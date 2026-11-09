@@ -426,8 +426,9 @@ ALTER TABLE holdout_freezes
 -- with the pair ('near_dup','near_dup_profile'); search_projection_tasks.kind gains 'near_dup_run'
 ```
 
-Tables: `image_contents` (the exact key: `UNIQUE NULLS NOT DISTINCT (project_id, content_sha256)`;
-the insert is the duplicate check, replacing the `imohash` lookup, RD-43 answered as recommended (D-78)), `near_dup_runs`
+Tables: `image_contents` (the exact key: `imohash` with a non-unique index, `content_sha256` filled only to confirm a match and
+`UNIQUE (project_id, content_sha256) WHERE content_sha256 IS NOT NULL`; the lookup and insert run under an advisory lock,
+RD-43 changed by the owner 2026-11-08), `near_dup_runs`
 (one `current` and one `building` per project and level by partial unique indexes),
 `near_dup_groups`, `near_dup_members`, `near_dup_edges`, `near_dup_decisions`, `near_dup_pending`,
 `holdout_near_dup_moves`. `holdout_near_dup_moves` is the only writer path for near-duplicate holdout moves, and it goes through the lock rule of `src/clients/occ_locks.py` (an automated writer never overwrites a human- or import-validated class or box, or an item in the frozen holdout); a test moves a locked item and expects a refusal.

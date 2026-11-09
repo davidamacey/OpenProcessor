@@ -42,8 +42,8 @@ answer; `imohash` is a sampled hash, not a content identity; the curation images
    plus the core global index as a third, deployment-scoped level `core`. Item-level groups are
    **derived from image-level groups** (the same object across near-duplicate frames), which
    replaces the IVF bucket scoping.
-2. **Evidence tiers as typed edges**: exact (SHA-256 of the bytes, enforced by a PostgreSQL unique
-   constraint at ingest, so concurrent batches cannot store a file twice), embedding (cosine in a
+2. **Evidence tiers as typed edges**: exact (`imohash` as the key, SHA-256 of the bytes only to confirm a
+   match, decided under a PostgreSQL advisory lock at ingest, so concurrent batches cannot store a file twice), embedding (cosine in a
    named space), and later perceptual (PDQ) and burst (EXIF time and camera) once the research
    shows they add recall at equal precision.
 3. **Groups are built by a single-writer Celery job per project and level** (Immich serializes its
@@ -130,7 +130,7 @@ near-duplicate step at high resolution.
 | **C8** | 2D-4: "the freeze checks near-duplicates of the held-out items (the items' near-duplicate group fields)" | the holdout cohort is human-validated, and the crop scorer never scores validated or held-out items (2.2), so **a held-out item never carries a group field**; a red test written against today's fields cannot turn green by reading them | 2D-4 moves to the near-duplicate lane, which groups every item (section 11) |
 | **C9** | `near_dup.py` docstring: "already validated at threshold 0.98 for whole-frame" | no validation record exists; `curation_scores.md` says precision was never executed | the defaults are hypotheses until 6.2 P1 |
 | **C10** | "near-duplicate photos of the same subject already land in the same or adjacent IVF bucket" (`near_dup.py:24-27`) | the clustering harness found 76 % of near-duplicate crop pairs split across clusters at about 8 crops per cluster (2.1) | the bucket scope is dropped (D3 in section 4) |
-| **C11** | `imohash` is the exact-duplicate key | it hashes 16 KiB samples plus the size; its README says not to use it for "file verification" or where "fixed-size files are manipulated" ([py-imohash](https://github.com/kalafut/py-imohash)) | SHA-256 of the bytes becomes the key (J6) |
+| **C11** | `imohash` is the exact-duplicate key | it hashes 16 KiB samples plus the size; its README says not to use it for "file verification" or where "fixed-size files are manipulated" ([py-imohash](https://github.com/kalafut/py-imohash)) | owner decision 2026-11-08 (J6): `imohash` stays the key, SHA-256 only confirms a match, so a collision keeps both files and no file is fully hashed unless its `imohash` is already stored |
 
 ---
 
@@ -305,7 +305,7 @@ spaces are PE and MobileCLIP; numbers do not transfer, C2).
 | D12 | Groups only as OpenSearch fields (today) | ❌ | no run, version, owner or history; stale fields; positional ids |
 | D13 | **Groups in PostgreSQL runs, OpenSearch as a projection** | ✅ | the control-plane rule: anything with a lifecycle goes to PostgreSQL ([02_control_plane_database.md](02_control_plane_database.md) section 3.1); the filter fields stay searchable |
 | D14 | **Two cuts per level (`dedup`, `leak`)** | ✅ | DINOv2's self versus relative dedup; FiftyOne's leaky splits |
-| D15 | Exact key: SHA-256 with a PostgreSQL unique constraint | ✅ (J6) | race-free across workers and replicas, which an index lookup is not (#358); a real content identity (C11) |
+| D15 | Exact key: `imohash` first, SHA-256 only to confirm, decided in one transaction under a PostgreSQL advisory lock | ✅ (J6, owner decision 2026-11-08) | race-free across workers and replicas, which an index lookup is not (#358); cheap (no full read for new content) and still a real content identity on a match (C11) |
 
 ---
 
@@ -320,17 +320,23 @@ only under `deployment` scope, as for `jobs`). One Alembic revision `near_duplic
 ### 5.1 PostgreSQL tables
 
 ```sql
--- Exact duplicates: one row per stored content. The insert is the duplicate check.
+-- Exact duplicates: one row per stored image. imohash is the key (not unique: two files can share
+-- it); content_sha256 is filled only when a second file with that imohash makes the comparison
+-- necessary. image_path is where the stored bytes are read from for that comparison.
 CREATE TABLE image_contents (
   id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   project_id      uuid NULL REFERENCES projects(id) ON DELETE CASCADE,   -- NULL: the core global index
-  content_sha256  text NOT NULL CHECK (content_sha256 ~ '^[0-9a-f]{64}$'),
+  imohash         text NOT NULL CHECK (imohash ~ '^[0-9a-f]{32}$'),
+  content_sha256  text NULL CHECK (content_sha256 IS NULL OR content_sha256 ~ '^[0-9a-f]{64}$'),
   image_id        text NOT NULL,
+  image_path      text NOT NULL,
   size_bytes      bigint NOT NULL CHECK (size_bytes >= 0),
   created_at      timestamptz NOT NULL DEFAULT now(),
-  UNIQUE NULLS NOT DISTINCT (project_id, content_sha256),
   UNIQUE NULLS NOT DISTINCT (project_id, image_id)
 );
+CREATE INDEX ix_image_contents_imohash ON image_contents (project_id, imohash);
+CREATE UNIQUE INDEX uq_image_contents_sha256 ON image_contents (project_id, content_sha256)
+  NULLS NOT DISTINCT WHERE content_sha256 IS NOT NULL;
 
 -- One grouping run of one level. Exactly one 'current' run per (project, level).
 CREATE TABLE near_dup_runs (
@@ -464,10 +470,16 @@ Rules:
   status = 'current'`, then `SET status = 'current'` on the new run, insert the
   `search_projection_tasks` row (kind `near_dup_run`, payload `{run_id, level}`), and the `events` row
   (`near_dup.run`). The partial unique indexes make two current runs impossible.
-- **Exact check at ingest**: `INSERT INTO image_contents ... ON CONFLICT DO NOTHING RETURNING id`; no
-  row means the content exists, and the existing `duplicate` answer is returned. The image delete
-  path deletes the row in the same code path that deletes the document. This replaces the
-  `imohash` lookup, so the concurrency fix of #358 becomes a constraint instead of a batch lookup.
+- **Exact check at ingest** (owner decision 2026-11-08, J6): one transaction under
+  `pg_advisory_xact_lock(hashtextextended('image_contents:<project>:<imohash>', 0))`. No row with
+  the `imohash`: insert `(imohash, NULL sha256, image_id, image_path, size)`; the bytes are never fully
+  hashed. A row exists: hash the new bytes, fill the SHA-256 of each row that has none from its stored
+  file, and an equal SHA-256 is a `duplicate` of that image. No equal SHA-256 is an `imohash`
+  collision: a new row with its SHA-256 set, an image id derived from the SHA-256 instead of the
+  `imohash`, a log line and `op_exact_key_imohash_collisions_total`. The image delete path deletes the
+  row in the same code path that deletes the document. A claim whose derived id changed since the
+  lookup (a collision stored in between) is refused and retried, never written under the other
+  image's id.
 - **Pending rows are written before the OpenSearch write** they describe (an extra pending row is
   harmless: the rescore is idempotent per member; a missing one is a silent stale group). Writers:
   curation ingest (`added`), reprocess and re-embed (`vector_changed`), the region stage when it
@@ -506,7 +518,7 @@ step, `parent_job_id` set). `item` level always runs after the `image` level of 
 | `near_dup_is_representative` | boolean | images, items | true for the `dedup` representative |
 | `near_dup_group_size` | integer | images, items | `dedup` member count |
 | `near_dup_run_id` | keyword | images, items | the run that wrote the fields |
-| `content_sha256` | keyword | images | the exact key (also in `image_contents`) |
+| `imohash` | keyword | images | the exact key (also in `image_contents`) |
 
 Writes: bulk-set the members' fields with the new `near_dup_run_id`, then `update_by_query` removes
 the five group fields from every document whose `near_dup_run_id` exists and differs from the current
@@ -518,8 +530,7 @@ a validated class or box.
 
 Deleted with no replacement (no shims): items `dup_group_id`, `dup_group_size`,
 `dup_is_representative`, `dup_threshold`, `dup_method`, `dup_scored_at`
-(`bodies_core.py:408-413`, `ensure_overlay_fields.py:239-257`); images `phash` (no writer) and
-`imohash` (J6). The core global index renames `duplicate_group_id`, `is_duplicate_primary`,
+(`bodies_core.py:408-413`, `ensure_overlay_fields.py:239-257`); images `phash` (no writer); `imohash` stays as the exact key (J6). The core global index renames `duplicate_group_id`, `is_duplicate_primary`,
 `duplicate_score` to `near_dup_group_id`, `near_dup_is_representative`, `near_dup_cosine_to_rep`
 (J15); the `/query/duplicates` wire shapes stay. Existing 0.6.0 indexes keep the old mappings
 (mappings cannot be dropped without a reindex); the 0.7.0 upgrade step clears their values with one
@@ -788,7 +799,7 @@ equal bars.
 
 ```
 ingest (curation or core)
-  -> SHA-256 of the bytes -> INSERT image_contents ON CONFLICT DO NOTHING   (exact: duplicate answered here)
+  -> imohash of the bytes -> locked lookup + INSERT image_contents (SHA-256 only on an imohash match: duplicate answered here)
   -> decode once -> vectors (PE frame, PE crops; MobileCLIP for core)
   -> INSERT near_dup_pending ('added')  -> OpenSearch document writes
 beat tick (per project and level with pending rows)
@@ -819,8 +830,8 @@ Deleted in the same change: `src/services/curation/item_scores/near_dup.py` and 
 oracle in `scripts/research/near_dup/group.py` reimplements nothing, it imports the domain function);
 `src/services/duplicate_detection/service.py::create_duplicate_group` and the in-request assignment
 in `ingest_single.py` and `ingest_batch.py`; the seven 0.99 literals; `OP_CROP_DUP_THRESHOLD` (into
-`src/config/retired_env.py`, `env.template:590` removed); `imohash` from `requirements.txt` and the
-pins if J6 is accepted.
+`src/config/retired_env.py`, `env.template:590` removed); `imohash` stays in `requirements.txt` and the
+pins (J6, owner decision 2026-11-08).
 
 ### 7.3 Behaviour that matters
 
@@ -902,7 +913,7 @@ files only; the wave's single full sweep runs on the integration branch.
 | J3 | A separate looser `leak` cut (DINOv2 pattern) with its default equal to the dedup cut until P5? | yes | equal cuts are simpler but give the holdout no margin |
 | J4 | Freeze and training export refuse on stale near-duplicate state (409), rather than the freeze starting a rescore itself? | refuse; Cropwright offers the rescore button | one extra click versus a request-bound job wait |
 | J5 | After a freeze, move new near-duplicates of held-out items into the holdout automatically, or only exclude them from training? | move (audited) | the holdout keeps growing in burst-heavy projects; exclusion alone leaves items in limbo |
-| J6 | SHA-256 replaces `imohash` as the exact key, with the PostgreSQL unique constraint | yes; P6 reports the cost | a full read of every file; P2a counts real collisions |
+| J6 | ~~SHA-256 replaces `imohash` as the exact key~~ **Owner decision 2026-11-08: `imohash` first, SHA-256 only to confirm a match** (advisory lock, UNIQUE on the SHA-256 where set) | decided; P6 still reports the cost of the confirmation, P2a counts real collisions | a collision costs one full read of the stored file once; a new file is never fully read |
 | J7 | Core `/ingest` groups asynchronously (the response lists candidates; the group appears after the core job) | yes | a wire change for core clients; synchronous grouping under a lock serializes ingest |
 | J8 | Export: replace `dedup_threshold` with `collapse_near_duplicates` reading stored groups | yes | per-request cuts go away |
 | J9 | Perceptual tier: PDQ (if P2 passes), ImageHash pHash, or none; SSCD only on a large gain | PDQ on a pass, else none; SSCD only past its stop rule | another field and ingest step versus model independence |
@@ -933,9 +944,9 @@ integration agent:
 | [v070_rebuild/05_b4_stateless_api.md.md](05_b4_stateless_api.md) 4A-4b | rewrite as ND-C1: core ingest writes `near_dup_pending` rows; grouping by the `near_dup_core_group` job (single writer); red test `tests/visual_search/test_core_grouping_serialized.py` |
 | [v070_rebuild/02a_postgres_schema.md.md](02a_postgres_schema.md) | a new section "Near-duplicates" with the tables of 5.1 (or a link here); the `config_documents.kind` and `config_activations.axis` CHECK lists and the axis pair of 5.5; `search_projection_tasks.kind` gains `near_dup_run`; `holdout_freezes` columns; section 9 retention row |
 | [v070_rebuild/02b_jobs_locking_events.md.md](02b_jobs_locking_events.md) section 2.1 | the five kind rows of 5.2; the beat schedule gains the `near_dup_rescore` tick, the weekly full build and the run pruning |
-| [v070_rebuild/02_control_plane_database.md.md](02_control_plane_database.md) sections 3.1, 3.2, 4.7 | rows: near-duplicate runs, groups, members, edges, decisions, pending, holdout moves -> PostgreSQL, the `near_dup_*` fields as search projection; the exact key `image_contents`; images lose `imohash` and `phash` |
+| [v070_rebuild/02_control_plane_database.md.md](02_control_plane_database.md) sections 3.1, 3.2, 4.7 | rows: near-duplicate runs, groups, members, edges, decisions, pending, holdout moves -> PostgreSQL, the `near_dup_*` fields as search projection; the exact key `image_contents`; images lose `phash` and keep `imohash` as the exact key (J6) |
 | [v070_rebuild/06d_b5_processing_plans.md.md](06d_b5_processing_plans.md) | the `near_duplicates` branch returns candidates, not groups (J7); Q1 includes the `near_duplicate_threshold` field |
-| [v070_rebuild/01_package_pins.md.md](01_package_pins.md) section 3.9 | add `scripts/research/near_dup/requirements.txt` with the pins of 6.2; if J6 passes, `imohash` leaves the product manifests; if J9 passes, `pdqhash==0.2.8` (MIT, bundles ThreatExchange PDQ under BSD) joins them in ND-E |
+| [v070_rebuild/01_package_pins.md.md](01_package_pins.md) section 3.9 | add `scripts/research/near_dup/requirements.txt` with the pins of 6.2; `imohash` stays in the product manifests (J6, owner decision 2026-11-08); if J9 passes, `pdqhash==0.2.8` (MIT, bundles ThreatExchange PDQ under BSD) joins them in ND-E |
 | [09b_research_clustering.md](09b_research_clustering.md) | RQ-2, E-2, the RQ-2 rows of its method, data, bars and landing tables, and OQ-9 point here (absorbed as P1 and J10); RQ-6's near-duplicate must-link reads the `leak` groups |
 | [cluster_search_makemodel_plan.md](../cluster_search_makemodel_plan.md) signals table | "Near-duplicate group" row: fields become `near_dup_group_id`, `near_dup_is_representative` |
 | [v070_rebuild/reference/github_actions.md.md](reference/github_actions.md) | comment on #416 with this plan's path (the gist plan is superseded); comment on #473 with the re-cut placement |

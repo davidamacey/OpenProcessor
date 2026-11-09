@@ -283,12 +283,12 @@ calls in every writer of the Owns list, each written before the OpenSearch write
 build, OpenSearch kNN for an incremental one, connected components with the size guard and a
 complete-linkage split, lineage through 4F's `group_lineage`); ND-5 the projection sync and the
 deletion of every `dup_*` field; ND-6 the routes, wire and contracts; ND-7 the export's
-`collapse_near_duplicates` (RD-45 answered as recommended (D-78)); ND-8 the `content_sha256` exact key in curation ingest
+`collapse_near_duplicates` (RD-45 answered as recommended (D-78)); ND-8 the `imohash` exact key (SHA-256 only to confirm a match; owner decision 2026-11-08) in curation ingest
 (RD-43 answered as recommended (D-78)), first confirming that the stored bytes equal the uploaded bytes (no re-encode at
 ingest; review RR-10; red `tests/near_duplicates/test_stored_bytes_equal_upload.py`), else stop and
 report; ND-9 (moved back to 4A as 4A-6, D-84: the scorer is deleted by the lane that owns
 `item_scores/`, never ported); ND-10 the upgrade step with its own test file `tests/upgrade/test_step_near_duplicates.py`; ND-11 the `source_backfill` job (pausable,
-`slice_s` 600, one read per stored image) with its content step writing `content_sha256` for every
+`slice_s` 600, one read per stored image) with its content step writing the `imohash` (sampled read, no SHA-256) for every
 image the 0.6.0 upgrade carried over, started from the upgrade report (RD-53); the W4 capture lane
 adds the capture step to the same pass (review RR-10; red
 `tests/near_duplicates/test_backfill_then_reingest_refused.py`: an upgraded fixture image re-ingested

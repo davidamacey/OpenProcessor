@@ -1764,8 +1764,10 @@ cluster.
 - `BatchIngestResponse`: `status` (`success`, `partial`, `error`),
   `summary` (`successful`, `duplicates`, `failed`, `crops_indexed`,
   `secondary_detector_failures`) and `results[]`.
-- Duplicates are detected by content hash (`imohash`) against the index and
-  within a batch. A byte-identical file later in the same request reports
+- Duplicates are detected by content hash (`imohash`) against the project's
+  stored contents and within a batch; a file that shares an `imohash` with a
+  stored file is compared by SHA-256, and only an equal SHA-256 is a duplicate
+  (two different files with one `imohash` are two images). A byte-identical file later in the same request reports
   `duplicate` with the representative's `image_id`, and exactly one item set
   is created.
 - Paths for `/ingest/image` and `/ingest/batch` must be servable: under a
