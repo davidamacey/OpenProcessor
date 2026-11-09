@@ -1,7 +1,6 @@
 /**
  * Training cohorts — a named, previewable slice of crops offered as the
- * input to a training run (docs/genericization-plan-2026-09-13.md
- * §9.2, addendum 2026-09-14). Deliberately NOT a general query
+ * input to a training run. Deliberately NOT a general query
  * language: the union below has exactly two arms, and the `predicate`
  * arm's operator set is closed at the four operators every existing
  * region training-candidate mode actually uses (§9.1's mode table).
@@ -284,8 +283,7 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
  * to answer today (§9.1's mode table + §9.2.2's CORE_COHORTS), keyed by
  * a compiled query's final path segment rather than the whole path.
  *
- * Matching the last segment rather than the whole path
- * docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §10) means a
+ * Matching the last segment rather than the whole path means a
  * backend base-path rename, or a second slot's endpoint cohort under
  * another base path (e.g. a tier-2 profile's
  * `/widgets/training_candidates`), still dispatches instead of silently

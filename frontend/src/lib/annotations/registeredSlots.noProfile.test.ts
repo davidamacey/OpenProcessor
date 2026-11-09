@@ -1,6 +1,6 @@
 /**
  * Registry composition around the served region profile
- * (docs/design/domain-neutral-audit-2026-09-24.md §5.2, §5.4): no
+ * (domain-neutral audit §5.2, §5.4): no
  * profile means no region slot, and a tier-2 slot that calls region
  * routes survives only under the served profile's own key.
  */

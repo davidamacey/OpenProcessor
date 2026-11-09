@@ -5,7 +5,7 @@
  * a text attribute, a triage state, or any combination (e.g. a text
  * region on an item). The shape below is a *decomposition* into
  * independent capabilities, not one domain's struct. See
- * docs/genericization-plan-2026-09-13.md §2.5.
+ * genericization plan §2.5.
  *
  * Design constraint that drives almost every decision in this file:
  * **the frontend reads whatever field names the backend already emits.**
@@ -89,7 +89,7 @@ export interface SubBoxRing {
  * existing scalar `SubBoxCapability` fields below — a slot that declares
  * `listField` gets `SlotData.subBoxes` populated by `readSlot`; slots that
  * don't (every non-region slot today) are unaffected. See
- * docs/design/w8-multibox-frontend-plan-2026-09-26.md.
+ * w8 multibox frontend plan.
  */
 export interface SlotBox {
   /** Stable id within the item, e.g. `"b1"`. Null only for a not-yet-saved local box. */
@@ -244,7 +244,7 @@ export interface SlotState {
    *  what the UI *writes*; `aliases` is what it *accepts* on read, so a
    *  backend enum rename (or old OpenSearch documents that still carry
    *  the pre-rename value) never resolves to a null state. See
-   *  docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §8.4(ii). */
+   *  slot-generic crop mapping plan §8.4(ii). */
   aliases?: string[];
 }
 

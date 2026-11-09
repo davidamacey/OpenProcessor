@@ -1,6 +1,6 @@
 /**
  * The annotation slots live in this deployment (P2.10,
- * docs/genericization-plan-2026-09-13.md §3.3), composed from three
+ * genericization plan §3.3), composed from three
  * sources in order, merged per slot key with REPLACE semantics
  * (`resolveSlotRegistry`):
  *
@@ -8,7 +8,7 @@
  *    app ships with no domain built in.
  * 2. The served region slot — synthesized from the backend's
  *    `/health.region_profile` (`./servedRegionSlot.ts`,
- *    docs/design/domain-neutral-audit-2026-09-24.md §5). Absent when the
+ *    domain-neutral audit §5). Absent when the
  *    backend has no region profile, which turns every region feature off.
  * 3. Deployment slots — `annotation-profiles.json` (tier 2,
  *    `./deploymentProfiles.ts`). A tier-2 entry whose key equals the
@@ -45,7 +45,7 @@ export const builtinSlots: SlotSpec[] = [];
  * this module body has already executed — but BEFORE rendering any
  * component. ESM live bindings mean every importer sees the merged list
  * at use time with no call-site change. See
- * docs/design/tier2-annotation-profile-config-plan-2026-09-20.md §1.5.
+ * tier-2 annotation profile config plan §1.5.
  */
 export let registeredSlots: SlotSpec[] = builtinSlots;
 

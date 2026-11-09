@@ -1,6 +1,5 @@
 /**
- * P3.6 — the integration gate (docs/genericization-plan-2026-09-13.md
- * §9.7/§9.9 Level 2): the one falsification level that actually proves
+ * P3.6 — the integration gate (genericization plan §9.7/§9.9 Level 2): the one falsification level that actually proves
  * something, versus Level 1's pure-function unit tests. Registers a
  * throwaway second slot in a TEST-ONLY registry — reusing
  * `aircraftTailNumberSlot`, which already exists and is deliberately
@@ -98,8 +97,7 @@ describe('P3.6: registering a second capable slot works with zero production cod
     }
   });
 
-  // C6 (Finding D, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
-  // §6): /review's inline panel body — not just the tab shell/keymap —
+  // C6 (Finding D, slot-generic crop mapping plan §6): /review's inline panel body — not just the tab shell/keymap —
   // is now slot-generic. These are the executable proof: the same
   // slotPanel.ts functions the panel calls produce a completely
   // different, correct result for a second slot, with zero code change.
