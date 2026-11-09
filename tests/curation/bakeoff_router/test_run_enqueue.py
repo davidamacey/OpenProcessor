@@ -34,7 +34,7 @@ def test_dataset_id_rejects_traversal(env: dict[str, Path], client: TestClient) 
             client, {'datasets': [{'id': bad}], 'models': [{'source': 'run', 'run_id': 'r1'}]}
         )
         assert r.status_code == 400, (bad, r.text)
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClient) -> None:
@@ -170,7 +170,7 @@ def test_run_rejects_multiclass_single_cls_run(env: dict[str, Path], client: Tes
         'single_cls run over 2 classes cannot be scored per class; '
         'compare it on a single-class export'
     )
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_alias_run_dataset_id(env: dict[str, Path], client: TestClient) -> None:
@@ -211,7 +211,7 @@ def test_run_unknown_run_or_baseline_400(env: dict[str, Path], client: TestClien
     )
     assert r.status_code == 400
     assert 'export:missing' in r.json()['detail']
-    assert env['started'] == {}
+    assert env['started'] == {}  # type: ignore[comparison-overlap]
 
 
 def test_run_requires_models_and_datasets(env: dict[str, Path], client: TestClient) -> None:

@@ -85,7 +85,7 @@ def test_metric_name_type_labels(name: str) -> None:
     assert metric._type == kind
     assert tuple(metric._labelnames) == labels
     if mode is not None:
-        assert metric._multiprocess_mode == mode
+        assert metric._multiprocess_mode == mode  # type: ignore[attr-defined]
     assert 'item' not in ''.join(labels)
     assert 'crop' not in ''.join(labels)
 

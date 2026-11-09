@@ -92,5 +92,5 @@ def test_no_curation_service_discards_a_bulk_response() -> None:
             call = call.value if isinstance(call, ast.Await) else None
             func = getattr(call, 'func', None)
             if isinstance(func, ast.Attribute) and func.attr == 'bulk':
-                offenders.append(f'{path}:{node.lineno}')
+                offenders.append(f'{path}:{node.lineno}')  # type: ignore[attr-defined]
     assert not offenders, offenders

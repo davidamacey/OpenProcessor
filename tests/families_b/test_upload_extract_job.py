@@ -58,7 +58,7 @@ async def test_the_route_streams_to_storage_queues_one_job_and_does_not_extract(
     slug, pid = _project(app, pg, tmp_path)
     called: list[str] = []
     real = upload.safe_extract
-    monkeypatch.setattr(upload, 'safe_extract', lambda *a, **k: called.append('x') or real(*a, **k))
+    monkeypatch.setattr(upload, 'safe_extract', lambda *a, **k: called.append('x') or real(*a, **k))  # type: ignore[func-returns-value]
 
     reply = await _upload(client, slug, _zip({'ds/data.yaml': b'names: [a]'}))
 
@@ -92,7 +92,7 @@ async def test_the_task_extracts_once_records_the_result_and_removes_the_archive
     bind_worker_to(monkeypatch, app, None)
     calls: list[Path] = []
     real = upload.safe_extract
-    monkeypatch.setattr(upload, 'safe_extract', lambda a, d: calls.append(a) or real(a, d))
+    monkeypatch.setattr(upload, 'safe_extract', lambda a, d: calls.append(a) or real(a, d))  # type: ignore[func-returns-value]
     reply = (await _upload(client, slug, _zip({'ds/data.yaml': b'names: [a]'}))).json()
 
     outcome = await asyncio.to_thread(

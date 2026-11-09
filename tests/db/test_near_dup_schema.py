@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pytest
@@ -27,7 +27,7 @@ _HASH = 'b' * 32
 
 
 def _run(conn, project, level='image', status='current'):
-    profile = (None, None)
+    profile: tuple[Any, Any] = (None, None)
     if project is not None:
         if project not in _PROFILES:
             _PROFILES[project] = make_profile(conn, project, 'near_dup_profile')

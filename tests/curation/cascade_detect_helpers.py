@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -82,5 +83,5 @@ def _make_mock_pool(
     if raises is not None:
         pool.infer = AsyncMock(side_effect=raises)
     else:
-        pool.infer = AsyncMock(return_value=_FakeInferResult(raw_output))
+        pool.infer = AsyncMock(return_value=_FakeInferResult(cast('Any', raw_output)))
     return pool

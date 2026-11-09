@@ -240,7 +240,9 @@ async def test_a_cancelled_import_resumes_as_a_new_job_without_a_rescan_in_the_r
     scans: list[Path] = []
     real = runner.scan_dataset
     monkeypatch.setattr(
-        runner, 'scan_dataset', lambda source, **kw: scans.append(source) or real(source, **kw)
+        runner,
+        'scan_dataset',
+        lambda source, **kw: scans.append(source) or real(source, **kw),  # type: ignore[func-returns-value]
     )
 
     reply = await client.post(

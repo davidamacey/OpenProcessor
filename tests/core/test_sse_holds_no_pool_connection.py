@@ -75,7 +75,7 @@ async def test_an_open_stream_holds_no_pooled_connection_between_reads(
         for _ in range(2):
             async with factory() as session:  # one session per read, never per stream
                 value = (await session.execute(text('SELECT 1'))).scalar_one()
-            between_reads.append(get_async_engine().sync_engine.pool.checkedout())
+            between_reads.append(get_async_engine().sync_engine.pool.checkedout())  # type: ignore[attr-defined]
             await asyncio.sleep(0.05)
             yield f'data: {value}\n\n'
 

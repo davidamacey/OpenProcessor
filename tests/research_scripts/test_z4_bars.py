@@ -76,7 +76,7 @@ def test_adoption_takes_the_cheaper_passing_key_arm() -> None:
 
 
 def test_adoption_falls_back_to_within_key_then_ivf() -> None:
-    u1 = {'key': 0.3, 'key_guard': 0.3, 'within_key': 0.3}
+    u1: dict[str, float | None] = {'key': 0.3, 'key_guard': 0.3, 'within_key': 0.3}
     v = {'key': zb.FAIL, 'key_guard': zb.INCONCLUSIVE, 'within_key': zb.PASS}
     assert zb.adoption(v, u1)['adopt'] == 'within_key'
     v['within_key'] = zb.INCONCLUSIVE

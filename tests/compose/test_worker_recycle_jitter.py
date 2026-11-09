@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
 from compose._helpers import _services
 
 
 def _args(service: dict[str, object]) -> list[str]:
     command = service.get('command') or []
-    return command.split() if isinstance(command, str) else [str(a) for a in command]
+    return (
+        command.split()
+        if isinstance(command, str)
+        else [str(a) for a in cast('list[object]', command)]
+    )
 
 
 def _flag(args: list[str], name: str) -> str | None:

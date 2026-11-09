@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pytest
@@ -130,7 +130,7 @@ def test_core_tx_outside_its_allowlist_raises() -> None:
 def test_core_tx_from_a_listed_module_opens_the_core_scope(pg_env) -> None:
     code = compile('result = core_tx(session, "probe")', '/srv/app/src/routers/persons.py', 'exec')
     with sync_session_factory()() as session:
-        namespace = {
+        namespace: dict[str, Any] = {
             '__name__': 'src.routers.persons',
             'core_tx': db_session.sync_core_tx,
             'session': session,

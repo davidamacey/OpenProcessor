@@ -350,7 +350,7 @@ async def test_a_crop_released_during_a_fetch_is_not_dispatched_again(
 
     monkeypatch.setattr(vlm_worker, 'fetch_pending_ids', _fetch)
     fakes.label_script = lambda _s, ids: (
-        labelled_once.set() or {'predicted': len(ids), 'updated': len(ids)}
+        labelled_once.set() or {'predicted': len(ids), 'updated': len(ids)}  # type: ignore[func-returns-value]
     )
     await asyncio.wait_for(vlm_worker.run(_args('--until-empty')), 10)
     assert fakes.labelled == [('alpha', ['c1', 'c2'])]

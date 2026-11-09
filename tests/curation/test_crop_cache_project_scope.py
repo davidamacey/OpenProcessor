@@ -25,11 +25,12 @@ from src.services.projects.delete_paths import _delete_dirs, _validate_delete_pa
 
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 
 @pytest.fixture
-def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     root = tmp_path / 'crop_cache'
     root.mkdir()
     monkeypatch.setenv('OP_CROP_CACHE_DIR', str(root))

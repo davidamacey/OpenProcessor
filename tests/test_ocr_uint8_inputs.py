@@ -173,7 +173,7 @@ class TestSyncDatatypeLookup:
         monkeypatch.setattr(tc, 'ensure_loaded_sync', lambda *_a: None)
         client = tc.TritonClient.__new__(tc.TritonClient)
         client._input_datatypes = {}
-        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)
+        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)  # type: ignore[func-returns-value]
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert len(calls) == 1

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
@@ -75,6 +76,7 @@ def test_monotone_in_theta_dissent_and_alpha() -> None:
 
 
 def test_required_sample_rejects_bad_arguments() -> None:
+    kwargs: dict[str, Any]
     for kwargs in (
         {'n_members': 0, 'theta': 0.9, 'alpha': 0.05, 'dissent': 0},
         {'n_members': 10, 'theta': 1.0, 'alpha': 0.05, 'dissent': 0},

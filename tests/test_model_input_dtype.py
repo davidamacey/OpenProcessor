@@ -68,7 +68,9 @@ def _sync_client(datatype: str, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, l
     monkeypatch.setattr(tc, 'resolve_adapter', lambda _m: _Adapter())
     monkeypatch.setattr(tc, 'InferRequestedOutput', lambda name: name)
     monkeypatch.setattr(
-        client, '_infer_with_retry', lambda _n, inputs, _o: sent.append(inputs[0]) or object()
+        client,
+        '_infer_with_retry',
+        lambda _n, inputs, _o: sent.append(inputs[0]) or object(),  # type: ignore[func-returns-value]
     )
     return client, sent
 
