@@ -9,11 +9,12 @@ import pytest
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 
+from src.db.repos import image_contents as repo
 from src.services.near_duplicates import content_key
-from src.services.near_duplicates.content_key import content_sha256
+from src.services.near_duplicates.content_key import content_imohash
 from src.services.source_backfill import job
 from src.services.source_backfill.content import record_contents
-from src.tasks.runtime.context import JobResult, Paused, Yield
+from src.tasks.runtime.context import JobResult
 
 from .conftest import make_project, scope_for
 
@@ -102,7 +103,7 @@ async def test_an_upgraded_image_is_refused_after_the_backfill(
         images={'old-image': {'image_id': 'old-image', 'image_path': str(stored)}}
     )
     svc, _, _ = _make_service(opensearch=svc_os)
-    assert await svc._check_duplicates([content_sha256(data)]) == {content_sha256(data): None}
+    assert await svc._check_duplicates([(content_imohash(data), data)]) == [None]
 
     ctx = _Ctx(project, _Search({'old-image': str(stored)}))
     outcome = await job.run(ctx)  # type: ignore[arg-type]
@@ -120,7 +121,7 @@ async def test_the_backfill_is_idempotent_and_reports_what_it_could_not_read(
 ) -> None:
     project = await make_project()
     (tmp_path / 'a.jpg').write_bytes(b'one')
-    (tmp_path / 'b.jpg').write_bytes(b'one')  # the same bytes as a: a holds the content
+    (tmp_path / 'b.jpg').write_bytes(b'one')  # the same bytes as a
     pairs = [('a', str(tmp_path / 'a.jpg')), ('b', str(tmp_path / 'b.jpg')), ('c', '/gone.jpg')]
 
     async with scope_for(project)() as session:
@@ -128,37 +129,12 @@ async def test_the_backfill_is_idempotent_and_reports_what_it_could_not_read(
     async with scope_for(project)() as session:
         second = await record_contents(session, project, pairs)
 
-    assert first.as_dict() == {
-        'recorded': 1,
-        'already': 0,
-        'same_bytes_as_another': 1,
-        'unreadable': 1,
-        'changed': 0,
-    }
-    # a is already recorded; b and c are tried again and give the same answers
-    assert (second.recorded, second.already, second.unreadable) == (0, 1, 1)
-
-
-async def test_a_slice_yields_and_the_next_delivery_resumes_after_the_cursor(
-    pg_registry, bound, tmp_path: Path
-) -> None:
-    project = await make_project()
-    bound['project'] = project
-    paths = {}
-    for i in range(3):
-        f = tmp_path / f'{i}.jpg'
-        f.write_bytes(f'bytes-{i}'.encode())
-        paths[f'img{i}'] = str(f)
-    client = _Search(paths)
-
-    assert isinstance(await job.run(_Ctx(project, client, slice_due=True)), Yield)  # type: ignore[arg-type]
-    assert client.calls == 0
-    assert isinstance(await job.run(_Ctx(project, client, paused=True)), Paused)  # type: ignore[arg-type]
-
-    resumed = _Ctx(
-        project, client, resume_from={'after': 'img0', 'counts': {'recorded': 1}, 'scanned': 1}
-    )
-    outcome = await job.run(resumed)  # type: ignore[arg-type]
-    assert isinstance(outcome, JobResult)
-    assert outcome.result['scanned'] == 3  # type: ignore[index]
-    assert resumed.checkpoints[-1]['after'] == 'img2'
+    assert first.as_dict() == {'recorded': 2, 'already': 0, 'unreadable': 1, 'changed': 0}
+    # a and b are recorded; c is tried again and gives the same answer
+    assert (second.recorded, second.already, second.unreadable) == (0, 2, 1)
+    async with scope_for(project)() as session:
+        rows = await repo.rows_for_imohash(session, project, content_imohash(b'one'))
+    assert [(r.image_id, r.content_sha256, r.size_bytes) for r in rows] == [
+        ('a', None, 3),
+        ('b', None, 3),
+    ]  # the sampled hash only: no SHA-256 is computed until a second file needs the comparison

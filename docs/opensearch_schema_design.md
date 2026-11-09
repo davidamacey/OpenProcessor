@@ -168,7 +168,9 @@ One document per ingested source image: `image_id`, `image_path`,
 `origin_image_id`, `origin_split`.
 
 Ingest and dataset import name the document by its content: `image_id` (also the
-`_id`) is `sha256(imohash)[:32]`, written with `create`. The imohash lookup before
+`_id`) is `sha256(imohash)[:32]` (the SHA-256 of the bytes instead, for a file whose
+imohash matched a different stored file), written with `create`. The content lookup
+(`image_contents`: imohash first, SHA-256 only to confirm a match) before
 the write cannot see a copy another request wrote but the index has not yet
 refreshed, so the `create` is what keeps one image per content: the copy that gets
 409 is reported `duplicate` and stores no items or crops. The writer stamps each

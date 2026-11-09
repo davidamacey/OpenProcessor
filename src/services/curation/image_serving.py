@@ -32,6 +32,7 @@ archive or a training-corpus mount).
 
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 from pathlib import Path
@@ -150,34 +151,40 @@ UNSERVABLE_PATH_ERROR = (
 def persist_uploaded_bytes(
     payload: bytes,
     *,
-    content_sha256: str,
+    imohash: str,
     extension: str,
     config: CurationConfig | None = None,
 ) -> Path:
     """Persist uploaded image bytes under ``CurationConfig.upload_root``,
     content-addressed.
 
-    Path shape: ``<upload_root>/<content_sha256[:2]>/<content_sha256><extension>`` —
-    the same bytes always resolve to the same path, so re-uploading the
-    same image is a no-op write (dedup by content hash) and the file is
-    written atomically (temp file + ``os.replace``) so a concurrent
-    reader never observes a partial file. Returns the absolute
-    destination path; the caller stores this as the item's ``image_path``
-    (it is guaranteed servable -- ``upload_root`` is one of
-    :func:`_configured_roots`).
+    Path shape: ``<upload_root>/<imohash[:2]>/<imohash><extension>`` -- the same bytes
+    always resolve to the same path, so re-uploading the same image is a no-op write (dedup by
+    content hash) and the file is written atomically (temp file + ``os.replace``) so a concurrent
+    reader never observes a partial file. ``imohash`` samples the file, so a path that is taken
+    by other bytes (an ``imohash`` collision) is detected by comparing the stored file, and the
+    payload goes to a path named by its SHA-256 instead. Returns the absolute destination path;
+    the caller stores this as the item's ``image_path`` (it is guaranteed servable --
+    ``upload_root`` is one of :func:`_configured_roots`).
     """
     cfg = config or get_curation_config()
     root = cfg.upload_root
-    shard = content_sha256[:2]
-    dest_dir = root / shard
-    dest = dest_dir / f'{content_sha256}{extension}'
+    dest = _upload_dest(root, imohash, extension)
     if dest.exists():
-        return dest
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    tmp = dest_dir / f'.{content_sha256}{extension}.{os.getpid()}.tmp'
+        if dest.stat().st_size == len(payload) and dest.read_bytes() == payload:
+            return dest
+        dest = _upload_dest(root, hashlib.sha256(payload).hexdigest(), extension)
+        if dest.exists():
+            return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.parent / f'.{dest.name}.{os.getpid()}.tmp'
     tmp.write_bytes(payload)
     tmp.replace(dest)
     return dest
+
+
+def _upload_dest(root: Path, key: str, extension: str) -> Path:
+    return root / key[:2] / f'{key}{extension}'
 
 
 # =============================================================================

@@ -46,8 +46,8 @@ class SourceImage:
     items: list[dict[str, Any]] = field(default_factory=list)
 
     @property
-    def content_sha256(self) -> str:
-        return str(self.doc.get('content_sha256') or '')
+    def imohash(self) -> str:
+        return str(self.doc.get('imohash') or '')
 
     @property
     def path(self) -> str:

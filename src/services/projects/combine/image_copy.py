@@ -62,7 +62,7 @@ class CopyContext:
     now: str
     duplicates: dict[tuple[int, str], tuple[int, str]]
     originals: dict[tuple[int, str], tuple[str, str]]
-    """``(source index, image id) -> (path, content_sha256)`` of every duplicate's priority image."""
+    """``(source index, image id) -> (path, imohash)`` of every duplicate's priority image."""
     enqueue_pending: PendingEnqueue
     containment: float = 0.9
     counts: Counter[str] = field(default_factory=Counter)
@@ -77,7 +77,7 @@ class CopyContext:
 
 
 def _target_location(
-    ctx: CopyContext, source_index: int, path: str, content_sha256: str
+    ctx: CopyContext, source_index: int, path: str, imohash: str
 ) -> tuple[str, str, Path | None]:
     """``(target path, target image id, file to link)``. Without dedup the id
     also names the source, so the same file arriving from two sources stays
@@ -89,7 +89,7 @@ def _target_location(
         target_upload_root=ctx.target.resources.upload_root,
     )
     key = tpath if ctx.request.dedup == 'content_hash' else f'{source.slug}:{tpath}'
-    return tpath, hashlib.sha256(f'{key}|{content_sha256}'.encode()).hexdigest()[:32], link_src
+    return tpath, hashlib.sha256(f'{key}|{imohash}'.encode()).hexdigest()[:32], link_src
 
 
 def map_negative_for(names: list[str], ctx: CopyContext, project: str) -> list[str]:
@@ -235,7 +235,7 @@ async def _copy_image(
     ctx: CopyContext, source_index: int, image: SourceImage
 ) -> list[dict[str, Any]]:
     project = ctx.sources[source_index].slug
-    tpath, tid, link_src = _target_location(ctx, source_index, image.path, image.content_sha256)
+    tpath, tid, link_src = _target_location(ctx, source_index, image.path, image.imohash)
     if link_src is not None:
         linked = await asyncio.to_thread(link_or_copy, link_src, Path(tpath))
         ctx.counts[f'files_{linked}'] += 1
@@ -306,8 +306,8 @@ async def _merge_duplicate(
     """Attach a duplicate image's boxes to the priority copy already in the
     target (see :func:`decide_merges`)."""
     pri_index, pri_id = ctx.duplicates[(source_index, image.image_id)]
-    path, content_sha256 = ctx.originals[(pri_index, pri_id)]
-    tpath, tid, _ = _target_location(ctx, pri_index, path, content_sha256)
+    path, imohash = ctx.originals[(pri_index, pri_id)]
+    tpath, tid, _ = _target_location(ctx, pri_index, path, imohash)
     existing = await _target_items(ctx, tid)
     probes = [Probe(tuple(d['bbox_norm']), d.get('class_name'), trust_rank(d)) for d in existing]
     docs, regions = _item_docs(ctx, source_index, image, tid, tpath)

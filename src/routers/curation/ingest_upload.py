@@ -112,11 +112,11 @@ async def curation_ingest_upload(
     /curation/ingest/path_lookup`` matches on either field.
 
     Resume is server-side content dedup: every image is fingerprinted
-    (SHA-256 over the uploaded bytes) and one already stored in the project
-    comes back as ``duplicate`` without re-running inference — and since
-    the persisted path is itself content-addressed by that same hash, the
-    same bytes are only ever written to disk once, so a crashed upload run
-    can simply be restarted. The whole-frame embedding is computed from the
+    (``imohash`` of the uploaded bytes, confirmed by SHA-256 on a match) and
+    one already stored in the project comes back as ``duplicate`` without
+    re-running inference — and since the persisted path is itself
+    content-addressed by that same hash, the same bytes are only ever
+    written to disk once, so a crashed upload run can simply be restarted. The whole-frame embedding is computed from the
     uploaded bytes, not by re-opening the path.
     """
     from src.config import get_curation_config

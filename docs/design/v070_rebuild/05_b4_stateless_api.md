@@ -165,7 +165,7 @@ Why `TaskGroup` and why only here: the Python documentation says that when a tas
   run; the `near_duplicate_threshold` form field on the three ingest routes goes. ND-C3: the literal
   thresholds, the stale comment about Immich's threshold and the swallowed exception in
   `src/services/duplicate_detection/` deleted; the core index fields renamed to `near_dup_*` with
-  the `/query/duplicates` wire shapes kept. ND-C4: the core `content_sha256` key. 4A owns
+  the `/query/duplicates` wire shapes kept. ND-C4: the core exact key (`imohash`, J6). 4A owns
   `src/services/visual_search/ingest_single.py`, `src/services/duplicate_detection/`, the threshold
   fields of `src/routers/ingest/*.py`, the reads in `src/routers/query_duplicates.py` and the core
   index mapping for these tasks. Red: `tests/visual_search/test_core_grouping_serialized.py`: two

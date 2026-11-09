@@ -11,7 +11,7 @@ that needs it builds its own overlay on top of
 
 Pipeline, per image:
 
-1. Decode (EXIF-transposed) + exact-content dedup (SHA-256 against ``image_contents``).
+1. Decode (EXIF-transposed) + exact-content dedup (``imohash`` against ``image_contents``, confirmed by SHA-256).
 2. Run the primary detector (:class:`~src.config.DetectionProfile`,
    an end2end model whose Triton response is already NMS'd) over the
    full image.
@@ -30,7 +30,7 @@ Pipeline, per image:
    cluster assignment via the ingest-time IVF cache
    (:mod:`~src.services.curation.clustering.ivf_ingest`).
 6. Bulk index: the images doc is a ``create`` under an id derived from the
-   content (:func:`~src.services.curation.ingest_index.content_image_id`), so
+   content (:func:`~src.services.near_duplicates.content_key.content_image_id`), so
    a copy that raced past step 1's lookup (a search does not see an
    unrefreshed write) is refused 409 and reported ``duplicate`` with none of
    its items or crops stored (#358). Items docs go through
@@ -71,7 +71,7 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-from src.services.curation.ingest_dedup import IngestDedupMixin
+from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
     SecondaryOutput,
@@ -82,7 +82,6 @@ from src.services.curation.ingest_index import (
     PARKED_CLUSTER_ID,
     ImageContext,
     IndexOutcome,
-    content_image_id,
     index_items,
 )
 from src.services.curation.ingest_items import IngestItemsMixin
@@ -98,7 +97,7 @@ from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.curation.ops_metrics import record_ingest_result
 from src.services.events.publish import apublish_crops_created
-from src.services.near_duplicates.content_key import content_sha256
+from src.services.near_duplicates.content_key import content_image_id, content_imohash
 from src.utils.cpu_pool import encoded_nbytes, run_cpu
 
 
@@ -216,18 +215,23 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             assert prefilled_frame is not None
             width, height = prefilled_frame.width, prefilled_frame.height
 
-        image_hash = content_sha256(image_bytes)
-        existing = known_existing or await self._lookup_image(image_hash)
+        image_hash = content_imohash(image_bytes)
+        resolved = (
+            Resolved(known_existing, image_hash)
+            if known_existing is not None
+            else await self._lookup_image(image_hash, image_bytes)
+        )
+        existing = resolved.existing
         if existing is not None and not adopt_existing:
             return IngestResult(
                 status='duplicate',
                 image_id=existing['image_id'],
                 image_path=image_path,
                 source_identifier=source_identifier,
-                content_sha256=image_hash,
+                imohash=image_hash,
             )
         if existing is None:
-            image_id = content_image_id(image_hash)
+            image_id = content_image_id(resolved.key)
             resolved_path = image_path
         else:
             image_id = existing['image_id']
@@ -242,8 +246,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             gpu_frame=prefilled_frame,
             width=width,
             height=height,
-            content_sha256=image_hash,
-            content_bytes=len(image_bytes),
+            imohash=image_hash,
+            content=image_bytes,
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,

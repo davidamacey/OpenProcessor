@@ -23,7 +23,7 @@ Safety rules kept from the per-image path:
 - Two writes that share an item id (labels added to one image twice at once) never share a
   flush, so the second sees the first as already created.
 - An images doc is written before its items, with ``create``: its id names the content
-  (:func:`~src.services.curation.ingest_index.content_image_id`), so a second copy of the
+  (:func:`~src.services.near_duplicates.content_key.content_image_id`), so a second copy of the
   same content that got past the content lookup (the lookup cannot see an unrefreshed
   write) is answered 409. That unit is the ``duplicate`` and none of its items are written
   (#358). Each images doc carries a fresh write id (:data:`WRITE_ID_FIELD`): a 409

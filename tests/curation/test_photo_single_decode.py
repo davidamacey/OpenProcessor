@@ -117,6 +117,7 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
     from src.services.curation.ingest_index import ImageContext, index_items
     from src.services.curation.ingest_policy import IngestPolicy
     from src.services.curation.item_doc import DetectedItem
+    from src.services.near_duplicates.content_key import content_image_id
 
     seen: list[Image.Image] = []
 
@@ -142,14 +143,14 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
     )
     frame = Image.open(io.BytesIO(_jpeg(128, 96))).convert('RGB')
     ctx = ImageContext(
-        image_id='img',
+        image_id=content_image_id('h'),
         image_path='/client/side/name.jpg',
         created=True,
         pil=frame,
         width=128,
         height=96,
-        content_sha256='h',
-        content_bytes=1,
+        imohash='h',
+        content=b'x',
         source='t',
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from src.services.curation.image_serving import persist_uploaded_bytes
 from src.services.curation.ingest_models import ERROR_KIND_EMPTY, ERROR_KIND_UNSUPPORTED_TYPE
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
-from src.services.near_duplicates.content_key import content_sha256
+from src.services.near_duplicates.content_key import content_imohash
 from src.utils.stage_timing import stage_timer
 
 
@@ -84,10 +84,10 @@ async def stage_and_ingest(
         total += len(entry.payload)
         if max_total_bytes is not None and total > max_total_bytes:
             raise PayloadTooLargeError(total)
-        image_hash = content_sha256(entry.payload)
+        image_hash = content_imohash(entry.payload)
         with stage_timer('persist', nbytes=len(entry.payload)):
             persisted = persist_uploaded_bytes(
-                entry.payload, content_sha256=image_hash, extension=entry.extension, config=config
+                entry.payload, imohash=image_hash, extension=entry.extension, config=config
             )
         data.append(entry.payload)
         kept_paths.append(str(persisted))

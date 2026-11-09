@@ -265,7 +265,7 @@ caches) behind the storage seam.
 
 | Role | Fields | Verdict |
 |---|---|---|
-| `images` | identity, geometry, `content_sha256` (the exact key; `imohash` and the writer-less `phash` deleted, RD-43 answered as recommended (D-78)), vectors, import and combine provenance, the `capture.*` object (W4) | stays (search data) |
+| `images` | identity, geometry, `imohash` (the exact key, SHA-256 only to confirm a match, RD-43 changed by the owner 2026-11-08; the writer-less `phash` deleted), vectors, import and combine provenance, the `capture.*` object (W4) | stays (search data) |
 | `items` | see the schema doc; control-looking fields stay per section 3.4 | stays |
 | `classes` | mirror of the registry | deleted (D-56) |
 | `labels_confirmed` | no writer | deleted (D-56) |

@@ -36,28 +36,40 @@ def _project_fk(*, name: str | None = None) -> ForeignKey:
 
 
 class ImageContent(Base):
+    """The exact-duplicate key of one stored image: the sampled ``imohash`` always, the SHA-256
+    only once a second file with that ``imohash`` made it necessary (a confirmation, not the key).
+
+    ``image_path`` is where the stored bytes are read from when that confirmation needs them.
+    """
+
     __tablename__ = 'image_contents'
     __table_args__ = (
-        UniqueConstraint(
-            'project_id',
-            'content_sha256',
-            name='uq_image_contents_content',
-            postgresql_nulls_not_distinct=True,
-        ),
         UniqueConstraint(
             'project_id',
             'image_id',
             name='uq_image_contents_image',
             postgresql_nulls_not_distinct=True,
         ),
-        check('sha256', "content_sha256 ~ '^[0-9a-f]{64}$'"),
+        Index('ix_image_contents_imohash', 'project_id', 'imohash'),
+        Index(
+            'uq_image_contents_sha256',
+            'project_id',
+            'content_sha256',
+            unique=True,
+            postgresql_where=text('content_sha256 IS NOT NULL'),
+            postgresql_nulls_not_distinct=True,
+        ),
+        check('imohash', "imohash ~ '^[0-9a-f]{32}$'"),
+        check('sha256', "content_sha256 IS NULL OR content_sha256 ~ '^[0-9a-f]{64}$'"),
         check('size', 'size_bytes >= 0'),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(_project_fk())
-    content_sha256: Mapped[str]
+    imohash: Mapped[str]
+    content_sha256: Mapped[str | None]
     image_id: Mapped[str]
+    image_path: Mapped[str]
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     created_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
 

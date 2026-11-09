@@ -1,11 +1,10 @@
 """RR-10: the exact key identifies the upload only if the bytes kept equal the bytes sent.
 
 The upload route persists the payload under a path named by the content key and hands the same
-payload to the pipeline; nothing re-encodes it. The key is the SHA-256 of those bytes."""
+payload to the pipeline; nothing re-encodes it. The key is the imohash of those bytes."""
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -14,6 +13,7 @@ import pytest
 
 from src.services.curation.ingest_models import BatchIngestResult, IngestSummary
 from src.services.curation.upload_ingest import StagedEntry, stage_and_ingest
+from src.services.near_duplicates.content_key import content_imohash
 
 
 class _Pipeline:
@@ -27,7 +27,7 @@ class _Pipeline:
 
 
 @pytest.mark.asyncio
-async def test_the_stored_file_is_the_upload_and_is_named_by_its_sha256(
+async def test_the_stored_file_is_the_upload_and_is_named_by_its_imohash(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cfg = SimpleNamespace(upload_root=tmp_path, upload_accepted_extensions=('.jpg',))
@@ -46,7 +46,7 @@ async def test_the_stored_file_is_the_upload_and_is_named_by_its_sha256(
         run_id=None,
     )
 
-    digest = hashlib.sha256(payload).hexdigest()
+    digest = content_imohash(payload)
     (stored_path,) = pipeline.paths
     assert Path(stored_path).name == f'{digest}.jpg'
     assert Path(stored_path).read_bytes() == payload

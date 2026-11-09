@@ -1,12 +1,11 @@
 """The 0.6.0 near-duplicate fields are gone from the curation code: the per-item `dup_*` group
-fields, the unwritten `phash` and the sampled `imohash` key. Their replacements are the
-`near_dup_*` projection fields and `content_sha256`.
+fields and the unwritten `phash`. Their replacements are the `near_dup_*` projection fields.
+(`imohash` is the exact key again, confirmed by SHA-256 on a match, so it is no longer legacy.)
 
-Three owners still hold the older names and remove them in their own change: the near-duplicate
-scorer under `item_scores/` (it is deleted with the `OP_CROP_DUP_THRESHOLD` setting), the core
-global index (`duplicate_group_id` and the core `imohash`; its grouping is rebuilt on the run
-tables) and the project combine with its source reader, which dedupe on the stored `imohash` of
-the source images.
+Two owners still hold the older names and remove them in their own change: the near-duplicate
+scorer under `item_scores/` (it is deleted with the `OP_CROP_DUP_THRESHOLD` setting) and the core
+global index (`duplicate_group_id`; its grouping is rebuilt on the run tables). The 0.6.0 upgrade
+step names the old fields to remove them from a loaded install.
 """
 
 from __future__ import annotations
@@ -24,13 +23,12 @@ OWNED_ELSEWHERE = (
     'clients/opensearch/',
     'routers/ingest/',
     'routers/query_duplicates.py',
+    'services/upgrade/',
     'schemas/',
-    'services/projects/combine/',
-    'services/curation/dataset_import/project_source.py',
 )
 LEGACY = re.compile(
     r"""(?<![A-Za-z_])(dup_group_id|dup_group_size|dup_is_representative|dup_threshold|"""
-    r"""dup_method|dup_scored_at)\b|'phash'|"phash"|\bimohash\b"""
+    r"""dup_method|dup_scored_at)\b|'phash'|["]phash["]"""
 )
 
 

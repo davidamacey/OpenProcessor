@@ -65,11 +65,11 @@ def test_letterbox_is_timed_and_unchanged() -> None:
 
 
 def test_file_hash_is_timed() -> None:
-    from src.services.near_duplicates.content_key import content_sha256
+    from src.services.near_duplicates.content_key import content_imohash
 
     data = _jpeg()
     before, nbytes = _count('hash'), _bytes('hash')
-    assert content_sha256(data) == content_sha256(data)
+    assert content_imohash(data) == content_imohash(data)
     assert _count('hash') - before == 2
     assert _bytes('hash') - nbytes == 2 * len(data)
 
@@ -166,17 +166,18 @@ def index_service(tmp_path):
 def test_index_items_times_blur_and_document_build(index_service) -> None:
     from src.services.curation.ingest_index import ImageContext, index_items
     from src.services.curation.item_doc import DetectedItem
+    from src.services.near_duplicates.content_key import content_image_id
 
     data = _jpeg(128, 96)
     ctx = ImageContext(
-        image_id='img',
+        image_id=content_image_id('h'),
         image_path='/x.jpg',
         created=True,
         pil=Image.open(io.BytesIO(data)).convert('RGB'),
         width=128,
         height=96,
-        content_sha256='h',
-        content_bytes=1,
+        imohash='h',
+        content=b'x',
         source='t',
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]
