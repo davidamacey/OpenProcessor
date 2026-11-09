@@ -28,6 +28,11 @@ def app_client(monkeypatch):
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    # The refresh hold on a start reads the job tables; these tests run no database.
+    monkeypatch.setattr(
+        'src.services.curation.assist_loop.service.require_no_live_loop',
+        AsyncMock(return_value=None),
+    )
     from curation.query_fakes import QueryFakeOpenSearch
 
     items = QueryFakeOpenSearch({})
