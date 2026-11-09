@@ -71,6 +71,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.domain.capture_metadata import unknown_capture
 from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
@@ -98,12 +99,15 @@ from src.utils.cpu_pool import encoded_nbytes, run_cpu
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from opensearchpy import AsyncOpenSearch
 
     from src.clients.curation_opensearch import ClassRegistryFile
     from src.clients.pe_encoder import PEEncoder
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
+    from src.domain.capture_metadata import CaptureMetadata
     from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 
@@ -129,6 +133,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         secondary_profile: DetectionProfile | None = None,
         config: CurationConfig | None = None,
         policy: IngestPolicy | None = None,
+        capture_reader: Callable[[bytes], Awaitable[CaptureMetadata]] | None = None,
+        location_policy: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         # Accept either a wrapper exposing `.client` or a raw AsyncOpenSearch.
         self.opensearch = getattr(opensearch, 'client', opensearch)
@@ -147,6 +153,11 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         self.region_seed_status = region_seed_status()
         # The project's detect filter and embedding policy; defaults = today's behaviour.
         self.policy = policy or IngestPolicy()
+        # How a new image's capture metadata is read and which location policy it is stored under.
+        # Without a reader the capture is unknown (the capture backfill fills it); without a
+        # policy source no coordinate is stored (fail closed).
+        self._capture_reader = capture_reader
+        self._location_policy = location_policy
 
     # ------------------------------------------------------------------
     # Public API
@@ -226,9 +237,11 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                 source_identifier=source_identifier,
                 imohash=image_hash,
             )
+        capture: CaptureMetadata | None = None
         if existing is None:
             image_id = content_image_id(resolved.key)
             resolved_path = image_path
+            capture = await self.read_capture(image_bytes)
         else:
             image_id = existing['image_id']
             resolved_path = existing.get('image_path') or image_path
@@ -247,7 +260,18 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
+            capture=capture,
         )
+
+    async def read_capture(self, image_bytes: bytes) -> CaptureMetadata:
+        """The capture metadata of a new image's file (unknown when no reader is wired)."""
+        if self._capture_reader is None:
+            return unknown_capture()
+        return await self._capture_reader(image_bytes)
+
+    async def location_policy(self) -> str:
+        """The location policy a new image is stored under (``drop`` when none is wired)."""
+        return 'drop' if self._location_policy is None else await self._location_policy()
 
     async def index_items(
         self,

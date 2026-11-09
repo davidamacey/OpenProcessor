@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final, Literal
 
@@ -106,7 +106,7 @@ class CaptureMetadata:
     focal_length_mm: float | None = None
     focal_length_35mm: float | None = None
     orientation: int | None = None
-    location: CaptureLocation | None = None
+    location: CaptureLocation | None = field(default=None, repr=False)
     has_location: bool = False
     """A valid GPS fix was in the file; unchanged by the location policy, which only decides
     whether ``location`` is kept."""

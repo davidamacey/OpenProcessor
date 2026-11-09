@@ -54,9 +54,11 @@ class WorkerIngest:
         from src.clients.triton_pool_core import AsyncTritonPool
         from src.config.settings import get_settings
         from src.services.classes.registry import get_class_registry
+        from src.services.curation.capture_read import read_capture
         from src.services.curation.ingest import CurationIngestService
         from src.services.curation.ingest_detector import refreshed_ingest_profiles
         from src.services.curation.ingest_policy_store import get_ingest_policy
+        from src.services.curation.location_policy_store import get_location_policy
 
         if self._pool is None:
             self._pool = AsyncTritonPool(
@@ -79,6 +81,8 @@ class WorkerIngest:
             secondary_profile=profiles.secondary,
             pe_encoder=PEEncoder(triton_pool=self._pool),
             policy=await get_ingest_policy(),
+            capture_reader=read_capture,
+            location_policy=get_location_policy,
         )
 
     async def aclose(self) -> None:

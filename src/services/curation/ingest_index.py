@@ -20,8 +20,10 @@ from typing import TYPE_CHECKING, Any
 import cv2
 import numpy as np
 
+from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
+from src.domain.location_policy import apply_location_policy
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import ERROR_KIND_BLUR, ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
@@ -55,6 +57,7 @@ if TYPE_CHECKING:
 
     from PIL import Image
 
+    from src.domain.capture_metadata import CaptureMetadata
     from src.services.clustering.assign import Placement
     from src.services.curation.ingest import CurationIngestService
 
@@ -93,6 +96,9 @@ class ImageContext:
     indexed on this image later inherit it."""
     image_extra: dict[str, Any] = field(default_factory=dict)
     """Extra fields merged into the images doc this call creates."""
+    capture: CaptureMetadata | None = None
+    """The file's capture metadata as read, location included (``repr`` hides it); ``None`` for
+    an image that already has a doc, whose capture is already stored."""
 
     def require_pil(self) -> Image.Image:
         """The host-side frame; raises when the GPU decode kept the pixels on the device."""
@@ -357,6 +363,9 @@ async def index_items(
                 ingest_run_id=ctx.ingest_run_id,
             )
             image_doc.update(ctx.image_extra)
+            if ctx.capture is not None:
+                stored = apply_location_policy(ctx.capture, await service.location_policy())
+                image_doc['capture'] = capture_image_block(stored)
 
     rgb_frame = None
     full_var = 0.0
@@ -436,6 +445,8 @@ async def index_items(
             )
             if ctx.dataset_split and 'dataset_split' not in doc:
                 doc['dataset_split'] = ctx.dataset_split
+            if ctx.capture is not None:
+                doc.update(capture_item_fields(ctx.capture))
         crop_docs.append(doc)
 
     created_ids: list[str] = []
