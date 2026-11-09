@@ -13,7 +13,7 @@ from src.services.near_duplicates.build import full_build
 from .test_holdout_near_duplicates import ITEMS, _built, _make_freeze, _SeqNoOpenSearch
 
 
-pytestmark = [pytest.mark.db, pytest.mark.asyncio]
+pytestmark = [pytest.mark.db, pytest.mark.asyncio, pytest.mark.usefixtures('bound')]
 
 
 async def _rebuild_after_freeze(pg, project, held: str):

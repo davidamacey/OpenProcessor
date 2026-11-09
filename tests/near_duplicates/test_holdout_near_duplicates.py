@@ -15,7 +15,7 @@ from .engine import IMAGES, basis, make_env, near
 from .fake_opensearch import FakeNearDupOpenSearch
 
 
-pytestmark = [pytest.mark.db, pytest.mark.asyncio]
+pytestmark = [pytest.mark.db, pytest.mark.asyncio, pytest.mark.usefixtures('bound')]
 
 ITEMS = 'op_prj_nd__items'
 
