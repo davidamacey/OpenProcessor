@@ -51,8 +51,8 @@ pyclipper==1.4.0
 # src/services/curation/image_decode.py
 simplejpeg
 
-numpy
-scipy
+numpy==2.5.4
+scipy==1.18.1
 pyyaml==6.0.3
 requests==2.34.2
 
@@ -83,7 +83,7 @@ botocore==1.43.125
 
 # tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
 # marked live) -- this is the one non-lazy scikit-learn use in the base suite
-scikit-learn
+scikit-learn==1.9.1
 
 # Test runner
 pytest==9.2.0
@@ -112,8 +112,8 @@ onnxconverter-common==1.16.0
 
 # Lazy-imported by src/, but exercised by tests that are not marked live.
 faiss-cpu
-umap-learn
-hdbscan
+umap-learn==0.5.12
+hdbscan==0.8.44
 joblib==1.6.0
 imohash==1.1.0
 onnxruntime

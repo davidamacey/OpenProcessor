@@ -26,8 +26,8 @@ simplejpeg
 # Note: Pillow is installed as dependency of ultralytics (no need to specify)
 
 # Scientific Computing
-numpy
-scipy
+numpy==2.5.4
+scipy==1.18.1
 
 # HTTP Client
 requests==2.34.2
@@ -40,9 +40,9 @@ boto3==1.43.125
 botocore==1.43.125
 
 # Benchmarking and Visualization
-matplotlib
-seaborn
-pandas
+matplotlib==3.11.2
+seaborn==0.13.2
+pandas==3.1.1
 psutil==7.2.2
 tqdm==4.70.1
 tabulate==0.10.0
@@ -93,9 +93,9 @@ regex==2026.9.29
 
 # Curation Clustering (lazily imported -- ImportError only surfaces on first
 # call to a clustering endpoint if these are missing from the image)
-scikit-learn  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py
-umap-learn  # src/services/curation/clustering/embedding_reduce.py, umap_state.py, backend.py; src/services/curation/embedding_viz.py
-hdbscan  # src/services/curation/clustering/methods/hdbscan.py
+scikit-learn==1.9.1  # src/services/curation/clustering/orchestrator.py, methods/ahc.py, backend.py; scripts/curation/bakeoff/sample.py
+umap-learn==0.5.12  # src/services/curation/clustering/embedding_reduce.py, umap_state.py, backend.py; src/services/curation/embedding_viz.py
+hdbscan==0.8.44  # src/services/curation/clustering/methods/hdbscan.py
 joblib==1.6.0  # src/services/curation/clustering/umap_state.py, embedding_viz.py
 
 # GPU arbiter (src/services/training/gpu_arbiter.py): stops/starts

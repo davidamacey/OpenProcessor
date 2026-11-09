@@ -14,14 +14,14 @@ torchvision>=0.21,<1
 
 # Ultralytics runtime deps we want resolved up front rather than auto-installed
 # mid-run (see the ONNX note below).
-numpy>=1.26,<3
+numpy==2.5.4
 opencv-python-headless>=4.10,<6
 Pillow>=10.4
 PyYAML>=6.0
 requests>=2.32
-scipy>=1.13
-pandas>=2.2
-matplotlib>=3.9
+scipy==1.18.1
+pandas==3.1.1
+matplotlib==3.11.2
 psutil>=6.0
 tqdm>=4.66
 

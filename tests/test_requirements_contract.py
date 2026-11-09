@@ -119,14 +119,6 @@ _REQ_RE = re.compile(
 # package cannot stay on the list.
 _UNPINNED_UNTIL_PART_B = frozenset(
     {
-        'numpy',
-        'scipy',
-        'scikit-learn',
-        'umap-learn',
-        'hdbscan',
-        'pandas',
-        'matplotlib',
-        'seaborn',
         'opencv-python',
         'simplejpeg',
         'transformers',
