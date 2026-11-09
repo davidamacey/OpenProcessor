@@ -209,7 +209,7 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
     def only(key: tuple[str, str]) -> bool:
         return key[0] == 'GET' and key[1].startswith('/review/')
 
-    _, _, shapes_alpha = _sweep(leak_env, 'alpha', only)
-    _, _, shapes_beta = _sweep(leak_env, 'beta', only)
+    _, _, shapes_alpha, _ = _sweep(leak_env, 'alpha', only)
+    _, _, shapes_beta, _ = _sweep(leak_env, 'beta', only)
     caught = _cache_parity('alpha', 'beta', shapes_alpha, shapes_beta)
     assert any('/review/' in line for line in caught), 'the planted unkeyed cache went unnoticed'
