@@ -8,7 +8,6 @@ row-level security) uses the real repository in the ``db`` tier instead.
 from __future__ import annotations
 
 import datetime as dt
-import sys
 from typing import Any
 
 import pytest
@@ -238,11 +237,10 @@ def install(monkeypatch: pytest.MonkeyPatch) -> MemorySettings:
     )
     for module in (
         'src.services.curation.clustering.refresh_state_store',
-        'scripts.curation.cluster_refresh_daemon',
+        'src.services.periodic.cluster_refresh',
     ):
-        if module in sys.modules or module.startswith('src.'):
-            monkeypatch.setattr(f'{module}.load_refresh_state', memory.load_refresh_state)
-            monkeypatch.setattr(f'{module}.save_refresh_state', memory.save_refresh_state)
+        monkeypatch.setattr(f'{module}.load_refresh_state', memory.load_refresh_state)
+        monkeypatch.setattr(f'{module}.save_refresh_state', memory.save_refresh_state)
     return memory
 
 

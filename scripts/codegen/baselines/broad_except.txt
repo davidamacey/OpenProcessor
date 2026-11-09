@@ -36,7 +36,6 @@ scripts/curation/backfill_region_embeddings.py	2	ratchet: may only go down
 scripts/curation/bakeoff/bakeoff_runner.py	2	ratchet: may only go down
 scripts/curation/bakeoff/report.py	2	ratchet: may only go down
 scripts/curation/cluster_raw_labels.py	1	ratchet: may only go down
-scripts/curation/cluster_refresh_daemon.py	2	ratchet: may only go down
 scripts/curation/ingest_upload.py	1	ratchet: may only go down
 scripts/curation/revert_class_cluster_promotions.py	1	ratchet: may only go down
 scripts/curation/seed_live_harness.py	1	ratchet: may only go down

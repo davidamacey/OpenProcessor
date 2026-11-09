@@ -30,6 +30,18 @@ RETIRED_ENV: dict[str, str] = {
     'OP_IVF_RETRAIN_CHECK_S': (
         f'{_REMOVED} the IVF retrain is a cluster_run started by the periodic cluster refresh'
     ),
+    'OP_CLUSTER_REFRESH_GROWTH_THRESHOLD': (
+        f'{_REMOVED} the growth rule is the cluster profile refresh.growth_threshold'
+    ),
+    'OP_CLUSTER_REFRESH_MAX_DEFERRAL_S': (
+        f'{_REMOVED} the deferral bound is the cluster profile refresh.max_deferral_s'
+    ),
+    'OP_CLUSTER_REFRESH_RETRY_BACKOFF_S': (
+        f'{_REMOVED} the retry backoff is the cluster profile refresh.retry_backoff_s'
+    ),
+    'OP_CLUSTER_REFRESH_AUTO_LABEL': (
+        f'{_REMOVED} the periodic refresh starts a cluster_run, never the auto-label job'
+    ),
     'VLM_URL': 'OP_VLM_URL',
     'GEMMA_URL': 'OP_VLM_URL',
     'OPENWEBUI_BASE_URL': 'OP_VLM_URL',

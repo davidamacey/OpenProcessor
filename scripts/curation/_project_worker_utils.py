@@ -1,5 +1,5 @@
 """Per-project discovery helpers shared by the multi-project curation
-workers (``vlm_worker.py``, ``cluster_refresh_daemon.py`` and the
+workers (``vlm_worker.py`` and the
 detection worker in ``scripts/curation/worker/``).
 
 A worker process is not bound to one project: each cycle it discovers

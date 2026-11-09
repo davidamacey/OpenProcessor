@@ -11,6 +11,8 @@ from __future__ import annotations
 from typing import Any, Final
 
 
+REFRESH_INTERVAL_ENV: Final = 'OP_CLUSTER_REFRESH_INTERVAL_S'
+DEFAULT_REFRESH_INTERVAL_S: Final = 120
 TARGET_AXES: Final[dict[str, str]] = {
     'item': 'clustering_item',
     'region_box': 'clustering_region_box',

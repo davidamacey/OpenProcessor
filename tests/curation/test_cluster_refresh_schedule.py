@@ -1,6 +1,8 @@
-"""Issue #212: when the cluster retrain starts, with a fake clock and fake
-ingest-status observations. Scheduling only: what a retrain computes is
-pinned by ``test_cluster_schedule_equivalence.py``."""
+"""Issue #212: when the periodic cluster refresh starts a run, with a fake clock and fake
+observations. Scheduling only: what a run computes is pinned by
+``test_cluster_schedule_equivalence.py`` and ``tests/clustering/``. ``built`` is the pool size of
+the newest finished partition, so growth is measured against what clustering last saw.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +13,6 @@ from src.services.curation.clustering.refresh_schedule import (
     Observation,
     Policy,
     ProjectSchedule,
-    ScheduleBook,
     step,
 )
 
@@ -19,20 +20,29 @@ from src.services.curation.clustering.refresh_schedule import (
 POLICY = Policy(threshold=200, max_deferral_s=600.0, retry_backoff_s=300.0)
 
 
-def obs(count: int, *, unfinished: int = 0, tracked: str | None = None, busy: bool = False):
+def obs(
+    count: int,
+    *,
+    built: int = 1000,
+    unfinished: int = 0,
+    tracked: str | None = None,
+    busy: bool = False,
+    recent_ingest: bool = False,
+):
     return Observation(
         count=count,
+        built=built,
         unfinished=unfinished,
         tracked_status=tracked,
         busy=busy,
         loop_live=False,
-        recent_ingest=False,
+        recent_ingest=recent_ingest,
     )
 
 
 def settled(count: int = 1000) -> ProjectSchedule:
-    """A project that trained once at ``count`` and has seen it since."""
-    return ProjectSchedule(last_trained_count=count, prev_count=count)
+    """A project that has seen ``count`` since its last run."""
+    return ProjectSchedule(prev_count=count)
 
 
 def test_below_threshold_does_nothing() -> None:
@@ -58,10 +68,9 @@ def test_runs_once_ingest_is_quiet() -> None:
     s = settled(1000)
     assert step(s, obs(1250), 0.0, POLICY) is Action.DEFER
     assert step(s, obs(1250), 120.0, POLICY) is Action.START
-    s.on_started(1250, 'job-1', previous_trained=1000)
+    s.on_started('job-1')
     assert s.pending_since is None
     assert s.job_id == 'job-1'
-    assert s.last_trained_count == 1250
 
 
 def test_max_deferral_is_honoured_under_continuous_ingest() -> None:
@@ -71,14 +80,14 @@ def test_max_deferral_is_honoured_under_continuous_ingest() -> None:
     assert step(s, obs(1800), 600.0, POLICY) is Action.START
 
 
-def test_repeated_requests_coalesce_into_one_pending_job() -> None:
+def test_repeated_requests_coalesce_into_one_pending_run() -> None:
     s = settled(1000)
     step(s, obs(1250), 0.0, POLICY)
     step(s, obs(1600), 120.0, POLICY)
     step(s, obs(2100), 240.0, POLICY)
     assert s.pending_since == 0.0  # one request, dated from the first crossing
     assert step(s, obs(2100), 360.0, POLICY) is Action.START
-    s.on_started(2100, 'job-1', previous_trained=1000)
+    s.on_started('job-1')
     assert step(s, obs(2100, tracked='running'), 480.0, POLICY) is Action.NONE
 
 
@@ -86,115 +95,112 @@ def test_never_started_twice_while_in_flight() -> None:
     s = settled(1000)
     step(s, obs(1250), 0.0, POLICY)
     assert step(s, obs(1250), 120.0, POLICY) is Action.START
-    s.on_started(1250, 'job-1', previous_trained=1000)
-    # More growth crosses the threshold again while the job runs: the request
-    # is kept (coalesced) but nothing starts.
+    s.on_started('job-1')
+    # More growth crosses the threshold again while the run is live: the request is kept
+    # (coalesced) but nothing starts.
     assert step(s, obs(1500, tracked='running'), 240.0, POLICY) is Action.NONE
     assert step(s, obs(1500, tracked='queued'), 360.0, POLICY) is Action.NONE
     assert s.pending_since is not None
-    # The job ends; the kept request runs once, when quiet.
-    assert step(s, obs(1500, tracked='completed'), 480.0, POLICY) is Action.START
+    # The run ends with a partition of 1250; the kept request is still due (1500 - 1250 >= 200)
+    # and runs once, when quiet.
+    done = obs(1500, built=1250, tracked='completed')
+    assert step(s, done, 480.0, POLICY) is Action.START
 
 
-def test_another_jobs_run_in_the_project_blocks_start() -> None:
+def test_a_completed_run_clears_the_request_when_its_partition_covers_the_growth() -> None:
+    s = settled(1250)
+    s.job_id, s.pending_since = 'job-1', 120.0
+    assert step(s, obs(1250, built=1250, tracked='completed'), 480.0, POLICY) is Action.NONE
+    assert (s.job_id, s.pending_since) == (None, None)
+
+
+def test_another_runs_presence_in_the_project_blocks_start() -> None:
     s = settled(1000)
     step(s, obs(1250), 0.0, POLICY)
     assert step(s, obs(1250, busy=True), 120.0, POLICY) is Action.NONE
     assert step(s, obs(1250), 240.0, POLICY) is Action.START
 
 
-def test_stale_or_failed_job_is_repaired_by_a_retry_after_backoff() -> None:
+def test_a_failed_run_is_retried_after_the_backoff() -> None:
     s = settled(1000)
     step(s, obs(1250), 0.0, POLICY)
     step(s, obs(1250), 120.0, POLICY)
-    s.on_started(1250, 'job-1', previous_trained=1000)
-    # The server repaired a dead worker's job to 'interrupted'.
+    s.on_started('job-1')
+    # The reaper marked a dead worker's run interrupted: no partition came of it.
     assert step(s, obs(1250, tracked='interrupted'), 240.0, POLICY) is Action.NONE
     assert s.job_id is None
-    assert s.last_trained_count == 1000
+    assert s.retry_not_before == 540.0
     assert step(s, obs(1250), 300.0, POLICY) is Action.NONE  # backing off
     assert step(s, obs(1250), 600.0, POLICY) is Action.START
 
 
-def test_unknown_tracked_job_is_treated_as_lost_and_retried() -> None:
-    s = settled(1000)
-    s.job_id, s.trained_before = 'gone', 1000
-    s.last_trained_count = 1250
-    assert step(s, obs(1250, tracked='unknown'), 0.0, POLICY) is Action.NONE
-    assert s.last_trained_count == 1000
-
-
-def test_first_ever_observation_requests_a_train() -> None:
-    s = ProjectSchedule()
-    assert step(s, obs(500), 0.0, POLICY) is Action.START
-
-
-def test_cancel_restores_the_trained_mark_so_it_reruns_after_resume() -> None:
-    s = settled(1000)
-    step(s, obs(1250), 0.0, POLICY)
-    step(s, obs(1250), 120.0, POLICY)
-    s.on_started(1250, 'job-1', previous_trained=1000)
-    assert s.job_id == 'job-1'
-    s.on_cancelled()
+def test_an_unknown_tracked_run_is_treated_as_lost_and_retried() -> None:
+    s = settled(1250)
+    s.job_id = 'gone'
+    assert step(s, obs(1250, tracked='lost'), 0.0, POLICY) is Action.NONE
     assert s.job_id is None
-    assert s.last_trained_count == 1000
-    assert step(s, obs(1250), 1000.0, POLICY) is Action.START  # crossed again and quiet
+    assert s.retry_not_before == POLICY.retry_backoff_s
 
 
-def test_projects_are_isolated() -> None:
-    book = ScheduleBook()
-    a, b = book.get('alpha'), book.get('beta')
-    a.last_trained_count = a.prev_count = 1000
-    b.last_trained_count = b.prev_count = 1000
+def test_a_paused_or_cancelling_run_still_holds_the_project() -> None:
+    for status in ('paused', 'cancelling'):
+        s = settled(1250)
+        s.job_id = 'job-1'
+        assert step(s, obs(1500, tracked=status), 0.0, POLICY) is Action.NONE
+        assert s.job_id == 'job-1'
+
+
+def test_first_ever_observation_requests_a_run() -> None:
+    s = ProjectSchedule()
+    assert step(s, obs(500, built=0), 0.0, POLICY) is Action.START
+
+
+def test_projects_do_not_share_a_clock() -> None:
+    a, b = settled(1000), settled(1000)
     assert step(a, obs(1300), 0.0, POLICY) is Action.DEFER
     assert step(b, obs(1010), 0.0, POLICY) is Action.NONE
     assert step(a, obs(1300), 120.0, POLICY) is Action.START
-    a.on_started(1300, 'ja', previous_trained=1000)
+    a.on_started('ja')
     assert b.job_id is None
     assert b.pending_since is None
-    assert book.get('alpha') is a
 
 
-def test_book_forget_drops_state() -> None:
-    book = ScheduleBook()
-    book.get('alpha').job_id = 'x'
-    book.forget('alpha')
-    assert book.get('alpha').job_id is None
-
-
-def test_empty_project_never_requests_a_train() -> None:
-    """#350: zero crops with nothing trained must not read as 'never trained'."""
+def test_empty_project_never_requests_a_run() -> None:
+    """#350: zero items with nothing built must not read as 'never clustered'."""
     s = ProjectSchedule()
     for cycle in range(5):
-        assert step(s, obs(0), cycle * 120.0, POLICY) is Action.NONE
+        assert step(s, obs(0, built=0), cycle * 120.0, POLICY) is Action.NONE
     assert s.pending_since is None
 
 
-def test_idle_project_queues_one_train_then_nothing() -> None:
+def test_idle_project_queues_one_run_then_nothing() -> None:
     s = ProjectSchedule()
-    assert step(s, obs(50), 0.0, POLICY) is Action.START
-    s.on_started(50, 'job-1', previous_trained=0)
+    assert step(s, obs(50, built=0), 0.0, POLICY) is Action.START
+    s.on_started('job-1')
     for cycle in range(1, 6):
-        assert step(s, obs(50, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE
+        done = obs(50, built=50, tracked='completed')
+        assert step(s, done, cycle * 120.0, POLICY) is Action.NONE
 
 
 def test_growth_past_the_threshold_from_empty_triggers_exactly_once() -> None:
     s = ProjectSchedule()
-    assert step(s, obs(0), 0.0, POLICY) is Action.NONE
-    assert step(s, obs(300), 120.0, POLICY) is Action.DEFER
-    assert step(s, obs(300), 240.0, POLICY) is Action.START
-    s.on_started(300, 'job-1', previous_trained=0)
+    assert step(s, obs(0, built=0), 0.0, POLICY) is Action.NONE
+    assert step(s, obs(300, built=0), 120.0, POLICY) is Action.DEFER
+    assert step(s, obs(300, built=0), 240.0, POLICY) is Action.START
+    s.on_started('job-1')
     for cycle in range(3, 7):
-        assert step(s, obs(300, tracked='completed'), cycle * 120.0, POLICY) is Action.NONE
+        done = obs(300, built=300, tracked='completed')
+        assert step(s, done, cycle * 120.0, POLICY) is Action.NONE
 
 
 def test_recent_ingest_defers_even_when_count_is_flat_and_nothing_pending() -> None:
-    s = settled(1000)
-    step(s, Observation(1250, 0, None, False, False, recent_ingest=True), 0.0, POLICY)
-    flat = Observation(1250, 0, None, False, False, recent_ingest=True)
-    assert step(s, flat, 120.0, POLICY) is Action.DEFER
+    s = settled(1250)
+    step(s, obs(1250, recent_ingest=True), 0.0, POLICY)
+    assert step(s, obs(1250, recent_ingest=True), 120.0, POLICY) is Action.DEFER
 
 
 def test_recent_ingest_must_be_given() -> None:
     with pytest.raises(TypeError):
-        Observation(count=1, unfinished=0, tracked_status=None, busy=False, loop_live=False)  # type: ignore[call-arg]
+        Observation(  # type: ignore[call-arg]
+            count=1, built=0, unfinished=0, tracked_status=None, busy=False, loop_live=False
+        )

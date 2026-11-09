@@ -115,7 +115,6 @@ _.crop_key  # src/domain/storage_keys.py, the crop-cache key; its first caller i
 # by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by
 # the consumer-from-compose test. Delete each entry in the change that adds its production caller.
 _.GPU_ARBITER  # src/config/advisory_locks.py, periodic arbiter tick (stage 6)
-_.CLUSTER_REFRESH  # src/config/advisory_locks.py, periodic clustering refresh (stage 6)
 _.REAPER  # src/config/advisory_locks.py, the reaper tick (stage 3)
 _.QUEUE_PROFILE  # src/config/queue.py, queue -> compose profile table the consumers-from-compose test reads
 _._on_worker_init  # src/tasks/app.py, connected to Celery's worker_init signal by decorator

@@ -480,22 +480,3 @@ async def test_vlm_worker_reads_and_labels_each_project_in_its_own_scope(
     labelled = {cid for _, body in api.requests for cid in body['crop_ids']}
     every_crop = {cid for store in transport.docs.values() for cid in store}
     assert labelled == every_crop, 'every project was drained'
-
-
-@pytest.mark.asyncio
-async def test_cluster_refresh_counts_and_refreshes_each_project_in_its_own_scope(
-    projects: dict[str, ProjectRecord], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from scripts.curation import cluster_refresh_daemon
-
-    transport, api = _http_world(monkeypatch, cluster_refresh_daemon, projects)
-    monkeypatch.setattr(cluster_refresh_daemon, 'write_heartbeat', lambda *_a, **_kw: None)
-    monkeypatch.setattr('sys.argv', ['cluster_refresh_daemon', '--once'])
-    rejected_before = cross_project_access_count()
-    assert await cluster_refresh_daemon.run(cluster_refresh_daemon._parse_args()) == 0
-
-    assert cross_project_access_count() == rejected_before
-    _assert_no_cross_project_calls(transport, projects)
-    _assert_requests_scoped(api, projects)
-    promoted = {path.split('/projects/', 1)[1].split('/', 1)[0] for path, _ in api.requests}
-    assert promoted == set(SLUGS), 'every project gets its own refresh'
