@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.clients.occ_locks import _is_locked_marker, is_locked_class
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -59,6 +58,9 @@ async def occ_upsert_bulk(
     *,
     index: str | None = None,
     human_field_guards: list[str],
+    vector_excludes: list[str],
+    vector_field: str,
+    state_field: str,
     writer_id: str = 'ingest',
     id_field: str = 'crop_id',
     refresh: bool | str = False,
@@ -102,6 +104,9 @@ async def occ_upsert_bulk(
         index: Target index.
         human_field_guards: Fields whose non-empty presence on the
             existing doc signals a human write to preserve.
+        vector_excludes: Every vector field of the items index, left out of the fetches.
+        vector_field, state_field: The primary item space's vector and ``embedding_state``
+            fields (a failed re-encode must not relabel a stored vector).
         writer_id: Provenance tag for structured logs / metrics.
         id_field: Doc id field name (default ``crop_id``).
         refresh: OS refresh policy on the writes.
@@ -134,9 +139,7 @@ async def occ_upsert_bulk(
         return result
 
     ids = [doc[id_field] for doc in docs]
-    mget_resp = await client.mget(
-        body={'ids': ids}, index=index, _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES
-    )
+    mget_resp = await client.mget(body={'ids': ids}, index=index, _source_excludes=vector_excludes)
     by_id: dict[str, dict[str, Any]] = {item['_id']: item for item in mget_resp.get('docs', [])}
 
     create_docs: list[dict[str, Any]] = []
@@ -167,7 +170,7 @@ async def occ_upsert_bulk(
         refetch = await client.mget(
             body={'ids': sorted(create_conflict_ids)},
             index=index,
-            _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+            _source_excludes=vector_excludes,
         )
         update_targets.extend(
             (id_to_doc[item['_id']], item)
@@ -182,6 +185,9 @@ async def occ_upsert_bulk(
             {doc[id_field]: doc for doc, _existing in update_targets},
             index=index,
             human_field_guards=human_field_guards,
+            vector_excludes=vector_excludes,
+            vector_field=vector_field,
+            state_field=state_field,
             writer_id=writer_id,
             refresh=refresh,
             fill_if_absent=fill_if_absent,
@@ -247,6 +253,9 @@ async def _update_existing_docs(
     *,
     index: str,
     human_field_guards: list[str],
+    vector_excludes: list[str],
+    vector_field: str,
+    state_field: str,
     writer_id: str,
     refresh: bool | str,
     fill_if_absent: Collection[str],
@@ -271,7 +280,7 @@ async def _update_existing_docs(
             human_field_guards=human_field_guards,
         )
         filled = _apply_fill_if_absent(merged, source, fill_if_absent)
-        keep_stored_vector_state(merged, source)
+        keep_stored_vector_state(merged, source, vector_field, state_field)
         merge_effects[doc_id] = (preserved_fields, filled)
         return merged
 
@@ -281,6 +290,7 @@ async def _update_existing_docs(
             index=index,
             ids=list(new_doc_by_id),
             merge_fn=_merge,
+            vector_excludes=vector_excludes,
             max_retries=1,
             refresh=refresh,
         )

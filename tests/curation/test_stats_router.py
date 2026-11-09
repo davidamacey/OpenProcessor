@@ -12,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from src.routers.curation.stats import _rollup_class_sources, stats_dataset
 from src.services.curation.stats_dataset_query import build_dataset_query_body
@@ -59,7 +60,7 @@ def test_class_sources_agg_configures_a_missing_bucket() -> None:
     )
     # Also prove the body actually built from the source carries it —
     # not just present in a comment.
-    body = build_dataset_query_body(get_region_fields())
+    body = build_dataset_query_body(get_region_fields(), embedding=DEFAULT_WRITE_FIELDS)
     assert body['aggs']['class_sources']['terms']['missing'] == '__none__'
 
 
@@ -72,7 +73,7 @@ def test_dataset_query_body_scopes_class_source_rollup_to_docs_with_class_id() -
     """
     from src.config.region_fields import get_region_fields
 
-    body = build_dataset_query_body(get_region_fields())
+    body = build_dataset_query_body(get_region_fields(), embedding=DEFAULT_WRITE_FIELDS)
     assert body['aggs']['class_sources_with_class']['filter'] == {'exists': {'field': 'class_id'}}
     assert (
         body['aggs']['class_sources_with_class']['aggs']['by_source']['terms']['field']

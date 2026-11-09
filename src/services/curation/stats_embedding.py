@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,10 @@ from src.domain.embedding_state import (
     legacy_embedded_clause,
     state_clause,
 )
+
+
+if TYPE_CHECKING:
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 _KNOWN_STATES = (EMBEDDED, NOT_SELECTED, DEFERRED, FAILED)
@@ -46,15 +50,21 @@ class EmbeddingBreakdown(BaseModel):
     by_state: EmbeddingByState
 
 
-def embedding_aggregations() -> dict[str, Any]:
+def embedding_aggregations(embedding: WriteFields) -> dict[str, Any]:
     return {
         # One filter per known state: a terms aggregation on embedding_state
         # 400s on indexes whose mapping predates the keyword type.
-        'embedding_states': {'filters': {'filters': {s: state_clause(s) for s in _KNOWN_STATES}}},
-        'embedded_items': {'filter': embedded_clause()},
+        'embedding_states': {
+            'filters': {
+                'filters': {s: state_clause(s, embedding.state_field) for s in _KNOWN_STATES}
+            }
+        },
+        'embedded_items': {'filter': embedded_clause(embedding.vector_field)},
         # An item written before embedding_state existed that has its vector is
         # embedded; it must not read as "unknown" beside embedded=N.
-        'legacy_embedded_items': {'filter': legacy_embedded_clause()},
+        'legacy_embedded_items': {
+            'filter': legacy_embedded_clause(embedding.vector_field, embedding.state_field)
+        },
     }
 
 

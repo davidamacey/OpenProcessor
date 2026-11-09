@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from curation.config_test_stack import ITEMS
 from src.config import get_region_fields
@@ -251,7 +252,7 @@ def test_a_box_run_keeps_the_item_suggestions_and_a_deleted_box_is_dropped_on_re
     slot = _doc(world, 'c1')['assist']
     assert (slot['run_id'], slot['class_name']) == ('asr_item', 'widget')
     assert slot['attributes'][0]['value'] == 'acme'
-    wire = serialize_item(_doc(world, 'c1'))['assist']['boxes']
+    wire = serialize_item(_doc(world, 'c1'), state_fields=DEFAULT_STATE_FIELDS)['assist']['boxes']
     assert [b['box_id'] for b in wire] == ['b1'], 'the box that no longer exists is not served'
 
 

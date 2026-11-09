@@ -35,6 +35,7 @@ from src.services.curation.edit_history import (
     restore_edit_state,
 )
 from src.services.curation.item_delete import delete_items
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -406,7 +407,12 @@ async def _write(
         return _decide(current, ctx, entry, boxes).fields
 
     await occ_update_one(
-        ctx.opensearch, doc_id=crop_id, merger=merger, index=ctx.items_index, writer_id=ctx.writer
+        ctx.opensearch,
+        vector_excludes=await vector_source_excludes(),
+        doc_id=crop_id,
+        merger=merger,
+        index=ctx.items_index,
+        writer_id=ctx.writer,
     )
 
 

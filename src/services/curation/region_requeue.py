@@ -68,6 +68,7 @@ from src.core.logging import get_logger
 from src.domain.region_boxes import box_query, boxes_write_fields, has_any_box_query, read_boxes
 from src.services.curation.region_box_embeddings import prune_box_embeddings
 from src.services.curation.reprocess_locks import region_locked_clause, region_set_locked
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -463,6 +464,7 @@ async def apply_requeue_ids(
     )
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=doc_ids,
         merger=merger,
         index=cfg.items_index,
@@ -542,6 +544,7 @@ async def apply_requeue(
         cursor = hits[-1].get('sort')
         result = await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_ids=[h['_id'] for h in hits],
             merger=merger,
             index=cfg.items_index,

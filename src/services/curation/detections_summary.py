@@ -25,6 +25,7 @@ from src.services.curation.stats_embedding import (
     embedding_aggregations,
     embedding_summary,
 )
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
@@ -68,15 +69,16 @@ def suggested_embed_request(flt: ItemFilter) -> ReprocessRequest:
 async def detections_summary(
     opensearch: AsyncOpenSearch, index: str, flt: ItemFilter
 ) -> DetectionsSummary:
+    embedding = await item_write_fields()
     body = {
         'size': 0,
         'track_total_hits': True,
-        'query': item_filter_query(flt),
+        'query': item_filter_query(flt, embedding=embedding),
         'aggs': {
-            **embedding_aggregations(),
+            **embedding_aggregations(embedding),
             'by_label': {
                 'terms': {'field': 'proposal_name', 'size': MAX_LABELS, 'missing': _NAME_MISSING},
-                'aggs': embedding_aggregations(),
+                'aggs': embedding_aggregations(embedding),
             },
             'n_labels': {'cardinality': {'field': 'proposal_name'}},
         },

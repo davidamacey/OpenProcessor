@@ -53,3 +53,24 @@ def test_the_default_cluster_profile_names_the_space_it_clusters() -> None:
     body = default_profile_body('item', 'vec_x_v1')
     assert body['embedding_field'] == 'vec_x_v1'
     assert default_profile_body('item', 'pe_embedding')['embedding_field'] == 'pe_embedding'
+
+
+@pytest.mark.asyncio
+async def test_the_item_state_fields_are_those_of_every_live_item_space(embedding_registry) -> None:
+    assert await readers.item_state_fields() == {'pe_core_l14_336_v1': 'embedding_state'}
+    embedding_registry.add(new_space(Target.ITEM, 'mobileclip2_s2'))
+    embedding_registry.add(new_space(Target.BOX, 'mobileclip2_s2'))
+    assert await readers.item_state_fields() == {
+        'pe_core_l14_336_v1': 'embedding_state',
+        'mobileclip2_s2_v1': 'vec_mobileclip2_s2_v1_state',
+    }
+
+
+@pytest.mark.asyncio
+async def test_the_images_excludes_are_the_frame_vectors_only(embedding_registry) -> None:
+    embedding_registry.add(new_space(Target.FRAME, 'mobileclip2_s2'))
+    embedding_registry.add(new_space(Target.ITEM, 'mobileclip2_s2'))
+    assert await readers.vector_source_excludes('images') == [
+        'pe_embedding',
+        'vec_mobileclip2_s2_v1',
+    ]

@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from src.config.region_fields import RegionFields
 from src.config.region_rejection import REJECT_REASON_HUMAN
@@ -392,7 +393,7 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
         F.set_complete: True,
         F.revision: 2,
     }
-    item = serialize_item(src, 'x')
+    item = serialize_item(src, 'x', state_fields=DEFAULT_STATE_FIELDS)
     # bbox_in_parent / thumbnail_url / locked are derived wire-only additions
     # on top of the stored element (the lock rule) -- not part of
     # RegionBox.to_doc().
@@ -415,7 +416,7 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
 def test_serialize_item_defaults_when_absent() -> None:
     from src.services.curation.wire import serialize_item
 
-    item = serialize_item({'crop_id': 'x'}, 'x')
+    item = serialize_item({'crop_id': 'x'}, 'x', state_fields=DEFAULT_STATE_FIELDS)
     assert item['region_boxes'] == []
     assert item['region_count'] == 0
     assert item['region_rejected_count'] == 0

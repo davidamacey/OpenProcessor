@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from curation.occ_fakes import FakeIngestOpenSearch
@@ -88,7 +89,12 @@ def test_an_already_classed_or_labeled_item_is_left_alone() -> None:
 
 def test_the_resolved_source_is_recognised_as_a_classifier_label_the_vlm_skips() -> None:
     assert is_classifier_class_source('item_model')
-    query = vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
+    query = vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+    )
     skipped = [
         c
         for c in query['bool']['must_not']

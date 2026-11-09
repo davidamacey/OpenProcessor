@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from src.domain.embedding_spaces import Target, legacy_names
 from src.domain.embedding_state import legacy_embedded_backfill_body, legacy_embedded_clause
 from src.services.upgrade.from_060 import control_rows
 from src.utils.class_names import normalize_class_name
@@ -64,13 +65,15 @@ def adds_region_class(pd: ProjectData) -> bool:
 async def backfill_embedded_state(ctx: StepContext, index: str) -> int:
     """Record ``embedded`` on every legacy item that has its vector. Idempotent: after one pass
     nothing matches, and a cheap count says so without starting a task."""
-    if await ctx.writer.count(index, legacy_embedded_clause()) == 0:
+    names = legacy_names(Target.ITEM)
+    state_field = names.state_field or ''
+    if await ctx.writer.count(index, legacy_embedded_clause(names.vector_field, state_field)) == 0:
         return 0
     for attempt in range(_RETRY_ATTEMPTS):
         try:
             return await ctx.writer.update_by_query(
                 index,
-                legacy_embedded_backfill_body(),
+                legacy_embedded_backfill_body(names.vector_field, state_field),
                 requests_per_second=_BACKFILL_REQUESTS_PER_SECOND,
             )
         except Exception as exc:

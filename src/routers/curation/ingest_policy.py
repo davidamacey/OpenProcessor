@@ -35,6 +35,7 @@ from src.services.curation.ingest_policy import (
 from src.services.curation.ingest_policy_store import get_ingest_policy, put_ingest_policy
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.reprocess_targets import scan_items
+from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.class_names import normalize_class_name
 
 
@@ -51,7 +52,6 @@ _PREVIEW_FIELDS = [
     'label_source',
     'class_labeled_at',
     'class_excluded',
-    'embedding_state',
 ]
 
 
@@ -107,12 +107,13 @@ async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> I
     """What ``body.embedding`` would embed over the stored items (one image's
     items at a time, the same function ingest runs). Read-only."""
     cfg = get_curation_config()
+    state_field = (await item_write_fields()).state_field
     total = (await opensearch.count(index=cfg.items_index)).get('count', 0)
     docs = await scan_items(
         opensearch,
         {'match_all': {}},
         index=cfg.items_index,
-        includes=_PREVIEW_FIELDS,
+        includes=[*_PREVIEW_FIELDS, state_field],
         max_docs=PREVIEW_MAX_ITEMS,
     )
     by_image: dict[str, list[dict]] = {}
@@ -126,7 +127,7 @@ async def preview_policy(body: IngestPolicyBody, opensearch: OpenSearchDep) -> I
         # A label given after ingest does not embed a stored vectorless item (only a
         # re-ingest applies the labeled-always-embeds rule), so it must not count here.
         cands = [
-            dataclasses.replace(c, labeled=c.labeled and s.get('embedding_state') not in _NO_VECTOR)
+            dataclasses.replace(c, labeled=c.labeled and s.get(state_field) not in _NO_VECTOR)
             for s in sources
             for c in (candidate_from_doc(s),)
         ]

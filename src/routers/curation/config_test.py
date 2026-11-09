@@ -64,6 +64,7 @@ from src.services.curation.wire import item_source_excludes
 from src.services.detection.profile_registry import resolve_region_profile
 from src.services.detection.segmenter_health import configured_segmenter_health
 from src.services.detection.segmenter_http import first_segmenter_url
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
 from src.services.labeling.vlm_labeler_assist import PackAttributesError
@@ -165,7 +166,10 @@ async def _load_crops(opensearch: Any, crop_ids: list[str]) -> list[CropInput]:
     is 404 ``image_not_found``."""
     ids = list(dict.fromkeys(crop_ids))
     docs = await mget_crops(
-        opensearch, ids, index=items_index(), source_excludes=item_source_excludes()
+        opensearch,
+        ids,
+        index=items_index(),
+        source_excludes=item_source_excludes(await vector_source_excludes()),
     )
     missing = [i for i in ids if i not in docs]
     if missing:

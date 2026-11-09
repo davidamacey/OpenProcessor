@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
@@ -132,6 +133,7 @@ def test_auto_confirmed_region_is_on_the_wire_and_not_label_validated() -> None:
     item = serialize_item(
         {'crop_id': 'x', F.status: 'detected', F.auto_confirmed: True, F.validated: False},
         'x',
+        state_fields=DEFAULT_STATE_FIELDS,
         api_prefix='',
     )
     assert item['region_auto_confirmed'] is True
@@ -143,7 +145,7 @@ def test_region_review_tab_keeps_auto_confirmed_regions() -> None:
     """The region tab excludes only human-validated regions, so an
     auto-confirmed (unvalidated) region is in the human queue."""
     _must, must_not, _reason = build_tab_query(
-        'regions', include_test=True, text=None, max_rank=None
+        'regions', vector_field='pe_embedding', include_test=True, text=None, max_rank=None
     )
     assert {'term': {F.validated: True}} in must_not
     assert not any(F.auto_confirmed in str(clause) for clause in must_not)

@@ -19,7 +19,7 @@ from src.services.detection.region_candidates import select_region_candidates
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from src.config import DetectionProfile
     from src.services.detection.region_candidates import SelectionResult
@@ -124,12 +124,17 @@ def candidate_wires(
     return wires
 
 
-def preview_item(source: dict[str, Any], write_doc: dict[str, Any], crop_id: str) -> dict[str, Any]:
+def preview_item(
+    source: dict[str, Any],
+    write_doc: dict[str, Any],
+    crop_id: str,
+    state_fields: Mapping[str, str],
+) -> dict[str, Any]:
     """The item wire as it would be after the write: the stored ``source``
     with ``write_doc`` laid over it (an OpenSearch partial update: keys the
     write does not carry keep their stored value), serialized by the one
     item serializer."""
-    return serialize_item({**source, **write_doc}, crop_id)
+    return serialize_item({**source, **write_doc}, crop_id, state_fields=state_fields)
 
 
 __all__ = [

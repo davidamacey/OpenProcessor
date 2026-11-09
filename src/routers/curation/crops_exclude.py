@@ -16,6 +16,7 @@ from src.routers.curation._selection_write_models import (
     BatchUnexcludeResponse,
     SelectionDryRunResponse,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -78,9 +79,11 @@ async def _occ_bulk_human_write(
     """
     from src.clients.occ import occ_skip_on_conflict_bulk
 
+    excludes = await vector_source_excludes()
     try:
         resp = await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=excludes,
             doc_ids=list(crop_ids),
             merger=merger,
             index=items_index(),

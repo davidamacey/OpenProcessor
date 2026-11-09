@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -76,7 +77,7 @@ def test_vlm_dismiss_of_a_new_class_proposal() -> None:
 
 def test_a_different_later_suggestion_is_shown_again() -> None:
     doc = _vlm_doc('c1', class_id=5, class_name='other', vlm_dismissed_class_id=3)
-    item = serialize_item(doc, 'c1', api_prefix='')
+    item = serialize_item(doc, 'c1', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
     assert item['vlm_proposed_class_id'] == 5
 
 

@@ -28,6 +28,7 @@ from src.services.curation.vlm_class_batch import (
     updates_from_predictions,
     write_updates,
 )
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.labeling.run_labeler import get_vlm_labeler, resolve_pack
 from src.services.labeling.vlm_factory import assert_may_connect
 from src.utils.timeutil import now_iso
@@ -180,11 +181,13 @@ async def _label_all(
 
 
 async def _remaining_unvalidated(run: Run) -> int:
+    embedding = await item_write_fields()
     try:
         cnt_resp = await run.opensearch.count(
             index=items_index(),
             body={
                 'query': unvalidated_count_query(
+                    embedding=embedding,
                     class_id=run.class_id,
                     cluster_uid=run.cluster_uid,
                     item_filter=run.scope_filter,

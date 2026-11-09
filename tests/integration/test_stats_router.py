@@ -31,6 +31,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -320,7 +321,9 @@ def test_cluster_count_query_counts_partition_clusters() -> None:
     from src.config import get_region_fields
     from src.services.curation.stats_dataset_query import build_dataset_query_body
 
-    agg = build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
+    agg = build_dataset_query_body(get_region_fields(), embedding=DEFAULT_WRITE_FIELDS)['aggs'][
+        'distinct_clusters'
+    ]
     assert agg['filter'] == {'exists': {'field': 'cluster_uid'}}
     assert agg['aggs']['n']['cardinality']['field'] == 'cluster_uid'
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
+
 from src.clients.curation_opensearch.assist_fields import ASSIST_ITEM_MAPPING
 from src.clients.curation_opensearch.bodies_core import _items_body
 from src.config import get_region_fields
@@ -45,11 +47,11 @@ def _item(assist: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def test_an_item_without_suggestions_has_a_null_assist() -> None:
-    assert serialize_item(_item(None))['assist'] is None
+    assert serialize_item(_item(None), state_fields=DEFAULT_STATE_FIELDS)['assist'] is None
 
 
 def test_the_stored_assist_object_reaches_the_wire() -> None:
-    wire = serialize_item(_item(STORED))['assist']
+    wire = serialize_item(_item(STORED), state_fields=DEFAULT_STATE_FIELDS)['assist']
     assert wire['run_id'] == 'asr_1'
     assert wire['class_name'] == 'sedan'
     assert wire['attributes'] == [{'key': 'make', 'value': 'acme', 'confidence': 'medium'}]
@@ -58,14 +60,14 @@ def test_the_stored_assist_object_reaches_the_wire() -> None:
 
 
 def test_boxes_that_no_longer_exist_are_dropped() -> None:
-    boxes = serialize_item(_item(STORED))['assist']['boxes']
+    boxes = serialize_item(_item(STORED), state_fields=DEFAULT_STATE_FIELDS)['assist']['boxes']
     assert [b['box_id'] for b in boxes] == ['b1']
 
 
 def test_the_wire_model_documents_the_key() -> None:
     assert 'assist' in ITEM_WIRE_KEYS
     assert 'assist' in ItemDoc.model_fields
-    ItemDoc.model_validate(serialize_item(_item(STORED)))
+    ItemDoc.model_validate(serialize_item(_item(STORED), state_fields=DEFAULT_STATE_FIELDS))
 
 
 def test_the_items_index_maps_the_assist_object() -> None:

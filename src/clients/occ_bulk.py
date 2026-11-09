@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 
@@ -157,6 +157,7 @@ async def occ_update_bulk(
     index: str | None = None,
     ids: list[str],
     merge_fn: Callable[[str, dict[str, Any]], dict[str, Any]],
+    vector_excludes: list[str],
     max_retries: int = 3,
     refresh: bool | str = False,
 ) -> dict[str, str]:
@@ -177,6 +178,8 @@ async def occ_update_bulk(
         merge_fn: ``(doc_id, source) -> update_doc``. An empty/falsy
             return is a documented noop (recorded as ``'updated'`` with
             nothing written).
+        vector_excludes: Every vector field of the items index, left out of the fetch
+            (``vector_source_excludes()``).
         max_retries: Max retry rounds on 409 conflict.
         refresh: OpenSearch refresh policy for the final bulk call of
             each round (``True`` / ``False`` / ``'wait_for'``).
@@ -212,7 +215,7 @@ async def occ_update_bulk(
         on_failed=on_failed,
         max_retries=max_retries,
         refresh=refresh,
-        source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        source_excludes=vector_excludes,
     )
     return status
 

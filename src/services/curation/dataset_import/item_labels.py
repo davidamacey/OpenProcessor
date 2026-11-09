@@ -18,6 +18,7 @@ from src.clients.occ_locks import is_human_marker
 from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.detection.geometry import crop_id as make_crop_id, iou
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -177,6 +178,7 @@ async def apply_item_updates(
 
         await occ_update_one(
             ctx.opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_id=plan.crop_id,
             merger=merger,
             index=ctx.items_index,
@@ -206,6 +208,7 @@ async def stamp_matched_noops(ctx: ImportContext, plans: list[ItemPlan]) -> None
 
         await occ_update_one(
             ctx.opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_id=plan.crop_id,
             merger=merger,
             index=ctx.items_index,

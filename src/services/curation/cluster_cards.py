@@ -17,6 +17,7 @@ from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flag
 from src.services.curation import review_queries
 from src.services.curation.cluster_representatives import partition_representatives_body
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.class_names import normalize_class_name
 
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
         ClusterListResponse,
         ClusterRepresentative,
     )
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 CLUSTER_REVIEW_TABS: tuple[str, ...] = (
@@ -71,20 +73,20 @@ class ClusterListParams:
     needs_review: bool | None = None
 
 
-def review_aggs() -> dict[str, Any]:
+def review_aggs(vector_field: str) -> dict[str, Any]:
     """One ``filters`` agg holding a filter per tab in :data:`CLUSTER_REVIEW_TABS`,
     built by the same clause builder ``GET /review/{tab}`` uses (holdout hidden,
     as there)."""
     named: dict[str, Any] = {}
     for tab in CLUSTER_REVIEW_TABS:
         must, must_not, _reason = review_queries.build_tab_query(
-            tab, include_test=False, text=None, max_rank=None
+            tab, include_test=False, text=None, max_rank=None, vector_field=vector_field
         )
         named[tab] = {'bool': {'must': must, 'must_not': must_not}}
     return {'review': {'filters': {'filters': named}}}
 
 
-def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
+def aggregation_body(params: ClusterListParams, embedding: WriteFields) -> dict[str, Any]:
     """The one search body: items grouped by their served ``cluster_uid`` with every card input."""
     base_match: dict[str, Any] = (
         {'term': {'cluster_uid': params.cluster_uid}}
@@ -93,7 +95,7 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
     )
     query = {
         'bool': {
-            'filter': [base_match, *item_filter_clauses(params.item_filter)],
+            'filter': [base_match, *item_filter_clauses(params.item_filter, embedding=embedding)],
             # Human-ignored items left their bucket for good; the frozen test
             # holdout is never part of a cluster the operator works.
             'must_not': [{'term': {'class_excluded': True}}, {'term': {'test_holdout': True}}],
@@ -108,7 +110,7 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
-        **review_aggs(),
+        **review_aggs(embedding.vector_field),
     }
     terms = {
         'terms': {'field': 'cluster_uid', 'size': params.max_clusters, 'order': {'_count': 'desc'}},
@@ -276,8 +278,9 @@ async def fetch_representatives(
 
 
 async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> ClusterListResponse:
+    body = aggregation_body(params, await item_write_fields())
     try:
-        resp = await opensearch.search(index=items_index(), body=aggregation_body(params))
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise RequestRejectedError(500, f'clusters query failed: {exc}') from exc
     buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])

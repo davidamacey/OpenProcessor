@@ -38,6 +38,7 @@ from src.services.curation.item_filter import ItemFilter, item_filter_query
 from src.services.curation.stats_dataset_query import build_dataset_query_body
 from src.services.curation.stats_embedding import embedding_summary
 from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.timeutil import now_iso
 
 
@@ -104,7 +105,7 @@ async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery)
     }
     try:
         if not item_filter.is_empty():
-            body['query'] = item_filter_query(item_filter)
+            body['query'] = item_filter_query(item_filter, embedding=await item_write_fields())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
@@ -322,10 +323,11 @@ async def dataset_stats(
       ``cluster_count`` falls back to the live ``cluster_uid`` cardinality.
     """
     fields = get_region_fields()
-    body = build_dataset_query_body(fields)
+    embedding = await item_write_fields()
+    body = build_dataset_query_body(fields, embedding)
     try:
         if not item_filter.is_empty():
-            body['query'] = item_filter_query(item_filter)
+            body['query'] = item_filter_query(item_filter, embedding=embedding)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:

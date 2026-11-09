@@ -13,9 +13,10 @@ from src.services.curation.stats_embedding import embedding_aggregations
 
 if TYPE_CHECKING:
     from src.config.region_fields import RegionFields
+    from src.services.embedding_spaces.readers import WriteFields
 
 
-def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
+def build_dataset_query_body(fields: RegionFields, embedding: WriteFields) -> dict[str, Any]:
     return {
         'size': 0,
         # Exact total_crops, not the default 10000-hit cap (it would look like a stuck pipeline).
@@ -131,7 +132,7 @@ def build_dataset_query_body(fields: RegionFields) -> dict[str, Any]:
                 }
             },
             **imp.import_aggregations(fields),
-            **embedding_aggregations(),
+            **embedding_aggregations(embedding),
             'region_status': {
                 'terms': {'field': fields.status, 'size': 32},
             },

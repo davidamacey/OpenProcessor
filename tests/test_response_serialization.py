@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 import orjson
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import APIRouter, FastAPI
 from fastapi.datastructures import DefaultPlaceholder
 from fastapi.encoders import jsonable_encoder
@@ -230,6 +231,7 @@ def _wire_payloads() -> dict[str, Any]:
                 ],
             },
             f'c{i}',
+            state_fields=DEFAULT_STATE_FIELDS,
             api_prefix='/curation/projects/default',
         )
         for i in range(100)

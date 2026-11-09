@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from src.services.curation.semantic_search import _build_filter
 
@@ -45,6 +46,7 @@ def kept(clauses: list[dict[str, Any]]) -> set[str]:
 
 def _search_clauses(hide: bool) -> list[dict[str, Any]]:
     return _build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid=None,
         date_from=None,

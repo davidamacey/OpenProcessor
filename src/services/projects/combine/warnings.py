@@ -20,13 +20,12 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectRecord
     from src.services.projects.combine.models import CombineRequest
 
-_HAS_VECTOR = embedded_clause()
 
-
-async def _items_with_vectors(client: Any, record: ProjectRecord) -> int:
+async def _items_with_vectors(client: Any, record: ProjectRecord, vector_field: str) -> int:
     index = record.resources.indexes[IndexRole.ITEMS]
     with bind_project(record, read_only=True):
-        return int((await client.count(index=index, body={'query': _HAS_VECTOR})).get('count') or 0)
+        query = embedded_clause(vector_field)
+        return int((await client.count(index=index, body={'query': query})).get('count') or 0)
 
 
 async def embedding_model_mismatch(
@@ -43,7 +42,7 @@ async def embedding_model_mismatch(
         held = await primary_space(record, Target.ITEM)
         if held is None or held.space_key in target_keys:
             continue
-        count = await _items_with_vectors(client, record)
+        count = await _items_with_vectors(client, record, held.vector_field)
         if not count:
             continue
         out.append(

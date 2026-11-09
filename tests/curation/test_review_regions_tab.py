@@ -55,7 +55,12 @@ def _in_queue(
     doc: dict[str, Any], *, text: str | None = None, region_status: str | None = None
 ) -> bool:
     must, must_not, _reason = build_tab_query(
-        'regions', include_test=False, text=text, max_rank=None, region_status=region_status
+        'regions',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=text,
+        max_rank=None,
+        region_status=region_status,
     )
     return matches(doc, {'bool': {'must': must, 'must_not': must_not}})
 
@@ -110,7 +115,12 @@ def test_detected_item_is_reachable_in_every_mode_except_verify_rejected_only() 
 def test_unknown_region_status_filter_raises_400() -> None:
     with pytest.raises(RequestRejectedError) as exc:
         build_tab_query(
-            'regions', include_test=False, text=None, max_rank=None, region_status='bogus'
+            'regions',
+            vector_field='pe_embedding',
+            include_test=False,
+            text=None,
+            max_rank=None,
+            region_status='bogus',
         )
     assert exc.value.status_code == 400
 

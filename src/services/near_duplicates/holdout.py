@@ -17,6 +17,7 @@ from src.db.repos import near_dup as repo
 from src.db.repos.near_dup_holdout import Move, record_moves, stamp_freeze
 from src.db.repos.records import current_holdout_freeze
 from src.db.session import project_tx
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.events.publish import apublish
 from src.services.near_duplicates import status as near_dup_status
 from src.utils.timeutil import now_iso
@@ -71,6 +72,7 @@ async def flag_held_out(client: AsyncOpenSearch, index: str, item_ids: list[str]
     now = now_iso()
     result = await occ_skip_on_conflict_bulk(
         client,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=item_ids,
         merger=lambda _id, _source: {'test_holdout': True, 'updated_at': now},
         index=index,

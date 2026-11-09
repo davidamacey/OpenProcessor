@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.reprocess_fixtures import (
     FakePE,
@@ -264,11 +265,17 @@ async def test_a_cap_embeds_only_the_limit(tmp_path: Path, monkeypatch: pytest.M
 
 def test_limit_and_sample_apply_to_a_filter_only() -> None:
     with pytest.raises(ReprocessTargetsError):
-        validate_targets(ReprocessTargets(crop_ids=['a'], limit=2))
+        validate_targets(ReprocessTargets(crop_ids=['a'], limit=2), embedding=DEFAULT_WRITE_FIELDS)
     with pytest.raises(ReprocessTargetsError):
-        validate_targets(ReprocessTargets(filter=ReprocessFilter(source='s'), sample='random'))
+        validate_targets(
+            ReprocessTargets(filter=ReprocessFilter(source='s'), sample='random'),
+            embedding=DEFAULT_WRITE_FIELDS,
+        )
     with pytest.raises(ReprocessTargetsError):
-        validate_targets(ReprocessTargets(filter=ReprocessFilter(conf_min=0.9, conf_max=0.1)))
+        validate_targets(
+            ReprocessTargets(filter=ReprocessFilter(conf_min=0.9, conf_max=0.1)),
+            embedding=DEFAULT_WRITE_FIELDS,
+        )
 
 
 @pytest.mark.asyncio

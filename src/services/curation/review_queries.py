@@ -30,6 +30,7 @@ def build_tab_query(
     text: str | None,
     max_rank: int | None,
     region_status: str | None = None,
+    vector_field: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     """Return ``(must, must_not, reason)`` for one review tab.
 
@@ -37,11 +38,14 @@ def build_tab_query(
     :data:`REGION_STATUS_FILTER_VALUES`. Raises ``RequestRejectedError(400, ...)``
     for an unrecognized ``tab`` or an unrecognized ``region_status`` — same
     behavior the review router had inline before this split.
+
+    ``vector_field`` (the primary item space's vector) is read by the ``all`` tab only, which
+    raises ``ValueError`` without it.
     """
     if tab == 'regions':
         must, must_not, reason = review_tab_clauses.regions_tab(include_test, text, region_status)
     elif tab in review_tab_clauses.SIMPLE_TABS:
-        must, must_not, reason = review_tab_clauses.SIMPLE_TABS[tab](include_test)
+        must, must_not, reason = review_tab_clauses.SIMPLE_TABS[tab](include_test, vector_field)
     else:
         raise RequestRejectedError(
             status_code=400,

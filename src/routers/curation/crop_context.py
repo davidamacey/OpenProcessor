@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -22,6 +23,7 @@ from src.services.curation.wire import (
     item_source_excludes,
     serialize_item,
 )
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 _MAX_SIBLINGS = 500
@@ -62,16 +64,16 @@ def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
     (unservable path, missing file, corrupt image) rather than raising —
     this is a best-effort fill-in, not a hard dependency of the route.
     """
+    from PIL import Image
+
+    from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
+
     try:
-        from PIL import Image
-
-        from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
-
         root = resolve_crop_root(image_path)
         safe_path = resolve_safe_path(image_path, root)
         with Image.open(safe_path) as img:
             return img.size
-    except Exception as exc:
+    except (RequestRejectedError, OSError, ValueError, Image.DecompressionBombError) as exc:
         logger.debug('crop_context_pixel_size_failed', image_path=image_path, error=str(exc))
         return None
 
@@ -105,14 +107,19 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
     # single-item fetch (item_source_excludes), and the sibling list
     # below additionally drops class_id_history (item_list_source_excludes
     # -- undo-only, no list renderer reads it).
+    vector_excludes = await vector_source_excludes()
     item = await _get_source(
-        opensearch, items_index(), crop_id, _source_excludes=item_source_excludes()
+        opensearch,
+        items_index(),
+        crop_id,
+        _source_excludes=item_source_excludes(vector_excludes),
     )
     if item is None:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
     image_id = item.get('image_id')
     image: dict[str, Any] | None = None
-    items: list[dict[str, Any]] = [serialize_item(item, crop_id)]
+    state_fields = await item_state_fields()
+    items: list[dict[str, Any]] = [serialize_item(item, crop_id, state_fields=state_fields)]
     if image_id:
         img = await _get_source(opensearch, images_index(), image_id)
         if img is not None:
@@ -139,12 +146,15 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
             'size': _MAX_SIBLINGS,
             'query': {'term': {'image_id': image_id}},
             'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-            '_source': {'excludes': item_context_source_excludes()},
+            '_source': {'excludes': item_context_source_excludes(vector_excludes)},
         }
         try:
             resp = await opensearch.search(index=items_index(), body=body)
         except Exception as exc:
             raise server_error(503, 'opensearch unavailable', exc) from exc
         hits = (resp.get('hits') or {}).get('hits') or []
-        items = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
+        items = [
+            serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
+            for h in hits
+        ]
     return {'image': image, 'items': items}

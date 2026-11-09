@@ -31,6 +31,7 @@ from src.services.clustering.serving_cluster import serving_cluster_partition
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.label_ops.record import start as start_relabel
 from src.services.curation.label_ops.store import NewLabelOp
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -59,9 +60,11 @@ async def label_crop(
             ),
         )
 
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=_merge_label,
             refresh='wait_for',

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config.curation_accessors import items_index
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -88,6 +89,7 @@ async def write_slots(opensearch: AsyncOpenSearch, slots: dict[str, dict[str, An
 
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=list(slots),
         merger=merge,
         index=items_index(),
@@ -124,6 +126,7 @@ async def write_box_attributes(
 
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=list(by_crop),
         merger=merge,
         index=items_index(),

@@ -34,9 +34,10 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.parity_metrics import adjusted_rand_index, normalized_mutual_info, purity
-from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
+from src.domain.embedding_spaces import LEGACY_ITEM_STATE_FIELD, LEGACY_ITEM_VECTOR_FIELD
 from src.services.curation.semantic_search import _build_filter
 from src.services.curation.semantic_search_run import build_knn_query
+from src.services.embedding_spaces.readers import WriteFields
 
 
 VECTOR = LEGACY_ITEM_VECTOR_FIELD
@@ -87,6 +88,7 @@ def cluster_agreement(ref: list[dict[str, Any]], cand: list[dict[str, Any]]) -> 
 
 def review_default_filter(extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
     base = _build_filter(
+        embedding=WriteFields(LEGACY_ITEM_VECTOR_FIELD, LEGACY_ITEM_STATE_FIELD),
         tab=None,
         cluster_uid=None,
         date_from=None,

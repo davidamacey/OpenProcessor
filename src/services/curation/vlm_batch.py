@@ -28,6 +28,7 @@ from src.services.curation.class_write_guard import (
 from src.services.curation.crop_bytes import load_vlm_item_jpeg
 from src.services.curation.label_batch_write import label_batch_merge, label_batch_update
 from src.services.curation.source_image_cache import crop_cache_file
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 from src.services.labeling.run_labeler import vlm_stamp
 from src.utils.timeutil import now_iso
@@ -204,6 +205,7 @@ async def _write_updates(
     try:
         await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_ids=list(updates),
             merger=merge,
             index=items_index(),

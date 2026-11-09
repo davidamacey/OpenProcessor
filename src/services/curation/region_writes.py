@@ -40,7 +40,7 @@ from src.services.detection.cascade_detect.sanity import crop_norm_to_source_nor
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 
 def parent_to_source_bbox(region_in_parent: Sequence[float], parent_bbox_norm: Any) -> list[float]:
@@ -198,10 +198,13 @@ def reason_only_box_write(current: dict[str, Any], reason: str | None) -> dict[s
 
 
 def post_write_item(
-    current: dict[str, Any], update: dict[str, Any], crop_id: str
+    current: dict[str, Any],
+    update: dict[str, Any],
+    crop_id: str,
+    state_fields: Mapping[str, str],
 ) -> dict[str, Any]:
     """The wire item as stored after ``update`` is merged onto ``current``."""
-    return serialize_item({**current, **update}, crop_id)
+    return serialize_item({**current, **update}, crop_id, state_fields=state_fields)
 
 
 __all__ = [

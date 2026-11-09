@@ -19,9 +19,9 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.core.logging import get_logger
 from src.services.curation.source_image_cache import crop_cache_file
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 
 
@@ -81,7 +81,7 @@ async def _fresh(
 ) -> dict[str, tuple[dict[str, Any], int, int]]:
     resp = await opensearch.mget(
         body={'docs': [{'_id': i, '_index': index} for i in ids]},
-        _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        _source_excludes=await vector_source_excludes(),
     )
     return {
         d['_id']: (d.get('_source') or {}, int(d['_seq_no']), int(d['_primary_term']))

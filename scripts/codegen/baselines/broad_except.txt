@@ -28,7 +28,6 @@ models/gpu_image_prep/1/model.py	2	ratchet: may only go down
 models/ocr_pipeline/1/model.py	1	ratchet: may only go down
 scripts/bench/gpu_decode_bench.py	2	bench boundary: a decoder failure is recorded in the row, the sweep continues
 scripts/bench/gpu_decode_parity.py	1	bench boundary: a GPU decode failure is recorded and falls back to CPU
-scripts/bench/ingest_write_path.py	1	bench boundary: a failed request is counted as a failure
 scripts/bench/vectordb/orchestrate.py	1	readiness poll: any connect error means not ready yet, retried then raises
 scripts/curation/_vlm_activity.py	1	per-project boundary: an unreadable VLM state skips that project, logged
 scripts/curation/backfill_region_embeddings.py	2	script boundary: advisory scroll clear / index refresh failures are logged
@@ -38,7 +37,7 @@ scripts/curation/cluster_raw_labels.py	1	backend probe: any embedder load failur
 scripts/curation/ingest_upload.py	1	task boundary: a crashed batch is counted and logged so the bounded queue cannot deadlock
 scripts/curation/seed_live_harness.py	1	harness boundary: a failed wipe step is printed, seeding continues
 scripts/curation/vlm_worker.py	2	worker-loop boundary: one project fetch or consumer error must not stop the loop
-scripts/curation/worker/bulk_writer.py	3	writer boundary: stamp/embedding-write failures are logged and never block a region write
+scripts/curation/worker/bulk_writer.py	2	ratchet: may only go down
 scripts/curation/worker/flow.py	2	worker-loop boundary: a failed fetch, embed stage or bulk write is logged and the loop goes on
 scripts/curation/worker/region_embed_stage.py	1	per-photo/batch boundary: a failed embed is logged and skipped
 scripts/curation/worker/region_text_stage.py	2	per-crop boundary: an OCR failure yields no text, logged
@@ -58,15 +57,12 @@ src/app/lifespan.py	2	lifespan boundary: startup/shutdown steps are best-effort 
 src/routers/analyze.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/services/analyze_pipeline.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/_models_vlm.py	2	status boundary: a VLM probe failure is reported as unavailable
-src/routers/curation/crop_context.py	1	route boundary: pixel-size read failure yields None, logged
 src/routers/curation/datasets.py	1	route boundary: a class-creation failure is mapped to 422
-src/routers/curation/edit_undo.py	1	route boundary: a failed undo is reported as a conflict, logged
 src/routers/curation/global_status.py	1	health boundary: the probe error text is returned as detail
 src/routers/curation/health.py	3	health boundary: the probe error text is returned as detail
 src/routers/curation/methods.py	1	registry boundary: falls back to the unscoped registry, logged
 src/routers/curation/pipeline_events.py	1	stats boundary: the error is cached and returned as the payload
 src/routers/curation/projects.py	2	listing boundary: unavailable counts are logged, the list still serves
-src/routers/curation/review_resolve.py	1	per-crop boundary: a failed update is reported as a conflict, logged
 src/routers/curation/vlm_endpoints.py	1	listing boundary: unavailable activations are logged, the list still serves
 src/routers/detect.py	2	route boundary: mapped to a 500 or a per-file failure entry
 src/routers/embed.py	1	route boundary: mapped to a 500 or a per-file failure entry
