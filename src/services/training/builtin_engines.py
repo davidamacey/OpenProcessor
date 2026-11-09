@@ -89,11 +89,7 @@ SHIPPED: tuple[Shipped, ...] = (
         'fp16',
         640,
         _YOLO_INPUT,
-        EngineOutputContract(
-            kind='end2end_boxes',
-            shapes=[[1], [300, 4], [300], [300]],
-            dtypes=['int32', 'fp32', 'fp16', 'int32'],
-        ),
+        EngineOutputContract(kind='end2end_boxes', shapes=[[300, 6]], dtypes=['fp32']),
     ),
     Shipped(
         'yolo26_small_trt',
