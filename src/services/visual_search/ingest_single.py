@@ -4,11 +4,13 @@ import logging
 from typing import Any
 
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.config.faces import faces_enabled
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import landmarks_for
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 logger = logging.getLogger(__name__)
@@ -56,6 +58,9 @@ def _run_pipelines(
         if 'face' in futures:
             face_result = futures['face'].result()
     return result, face_result
+
+
+_OCR_INDEX_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, OpenSearchException)
 
 
 class IngestSingleMixin:
@@ -265,8 +270,8 @@ class IngestSingleMixin:
                         quality=float(face_quality[i]) if len(face_quality) > i else 0.0,
                     )
                     indexed += 1
-                except Exception as e:
-                    logger.debug(f'Failed to index face {face_id}: {e}')
+                except OpenSearchException as e:
+                    logger.warning(f'Failed to index face {face_id}: {e}')
         return indexed
 
     async def _assign_to_duplicate_group(
@@ -410,7 +415,7 @@ class IngestSingleMixin:
                 'indexed': True,
             }
 
-        except Exception as e:
+        except _OCR_INDEX_ERRORS as e:
             # Don't fail main ingestion if OCR fails
             logger.warning(f'OCR processing failed for {image_id}: {e}')
             return None

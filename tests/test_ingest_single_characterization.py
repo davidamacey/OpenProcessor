@@ -17,6 +17,7 @@ from typing import Any
 import imohash
 import numpy as np
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.services.visual_search import VisualSearchService
 
@@ -193,8 +194,7 @@ class FakeOpenSearch:
     async def index_face(self, **kw: Any) -> None:
         self.calls.append(('index_face', kw))
         if kw['face_id'] in self.sc.get('face_index_fail', []):
-            msg = 'face index down'
-            raise RuntimeError(msg)
+            raise OpenSearchConnectionError('N/A', 'face index down', OSError('refused'))
 
     async def index_ocr_results(self, **kw: Any) -> None:
         self.calls.append(('index_ocr_results', kw))

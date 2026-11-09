@@ -33,6 +33,7 @@ from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_factory import build_uncached_labeler as build_vlm_labeler
 from src.services.projects.guard import make_script_opensearch
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 logger = get_logger('curation_worker')
@@ -101,7 +102,7 @@ async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
 
         try:
             model_ready = bool(await pool.is_model_ready(PE_IMAGE_MODEL))
-        except Exception as exc:
+        except TRITON_CALL_ERRORS as exc:
             logger.warning('region_embed_readiness_probe_failed', error=str(exc))
             model_ready = False
         if model_ready:

@@ -11,7 +11,12 @@ from src.core.logging import get_logger
 from src.services.labeling.vlm_attributes import parse_attributes
 from src.services.labeling.vlm_chunks import run_chunks
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
-from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
+from src.services.labeling.vlm_labeler_core import (
+    _RESULTS_ENVELOPE,
+    CHAT_CALL_ERRORS,
+    VlmLabelerCore,
+    _b64_jpeg,
+)
 from src.services.labeling.vlm_models import ItemCrop, VlmClassPrediction
 from src.services.labeling.vlm_prompts import proposal_denied
 from src.services.labeling.vlm_reply_parse import (
@@ -100,7 +105,7 @@ class ClassifyOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.label_chunk_failed',
                 chunk_size=len(chunk),
@@ -364,7 +369,7 @@ class ClassifyOps(VlmLabelerCore):
         }
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.label_chunk_open_failed',
                 chunk_size=len(chunk),

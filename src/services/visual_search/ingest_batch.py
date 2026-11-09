@@ -5,6 +5,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import build_documents
@@ -297,8 +299,8 @@ class IngestBatchMixin:
             )
             logger.info(f'OCR indexed {num_texts} text regions for {img_id}')
             return True
-        except Exception as e:
-            logger.debug(f'OCR index failed for {img_id}: {e}')
+        except OpenSearchException as e:
+            logger.warning(f'OCR index failed for {img_id}: {e}')
             return False
 
     async def _index_ocr_results(

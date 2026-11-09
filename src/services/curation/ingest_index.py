@@ -41,6 +41,7 @@ from src.services.detection.geometry import (
 from src.services.embedding_spaces.readers import frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
+from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
 
 
@@ -204,7 +205,7 @@ async def embed_items(
             )
             for i, emb in zip(wanted, embeddings, strict=False):
                 items[i].pe_embedding = emb
-    except Exception as exc:
+    except TRITON_CALL_ERRORS as exc:
         logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
     for i in wanted:
         items[i].embedding_state = EMBEDDED if items[i].pe_embedding is not None else FAILED
@@ -242,7 +243,7 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
             return ctx.gpu_frame.whole_embedding
         assert ctx.pil is not None
         return await service.pe_encoder.embed_whole_frame_image(ctx.pil)
-    except Exception as exc:
+    except TRITON_CALL_ERRORS as exc:
         logger.warning('ingest_embed_whole_frame_failed', path=ctx.image_path, error=str(exc))
         return None
 

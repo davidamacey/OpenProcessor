@@ -18,6 +18,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.source_image_cache import crop_cache_file
 from src.services.detection.geometry import crop_rect
 
@@ -176,7 +177,7 @@ def load_vlm_item_jpeg(
         return THUMBNAIL_CACHE.get_or_compute(
             resolved_image_path(image_path), tuple(bbox), size=VLM_CROP_SIZE
         )
-    except Exception as exc:
+    except IMAGE_DECODE_ERRORS as exc:
         logger.warning('vlm_crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
         return None
 

@@ -73,7 +73,7 @@ async def test_embedded_count_is_none_when_uncountable() -> None:
 
     class _Down:
         async def count(self, **_: Any) -> dict[str, int]:
-            raise OpenSearchConnectionError('N/A', 'down', RuntimeError('down'))
+            raise OpenSearchConnectionError('N/A', 'down', OSError('refused'))
 
     assert await embedded_count(_Down(), 'items') is None
     assert await embedded_count(_Client({'items': 9}, validated=4), 'items') == 4

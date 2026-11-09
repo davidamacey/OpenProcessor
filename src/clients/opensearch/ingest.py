@@ -49,7 +49,7 @@ def _assign_cluster(
         doc['cluster_id'] = assignment.cluster_id
         doc['cluster_distance'] = assignment.distance
         doc['clustered_at'] = doc['indexed_at']
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:  # faiss RuntimeError, an untrained or mis-sized index
         logger.warning(f'Cluster assignment failed for {label}: {e}')
         return False
     return True

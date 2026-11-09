@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
+    fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -487,7 +489,9 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
     fix that defaults failures to 0 (mirroring
     crop_scores/job.py::compute_coverage's precedent) would also fail this
     test."""
-    app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('opensearch unreachable'))  # type: ignore[attr-defined]
+    app_client.fake_os.search = AsyncMock(
+        side_effect=OpenSearchConnectionError('N/A', 'opensearch unreachable', OSError('refused'))
+    )  # type: ignore[attr-defined]
 
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200

@@ -33,6 +33,9 @@ from typing import Any
 
 log = logging.getLogger('mlflow_cb')
 
+#: ``MlflowException.error_code`` of a name the registry does not know (``ErrorCode.Name(RESOURCE_DOES_NOT_EXIST)``).
+_MLFLOW_NOT_FOUND = 'RESOURCE_DOES_NOT_EXIST'
+
 
 # Deliberately generic: this repo ships no domain model name. A deployment
 # points its runs at its own registered model via OP_MLFLOW_MODEL_NAME.
@@ -296,15 +299,19 @@ class _RunHooks:
         }
 
     def _register_model(self, run_id: str, metadata: dict[str, Any]) -> None:
+        from mlflow.exceptions import MlflowException
+        from mlflow.tracking import MlflowClient
+
         model_uri = f'runs:/{run_id}/weights/best.pt'
         try:
-            from mlflow.tracking import MlflowClient
-
             client = MlflowClient()
-            # Ensure the registered model exists.
+            # Ensure the registered model exists: ``get_registered_model`` raises an
+            # ``MlflowException`` whose ``error_code`` is RESOURCE_DOES_NOT_EXIST for a new name.
             try:
                 client.get_registered_model(self.registry_name)
-            except Exception:  # "not found" has no stable type here
+            except MlflowException as missing:
+                if missing.error_code != _MLFLOW_NOT_FOUND:
+                    raise
                 client.create_registered_model(self.registry_name)
             mv = client.create_model_version(
                 name=self.registry_name,
@@ -316,7 +323,7 @@ class _RunHooks:
             # deprecated). Production is a manual step.
             client.set_registered_model_alias(self.registry_name, 'staging', mv.version)
             log.info('registered %s v%s with alias staging', self.registry_name, mv.version)
-        except Exception as exc:  # registry push is best-effort
+        except MlflowException as exc:  # registry push is best-effort
             log.warning('model registry push failed: %s', exc)
 
     def on_train_end(self, trainer: Any) -> None:

@@ -68,3 +68,10 @@ def test_the_start_payload_refuses_a_job_id_and_the_retired_image_fields() -> No
     for retired in ('job_id', 'trainer_image_id', 'trainer_image_revision'):
         with pytest.raises(ValueError, match='Extra inputs are not permitted'):
             TrainJobSpec(dataset_export_dir='/x', **{retired: 'v'})  # type: ignore[arg-type]
+
+
+def test_a_corrupt_manifest_is_an_error_not_an_empty_identity(tmp_path: Path) -> None:
+    root = _export(tmp_path, None)
+    (root / 'manifest.json').write_text('{"dataset_sha": ')
+    with pytest.raises(json.JSONDecodeError):
+        lineage.read_export_identity(root)

@@ -23,6 +23,17 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 EXIF_ORIENTATION = 0x0112
 
+#: What Pillow raises on a file it cannot read: ``OSError`` (``UnidentifiedImageError``,
+#: truncated, I/O), ``ValueError``/``TypeError`` (bad mode, malformed EXIF), ``SyntaxError`` (a
+#: broken PNG chunk) and ``DecompressionBombError`` (a frame past ``MAX_IMAGE_PIXELS``).
+IMAGE_DECODE_ERRORS: tuple[type[Exception], ...] = (
+    OSError,
+    ValueError,
+    TypeError,
+    SyntaxError,
+    Image.DecompressionBombError,
+)
+
 NOT_DECODABLE = 'not a decodable image'
 HEADER_REJECTED = 'Could not determine subsampling level'
 

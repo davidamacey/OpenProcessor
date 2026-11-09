@@ -8,11 +8,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from curation.index_fakes import FakeIndicesApi
 from src.config import get_curation_config
 from src.services.curation import index_bootstrap
 
 
 class _OpenSearch:
+    indices = FakeIndicesApi()
+
     async def count(self, **_: Any) -> dict[str, int]:
         return {'count': 1}
 

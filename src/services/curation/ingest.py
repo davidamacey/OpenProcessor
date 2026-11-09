@@ -67,8 +67,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
@@ -193,7 +196,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                 decoded = await run_cpu(
                     _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
                 )
-            except Exception as exc:
+            except IMAGE_DECODE_ERRORS as exc:
                 return IngestResult(
                     status='failed',
                     image_path=image_path,
@@ -357,7 +360,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             await self.opensearch.indices.refresh(
                 index=f'{self.config.images_index},{self.config.items_index}'
             )
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('ingest_refresh_failed', error=str(exc))
 
     async def ingest_batch(

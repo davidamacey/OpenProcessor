@@ -17,12 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._methods_models import MethodsResponse
-
-
-logger = get_logger(__name__)
 
 
 @router.get('/methods', response_model=MethodsResponse)
@@ -41,8 +37,4 @@ async def get_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
     """
     from src.services.curation.strategy_registry import get_registry
 
-    try:
-        return await get_registry(opensearch)
-    except Exception as exc:
-        logger.warning('curation_methods_registry_failed', error=str(exc))
-        return await get_registry(None)
+    return await get_registry(opensearch)

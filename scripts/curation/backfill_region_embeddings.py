@@ -45,6 +45,8 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.pe_encoder import PEEncoder
 from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import get_curation_config, get_region_fields
@@ -114,7 +116,7 @@ async def _scroll_candidates(
     if scroll_id:
         try:
             await client.clear_scroll(scroll_id=scroll_id)
-        except Exception as exc:  # nosec B110 — advisory cleanup only
+        except OpenSearchException as exc:  # nosec B110 — advisory cleanup only
             logger.info('clear_scroll_failed', extra={'error': str(exc)})
     return out
 
@@ -161,7 +163,7 @@ async def _run(
 
         try:
             await client.indices.refresh(index=cfg.items_index)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.debug('refresh_failed: %s', exc)
 
         print(f'\nwritten={n_written:,} missing_source_image={n_missing_image:,}')

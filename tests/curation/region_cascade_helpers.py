@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from _fake_project_registry import install_static_project_registry
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod, stage_a as stage_a_mod
@@ -278,8 +279,7 @@ async def _drive_worker(
         register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
-    if region_embed_ready:
-        pool.is_model_ready = AsyncMock(return_value=True)
+    pool.is_model_ready = AsyncMock(return_value=region_embed_ready)
     monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
@@ -294,6 +294,9 @@ async def _drive_worker(
     primary_det.detect_batch_multi = AsyncMock(return_value=[primary_list])
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
     ocr = MagicMock()
+    # Item/region OCR is not scripted here: a read that raises means "no text read", as before.
+    ocr.read_lines = AsyncMock(side_effect=InferenceServerException('ocr not scripted'))
+    ocr.read_region_lines = AsyncMock(side_effect=InferenceServerException('ocr not scripted'))
     ocr.detect_regions = AsyncMock(return_value=[])
     ocr.pick_best_text_region = MagicMock(return_value=None)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))

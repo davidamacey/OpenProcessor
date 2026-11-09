@@ -23,6 +23,7 @@ from opensearchpy.exceptions import OpenSearchException
 
 from src.config.env import env_optional_str
 from src.core.logging import get_logger
+from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 
 
 if TYPE_CHECKING:
@@ -414,7 +415,7 @@ def _copy_or_resize_one(
                 raise ValueError(msg)
             rgb.save(dest_path, format='JPEG', quality=90)
         return dest_path, True, None
-    except Exception as exc:
+    except IMAGE_DECODE_ERRORS as exc:
         return dest_path, False, str(exc)
 
 

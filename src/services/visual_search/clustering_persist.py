@@ -104,7 +104,8 @@ class IndexPersistenceMixin:
             metadata: dict = {}
             if metadata_path.exists():
                 metadata = json.loads(metadata_path.read_text())
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
+            # faiss raises RuntimeError, the metadata JSON a ValueError, the files an OSError.
             logger.error(f'Failed to load {index_name} index from {index_path}: {e}')
             self._unloadable.add(index_name)
             return False

@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 
 from curation.export_fakes import make_registry
+from curation.index_fakes import FakeIndicesApi
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 
@@ -87,6 +88,7 @@ class _IndexFake:
     """Serves one page per search, picked by index; no scroll continuation."""
 
     def __init__(self, by_index: dict[str, list[dict[str, Any]]]) -> None:
+        self.indices = FakeIndicesApi()
         self.by_index = by_index
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002

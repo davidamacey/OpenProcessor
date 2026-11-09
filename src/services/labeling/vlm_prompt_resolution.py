@@ -54,7 +54,7 @@ def _load_pack_file(path: Path) -> PromptPack | None:
 
     try:
         pack = PromptPack.from_json(path)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:  # unreadable file, bad JSON, missing field
         logger.warning('prompt_pack_load_failed', path=str(path), error=str(exc))
         return None
     _PACK_FILE_CACHE[str(path)] = (mtime, pack)
@@ -153,7 +153,7 @@ def _stored_packs() -> dict[str, PromptPack]:
     for name, stored in snapshot.packs.items():
         try:
             packs[name] = PromptPack.from_dict({**stored.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('stored_prompt_pack_invalid', name=name, error=str(exc))
     return packs
 
@@ -182,7 +182,7 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
 
         try:
             return PromptPack.from_dict({**pinned.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
             # a decode failure on the
             # pinned body must not fail open to the unvalidated current
@@ -241,7 +241,7 @@ def get_prompt_pack(
 
         try:
             pack = PromptPack.from_dict({**stored.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
             return None
         # tag the EXACT revision this call
