@@ -5,8 +5,7 @@ The scope is the run's ``class_id`` / ``cluster_uid`` plus the shared item
 filter; only items stored without a vector for a recorded reason
 (``not_selected``, ``deferred``, ``failed``) are embedded, by the same code the
 ``embed`` reprocess scope runs. The worker has no resident encoder, so one is
-built per run from ``TRITON_URL`` (default
-``triton-server:8001``, reachable on the compose network).
+built per run on a pool that follows the active serving profile.
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
 from src.services.curation.item_filter import ItemFilter
@@ -37,11 +35,14 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-DEFAULT_TRITON_URL = 'triton-server:8001'
 
+async def _owned_encoder() -> tuple[Any, Any]:
+    """The per-run pool and the encoder that sends its batches through it."""
+    from src.clients.pe_encoder import PEEncoder
+    from src.services.serving_router import open_routed_pool
 
-def triton_url() -> str:
-    return env_str('TRITON_URL', DEFAULT_TRITON_URL)
+    pool = await open_routed_pool(pool_size=1, max_concurrent=8)
+    return pool, PEEncoder(triton_pool=pool)
 
 
 def stage_request(
@@ -101,12 +102,7 @@ async def _embed_missing(
         return {'skipped': True, 'reason': 'nothing to embed'}
     owned_pool: Any = None
     if encoder is None:
-        from src.clients.pe_encoder import PEEncoder
-        from src.clients.triton_pool_core import AsyncTritonPool
-
-        owned_pool = AsyncTritonPool(url=triton_url(), pool_size=1, max_concurrent=8)
-        await owned_pool.initialize()
-        encoder = PEEncoder(triton_pool=owned_pool)
+        owned_pool, encoder = await _owned_encoder()
     result = ReprocessScopeResult(scope='embed', selected=len(plan.image_ids))
     try:
         for start in range(0, len(plan.image_ids), CHUNK):
@@ -137,4 +133,4 @@ def _images_index() -> str:
     return get_curation_config().images_index
 
 
-__all__ = ['DEFAULT_TRITON_URL', 'run_embed_missing_stage', 'stage_request', 'triton_url']
+__all__ = ['run_embed_missing_stage', 'stage_request']

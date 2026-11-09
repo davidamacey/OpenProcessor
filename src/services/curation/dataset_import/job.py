@@ -68,11 +68,9 @@ class IngestRuntime:
 
 async def open_ingest_runtime() -> IngestRuntime:
     from src.clients.pe_encoder import PEEncoder
-    from src.clients.triton_pool_core import AsyncTritonPool
-    from src.config.settings import get_settings
+    from src.services.serving_router import open_routed_pool
 
-    pool = AsyncTritonPool(url=get_settings().triton_url, pool_size=2, max_concurrent=16)
-    await pool.initialize()
+    pool = await open_routed_pool(pool_size=2, max_concurrent=16)
     return IngestRuntime(pool, PEEncoder(triton_pool=pool))
 
 

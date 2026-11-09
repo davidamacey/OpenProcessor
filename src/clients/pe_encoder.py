@@ -310,15 +310,23 @@ class PEEncoder:
             ) from exc
         if not ready:
             raise TextModelNotReady(f'Triton text model {self._text_triton_model!r} is not ready')
-        return TritonTextBackend(client, self._text_triton_model)
+        return TritonTextBackend(self._make_triton_client, self._text_triton_model)
 
     def _make_triton_client(self) -> Any:
         if self._triton_client_factory is not None:
             return self._triton_client_factory()
         from src.clients.triton_client_manager import TritonClientManager
-        from src.config import get_settings
 
-        return TritonClientManager.get_sync_client(get_settings().triton_url)
+        if self.triton_pool is not None:
+            # The server the pool's router picks now; encode_text runs on worker threads, so the
+            # choice is made without counting (the router's counts belong to the event loop).
+            url = self.triton_pool.router.choose(self._text_triton_model).url
+        else:
+            # A PEEncoder built without a pool (a one-shot script) has no router to ask.
+            from src.config import get_settings
+
+            url = get_settings().triton_url
+        return TritonClientManager.get_sync_client(url)
 
     # -- encoding --------------------------------------------------------
 

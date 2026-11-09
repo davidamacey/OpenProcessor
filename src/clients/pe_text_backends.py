@@ -7,12 +7,16 @@ is imported inside :meth:`TritonTextBackend.encode`, so this module stays import
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from src.clients.triton_deadline import infer_with_deadline
 from src.config.settings import TritonModelConfig
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 PE_TEXT_CHECKPOINT = 'PE-Core-L14-336'
@@ -48,8 +52,11 @@ class TritonTextBackend:
 
     name = 'triton'
 
-    def __init__(self, client: Any, model_name: str = PE_TEXT_TRITON_MODEL) -> None:
-        self._client = client
+    def __init__(
+        self, client_source: Callable[[], Any], model_name: str = PE_TEXT_TRITON_MODEL
+    ) -> None:
+        # Asked on every call, so a router that moved to another server is followed.
+        self._client_source = client_source
         self.model_name = model_name
 
     def encode(self, tokens: np.ndarray) -> np.ndarray:
@@ -58,6 +65,6 @@ class TritonTextBackend:
         inp = InferInput(PE_TEXT_INPUT, list(tokens.shape), 'INT64')
         inp.set_data_from_numpy(tokens)
         result = infer_with_deadline(
-            self._client, self.model_name, [inp], [InferRequestedOutput(PE_TEXT_OUTPUT)]
+            self._client_source(), self.model_name, [inp], [InferRequestedOutput(PE_TEXT_OUTPUT)]
         )
         return np.asarray(result.as_numpy(PE_TEXT_OUTPUT), dtype=np.float32)

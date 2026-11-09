@@ -34,6 +34,8 @@ logger = get_logger('curation_worker')
 # truth without a scripts -> src layering violation.
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
+# The standalone detection worker takes its Triton address from `--triton` (compose passes
+# TRITON_URL) and opens one pool to it; it does not read the serving profile.
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 DEFAULT_SEGMENTER_URL = os.environ.get('OP_SEGMENTER_URL', 'http://sam3:8000')
 # Dual-GPU SAM3: OP_SEGMENTER_URLS=http://sam3-gpu0:8000,http://sam3-gpu1:8000

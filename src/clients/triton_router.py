@@ -98,6 +98,12 @@ class TritonRouter:
             raise NoServerError(msg)
         return min(candidates, key=lambda s: self._outstanding[s])
 
+    def choose(self, model: str) -> Route:
+        """The server a call would go to, without counting it: for a synchronous client that runs
+        on a worker thread (the counts belong to the event loop's callers)."""
+        server = self._pick(model)
+        return Route(server, self._servers[server])
+
     @contextmanager
     def route(self, model: str) -> Iterator[Route]:
         """Count one call against the chosen server for as long as the ``with`` body runs."""
