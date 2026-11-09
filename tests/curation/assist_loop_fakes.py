@@ -263,15 +263,19 @@ class World:
                 "'class', 'f', %s, %s, 'test')",
                 (env.project, partition, partition),
             )
-        for key, number in self.number_of.items():
-            self.os.docs(ITEMS)[key].update(
-                cluster_partition_id=str(partition),
-                cluster_uid=str(self.uids[number]),
-                cluster_state=self.doc(key).get('cluster_state', 'assigned'),
-                cluster_assigned_by='run',
-            )
+        self._stamp(partition)
         self.served[env.project] = partition
         return partition
+
+    def _stamp(self, partition: uuid.UUID) -> None:
+        for key, number in self.number_of.items():
+            doc = self.os.docs(ITEMS)[key]
+            doc.update(
+                cluster_partition_id=str(partition),
+                cluster_uid=str(self.uids[number]),
+                cluster_state=doc.get('cluster_state', 'assigned'),
+                cluster_assigned_by='run',
+            )
 
     def reader(self, env: LoopEnv, record: LoopRecord) -> PartitionReader:
         """The loop's real reader over this world, bound to the partition the run pinned (none
@@ -290,6 +294,10 @@ class World:
     def restore(self, docs: dict[str, dict[str, Any]]) -> None:
         self.os.store[ITEMS] = copy.deepcopy(docs)
         self.os.seq.clear()
+        # A snapshot taken before the world was served has no partition stamp; the partition rows
+        # live in PostgreSQL and survive the restore, so the items get the stamp back.
+        for partition in self.served.values():
+            self._stamp(partition)
 
     def doc(self, crop_id: str) -> dict[str, Any]:
         return self.os.docs(ITEMS)[crop_id]
