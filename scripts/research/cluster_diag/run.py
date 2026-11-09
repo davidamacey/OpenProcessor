@@ -31,7 +31,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.eval_split import load_manifest, split_groups_of
 from scripts.bench.parity_metrics import adjusted_rand_index
 from scripts.research.cluster_diag import diagnostics as dg, heldout as ho, partitions as pt

@@ -31,7 +31,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.parity_metrics import adjusted_rand_index, normalized_mutual_info, purity
 from src.domain.embedding_spaces import LEGACY_ITEM_STATE_FIELD, LEGACY_ITEM_VECTOR_FIELD

@@ -44,7 +44,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench import parity_capture as cap, parity_gates as gates, parity_store as store
 from scripts.bench.parity_assemble import build_arrays, load_gt
 from scripts.bench.parity_env import engine_record, environment_record

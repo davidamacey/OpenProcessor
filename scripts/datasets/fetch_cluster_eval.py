@@ -39,7 +39,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.datasets import cluster_eval_selection as sel
 from scripts.datasets._common import FetchError, download, sha256_file, write_csv, write_json
 from scripts.datasets.coco_fetch import IMAGE_URL_TMPL, ensure_annotations

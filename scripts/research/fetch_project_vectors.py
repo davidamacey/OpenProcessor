@@ -22,7 +22,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.domain.embedding_state import embedded_clause
 

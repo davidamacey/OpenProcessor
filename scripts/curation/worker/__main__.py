@@ -7,7 +7,6 @@ Argument parsing and ``main``; the pipeline itself is in the rest of the
 
 from __future__ import annotations
 
-# ruff: noqa: E402
 import argparse
 import asyncio
 import sys

@@ -5,10 +5,7 @@ docker/trainer/augment.py	1	suppressions recorded when the ratchet landed; fix o
 export/export_mobileclip_image_encoder.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 export/preflight.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 frontend/e2e/stubbed/test_bulk_ingest.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/bench/detector_capture.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/bench/gpu_decode_bench.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/bench/gpu_decode_kernels.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/bench/gpu_decode_parity.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/bench/ingest_transport_bench.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/bench/vectordb/adapters/base.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/bench/vectordb/adapters/faiss_flat.py	4	suppressions recorded when the ratchet landed; fix or justify, then lower
@@ -19,8 +16,6 @@ scripts/curation/worker/bulk_writer.py	1	suppressions recorded when the ratchet 
 scripts/curation/worker/cascade.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/curation/worker/client.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/curation/worker/state.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/datasets/build_import_fixture.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-scripts/datasets/prepare_labelled_benchmark.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 scripts/docs/check_docs_vs_code.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/app/factory.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/clients/curation_opensearch/crops.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
