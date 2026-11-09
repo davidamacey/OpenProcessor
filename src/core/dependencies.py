@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import tritonclient.grpc as grpcclient
 import tritonclient.grpc.aio as grpcclient_aio
 from fastapi import Depends
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.clients.triton_client_manager import TritonClientManager
@@ -103,7 +104,11 @@ class OpenSearchClientFactory:
             app_state._opensearch_client = client
 
             if not await client.ping():
-                raise RuntimeError(f'OpenSearch connection failed: {settings.opensearch_url}')
+                # An OpenSearchException so callers that degrade on an outage (the project
+                # list shows unknown counts) catch it by the class every other failure uses.
+                raise OpenSearchConnectionError(
+                    'N/A', f'OpenSearch connection failed: {settings.opensearch_url}', None
+                )
 
             logger.info('OpenSearch client ready')
         return app_state._opensearch_client
