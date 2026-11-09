@@ -386,17 +386,22 @@ python scripts/bench/run_baseline.py <dir>/coco_4000.txt --api-url http://<api-h
   --opensearch-url http://<opensearch-host>:<port> --out <dir>/a_before
 ```
 
-Set B, private (4,000 photos of about 12 to 20 MP from a private archive, taken
-round-robin across its first-level folders; decodable JPEG, min side 320 px,
-at most 40 MB):
+Set B, public (500 Wikimedia Commons featured-picture photos of 12 to 24 MP, licensed CC0,
+public domain, CC BY or CC BY-SA, pinned in `scripts/datasets/manifests/commons_hires_500.json`
+with its seed and sha256). Fetch it once, then write the path list from the fetched folder:
 
 ```bash
-python scripts/bench/select_baseline_set.py local --root <archive dir> \
-  --count 4000 --seed 42 --out <private dir>/set_b.txt
-python scripts/bench/run_baseline.py <private dir>/set_b.txt --api-url http://<api-host>:<port> \
-  --slug-prefix baseline-b --policy all --path-map <host archive dir>=<same dir inside the API container> \
-  --out <private dir>/b_before
+python scripts/datasets/fetch_hires_set.py --out <dir>/hires_500 --n 500 --seed 20261010 \
+  --manifest scripts/datasets/manifests/commons_hires_500.json
+python scripts/bench/select_baseline_set.py local --root <dir>/hires_500 \
+  --count 500 --seed 42 --out <dir>/set_b.txt
+python scripts/bench/run_baseline.py <dir>/set_b.txt --api-url http://<api-host>:<port> \
+  --slug-prefix baseline-b --policy all --path-map <host dir>=<same dir inside the API container> \
+  --out <dir>/b_before
 ```
+
+The measurement rules M-1 to M-10 (public data only, host load recorded, honest reporting) are
+in `docs/design/v070_rebuild/06_b5_overview.md`.
 
 Compare two runs: `python scripts/bench/run_baseline.py --compare before.json after.json`.
 
@@ -432,9 +437,7 @@ block, so on the event-loop thread their seconds are API CPU seconds. The compos
 `PROMETHEUS_MULTIPROC_DIR` on the API, so a scrape aggregates all workers.
 
 Where numbers go: set A numbers go into this file, in a table with the commit,
-GPU model and the Triton, TensorRT, driver and torch versions. Set B numbers
-stay in private notes, and only an aggregate ratio or pass/fail is stated in
-public text.
+GPU model and the Triton, TensorRT, driver and torch versions. Set B is public, so its numbers go into this file the same way.
 
 ### Baseline 0.4.1 (set A, public COCO, 4,000 images; commit 15f7bbb9)
 

@@ -138,3 +138,24 @@ def test_merge_annotations_joins_splits_and_keeps_categories() -> None:
     assert [i['id'] for i in merged['images']] == [1, 2]
     assert len(merged['annotations']) == 2
     assert merged['categories'] == [{'id': 5}]
+
+
+def test_coco_ap_reports_per_size_bucket() -> None:
+    # areas: small 20x20=400 (<32^2), medium 50x50=2500, large 100x100=10000 (>96^2)
+    gt = dq.GroundTruth(
+        boxes={
+            1: [
+                dq.GtBox((0, 0, 20, 20), 1, crowd=False),
+                dq.GtBox((100, 0, 150, 50), 1, crowd=False),
+                dq.GtBox((0, 100, 100, 200), 1, crowd=False),
+            ]
+        },
+        sizes={1: (300, 300)},
+    )
+    dets: dict[int, list[dq.Det]] = {
+        1: [(100, 0, 150, 50, 0.9, 1), (0, 100, 100, 200, 0.9, 1)]  # small one is missed
+    }
+    by_size = dq.coco_ap(gt, dets, [1])['by_size']
+    assert by_size['small'] == {'ap': pytest.approx(0.0), 'ar100': pytest.approx(0.0)}
+    assert by_size['medium'] == {'ap': pytest.approx(1.0), 'ar100': pytest.approx(1.0)}
+    assert by_size['large'] == {'ap': pytest.approx(1.0), 'ar100': pytest.approx(1.0)}

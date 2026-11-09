@@ -194,6 +194,30 @@ def _mem_used_gb() -> float:
     return (kv['MemTotal'] - kv['MemAvailable']) / 1024**2
 
 
+_COUNTER_FIELDS = (
+    ('merges', 'total', 'merge_total'),
+    ('merges', 'total_time_in_millis', 'merge_time_ms'),
+    ('merges', 'total_size_in_bytes', 'merge_bytes'),
+    ('refresh', 'total', 'refresh_total'),
+    ('flush', 'total', 'flush_total'),
+    ('flush', 'total_time_in_millis', 'flush_time_ms'),
+)
+
+
+def merge_counters(stats: dict[str, Any]) -> dict[str, int]:
+    """Cumulative merge/refresh/flush totals summed over the nodes of a ``_nodes/stats/indices`` reply."""
+    out = {name: 0 for _, _, name in _COUNTER_FIELDS}
+    for node in (stats.get('nodes') or {}).values():
+        indices = node.get('indices', {})
+        for group, key, name in _COUNTER_FIELDS:
+            out[name] += int(indices.get(group, {}).get(key) or 0)
+    return out
+
+
+def counter_delta(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+    return {k: after[k] - before[k] for k in after}
+
+
 def io_stall_fields(path: Path = PRESSURE_IO) -> dict[str, float]:
     """Cumulative host IO stall seconds, so a window's stall is the difference of two samples."""
     some, full = pressure_io(path)
@@ -336,6 +360,9 @@ def drive(args: argparse.Namespace) -> int:
     cancelled = False
     with series.open('a') as log:
         for leg in (1, 2):
+            os_before = merge_counters(
+                _os_get(args.opensearch_container, '_nodes/stats/indices') or {}
+            )
             run = call(f'{base}/ingest/bulk', body, post=True)
             rid, t0 = run['run_id'], time.time()
             window: list[tuple[float, int]] = []
@@ -384,6 +411,12 @@ def drive(args: argparse.Namespace) -> int:
                     'ingested': int(run['progress'].get('ingested') or 0),
                     'failed': int(run['progress'].get('failed') or 0),
                     'skipped': int(run['progress'].get('skipped') or 0),
+                    'os_counters': counter_delta(
+                        os_before,
+                        merge_counters(
+                            _os_get(args.opensearch_container, '_nodes/stats/indices') or {}
+                        ),
+                    ),
                 }
             )
             if run['status'] in TERMINAL or not cancelled:
