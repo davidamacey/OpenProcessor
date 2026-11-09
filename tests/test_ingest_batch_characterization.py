@@ -205,8 +205,8 @@ async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
     face = FakeFace(BASE_SCRIPT)
     ocr = FakeOcr(BASE_SCRIPT)
     opensearch = FakeOpenSearch(sc)
-    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)  # noqa: ARG005
-    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)  # noqa: ARG005
+    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)
+    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
     if 'jpeg_dims' in sc:
 

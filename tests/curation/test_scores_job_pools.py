@@ -79,7 +79,7 @@ class _FakeScrollOpenSearch:
             'hits': {'hits': [{'_id': i} for i in page_ids]},
         }
 
-    async def search(self, *, index: str, body: dict[str, Any], scroll: str) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], scroll: str) -> dict[str, Any]:
         assert scroll, 'probe_scored fetch must scroll, not rely on a single page'
         assert body.get('_source') is False, 'probe_scored fetch must not read embeddings'
         self.last_query = body['query']
@@ -89,12 +89,12 @@ class _FakeScrollOpenSearch:
         self._cursor = 0
         return self._page()
 
-    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:
         assert scroll_id == 'scroll-token'
         self.scroll_calls += 1
         return self._page()
 
-    async def clear_scroll(self, *, scroll_id: str) -> dict[str, Any]:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str) -> dict[str, Any]:
         self.clear_scroll_calls += 1
         return {}
 
@@ -176,8 +176,8 @@ class _SpyScorer:
         ids: list[str],
         embeddings: np.ndarray,
         *,
-        opensearch: Any = None,  # noqa: ARG002
-        progress: Any = None,  # noqa: ARG002
+        opensearch: Any = None,
+        progress: Any = None,
     ) -> ScoreResult:
         self.calls.append({'ids': list(ids), 'embeddings': embeddings})
         return ScoreResult(scorer=self.name, version=self.version, scored_at='t', fields={})
@@ -195,7 +195,7 @@ async def _run_with_spies(
 
     monkeypatch.setattr(
         'src.services.curation.item_scores.get_scorer',
-        lambda name, **kwargs: spies[name],  # noqa: ARG005
+        lambda name, **kwargs: spies[name],
     )
 
     async def _fake_residual(client, **kwargs):

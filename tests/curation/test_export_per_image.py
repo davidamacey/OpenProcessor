@@ -64,7 +64,7 @@ class _FilteringOpenSearch:
         self._docs = docs
         self.queries: list[dict[str, Any]] = []
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         query = body['query']
         self.queries.append(query)
         bool_q = query.get('bool') or {}
@@ -76,10 +76,10 @@ class _FilteringOpenSearch:
         ]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 

@@ -45,7 +45,7 @@ class FakeOpenSearch:
         self.queries: list[dict[str, Any]] = []
         self._served: set[str] = set()
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         self.queries.append(body['query'])
         docs = self._docs if not self._by_status else self._match(body['query'])
         scroll_id = f'scroll-{len(self.queries)}'
@@ -72,10 +72,10 @@ class FakeOpenSearch:
             return self._docs
         return [d for d in self._docs if d.get(FIELDS.status) in wanted]
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle
+from src.services.projects import clone as clone_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
@@ -58,7 +58,7 @@ def test_clone_settings_copies_defaults() -> None:
         asyncio.run(update_curation_settings({'axis_x': 'value_x'}, expected_revision=revision))
 
     asyncio.run(
-        lifecycle.clone_settings(
+        clone_mod.clone_settings(
             client, target_record=target, from_slug='source', axes=['settings_defaults']
         )
     )
@@ -87,7 +87,7 @@ def test_clone_classes_refused_on_non_empty_target() -> None:
 
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(
-            lifecycle.clone_settings(
+            clone_mod.clone_settings(
                 client, target_record=target, from_slug='source', axes=['classes']
             )
         )
@@ -108,7 +108,7 @@ def test_clone_source_stays_byte_identical() -> None:
     assert target is not None
 
     asyncio.run(
-        lifecycle.clone_settings(
+        clone_mod.clone_settings(
             client, target_record=target, from_slug='source', axes=['settings_defaults']
         )
     )
@@ -194,7 +194,7 @@ def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
         reg.seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')  # type: ignore[attr-defined]
 
     conflicts = asyncio.run(
-        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+        clone_mod.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
     )
 
     # B2: the conflict (combo 'i' is the target's ice_cream_truck hotkey)
@@ -256,7 +256,7 @@ def test_clone_keymap_axis_copies_overrides_when_no_conflicts(
     monkeypatch.setattr('src.services.curation.keymap.save_keymap_doc', _fake_save)
 
     conflicts = asyncio.run(
-        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+        clone_mod.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
     )
 
     assert saved['target'] == {'cluster.ignore': ['i'], 'review.skip': ['j']}
@@ -307,7 +307,7 @@ def _clone_keymap(
         clone_mod.logger, 'warning', lambda event, **kw: warnings.append((event, kw))
     )
     conflicts = asyncio.run(
-        lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
+        clone_mod.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])
     )
     return saves, events, warnings, conflicts
 

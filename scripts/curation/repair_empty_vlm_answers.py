@@ -32,7 +32,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 
 from src.config import get_curation_config
 from src.db.engine import run_with_engine

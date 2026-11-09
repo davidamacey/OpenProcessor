@@ -6,7 +6,7 @@ guarded project delete, completed by the ``project_delete`` job.
 status is the claim, and the job's exclusive scope (the slug) keeps two finishes apart.
 
 Split out of ``lifecycle.py`` to stay under the repo's 700-LOC
-pre-commit ratchet; ``lifecycle.py`` re-exports every public name here.
+pre-commit ratchet; callers import it from here.
 """
 
 from __future__ import annotations

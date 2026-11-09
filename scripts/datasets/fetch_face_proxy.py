@@ -30,7 +30,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.datasets import proxy_openimages as oi
 from scripts.datasets._common import FetchError, download
 from scripts.datasets.proxy_manifest import (

@@ -37,7 +37,7 @@ class TaggingPE:
     def vector(crop: np.ndarray) -> np.ndarray:
         return np.array([float(crop.mean()) / 255.0, 1.0, 0.0], dtype=np.float32)
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         self.inflight += 1
         self.peak = max(self.peak, self.inflight)
         try:
@@ -50,7 +50,7 @@ class TaggingPE:
         finally:
             self.inflight -= 1
 
-    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
         await asyncio.sleep(0.01)
         return np.array([0.0, 1.0, 0.0], dtype=np.float32)
 

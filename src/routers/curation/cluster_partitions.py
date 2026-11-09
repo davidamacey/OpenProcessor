@@ -7,13 +7,13 @@ the caller's view is stale) and queues the projection that serves it.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import Annotated
 
 from fastapi import Query
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.core.exceptions import RequestRejectedError
 from src.db.session import project_tx
 from src.domain.embedding_spaces import Target

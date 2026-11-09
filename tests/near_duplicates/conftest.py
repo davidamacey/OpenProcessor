@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 import pytest
 import pytest_asyncio
-from fixtures.job_fixtures import job_env, kinds, producer, queue_hooks, wakes
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
@@ -57,6 +56,3 @@ def bound(project: uuid.UUID, pg_registry: Any) -> Iterator[None]:
         slug = conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()[0]  # type: ignore[index]
     with bind_project(new_project_record(slug, base_curation_config())):
         yield
-
-
-__all__ = ['job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']

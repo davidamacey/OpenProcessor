@@ -102,7 +102,10 @@ def test_the_context_estimate_grows_with_images_and_classes() -> None:
     assert small is not None
     assert large is not None
     assert many is not None
-    by_call = lambda rows: {r['call']: r['estimate'] for r in rows}  # noqa: E731
+
+    def by_call(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        return {r['call']: r['estimate'] for r in rows}
+
     assert by_call(large)['combined_batch'] - by_call(small)['combined_batch'] == 7 * 260
     assert by_call(many)['class_batch'] > by_call(small)['class_batch']
 

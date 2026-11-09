@@ -236,7 +236,7 @@ class TestResolveExportFormats:
     def test_does_not_duplicate_when_cached_onnx_already_exists(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(export_models.Path, 'exists', lambda self: True)  # noqa: ARG005
+        monkeypatch.setattr(export_models.Path, 'exists', lambda self: True)
         resolved = export_models.resolve_export_formats(['trt', 'trt_end2end'], 'yolov11_small')
         assert resolved == ['trt', 'trt_end2end']
 

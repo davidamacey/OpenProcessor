@@ -57,7 +57,7 @@ def served_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(
         image_serving,
         '_configured_roots',
-        lambda config=None: (root.resolve(),),  # noqa: ARG005
+        lambda config=None: (root.resolve(),),
     )
     return root
 

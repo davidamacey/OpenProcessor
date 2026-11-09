@@ -28,8 +28,8 @@ class _FakeOSClient:
 
     async def get(
         self,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         _source_includes: list[str] | None = None,
     ) -> dict[str, Any]:
         try:

@@ -78,7 +78,7 @@ class TestOccUpdateBulk:
                 self,
                 *,
                 body: list[dict[str, Any]],
-                refresh: bool | str = False,  # noqa: ARG002
+                refresh: bool | str = False,
             ) -> dict[str, Any]:
                 self._bulk_attempt += 1
                 self.bulk_calls.append(body)
@@ -142,7 +142,7 @@ class _AlwaysConflict(FakeOccOpenSearch):
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         if self.transport_error:

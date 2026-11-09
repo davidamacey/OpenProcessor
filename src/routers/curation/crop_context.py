@@ -7,16 +7,10 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.config.curation_accessors import images_index, items_index
 from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    images_index,
-    is_not_found,
-    items_index,
-    logger,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, is_not_found, logger, router
 from src.routers.curation._item_models import ItemDoc
 from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.wire import (

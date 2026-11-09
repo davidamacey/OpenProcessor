@@ -84,7 +84,7 @@ class FakeScorer:
     def __init__(self, name):
         self.name = name
 
-    async def score(self, ids, _embeddings, *, opensearch):  # noqa: ARG002
+    async def score(self, ids, _embeddings, *, opensearch):
         return SimpleNamespace(fields={i: {'s': 1} for i in ids}, n_scored=len(ids), extra={})
 
 

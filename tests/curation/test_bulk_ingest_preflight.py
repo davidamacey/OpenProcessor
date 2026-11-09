@@ -29,7 +29,7 @@ def _roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         image_serving,
         '_configured_roots',
-        lambda config=None: (tmp_path.resolve(),),  # noqa: ARG005
+        lambda config=None: (tmp_path.resolve(),),
     )
 
 

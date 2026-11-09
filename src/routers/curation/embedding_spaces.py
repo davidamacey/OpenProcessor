@@ -8,14 +8,14 @@ stable ``{"error": code, "message": ...}`` body.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import Annotated
 
 from fastapi import Depends, Header, Query
 
 from src.config.curation_accessors import images_index, items_index
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.core.dependencies import get_curation_opensearch
 from src.domain.embedding_spaces import Target
 from src.routers.curation._common import router

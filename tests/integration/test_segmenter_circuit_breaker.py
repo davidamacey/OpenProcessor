@@ -20,9 +20,9 @@ from typing import Any
 import httpx
 import pytest
 
-from scripts.curation.worker.cascade import SegmenterClient
 from scripts.curation.worker.client import (
     SegmenterAllHostsDown,
+    SegmenterClient,
     SegmenterRequestFailed,
     SegmenterUnavailable,
 )

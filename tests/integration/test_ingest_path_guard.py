@@ -48,7 +48,7 @@ def client(monkeypatch: pytest.MonkeyPatch, served_root: Path) -> Iterator[TestC
         monkeypatch.setattr(
             image_serving,
             '_configured_roots',
-            lambda config=None: (served_root.resolve(),),  # noqa: ARG005
+            lambda config=None: (served_root.resolve(),),
         )
         yield c
 

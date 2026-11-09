@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 import pytest
 from _records_world import make_project_row
-from fixtures.job_fixtures import job_env, producer, wakes  # noqa: F401
 from fixtures.job_rows import seed_default_spaces
 
 from curation.jobs_a.ctx import FakeCtx
@@ -39,9 +38,9 @@ pytestmark = pytest.mark.db
 
 @pytest.mark.asyncio
 async def test_a_reprocess_that_changes_a_vector_adds_one_pending_row_per_level(
-    job_env: Any,  # noqa: F811 - the fixture is requested by name
-    producer: Any,  # noqa: F811 - the fixture is requested by name
-    wakes: Any,  # noqa: F811 - the fixture is requested by name
+    job_env: Any,
+    producer: Any,
+    wakes: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

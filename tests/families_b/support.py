@@ -96,14 +96,6 @@ def project(app, pg, slug: str | None = None) -> tuple[str, uuid.UUID]:
     return real, pid
 
 
-@pytest.fixture
-def worker_app(queue_env):
-    from src.tasks.app import app
-
-    app.loader.import_default_modules()
-    return app
-
-
 def bind_worker_to(monkeypatch, app, opensearch) -> None:
     """The worker side of a handler: its project registry and its OpenSearch client."""
 

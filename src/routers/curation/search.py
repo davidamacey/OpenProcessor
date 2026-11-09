@@ -11,7 +11,7 @@ the operator which flag to flip, same shape ``scores.py`` uses.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Request, Response
@@ -22,7 +22,7 @@ from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
 from src.routers.curation._space_refusals import space_refusals
 from src.schemas.curation.config_common import ApiErrorResponse

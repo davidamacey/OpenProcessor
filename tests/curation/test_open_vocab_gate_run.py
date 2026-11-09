@@ -45,7 +45,7 @@ class _Vlm:
         self.answers = answers
         self.asked: list[str] = []
 
-    async def __call__(self, jpeg: bytes, prompt: str) -> bool | None:  # noqa: ARG002
+    async def __call__(self, jpeg: bytes, prompt: str) -> bool | None:
         self.asked.append(prompt)
         answer = self.answers.get(prompt, True)
         if answer is None:

@@ -37,7 +37,7 @@ class _Pass:
             reprocess_images, 'get_curation_config', lambda: SimpleNamespace(images_index='img')
         )
 
-    async def existing_images(self, _os: Any, ids: list[str], *, index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def existing_images(self, _os: Any, ids: list[str], *, index: str) -> dict[str, Any]:
         self.events.append(('read', tuple(ids)))
         return {i: {'image_id': i} for i in ids}
 
@@ -187,10 +187,10 @@ async def test_the_embed_pass_preprocess_runs_on_the_pool_not_the_loop(
     monkeypatch.setattr(reprocess_embed, 'crop_pil', spy)
 
     class PE:
-        async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+        async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
             return np.ones((len(crops), 3), np.float32)
 
-        async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
+        async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
             return np.ones(3, np.float32)
 
     await reembed_items(fake, PE(), [target], parts=frozenset({'crop'}))
@@ -254,7 +254,7 @@ async def test_chunks_in_flight_share_one_image_bound(
     class PE:
         inflight = peak = 0
 
-        async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+        async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
             PE.inflight += 1
             PE.peak = max(PE.peak, PE.inflight)
             await asyncio.sleep(0.02)

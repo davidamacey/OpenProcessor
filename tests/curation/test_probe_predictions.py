@@ -43,24 +43,24 @@ class _FakeOpenSearch:
             docs = [d for d in docs if not d.get('test_holdout')]
         return docs
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         self.search_bodies.append(body)
         docs = self._matches(body)
         hits = [{'_id': d['crop_id'], '_source': d} for d in docs]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         # First page already returned everything in these small tests —
         # the second scroll call always signals "no more hits" to end the loop.
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
-    async def update(self, index: str, id: str, body: dict[str, Any]) -> None:  # noqa: A002
+    async def update(self, index: str, id: str, body: dict[str, Any]) -> None:
         self.updates.append({'index': index, 'id': id, 'doc': body['doc']})
 
-    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:  # noqa: ARG002
+    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:
         self.bulk_calls = getattr(self, 'bulk_calls', 0) + 1
         for action, doc in zip(body[0::2], body[1::2], strict=True):
             meta = action['update']
@@ -88,7 +88,7 @@ def _install_canned_predictor(
     from src.services.curation import probe_predictions as pp
 
     def fake_build_predictor(model_path: Path, architecture: str):
-        return (lambda crop: prediction), 'canned-v1'  # noqa: ARG005
+        return (lambda crop: prediction), 'canned-v1'
 
     monkeypatch.setattr(pp, '_build_predictor', fake_build_predictor)
 
@@ -108,7 +108,7 @@ async def test_probe_writes_all_seven_fields(
     monkeypatch.setattr(
         pp,
         '_resolve_image',
-        lambda image_path, *, config: tiny_image,  # noqa: ARG005
+        lambda image_path, *, config: tiny_image,
     )
 
     docs = [
@@ -164,7 +164,7 @@ async def test_probe_writes_one_bulk_call_per_page_not_per_item(
     monkeypatch.setattr(
         pp,
         '_resolve_image',
-        lambda image_path, *, config: tiny_image,  # noqa: ARG005
+        lambda image_path, *, config: tiny_image,
     )
 
     docs = [
@@ -202,7 +202,7 @@ async def test_probe_agreement_is_false_when_prediction_matches_stored_label(
     monkeypatch.setattr(
         pp,
         '_resolve_image',
-        lambda image_path, *, config: tiny_image,  # noqa: ARG005
+        lambda image_path, *, config: tiny_image,
     )
     docs = [
         {
@@ -236,7 +236,7 @@ async def test_probe_skips_test_holdout_crops(
     monkeypatch.setattr(
         pp,
         '_resolve_image',
-        lambda image_path, *, config: tiny_image,  # noqa: ARG005
+        lambda image_path, *, config: tiny_image,
     )
     docs = [
         {
@@ -282,7 +282,7 @@ async def test_probe_writes_the_registry_id_of_its_prediction(
     from src.services.curation import probe_predictions as pp
 
     _install_canned_predictor(monkeypatch, ('sedan', 0.81, 1.23, 0.44))
-    monkeypatch.setattr(pp, '_resolve_image', lambda image_path, *, config: tiny_image)  # noqa: ARG005
+    monkeypatch.setattr(pp, '_resolve_image', lambda image_path, *, config: tiny_image)
     docs = [{'crop_id': 'c', 'image_path': 'x.jpg', 'bbox_norm': [0, 0, 1, 1], 'class_name': 'suv'}]
     fake_os = _FakeOpenSearch(docs)
     await pp.run_probe_inference(
@@ -314,7 +314,7 @@ def test_raw_preds_accepts_arbitrary_attributes() -> None:
     anticipated, not just the ones this module already knows about."""
     import torch
 
-    from src.services.curation.probe_predictions import _RawPreds
+    from src.services.curation.probe_models import _RawPreds
 
     preds = _RawPreds(torch.zeros((9, 1)))
     preds.speed = {'preprocess': 0.1}

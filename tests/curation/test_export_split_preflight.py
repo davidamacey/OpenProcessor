@@ -18,7 +18,7 @@ from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.services.curation import dataset_thresholds as T  # noqa: N812
+from src.services.curation import dataset_thresholds as thresholds
 from src.services.curation.export_readiness import export_class_split_check, export_splits_check
 
 
@@ -96,8 +96,8 @@ def test_class_split_check_uses_the_threshold_constants(monkeypatch: pytest.Monk
     sev, _msg, detail = export_class_split_check({'class_split_counts': BALANCED}, None)
     assert sev == 'block'
     assert len(detail['classes']) == 3
-    assert T.MIN_TRAIN_INSTANCES_PER_CLASS == 1
-    assert T.MIN_VAL_INSTANCES_PER_CLASS == 1
+    assert thresholds.MIN_TRAIN_INSTANCES_PER_CLASS == 1
+    assert thresholds.MIN_VAL_INSTANCES_PER_CLASS == 1
 
 
 def test_class_split_check_unknown_without_per_class_counts() -> None:

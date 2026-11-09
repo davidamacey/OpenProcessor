@@ -55,17 +55,17 @@ class FakeTritonPool:
     def __init__(self) -> None:
         self.batch_sizes: list[int] = []
 
-    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
+    async def is_model_ready(self, model_name: str) -> bool:
         return False
 
     async def load_model(self, model_name: str) -> None:
         # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
         raise InferenceServerException(f'{model_name}: not in the repository')
 
-    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+    async def get_model_input_datatype(self, model_name: str) -> str:
         return 'UINT8'
 
-    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
+    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:
         batch = int(inputs[0].shape()[0])
         self.batch_sizes.append(batch)
         return FakeInferResult(
@@ -89,7 +89,7 @@ class FakePEEncoder:
     def __init__(self) -> None:
         self.whole_frame_sizes: list[tuple[int, int]] = []
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         return np.tile(np.array([1.0, 0.0], dtype=np.float32), (len(crops), 1))
 
     async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
@@ -145,10 +145,10 @@ class FakeOpenSearch:
         def __init__(self, outer: FakeOpenSearch) -> None:
             self._outer = outer
 
-        async def exists(self, index: str) -> bool:  # noqa: ARG002
+        async def exists(self, index: str) -> bool:
             return True
 
-        async def create(self, index: str, body: dict) -> dict:  # noqa: ARG002
+        async def create(self, index: str, body: dict) -> dict:
             return {'acknowledged': True}
 
         async def refresh(self, index: str) -> dict:
@@ -277,7 +277,7 @@ class FakeOpenSearch:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
 
         items_index = self._items_index()
@@ -311,10 +311,10 @@ class FakeOpenSearch:
     async def update(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
-        **kwargs: Any,  # noqa: ARG002
+        **kwargs: Any,
     ) -> dict[str, Any]:
         self.items.setdefault(id, {}).update(body['doc'])
         return {'_id': id, 'result': 'updated', '_seq_no': 2, '_primary_term': 1}
@@ -322,14 +322,14 @@ class FakeOpenSearch:
     async def get(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         _source_excludes: list[str] | None = None,
-        ignore: Any = None,  # noqa: ARG002
+        ignore: Any = None,
     ) -> dict[str, Any]:
         return {'_id': id, '_source': self.items.get(id, {}), '_seq_no': 1, '_primary_term': 1}
 
-    async def count(self, index: str, body: dict | None = None) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, index: str, body: dict | None = None) -> dict[str, Any]:
         return {'count': len(self.items)}
 
 
@@ -373,7 +373,7 @@ def curation_app(
     from src.services.curation import image_serving
 
     temp_root = Path(tempfile.gettempdir()).resolve()
-    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (temp_root,))  # noqa: ARG005
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (temp_root,))
 
     # BA-1: POST /ingest/upload persists bytes under the project's upload
     # root ($OP_STATE_DIR/projects/<project>/uploads) -- give it a real,

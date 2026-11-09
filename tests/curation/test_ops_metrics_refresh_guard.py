@@ -45,7 +45,7 @@ class _Bottom:
         self.docs = docs
         self.seen: list[tuple[str, str]] = []
 
-    async def perform_request(self, method: str, url: str, params=None, body=None, **_kw):  # noqa: ARG002
+    async def perform_request(self, method: str, url: str, params=None, body=None, **_kw):
         self.seen.append((method, url))
         if url.startswith('/_cat/indices/'):
             names = url.removeprefix('/_cat/indices/').split(',')

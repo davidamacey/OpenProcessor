@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle, lifecycle_checks
+from src.services.projects import delete as delete_mod, lifecycle, lifecycle_checks
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
@@ -132,7 +132,7 @@ def test_delete_busy_409_carries_typed_job_refs(monkeypatch) -> None:
         )
 
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project(slug='cars', confirm='cars')
+            await delete_mod.delete_project(slug='cars', confirm='cars')
 
         detail = exc_info.value.detail
         assert detail['error'] == 'project_busy'

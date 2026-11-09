@@ -98,10 +98,10 @@ class _Indices:
             raise NotFoundError(404, 'index_not_found_exception', index)
         del self._fake.indexes[index]
 
-    async def refresh(self, index: str) -> None:  # noqa: ARG002  # mirrors the client signature
+    async def refresh(self, index: str) -> None:  # mirrors the client signature
         self._fake.calls.append('indices.refresh')
 
-    async def stats(self, index: str, metric: str) -> dict[str, Any]:  # noqa: ARG002
+    async def stats(self, index: str, metric: str) -> dict[str, Any]:
         self._fake.calls.append('indices.stats')
         docs = len(self._fake.index(index)['docs'])
         primaries = {'docs': {'count': docs}, 'store': {'size_in_bytes': docs * 1024}}
@@ -138,7 +138,7 @@ class _Cluster:
     def __init__(self, fake: FakeOpenSearch) -> None:
         self._fake = fake
 
-    async def health(self, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:  # noqa: ARG002
+    async def health(self, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:
         self._fake.calls.append('cluster.health')
         return {'status': 'green', 'timed_out': False}
 
@@ -147,7 +147,7 @@ class _Tasks:
     def __init__(self, fake: FakeOpenSearch) -> None:
         self._fake = fake
 
-    async def get(self, task_id: str) -> dict[str, Any]:  # noqa: ARG002  # mirrors the client signature
+    async def get(self, task_id: str) -> dict[str, Any]:  # mirrors the client signature
         self._fake.calls.append('tasks.get')
         return {'completed': True, 'response': {'updated': self._fake.last_updated}}
 
@@ -174,7 +174,7 @@ class FakeOpenSearch:
         docs: dict[str, Any] = self.index(name)['docs']
         return docs
 
-    async def get(self, index: str, id: str) -> dict[str, Any]:  # noqa: A002
+    async def get(self, index: str, id: str) -> dict[str, Any]:
         self.calls.append('get')
         docs = self.docs(index)
         if id not in docs:
@@ -226,7 +226,7 @@ class FakeOpenSearch:
         self.last_updated = n
         return {'task': 'fake:1'}
 
-    async def bulk(self, body: list[Any], refresh: bool = False) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, body: list[Any], refresh: bool = False) -> dict[str, Any]:
         self.calls.append('bulk')
         for action, source in zip(body[::2], body[1::2], strict=True):
             meta = action['index']

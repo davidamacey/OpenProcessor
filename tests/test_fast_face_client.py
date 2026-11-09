@@ -120,7 +120,7 @@ def test_orig_shape_uncapped_image_reports_actual_size(
         )
 
     monkeypatch.setattr('src.clients.fast_face_client.decode_scrfd_outputs', fake_decode)
-    monkeypatch.setattr(face_client, '_call_scrfd', lambda blob: {})  # noqa: ARG005
+    monkeypatch.setattr(face_client, '_call_scrfd', lambda blob: {})
 
     result = face_client.recognize(_encode_jpeg(img), confidence=0.5)
     assert result['num_faces'] == 0

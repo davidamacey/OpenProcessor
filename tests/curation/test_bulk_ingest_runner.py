@@ -31,7 +31,7 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     root = tmp_path / 'served'
     root.mkdir()
-    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root.resolve(),))  # noqa: ARG005
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root.resolve(),))
     return root
 
 
@@ -85,7 +85,7 @@ class MemoryReporter:
         stage: str | None = None,
         counters: Any = None,
         *,
-        force: bool = False,  # noqa: ARG002
+        force: bool = False,
     ) -> None:
         self.snapshots.append({'done': done, 'total': total, 'stage': stage, **(counters or {})})
 

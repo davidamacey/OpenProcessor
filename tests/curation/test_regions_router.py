@@ -39,7 +39,7 @@ class _FakeRegionOS:
         def __init__(self, outer: _FakeRegionOS) -> None:
             self._outer = outer
 
-        async def refresh(self, *, index: str) -> None:  # noqa: ARG002
+        async def refresh(self, *, index: str) -> None:
             self._outer.refresh_calls += 1
 
     def __init__(self, docs: dict[str, dict[str, Any]] | None = None) -> None:
@@ -51,7 +51,7 @@ class _FakeRegionOS:
         self.refresh_calls = 0
         self.indices = self._Indices(self)
 
-    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:
         if id not in self._docs:
             raise KeyError(id)
         return {
@@ -65,12 +65,12 @@ class _FakeRegionOS:
     async def update(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
         if_seq_no: int,
-        if_primary_term: int,  # noqa: ARG002
-        refresh: bool | str = False,  # noqa: ARG002
+        if_primary_term: int,
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         if self._seq.get(id) != if_seq_no:
             msg = f'version conflict on {id}'
@@ -81,7 +81,7 @@ class _FakeRegionOS:
         self._seq[id] = self._seq.get(id, 0) + 1
         return {'result': 'updated'}
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         """The ``terms`` on ``crop_id`` that ``items_by_terms`` issues (the
         post-edit box-embedding refresh), one page, sorted by id."""
         (clause,) = body['query']['bool']['filter']
@@ -119,7 +119,7 @@ class _FakeRegionOS:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         items = []

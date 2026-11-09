@@ -308,7 +308,7 @@ def test_resolve_skips_item_whose_state_changed_before_write(
 
     real_get = fake.get
 
-    async def _get_and_flip(*, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def _get_and_flip(*, index: str, id: str, **kw: Any) -> dict[str, Any]:
         if id == 'p2':
             # Simulate a concurrent write that resolved p2 to something
             # else between selection and this item's write — flip before

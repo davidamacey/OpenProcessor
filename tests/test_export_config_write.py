@@ -11,7 +11,7 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-from config_write import write_generated_config  # noqa: E402
+from config_write import write_generated_config
 
 
 def test_a_new_config_is_created(tmp_path: Path) -> None:

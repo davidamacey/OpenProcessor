@@ -6,7 +6,8 @@ from typing import Any
 
 from fastapi import Query
 
-from src.routers.curation._common import CropsPageResponse, OpenSearchDep, router
+from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._item_models import CropsPageResponse
 from src.routers.curation.crops_list import list_crops
 from src.services.curation.item_filter import ItemFilter
 

@@ -30,7 +30,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from src.config.curation_accessors import images_index, items_index
 from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.services.projects.guard import make_script_opensearch

@@ -51,10 +51,10 @@ class FakeItems:
         self.update_calls = 0
         self.tasks = _Tasks(self)
 
-    async def count(self, index: str, body: dict[str, Any]) -> dict[str, int]:  # noqa: ARG002
+    async def count(self, index: str, body: dict[str, Any]) -> dict[str, int]:
         return {'count': sum(_match(d, body['query']) for d in self.docs)}
 
-    async def update_by_query(self, index: str, body: dict[str, Any], **_: Any) -> dict[str, str]:  # noqa: ARG002
+    async def update_by_query(self, index: str, body: dict[str, Any], **_: Any) -> dict[str, str]:
         self.update_calls += 1
         hits = [d for d in self.docs if _match(d, body['query'])]
         for doc in hits:

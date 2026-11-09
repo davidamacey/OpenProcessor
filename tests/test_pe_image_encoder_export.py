@@ -33,11 +33,11 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import export_pe_image_encoder as pe_export  # noqa: E402
-import pe_image_constants  # noqa: E402
-import pe_image_triton_config  # noqa: E402
-import pe_image_validate  # noqa: E402
-import pe_onnx_common  # noqa: E402
+import export_pe_image_encoder as pe_export
+import pe_image_constants
+import pe_image_triton_config
+import pe_image_validate
+import pe_onnx_common
 
 
 # =============================================================================

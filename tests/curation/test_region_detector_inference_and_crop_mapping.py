@@ -98,7 +98,7 @@ class TestRegionDetectorSingle:
     @pytest.mark.asyncio
     async def test_detect_handles_missing_output(self) -> None:
         class _NullResult:
-            def as_numpy(self, name: str) -> Any:  # noqa: ARG002
+            def as_numpy(self, name: str) -> Any:
                 return None
 
         pool = MagicMock()

@@ -44,7 +44,7 @@ class _LeakPEEncoder(FakePEEncoder):
     """The ingest fake, at the seed data's embedding width (so the
     clustering and scoring routes see one consistent pool)."""
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         return np.array([_vec(100 + i) for i in range(len(crops))], dtype=np.float32)
 
     async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
@@ -269,7 +269,9 @@ def leak_env(
     from src.main import app
 
     env.app = app
-    app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[get_async_triton] = lambda: (
+        _DeadTriton()
+    )  # FastAPI parses a class here as a dependency with parameters
 
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).

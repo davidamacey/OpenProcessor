@@ -41,7 +41,7 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-from pe_rearrange_shim import (  # noqa: E402
+from pe_rearrange_shim import (
     _MERGE_HEADS,
     _SPLIT_HEADS,
     _safe_rearrange,

@@ -363,7 +363,7 @@ class _FakeOSClient:
     async def get(
         self,
         index: str,
-        id: str,  # noqa: A002 - test stub mirrors OpenSearch signature
+        id: str,
         _source_includes: list[str] | None = None,
     ) -> dict:
         self.last_call = {'index': index, 'id': id, '_source_includes': _source_includes}
@@ -400,7 +400,7 @@ def test_fetch_crop_uses_configured_items_index() -> None:
     seen: dict[str, str] = {}
 
     class _RecordingOS:
-        async def get(self, index: str, id: str, **kwargs: object) -> dict:  # noqa: A002, ARG002
+        async def get(self, index: str, id: str, **kwargs: object) -> dict:
             seen['index'] = index
             return {'_source': {'image_path': 'x.jpg'}}
 

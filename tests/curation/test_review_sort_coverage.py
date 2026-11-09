@@ -51,13 +51,13 @@ class _CoverageOpenSearch:
         self.coverage = coverage
         self.total = total
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         query = body['query']
         if 'exists' in query:
             return {'count': self.coverage.get(query['exists']['field'], 0)}
         return {'count': self.total}
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         """Coverage is one ``size: 0`` search with a ``filter: exists``
         sub-agg per field (plus ``track_total_hits`` for the denominator)."""
         aggs = {

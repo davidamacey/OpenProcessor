@@ -296,7 +296,8 @@ async def test_worker_fetch_requests_guard_fields_and_records_token() -> None:
 @pytest.mark.asyncio
 async def test_worker_drops_class_fields_when_class_changed_after_read() -> None:
     from scripts.curation.worker.bulk_writer import _bulk_update
-    from scripts.curation.worker.state import _ItemTask, items_index
+    from scripts.curation.worker.state import _ItemTask
+    from src.config.curation_accessors import items_index
 
     read = _discarded('w1') | {F.status: 'pending_detection'}
     fake = QueryFakeOpenSearch({items_index(): {'w1': dict(read)}})
@@ -329,7 +330,8 @@ async def test_worker_drops_class_fields_when_class_changed_after_read() -> None
 @pytest.mark.asyncio
 async def test_worker_writes_class_when_unchanged() -> None:
     from scripts.curation.worker.bulk_writer import _bulk_update
-    from scripts.curation.worker.state import _ItemTask, items_index
+    from scripts.curation.worker.state import _ItemTask
+    from src.config.curation_accessors import items_index
 
     read = _plain('w2') | {F.status: 'pending_detection'}
     fake = QueryFakeOpenSearch({items_index(): {'w2': dict(read)}})

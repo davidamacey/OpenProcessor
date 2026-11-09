@@ -11,8 +11,9 @@ from typing import Any
 
 from fastapi import Query
 
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.review_terms import (
     raw_label_clusters_body,
     raw_label_clusters_response,

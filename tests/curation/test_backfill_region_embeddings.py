@@ -28,7 +28,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / 'scripts' / 'curation'
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import backfill_region_embeddings as backfill_script  # noqa: E402
+import backfill_region_embeddings as backfill_script
 
 
 F = get_region_fields()
@@ -56,7 +56,7 @@ class _FakePE:
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         self.embed_crops_calls: list[int] = []
 
-    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:
         self.embed_crops_calls.append(len(crops))
         return np.tile(np.array([0.6, 0.8, 0.0], dtype=np.float32), (len(crops), 1))
 
@@ -87,7 +87,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, root: Path | None) -
     fake_pe = _FakePE()
     if root is not None:
         resolved = root.resolve()
-        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))  # noqa: ARG005
+        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))
         for cid, doc in client.docs(INDEX).items():
             (resolved / f'{cid}.jpg').write_bytes(_tiny_jpeg())
             doc['image_path'] = str(resolved / f'{cid}.jpg')

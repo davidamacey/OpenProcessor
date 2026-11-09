@@ -46,7 +46,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench import baseline_suite as bs
 from scripts.bench.baseline_report import percentile
 from scripts.bench.ingest_sweep_lib import (

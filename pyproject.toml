@@ -235,12 +235,64 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/curation/seed_docs_run_results.py" = ["E402"]
 "scripts/curation/seed_docs_embeddings.py" = ["E402"]
 "scripts/curation/seed_live_harness.py" = ["E402"]
+# Standalone scripts put the repo root on sys.path before importing `src`/`scripts` (they run as
+# `python scripts/...` from a checkout or the image), so their imports cannot precede that setup.
+"scripts/bench/**/*.py" = ["E402"]
+"scripts/research/**/*.py" = ["E402"]
+"scripts/datasets/*.py" = ["E402"]
+"scripts/curation/backfill_region_embeddings.py" = ["E402"]
+"scripts/curation/backfill_scores.py" = ["E402"]
+"scripts/curation/bulk_ingest.py" = ["E402"]
+"scripts/curation/cluster_raw_labels.py" = ["E402"]
+"scripts/curation/eval_regions_vs_gt.py" = ["E402"]
+"scripts/curation/import_labeled_dataset.py" = ["E402"]
+"scripts/curation/ingest_upload.py" = ["E402"]
+"scripts/curation/prune_exports.py" = ["E402"]
+"scripts/curation/prune_training_runs.py" = ["E402"]
+"scripts/curation/reclassify_after_registry_growth.py" = ["E402"]
+"scripts/curation/rederive_region_text.py" = ["E402"]
+"scripts/curation/repair_empty_vlm_answers.py" = ["E402"]
+"scripts/curation/repair_stale_label_source.py" = ["E402"]
+"scripts/curation/repair_unmatched_class.py" = ["E402"]
+"scripts/curation/requeue_regions.py" = ["E402"]
+"scripts/curation/run_probe.py" = ["E402"]
+"scripts/curation/seed_class_registry.py" = ["E402"]
+"scripts/curation/worker/__main__.py" = ["E402"]
+"scripts/purge_face_data.py" = ["E402"]
+"scripts/validation/validate_models.py" = ["E402"]
 # The whitelist is read by vulture, never run: each line is a bare attribute read on purpose.
 "scripts/codegen/vulture_whitelist.py" = ["B018"]
+# Tests that import a script or tool module by bare name put its directory on sys.path (or
+# `pytest.importorskip` an optional dependency) first, so the import cannot precede that setup.
+"tests/curation/test_backfill_region_embeddings.py" = ["E402"]
+"tests/curation/test_mlflow_callbacks.py" = ["E402"]
+"tests/curation/test_test_split_identity.py" = ["E402"]
+"tests/curation/test_trainer_mlflow_guard.py" = ["E402"]
+"tests/installer/test_trt_build_target.py" = ["E402"]
+"tests/records/test_holdout_freeze_route_pg.py" = ["E402"]
+"tests/test_docs_screenshot_public_data_guard.py" = ["E402"]
+"tests/test_docs_screenshot_seed.py" = ["E402"]
+"tests/test_download_paddleocr_flow.py" = ["E402"]
+"tests/test_export_config_write.py" = ["E402"]
+"tests/test_export_face_recognition.py" = ["E402"]
+"tests/test_export_paddleocr_rec.py" = ["E402"]
+"tests/test_pe_download_weights.py" = ["E402"]
+"tests/test_pe_image_encoder_export.py" = ["E402"]
+"tests/test_pe_rearrange_shim.py" = ["E402"]
+"tests/test_pe_rope_layout.py" = ["E402"]
+"tests/test_pe_text_encoder_export.py" = ["E402"]
+"tests/test_trt_build_settings.py" = ["E402"]
+"tests/test_uint8_input.py" = ["E402"]
+"tests/test_validate_pytorch_model_restricted.py" = ["E402"]
+
 # Test files can have additional flexibility
 "tests/**/*.py" = [
+    "A002",    # Argument shadows a builtin: fakes of the OpenSearch/Triton clients keep the real keyword (`id=`)
     "ARG001",  # Unused function argument (fixtures)
+    "ARG002",  # Unused method argument: fakes and stubs implement the real collaborator's signature
+    "ARG005",  # Unused lambda argument: monkeypatch replacements take the replaced callable's signature
     "PLR2004", # Magic values
+    "PLW0108", # `lambda: Cls()` in dependency_overrides: FastAPI would read a bare class as a dependency with parameters
     "PT028",   # Default arguments in test-like functions (standalone test scripts, not pytest)
     "RUF001",  # Ambiguous Unicode characters (intentional for display)
     "TID251",  # Tests set and read os.environ directly; the ban is for src/
@@ -307,17 +359,38 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.flake8-type-checking]
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
-runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
-# FastAPI resolves the route request/response annotations at call time, so the router modules import these models at runtime.
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings", "src.services.curation.item_filter.ItemFilter"]
+# FastAPI evaluates route-handler annotations at runtime to build dependencies and parameters, but
+# ruff cannot see through `router.get(...)` (the router is an instance, not `fastapi.APIRouter`), so
+# `runtime-evaluated-decorators` cannot express it. Exempting the modules that define the aliases
+# and parameter models handlers are annotated with is the documented alternative
+# (https://docs.astral.sh/ruff/settings/#lint_flake8-type-checking_exempt-modules).
 exempt-modules = [
     "typing",
-    "src.routers.curation._common_models",
+    "uuid",                                      # path/query parameter types
+    "fastapi",                                   # UploadFile, Request, ... in handler signatures
+    "src.core.db_session",                       # DbSessionDep
+    "src.core.dependencies",                     # dependency aliases
+    "src.routers.curation._item_filter_params",  # ItemFilterQuery
+    "src.routers.curation._common_models",       # route request/response models
     "src.routers.curation._crop_write_models",
     "src.routers.curation._export_models",
     "src.routers.curation._health_models",
     "src.routers.curation._holdout_models",
     "src.routers.curation._ingest_config_models",
     "src.routers.curation._settings_models",
+    "src.routers.curation._review_params",       # Annotated Query aliases used by review routes
+    "src.routers.curation._class_models",
+    "src.routers.curation._vlm_policy_models",
+    "src.routers.curation._item_models",
+    "src.routers.curation._common",              # OpenSearchDep
+    "src.services.curation.vlm_policy",          # VlmScope query parameter
+    "src.services.curation.dataset_import.options",
+    "src.services.training.job_models",
+    "src.config.projects",                       # ProjectRecord dependency return type
+    "src.domain.embedding_state",                # EmbeddingState query parameter
+    "src.services.curation.region_impact",
+    "collections.abc",
 ]
 
 [tool.ruff.lint.isort]

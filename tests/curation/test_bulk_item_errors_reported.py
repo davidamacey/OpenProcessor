@@ -29,7 +29,7 @@ class _Bulk:
     def __init__(self, *, refused: int) -> None:
         self.refused = refused
 
-    async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:
         return _bulk_response(len(body) // 2, refused=min(self.refused, len(body) // 2))
 
 

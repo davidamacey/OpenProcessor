@@ -41,7 +41,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from src.services.curation import holdout as test_holdout_module
 from src.services.curation.holdout import compute_holdout_sha, select_test_holdout
 

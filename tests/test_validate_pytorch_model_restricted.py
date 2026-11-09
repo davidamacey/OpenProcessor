@@ -10,7 +10,7 @@ import pytest
 torch = pytest.importorskip('torch')
 pytest.importorskip('ultralytics')
 
-from src.services.models.model_export import validate_pytorch_model  # noqa: E402  # after importorskip
+from src.services.models.model_export import validate_pytorch_model
 
 
 def _write_marker(path: str) -> None:

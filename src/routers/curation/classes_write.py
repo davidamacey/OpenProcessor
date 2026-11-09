@@ -7,9 +7,10 @@ from typing import Any
 from fastapi import HTTPException, status
 
 from src.clients.curation_opensearch import RegistryClassEntry
+from src.config.curation_accessors import items_index
 from src.routers.curation._class_hotkeys import project_keymap_overrides, validated_hotkey
-from src.routers.curation._class_models import ClassCreateRequest, ClassUpdateRequest  # noqa: TC001 - FastAPI
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._class_models import ClassCreateRequest, ClassUpdateRequest
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.services.classes.registry import ClassRegistry, ClassRegistryError
 
 

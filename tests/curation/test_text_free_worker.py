@@ -226,7 +226,7 @@ class TestNoDetectorLeg:
 
 class TestTextFreeWriteHelpers:
     @pytest.fixture
-    def text_free(self, reference_region_profile: None) -> Any:  # noqa: ARG002
+    def text_free(self, reference_region_profile: None) -> Any:
         import dataclasses
 
         from src.services.detection.profile_registry import register_profile

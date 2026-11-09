@@ -29,7 +29,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.cluster_eval_set import fetch_crops
 from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 

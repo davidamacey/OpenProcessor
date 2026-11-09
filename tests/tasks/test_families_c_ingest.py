@@ -37,7 +37,7 @@ class Sender:
         self.closed = False
         self.paths: list[str] = []
 
-    async def post_batch(self, paths: list[str], *, source: str, run_id: str) -> dict[str, Any]:  # noqa: ARG002 - the fake ignores the run id
+    async def post_batch(self, paths: list[str], *, source: str, run_id: str) -> dict[str, Any]:
         self.paths += paths
         assert source == 'tag'
         results = []

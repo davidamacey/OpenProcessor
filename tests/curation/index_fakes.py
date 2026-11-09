@@ -7,17 +7,17 @@ from typing import Any
 
 
 class FakeIndicesApi:
-    async def refresh(self, index: str | None = None, **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def refresh(self, index: str | None = None, **_: Any) -> dict[str, Any]:
         return {'_shards': {}}
 
-    async def get_settings(self, index: str | None = None, **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def get_settings(self, index: str | None = None, **_: Any) -> dict[str, Any]:
         return {}
 
-    async def get(self, index: str | None = None, **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def get(self, index: str | None = None, **_: Any) -> dict[str, Any]:
         return {}
 
-    async def put_mapping(self, index: str | None = None, **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def put_mapping(self, index: str | None = None, **_: Any) -> dict[str, Any]:
         return {'acknowledged': True}
 
-    async def put_settings(self, index: str | None = None, **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def put_settings(self, index: str | None = None, **_: Any) -> dict[str, Any]:
         return {'acknowledged': True}

@@ -5,7 +5,6 @@ point-in-time sliced search the fast fetch uses; ``sort`` is the document positi
 ``_shard_doc`` of a one-shard index) and applies the pass's guarded script updates.
 """
 
-# ruff: noqa: ARG002 - accepts the real client's keyword arguments and ignores most of them
 from __future__ import annotations
 
 import asyncio

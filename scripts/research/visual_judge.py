@@ -32,7 +32,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.scorecard import current_git_sha as _git_sha
 from scripts.research import judge_cases as jc, judge_sheetdir as sd
 from scripts.research.judge_backends import LocalVlmBackend, SheetFileBackend

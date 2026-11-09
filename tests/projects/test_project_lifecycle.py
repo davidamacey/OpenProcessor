@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle
+from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 from .conftest import (
@@ -115,8 +115,8 @@ def test_create_project_slug_retired_after_delete() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
-    asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
-    asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+    asyncio.run(delete_mod.delete_project(slug='alpha', confirm='alpha'))
+    asyncio.run(delete_mod.delete_project_finish(client, slug='alpha'))
     with pytest.raises(RequestRejectedError) as exc_info:
         asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha again'))
     assert exc_info.value.detail['error'] == 'slug_retired'

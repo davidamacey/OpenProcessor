@@ -91,15 +91,15 @@ class _IndexFake:
         self.indices = FakeIndicesApi()
         self.by_index = by_index
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         docs = self.by_index.get(index, [])
         hits = [{'_id': d.get('crop_id') or d.get('image_id', ''), '_source': d} for d in docs]
         return {'_scroll_id': 's', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 

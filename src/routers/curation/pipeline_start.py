@@ -3,15 +3,15 @@
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import Query
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._autolabel_models import AutoLabelJobState
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
@@ -34,7 +34,7 @@ from src.services.curation.autolabel.run_vlm import (
     require_run_vlm,
     resolve_run_vlm,
 )
-from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
+from src.services.curation.vlm_policy import VlmScope
 from src.services.labeling.run_labeler import resolve_pack
 from src.services.rejections import rejection
 

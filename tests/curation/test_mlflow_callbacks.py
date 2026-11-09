@@ -25,7 +25,7 @@ TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'
 if str(TRAINER_DIR) not in sys.path:
     sys.path.insert(0, str(TRAINER_DIR))
 
-import mlflow_callbacks  # noqa: E402
+import mlflow_callbacks
 
 
 class _FakeTrainerObj:

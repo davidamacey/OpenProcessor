@@ -4,7 +4,7 @@ Run it with ``python -m scripts.curation.worker``.
 
 Sub-modules:
     state        — constants, ``_ItemTask`` dataclass, crop IO helpers
-    cascade      — pending fetch, ``SegmenterClient`` re-export, geometry helpers
+    cascade      — pending fetch, geometry helpers
     verify       — VLM verify + region doc builders + auto-confirm + verdicts_to_boxes
     bulk_writer  — ``_bulk_update`` + ``_publish_region_events``
     client       — SAM3 HTTP client with circuit breaker

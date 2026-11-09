@@ -55,10 +55,10 @@ def stub_vector(crop: np.ndarray) -> np.ndarray:
 
 
 class NoiseSensitivePE:
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         return np.stack([stub_vector(c) for c in crops])
 
-    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
         return np.array([0.0, 1.0, 0.0])
 
 

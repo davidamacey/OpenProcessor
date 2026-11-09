@@ -11,7 +11,6 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from curation.cross_project_leak import _env as _sweep
 from curation.cross_project_leak._seeders import _promoted_model
 from fastapi.testclient import TestClient
 
@@ -26,7 +25,6 @@ pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
 
 # The route sweep's fixture: the real app, three seeded projects, the real guard.
-leak_env = _sweep.leak_env
 
 API = '/curation/projects'
 

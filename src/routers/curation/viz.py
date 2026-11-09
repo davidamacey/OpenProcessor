@@ -28,7 +28,7 @@ entry for how the measured purity maps to this entry's
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Any, Literal
 
 from fastapi import HTTPException, Query
@@ -37,7 +37,7 @@ from pydantic import BaseModel
 
 from src.config.env import env_bool, env_int
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
 
 

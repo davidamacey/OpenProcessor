@@ -11,7 +11,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
-from fixtures.job_fixtures import FakeProducer, job_env, kinds, producer, queue_hooks, wakes
 from fixtures.job_rows import make_project, sql
 
 from src.clients.storage.roots import RootedStore
@@ -23,7 +22,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-__all__ = ['FakeProducer', 'job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']
 
 REGISTRY_CLASSES = [(0, 'car'), (1, 'bus'), (2, 'person'), (3, 'bike')]
 
