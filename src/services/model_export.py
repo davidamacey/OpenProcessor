@@ -9,18 +9,37 @@ status; nothing is kept in a process or in a file.
 """
 
 import logging
+import pickle  # nosec B403 - only names pickle.UnpicklingError, never loads
 import re
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.services.checkpoint_inspect import YOLOV5_ORIGINAL_MESSAGE, head_kind, is_original_yolov5
+from src.domain.model_families import head_kind_of
+from src.services.checkpoint_inspect import YOLOV5_ORIGINAL_MESSAGE, is_original_yolov5
 
 
 logger = logging.getLogger(__name__)
 
 PYTORCH_MODELS_DIR = Path('/app/pytorch_models')
+
+# What reading an untrusted checkpoint can raise: a damaged archive, a refused or unknown pickle
+# class, a missing attribute. Each one rejects the upload with its message.
+_UNREADABLE_CHECKPOINT = (
+    OSError,
+    EOFError,
+    RuntimeError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    AssertionError,
+    ImportError,
+    pickle.UnpicklingError,
+    zipfile.BadZipFile,
+)
 
 
 def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
@@ -66,7 +85,7 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
             'class_names': list(names.values()) if isinstance(names, dict) else [],
             # The NMS-free head (YOLO26, YOLOv10) exports through the native toolchain; the
             # other heads go through the EfficientNMS toolchain. The export worker routes on it.
-            'head_kind': head_kind(model),
+            'head_kind': head_kind_of(model.model[-1]),
             'ultralytics_version': ckpt.get('version'),
         }
 
@@ -78,7 +97,7 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
 
         return True, 'Valid YOLO detection model', model_info
 
-    except Exception as e:
+    except _UNREADABLE_CHECKPOINT as e:
         return False, f'Validation error: {e}', {}
 
 

@@ -5,10 +5,8 @@ docker/trainer/incumbent_compare.py	2	ratchet: may only go down
 docker/trainer/job_manifest.py	2	ratchet: may only go down
 docker/trainer/job_status.py	3	ratchet: may only go down
 docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
-docker/trainer/trainer.py	1	ratchet: may only go down
 docker/trainer/trainer_callbacks.py	3	ratchet: may only go down
 docker/trainer/trainer_eval.py	1	ratchet: may only go down
-docker/trainer/trainer_fit.py	2	ratchet: may only go down
 docker/trainer/trainer_kwargs.py	1	ratchet: may only go down
 export/download_face_models.py	2	ratchet: may only go down
 export/download_paddleocr.py	2	ratchet: may only go down
@@ -164,7 +162,6 @@ src/services/labeling/vlm_labeler_core.py	1	triage every return-empty handler in
 src/services/labeling/vlm_labeler_verify.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/labeling/vlm_labeler_visibility.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/labeling/vlm_prompt_resolution.py	8	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/model_export.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/bootstrap.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/capacity.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/combine/execute.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
