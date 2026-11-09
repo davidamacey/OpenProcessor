@@ -1857,17 +1857,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -1950,7 +1939,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
@@ -2032,17 +2020,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -2125,7 +2102,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
@@ -2202,17 +2178,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -2295,7 +2260,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",

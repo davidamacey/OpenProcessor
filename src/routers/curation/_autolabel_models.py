@@ -38,7 +38,6 @@ class AutoLabelJobState(BaseModel):
     )
     args: dict[str, Any] = Field(description='The arguments the run was started with.')
     pipeline: str
-    peak_vram_mb: int | None
     stage_durations: dict[str, float] = Field(description='Wall seconds per finished stage.')
     eta_seconds: float | None
     elapsed_seconds: float

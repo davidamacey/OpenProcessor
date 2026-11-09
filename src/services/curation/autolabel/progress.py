@@ -49,7 +49,6 @@ class JobProgress:
         self.stage = ''
         self.processed = 0
         self.total = 0
-        self.peak_vram_mb: int | None = None
         self.stage_durations: dict[str, float] = {}
         self._stage_started_at = 0.0
 
@@ -74,10 +73,6 @@ class JobProgress:
         self.processed = max(0, int(processed))
         if total is not None:
             self.total = max(0, int(total))
-
-    def record_peak_vram(self, mb: int | None) -> None:
-        if mb is not None and mb > (self.peak_vram_mb or 0):
-            self.peak_vram_mb = int(mb)
 
     def finalize(self) -> None:
         self._fold_stage_duration()
@@ -105,7 +100,6 @@ class JobProgress:
             self.total,
             self.stage or None,
             {
-                'peak_vram_mb': self.peak_vram_mb,
                 'stage_durations': dict(self.stage_durations),
             },
         )

@@ -103,7 +103,7 @@ src/services/curation/autolabel/selection.py	2	triage every return-empty handler
 src/services/curation/autolabel/vlm_stage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/bulk_ingest/runner.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/bulk_ingest/s3_listing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/clustering/backend.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/curation/clustering/backend.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/embedding_reduce.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/residual_fetch.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/clustering/umap_state.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
