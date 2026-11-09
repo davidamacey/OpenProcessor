@@ -15,13 +15,15 @@ The adapter for a model is resolved from **Triton model metadata** (output
 names/shapes), not from the model's name — so any conforming engine works
 regardless of naming convention. Both adapters normalize to the same
 result dict consumed by the rest of the pipeline:
-``{'num_dets', 'boxes', 'scores', 'classes'}`` per image.
+``{'num_dets', 'boxes', 'scores', 'classes', 'box_frame'}`` per image.
 """
 
 import logging
 from typing import Any, Protocol
 
 import numpy as np
+
+from src.utils.affine import BoxFrame
 
 
 logger = logging.getLogger(__name__)
@@ -33,9 +35,10 @@ class DetectionAdapter(Protocol):
     """Parses a Triton detection response into per-image result dicts."""
 
     requested_outputs: tuple[str, ...]
+    box_frame: BoxFrame
 
     def parse(self, response: Any, batch_size: int) -> list[dict[str, Any]]:
-        """Return one ``{'num_dets','boxes','scores','classes'}`` per image."""
+        """Return one ``{'num_dets','boxes','scores','classes','box_frame'}`` per image."""
         ...
 
 
@@ -43,6 +46,8 @@ class End2EndNMSAdapter:
     """EfficientNMS_TRT contract: num_dets/det_boxes/det_scores/det_classes."""
 
     requested_outputs: tuple[str, ...] = END2END_OUTPUTS
+    # The export patch sets normalize_boxes=True, so the plugin emits [0,1] boxes.
+    box_frame: BoxFrame = 'normalized'
 
     def parse(self, response: Any, batch_size: int) -> list[dict[str, Any]]:
         num_dets_batch = response.as_numpy('num_dets')
@@ -59,6 +64,7 @@ class End2EndNMSAdapter:
                     'boxes': boxes_batch[i][:num_dets],
                     'scores': scores_batch[i][:num_dets],
                     'classes': classes_batch[i][:num_dets],
+                    'box_frame': self.box_frame,
                 }
             )
         return results
@@ -68,9 +74,10 @@ class FusedDetAdapter:
     """Fused NMS-free contract: one ``(batch, max_det, 6)`` tensor.
 
     Rows are ``[x1, y1, x2, y2, score, class]`` in letterboxed input
-    coordinates (same frame as the end2end contract); padding rows carry
-    score 0 and are dropped.
+    pixels; padding rows carry score 0 and are dropped.
     """
+
+    box_frame: BoxFrame = 'pixels'
 
     def __init__(self, output_name: str):
         self.output_name = output_name
@@ -90,6 +97,7 @@ class FusedDetAdapter:
                     'boxes': kept[:, :4],
                     'scores': kept[:, 4],
                     'classes': kept[:, 5].astype(np.int32),
+                    'box_frame': self.box_frame,
                 }
             )
         return results
