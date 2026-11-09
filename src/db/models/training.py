@@ -68,6 +68,7 @@ class Model(Base):
         ),
         check('version', 'version >= 1'),
         check('origin', in_list('origin', MODEL_ORIGINS)),
+        check('sharing_revision', 'sharing_revision >= 1'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=UUIDV7)
@@ -86,6 +87,9 @@ class Model(Base):
     artifact_storage_key: Mapped[str]
     created_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     created_by: Mapped[str]
+    # The optimistic-concurrency token of the sharing PUT: +1 on every share and unshare, never
+    # derived from the rows and never reset, so a stale writer cannot match it again (ABA).
+    sharing_revision: Mapped[int] = mapped_column(Integer, server_default=text('1'))
 
 
 class ModelEngine(Base):

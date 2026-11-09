@@ -85,3 +85,23 @@ async def test_without_a_router_every_call_goes_to_the_one_configured_server() -
     await _run(pool, clients, 7)
     assert clients['only:8001'].calls == 7
     assert pool._clients is pool._servers['only:8001']
+
+
+@pytest.mark.asyncio
+async def test_a_call_in_flight_on_a_server_dropped_by_a_new_router_fails_closed() -> None:
+    router = TritonRouter({'a': 'a:8001', 'b': 'b:8001'})
+    router.update_ready({'a': ['yolo'], 'b': ['yolo']})
+    pool, clients = _pool(router, ('a:8001', 'b:8001'))
+    first = asyncio.create_task(pool.infer('yolo', [], []))
+    await asyncio.sleep(0.01)
+    kept = TritonRouter({'b': 'b:8001'})
+    kept.update_ready({'b': ['yolo']})
+    await pool.adopt_router(kept)
+    assert set(pool._servers) == {'b:8001'}
+    clients['a:8001'].gate.set()
+    clients['b:8001'].gate.set()
+    assert (
+        await first == 'ok'
+    )  # it already holds its channel; nothing new goes to the dropped server
+    await pool.infer('yolo', [], [])
+    assert clients['a:8001'].calls == 1

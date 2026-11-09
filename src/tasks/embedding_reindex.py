@@ -25,14 +25,10 @@ async def _reindex_index() -> Any:
 
 async def _encoder() -> Any:
     from src.clients.pe_encoder import PEEncoder
-    from src.clients.triton_pool_core import AsyncTritonPool
-    from src.config.settings import get_settings
     from src.services.embedding_spaces.reindex_encoder import ReindexEncoder
+    from src.services.serving_router import open_routed_pool
 
-    pool = AsyncTritonPool(
-        url=get_settings().triton_url, pool_size=4, max_concurrent=64, verbose=False
-    )
-    await pool.initialize()
+    pool = await open_routed_pool(pool_size=4, max_concurrent=64)
     client = await opensearch_client(60)
     return ReindexEncoder(client, PEEncoder(triton_pool=pool), owned=[client, pool])
 

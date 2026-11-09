@@ -10,7 +10,8 @@ second finds the first committed and supersedes it instead of failing on the ind
 
 A share is a row per consumer project (``model_shares``). The sharing wire keeps one boolean:
 "shared" means a row for every consumer the caller names, and the sharing revision the wire
-carries is derived from the rows (1 private, 2 shared), so a stale write is still told.
+carries is ``models.sharing_revision``: it grows by one on every share and unshare and is never
+reset, so a writer holding an old revision is refused whatever the rows look like now.
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ class ModelRow:
     artifact_storage_key: str
     created_at: dt.datetime
     created_by: str
+    sharing_revision: int
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,7 @@ def _model_row(row: Model) -> ModelRow:
         artifact_storage_key=make_key(*row.artifact_storage_key.split('/')),
         created_at=row.created_at,
         created_by=row.created_by,
+        sharing_revision=row.sharing_revision,
     )
 
 
@@ -305,18 +308,22 @@ async def share_consumers(session: AsyncSession, model_id: uuid.UUID) -> list[uu
     return list((await session.execute(stmt.order_by(ModelShare.consumer_project_id))).scalars())
 
 
-def sharing_revision(consumer_count: int) -> int:
-    """The sharing state as the wire's revision: 1 while the model is private, 2 once shared.
-
-    It is a function of the rows, so a writer holding the revision it read can only be refused
-    when the state moved under it (the unshare it meant to undo already happened).
-    """
-    return 2 if consumer_count else 1
+async def lock_model(session: AsyncSession, model_id: uuid.UUID) -> int:
+    """Serialise sharing writers of one model (``FOR UPDATE`` on its row); return the sharing
+    revision as the lock holder sees it."""
+    stmt = select(Model.sharing_revision).where(Model.id == model_id).with_for_update()
+    return int((await session.execute(stmt)).scalar_one())
 
 
-async def lock_model(session: AsyncSession, model_id: uuid.UUID) -> None:
-    """Serialise sharing writers of one model (``FOR UPDATE`` on its row)."""
-    await session.execute(select(Model.id).where(Model.id == model_id).with_for_update())
+async def bump_sharing_revision(session: AsyncSession, model_id: uuid.UUID) -> int:
+    """Move the sharing revision forward by one (the caller holds the model's lock)."""
+    stmt = (
+        update(Model)
+        .where(Model.id == model_id)
+        .values(sharing_revision=Model.sharing_revision + 1)
+        .returning(Model.sharing_revision)
+    )
+    return int((await session.execute(stmt)).scalar_one())
 
 
 async def replace_shares(

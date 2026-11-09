@@ -120,7 +120,7 @@ async def _start_background_tasks() -> None:
 
     pool = AppResources.async_triton_pool
     AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe(
-        on_tick=refresh_tick(pool.router) if pool is not None else None
+        on_tick=refresh_tick(pool) if pool is not None else None
     )
 
 

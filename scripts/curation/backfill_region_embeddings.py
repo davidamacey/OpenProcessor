@@ -62,6 +62,8 @@ if TYPE_CHECKING:
 
 
 DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
+# A one-shot operator script: it opens no database connection (so no serving profile to read) and
+# `--triton-url` lets the operator point it at one chosen server.
 DEFAULT_TRITON = os.environ.get('TRITON_URL', 'triton-server:8001')
 _SCROLL_PAGE = 200
 

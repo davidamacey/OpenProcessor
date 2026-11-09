@@ -234,6 +234,7 @@ async def promotions(
                 artifact_storage_key=p.artifact_key,
                 created_at=p.promoted_at,
                 created_by=UPDATED_BY,
+                sharing_revision=2 if p.shared else 1,  # what the 0.6.0 wire served
             )
         )
     await session.flush()

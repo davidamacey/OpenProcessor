@@ -78,7 +78,9 @@ async def test_the_consumer_maps_the_model_classes_by_name_not_by_position(pg, j
     assert await is_model_shared('maporig__det', 'nobody') is False
 
 
-async def test_a_stale_revision_is_refused_and_unsharing_resets_the_revision(pg, job_env) -> None:
+async def test_the_revision_only_grows_so_a_stale_writer_after_share_and_unshare_is_refused(
+    pg, job_env
+) -> None:
     owner, consumer = make_project(pg), make_project(pg)
     await promote(owner, 'own__rev_det', 1)
 
@@ -86,21 +88,26 @@ async def test_a_stale_revision_is_refused_and_unsharing_resets_the_revision(pg,
         await share(owner, 'own__rev_det', [consumer], expected=99)
     assert stale.value.current_revision == 1
     assert await share(owner, 'own__rev_det', [consumer]) == 2
-    assert await share(owner, 'own__rev_det', [consumer], shared=False, expected=2) == 1
+    assert await share(owner, 'own__rev_det', [consumer], shared=False, expected=2) == 3
     assert sql(
         pg,
         "SELECT count(*) FROM model_shares s JOIN models m ON m.id = s.model_id WHERE m.name = 'own__rev_det'",
     ) == [(0,)]
-    assert await model_sharing_revision('own__rev_det') == 1
+    assert await model_sharing_revision('own__rev_det') == 3
+
+    # The state is private again, exactly as when the stale writer read revision 1.
+    with pytest.raises(model_registry.SharingRevisionConflictError) as aba:
+        await share(owner, 'own__rev_det', [consumer], expected=1)
+    assert aba.value.current_revision == 3
+    assert await model_sharing_revision('own__rev_det') == 3
 
 
 async def test_two_concurrent_writers_on_one_revision_one_wins_one_is_refused(pg, job_env) -> None:
     owner, consumer, other = make_project(pg), make_project(pg), make_project(pg)
     await promote(owner, 'own__race_det', 1)
 
-    # Both write on revision 1 and both share (the revision is the consumer count, so an unshare
-    # would put it back to 1 and let the second writer win too, depending on who locks first).
-    # Whichever takes the row lock first moves the revision to 2 and the other is refused.
+    # Both write on revision 1. Whichever takes the row lock first moves the revision to 2 and
+    # the other is refused.
     results = await asyncio.gather(
         share(owner, 'own__race_det', [consumer]),
         share(owner, 'own__race_det', [other]),

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.db.repos import models as repo
@@ -50,6 +51,7 @@ class FakeModelRegistry:
             artifact_storage_key=f'models/{triton_name}/{version}/model.onnx',
             created_at=_NOW,
             created_by='test',
+            sharing_revision=2 if shared_with else 1,
         )
         promotion = repo.PromotionRow(
             id=uuid.uuid4(),
@@ -105,11 +107,14 @@ class FakeModelRegistry:
     ) -> int:
         if triton_name not in self.live:
             raise model_registry.ModelNotOwnedError(triton_name)
-        current = repo.sharing_revision(len(self.shares[triton_name]))
+        live = self.live[triton_name]
+        current = live.model.sharing_revision
         if expected_revision != current:
             raise model_registry.SharingRevisionConflictError(current)
         self.shares[triton_name] = {str(c) for c in consumers} if shared else set()
-        return repo.sharing_revision(len(self.shares[triton_name]))
+        moved = replace(live.model, sharing_revision=current + 1)
+        self.live[triton_name] = replace(live, model=moved)
+        return moved.sharing_revision
 
 
 CURRENT: FakeModelRegistry | None = None

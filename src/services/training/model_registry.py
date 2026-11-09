@@ -119,10 +119,9 @@ async def set_sharing(
         live = await repo.get_live(session, triton_name)
         if live is None or live.promotion.project_id != owner_project_id:
             raise ModelNotOwnedError(triton_name)
-        await repo.lock_model(session, live.model.id)
-        current = repo.sharing_revision(len(await repo.share_consumers(session, live.model.id)))
+        current = await repo.lock_model(session, live.model.id)
         if expected_revision != current:
             raise SharingRevisionConflictError(current)
         wanted = [c for c in consumers if c != owner_project_id] if shared else []
         await repo.replace_shares(session, live.model.id, wanted, requested_by)
-        return repo.sharing_revision(len(wanted))
+        return await repo.bump_sharing_revision(session, live.model.id)
