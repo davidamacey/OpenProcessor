@@ -406,7 +406,7 @@ secrets.yml
 #
 # Files to GENERATE LOCALLY:
 # - DALI pipelines: python dali/create_dali_letterbox_pipeline.py
-# - TensorRT engines: python export/export_models.py
+# - TensorRT engines: python export/ultralytics_export.py
 # - PyTorch models: bash export/download_pytorch_models.sh
 # - Test images: Add your own to test_images/ (ignored)
 #
