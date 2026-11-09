@@ -187,8 +187,8 @@ def _capture_mlflow_run_id(spec: JobSpec, state: StatusState) -> None:
             state.mlflow_experiment_id = str(experiment.experiment_id)
             # Internal-network URL -- a browser behind the deployment can't
             # reach ``tracking_uri`` (it's a container hostname). Kept here
-            # for operators inspecting status.json/manifest.json directly
-            # (e.g. ``docker exec``); the API rewrites this to a public URL
+            # for operators inspecting the run in the trainer container (the
+            # run's manifest keeps it); the API rewrites this to a public URL
             # (or null) before it ever reaches the wire -- see
             # ``src/services/training/job_wire.py``'s ``_public_mlflow_url``.
             state.mlflow_run_url = (

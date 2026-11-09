@@ -1,4 +1,4 @@
-"""P3F item 6 m1: the delete path guard for ``train_jobs_dir``
+"""P3F item 6 m1: the delete path guard for ``bakeoff_results_dir``
 used to be checked against a root DERIVED FROM the
 same path (``path.parent.parent``), which can never refuse anything --
 any path is trivially "within" its own grandparent. A corrupted or
@@ -42,7 +42,6 @@ def _env(tmp_path, monkeypatch):
 
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path / 'jobs'))
     curation_mod._default_curation_config = None
     capacity_mod._cache = None
     set_project_registry(None)
@@ -72,7 +71,9 @@ def _corrupt_stored(monkeypatch, corrupted) -> None:
     monkeypatch.setattr(delete_mod, 'record_from_row', read)
 
 
-def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path, monkeypatch) -> None:
+def test_delete_refuses_path_escape_for_corrupted_bakeoff_results_dir(
+    tmp_path, monkeypatch
+) -> None:
     client = FakeLifecycleOpenSearch()
     registry = _registry_for(client)
     asyncio.run(seed_default_project(client))
@@ -84,7 +85,9 @@ def test_delete_refuses_path_escape_for_corrupted_train_jobs_dir(tmp_path, monke
     escaped_dir = tmp_path / 'escaped_outside_root'
     escaped_dir.mkdir(parents=True)
     (escaped_dir / 'canary.txt').write_text('do not delete me', encoding='utf-8')
-    corrupted = replace(record, resources=replace(record.resources, train_jobs_dir=escaped_dir))
+    corrupted = replace(
+        record, resources=replace(record.resources, bakeoff_results_dir=escaped_dir)
+    )
     _corrupt_stored(monkeypatch, corrupted)
 
     deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))

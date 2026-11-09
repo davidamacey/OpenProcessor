@@ -8,7 +8,6 @@ against another project's promoted model, pause flag or export.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -18,6 +17,8 @@ from fastapi.testclient import TestClient
 
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from curation.cross_project_leak._transport import LeakEnv
 
 
@@ -126,5 +127,3 @@ def test_training_refuses_another_projects_export(leak_env: LeakEnv, route: str)
     assert r.status_code == 422, r.text
     assert r.json()['detail']['error'] == 'export_outside_project'
     assert 'alpha_secret_marker' not in r.text
-    beta_jobs = Path(leak_env.records['beta'].resources.train_jobs_dir)
-    assert not list(beta_jobs.glob('*.job.json'))

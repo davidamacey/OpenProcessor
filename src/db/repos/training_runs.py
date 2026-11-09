@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import delete, func, select, text, update
 
 from src.db.models.jobs import Job
 from src.db.models.training import TrainingRun
@@ -130,6 +130,39 @@ def insert_run(
         )
     )
     session.flush()
+
+
+def refs(session: Session) -> list[tuple[uuid.UUID, str]]:
+    """Every run of the bound project as ``(job_id, job status)``, newest first."""
+    query = (
+        select(TrainingRun.job_id, Job.status)
+        .join(Job, Job.id == TrainingRun.job_id)
+        .order_by(Job.created_at.desc(), Job.id.desc())
+    )
+    return [(row.job_id, row.status) for row in session.execute(query)]
+
+
+def export_dirs(session: Session) -> set[str]:
+    """The export directory each run of the bound project was queued with (``spec``) and the
+    one its finished manifest records as lineage; they differ if an export was re-pointed."""
+    query = select(TrainingRun.spec, TrainingRun.manifest)
+    found: set[str] = set()
+    for spec, manifest in session.execute(query):
+        found.add(str(spec.get('dataset_export_dir') or ''))
+        lineage = (manifest or {}).get('lineage')
+        found.add(str(lineage.get('export_dir') or '') if isinstance(lineage, dict) else '')
+    found.discard('')
+    return found
+
+
+def delete_runs(session: Session, job_ids: Sequence[uuid.UUID]) -> int:
+    """Remove the runs and their jobs rows (events and claims cascade; models keep their row
+    with the run link cleared); how many runs went."""
+    if not job_ids:
+        return 0
+    removed = session.execute(delete(TrainingRun).where(TrainingRun.job_id.in_(job_ids)))
+    session.execute(delete(Job).where(Job.id.in_(job_ids)))
+    return int(removed.rowcount or 0)  # type: ignore[attr-defined]
 
 
 def get(session: Session, job_id: uuid.UUID) -> RunRow | None:

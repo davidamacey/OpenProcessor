@@ -3,7 +3,7 @@
 
 Two independent prunes, both dry-run by default:
 
-* training-run job state under ``OP_TRAIN_JOBS_DIR`` -- never a
+* the training runs (``training_runs`` and job rows) of the bound project -- never a
   non-terminal run, a promoted run, or one a queued/running bake-off job
   still references (see ``src.services.training.run_retention``);
 * bake-off comparison output under each project's ``<bakeoff_results_dir>/out`` -- pure
@@ -54,6 +54,7 @@ from src.services.training.run_retention import (
     apply_run_prune,
     bakeoff_out_dir,
     collect_active_bakeoff_run_ids,
+    list_runs,
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
@@ -61,11 +62,10 @@ from src.services.training.run_retention import (
 
 def _run_one_project(args: argparse.Namespace) -> int:
     """Prune training runs + bake-off output for whatever project is
-    currently bound. ``train_jobs_dir``/``bakeoff_results_dir`` come from
-    the bound project's own ``CurationConfig`` view (PROJECT_SCOPED_FIELDS),
-    not a raw env var, so each project prunes only its own dir."""
+    currently bound. The runs come from the bound project's database scope and
+    ``bakeoff_results_dir`` from its own ``CurationConfig`` view, so each project prunes
+    only its own."""
     config = get_curation_config()
-    jobs_dir = config.train_jobs_dir
     promoted = {
         live.run_job_id
         for live in asyncio.run(model_registry.owned_live(config.project_slug))
@@ -75,7 +75,7 @@ def _run_one_project(args: argparse.Namespace) -> int:
     out_dir = bakeoff_out_dir(Path(bakeoff_results_dir))
 
     run_plan = plan_run_prune(
-        jobs_dir=jobs_dir,
+        list_runs(),
         promoted_job_ids=promoted,
         bakeoff_run_ids=collect_active_bakeoff_run_ids(),
         keep_last=args.keep_last,
@@ -96,12 +96,9 @@ def _run_one_project(args: argparse.Namespace) -> int:
         print('Dry-run only. Pass --apply to remove.')
         return 0
 
-    run_result = apply_run_prune(run_plan, jobs_dir=jobs_dir)
+    run_result = apply_run_prune(run_plan)
     out_result = apply_bakeoff_out_prune(out_plan)
-    print(
-        f'removed_runs={run_result["removed_runs"]} removed_run_files={run_result["removed_files"]} '
-        f'removed_bakeoff_out={out_result["removed"]}'
-    )
+    print(f'removed_runs={run_result["removed_runs"]} removed_bakeoff_out={out_result["removed"]}')
     return 0
 
 

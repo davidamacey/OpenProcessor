@@ -61,3 +61,23 @@ def test_the_cluster_worker_has_the_app_role_and_queue_secrets() -> None:
     env = render({})['cluster-worker']['environment']
     assert env['OP_DB_APP_PASSWORD_FILE'] == '/run/secrets/op_pg/app_password'
     assert env['OP_QUEUE_PASSWORD_FILE'] == '/run/secrets/op_valkey/password'
+
+
+def test_arbiter_and_claim_env_reach_the_services_that_read_it() -> None:
+    env = {
+        'OP_GPU_ARBITER_CONTAINERS': 'vlm',
+        'OP_BAKEOFF_HOST_GPUS': '2',
+        'OP_TRAIN_GPU_ORDER': '2',
+    }
+    services = render(env, 'docker-compose.yml', 'docker-compose.gpu-arbiter.yml')
+
+    def environment(name: str) -> dict[str, str]:
+        raw = services[name]['environment']
+        return raw if isinstance(raw, dict) else dict(e.split('=', 1) for e in raw)
+
+    arbiter = environment('gpu-arbiter-worker')
+    assert arbiter['OP_GPU_ARBITER_CONTAINERS'] == 'vlm'
+    assert arbiter['OP_BAKEOFF_HOST_GPUS'] == '2'
+    assert environment('jobs-worker')['OP_TRAIN_GPU_ORDER'] == '2'
+    assert environment('jobs-worker')['OP_GPU_ARBITER_CONTAINERS'] == 'vlm'
+    assert 'hostname' not in services['gpu-arbiter-worker']

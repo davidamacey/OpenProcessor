@@ -11,6 +11,7 @@ from fixtures.job_rows import make_project
 
 from src.db.repos import bakeoff as bakeoff_repo
 from src.db.session import async_session_factory
+from src.services.curation import export_retention
 from src.services.curation.export_retention import collect_export_pins, plan_export_prune
 from src.services.jobs.service import start_job
 from src.services.training.run_retention import collect_active_bakeoff_run_ids, plan_run_prune
@@ -44,30 +45,30 @@ async def _start_bakeoff(pg: Any, tmp_path: Any, run_id: str, export_dir: str) -
 
 @pytest.mark.asyncio
 async def test_a_queued_bakeoff_pins_its_run_and_its_export(
-    pg, job_env, producer, wakes, tmp_path
+    pg, job_env, producer, wakes, tmp_path, monkeypatch
 ) -> None:
+    monkeypatch.setattr(export_retention, '_run_export_dirs', set)  # the runs have no rows here
     export_root = tmp_path / 'exports'
     scored = export_root / '20260101T000000Z'
     spare = export_root / '20260102T000000Z'
     for d in (scored, spare):
         d.mkdir(parents=True)
-    run_id = '20260101T000000Z-run'
+    run = uuid.uuid4()
+    run_id = str(run)
     await _start_bakeoff(pg, tmp_path, run_id, str(scored))
 
     assert await _in_thread(collect_active_bakeoff_run_ids) == {run_id}
 
-    jobs_dir = tmp_path / 'jobs'
-    jobs_dir.mkdir()
-    for name in (run_id, '20260102T000000Z-run'):
-        (jobs_dir / f'{name}.status.json').write_text('{"state": "finished"}')
-    pins = await _in_thread(lambda: collect_export_pins(export_root=export_root, jobs_dir=jobs_dir))
+    pins = await _in_thread(lambda: collect_export_pins(export_root=export_root))
     assert scored.resolve() in pins
     assert plan_export_prune(export_root, 1, pins) == []
-    runs = await _in_thread(collect_active_bakeoff_run_ids)
+    pinned = await _in_thread(collect_active_bakeoff_run_ids)
+    finished = [(uuid.uuid4(), 'completed'), (run, 'completed')]
     assert (
-        plan_run_prune(jobs_dir=jobs_dir, promoted_job_ids=set(), bakeoff_run_ids=runs, keep_last=1)
+        plan_run_prune(finished, promoted_job_ids=set(), bakeoff_run_ids={str(run)}, keep_last=1)
         == []
     )
+    assert pinned == {run_id}
 
 
 async def _in_thread(fn: Any) -> Any:

@@ -18,7 +18,7 @@ logger = get_logger('trainer.trainer_kwargs')
 
 # Ultralytics' ``project=`` dir for run outputs. This MUST be the same absolute
 # path in every container that later reads a path recorded in
-# status.json/manifest.json (``checkpoint_path``, the ONNX sibling) -- the API
+# the run's manifest (``checkpoint_path``, the ONNX sibling) -- the API
 # container resolves ``checkpoint_path`` verbatim when promoting, so a
 # trainer-private mount alias 404s the moment promote runs. Both containers
 # mount the same host dir at this path; see docker-compose.yml.

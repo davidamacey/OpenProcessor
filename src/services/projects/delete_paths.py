@@ -54,7 +54,7 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     autolabel state) -- never under ``default``'s own dirs, which
     :func:`resources_for_new` never nests anything into."""
     from src.config.curation_accessors import base_curation_config
-    from src.config.projects import projects_data_root, trainer_jobs_root
+    from src.config.projects import projects_data_root
 
     base = base_curation_config()
     data_root = projects_data_root()
@@ -66,7 +66,6 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (record.resources.project_state_dir, state_projects_root),
         (record.resources.upload_root, state_projects_root),
         (record.resources.bakeoff_results_dir, state_projects_root),
-        (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
         # The tmpfs crop cache keys its files per project (<crop_cache_dir>/<slug>).
         (base.crop_cache_dir / record.slug, base.crop_cache_dir),
     ]

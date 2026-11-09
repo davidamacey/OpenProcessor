@@ -25,7 +25,9 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.db
 
-ENTRY_KINDS = ['migrate_step', 'verify', 'detection_worker', 'vlm_worker', 'assist_loop', 'script']
+ENTRY_KINDS = ['migrate_step', 'verify', 'detection_worker', 'vlm_worker', 'script']
+# assist_loop is a Celery job handler (src/tasks/assist_loop.py) with no process entry of its own:
+# it runs on the Celery runtime's engine, which tests/tasks covers.
 
 
 @pytest.fixture
@@ -80,11 +82,6 @@ def _run_entry(kind: str, probe: Callable[..., Any], monkeypatch: pytest.MonkeyP
         module = importlib.import_module('scripts.curation.vlm_worker')
         monkeypatch.setattr(module, 'run', probe)
         monkeypatch.setattr(module, 'start_worker_metrics_server', lambda _port: None)
-        assert module.main([]) == 0
-        return False
-    if kind == 'assist_loop':
-        module = importlib.import_module('scripts.curation.assist_loop_worker')
-        monkeypatch.setattr(module, '_main_loop', probe)
         assert module.main([]) == 0
         return False
     module = importlib.import_module('scripts.curation.backfill_scores')

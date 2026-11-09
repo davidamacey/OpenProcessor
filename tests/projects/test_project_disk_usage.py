@@ -13,23 +13,21 @@ if TYPE_CHECKING:
 
 
 def test_disk_usage_counts_bytes_per_directory(tmp_path: Path) -> None:
-    exports, uploads, runs = tmp_path / 'exports', tmp_path / 'uploads', tmp_path / 'runs'
+    exports, uploads = tmp_path / 'exports', tmp_path / 'uploads'
     (exports / 'sub').mkdir(parents=True)
     (exports / 'sub' / 'a.bin').write_bytes(b'0123456789')
     (exports / 'b.bin').write_bytes(b'xyz')
     uploads.mkdir()
-    # runs does not exist: a missing directory is 0 bytes, not an error
-    resources = SimpleNamespace(export_root=exports, upload_root=uploads, train_jobs_dir=runs)
+    resources = SimpleNamespace(export_root=exports, upload_root=uploads)
 
     usage = _disk_usage('disk-usage-test', resources)
 
-    assert (usage['exports_bytes'], usage['uploads_bytes'], usage['runs_bytes']) == (13, 0, 0)
+    assert (usage['exports_bytes'], usage['uploads_bytes']) == (13, 0)
+    assert 'runs_bytes' not in usage
 
 
 def test_one_ten_byte_file_is_ten_bytes(tmp_path: Path) -> None:
     (tmp_path / 'f.bin').write_bytes(b'0123456789')
-    resources = SimpleNamespace(
-        export_root=tmp_path, upload_root=tmp_path / 'none', train_jobs_dir=tmp_path / 'none'
-    )
+    resources = SimpleNamespace(export_root=tmp_path, upload_root=tmp_path / 'none')
 
     assert _disk_usage('disk-usage-ten', resources)['exports_bytes'] == 10

@@ -94,6 +94,7 @@ export = [
     "onnxsim>=0.4.33",
     "onnxslim>=0.1.71",
     "onnxscript",
+    "nvidia-ml-py==13.615.71",
 ]
 # Install with `pip install --no-deps` (see Dockerfile): its own requirements
 # exact-pin research packages that conflict with open-clip-torch>=3.2.

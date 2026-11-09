@@ -121,6 +121,7 @@ async def test_export_manifest_records_the_items_index_generation(tmp_path: Path
 
 def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_fresh
 
     async def _refuse(self: Any, **_kw: Any) -> Any:
         raise NothingToExportError('0 items are class_validated')
@@ -134,6 +135,7 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[require_near_dup_fresh] = lambda: None  # the gate reads PostgreSQL
     r = TestClient(app).post('/curation/projects/default/export/yolo', json={})
     assert r.status_code == 422
     assert '0 items are class_validated' in r.json()['detail']

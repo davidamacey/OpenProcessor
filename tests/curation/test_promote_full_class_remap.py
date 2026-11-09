@@ -58,7 +58,6 @@ def app_client(
     tmp_path: Any,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(tmp_path))
     no_database(monkeypatch)
 
     from src.routers.curation._common import _raw_opensearch_dep

@@ -174,23 +174,6 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
     for job_dir in own_dirs:
         job_dir.mkdir(parents=True, exist_ok=True)
         (job_dir / 'state.json').write_text(json.dumps(state), encoding='utf-8')
-    # A finished training run with its checkpoint, in the project's own
-    # jobs dir and (until P2 scopes the trainer, plan §5.3) in the shared
-    # one the training service still reads.
-    checkpoint = tmp_path / 'state' / 'training_runs' / slug / 'weights' / 'best.pt'
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    checkpoint.write_bytes(b'fake checkpoint')
-    finished = {
-        'job_id': f'{slug}-job-0001',
-        'state': 'finished',
-        'classes': [CLASS_NAMES[slug]],
-        'checkpoint_path': str(checkpoint),
-    }
-    for jobs_dir in (res.train_jobs_dir, tmp_path / 'jobs' / 'train'):
-        jobs_dir.mkdir(parents=True, exist_ok=True)
-        (jobs_dir / f'{slug}-job-0001.status.json').write_text(
-            json.dumps(finished), encoding='utf-8'
-        )
     with bind_project(record):
         # The same ``trained_at`` in every project: a cache keyed only by
         # it would serve one project's scored crops to another.
@@ -205,6 +188,5 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
     return [
         *own_dirs,
         res.project_state_dir,
-        res.train_jobs_dir,
         res.class_registry_path.parent,
     ]

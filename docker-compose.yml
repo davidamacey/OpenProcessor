@@ -481,6 +481,9 @@ services:
       # bulk_ingest_run posts its batches to the API.
       - OP_API_LOOPBACK_URL=http://api:8000
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
+      # The probe job maps host GPU ids to local indices: must equal the trainer's value.
+      - OP_TRAIN_GPU_ORDER=${OP_TRAIN_GPU_ORDER:-0}
+      - OP_GPU_ARBITER_CONTAINERS=${OP_GPU_ARBITER_CONTAINERS:-}
     tmpfs:
       - /run/op-prom-worker:mode=1777
     volumes:
