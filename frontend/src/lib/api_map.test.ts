@@ -28,11 +28,11 @@ describe('map wrappers', () => {
     fetchMock.mockResolvedValue(ok({ type: 'FeatureCollection', features: [] }));
     await getMapCells(
       { zoom: 6, bbox: '7,46,9,48' },
-      { class_name: ['car', 'bus'], taken_from: '2024-03-05' },
+      { class_name: ['class_a', 'class_b'], taken_from: '2024-03-05' },
     );
     const url = new URL(fetchMock.mock.calls[0][0], 'http://x');
     expect(url.pathname).toBe('/curation/projects/default/map/cells');
-    expect(url.searchParams.getAll('class_name')).toEqual(['car', 'bus']);
+    expect(url.searchParams.getAll('class_name')).toEqual(['class_a', 'class_b']);
     expect(url.searchParams.get('taken_from')).toBe('2024-03-05');
     expect(url.searchParams.get('zoom')).toBe('6');
     expect(url.searchParams.get('bbox')).toBe('7,46,9,48');

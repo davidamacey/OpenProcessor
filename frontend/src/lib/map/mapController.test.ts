@@ -54,12 +54,12 @@ describe('MapController', () => {
   it('sends the shared filter and the capture days with every cells request', async () => {
     const d = deps();
     const ctl = new MapController(d);
-    ctl.filter.setValue('class_name', ['car']);
+    ctl.filter.setValue('class_name', ['class_a']);
     ctl.takenFrom = '2024-03-05';
     await ctl.loadCells({ zoom: 6, bbox: '7,46,9,48' });
     expect(d.cells).toHaveBeenCalledWith(
       { zoom: 6, bbox: '7,46,9,48' },
-      { class_name: ['car'], taken_from: '2024-03-05' },
+      { class_name: ['class_a'], taken_from: '2024-03-05' },
       expect.any(AbortSignal),
     );
     expect(ctl.cells).toEqual(CELLS);
