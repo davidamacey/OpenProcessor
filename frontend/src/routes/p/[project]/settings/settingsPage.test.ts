@@ -1,6 +1,6 @@
 /**
  * Static source scan for the `/settings` deployment-defaults admin
- * page (docs/design/curation-settings-ui-plan-2026-09-21.md §6.4).
+ * page (curation settings UI plan §6.4).
  * This repo has no `@testing-library/svelte` harness (see
  * `StrategyBar.test.ts`/`AssistScopeBar.test.ts`'s header), so this
  * asserts the wiring a reviewer would check by eye.

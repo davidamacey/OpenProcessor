@@ -1,6 +1,6 @@
 /**
  * Static source scan for T-C3's dataset-export capability gate
- * (docs/design/backend-integration-phase-c-plan-2026-09-20.md §3).
+ * (backend integration phase C plan §3).
  * This repo has no `@testing-library/svelte` harness (see
  * `TrainForm.test.ts`'s header, `StrategyBar.test.ts`), so — same
  * convention — this asserts the wiring a reviewer would check by eye.

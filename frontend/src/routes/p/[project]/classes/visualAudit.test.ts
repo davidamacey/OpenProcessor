@@ -1,5 +1,5 @@
 /**
- * Mount tests for the /classes fixes from docs/design/visual-audit-2026-09-24.md:
+ * Mount tests for the /classes fixes from the visual audit:
  *
  *  - L1: "Total (in cluster)" showed `sample_count` (widget_a 271) though its
  *    header promised the cluster page's "in cluster" number (270).

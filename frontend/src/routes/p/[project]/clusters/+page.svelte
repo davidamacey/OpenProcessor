@@ -185,7 +185,7 @@
   const slotGallery = $derived(gallerySlot ? galleryFor(gallerySlot) : null);
 
   // Embedding-plot overlay (curation-strategy plan Phase 5 —
-  // docs/curation-strategy-plan-2026-09.md §2.7/§5.6). Off by default,
+  // curation strategy plan §2.7/§5.6). Off by default,
   // lazily mounted: <EmbeddingPlot> only appears in ClustersGrid inside
   // its showEmbeddingViz branch, so it never instantiates
   // (never calls getVizProjection) until the operator explicitly toggles

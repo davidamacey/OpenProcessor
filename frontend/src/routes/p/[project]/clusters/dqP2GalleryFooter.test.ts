@@ -1,5 +1,5 @@
 /**
- * DQ-p2 (docs/design/data-quality-pass-2026-09-24.md §7 FRONTEND item 7):
+ * DQ-p2 (data-quality pass §7 FRONTEND item 7):
  * the /clusters status bar always read off `clusterPager` (the cluster-
  * grid pager) — "102 / 102 all loaded" under a much larger slot-gallery
  * grid, because the slot-gallery view (`isSlotFilter`) renders
@@ -23,7 +23,7 @@ const src = readFileSync(
 
 describe('DQ-p2: the status bar reads the pager that actually backs the visible grid', () => {
   it('branches on slotGallery to read its pager in gallery mode', () => {
-    const idx = src.indexOf('DQ-p2 (docs/design/data-quality-pass-2026-09-24.md)');
+    const idx = src.indexOf('DQ-p2: this always');
     expect(idx).toBeGreaterThan(-1);
     const slice = src.slice(idx, idx + 1800);
     expect(slice).toMatch(/\{(#|:else )if slotGallery\}/);
