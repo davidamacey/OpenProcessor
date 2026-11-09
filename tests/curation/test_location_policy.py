@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
-from near_duplicates.conftest import job_env, kinds, make_project, producer, queue_hooks, wakes
+from near_duplicates.conftest import make_project
 
 from src.core.exceptions import RequestRejectedError
 from src.db.repos.config import RevisionConflictError
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from typing import Any
 
 pytestmark = [pytest.mark.db, pytest.mark.asyncio]
-__all__ = ['job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']
 
 
 @pytest_asyncio.fixture(autouse=True)
