@@ -4,11 +4,12 @@ no second images doc, and no labels dropped with the refused create."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
 from curation.dataset_import.harness import Harness, map_all, write_yolo
+from src.services.curation.ingest_dedup import Resolved
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 
 
@@ -36,8 +37,8 @@ async def test_import_lands_on_the_copy_stored_after_its_lookup(
     }
     h.os.docs(h.cfg.images_index)[image_id] = dict(stored)
 
-    async def unrefreshed_lookup(_image_hash: str) -> dict[str, Any] | None:
-        return None
+    async def unrefreshed_lookup(imohash: str, _data: bytes) -> Resolved:
+        return Resolved(None, imohash)
 
     monkeypatch.setattr(h.service, '_lookup_image', unrefreshed_lookup)
 
