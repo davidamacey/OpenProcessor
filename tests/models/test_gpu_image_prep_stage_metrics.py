@@ -51,7 +51,7 @@ def _dev(a: Any) -> _Dev:
 
 
 def _fake_cupy() -> types.ModuleType:
-    cp = types.ModuleType('cupy')
+    cp: Any = types.ModuleType('cupy')
 
     class _Ctx:
         def __init__(self, *_a: Any, **_k: Any) -> None:
@@ -69,10 +69,10 @@ def _fake_cupy() -> types.ModuleType:
         def synchronize(self) -> None:
             cp.syncs += 1
 
-    cp.syncs = 0  # type: ignore[attr-defined]
-    cp.uint8 = np.uint8  # type: ignore[attr-defined]
+    cp.syncs = 0
+    cp.uint8 = np.uint8
     out_of_memory = type('OutOfMemoryError', (RuntimeError,), {})
-    cp.cuda = types.SimpleNamespace(  # type: ignore[attr-defined]
+    cp.cuda = types.SimpleNamespace(
         Device=_Ctx,
         Stream=_Ctx,
         get_current_stream=_Ctx,
@@ -82,10 +82,10 @@ def _fake_cupy() -> types.ModuleType:
             CUDARuntimeError=type('CUDARuntimeError', (RuntimeError,), {}),
         ),
     )
-    cp.get_default_memory_pool = lambda: types.SimpleNamespace(set_limit=lambda **_k: None)  # type: ignore[attr-defined]
-    cp.full = lambda shape, v, dt: _dev(np.full(shape, v, dt))  # type: ignore[attr-defined]
-    cp.alloc_limit = None  # type: ignore[attr-defined]
-    cp.allocated = []  # type: ignore[attr-defined]
+    cp.get_default_memory_pool = lambda: types.SimpleNamespace(set_limit=lambda **_k: None)
+    cp.full = lambda shape, v, dt: _dev(np.full(shape, v, dt))
+    cp.alloc_limit = None
+    cp.allocated = []
 
     def _empty(shape: Any, dt: Any) -> _Dev:
         n = int(np.prod(shape)) * np.dtype(dt).itemsize
@@ -94,9 +94,9 @@ def _fake_cupy() -> types.ModuleType:
         cp.allocated.append(n)
         return _dev(np.zeros(shape, dt))
 
-    cp.empty = _empty  # type: ignore[attr-defined]
-    cp.ascontiguousarray = _dev  # type: ignore[attr-defined]
-    cp.asnumpy = np.asarray  # type: ignore[attr-defined]
+    cp.empty = _empty
+    cp.ascontiguousarray = _dev
+    cp.asnumpy = np.asarray
     return cp
 
 

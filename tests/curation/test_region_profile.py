@@ -161,7 +161,7 @@ def test_unknown_profile_name_fails_loudly(region_env: pytest.MonkeyPatch) -> No
 def _advertised(default_id: str | None = None) -> dict[str, dict[str, object]]:
     from src.services.curation.axis_copy import detection_profile_strategies
 
-    return {e['id']: e for e in detection_profile_strategies(default_id)}  # type: ignore[misc]
+    return {e['id']: e for e in detection_profile_strategies(default_id)}
 
 
 def test_methods_axis_empty_when_unconfigured(region_env: pytest.MonkeyPatch) -> None:

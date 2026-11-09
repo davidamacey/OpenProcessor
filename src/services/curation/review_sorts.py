@@ -1,7 +1,6 @@
 """Review-queue sort/filter strategy registry.
 
-Mirrors ``cluster_methods/__init__.py``'s ``get_method``/``available_methods``
-pattern, but for the *sort* axis — a :class:`ReviewSort` never assigns a crop
+A ``get_method``/``available_methods``-style registry for the *sort* axis — a :class:`ReviewSort` never assigns a crop
 to a cluster or mutates any doc; it only picks the OpenSearch ``sort`` clause
 ``GET /curation/review/{tab}`` uses to order an already-built query.
 

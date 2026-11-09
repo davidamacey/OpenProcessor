@@ -118,8 +118,12 @@ class _FakeItemsOS:
             raise KeyError(id)
         return {**self._hit(), 'found': True}
 
-    async def mget(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
-        return {'docs': [{**self._hit(), 'found': True}]}
+    async def mget(self, *, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+        return {'docs': [{**self._hit(), 'found': True, '_seq_no': 1, '_primary_term': 1}]}
+
+    async def bulk(self, *, body: list[dict[str, Any]], **_: Any) -> dict[str, Any]:
+        items = [{'update': {'_id': a['update']['_id'], 'status': 200}} for a in body[0::2]]
+        return {'errors': False, 'items': items}
 
 
 def _client(monkeypatch: pytest.MonkeyPatch, storage: RegionFields) -> TestClient:

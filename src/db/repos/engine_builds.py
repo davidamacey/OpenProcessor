@@ -102,7 +102,7 @@ def begin_engine(
     model_id: uuid.UUID,
     triton_model_name: str,
     max_batch: int,
-    build_job_id: uuid.UUID,
+    build_job_id: uuid.UUID | None,
 ) -> uuid.UUID:
     """The ``building`` row of one engine. A failed attempt that never learned its build key is
     reset by the same statement, so a retry does not collide with its own leftover."""

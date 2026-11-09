@@ -229,6 +229,12 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
+# Entry-point scripts that must run before their imports are valid: export_models re-execs
+# into the toolchain interpreter first, the seed scripts put the repo root on sys.path first.
+"export/export_models.py" = ["E402"]
+"scripts/curation/seed_docs_run_results.py" = ["E402"]
+"scripts/curation/seed_docs_embeddings.py" = ["E402"]
+"scripts/curation/seed_live_harness.py" = ["E402"]
 # The whitelist is read by vulture, never run: each line is a bare attribute read on purpose.
 "scripts/codegen/vulture_whitelist.py" = ["B018"]
 # Test files can have additional flexibility
@@ -444,25 +450,13 @@ namespace_packages = true
 
 # Test code: untyped test functions and fixtures are the norm (mypy docs, "Using mypy with an
 # existing codebase" and config_file "Untyped definitions and calls": the disallow_* flags are
-# per-module options). Bodies are still checked (check_untyped_defs stays on). Modules that still
-# have errors are listed in the ignore_errors block below.
+# per-module options). Bodies are still checked (check_untyped_defs stays on). No test module is
+# skipped; scripts/codegen/check_mypy_tests.py explains how a temporary skip block is guarded.
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 warn_return_any = false
-
-# Test modules that still have mypy errors; shrink-only, guarded by scripts/codegen/check_mypy_tests.py
-[[tool.mypy.overrides]]
-module = [
-    "tests.curation.test_curation_settings_router",
-    "tests.curation.test_region_profile",
-    "tests.integration.test_stats_router",
-    "tests.models.test_gpu_image_prep_geometry",
-    "tests.models.test_gpu_image_prep_stage_metrics",
-    "tests.models.test_newest_ready_engine_wins",
-]
-ignore_errors = true
 
 # tests put export/ on sys.path and import `export_tasks` by its bare name; mypy would find
 # the same file as `export.export_tasks` too and stop ("found twice"). Skip following the bare name.

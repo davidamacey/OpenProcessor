@@ -43,13 +43,6 @@ describe('getMethods', () => {
     const serverBody = {
       strategies: [
         {
-          id: 'ivf',
-          axis: 'cluster',
-          label: 'FAISS IVF-512 (production)',
-          status: 'stable',
-          default: true,
-        },
-        {
           id: 'default',
           axis: 'sort',
           label: 'Recent first',
@@ -71,9 +64,6 @@ describe('getMethods', () => {
     const result = await getMethods();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result.cluster_methods).toEqual([
-      { id: 'ivf', label: 'FAISS IVF-512 (production)', status: 'stable', default: true },
-    ]);
     expect(result.review_sorts).toEqual([
       { id: 'default', label: 'Recent first', status: 'stable', default: true },
       {
@@ -121,7 +111,6 @@ describe('getMethods', () => {
     // crash, and distinct from the true-failure fallback path.
     const result = await getMethods();
     expect(result).toEqual({
-      cluster_methods: [],
       review_sorts: [],
       overlays: [],
       scores: [],
@@ -172,7 +161,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
   it('getCurationSettings composes ${API_PREFIX}/settings and parses the body', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
-        defaults: { cluster: 'ivf' },
+        defaults: { vlm: 'a' },
         revision: 6,
         updated_at: '2026-09-20T23:04:39+00:00',
         updated_by: null,
@@ -187,7 +176,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
     const calledUrl = (fetchMock.mock.calls[0]?.[0] as string) ?? '';
     expect(calledUrl).toContain(`${API_PREFIX}/settings`);
     expect(result).toEqual({
-      defaults: { cluster: 'ivf' },
+      defaults: { vlm: 'a' },
       revision: 6,
       updated_at: '2026-09-20T23:04:39+00:00',
       updated_by: null,

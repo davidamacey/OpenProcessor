@@ -146,7 +146,7 @@ async def validate_create(
             from src.services.projects.clone_validate import _validate_clone_source
 
             await _validate_clone_source(
-                client, target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
+                target_slug=slug, from_slug=clone_settings_from, axes=clone_axes
             )
 
     with stages.stage('project_create_capacity'):

@@ -145,7 +145,7 @@ Examples:
     logger.info('Next steps:')
     logger.info('  1. Restart Triton: docker compose restart triton-server')
     logger.info('  2. Load model: make load-scrfd')
-    logger.info('  3. Test: python tests/test_scrfd_pipeline.py')
+    logger.info('  3. Test: python scripts/validation/scrfd_pipeline_check.py')
 
     return 0
 

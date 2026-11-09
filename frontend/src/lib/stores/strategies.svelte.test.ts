@@ -17,13 +17,6 @@ import { EMPTY_METHODS, isScopedAssistAvailable } from '$lib/strategies';
 const METHODS_TODAY = {
   strategies: [
     {
-      id: 'ivf',
-      axis: 'cluster',
-      label: 'FAISS IVF-512 (production)',
-      status: 'stable',
-      default: true,
-    },
-    {
       id: 'default',
       axis: 'sort',
       label: 'Recent first',
@@ -80,13 +73,6 @@ describe('strategiesStore', () => {
         jsonResponse({
           strategies: [
             {
-              id: 'ivf',
-              axis: 'cluster',
-              label: 'FAISS IVF-512 (production)',
-              status: 'stable',
-              default: true,
-            },
-            {
               id: 'default',
               axis: 'sort',
               label: 'Recent first',
@@ -116,13 +102,6 @@ describe('strategiesStore', () => {
     const serverBody = {
       strategies: [
         {
-          id: 'ivf',
-          axis: 'cluster',
-          label: 'FAISS IVF-512 (production)',
-          status: 'stable',
-          default: true,
-        },
-        {
           id: 'default',
           axis: 'sort',
           label: 'Recent first',
@@ -146,7 +125,6 @@ describe('strategiesStore', () => {
     expect(strategiesStore.loading).toBe(false);
     expect(strategiesStore.error).toBeNull();
     expect(strategiesStore.methods.review_sorts).toHaveLength(2);
-    expect(strategiesStore.defaultClusterMethodId).toBe('ivf');
   });
 
   it('keeps EMPTY_METHODS and records the error (never throws) when {API_PREFIX}/methods fails', async () => {

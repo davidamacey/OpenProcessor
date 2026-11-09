@@ -6,11 +6,11 @@
  * CONFIRMED AGAINST THE REAL BACKEND (2026-09-10, live end-to-end check
  * after rebuilding/restarting the backend from its curation-scores branch):
  * the actual wire shape is a single flat `{strategies: [...], flags: {...}}`
- * — every entry carries an `axis: 'cluster' | 'sort' | 'score' | 'overlay'`
+ * — every entry carries an `axis: 'sort' | 'score' | 'overlay'`
  * field (see `strategy_registry.py`'s `StrategyAxis`), NOT four separate
  * top-level arrays as this file originally assumed from the plan doc's
  * illustrative example. `parseMethodsResponse` below reshapes the flat
- * list into the seven buckets (`cluster_methods`/`review_sorts`/`overlays`/
+ * list into the six buckets (`review_sorts`/`overlays`/
  * `scores`/`dataset_exports`/`detection_profiles`/`prompt_packs`) client-side
  * by grouping on `axis`, so every downstream consumer
  * (`isDiverseOverlayAvailable`, `StrategyBar`, etc.) keeps working against
@@ -65,11 +65,6 @@ export interface MethodInfoBase {
    *  default for its axis — the server's own record of which axes a
    *  default actually changes. Absent is treated as not settable. */
   settable?: boolean;
-}
-
-export interface ClusterMethodInfo extends MethodInfoBase {
-  /** True on exactly the entry matching today's DEFAULT_METHOD ('ivf'). */
-  default?: boolean;
 }
 
 export interface ReviewSortInfo extends MethodInfoBase {
@@ -226,20 +221,19 @@ export interface MethodAxisCopy {
 }
 
 export interface MethodsResponse {
-  cluster_methods: ClusterMethodInfo[];
   review_sorts: ReviewSortInfo[];
   overlays: OverlayInfo[];
   scores: ScoreInfo[];
   /**
    * `axis: 'export'` entries. Named for what they are rather than by
-   * mechanically pluralizing the axis, the same way `cluster` →
-   * `cluster_methods` and `sort` → `review_sorts` already are.
+   * mechanically pluralizing the axis, the same way `sort` →
+   * `review_sorts` already is.
    */
   dataset_exports: DatasetExportInfo[];
   /**
    * `axis: 'detection_profile'` entries. Named as a descriptive plural
-   * noun phrase like every other bucket (`cluster` → `cluster_methods`,
-   * `sort` → `review_sorts`, `export` → `dataset_exports`), not a
+   * noun phrase like every other bucket (`sort` → `review_sorts`,
+   * `export` → `dataset_exports`), not a
    * mechanical pluralization of the axis string.
    */
   detection_profiles: DetectionProfileInfo[];
@@ -354,14 +348,6 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
   const rec = isRecord(raw) ? raw : {};
   const strategies = Array.isArray(rec.strategies) ? rec.strategies : [];
   return {
-    cluster_methods: normalizeAxis<ClusterMethodInfo>(
-      strategies,
-      'cluster',
-      (base, e) => ({
-        ...base,
-        default: optBool(e.default),
-      }),
-    ),
     review_sorts: normalizeAxis<ReviewSortInfo>(strategies, 'sort', (base, e) => ({
       ...base,
       default: optBool(e.default),
@@ -628,7 +614,6 @@ export function hasFieldCoverage(entry: { field_coverage?: number | null }): boo
  * stays hidden. Never a guessed stand-in for the served list.
  */
 export const EMPTY_METHODS: MethodsResponse = {
-  cluster_methods: [],
   review_sorts: [],
   overlays: [],
   scores: [],

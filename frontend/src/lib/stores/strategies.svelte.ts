@@ -28,14 +28,6 @@ class StrategiesStore {
   loaded = $state<boolean>(false);
   error = $state<string | null>(null);
 
-  /** Convenience accessor for the entry the backend (or the fallback)
-   *  marks as its default cluster method — 'ivf' until a server ever
-   *  says otherwise. Nothing writes cluster_id off this; it's read-only
-   *  capability metadata. */
-  defaultClusterMethodId = $derived(
-    this.methods.cluster_methods.find((m) => m.default)?.id ?? 'ivf',
-  );
-
   #inflight: Promise<void> | null = null;
   #gen = 0;
 

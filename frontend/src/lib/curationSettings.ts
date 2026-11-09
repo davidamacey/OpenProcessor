@@ -25,8 +25,7 @@ import { pickableVlmEntries, selectableAxisEntries } from '$lib/strategies';
 
 /** The axes the backend's `SETTABLE_DEFAULT_AXES` can accept on PUT (each
  *  is offered only when `/methods` marks one of its entries `settable`). */
-export type SettingsAxis =
-  'cluster' | 'sort' | 'detection_profile' | 'prompt_pack' | 'vlm';
+export type SettingsAxis = 'sort' | 'detection_profile' | 'prompt_pack' | 'vlm';
 
 export interface CurationSettings {
   /**
@@ -111,18 +110,6 @@ export interface SettingsAxisSpec {
 }
 
 export const SETTINGS_AXES: readonly SettingsAxisSpec[] = [
-  {
-    axis: 'cluster',
-    label: 'Clustering method',
-    bucket: 'cluster_methods',
-    blurb:
-      'Used by every auto-label run this app starts — Cropwright never sends an ' +
-      'explicit clustering_method, so residual clustering resolves this shared default.',
-    // Pinning the backend's own built-in ('ivf') is behaviorally identical
-    // to unset, so this one is recoverable in effect even without a
-    // backend delete path.
-    irreversibleWarning: null,
-  },
   {
     axis: 'sort',
     label: 'Review queue sort',

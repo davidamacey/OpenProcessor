@@ -322,6 +322,7 @@ async def test_move_sets_the_partition_placement_not_the_class(crops, registry, 
     partition, (uid, _other) = await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m'), 'peer': _proposal_doc('peer')}})
     before = _class_state(fake.docs(ITEMS)['m'])
+    peer_before = dict(fake.docs(ITEMS)['peer'])
 
     out = await call_route(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_uid=uid), fake)
     assert out['updated'] == 1
@@ -332,7 +333,7 @@ async def test_move_sets_the_partition_placement_not_the_class(crops, registry, 
     assert m.get('class_id') is None
     assert m['class_validated'] is False
     assert m['class_source'] == 'detector_proposal'
-    assert 'cluster_uid' not in fake.docs(ITEMS)['peer']
+    assert fake.docs(ITEMS)['peer'] == peer_before
 
     await label_undo.unlabel_crop('m', fake)
     assert _class_state(fake.docs(ITEMS)['m']) == before

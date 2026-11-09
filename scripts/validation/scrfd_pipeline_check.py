@@ -9,7 +9,7 @@ Tests the full face recognition pipeline:
 4. End-to-end API test via /faces/recognize
 
 Run:
-    source .venv/bin/activate && python tests/test_scrfd_pipeline.py
+    source .venv/bin/activate && python scripts/validation/scrfd_pipeline_check.py
 
 Prerequisites:
     - Triton server running with scrfd_10g_bnkps and arcface_w600k_r50 loaded
@@ -31,7 +31,6 @@ import requests
 
 API_BASE = os.environ.get('API_BASE', 'http://localhost:4603')
 TRITON_HTTP = os.environ.get('TRITON_HTTP', 'http://localhost:4600')
-TRITON_GRPC = os.environ.get('TRITON_GRPC', 'localhost:4601')
 TEST_IMAGE_DIR = Path('test_images')
 
 # Thresholds
@@ -64,7 +63,7 @@ def find_test_image() -> Path | None:
     return None
 
 
-def test_result(name: str, passed: bool, details: str = '') -> bool:
+def check_result(name: str, passed: bool, details: str = '') -> bool:
     """Print test result."""
     status = 'PASS' if passed else 'FAIL'
     msg = f'[{status}] {name}'
@@ -79,7 +78,7 @@ def test_result(name: str, passed: bool, details: str = '') -> bool:
 # =============================================================================
 
 
-def test_triton_model_ready() -> bool:
+def check_triton_model_ready() -> bool:
     """Check if SCRFD model is loaded on Triton."""
     print('\n--- Triton Model Status ---')
 
@@ -90,17 +89,17 @@ def test_triton_model_ready() -> bool:
         try:
             resp = requests.get(f'{TRITON_HTTP}/v2/models/{model}/ready', timeout=5)
             ready = resp.status_code == 200
-            test_result(f'{model} ready', ready, f'HTTP {resp.status_code}')
+            check_result(f'{model} ready', ready, f'HTTP {resp.status_code}')
             if not ready:
                 all_ready = False
         except requests.ConnectionError:
-            test_result(f'{model} ready', False, 'Triton not reachable')
+            check_result(f'{model} ready', False, 'Triton not reachable')
             all_ready = False
 
     return all_ready
 
 
-def test_scrfd_decode_unit() -> bool:
+def check_scrfd_decode_unit() -> bool:
     """Unit test for SCRFD decode logic with synthetic data."""
     print('\n--- SCRFD Decode Unit Test ---')
 
@@ -153,32 +152,34 @@ def test_scrfd_decode_unit() -> bool:
     # Validate
     passed = True
 
-    p = test_result('Detections found', len(boxes) > 0, f'{len(boxes)} faces detected')
+    p = check_result('Detections found', len(boxes) > 0, f'{len(boxes)} faces detected')
     passed = passed and p
 
     if len(boxes) > 0:
-        p = test_result('Box shape', boxes.shape[1] == 4, f'Expected [N, 4], got {boxes.shape}')
+        p = check_result('Box shape', boxes.shape[1] == 4, f'Expected [N, 4], got {boxes.shape}')
         passed = passed and p
 
-        p = test_result(
+        p = check_result(
             'Landmark shape',
             landmarks.shape[1:] == (5, 2),
             f'Expected [N, 5, 2], got {landmarks.shape}',
         )
         passed = passed and p
 
-        p = test_result('Score above threshold', float(scores[0]) >= 0.5, f'Score: {scores[0]:.3f}')
+        p = check_result(
+            'Score above threshold', float(scores[0]) >= 0.5, f'Score: {scores[0]:.3f}'
+        )
         passed = passed and p
 
         # Check landmarks are non-zero
         lmk_nonzero = np.any(landmarks[0] != 0)
-        p = test_result('Landmarks non-zero', lmk_nonzero, f'First landmark: {landmarks[0][0]}')  # type: ignore[arg-type]
+        p = check_result('Landmarks non-zero', lmk_nonzero, f'First landmark: {landmarks[0][0]}')  # type: ignore[arg-type]
         passed = passed and p
 
     return passed
 
 
-def test_face_alignment_unit() -> bool:
+def check_face_alignment_unit() -> bool:
     """Unit test for Umeyama face alignment."""
     print('\n--- Face Alignment Unit Test ---')
 
@@ -210,38 +211,38 @@ def test_face_alignment_unit() -> bool:
     # Align
     aligned = align_face(img, landmarks, image_size=112)
 
-    p = test_result('Output shape', aligned.shape == (112, 112, 3), f'Got {aligned.shape}')
+    p = check_result('Output shape', aligned.shape == (112, 112, 3), f'Got {aligned.shape}')
     passed = passed and p
 
-    p = test_result(
+    p = check_result(
         'Output non-zero', aligned.mean() > 0, f'Mean pixel value: {aligned.mean():.1f}'
     )
     passed = passed and p
 
-    p = test_result('Output is uint8', aligned.dtype == np.uint8, f'Got {aligned.dtype}')
+    p = check_result('Output is uint8', aligned.dtype == np.uint8, f'Got {aligned.dtype}')
     passed = passed and p
 
     # Test batch alignment
     from utils.face_align import align_faces_batch, preprocess_for_arcface
 
     batch = align_faces_batch(img, landmarks[np.newaxis, ...])
-    p = test_result('Batch output shape', batch.shape == (1, 112, 112, 3), f'Got {batch.shape}')
+    p = check_result('Batch output shape', batch.shape == (1, 112, 112, 3), f'Got {batch.shape}')
     passed = passed and p
 
     # Test preprocessing
     arcface_input = preprocess_for_arcface(batch)
-    p = test_result(
+    p = check_result(
         'ArcFace input shape', arcface_input.shape == (1, 3, 112, 112), f'Got {arcface_input.shape}'
     )
     passed = passed and p
 
-    p = test_result(
+    p = check_result(
         'ArcFace input dtype', arcface_input.dtype == np.float32, f'Got {arcface_input.dtype}'
     )
     passed = passed and p
 
     # Check normalization range: (pixel - 127.5) / 128.0 -> ~[-1, 1]
-    p = test_result(
+    p = check_result(
         'ArcFace normalization range',
         -1.5 < arcface_input.min() < 1.5,
         f'Range: [{arcface_input.min():.3f}, {arcface_input.max():.3f}]',
@@ -249,7 +250,7 @@ def test_face_alignment_unit() -> bool:
     return passed and p
 
 
-def test_api_face_recognize(image_path: Path) -> bool:
+def check_api_face_recognize(image_path: Path) -> bool:
     """Test /faces/recognize API endpoint with SCRFD backend."""
     print(f'\n--- API /faces/recognize Test (image: {image_path.name}) ---')
 
@@ -266,10 +267,10 @@ def test_api_face_recognize(image_path: Path) -> bool:
             )
             elapsed = (time.time() - start) * 1000
         except requests.ConnectionError:
-            test_result('API reachable', False, 'Connection refused')
+            check_result('API reachable', False, 'Connection refused')
             return False
 
-    p = test_result('HTTP status', resp.status_code == 200, f'HTTP {resp.status_code}')
+    p = check_result('HTTP status', resp.status_code == 200, f'HTTP {resp.status_code}')
     passed = passed and p
 
     if resp.status_code != 200:
@@ -277,12 +278,12 @@ def test_api_face_recognize(image_path: Path) -> bool:
         return False
 
     data = resp.json()
-    p = test_result('Response time', elapsed < 5000, f'{elapsed:.1f}ms')
+    p = check_result('Response time', elapsed < 5000, f'{elapsed:.1f}ms')
     passed = passed and p
 
     faces = data.get('faces', [])
     num_faces = len(faces)
-    p = test_result('Faces detected', num_faces > 0, f'{num_faces} faces')
+    p = check_result('Faces detected', num_faces > 0, f'{num_faces} faces')
     passed = passed and p
 
     if num_faces > 0:
@@ -291,17 +292,17 @@ def test_api_face_recognize(image_path: Path) -> bool:
         # Check box
         box = face.get('box', {})
         has_box = all(k in box for k in ('x1', 'y1', 'x2', 'y2'))
-        p = test_result('Box present', has_box, str(box))
+        p = check_result('Box present', has_box, str(box))
         passed = passed and p
 
         # Check confidence
         conf = face.get('confidence', 0)
-        p = test_result('Confidence', conf > MIN_CONFIDENCE, f'{conf:.3f}')
+        p = check_result('Confidence', conf > MIN_CONFIDENCE, f'{conf:.3f}')
         passed = passed and p
 
         # Check embedding
         embedding = face.get('embedding', [])
-        p = test_result(
+        p = check_result(
             'Embedding dimensions', len(embedding) == MIN_EMBEDDING_DIM, f'{len(embedding)} dims'
         )
         passed = passed and p
@@ -309,13 +310,13 @@ def test_api_face_recognize(image_path: Path) -> bool:
         if embedding:
             # Check L2 normalization
             norm = np.linalg.norm(embedding)
-            p = test_result('Embedding L2 normalized', 0.95 < norm < 1.05, f'L2 norm: {norm:.4f}')
+            p = check_result('Embedding L2 normalized', 0.95 < norm < 1.05, f'L2 norm: {norm:.4f}')
             passed = passed and p
 
         # Check landmarks (SCRFD should provide these)
         landmarks = face.get('landmarks', [])
         has_landmarks = len(landmarks) == LANDMARK_COUNT
-        p = test_result(
+        p = check_result(
             'Landmarks present',
             has_landmarks,
             f'{len(landmarks)} landmarks'
@@ -327,7 +328,7 @@ def test_api_face_recognize(image_path: Path) -> bool:
             # Landmarks should be [0,1] normalized
             lmk_arr = np.array(landmarks)
             in_range = (lmk_arr >= 0).all() and (lmk_arr <= 1).all()
-            p = test_result(
+            p = check_result(
                 'Landmarks in [0,1]',
                 in_range,  # type: ignore[arg-type]
                 f'Range: [{lmk_arr.min():.3f}, {lmk_arr.max():.3f}]',
@@ -337,7 +338,7 @@ def test_api_face_recognize(image_path: Path) -> bool:
     return passed
 
 
-def test_api_face_verify(image_path: Path) -> bool:
+def check_api_face_verify(image_path: Path) -> bool:
     """Test /faces/verify endpoint with the same face (should match)."""
     print('\n--- API /faces/verify Self-Match Test ---')
 
@@ -355,26 +356,26 @@ def test_api_face_verify(image_path: Path) -> bool:
             timeout=30,
         )
     except requests.ConnectionError:
-        test_result('API reachable', False, 'Connection refused')
+        check_result('API reachable', False, 'Connection refused')
         return False
 
-    passed = test_result('HTTP status', resp.status_code == 200, f'HTTP {resp.status_code}')
+    passed = check_result('HTTP status', resp.status_code == 200, f'HTTP {resp.status_code}')
 
     if resp.status_code == 200:
         data = resp.json()
         similarity = data.get('similarity', 0)
         matched = data.get('matched', False)
 
-        p = test_result('Self-similarity high', similarity > 0.9, f'Similarity: {similarity:.4f}')
+        p = check_result('Self-similarity high', similarity > 0.9, f'Similarity: {similarity:.4f}')
         passed = passed and p
 
-        p = test_result('Self-match', matched)
+        p = check_result('Self-match', matched)
         passed = passed and p
 
     return passed
 
 
-def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
+def check_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
     """Benchmark the face recognition pipeline throughput."""
     print(f'\n--- Pipeline Benchmark ({iterations} iterations) ---')
 
@@ -403,7 +404,7 @@ def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
             latencies.append(elapsed)
 
     if not latencies:
-        test_result('Benchmark', False, 'No successful requests')
+        check_result('Benchmark', False, 'No successful requests')
         return False
 
     arr = np.array(latencies)
@@ -420,7 +421,7 @@ def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
     print(f'  P99:      {p99:.1f}ms')
     print(f'  RPS:      {rps:.1f} (single-client serial)')
 
-    return test_result('Mean latency < 500ms', mean_lat < 500, f'{mean_lat:.1f}ms')  # type: ignore[arg-type]
+    return check_result('Mean latency < 500ms', mean_lat < 500, f'{mean_lat:.1f}ms')  # type: ignore[arg-type]
 
 
 # =============================================================================
@@ -428,7 +429,7 @@ def test_scrfd_benchmark(image_path: Path, iterations: int = 20) -> bool:
 # =============================================================================
 
 
-def main():
+def main() -> int:
     print('=' * 60)
     print('SCRFD Face Detection Pipeline Test')
     print('=' * 60)
@@ -436,11 +437,11 @@ def main():
     results = {}
 
     # Unit tests (no server needed)
-    results['scrfd_decode'] = test_scrfd_decode_unit()
-    results['face_alignment'] = test_face_alignment_unit()
+    results['scrfd_decode'] = check_scrfd_decode_unit()
+    results['face_alignment'] = check_face_alignment_unit()
 
     # Integration tests (need running services)
-    results['triton_models'] = test_triton_model_ready()
+    results['triton_models'] = check_triton_model_ready()
 
     # Find test image
     test_image = find_test_image()
@@ -449,9 +450,9 @@ def main():
         print(f'  Expected: {TEST_IMAGE_DIR}/faces/ or {TEST_IMAGE_DIR}/*.jpg')
     else:
         print(f'\nUsing test image: {test_image}')
-        results['api_recognize'] = test_api_face_recognize(test_image)
-        results['api_verify'] = test_api_face_verify(test_image)
-        results['benchmark'] = test_scrfd_benchmark(test_image)
+        results['api_recognize'] = check_api_face_recognize(test_image)
+        results['api_verify'] = check_api_face_verify(test_image)
+        results['benchmark'] = check_scrfd_benchmark(test_image)
 
     # Summary
     print('\n' + '=' * 60)
