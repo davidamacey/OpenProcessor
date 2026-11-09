@@ -41,6 +41,7 @@ import collections
 import hashlib
 import inspect
 import re
+import types
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -54,10 +55,14 @@ from curation.cross_project_leak._route_tables import (
     CROP_FOR,
     EXPECTED_5XX,
     NO_WRITE,
+    PG_ROW_IDS,
     POSTGRES_BACKED_PREFIXES,
+    READ_CROP_FOR,
     READ_QUERIES,
+    SLUG_QUERIES,
     STREAMING_ROUTES,
     UNBOUND_BY_DESIGN,
+    UNREACHED_OK,
     UNSEEDED_WRITES,
     UUID_JOB_ID,
 )
@@ -93,10 +98,17 @@ def _scoped_routes(app: Any) -> list[tuple[str, str]]:
     return out
 
 
-def _fill(path: str, slug: str, key: tuple[str, str] | None = None) -> str:
+def _fill(
+    path: str,
+    slug: str,
+    key: tuple[str, str] | None = None,
+    pg_ids: dict[str, str] | None = None,
+) -> str:
     params = route_params(slug)
-    if key in CROP_FOR:
-        params['crop_id'] = f'{slug}-{CROP_FOR[key]}'
+    for param, row in PG_ROW_IDS.get(key, {}).items():
+        params[param] = (pg_ids or {})[row]
+    if key in CROP_FOR or key in READ_CROP_FOR:
+        params['crop_id'] = f'{slug}-{(CROP_FOR | READ_CROP_FOR)[key]}'
     if key in NAME_FOR:
         params['name'] = NAME_FOR[key]
     if key in UUID_JOB_ID:
@@ -163,10 +175,15 @@ def _shape(role_of: dict[str, str], verb: str, os_url: str, index: str) -> Shape
 
 def _sweep(
     env: LeakEnv, slug: str, only: Any = None
-) -> tuple[list[str], set[tuple[str, str]], dict[tuple[str, str], collections.Counter[Shape]]]:
+) -> tuple[
+    list[str],
+    set[tuple[str, str]],
+    dict[tuple[str, str], collections.Counter[Shape]],
+    dict[tuple[str, str], int],
+]:
     """Call every scoped route (or those ``only`` accepts) as ``slug``.
     Returns (leaks, routes that wrote, the OpenSearch request shapes each
-    route issued, counted per index role)."""
+    route issued, counted per index role, the status each route answered)."""
     app, records = env.app, env.records
     own_indexes = set(records[slug].resources.indexes.values())
     # An event names its project by the bound record's row id (a record without one by slug).
@@ -184,6 +201,7 @@ def _sweep(
     leaks: list[str] = []
     wrote: set[tuple[str, str]] = set()
     roles: dict[tuple[str, str], collections.Counter[Shape]] = {}
+    statuses: dict[tuple[str, str], int] = {}
     client = TestClient(app, raise_server_exceptions=False)
     # Reads first, against the seeded state; then every write.
     ordered = sorted(_scoped_routes(app), key=lambda route: route[0] != 'GET')
@@ -193,7 +211,7 @@ def _sweep(
         key = (method, template[len(SCOPED) :])
         if only is not None and not only(key):
             continue
-        url = _fill(template, slug, key)
+        url = _fill(template, slug, key, env.pg_ids.get(slug))
         before_access, before_write, before_events = (
             len(env.accesses),
             len(env.transport.writes),
@@ -203,6 +221,8 @@ def _sweep(
             PREPARE[key](env, slug)
         tree_before = _dir_digest([env.root]) if method != 'GET' else {}
         kwargs = bodies.get(key) or READ_QUERIES.get(key)
+        if key in SLUG_QUERIES:
+            kwargs = SLUG_QUERIES[key](slug)
         if kwargs is None:
             kwargs = {} if method in ('GET', 'DELETE') else {'json': {}}
         response = client.request(method, url, **kwargs)
@@ -240,7 +260,8 @@ def _sweep(
             )
         if response.status_code >= 500 and key not in EXPECTED_5XX:
             leaks.append(f'{tag}: unexpected {response.status_code} {body[:300]}')
-        if key in READ_QUERIES and response.status_code == 422:
+        statuses[key] = response.status_code
+        if (key in READ_QUERIES or key in SLUG_QUERIES) and response.status_code == 422:
             leaks.append(f'{tag}: unmapped query (422 {body[:200]})')
         if method != 'GET':
             if response.status_code == 422 and key not in NO_WRITE:
@@ -256,7 +277,7 @@ def _sweep(
                 leaks.append(
                     f'{tag}: mutating route wrote nothing ({response.status_code} {body[:200]})'
                 )
-    return leaks, wrote, roles
+    return leaks, wrote, roles, statuses
 
 
 def _cache_parity(
@@ -278,6 +299,26 @@ def _cache_parity(
     ]
 
 
+def _unreached(
+    statuses: dict[tuple[str, str], int], wrote: set[tuple[str, str]], slug: str
+) -> list[str]:
+    """Coverage ratchet: a route that answered 4xx/5xx, wrote nothing and has no reasoned excuse
+    never got past validation or a missing id, so the sweep proved nothing about it."""
+    excused = set(NO_WRITE) | set(UNSEEDED_WRITES) | set(UNREACHED_OK) | set(EXPECTED_5XX)
+    out = [
+        f'[{slug}] {m} {p}: answered {code} and is not excused (give it valid params/ids in '
+        'the sweep tables, or list it in UNREACHED_OK with a reason)'
+        for (m, p), code in sorted(statuses.items())
+        if code >= 400 and (m, p) not in excused and (m, p) not in wrote
+    ]
+    out.extend(
+        f'[{slug}] {m} {p}: listed in UNREACHED_OK but answered {code}; drop the entry'
+        for (m, p), code in sorted(statuses.items())
+        if code < 400 and (m, p) in UNREACHED_OK
+    )
+    return out
+
+
 @pytest.mark.parametrize(('first', 'second'), [('alpha', 'beta'), ('beta', 'alpha')])
 def test_every_scoped_route_stays_inside_the_bound_project(
     leak_env: LeakEnv, first: str, second: str, monkeypatch: pytest.MonkeyPatch
@@ -291,6 +332,12 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     monkeypatch.setattr(
         'src.services.curation.clustering.embedding_reduce.embedding_space', item_space
     )
+    # `images` reads its config once at import; give it the per-project alias roots a deployment
+    # would set with OP_SOURCE_PATH_ALIASES so `/images/root/{alias}` reaches the file.
+    from src.routers.curation import images as images_router
+
+    aliases = {f'{slug}-source': leak_env.root / 'images' / slug for slug in SLUGS}
+    monkeypatch.setattr(images_router, 'config', types.SimpleNamespace(source_path_aliases=aliases))
     app = leak_env.app
     routes = _scoped_routes(app)
     assert len(routes) > 100, f'expected the full scoped surface, got {len(routes)} routes'
@@ -300,13 +347,19 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     every = {(m, p[len(SCOPED) :]) for m, p in routes}
     mapped = set(NO_WRITE) | set(route_bodies('x', Path('/unused'))) | set(CROP_FOR) | set(PREPARE)
     stale = sorted(
-        (mapped - mutating) | (set(UNSEEDED_WRITES) - every) | (set(READ_QUERIES) - every)
+        (mapped - mutating)
+        | (set(UNSEEDED_WRITES) - every)
+        | (set(READ_QUERIES) - every)
+        | (set(SLUG_QUERIES) - every)
+        | (set(PG_ROW_IDS) - every)
+        | (set(READ_CROP_FOR) - every)
+        | (set(UNREACHED_OK) - every)
     )
     assert not stale, f'entries for routes that no longer exist: {stale}'
 
-    leaks_first, _, roles_first = _sweep(leak_env, first)
+    leaks_first, _, roles_first, status_first = _sweep(leak_env, first)
     first_dirs = _dir_digest(leak_env.own_dirs[first])
-    leaks_second, wrote, roles_second = _sweep(leak_env, second)
+    leaks_second, wrote, roles_second, status_second = _sweep(leak_env, second)
     skipped = _cache_parity(first, second, roles_first, roles_second)
     changed = sorted(
         path
@@ -315,6 +368,8 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     ) + sorted(set(first_dirs) - set(_dir_digest(leak_env.own_dirs[first])))
 
     leaks = leaks_first + leaks_second + skipped
+    leaks.extend(_unreached(status_first, wrote, first))
+    leaks.extend(_unreached(status_second, wrote, second))
     leaks.extend(f"[{second}] changed {first}'s file {p}" for p in changed)
     assert not leaks, 'cross-project leak(s):\n' + '\n'.join(sorted(set(leaks)))
     # Not vacuous: every mutating route not excused in NO_WRITE really wrote.
