@@ -1235,7 +1235,7 @@ curation-seed: sample-coco ## Seed a demo curation dataset from the public COCO 
         api-upload-model api-export-status api-exports api-models \
         api-load-model api-unload-model api-delete-model \
         api-health api-wait-ready api-test-quick \
-        export-models export-all export-small export-onnx export-custom export-config export-list \
+        export-models export-all export-onnx export-custom export-config export-list \
         export-mobileclip export-status validate-exports \
         download-face-models export-face-recognition load-face-models setup-face-pipeline download-face-test-data download-test-images \
         export-scrfd load-scrfd setup-scrfd \

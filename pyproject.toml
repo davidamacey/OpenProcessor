@@ -231,9 +231,8 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
-# Entry-point scripts that must run before their imports are valid: export_models re-execs
-# into the toolchain interpreter first, the seed scripts put the repo root on sys.path first.
-"export/export_models.py" = ["E402"]
+# Entry-point scripts that must run before their imports are valid: the seed scripts put the
+# repo root on sys.path first.
 "scripts/curation/seed_docs_run_results.py" = ["E402"]
 "scripts/curation/seed_docs_embeddings.py" = ["E402"]
 "scripts/curation/seed_live_harness.py" = ["E402"]
