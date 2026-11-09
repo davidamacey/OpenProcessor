@@ -23,6 +23,7 @@ from curation.reprocess_fixtures import (
 )
 from src.config.project_context import current_project
 from src.db.session import async_session_factory
+from src.services.config_store import bound_project
 from src.services.curation import reprocess_job
 from src.services.curation.reprocess_embed_spec import EmbedSpec
 
@@ -42,6 +43,7 @@ async def test_a_reprocess_that_changes_a_vector_adds_one_pending_row_per_level(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(bound_project, '_IDS', {})  # a slug's id is cached per process
     project = make_project_row(job_env, current_project().record.slug)
     monkeypatch.setattr(current_project().record, 'id', project, raising=False)
     root = servable_root(tmp_path, monkeypatch)

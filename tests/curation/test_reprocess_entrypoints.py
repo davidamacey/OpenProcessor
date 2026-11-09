@@ -254,6 +254,11 @@ def test_every_entry_point_skips_a_locked_set_and_counts_it(
 
     cli = _load_cli()
     monkeypatch.setattr(cli, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
+
+    async def without_engine(awaitable: Any, _name: str, **_: Any) -> Any:
+        return await awaitable  # the fake store needs no database engine
+
+    monkeypatch.setattr(cli, 'run_with_engine', without_engine)
     monkeypatch.setattr(sys, 'argv', ['requeue_regions.py', '--status', FAILED, '--apply'])
     assert cli.main() == 0
     out = capsys.readouterr().out
