@@ -7,7 +7,13 @@ slow one is killed rather than overlapping the next.
 
 from __future__ import annotations
 
-from src.services.periodic import ingest_dispatch, job_stats, open_vocab_sweep, upload_sweep
+from src.services.periodic import (
+    ingest_dispatch,
+    job_stats,
+    near_dup_ticks,
+    open_vocab_sweep,
+    upload_sweep,
+)
 from src.services.periodic.runner import run_periodic
 from src.tasks.app import app
 
@@ -37,3 +43,15 @@ def upload_sweep_tick() -> None:
 def job_stats_tick() -> None:
     """Set the queue and job gauges from the database."""
     run_periodic('job_stats', job_stats.tick())
+
+
+@app.task(name='op.periodic.near_dup_rescore', **_TICK)
+def near_dup_rescore_tick() -> None:
+    """Start the incremental near-duplicate rescore of each level with pending members."""
+    run_periodic('near_dup_rescore', near_dup_ticks.rescore_tick())
+
+
+@app.task(name='op.periodic.near_dup_full_build', **_TICK)
+def near_dup_full_build_tick() -> None:
+    """Start the weekly full near-duplicate build that bounds incremental drift."""
+    run_periodic('near_dup_full_build', near_dup_ticks.full_build_tick())

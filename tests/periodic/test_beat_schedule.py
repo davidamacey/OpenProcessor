@@ -20,6 +20,8 @@ EXPECTED = {
     'job_stats',
     'vlm_batch_staging_sweep',
     'upload_sweep',
+    'near_dup_rescore',
+    'near_dup_full_build',
 }
 
 
