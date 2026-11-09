@@ -41,6 +41,17 @@ Contents: 1 principles, 2 config that worked, 3 guards, 4 port checklist, 5 pitf
 8. **Review depth follows risk.** Behavior-identical moves of ordinary code need the guards and the
    existing tests; isolation, locking and concurrency code gets characterization tests first and an
    independent review.
+9. **No fan-out in a request handler.** A handler does not start tasks of its own: no
+   `asyncio.gather`, no `create_task`. A write by id is one bulk request with per-item optimistic
+   concurrency (`occ_bulk_rounds`), and above `OP_BATCH_SYNC_MAX` ids it is a queued job. The one
+   exemption is the ingest data plane (`curation/ingest_batch.py`, `curation/ingest_detect.py`,
+   `curation/ingest_index.py` `_cache_crops`, `visual_search/ingest_batch.py`): request-scoped,
+   bounded by the batch, awaited before the response, written as `asyncio.TaskGroup` through
+   `src/utils/task_group.py` (Python docs, "Task Groups": a failing child cancels its siblings,
+   while `gather` leaves them running), and it is the only exemption. The per-process helpers
+   (SSE stats aggregation, disconnect watcher) are listed with their reason in
+   `tests/test_no_request_fan_out.py`. Shared state lives in PostgreSQL or Valkey, never in a
+   process: `resource_links` reachability is probed by a beat task and read by every worker.
 
 ## 2. Configuration that worked
 
