@@ -113,6 +113,7 @@ def app_client(world):
 
     from src.core.dependencies import get_opensearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_freezable
 
     fake = AsyncMock()
     fake.indices = AsyncMock()
@@ -126,6 +127,8 @@ def app_client(world):
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    # a fresh near-duplicate state (the refusal itself is covered in tests/near_duplicates)
+    app.dependency_overrides[require_near_dup_freezable] = lambda: None
     with TestClient(app) as client:
         client.fake_os = fake  # type: ignore[attr-defined]
         yield client
