@@ -1,6 +1,7 @@
 """Single-image ingestion with category routing, near-duplicate marking and OCR."""
 
 import logging
+from dataclasses import asdict
 from typing import Any
 
 import numpy as np
@@ -91,8 +92,8 @@ class IngestSingleMixin:
            - Global embedding -> visual_search_global
            - Person detections -> visual_search_people
            - Vehicle detections -> visual_search_vehicles
-        6. Mark the image for the core grouping job (if enabled; the group appears once
-           ``near_dup_core_group`` has run)
+        6. Mark the image for the core grouping job and list its near-duplicate candidates
+           (if enabled; the group appears once ``near_dup_core_group`` has run)
         7. Run OCR and index text content (if enable_ocr=True)
 
         Args:
@@ -103,7 +104,7 @@ class IngestSingleMixin:
             skip_duplicates: If True, skip processing if image hash already exists.
                            Set to False for benchmarks. Default: True (production).
             detect_near_duplicates: If True, mark the image for the single-writer core
-                           grouping job. Default: True.
+                           grouping job and list its near-duplicate candidates. Default: True.
             enable_ocr: If True, run OCR and index detected text.
                            Default: True.
 
@@ -112,7 +113,7 @@ class IngestSingleMixin:
         """
         # Imported here: the near-duplicate services import the app's dependency module, which
         # imports this one.
-        from src.services.near_duplicates import core_pending
+        from src.services.near_duplicates import core_candidates, core_pending
 
         enable_faces = enable_faces and faces_enabled()
         try:
@@ -190,6 +191,14 @@ class IngestSingleMixin:
                     face_result, image_id, image_path or image_id
                 )
 
+            candidates = (
+                await core_candidates.find_candidates(
+                    self.opensearch.client, {image_id: global_embedding}
+                )
+                if detect_near_duplicates and ingest_result['global']
+                else {}
+            )
+
             response = {
                 'status': 'success' if ingest_result['global'] else 'failed',
                 'image_id': image_id,
@@ -206,6 +215,9 @@ class IngestSingleMixin:
                 },
                 'errors': ingest_result.get('errors', []),
             }
+
+            if candidates.get(image_id):
+                response['near_duplicate_candidates'] = [asdict(c) for c in candidates[image_id]]
 
             # 7. Run OCR and index text content (if enabled)
             if enable_ocr:

@@ -497,6 +497,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -524,7 +528,7 @@
     "people": 0,
     "vehicles": 0
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -1008,7 +1012,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -1487,6 +1491,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -1514,7 +1522,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -1971,6 +1979,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -1998,7 +2010,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -2056,7 +2068,7 @@
     "people": 0,
     "vehicles": 0
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 0,
    "status": "success",
@@ -2343,6 +2355,10 @@
       "CD"
      ]
     }
+   ],
+   [
+    "msearch",
+    3
    ]
   ],
   "pending": [
@@ -2374,7 +2390,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 3,
    "status": "success",
@@ -2831,6 +2847,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -2858,7 +2878,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -3315,6 +3335,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -3342,8 +3366,533 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
+   "processed": 4,
+   "status": "success",
+   "total": 4
+  },
+  "triton": [
+   "jpeg-bytes-a",
+   "jpeg-bytes-b",
+   "jpeg-bytes-c",
+   "jpeg-bytes-d"
+  ]
+ },
+ "near_duplicate_candidates": {
+  "face": [
+   [
+    "jpeg-bytes-a",
+    0.5
+   ],
+   [
+    "jpeg-bytes-b",
+    0.5
+   ],
+   [
+    "jpeg-bytes-c",
+    0.5
+   ],
+   [
+    "jpeg-bytes-d",
+    0.5
+   ]
+  ],
+  "ocr": [
+   [
+    "jpeg-bytes-a",
+    true
+   ],
+   [
+    "jpeg-bytes-b",
+    true
+   ],
+   [
+    "jpeg-bytes-c",
+    true
+   ],
+   [
+    "jpeg-bytes-d",
+    true
+   ]
+  ],
+  "opensearch": [
+   [
+    "check_duplicates_by_hash_batch",
+    [
+     "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+     "0c77a9787ec06067e77d09b76050a2b0",
+     "0c57f75c074ec2bf71e076dad1f3ca53",
+     "0cef63e2b33efe55d82f6cc1ff79d5ad"
+    ]
+   ],
+   [
+    "bulk_ingest",
+    {
+     "documents": [
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0,
+        16
+       ],
+       "det_scores": [
+        0.9,
+        0.8,
+        0.7
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-a",
+       "image_path": "id-a",
+       "imohash": "0cc1fda0b5e2a4beaa8d1ba19358df2e",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 0,
+       "image_id": "id-b",
+       "image_path": "/p/b.jpg",
+       "imohash": "0c77a9787ec06067e77d09b76050a2b0",
+       "width": 0
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2
+       ],
+       "det_scores": [
+        0.9
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-c",
+       "image_path": "/p/c.jpg",
+       "imohash": "0c57f75c074ec2bf71e076dad1f3ca53",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      },
+      {
+       "box_embeddings": {
+        "ndarray": [
+         [
+          0.5,
+          0.5
+         ],
+         [
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "det_classes": [
+        2,
+        0
+       ],
+       "det_scores": [
+        0.9,
+        0.8
+       ],
+       "file_size_bytes": 12,
+       "global_embedding": {
+        "ndarray": [
+         1.0,
+         0.0,
+         0.0
+        ]
+       },
+       "height": 480,
+       "image_id": "id-d",
+       "image_path": "/p/d.jpg",
+       "imohash": "0cef63e2b33efe55d82f6cc1ff79d5ad",
+       "normalized_boxes": {
+        "ndarray": [
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ],
+         [
+          0.1,
+          0.1,
+          0.5,
+          0.5
+         ]
+        ]
+       },
+       "width": 640
+      }
+     ],
+     "refresh": false
+    }
+   ],
+   [
+    "bulk_index_faces",
+    [
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_0",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-a_face_1",
+      "image_id": "id-a",
+      "image_path": "id-a",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_0",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.99,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_1",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.8
+     },
+     {
+      "box": [
+       0.1,
+       0.1,
+       0.2,
+       0.2
+      ],
+      "confidence": 0.0,
+      "embedding": [
+       0.1,
+       0.2
+      ],
+      "face_id": "id-c_face_2",
+      "image_id": "id-c",
+      "image_path": "/p/c.jpg",
+      "indexed_at": "<ts>",
+      "landmarks": [
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "quality": 0.0
+     }
+    ]
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB CD",
+     "image_id": "id-a",
+     "image_path": "id-a",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB",
+      "CD"
+     ]
+    }
+   ],
+   [
+    "index_ocr_results",
+    {
+     "boxes": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "boxes_normalized": [
+      [
+       1,
+       2,
+       3,
+       4
+      ]
+     ],
+     "det_scores": [
+      0.9
+     ],
+     "full_text": "AB",
+     "image_id": "id-c",
+     "image_path": "/p/c.jpg",
+     "rec_scores": [
+      0.8
+     ],
+     "texts": [
+      "AB"
+     ]
+    }
+   ],
+   [
+    "msearch",
+    4
+   ]
+  ],
+  "pending": [
+   [
+    "core",
+    [
+     "id-a",
+     "id-b",
+     "id-c",
+     "id-d"
+    ],
+    "added"
+   ]
+  ],
+  "result": {
+   "deferred_ops": 0,
+   "duplicate_details": null,
+   "duplicates": 0,
+   "error_details": null,
+   "errors_count": 0,
+   "indexed": {
+    "faces": 4,
+    "global": 4,
+    "ocr": 2,
+    "people": 1,
+    "vehicles": 3
+   },
+   "near_duplicate_candidates": [
+    {
+     "candidates": [
+      {
+       "cosine": 1.0,
+       "image_id": "old-x"
+      }
+     ],
+     "image_id": "id-a"
+    },
+    {
+     "candidates": [
+      {
+       "cosine": 1.0,
+       "image_id": "old-x"
+      }
+     ],
+     "image_id": "id-b"
+    },
+    {
+     "candidates": [
+      {
+       "cosine": 1.0,
+       "image_id": "old-x"
+      }
+     ],
+     "image_id": "id-c"
+    },
+    {
+     "candidates": [
+      {
+       "cosine": 1.0,
+       "image_id": "old-x"
+      }
+     ],
+     "image_id": "id-d"
+    }
+   ],
+   "near_duplicates": 4,
    "processed": 4,
    "status": "success",
    "total": 4
@@ -3815,7 +4364,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -4263,6 +4812,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -4290,7 +4843,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -4394,7 +4947,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -4846,6 +5399,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -4873,7 +5430,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -4966,6 +5523,10 @@
      ],
      "refresh": false
     }
+   ],
+   [
+    "msearch",
+    4
    ]
   ],
   "pending": [
@@ -4993,7 +5554,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -5205,7 +5766,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -5481,7 +6042,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -5664,7 +6225,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 4,
    "status": "success",
@@ -6034,6 +6595,10 @@
       "AB"
      ]
     }
+   ],
+   [
+    "msearch",
+    2
    ]
   ],
   "pending": [
@@ -6070,7 +6635,7 @@
     "people": 1,
     "vehicles": 3
    },
-   "near_duplicate_details": null,
+   "near_duplicate_candidates": null,
    "near_duplicates": 0,
    "processed": 2,
    "status": "success",

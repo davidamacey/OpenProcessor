@@ -115,6 +115,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
     'jpeg_header_unreadable': {'jpeg_dims': 'fail'},
     'defer_heavy_ops': {'kwargs': {'defer_heavy_ops': True}},
     'near_duplicates_disabled': {'kwargs': {'detect_near_duplicates': False}},
+    'near_duplicate_candidates': {'neighbours': ['old-x']},
     'ocr_index_failure': {'ocr_index_fail': ['a']},
     'bulk_ingest_partial_result': {'bulk_result': {'global': 2}},
     'face_bulk_errors': {'face_bulk': {'indexed': 3, 'errors': ['x']}},
@@ -163,7 +164,19 @@ class FakeOpenSearch:
         self.bulk_result = scenario.get('bulk_result', {'global': 4, 'vehicles': 3, 'people': 1})
         self.face_bulk = scenario.get('face_bulk', {'indexed': 4})
         self.ocr_fail = {f'id-{k}' for k in scenario.get('ocr_index_fail', [])}
+        self.neighbours = scenario.get('neighbours', [])
         self.calls: list[tuple[str, Any]] = []
+        self.client = self
+
+    async def msearch(self, body: list[dict[str, Any]]) -> dict[str, Any]:
+        """Every query of the candidate lookup finds the scripted neighbours (the same unit vector
+        as every scripted image: cosine 1.0)."""
+        self.calls.append(('msearch', len(body) // 2))
+        hit = [
+            {'_id': n, '_score': 1.0, '_source': {'global_embedding': [1.0, 0.0, 0.0]}}
+            for n in self.neighbours
+        ]
+        return {'responses': [{'hits': {'hits': hit}} for _ in body[::2]]}
 
     async def check_duplicates_by_hash_batch(self, hashes: list[str]) -> dict[str, Any]:
         self.calls.append(('check_duplicates_by_hash_batch', hashes))

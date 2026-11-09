@@ -2,11 +2,13 @@
 
 import functools
 import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
+from src.services.near_duplicates import core_candidates
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
 from src.utils.task_group import run_settled
@@ -97,7 +99,7 @@ class IngestBatchMixin:
         - Batch Triton inference (dynamic batching: 16-48 avg)
         - OpenSearch bulk indexing for images and faces
         - Near-duplicate grouping off the request: one pending row per image, grouped by the
-          single-writer ``near_dup_core_group`` job
+          single-writer ``near_dup_core_group`` job; the response lists the candidates
         - Reduced HTTP overhead
 
         Target throughput: 300+ RPS with batch sizes of 32-64.
@@ -105,13 +107,14 @@ class IngestBatchMixin:
         Args:
             images_data: List of (image_bytes, image_id, image_path) tuples
             skip_duplicates: Skip processing if image hash exists
-            detect_near_duplicates: Mark the indexed images for the core grouping job
+            detect_near_duplicates: Mark the indexed images for the core grouping job and list
+                           their near-duplicate candidates
             enable_ocr: Run OCR text extraction and indexing
             enable_detection: Run YOLO object detection
             enable_faces: Run face detection and embedding extraction
             enable_clip: Run MobileCLIP global image embedding
-            defer_heavy_ops: If True, report the near-duplicate work as deferred. Grouping is
-                           done by the ``near_dup_core_group`` job either way.
+            defer_heavy_ops: If True, skip the candidate lookup (reported as deferred). Grouping
+                           is done by the ``near_dup_core_group`` job either way.
             max_workers: Max parallel threads for inference
 
         Returns:
@@ -204,7 +207,6 @@ class IngestBatchMixin:
         # Step 5: Mark the images for the core grouping job, then bulk index to OpenSearch
         # (global, vehicles, people, faces, OCR). The pending row goes first: an extra row costs
         # one idempotent rescore, a missing one would leave a stale group nobody knows about.
-        near_duplicates: list[dict] = []
         deferred_count = 0
         if detect_near_duplicates and documents:
             await core_pending.record_pending([doc['image_id'] for doc in documents], 'added')
@@ -214,6 +216,17 @@ class IngestBatchMixin:
         indexed['ocr'] = 0
         if enable_ocr:
             indexed['ocr'] = await self._index_ocr_results(inference_results, to_process)
+
+        # Step 6: The near-duplicate candidates (a read; the group appears once the job has run).
+        near_duplicates: list[dict[str, Any]] = []
+        if detect_near_duplicates and documents and not defer_heavy_ops:
+            found = await core_candidates.find_candidates(
+                self.opensearch.client, {d['image_id']: d['global_embedding'] for d in documents}
+            )
+            near_duplicates = [
+                {'image_id': image_id, 'candidates': [asdict(c) for c in items]}
+                for image_id, items in found.items()
+            ]
 
         return {
             'status': 'success',
@@ -226,7 +239,7 @@ class IngestBatchMixin:
             'deferred_ops': deferred_count if defer_heavy_ops else 0,
             'duplicate_details': duplicates if duplicates else None,
             'error_details': errors if errors else None,
-            'near_duplicate_details': near_duplicates if near_duplicates else None,
+            'near_duplicate_candidates': near_duplicates or None,
         }
 
     async def _bulk_index(

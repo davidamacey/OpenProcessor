@@ -111,6 +111,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         },
     },
     'near_duplicate_disabled': {'kwargs': {'detect_near_duplicates': False}},
+    'near_duplicate_candidates': {'neighbours': ['old-x', 'old-y']},
     'pending_write_raises': {'pending_raises': True},
     'ocr_finds_text': {'ocr': OCR_RESULT},
     'ocr_no_text': {'ocr': {'status': 'success', 'num_texts': 0}},
@@ -170,6 +171,18 @@ class FakeOpenSearch:
     def __init__(self, sc: dict[str, Any]) -> None:
         self.sc = sc
         self.calls: list[tuple[str, Any]] = []
+        self.client = self
+
+    async def msearch(self, body: list[dict[str, Any]]) -> dict[str, Any]:
+        """The candidate lookup finds the scripted neighbours (cosine 1.0 with the scripted vector
+        direction; the vector is normalised by the lookup)."""
+        self.calls.append(('msearch', len(body) // 2))
+        vector = self.sc.get('yolo', YOLO).get('image_embedding') or [1.0]
+        hit = [
+            {'_id': n, '_score': 1.0, '_source': {'global_embedding': vector}}
+            for n in self.sc.get('neighbours', [])
+        ]
+        return {'responses': [{'hits': {'hits': hit}} for _ in body[::2]]}
 
     async def check_duplicate_by_hash(self, image_hash: str) -> Any:
         self.calls.append(('check_duplicate_by_hash', image_hash))

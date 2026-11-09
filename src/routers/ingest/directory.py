@@ -87,7 +87,7 @@ async def ingest_directory(
     ),
     detect_near_duplicates: bool = Query(
         True,
-        description='Check for near-duplicates and assign to groups',
+        description='Mark images for near-duplicate grouping and list their candidates',
     ),
     enable_ocr: bool = Query(
         True,

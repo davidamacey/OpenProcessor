@@ -17,7 +17,8 @@ from src.schemas.ingest import (
     BatchIngestResponse,
     DuplicateDetail,
     ErrorDetail,
-    NearDuplicateDetail,
+    ImageNearDuplicateCandidates,
+    NearDuplicateCandidate,
 )
 
 
@@ -43,13 +44,13 @@ Batch ingest up to 64 images with optimized parallel processing.
 - Batch duplicate checking (msearch - 10x faster than sequential)
 - Batch Triton inference with dynamic batching
 - Bulk OpenSearch indexing for images and faces
-- Parallel near-duplicate detection
+- Near-duplicate candidates listed in one query (the groups come from the `near_dup_core_group` job)
 - Reduced HTTP overhead
 
 **Target throughput:** 300+ images/second with batch sizes of 32-64.
 
-**High-Throughput Mode:** Set `defer_heavy_ops=true` to skip near-duplicate detection
-during rapid ingestion. These can be processed later when system load is lower.
+**High-Throughput Mode:** Set `defer_heavy_ops=true` to skip the near-duplicate candidate lookup
+during rapid ingestion; the groups are built by the job either way.
 
 **Partial Failures:** The endpoint returns partial results if some images fail.
 Check the `error_details` field for per-image error information.
@@ -72,7 +73,7 @@ async def ingest_batch(
     ),
     detect_near_duplicates: bool = Form(
         True,
-        description='Check for near-duplicates and assign to groups.',
+        description='Mark images for near-duplicate grouping and list their candidates.',
     ),
     enable_ocr: bool = Form(
         True,
@@ -93,7 +94,7 @@ async def ingest_batch(
     ),
     defer_heavy_ops: bool = Form(
         False,
-        description='Defer heavy operations (near-duplicate detection) for faster ingestion. '
+        description='Skip the near-duplicate candidate lookup for faster ingestion. '
         'Use during high-throughput bulk ingestion.',
     ),
 ) -> BatchIngestResponse:
@@ -230,18 +231,17 @@ async def ingest_batch(
                 for e in result['error_details']
             ]
 
-        # Parse near-duplicate details
-        near_duplicate_details = None
-        if result.get('near_duplicate_details'):
-            near_duplicate_details = [
-                NearDuplicateDetail(
-                    image_id=nd['image_id'],
-                    action=nd['action'],
-                    group_id=nd['group_id'],
-                    similarity=nd['similarity'],
-                    matched_image=nd['matched_image'],
+        near_duplicate_candidates = None
+        if result.get('near_duplicate_candidates'):
+            near_duplicate_candidates = [
+                ImageNearDuplicateCandidates(
+                    image_id=entry['image_id'],
+                    candidates=[
+                        NearDuplicateCandidate(image_id=c['image_id'], cosine=c['cosine'])
+                        for c in entry['candidates']
+                    ],
                 )
-                for nd in result['near_duplicate_details']
+                for entry in result['near_duplicate_candidates']
             ]
 
         # Determine overall status
@@ -263,7 +263,7 @@ async def ingest_batch(
             deferred_ops=result.get('deferred_ops', 0),
             duplicate_details=duplicate_details,
             error_details=error_details,
-            near_duplicate_details=near_duplicate_details,
+            near_duplicate_candidates=near_duplicate_candidates,
             total_time_ms=round(elapsed_ms, 2),
         )
 

@@ -17,61 +17,19 @@ from typing import Any
 import numpy as np
 import pytest
 from fixtures.job_rows import sql
-from near_duplicates.fake_opensearch import FakeNearDupOpenSearch
 
 from src.db.session import async_session_factory, core_tx
 from src.services.near_duplicates import core_group, core_pending
 from src.services.visual_search import VisualSearchService
+from visual_search.core_fakes import INDEX, FakeCoreOpenSearch
 
 
 pytestmark = [pytest.mark.db, pytest.mark.asyncio]
 
-INDEX = 'visual_search_global'
 A = np.array([1.0, 0.0, 0.0], dtype=np.float32)
 B = np.array([0.9999, 0.0141, 0.0], dtype=np.float32)
 B = B / np.linalg.norm(B)
 VECTORS = {b'bytes-a': A, b'bytes-b': B}
-
-
-class FakeCoreOpenSearch(FakeNearDupOpenSearch):
-    """The calls the core ingest and the grouping job make, over one in-memory global index.
-
-    The request-time ``search`` waits at a barrier so both requests read the index before either
-    writes a group: the interleaving the in-request grouping could not survive.
-    """
-
-    def __init__(self) -> None:
-        super().__init__({INDEX: {}})
-        self.barrier = asyncio.Barrier(2)
-        self.client = self
-
-    async def check_duplicates_by_hash_batch(self, hashes: list[str]) -> dict[str, Any]:
-        return dict.fromkeys(hashes)
-
-    async def bulk_ingest(self, documents: list[dict[str, Any]], refresh: bool = False) -> Any:  # noqa: ARG002
-        for doc in documents:
-            self.docs[INDEX][doc['image_id']] = {
-                **doc,
-                'global_embedding': np.asarray(doc['global_embedding']).tolist(),
-            }
-        return {'global': len(documents)}
-
-    async def bulk_index_faces(self, _faces: list[dict[str, Any]]) -> Any:
-        return {'indexed': 0}
-
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
-        if 'knn' not in body['query']:
-            return await super().search(index=index, body=body, **kw)
-        await self.barrier.wait()
-        found = self._knn(index, {'query': body['query'], '_source': body['_source']})
-        hits = found['hits']['hits']
-        for hit in hits:
-            hit['_score'] = (1.0 + hit['_score']) / 2.0
-        return found
-
-    async def update(self, *, index: str, id: str, body: dict[str, Any]) -> None:  # noqa: A002
-        await asyncio.sleep(0)  # a write is a network round trip: the other request runs meanwhile
-        self.docs[index][id].update(body['doc'])
 
 
 @pytest.fixture

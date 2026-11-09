@@ -66,7 +66,7 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 
 | Method | Path | Inputs | Purpose |
 |---|---|---|---|
-| POST | `/ingest` | `image`; form `image_id`, `image_path`, `metadata`, `skip_duplicates`, `detect_near_duplicates`, `near_duplicate_threshold`, `enable_ocr`, `enable_detection`, `enable_faces`, `enable_clip` | Run every enabled model and index the results |
+| POST | `/ingest` | `image`; form `image_id`, `image_path`, `metadata`, `skip_duplicates`, `detect_near_duplicates`, `enable_ocr`, `enable_detection`, `enable_faces`, `enable_clip` | Run every enabled model and index the results |
 | POST | `/ingest/batch` | `images` (up to 64); form `image_ids`, `image_paths`, same toggles, `defer_heavy_ops` | Batch ingest |
 | POST | `/ingest/directory` | query `directory`, `recursive`, `max_images`, `batch_size`, same toggles | Ingest a server-side directory |
 | POST | `/analyze` | `image`; `include_embedding`, `include_face_embeddings`, `enable_ocr`, `confidence`, `face_confidence` | Detection + faces + CLIP + OCR in one call, no indexing |
@@ -150,7 +150,11 @@ five x/y pairs):
 
 `POST /ingest`: `{"status": "success", "image_id": "photo_001", "num_detections": 1,
 "num_faces": 2, "indexed": {"global": true, "vehicles": 1, "people": 0, "faces": 2}}`;
-`status` is `duplicate` when the image is already stored.
+`status` is `duplicate` when the image is already stored. `near_duplicate_candidates`
+(`[{"image_id": "...", "cosine": 0.99}]`, closest first) lists stored images above the core cut
+(cosine 0.98); the group appears once the `near_dup_core_group` job has run, and
+`GET /query/duplicates` serves it. `POST /ingest/batch` answers `near_duplicate_candidates` as
+`[{"image_id": "...", "candidates": [...]}]` and `near_duplicates`, the number of such images.
 
 `POST /ocr/predict`: `texts`, `full_text`, `num_texts` and `regions[]` (`text`,
 `box`, `box_normalized`, `det_score`, `rec_score`).

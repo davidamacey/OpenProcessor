@@ -28,6 +28,10 @@
      "metadata": null,
      "normalized_boxes": null
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -736,6 +740,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -943,6 +951,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -1067,6 +1079,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -1223,6 +1239,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -1981,6 +2001,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2169,6 +2193,10 @@
      ],
      "quality": 0.0
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2357,6 +2385,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2513,6 +2545,10 @@
      ],
      "quality": 0.7
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2697,6 +2733,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2793,6 +2833,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -2816,6 +2860,112 @@
     "skipped": 0,
     "vehicles": 1
    },
+   "num_detections": 2,
+   "num_faces": 0,
+   "status": "success"
+  },
+  "triton_calls": 1
+ },
+ "near_duplicate_candidates": {
+  "face_calls": [
+   0.5
+  ],
+  "ocr_calls": 1,
+  "opensearch": [
+   [
+    "check_duplicate_by_hash",
+    "1297ead300d79faa711327fa7ba5c194"
+   ],
+   [
+    "ingest_image",
+    {
+     "box_embeddings": {
+      "ndarray": [
+       [
+        0.5,
+        0.5
+       ],
+       [
+        0.1,
+        0.9
+       ]
+      ]
+     },
+     "det_classes": [
+      2,
+      0
+     ],
+     "det_scores": [
+      0.9,
+      0.8
+     ],
+     "file_size_bytes": 18,
+     "global_embedding": {
+      "ndarray": [
+       3.0,
+       4.0
+      ]
+     },
+     "image_height": 480,
+     "image_id": "id-1",
+     "image_path": "id-1",
+     "image_width": 640,
+     "imohash": "1297ead300d79faa711327fa7ba5c194",
+     "metadata": null,
+     "normalized_boxes": {
+      "ndarray": [
+       [
+        0.1,
+        0.1,
+        0.5,
+        0.5
+       ],
+       [
+        0.2,
+        0.2,
+        0.6,
+        0.6
+       ]
+      ]
+     }
+    }
+   ],
+   [
+    "msearch",
+    1
+   ]
+  ],
+  "pending": [
+   [
+    "core",
+    [
+     "id-1"
+    ],
+    "added"
+   ]
+  ],
+  "result": {
+   "embedding_norm": 5.0,
+   "errors": [],
+   "image_id": "id-1",
+   "imohash": "1297ead300d79faa711327fa7ba5c194",
+   "indexed": {
+    "faces": 0,
+    "global": true,
+    "people": 1,
+    "skipped": 0,
+    "vehicles": 1
+   },
+   "near_duplicate_candidates": [
+    {
+     "cosine": 1.0,
+     "image_id": "old-x"
+    },
+    {
+     "cosine": 1.0,
+     "image_id": "old-y"
+    }
+   ],
    "num_detections": 2,
    "num_faces": 0,
    "status": "success"
@@ -2937,6 +3087,10 @@
      "metadata": null,
      "normalized_boxes": null
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -4167,6 +4321,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
@@ -4259,6 +4417,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ],
    [
     "index_ocr_results",
@@ -4404,6 +4566,10 @@
       ]
      }
     }
+   ],
+   [
+    "msearch",
+    1
    ]
   ],
   "pending": [
