@@ -7,7 +7,9 @@ The jobs run against the in-memory lease store of ``tests/conftest.py``.
 from __future__ import annotations
 
 import os
+import sys
 import time
+import types
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,7 +18,6 @@ from src.clients import job_lease
 from src.domain.job_lease import Acquired, LeaseKind
 from src.services.curation import startup_reconcile
 from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
-from src.services.curation.item_scores import job as scores
 
 
 if TYPE_CHECKING:
@@ -25,12 +26,15 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def job(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FileJob:
+    """A file-backed job and a stand-in module whose startup repair is the real ``FileJob`` one."""
     job = FileJob(tmp_path / 'scores')
-    monkeypatch.setattr(scores, '_job', lambda: job)
+    stub = types.ModuleType('op_test_file_job_stub')
+    stub.reconcile_orphaned_jobs = lambda: job.reconcile(  # type: ignore[attr-defined]
+        active_statuses=frozenset({'running'}), error_prefix='stub job'
+    )
+    monkeypatch.setitem(sys.modules, 'op_test_file_job_stub', stub)
     monkeypatch.setattr(
-        startup_reconcile,
-        'JOB_MODULES',
-        (('src.services.curation.item_scores.job', LeaseKind.ITEM_SCORES),),
+        startup_reconcile, 'JOB_MODULES', (('op_test_file_job_stub', LeaseKind.ITEM_SCORES),)
     )
     return job
 

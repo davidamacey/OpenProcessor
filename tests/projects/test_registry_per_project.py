@@ -139,20 +139,16 @@ def test_index_bootstrap_runs_once_per_project(tmp_path: Any, monkeypatch: Any) 
     assert created == ['alpha', 'beta']
 
 
-def test_job_dirs_nest_per_project_default_included(tmp_path: Any, monkeypatch: Any) -> None:
+def test_job_dirs_nest_per_project_default_included(tmp_path: Any) -> None:
     from pathlib import Path
 
-    from src.config.project_context import bind_project
-    from src.services.curation.assist import job as assist_job
+    from src.config.project_context import bind_project, project_jobs_dir
 
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist'))
-    dirs = {'assist': assist_job.jobs_root}
+    base = tmp_path / 'jobs'
     # tests/conftest.py binds `default` for this test: it nests like any project.
-    for name, fn in dirs.items():
-        assert fn() == Path(tmp_path / name / 'projects' / 'default')
+    assert project_jobs_dir(base) == Path(base / 'projects' / 'default')
     with bind_project(_new_record('beta', tmp_path)):
-        for name, fn in dirs.items():
-            assert fn() == Path(tmp_path / name / 'projects' / 'beta')
+        assert project_jobs_dir(base) == Path(base / 'projects' / 'beta')
 
 
 @pytest.mark.db
