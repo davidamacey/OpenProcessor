@@ -191,6 +191,7 @@ def _loose_runtime_lines() -> set[str]:
         _pyproject_specs('dev'),
         _pyproject_specs('export'),
         _file_specs('requirements-export.txt'),
+        _file_specs('docker/trainer/requirements.txt'),
     ]
     for specs in groups:
         loose |= {n for n, s in specs.items() if not re.fullmatch(r'==[^,<>=!~]+', s)}
@@ -215,3 +216,10 @@ def test_the_image_only_pin_files_carry_the_manifest_releases() -> None:
         for name, spec in _file_specs(path).items():
             if _family(name) in {'torch', 'torchvision', 'opencv-python'}:
                 assert runtime[_family(name)] == spec, (path, name)
+
+
+def test_mlflow_client_pins_equal_the_server_image_release() -> None:
+    compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
+    (tag,) = re.findall(r'MLFLOW_IMAGE:-ghcr\.io/mlflow/mlflow:v(\S+?)\}', compose)
+    for path in ('docker/trainer/requirements.txt', 'scripts/curation/bakeoff/requirements.txt'):
+        assert _file_specs(path)['mlflow'] == f'=={tag}', path

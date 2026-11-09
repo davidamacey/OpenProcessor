@@ -16,4 +16,5 @@ pycocotools>=2.0.7        # single shared detection metric across all models
 onnxruntime-gpu==1.30.0           # ONNX backends + INT8 static quantization (quantize_static)
 onnx==1.21.0                    # ultralytics ONNX export + QDQ graph inspection (export/quantize.py)
 onnxslim==0.1.99          # ultralytics ONNX export simplify=True
+mlflow==3.18.0            # tracking client; the same release as the server image (MLFLOW_IMAGE)
 tritonclient[all]>=2.40   # score a deployed Triton TRT engine over gRPC

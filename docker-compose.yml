@@ -1487,7 +1487,7 @@ services:
   # docker/trainer/mlflow_callbacks.py degrades to a warning when this is
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
-    image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v3.17.0}
+    image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v3.18.0}
     logging: *default-logging
     mem_reservation: 512m
     profiles:

@@ -17,13 +17,13 @@ torchvision==0.29.1
 numpy==2.5.4
 opencv-python-headless==5.0.0.93
 Pillow==13.0.0
-PyYAML>=6.0
-requests>=2.32
+PyYAML==6.0.3
+requests==2.34.2
 scipy==1.18.1
 pandas==3.1.1
 matplotlib==3.11.2
-psutil>=6.0
-tqdm>=4.66
+psutil==7.2.2
+tqdm==4.70.1
 
 # ONNX export toolchain. Without these pre-installed, Ultralytics'
 # `model.export(format='onnx')` attempts its own pip install *inside the
@@ -35,22 +35,22 @@ onnxslim==0.1.99
 onnxruntime-gpu==1.30.0
 
 # Stage-1 on-disk augmentation (docker/trainer/augment.py).
-albumentations>=2.0,<3
+albumentations==2.0.8
 
 # Experiment tracking (docker/trainer/mlflow_callbacks.py). Optional at
 # runtime -- every hook degrades to a warning when the server is unreachable.
-# ML-2: pinned to the same major as the `curation-mlflow` server image
-# (ghcr.io/mlflow/mlflow:v3.17.0, docker-compose.yml). `create_model_version`
+# ML-2: pinned to the same release as the `curation-mlflow` server image
+# (ghcr.io/mlflow/mlflow:v3.18.0, docker-compose.yml). `create_model_version`
 # / `set_registered_model_alias` (on_train_end) and the model-registry
 # REST surface are not guaranteed compatible across a major boundary --
 # bump this only in lockstep with the server image.
-mlflow>=3.17,<4
+mlflow==3.18.0
 
 # GPU telemetry published in the run's progress (`gpu` counters).
-pynvml>=11.5
+pynvml==13.0.1
 
 # Structured logs, matching the API's logging style.
-structlog>=24.1
+structlog==26.1.0
 
 # The job runtime and the database layer (src/tasks/runtime, src/db): the same pins as the api image
 # (requirements.txt). psycopg[c] is built from source in the builder stage (libpq-dev) and runs on
