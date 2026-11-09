@@ -1,8 +1,5 @@
 """A new project owns two stored indexes, ``images`` and ``items``, and nothing else is derived
 from the retired control roles (2F-1).
-
-The one other index is the transitional lease index (``leases``): the B1 job leases live there
-until lane 6A deletes them, and it is the only index the control roles left behind.
 """
 
 from __future__ import annotations

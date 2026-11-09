@@ -36,7 +36,6 @@ from src.services.curation.clustering.assignment_writer import (
     batches,
 )
 from src.services.curation.clustering.cluster_geometry import DISTANCE_REF_FIELD
-from src.services.curation.clustering.last_run import record_last_run
 from src.services.curation.clustering.page_rows import hits_to_rows
 from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.clustering.pool_coverage import (
@@ -307,7 +306,7 @@ async def cluster_residuals(
 
     status, extra_fields = write_outcome(n_failed_writes)
 
-    summary = {
+    return {
         'status': status,
         **extra_fields,
         'method': result.method,
@@ -333,14 +332,6 @@ async def cluster_residuals(
             'write_back': round(write_back_s, 3),
         },
     }
-    _record_if_success(summary)
-    return summary
-
-
-def _record_if_success(summary: dict[str, Any]) -> None:
-    """Only a pass that covered its pool is the "last clustering" the dashboard shows."""
-    if summary['status'] == 'success':
-        record_last_run(summary)
 
 
 async def _write_assignments(client: AsyncOpenSearch, rows: list[Assignment], progress: Any) -> int:
@@ -480,7 +471,7 @@ async def assign_only_residuals(
     else:
         status, extra_fields = write_outcome(writer.n_failed)
 
-    summary = {
+    return {
         'status': status,
         **extra_fields,
         **coverage_fields(n_written, expected_pool),
@@ -493,5 +484,3 @@ async def assign_only_residuals(
         'cluster_id_offset': RESIDUAL_CLUSTER_ID_OFFSET,
         'centroids_trained_at': store.metadata.get('trained_at'),
     }
-    _record_if_success(summary)
-    return summary

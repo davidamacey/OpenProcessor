@@ -1,8 +1,8 @@
-"""P3F item 6 m1: the delete path guard for ``train_jobs_dir``/
-``autolabel_dir`` used to be checked against a root DERIVED FROM the
+"""P3F item 6 m1: the delete path guard for ``train_jobs_dir``
+used to be checked against a root DERIVED FROM the
 same path (``path.parent.parent``), which can never refuse anything --
 any path is trivially "within" its own grandparent. A corrupted or
-hand-edited registry doc pointing either field outside the real shared
+hand-edited registry doc pointing the field outside the real shared
 root must now be refused with ``path_escape``, not silently followed.
 
 P3F pass-3 m-a: the prior pass's fix covered only these 2 of the

@@ -245,24 +245,37 @@ def _count_by_proposal(buckets: list[dict[str, Any]]) -> int:
     )
 
 
-def _read_last_clustering_meta(
+async def _read_last_clustering_meta(
+    session: AsyncSession,
     fallback_residual: int,
     fallback_noise: int,
 ) -> dict[str, Any]:
-    """The last residual-clustering run, from the record every run writes
-    (``clustering.last_run``) whichever path started it. ``cluster_count`` is
-    the run's own count (the caller replaces it with the index total and moves
-    this to ``last_run_cluster_count``). With no record the time and method
-    are ``None`` and the counts fall back to the index aggregates."""
-    from src.services.curation.clustering.last_run import read_last_run
+    """The last finished item clustering run, from the newest ``ready`` or ``discarded``
+    partition (whichever path started the run). ``cluster_count`` is the run's own count (the
+    caller replaces it with the index total and moves this to ``last_run_cluster_count``). With
+    no partition the time and method are ``None`` and the counts fall back to the index
+    aggregates."""
+    from src.config.project_context import current_project_id
+    from src.db.session import project_tx
+    from src.services.clustering.partitions import list_partitions
 
-    rec = read_last_run() or {}
+    async with project_tx(session, current_project_id()):
+        rows = await list_partitions(session, target='item', limit=20)
+    finished = next((r for r in rows if r.status in ('ready', 'discarded')), None)
+    if finished is None:
+        return {
+            'last_run_at': None,
+            'cluster_count': 0,
+            'residual_count': fallback_residual,
+            'noise_count': fallback_noise,
+            'method': None,
+        }
     return {
-        'last_run_at': rec.get('finished_at'),
-        'cluster_count': int(rec.get('n_clusters') or 0),
-        'residual_count': int(rec.get('n_residuals') or fallback_residual),
-        'noise_count': int(rec.get('n_noise') or fallback_noise),
-        'method': rec.get('method'),
+        'last_run_at': finished.created_at,
+        'cluster_count': int(finished.n_clusters or 0),
+        'residual_count': int(finished.n_items or fallback_residual),
+        'noise_count': int(finished.n_unassigned or fallback_noise),
+        'method': finished.method,
     }
 
 
@@ -412,7 +425,8 @@ async def dataset_stats(
 
     no_label_source = int((aggs.get('no_label_source') or {}).get('doc_count', 0))
 
-    cluster_meta = _read_last_clustering_meta(
+    cluster_meta = await _read_last_clustering_meta(
+        session,
         fallback_residual=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
         fallback_noise=int((aggs.get('noise_clusters') or {}).get('doc_count', 0)),
     )

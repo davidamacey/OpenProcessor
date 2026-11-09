@@ -29,7 +29,6 @@ def _record(slug: str, tmp_path=None) -> ProjectRecord:
             resources,
             train_jobs_dir=tmp_path / 'jobs' / 'projects' / slug,
             bakeoff_jobs_dir=tmp_path / 'state' / 'projects' / slug / 'bakeoff_jobs',
-            autolabel_dir=tmp_path / 'jobs' / 'auto_label' / 'projects' / slug,
             project_state_dir=tmp_path / 'state' / 'projects' / slug,
         )
     return ProjectRecord(

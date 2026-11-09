@@ -61,35 +61,25 @@ def pool() -> tuple[list[str], np.ndarray]:
     return [f'd{i:05d}' for i in range(N_DOCS)], vectors.astype(np.float32)
 
 
-@pytest.fixture
-def recorded(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(orch, 'record_last_run', calls.append)
-    return calls
-
-
 async def _train(pool: tuple[list[str], np.ndarray]) -> None:
     await orch.cluster_residuals(FakeItemsClient(*pool), clustering_method='ivf')
 
 
 async def test_full_pool_is_success_and_reports_coverage(
-    pool: tuple[list[str], np.ndarray], ivf_state: None, recorded: list[dict[str, Any]]
+    pool: tuple[list[str], np.ndarray], ivf_state: None
 ) -> None:
     await _train(pool)
-    recorded.clear()
     result = await orch.assign_only_residuals(_TakenFromPool(*pool, taken=0), chunk_size=500)
     assert result['status'] == 'success'
     assert result['n_assigned'] == N_DOCS
     assert result['expected_pool'] == N_DOCS
     assert result['coverage'] == 1.0
-    assert len(recorded) == 1
 
 
 async def test_pool_taken_by_another_writer_is_partial(
-    pool: tuple[list[str], np.ndarray], ivf_state: None, recorded: list[dict[str, Any]]
+    pool: tuple[list[str], np.ndarray], ivf_state: None
 ) -> None:
     await _train(pool)
-    recorded.clear()
     client = _TakenFromPool(*pool, taken=int(N_DOCS * 0.75))
     result = await orch.assign_only_residuals(client, chunk_size=500)
 
@@ -98,8 +88,6 @@ async def test_pool_taken_by_another_writer_is_partial(
     assert result['expected_pool'] == N_DOCS
     assert result['n_assigned'] == N_DOCS - int(N_DOCS * 0.75)
     assert result['coverage'] == pytest.approx(0.25)
-    # A partial pass is not recorded as the project's last run.
-    assert recorded == []
 
 
 async def test_coverage_at_the_threshold_passes_and_below_fails(
@@ -118,10 +106,9 @@ async def test_coverage_at_the_threshold_passes_and_below_fails(
 
 
 async def test_failed_writes_make_the_assign_only_pass_partial(
-    pool: tuple[list[str], np.ndarray], ivf_state: None, recorded: list[dict[str, Any]]
+    pool: tuple[list[str], np.ndarray], ivf_state: None
 ) -> None:
     await _train(pool)
-    recorded.clear()
     client = _TakenFromPool(*pool, taken=0)
 
     async def refuse(*, body: list[dict[str, Any]], refresh: bool = False) -> dict[str, Any]:
@@ -135,4 +122,3 @@ async def test_failed_writes_make_the_assign_only_pass_partial(
     assert result['status'] == 'partial'
     assert result['reason'] == 'write_failures'
     assert result['n_failed_writes'] == N_DOCS
-    assert recorded == []

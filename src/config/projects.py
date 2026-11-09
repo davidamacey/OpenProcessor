@@ -76,7 +76,6 @@ class ProjectResources:
     bakeoff_eval_root: Path
     project_state_dir: Path
     train_jobs_dir: Path
-    autolabel_dir: Path
     bakeoff_jobs_dir: Path
     mlflow_experiment: str
     model_prefix: str
@@ -148,7 +147,6 @@ def resources_from_stored(
         bakeoff_eval_root=data_root / 'bakeoff_eval',
         project_state_dir=base.state_dir / 'projects' / slug,
         train_jobs_dir=trainer_jobs_root() / 'projects' / slug,
-        autolabel_dir=env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects' / slug,
         bakeoff_jobs_dir=base.state_dir / 'projects' / slug / 'bakeoff_jobs',
         mlflow_experiment=mlflow_experiment,
         model_prefix=model_prefix,

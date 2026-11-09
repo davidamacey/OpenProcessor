@@ -117,25 +117,15 @@ def method(monkeypatch: pytest.MonkeyPatch) -> _Method:
     return m
 
 
-@pytest.fixture
-def recorded(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(orch, 'record_last_run', calls.append)
-    return calls
-
-
-async def test_full_pool_is_success(method: _Method, recorded: list[dict[str, Any]]) -> None:
+async def test_full_pool_is_success(method: _Method) -> None:
     index = _PoolIndex(2000)
     result = await orch.cluster_residuals(index, clustering_method='ivf')
     assert result['status'] == 'success'
     assert result['n_residuals'] == 2000
     assert index.bulk_docs == 2000
-    assert len(recorded) == 1
 
 
-async def test_writer_assigns_between_count_and_fetch_is_partial(
-    method: _Method, recorded: list[dict[str, Any]]
-) -> None:
+async def test_writer_assigns_between_count_and_fetch_is_partial(method: _Method) -> None:
     index = _PoolIndex(2000)
 
     def daemon(idx: _PoolIndex) -> None:
@@ -149,15 +139,12 @@ async def test_writer_assigns_between_count_and_fetch_is_partial(
     assert result['n_residuals'] == 500
     assert result['expected_pool'] == 2000
     assert result['coverage'] == pytest.approx(0.25)
-    # Fail closed: nothing was trained, written or recorded for a pool it did not cover.
+    # Fail closed: nothing was trained or written for a pool it did not cover.
     assert method.fitted == 0
     assert index.bulk_docs == 0
-    assert recorded == []
 
 
-async def test_pool_the_caller_expects_but_another_writer_took_is_partial(
-    method: _Method, recorded: list[dict[str, Any]]
-) -> None:
+async def test_pool_the_caller_expects_but_another_writer_took_is_partial(method: _Method) -> None:
     index = _PoolIndex(5000, assigned=4000)
     result = await orch.cluster_residuals(index, clustering_method='ivf', expected_pool=5000)
 
@@ -165,7 +152,6 @@ async def test_pool_the_caller_expects_but_another_writer_took_is_partial(
     assert result['n_residuals'] == 1000
     assert result['expected_pool'] == 5000
     assert index.bulk_docs == 0
-    assert recorded == []
 
 
 async def test_a_pool_that_shrank_before_the_pass_is_not_partial_without_an_expectation(
@@ -188,16 +174,13 @@ async def test_coverage_at_the_threshold_passes_and_below_fails(method: _Method)
     assert bad['status'] == 'partial'
 
 
-async def test_failed_writes_make_the_pass_partial(
-    method: _Method, recorded: list[dict[str, Any]]
-) -> None:
+async def test_failed_writes_make_the_pass_partial(method: _Method) -> None:
     index = _PoolIndex(2000, bulk_fail=True)
     result = await orch.cluster_residuals(index, clustering_method='ivf')
 
     assert result['status'] == 'partial'
     assert result['reason'] == 'write_failures'
     assert result['n_failed_writes'] == 2000
-    assert recorded == []
 
 
 async def test_a_partial_stage_fails_the_job() -> None:

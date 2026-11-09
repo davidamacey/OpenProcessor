@@ -191,10 +191,6 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
         (jobs_dir / f'{slug}-job-0001.status.json').write_text(
             json.dumps(finished), encoding='utf-8'
         )
-    res.autolabel_dir.mkdir(parents=True, exist_ok=True)
-    (res.autolabel_dir / 'state.json').write_text(
-        json.dumps({'job_id': f'{slug}-job-autolabel', 'status': 'completed'}), encoding='utf-8'
-    )
     with bind_project(record):
         # The same ``trained_at`` in every project: a cache keyed only by
         # it would serve one project's scored crops to another.
@@ -210,6 +206,5 @@ def _seed_files(record: Any, tmp_path: Path) -> list[Path]:
         *own_dirs,
         res.project_state_dir,
         res.train_jobs_dir,
-        res.autolabel_dir,
         res.class_registry_path.parent,
     ]

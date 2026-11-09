@@ -128,3 +128,10 @@ def test_the_control_index_names_are_retired_for_postgresql(
     monkeypatch.setenv(name, 'op_anything')
     with pytest.raises(RuntimeError, match=f'{name} was removed'):
         reject_retired_env()
+
+
+def test_the_auto_label_state_dir_is_retired(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert RETIRED_ENV['OP_AUTO_LABEL_STATE_DIR'].startswith('removed:')
+    monkeypatch.setenv('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label')
+    with pytest.raises(RuntimeError, match='OP_AUTO_LABEL_STATE_DIR was removed'):
+        reject_retired_env()

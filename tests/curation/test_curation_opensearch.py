@@ -151,7 +151,6 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
     assert results == {
         'op_prj_default__images': True,
         'op_prj_default__items': True,
-        'op_prj_default__leases': True,
     }
     create_calls = client.indices.create.await_args_list
     assert len(create_calls) == 2

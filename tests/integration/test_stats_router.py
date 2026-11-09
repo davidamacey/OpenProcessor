@@ -188,27 +188,49 @@ def test_stats_dataset_endpoint_responds_with_full_schema(app_client: TestClient
     assert clusters.get('method') is None or isinstance(clusters['method'], str)
 
 
-def test_stats_clusters_serve_the_recorded_last_run(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+def _partition_row(**over: Any) -> Any:
+    import uuid
+
+    from src.services.clustering.partitions import PartitionRow
+
+    fields: dict[str, Any] = {
+        'id': uuid.uuid4(),
+        'target': 'item',
+        'level': 'class',
+        'embedding_field': 'pe_embedding',
+        'method': 'ivf',
+        'status': 'ready',
+        'n_items': 90,
+        'n_clusters': 7,
+        'n_review': 0,
+        'n_unassigned': 2,
+        'metrics': {},
+        'diff': None,
+        'created_at': '2026-11-08 10:00:00+00',
+        'parent_partition_id': None,
+        'serving': True,
+    }
+    return PartitionRow(**{**fields, **over})
+
+
+def test_stats_clusters_serve_the_last_finished_partition(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A clustering run recorded by the clustering code (no auto-label job
-    state, as with the cluster-refresh daemon's synchronous call) is served
-    as the last run's time and method."""
-    from types import SimpleNamespace
+    """The last run is the newest finished item partition: its time, method and counts."""
+    from src.services.clustering import partitions
 
-    from src.services.curation.clustering import last_run
+    async def newest_first(_session: Any, **_kw: Any) -> list[Any]:
+        return [_partition_row(status='building', method='kmeans'), _partition_row()]
 
-    monkeypatch.setattr(
-        last_run, 'get_curation_config', lambda: SimpleNamespace(autolabel_dir=tmp_path)
-    )
-    last_run.record_last_run({'method': 'ivf', 'n_clusters': 7, 'n_residuals': 90, 'n_noise': 2})
+    monkeypatch.setattr(partitions, 'list_partitions', newest_first)
 
     resp = app_client.get('/curation/projects/default/stats/dataset')
     assert resp.status_code == 200, resp.text[:500]
     clusters = resp.json()['clusters']
     assert clusters['method'] == 'ivf'
-    assert clusters['last_run_at'] == last_run.read_last_run()['finished_at']  # type: ignore[index]
+    assert clusters['last_run_at'] == '2026-11-08 10:00:00+00'
     assert clusters['last_run_cluster_count'] == 7
+    assert clusters['noise_count'] == 2
 
 
 def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None:
@@ -275,20 +297,18 @@ def test_stats_dataset_legacy_keys_preserved(app_client: TestClient) -> None:
 
 
 def test_cluster_count_is_the_current_total_not_the_last_run(
-    app_client: TestClient, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``clusters.cluster_count`` is how many (non-noise) clusters the index
     holds now. The last clustering run's own count -- often a residual pass
     that made a single cluster -- is served separately as
     ``last_run_cluster_count`` so a dashboard never shows it as the total."""
-    from types import SimpleNamespace
+    from src.services.clustering import partitions
 
-    from src.services.curation.clustering import last_run
+    async def one_cluster(_session: Any, **_kw: Any) -> list[Any]:
+        return [_partition_row(n_clusters=1)]
 
-    monkeypatch.setattr(
-        last_run, 'get_curation_config', lambda: SimpleNamespace(autolabel_dir=tmp_path)
-    )
-    last_run.record_last_run({'method': 'ivf', 'n_clusters': 1})
+    monkeypatch.setattr(partitions, 'list_partitions', one_cluster)
     body = app_client.get('/curation/projects/default/stats/dataset').json()
     clusters = body['clusters']
     assert clusters['cluster_count'] == 5

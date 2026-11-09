@@ -9,7 +9,6 @@ from __future__ import annotations
 import shutil
 from typing import TYPE_CHECKING
 
-from src.config.env import env_path
 from src.core.logging import get_logger
 from src.services.rejections import rejection
 
@@ -32,8 +31,8 @@ def _require_project_scoped_path(path: Path, shared_root: Path, slug: str) -> No
     never a sibling project's own ``<shared_root>/<other_slug>`` tree.
 
     The prior guard (``_rm_dir_guarded``, ``_path_within``) accepted
-    ``path == shared_root`` for 6 of the project's 8 dirs -- only
-    ``train_jobs_dir``/``autolabel_dir`` got a real per-slug check. This
+    ``path == shared_root`` for most of the project's dirs -- only
+    ``train_jobs_dir`` got a real per-slug check. This
     is the one guard every dir now goes through, each with its own
     independently-computed ``shared_root`` (never derived from the path
     being checked), and it always raises the plan's ``path_escape``
@@ -60,7 +59,6 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
     base = base_curation_config()
     data_root = projects_data_root()
     state_projects_root = base.state_dir / 'projects'
-    autolabel_projects_root = env_path('OP_AUTO_LABEL_STATE_DIR', '/jobs/auto_label') / 'projects'
     return [
         (record.resources.export_root, data_root),
         (record.resources.class_registry_path.parent, data_root),
@@ -69,7 +67,6 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (record.resources.upload_root, state_projects_root),
         (record.resources.bakeoff_jobs_dir, state_projects_root),
         (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
-        (record.resources.autolabel_dir, autolabel_projects_root),
         # The tmpfs crop cache keys its files per project (<crop_cache_dir>/<slug>).
         (base.crop_cache_dir / record.slug, base.crop_cache_dir),
     ]

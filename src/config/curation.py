@@ -233,7 +233,6 @@ class CurationConfig:
     project_slug: str = 'default'
     project_state_dir: Path = _FOLLOWS_STATE_DIR
     train_jobs_dir: Path = Path('/jobs')
-    autolabel_dir: Path = Path('/jobs/auto_label')
     bakeoff_jobs_dir: Path = _FOLLOWS_STATE_DIR
     mlflow_experiment: str = 'openprocessor'
     model_prefix: str = ''
