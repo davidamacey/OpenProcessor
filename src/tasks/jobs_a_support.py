@@ -51,30 +51,20 @@ class WorkerIngest:
     async def service(self, opensearch: Any) -> Any:
         from src.app.resources import AppResources
         from src.clients.pe_encoder import PEEncoder
-        from src.clients.triton_pool_core import AsyncTritonPool
-        from src.config.settings import get_settings
         from src.services.classes.registry import get_class_registry
         from src.services.curation.capture_read import read_capture
         from src.services.curation.ingest import CurationIngestService
         from src.services.curation.ingest_detector import refreshed_ingest_profiles
         from src.services.curation.ingest_policy_store import get_ingest_policy
         from src.services.curation.location_policy_store import get_location_policy
-        from src.services.serving_router import build_router, refresh_ready
+        from src.services.serving_router import open_routed_pool, sync_router
 
         if self._pool is None:
-            url = get_settings().triton_url
-            self._pool = AsyncTritonPool(
-                url=url,
-                pool_size=4,
-                max_concurrent=64,
-                verbose=False,
-                router=await build_router(url),
-            )
-            await self._pool.initialize()
+            self._pool = await open_routed_pool(pool_size=4, max_concurrent=64)
             self._executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix='job-ingest-')
             AppResources.async_triton_pool = self._pool
             AppResources.shared_executor = self._executor
-        await refresh_ready(self._pool.router)
+        await sync_router(self._pool)
         profiles = await refreshed_ingest_profiles()
         if not profiles.primary.detector_model:
             raise RuntimeError(

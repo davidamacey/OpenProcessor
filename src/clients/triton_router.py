@@ -42,11 +42,14 @@ class Route:
 
 
 class TritonRouter:
-    def __init__(self, servers: Mapping[str, str]) -> None:
+    def __init__(self, servers: Mapping[str, str], *, profile_revision: int | None = None) -> None:
         if not servers:
             msg = 'a router needs at least one server'
             raise ValueError(msg)
         self._servers = dict(servers)
+        # The serving-profile setting revision this router was built from (None: no profile).
+        self.profile_revision = profile_revision
+        self._rebuilding = False
         self._outstanding = dict.fromkeys(self._servers, 0)
         # None: no reports are consulted (the single default server, as before the router).
         self._ready: dict[str, frozenset[str]] | None = {}
@@ -77,7 +80,18 @@ class TritonRouter:
     def _eligible(self, server: str, model: str) -> bool:
         return self._ready is None or model in self._ready.get(server, frozenset())
 
+    @property
+    def rebuilding(self) -> bool:
+        return self._rebuilding
+
+    def hold_for_rebuild(self) -> None:
+        """Refuse every call until a new router replaces this one (the profile changed)."""
+        self._rebuilding = True
+
     def _pick(self, model: str) -> str:
+        if self._rebuilding:
+            msg = 'the serving profile changed and the router is being rebuilt'
+            raise NoServerError(msg)
         candidates = [s for s in self._servers if self._eligible(s, model)]
         if not candidates:
             msg = f'no server reports {model!r} ready'

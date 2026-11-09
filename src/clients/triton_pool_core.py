@@ -26,7 +26,7 @@ import tritonclient.grpc.aio as grpcclient_aio
 from tritonclient.utils import InferenceServerException
 
 from src.clients.model_residency import ensure_loaded
-from src.clients.triton_router import TritonRouter
+from src.clients.triton_router import NoServerError, TritonRouter
 from src.utils.retry import is_retryable_error
 from src.utils.stage_timing import stage_timer
 
@@ -237,28 +237,69 @@ class AsyncTritonPool:
         self._lock = asyncio.Lock()
 
         for server_url in self.router.urls():
-            self._servers[server_url] = []
-            self._indexes[server_url] = 0
-            for i in range(self.pool_size):
-                # CRITICAL: Different user-agent forces separate TCP connections
-                channel_args = [
-                    *GRPC_CHANNEL_OPTIONS,
-                    ('grpc.primary_user_agent', f'triton-pool-{i}'),
-                ]
-
-                client = grpcclient_aio.InferenceServerClient(
-                    url=server_url,
-                    verbose=self.verbose,
-                    channel_args=channel_args,
-                )
-                self._servers[server_url].append(client)
-                self._stats.requests_per_channel[self._channel_key(server_url, i)] = 0
+            self._open_channels(server_url)
 
         self._initialized = True
         logger.info(
             f'AsyncTritonPool initialized: {self.pool_size} channels, '
             f'max_concurrent={self.max_concurrent}, url={self.url}'
         )
+
+    def _open_channels(self, server_url: str) -> None:
+        self._servers[server_url] = []
+        self._indexes[server_url] = 0
+        for i in range(self.pool_size):
+            # CRITICAL: Different user-agent forces separate TCP connections
+            channel_args = [
+                *GRPC_CHANNEL_OPTIONS,
+                ('grpc.primary_user_agent', f'triton-pool-{i}'),
+            ]
+            client = grpcclient_aio.InferenceServerClient(
+                url=server_url,
+                verbose=self.verbose,
+                channel_args=channel_args,
+            )
+            self._servers[server_url].append(client)
+            self._stats.requests_per_channel[self._channel_key(server_url, i)] = 0
+
+    def _channels(self, server_url: str) -> list[grpcclient_aio.InferenceServerClient]:
+        """One server's channels; a server a new router dropped is refused, never guessed at."""
+        try:
+            return self._servers[server_url]
+        except KeyError:
+            msg = f'server {server_url!r} is no longer in the serving profile'
+            raise NoServerError(msg) from None
+
+    async def adopt_router(self, router: TritonRouter) -> None:
+        """Serve with ``router`` from now on: open channels to its new servers, close the dropped.
+
+        The swap has no ``await`` in it, so no call sees a router without its channels; a call
+        already past routing on a dropped server finishes on the channel it holds, and a retry on
+        that server is refused (``NoServerError``).
+        """
+        if not self._initialized:
+            msg = 'AsyncTritonPool not initialized - call initialize() first'
+            raise RuntimeError(msg)
+        wanted = router.urls()
+        for server_url in wanted:
+            if server_url not in self._servers:
+                self._open_channels(server_url)
+        self.router = router
+        dropped = {u: self._servers.pop(u) for u in list(self._servers) if u not in wanted}
+        for server_url, clients in dropped.items():
+            self._indexes.pop(server_url, None)
+            await self._close_channels(server_url, clients)
+
+    @staticmethod
+    async def _close_channels(
+        server_url: str, clients: list[grpcclient_aio.InferenceServerClient]
+    ) -> None:
+        for i, client in enumerate(clients):
+            try:
+                await client.close()
+                logger.debug(f'Closed pool client {server_url}/{i}')
+            except Exception as e:
+                logger.warning(f'Error closing pool client {server_url}/{i}: {e}')
 
     def _channel_key(self, server_url: str, index: int) -> int | str:
         return index if server_url == self.url else f'{server_url}/{index}'
@@ -277,7 +318,7 @@ class AsyncTritonPool:
     async def _next_client(self, model_name: str) -> grpcclient_aio.InferenceServerClient:
         """A channel to the server the router picks for ``model_name`` (metadata reads)."""
         with self.router.route(model_name) as route:
-            return self._servers[route.url][await self._get_client_index(route.url)]
+            return self._channels(route.url)[await self._get_client_index(route.url)]
 
     async def infer(
         self,
@@ -321,7 +362,7 @@ class AsyncTritonPool:
         timeout: float,
         retries: int,
     ) -> Any:
-        await ensure_loaded(self._servers[server_url][0], model_name)
+        await ensure_loaded(self._channels(server_url)[0], model_name)
 
         # Acquire semaphore (backpressure)
         await semaphore.acquire()
@@ -341,7 +382,7 @@ class AsyncTritonPool:
                 try:
                     # Get client via round-robin
                     client_idx = await self._get_client_index(server_url)
-                    client = self._servers[server_url][client_idx]
+                    client = self._channels(server_url)[client_idx]
                     self._stats.requests_per_channel[self._channel_key(server_url, client_idx)] += 1
 
                     # Execute inference
@@ -394,7 +435,7 @@ class AsyncTritonPool:
 
         with self.router.route(model_name) as route:
             async with self._semaphore:
-                client = self._servers[route.url][await self._get_client_index(route.url)]
+                client = self._channels(route.url)[await self._get_client_index(route.url)]
                 responses = client.stream_infer(_requests(), stream_timeout=timeout)
                 async for result, error in responses:
                     if error is not None:
@@ -537,12 +578,7 @@ class AsyncTritonPool:
             return
 
         for server_url, clients in self._servers.items():
-            for i, client in enumerate(clients):
-                try:
-                    await client.close()
-                    logger.debug(f'Closed pool client {server_url}/{i}')
-                except Exception as e:
-                    logger.warning(f'Error closing pool client {server_url}/{i}: {e}')
+            await self._close_channels(server_url, clients)
 
         self._servers.clear()
         self._initialized = False
