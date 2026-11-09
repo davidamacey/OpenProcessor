@@ -52,9 +52,7 @@ A representative sample is seeded, so the same scope, seed and size give the
 same members. Its size grows with the scope and is bounded. By default it is
 `max(8, min(64, ceil(2 * sqrt(n))))` of `n` members: 5 members are all sent,
 25 send 10, 100 send 20, 400 send 40, and 1000 or more send 64. `sample.size`
-(at most 256) overrides it. When the scope holds several strata the sample
-is spread over them, at least one member from each while the size allows
-(`stratify_by`, default `auto`). The plan reports `scope_count`, `sampled`, the
+(at most 256) overrides it. The plan reports `scope_count`, `sampled`, the
 strata and `estimated_vlm_calls`, so you see the cost before you start.
 
 ```bash
