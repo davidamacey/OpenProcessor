@@ -124,7 +124,7 @@ def servable_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from src.services.curation import image_serving
 
     root = tmp_path.resolve()
-    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (root,))  # noqa: ARG005
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda *_args, **_kwargs: (root,))
     return root
 
 
