@@ -21,7 +21,6 @@ _CLONE_SOURCE_READY_STATUSES = frozenset({'active', 'archived'})
 
 
 async def _validate_clone_source(
-    client: Any,  # noqa: ARG001 - kept for signature symmetry with _validate_clone
     *,
     target_slug: str,
     from_slug: str,
@@ -79,7 +78,7 @@ async def _validate_clone(
     when no doc exists at all) -- ``_clone_activations`` must use this as
     ``expected_active`` instead of assuming an empty target."""
     source, resolved_axes = await _validate_clone_source(
-        client, target_slug=target_record.slug, from_slug=from_slug, axes=axes
+        target_slug=target_record.slug, from_slug=from_slug, axes=axes
     )
 
     if 'classes' in resolved_axes:

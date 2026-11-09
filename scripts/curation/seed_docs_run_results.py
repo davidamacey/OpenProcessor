@@ -27,14 +27,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.clients.storage.roots import build_rooted_store  # noqa: E402  # import follows the sys.path setup above
-from src.config.project_context import current_project_id  # noqa: E402  # import follows the sys.path setup above
-from src.config.storage import storage_root_paths  # noqa: E402  # import follows the sys.path setup above
-from src.db.engine import run_with_engine  # noqa: E402  # import follows the sys.path setup above
-from src.db.repos import training_runs as runs_repo  # noqa: E402  # import follows the sys.path setup above
-from src.db.session import async_session_factory, project_tx  # noqa: E402  # import follows the sys.path setup above
-from src.domain.training_keys import run_object_key  # noqa: E402  # import follows the sys.path setup above
-from src.services.projects.script_binding import abind_script_project, add_project_argument  # noqa: E402  # import follows the sys.path setup above
+from src.clients.storage.roots import build_rooted_store
+from src.config.project_context import current_project_id
+from src.config.storage import storage_root_paths
+from src.db.engine import run_with_engine
+from src.db.repos import training_runs as runs_repo
+from src.db.session import async_session_factory, project_tx
+from src.domain.training_keys import run_object_key
+from src.services.projects.script_binding import abind_script_project, add_project_argument
 
 
 def confusion_counts(supports: list[int], accuracy: float = 0.9) -> list[list[int]]:
