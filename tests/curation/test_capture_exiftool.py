@@ -13,7 +13,7 @@ import signal
 import stat
 import subprocess
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from PIL import Image
@@ -134,3 +134,41 @@ def test_a_hung_process_is_killed_at_the_timeout_and_reported(tmp_path: Path) ->
         c.read('/etc/hostname')
     assert time.monotonic() - started < 15
     c.close()
+
+
+def _child_reads(path: str, out: Any) -> None:
+    from src.clients.exiftool_client import get_exiftool_client
+
+    client = get_exiftool_client()
+    make = parse_capture(client.read(path)).camera_make
+    process = client._process()
+    out.put((make, None if process is None else process.pid))
+
+
+def test_a_forked_child_starts_its_own_process_and_leaves_the_parents_alone(
+    tmp_path: Path,
+) -> None:
+    import multiprocessing
+
+    from src.clients.exiftool_client import get_exiftool_client
+
+    path = _jpeg(tmp_path, 'a.jpg', '-Make=Acme')
+    parent = get_exiftool_client()
+    parent.read(path)
+    process = parent._process()
+    assert process is not None
+
+    ctx = multiprocessing.get_context('fork')
+    out = ctx.Queue()
+    child = ctx.Process(target=_child_reads, args=(str(path), out))
+    child.start()
+    make, child_pid = out.get(timeout=60)
+    assert make == 'Acme'
+    assert child_pid not in (None, process.pid)  # its own exiftool, not the parent's pipes
+    child.join(timeout=60)
+
+    assert child.exitcode == 0
+    assert process.poll() is None  # the child's exit did not tell the parent's exiftool to quit
+    assert parse_capture(parent.read(path)).camera_make == 'Acme'
+    assert parent._process() is process
+    parent.close()

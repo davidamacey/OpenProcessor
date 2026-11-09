@@ -107,6 +107,8 @@ from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from src.services.curation.export_images import _ExportImage
     from src.services.curation.item_filter import ItemFilter
 
@@ -150,8 +152,11 @@ class GenericYoloExportService:
         config: CurationConfig | None = None,
         profile: ExportProfile | None = None,
         registry: ClassRegistry | None = None,
+        location_policy: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         self.opensearch = opensearch
+        # Without a policy source the GPS is stripped from byte copies (fail closed).
+        self._location_policy = location_policy
         self.config = config or get_curation_config()
         self.profile = profile or ExportProfile()
         self.registry = registry or get_class_registry()
@@ -317,6 +322,8 @@ class GenericYoloExportService:
             resize_mode=resize_mode,
             image_size=image_size,
             max_workers=max_image_workers,
+            # Read once per export: a `drop` project's byte copies lose their embedded GPS.
+            strip_gps=self._location_policy is None or await self._location_policy() == 'drop',
         )
 
         # Computed AFTER every label file is on disk — hashes what was

@@ -156,6 +156,23 @@ class ExifToolClient:
             handle.flush()
             return self.read(handle.name)
 
+    def strip_gps(self, src: str | Path, dest: str | Path) -> None:
+        """Write ``dest`` as ``src`` without any GPS tag, losslessly (no re-encode; every other
+        tag is kept): ``exiftool -GPS*= -o dest src``. ``-GPS*=`` also removes the XMP copy of
+        the position that ``-gps:all=`` leaves (https://exiftool.org/exiftool_pod.html, "-TAG=").
+        ``dest`` must not exist. Raises :class:`ExifToolError` when the strip did not succeed."""
+        with self._lock:
+            try:
+                helper = self._helper or self._start()
+                helper.execute('-GPS*=', '-o', str(dest), str(src))
+            except (ExifToolException, OSError, ValueError, RuntimeError) as exc:
+                self._reset()
+                msg = f'exiftool GPS strip failed ({type(exc).__name__}: {exc})'
+                raise ExifToolError(msg) from exc
+            if helper.last_status:
+                msg = f'exiftool GPS strip failed (exit {helper.last_status})'
+                raise ExifToolError(msg)
+
     def close(self) -> None:
         with self._lock:
             helper, proc = self._helper, self._process()
@@ -170,6 +187,19 @@ class ExifToolClient:
 def get_exiftool_client() -> ExifToolClient:
     """The process-wide client: one ExifTool process per worker process, started on first read."""
     return ExifToolClient()
+
+
+def _forget_inherited_process() -> None:
+    """In a forked child: the parent's ExifTool pipes are not ours. Mark the inherited helper as
+    not running, so its destructor never tells the parent's process to exit, and start fresh."""
+    if get_exiftool_client.cache_info().currsize:
+        helper = get_exiftool_client()._helper
+        if helper is not None:
+            helper._flag_running_false()
+        get_exiftool_client.cache_clear()
+
+
+os.register_at_fork(after_in_child=_forget_inherited_process)
 
 
 __all__ = [
