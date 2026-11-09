@@ -83,6 +83,10 @@ faiss-gpu-cu12>=1.10.0  # FAISS GPU for billion-scale clustering (CUDA 12)
 # Duplicate Detection
 imohash==1.1.0  # Fast constant-time image hashing (48KB sampled, ~1ms for any file size)
 
+# Capture metadata (EXIF time, GPS, camera): PyExifTool drives one long-lived exiftool
+# process (the Debian package libimage-exiftool-perl in the Dockerfile base stage)
+pyexiftool==0.5.6  # GPL-3.0-or-later OR BSD (dual); the BSD terms are used
+
 # Perception Encoder (PE) runtime deps. The `perception_models` package
 # itself (top-level `core`) is installed by the Dockerfile with --no-deps:
 # its own requirements exact-pin ~30 research packages (timm==1.0.15,
