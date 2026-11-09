@@ -109,6 +109,7 @@ describe('mapRawCrop full field mapping', () => {
         score: 0,
         margin: 0,
         assigned_by: 'run',
+        display_no: null,
       },
       crop_rank_in_image: 0,
       mistakenness_score: 0,
