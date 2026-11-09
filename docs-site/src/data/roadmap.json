@@ -8,7 +8,7 @@
       "stage": "shipped",
       "summary": "The measured first half of the Triton throughput plan (decode once, uint8 inputs, FP16 PE image encoder, GPU decode, multi-GPU embedding, coalesced writes) plus assist runs, bulk and S3 ingest, detection-only ingest and a repository cleanup. Numbers are in docs/PERFORMANCE.md.",
       "items": [
-        "Assist runs (/assist/runs): send a crop, box, selection, cluster, sub-cluster or filter to the VLM; cluster label proposals applied explicitly",
+        "Assist runs (/assist/runs): send a crop, box, selection, cluster or filter to the VLM; cluster label proposals applied explicitly",
         "Prompt-pack attributes replace the hard-coded make and model; a project calls no VLM until one is activated",
         "Bulk ingest of a folder, manifest or S3 with a preview; detection-only ingest",
         "Ingest speed-ups: decode once, uint8 inputs, FP16 PE image encoder, GPU decode, data-parallel PE encoding, coalesced writes, Lucene vector engine for new projects",

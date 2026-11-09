@@ -101,11 +101,9 @@ make export-pe
 It then restarts Triton; restart `api` afterwards. If the TensorRT
 build fails on PE's attention-pool ops, run `make pe-build-ort` to serve
 the image ONNX through Triton's ONNX Runtime backend instead.
-`make pe-text-status` (`GET /health/pe_text`) shows which text backend
-the API is using: with `OP_PE_TEXT_BACKEND=auto` it uses an in-process
-ONNX Runtime session when `OP_PE_TEXT_ONNX_PATH` exists, else Triton's
-shared CPU instance if it is ready, else a lazily loaded in-process
-PyTorch encoder.
+`make pe-text-status` (`GET /health/pe_text`) shows whether Triton's shared
+CPU `pe_text_encoder` is ready. Text encoding is Triton-only; the
+`OP_PE_TEXT_*` variables are retired.
 
 ## Your own models
 

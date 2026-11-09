@@ -12,6 +12,10 @@ nearest-centroid purity — labelled "cohesion" rather than "purity" so a
 mixed-labels-but-visually-coherent cluster doesn't read as "bad"), size and
 representative crops.
 
+- A **Clusters** panel states the serving partition (cluster and item counts,
+  method, when it was fitted). **Cluster items** starts a clustering job; when
+  its partition is ready but not serving, **Activate it** serves it. The
+  server refuses a stale activation and says why.
 - The sort and the filters are the server's. The toolbar offers the sort
   options and flags the backend serves and filters by dominant class,
   detector class, size range, validation state, flags and needs review. The
@@ -59,13 +63,13 @@ bulk-edits everything the filter matches, are described in
 The core triage surface: a crop grid for one cluster with pointer-based
 drag and drop onto class rows, bulk select/confirm/move/discard/ignore,
 per-class hotkeys, **Assist…** (ask the VLM about the selection, the cluster
-or the open sub-cluster, with a per-run endpoint and a proposal for the
+or a sample of it, with a per-run endpoint and a proposal for the
 cluster's label, see [Assist (VLM)](./assist.md)) and **Accept VLM** for
 the page, **Reprocess** for the selection (see
-[Reprocess](./dataset-import.md#reprocess)), **Refine**
-(sub-cluster with agglomerative clustering; a sub-cluster tab lists that
-sub-cluster's members from the server), a strategy bar (sort, score
-chips, diverse-selection overlay) and a core-member cut line.
+[Reprocess](./dataset-import.md#reprocess)) and **Move** (to a different
+cluster, reversible from the label operations list). A cluster is identified
+by its `cluster_uid`; the number shown (`#N`) is its display number in the
+serving partition.
 
 A facet bar on the page shows the served counts by detector class, validation,
 review tab and detector-confidence band, and the crops can be sorted by
@@ -89,6 +93,21 @@ A thumbnail whose source file cannot be read shows "Source not mounted" or
 
 **Label ops** in the top bar lists the bulk labels and moves the backend has
 recorded for the project, newest first (**Load older** pages back through the
-kept history). **Details** opens an operation with its served fields. **Undo**
+kept history). **Details** opens an operation with its served fields. A
+label operation on many items is accepted as a background job (202); the page
+follows it, and **Undo** targets the operation by its id. **Undo**
 first shows the backend's dry run (what it would restore, what it would keep,
 the conflicts); only **Confirm undo** changes anything.
+
+## Map (`/p/<project>/map`)
+
+**Map** appears in the top bar only when the project has photos with a stored
+position. It shows where the photos were taken as grid cells over a map; the
+server decides the cells for the viewport, the counts and whether a map exists
+at all. The filter bar is the shared item filter plus a capture-day range
+(`YYYY-MM-DD`, inclusive). A click on a small cell lists its photos beside the
+map; a click on a large one zooms in. The header states the project's location
+policy: **exact**, or **coarse (about 1 km)** when the policy is
+`store_coarse`. With the policy `drop` no position is stored, so the page says
+the project does not store where photos were taken. If the filter matches more
+cells or photos than fit, the page says so; zoom in or narrow the filter.

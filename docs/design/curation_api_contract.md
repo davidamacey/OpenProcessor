@@ -1534,12 +1534,10 @@ open-vocabulary profiles add `clone`, `revisions`, `revisions/{revision}` and `a
 - A crop the VLM gave no usable verdict for is omitted from a batch
   response, or left untouched by a single-crop call. It is never written as a
   reject.
-- `/pipeline/auto_label` and `/start` take: `train_clusters`,
-  `promote_min_purity`, `promote_min_members`, `vlm_batch_size`,
+- `/pipeline/auto_label` and `/start` take: `vlm_batch_size`,
   `vlm_concurrency`, `max_vlm_crops`, `classifier_confidence_skip_vlm`,
-  `run_vlm`, `recluster_unvalidated`, `reassign_only`,
-  `run_auto_promote`, `n_clusters`,
-  `class_id`, `cluster_id`, `prompt_pack` (`<name>` or `<name>@<revision>`),
+  `run_vlm`,
+  `class_id`, `cluster_uid`, `prompt_pack` (`<name>` or `<name>@<revision>`),
   `vlm`, `acknowledge_external` and `vlm_attributes` (with `run_vlm`, store the pack's item
   attributes in each item's `assist` slot through the combined `assist` call; `422
   pack_declares_no_attributes` when the pack cannot serve it). A `detection_profile` parameter is `422`:
@@ -1576,8 +1574,8 @@ its class), and the answers, including a locked item's, are kept in the item's
 
 | Field | Meaning |
 |---|---|
-| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_uid}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
-| `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0); `stratify_by`: `auto` (by `cluster_subid` when the scope has more than one), `cluster_subid` or `none` |
+| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_uid}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_uid}` is a cluster of the serving partition. `{kind: "filter", filter}` is a non-empty item filter |
+| `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0) |
 | `actions` | a non-empty subset of `classify`, `attributes` and `verify`. With `classify` and `attributes`, and a pack that declares item attributes, one `assist` call answers both. `attributes` on a `boxes` target reports the pack's `box` attributes for each box close-up. `verify` (crops and boxes targets) has the VLM judge each stored box that is still open to a machine verdict (`proposed` or `accepted`, never a human- or import-owned box) and writes the verdict onto the box; a box the VLM gave no usable answer for is left for a retry. Order inside a run: `verify`, then `classify` / `attributes` |
 | `vlm`, `prompt_pack`, `acknowledge_external` | the endpoint and pack for this run only (`name` or `name@revision`); omitted, the project's active endpoint and effective default pack. The run pins both |
 | `min_agreement` | 0.5 to 1.0, default 0.6 |
@@ -2364,17 +2362,17 @@ classes are reported.
 | GET | `/scores/status` | job state |
 | POST | `/scores/cancel` | |
 | GET | `/scores/coverage` | `{coverage}`: how many items carry each score field. Read-only routes work with the flag off |
-| POST | `/select/diverse` | `{k, scope: {cluster_id, filters, review_tab}, seed_crop_id}`. Answers inline with `{crop_ids, method, version, n_pool}` (`200`) when the pool is small enough (`OP_SELECT_SYNC_MAX_OPS`), otherwise starts a background job (`202`). `400` when `OP_SELECT_DIVERSE_ENABLED` is off, `409` while a job runs |
+| POST | `/select/diverse` | `{k, scope: {cluster_uid, filters, review_tab}, seed_crop_id}`. Answers inline with `{crop_ids, method, version, n_pool}` (`200`) when the pool is small enough (`OP_SELECT_SYNC_MAX_OPS`), otherwise starts a background job (`202`). `400` when `OP_SELECT_DIVERSE_ENABLED` is off, `409` while a job runs |
 | GET | `/select/status` | job state. `result` (`crop_ids`, `method`, `version`, `n_pool`) is set once `status` is `completed` |
 | POST | `/select/cancel` | |
-| GET | `/viz/projection` | `cluster_id`, `class_id`, `max_points` (default 50000). `400` when `OP_VIZ_PROJECTION_ENABLED` is off |
-| POST | `/viz/projection/rebuild` | `scope` (`residual` default, or `cluster` with `cluster_id`). `202` |
+| GET | `/viz/projection` | `cluster_uid`, `class_id`, `max_points` (default 50000). `400` when `OP_VIZ_PROJECTION_ENABLED` is off |
+| POST | `/viz/projection/rebuild` | `scope` (`residual` default, or `cluster` with `cluster_uid`). `202` |
 | GET | `/viz/projection/status` | |
 | POST | `/viz/projection/cancel` | |
 | POST | `/probe/run` | `{job_id, architecture, gpu, resume}`. Runs the active-learning probe from a finished training job (`409` when that job is unknown, not `finished`, has no checkpoint, or the GPU cannot be claimed; one job at a time) |
 | GET | `/probe/status` | `ProbeStatusResponse` (`status`, `job_id`, `train_job_id`, `model_path`, `gpu`, `updated_count`, `error`, `actionable_min_confidence`) |
 | POST | `/probe/cancel` | |
-| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_id`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`, `target` (`item` default, or `box`). Items plus `semantic_score`; with `target=box` the query ranks the per-box vectors and each item carries `matched_box_id` and `matched_box_stale`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off (it is on by default), `503` while the text encoder is not ready. A `200` carries a `Server-Timing` header with the wall milliseconds of each stage (`bootstrap`, `encode`, `filter_build`, `knn_page`, `knn`, `unembedded_count`, `hydrate`, plus `encode_cache_hit` and `os_took_ms`); `knn` and `unembedded_count` run together, so `knn_page` is their wall span, not their sum. The same stages feed the `op_search_stage_seconds{route,stage}` histogram. The JSON body is unchanged |
+| GET | `/search/text` | `q` (required), `page`, `page_size`, `cluster_uid`, `tab`, `date_from`, `date_to`, `max_rank`, `min_blur_ratio`, `hide_near_duplicates`, `min_score`, `include_test`, `target` (`item` default, or `box`). Items plus `semantic_score`; with `target=box` the query ranks the per-box vectors and each item carries `matched_box_id` and `matched_box_stale`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off (it is on by default), `503` while the text encoder is not ready. A `200` carries a `Server-Timing` header with the wall milliseconds of each stage (`bootstrap`, `encode`, `filter_build`, `knn_page`, `knn`, `unembedded_count`, `hydrate`, plus `encode_cache_hit` and `os_took_ms`); `knn` and `unembedded_count` run together, so `knn_page` is their wall span, not their sum. The same stages feed the `op_search_stage_seconds{route,stage}` histogram. The JSON body is unchanged |
 | GET | `/search/similar` | `crop_id` (required), `box_id` (use that box's stored vector as the query), `target`, `exclude_self` (default true; with `box_id` and `target=box` it drops only that box, so the crop's other boxes can still match), `page`, `page_size` and the `/search/text` filters. kNN over items from the stored `pe_embedding` of `crop_id`; no encode. Items plus `semantic_score`, `unembedded_in_scope`. `400` when `OP_SEMANTIC_SEARCH_ENABLED` is set off, `404 not_found` for a crop that is not in this project (`box_not_found` for a box it lacks), `409 crop_not_embedded` (`box_not_embedded`) for a crop or box without a vector. Hides validated, dismissed, excluded and holdout items, like text search. Same `Server-Timing` header (`source_vector` replaces `encode`) |
 | POST | `/search/image` | Multipart: `image` (the picture) or `image_id` (an image already in this project), exactly one; `box` (optional normalized `x1,y1,x2,y2`, search by that region). Query params as `/search/similar` minus `crop_id`/`box_id`/`exclude_self`, plus `target`. The picture is decoded once (EXIF upright), cut to `box`, encoded with the PE image tower and ranked like `/search/similar`; nothing is stored. `400` for `invalid_request`, `bad_box`, `image_unreadable` or the flag set off, `404 image_not_found`, `413 upload_too_large`, `503 image_encoder_unavailable` |
 | GET | `/stats` | project counts, indexes, disk, jobs |
