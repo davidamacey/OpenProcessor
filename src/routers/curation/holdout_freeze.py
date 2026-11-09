@@ -7,8 +7,10 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
-from src.clients.opensearch.bulk import failed_bulk_items
+from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
+from src.core.exceptions import RequestRejectedError
+from src.db.session import project_tx
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
 from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
@@ -22,7 +24,7 @@ from src.services.curation.holdout import (
     select_test_holdout,
     write_freeze_snapshot,
 )
-from src.utils.timeutil import now_iso
+from src.services.near_duplicates.holdout import flag_held_out, leak_closure, record_closure
 
 
 @router.post('/test_holdout/freeze', response_model=TestHoldoutFreezeResponse)
@@ -101,17 +103,25 @@ async def freeze_test_holdout(
             ),
         )
 
-    digest = compute_holdout_sha(chosen_ids)
+    # Fail closed: a database error here refuses the freeze before anything is written.
+    project_id = current_project_id()
+    async with project_tx(session, project_id):
+        closure = await leak_closure(session, project_id, chosen_ids)
+    held_ids = sorted({*chosen_ids, *closure.moved_ids})
+
+    digest = compute_holdout_sha(held_ids)
     cohort_spec = {
         'query': cohort_query,
         'selection': 'sha1_per_class',
         'percent': payload.percent,
         'fraction': fraction,
         'force': force,
+        'selected': len(chosen_ids),
+        'moved_by_near_dup': len(closure.moves),
     }
     snapshot_key = await asyncio.to_thread(
         write_freeze_snapshot,
-        crop_ids=chosen_ids,
+        crop_ids=held_ids,
         sha=digest,
         cohort_spec=cohort_spec,
         per_class_counts=per_class,
@@ -122,31 +132,20 @@ async def freeze_test_holdout(
     # inside the block and rolls the row back, so a record always covers exactly the flagged
     # ids. A rerun is idempotent.
     async with freeze_transaction(
-        session, item_count=len(chosen_ids), snapshot_storage_key=snapshot_key
-    ):
-        bulk: list[dict[str, Any]] = []
-        now = now_iso()
-        for crop_id in chosen_ids:
-            bulk.append({'update': {'_index': items_index(), '_id': crop_id}})
-            bulk.append({'doc': {'test_holdout': True, 'updated_at': now}})
+        session, item_count=len(held_ids), snapshot_storage_key=snapshot_key
+    ) as freeze:
         try:
-            bulk_resp = await opensearch.bulk(body=bulk, refresh=True)
+            await flag_held_out(opensearch, items_index(), held_ids)
+        except RequestRejectedError:
+            logger.error('curation_test_holdout_freeze_partial', n_ids=len(held_ids))
+            raise
         except Exception as exc:
             raise server_error(503, 'bulk failed', exc) from exc
-        failed = failed_bulk_items(bulk_resp or {})
-        if failed:
-            failed_ids = [f['id'] for f in failed]
-            logger.error('curation_test_holdout_freeze_partial', failed=failed)
-            raise HTTPException(
-                status_code=502,
-                detail=(
-                    f'holdout freeze incomplete: {len(failed)} of {len(chosen_ids)} crops '
-                    f'were not flagged (ids: {failed_ids[:20]}); no record persisted, retry'
-                ),
-            )
+        await record_closure(session, project_id, freeze.id, closure)
 
     return TestHoldoutFreezeResponse(
-        n_frozen=len(chosen_ids),
+        n_frozen=len(held_ids),
+        moved_by_near_dup=len(closure.moves),
         n_classes_covered=len(per_class),
         test_holdout_sha=digest,
         per_class_counts=per_class,
