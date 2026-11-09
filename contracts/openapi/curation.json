@@ -41248,7 +41248,7 @@
     },
     "/curation/projects/{project}/cluster/umap/rebuild": {
       "post": {
-        "description": "Refit the UMAP reducer and re-cluster the residual pool.\n\nReturns the same envelope as :func:`cluster_residuals` —\n``{status, n_residuals, n_clusters, n_noise, refit, ...}``.",
+        "description": "Refit the UMAP reducer over the residual pool (visualization only; it never changes a\ncluster).\n\nReturns ``{status, n_residuals, refit, backend, backend_detail}``.",
         "operationId": "post_umap_rebuild_curation_projects__project__cluster_umap_rebuild_post",
         "parameters": [
           {

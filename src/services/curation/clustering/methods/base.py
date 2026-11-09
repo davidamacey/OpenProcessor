@@ -1,8 +1,7 @@
 """Clustering-method interface for the residual pool.
 
-Each method (AHC, HDBSCAN, future additions) exposes the same async
-``fit_predict`` so :py:func:`src.services.curation.clustering.orchestrator.cluster_residuals`
-can dispatch through a registry rather than hard-coding the algorithm.
+Each method (IVF, AHC, HDBSCAN) exposes the same async ``fit_predict`` so a caller can dispatch
+through a registry rather than hard-coding the algorithm.
 
 Shape contract:
 
@@ -10,14 +9,12 @@ Shape contract:
 * Output — a :class:`ClusterResult` whose ``labels`` is an ``int64``
   array of length ``n``. ``-1`` means "noise" / unassigned (HDBSCAN
   emits these; AHC does not but the field is reserved). Non-negative
-  labels are dense (``0..K-1``); ``cluster_residuals`` adds the
-  ``RESIDUAL_CLUSTER_ID_OFFSET`` after stable-sorting them by size.
+  labels are dense (``0..K-1``).
 
 Methods are responsible for:
 
 * Picking a backend (GPU/CPU) given the :class:`BackendInfo` probe
-  ``cluster_residuals`` already collected — they should not call
-  ``detect_cluster_backend`` themselves.
+  the caller already collected — they should not call ``detect_cluster_backend`` themselves.
 * Wrapping any blocking compute in ``asyncio.to_thread`` so the worker's
   heartbeat coroutine continues to fire.
 * Calling ``progress.raise_if_cancelled()`` at coarse boundaries
@@ -55,9 +52,7 @@ class ClusterResult:
     """Optional float32 per-crop cosine distance to the assigned centroid,
     aligned 1:1 with ``labels``. IVF populates this (drives the labeler's
     outlier sort / review queue); label-only methods (AHC, HDBSCAN) and
-    IVF's single-bucket fallback leave it ``None`` and ``cluster_residuals``
-    derives it from each cluster's member-mean centroid instead
-    (:mod:`~src.services.curation.clustering.centroid_distance`)."""
+    IVF's single-bucket fallback leave it ``None``."""
 
     params: dict[str, Any] = field(default_factory=dict)
     """Method-specific knobs echoed for reproducibility

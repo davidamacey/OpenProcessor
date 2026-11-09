@@ -34,10 +34,10 @@ router = APIRouter(prefix='/cluster', tags=[f'{config.api_tag} — Clustering'])
 
 @router.post('/umap/rebuild')
 async def post_umap_rebuild(client: Any = Depends(_raw_opensearch_dep)) -> dict[str, Any]:
-    """Refit the UMAP reducer and re-cluster the residual pool.
+    """Refit the UMAP reducer over the residual pool (visualization only; it never changes a
+    cluster).
 
-    Returns the same envelope as :func:`cluster_residuals` —
-    ``{status, n_residuals, n_clusters, n_noise, refit, ...}``.
+    Returns ``{status, n_residuals, refit, backend, backend_detail}``.
     """
     try:
         result = await umap_rebuild(client)
