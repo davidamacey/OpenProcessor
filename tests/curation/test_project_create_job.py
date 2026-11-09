@@ -6,8 +6,6 @@ Celery's ``Task.apply`` runs the task with the real wrapper
 (https://docs.celeryq.dev/en/stable/userguide/testing.html).
 """
 
-# ruff: noqa: F811 - fixtures are imported for registration and requested by name
-
 from __future__ import annotations
 
 import asyncio
@@ -16,7 +14,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import Response
-from fixtures.job_fixtures import job_env, kinds, producer, wakes  # noqa: F401  # fixture registration
 from fixtures.job_rows import sql
 from projects.conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 

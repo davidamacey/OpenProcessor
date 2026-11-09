@@ -16,7 +16,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parents[1] / 'frontend' / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
 
-from docs_screenshots import public_data  # noqa: E402  # path set above
+from docs_screenshots import public_data
 
 
 def test_allowlist_is_required_and_parsed() -> None:

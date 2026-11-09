@@ -62,10 +62,10 @@ class FakeUpsertOpenSearch:
     async def index(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
-        refresh: bool = False,  # noqa: ARG002
+        refresh: bool = False,
     ) -> None:
         self._docs[id] = dict(body)
         self._seq[id] = self._seq.get(id, -1) + 1
@@ -73,19 +73,19 @@ class FakeUpsertOpenSearch:
     async def get(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         _source_excludes: list[str] | None = None,
     ) -> dict[str, Any]:
         return {'_id': id, '_source': dict(self._docs[id]), 'found': True}
 
-    async def count(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str) -> dict[str, Any]:
         return {'count': len(self._docs)}
 
     async def mget(
         self,
         *,
-        index: str | None = None,  # noqa: ARG002
+        index: str | None = None,
         body: dict[str, Any],
         _source_excludes: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -114,7 +114,7 @@ class FakeUpsertOpenSearch:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         items = []
@@ -156,12 +156,12 @@ class FakeUpsertOpenSearch:
     async def update(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
         if_seq_no: int,
-        if_primary_term: int,  # noqa: ARG002
-        refresh: bool | str = False,  # noqa: ARG002
+        if_primary_term: int,
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         current_seq = self._seq.get(id, -1)
         if current_seq != if_seq_no:

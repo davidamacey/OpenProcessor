@@ -94,7 +94,7 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
 
     asyncio.run(b4_project.project_create(cast('Any', _Ctx())))
 
-    from src.services.projects import registry as registry_mod
+    from src.services.projects import delete as delete_mod, registry as registry_mod
 
     registry = registry_mod.get_project_registry()
     asyncio.run(registry.refresh_strict())
@@ -103,11 +103,9 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     assert resp.status_code == 202, resp.text
     asyncio.run(registry.refresh_strict())
 
-    from src.services.projects import lifecycle
-
     assert app_state._opensearch_client is not None
     raw_client = app_state._opensearch_client.client
-    asyncio.run(lifecycle.delete_project_finish(raw_client, slug='gamma'))
+    asyncio.run(delete_mod.delete_project_finish(raw_client, slug='gamma'))
 
     assert _dir_digest(leak_env.own_dirs['alpha']) == before_alpha_dirs
     assert _dir_digest(leak_env.own_dirs['beta']) == before_beta_dirs
@@ -123,7 +121,7 @@ def test_create_then_real_delete_leaves_other_projects_untouched(leak_env: LeakE
     )
     # M5: the project_create job's handler publishes project.created (run above); the completion
     # event (project.deleted) is published by the project_delete job's handler, not by
-    # lifecycle.delete_project_finish (called above) -- so it is not expected here.
+    # delete_mod.delete_project_finish (called above) -- so it is not expected here.
     # See test_delete_finish_publishes_project_deleted.
     published = [(e.get('type'), e.get('target')) for e in leak_env.events]
     assert ('project.created', 'gamma') in published

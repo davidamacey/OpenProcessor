@@ -136,7 +136,8 @@ async def _deliver(env: LoopEnv, ref: RunRef, **flags: Any) -> tuple[Any, Ctx]:
                 ref.seeded = True
             # the handler reads the run's request and pins itself
             await session.run_sync(lambda s: s.execute(__import__('sqlalchemy').text('SELECT 1')))
-        result = await assist_loop.assist_loop(ctx)  # type: ignore[arg-type]
+        with env.bound(engine):
+            result = await assist_loop.assist_loop(ctx)  # type: ignore[arg-type]
         return result, ctx
     finally:
         await engine.dispose()

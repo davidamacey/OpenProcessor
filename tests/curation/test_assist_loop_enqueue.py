@@ -1,4 +1,3 @@
-# ruff: noqa: F811 - pytest fixtures are imported by name and used as test arguments
 """A loop is a queued job plus its run in the tables: start, the busy refusal, pause, resume,
 cancel, budget edits and the control flags the backend decides."""
 
@@ -14,7 +13,6 @@ import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fixtures.job_fixtures import job_env, kinds, producer, wakes  # noqa: F401
 from fixtures.job_rows import make_project, sql
 
 from src.config.curation_accessors import base_curation_config

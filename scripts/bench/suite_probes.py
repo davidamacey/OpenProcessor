@@ -28,7 +28,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.baseline_report import parse_prometheus
 from scripts.bench.run_baseline import GpuSampler, read_nvidia_smi
 from scripts.bench.suite_lib import foreign_gpu_summary, parse_pmon, parse_triton_stats

@@ -22,6 +22,7 @@ pytestmark = pytest.mark.db
 F = get_region_fields()
 RUNS = '/assist/runs'
 SCOPED = '/curation/projects/default'
+CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 VERIFY_YES = json.dumps({'is_region': True, 'confidence': 'high', 'reason': 'a wheel'})
 
 
@@ -50,7 +51,7 @@ def _activate(stack: Any, **profile: Any) -> None:
 def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
     stack.seed(
         crop_id,
-        cluster_id=10000,
+        cluster_uid=CLUSTER,
         class_source='item_model',
         updated_at='2026-10-01T00:00:00+00:00',
         **{F.status: 'detection_failed'},
@@ -60,7 +61,7 @@ def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
 
 def _body(*actions: str, verify: str = 'none', **over: Any) -> dict[str, Any]:
     return {
-        'target': {'kind': 'cluster', 'cluster_id': 10000},
+        'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
         'actions': list(actions),
         'segment': {'verify': verify},
         'dry_run': False,
@@ -154,9 +155,9 @@ def test_vlm_verification_with_another_endpoint_than_the_projects_is_refused(wor
 @pytest.mark.parametrize(
     'body',
     [
-        {'target': {'kind': 'cluster', 'cluster_id': 1}, 'actions': ['segment']},
+        {'target': {'kind': 'cluster', 'cluster_uid': CLUSTER}, 'actions': ['segment']},
         {
-            'target': {'kind': 'cluster', 'cluster_id': 1},
+            'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
             'actions': ['classify'],
             'segment': {'verify': 'none'},
         },
@@ -166,7 +167,7 @@ def test_vlm_verification_with_another_endpoint_than_the_projects_is_refused(wor
             'segment': {'verify': 'none'},
         },
         {
-            'target': {'kind': 'cluster', 'cluster_id': 1},
+            'target': {'kind': 'cluster', 'cluster_uid': CLUSTER},
             'actions': ['segment', 'verify'],
             'segment': {'verify': 'vlm'},
         },

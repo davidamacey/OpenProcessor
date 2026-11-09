@@ -21,7 +21,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.vectordb import dataset
 from scripts.bench.vectordb.arms import ARMS
 from scripts.bench.vectordb.run import add_common_args, write_arm

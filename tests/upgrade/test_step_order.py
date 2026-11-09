@@ -19,6 +19,7 @@ def test_the_steps_are_discovered_in_order() -> None:
         'legacy_repair',
         'clustering',
         'near_duplicates',
+        'storage_keys',
     ]
     orders = [m.ORDER for m in steps.discover()]
     assert orders == sorted(orders)
@@ -51,6 +52,7 @@ async def test_the_steps_ran_in_order_and_a_second_load_adds_nothing_new(
         'legacy_repair',
         'clustering',
         'near_duplicates',
+        'storage_keys',
     ]
     # idempotent: the second run is refused by the gate, and the rows stay one set
     with clean_db.engine('super').connect() as conn:

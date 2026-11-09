@@ -23,10 +23,11 @@ from typing import Any
 import numpy as np
 from fastapi import Query
 
+from src.config.curation_accessors import items_index
 from src.config.project_context import current_project, current_project_id, project_api_base
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, RegionProfileDep, items_index, router
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation.regions import region_source_excludes

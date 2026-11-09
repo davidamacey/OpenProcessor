@@ -39,6 +39,12 @@ _DIRECT_ENV_RE = re.compile(
     r"\(\s*['\"](OP_[A-Z0-9_]+)['\"]"
 )
 
+# A variable named once in a module-level ``<NAME>_ENV = 'OP_...'`` constant and read through it
+# (``env_int(REFRESH_INTERVAL_ENV, ...)``).
+_ENV_CONSTANT_RE = re.compile(
+    r"^[A-Z0-9_]*_ENV(?::\s*Final)?\s*=\s*['\"](OP_[A-Z0-9_]+)['\"]", re.M
+)
+
 # First-party Python this repo ships. ``docker/`` holds the side-car container
 # sources (the trainer watcher, the test-harness fakes) -- they are not
 # importable from ``src/`` but they read ``OP_*`` vars a deployment has to set,
@@ -136,6 +142,20 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_DB_BACKUP_KEEP',
     'OP_DB_BACKUP_DIR',
     'OP_DB_BACKUP_INTERVAL_H',
+    # Read by compose interpolation only: the jobs replica count and the per-service stop grace
+    # periods in docker-compose.yml, the PgBouncer overlay's image and pool sizes in
+    # docker-compose.pgbouncer.yml, and the Docker socket group of the GPU-arbiter overlay.
+    'OP_JOBS_REPLICAS',
+    'OP_STOP_GRACE_TRAIN',
+    'OP_STOP_GRACE_EVAL',
+    'OP_STOP_GRACE_EXPORT',
+    'OP_STOP_GRACE_AUTOLABEL',
+    'OP_STOP_GRACE_ASSIST_LOOP',
+    'OP_PGBOUNCER_IMAGE',
+    'OP_PGBOUNCER_POOL_SIZE',
+    'OP_PGBOUNCER_MAX_CLIENT_CONN',
+    'OP_PGBOUNCER_MAX_PREPARED',
+    'OP_DOCKER_GID',
 }
 
 
@@ -145,6 +165,7 @@ def _direct_env_vars_read_by_code() -> set[str]:
         for path in (REPO_ROOT / root).rglob('*.py'):
             text = path.read_text(encoding='utf-8', errors='ignore')
             found.update(_DIRECT_ENV_RE.findall(text))
+            found.update(_ENV_CONSTANT_RE.findall(text))
     return found
 
 

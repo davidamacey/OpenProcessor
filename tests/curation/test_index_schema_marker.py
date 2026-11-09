@@ -257,7 +257,7 @@ async def test_an_unreadable_marker_falls_back_to_the_full_bootstrap() -> None:
     cluster = _Cluster()
 
     async def down(**_kw: Any) -> Any:
-        raise OpenSearchConnectionError('N/A', 'connection reset', RuntimeError('reset'))
+        raise OpenSearchConnectionError('N/A', 'connection reset', OSError('reset'))
 
     cluster.indices.get = down  # type: ignore[method-assign]
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 import pytest
 from _records_world import make_project_row
-from fixtures.job_fixtures import job_env, producer, wakes  # noqa: F401
+from fixtures.job_rows import seed_default_spaces
 
 from curation.jobs_a.ctx import FakeCtx
 from curation.reprocess_fixtures import (
@@ -26,6 +26,7 @@ from src.db.session import async_session_factory
 from src.services.config_store import bound_project
 from src.services.curation import reprocess_job
 from src.services.curation.reprocess_embed_spec import EmbedSpec
+from src.services.embedding_spaces import resolve
 
 
 if TYPE_CHECKING:
@@ -37,14 +38,16 @@ pytestmark = pytest.mark.db
 
 @pytest.mark.asyncio
 async def test_a_reprocess_that_changes_a_vector_adds_one_pending_row_per_level(
-    job_env: Any,  # noqa: F811 - the fixture is requested by name
-    producer: Any,  # noqa: F811 - the fixture is requested by name
-    wakes: Any,  # noqa: F811 - the fixture is requested by name
+    job_env: Any,
+    producer: Any,
+    wakes: Any,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(bound_project, '_IDS', {})  # a slug's id is cached per process
     project = make_project_row(job_env, current_project().record.slug)
+    seed_default_spaces(job_env, project)  # the reprocess reads the project's item space
+    resolve.clear_cache()
     monkeypatch.setattr(current_project().record, 'id', project, raising=False)
     root = servable_root(tmp_path, monkeypatch)
     path = root / 'a.jpg'

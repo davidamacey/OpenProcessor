@@ -15,8 +15,9 @@ from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.config.batch_sync import batch_sync_max
+from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers._errors import server_error
 from src.routers.curation._batch_job_models import BatchJobAccepted
 from src.routers.curation._class_models import (
@@ -24,7 +25,7 @@ from src.routers.curation._class_models import (
     ResolveNewClassRequest,
     ResolveNewClassResponse,
 )
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation.classes_write import create_registry_class
 from src.services.classes.registry import ClassRegistryError
 from src.services.curation.export_support import scroll_hits

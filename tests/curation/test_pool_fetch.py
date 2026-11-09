@@ -18,10 +18,10 @@ class _CountOnlyOS:
         self._count = count
         self.search_calls = 0
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return {'count': self._count}
 
-    async def search(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         self.search_calls += 1
         raise AssertionError('must not scroll a pool already known to exceed cap')
 
@@ -47,15 +47,15 @@ class _ScrollOS(_CountOnlyOS):
         super().__init__(count)
         self._docs = docs
 
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         field = body['_source'][0]
         hits = [{'_id': cid, '_source': {field: emb}} for cid, emb in self._docs.items()]
         return {'_scroll_id': 'sid-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {}
 
 

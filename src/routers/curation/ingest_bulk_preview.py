@@ -13,7 +13,7 @@ import threading
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from fastapi import Request  # noqa: TC002 - FastAPI resolves the annotation
+from fastapi import Request
 
 from src.config import get_curation_config
 from src.routers._errors import server_error

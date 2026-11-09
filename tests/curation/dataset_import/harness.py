@@ -63,7 +63,7 @@ class FakeRun:
         stage: str | None = None,
         counters: Any = None,
         *,
-        force: bool = False,  # noqa: ARG002
+        force: bool = False,
     ) -> None:
         self.snapshots.append(
             {'done': done, 'total': total, 'stage': stage, 'counters': dict(counters or {})}
@@ -181,7 +181,7 @@ class Harness:
         monkeypatch.setattr(
             image_serving,
             '_configured_roots',
-            lambda config=None: ((root or tmp_path).resolve(),),  # noqa: ARG005
+            lambda config=None: ((root or tmp_path).resolve(),),
         )
         self.os = QueryFakeOpenSearch()
         self.registry = InMemoryRegistry(tmp_path)

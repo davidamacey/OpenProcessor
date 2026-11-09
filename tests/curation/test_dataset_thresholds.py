@@ -16,17 +16,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.services.curation import dataset_thresholds as T  # noqa: N812
+from src.services.curation import dataset_thresholds as thresholds
 
 
 EXPECTED = {
-    'block_below': T.HARD_MIN_CROPS_PER_CLASS,
-    'warn_below': T.WARN_MIN_CROPS_PER_CLASS,
-    'min_test_per_class': T.MIN_TEST_CROPS_PER_CLASS,
-    'min_train_per_class': T.MIN_TRAIN_INSTANCES_PER_CLASS,
-    'min_val_per_class': T.MIN_VAL_INSTANCES_PER_CLASS,
-    'aug_target_min': T.AUG_TARGET_MIN,
-    'aug_target_max': T.AUG_TARGET_MAX,
+    'block_below': thresholds.HARD_MIN_CROPS_PER_CLASS,
+    'warn_below': thresholds.WARN_MIN_CROPS_PER_CLASS,
+    'min_test_per_class': thresholds.MIN_TEST_CROPS_PER_CLASS,
+    'min_train_per_class': thresholds.MIN_TRAIN_INSTANCES_PER_CLASS,
+    'min_val_per_class': thresholds.MIN_VAL_INSTANCES_PER_CLASS,
+    'aug_target_min': thresholds.AUG_TARGET_MIN,
+    'aug_target_max': thresholds.AUG_TARGET_MAX,
 }
 
 
@@ -35,23 +35,23 @@ EXPECTED = {
     [(0, 'block'), (19, 'block'), (20, 'warn'), (499, 'warn'), (500, 'ok'), (9000, 'ok')],
 )
 def test_adequacy(n: int, tier: str) -> None:
-    assert T.adequacy(n) == tier
+    assert thresholds.adequacy(n) == tier
 
 
 @pytest.mark.parametrize(('n', 'target'), [(0, 500), (800, 800), (5000, 3000)])
 def test_aug_target(n: int, target: int) -> None:
-    assert T.aug_target(n) == target
+    assert thresholds.aug_target(n) == target
 
 
 def test_preflight_uses_the_same_constants() -> None:
     from src.services.curation import holdout
     from src.services.training import preflight_run as preflight
 
-    assert preflight.HARD_MIN_CROPS_PER_CLASS == T.HARD_MIN_CROPS_PER_CLASS
-    assert preflight.WARN_MIN_CROPS_PER_CLASS == T.WARN_MIN_CROPS_PER_CLASS
-    assert preflight.MIN_TEST_CROPS_PER_CLASS == T.MIN_TEST_CROPS_PER_CLASS
-    assert holdout.MIN_TEST_PER_CLASS == T.MIN_TEST_CROPS_PER_CLASS
-    assert T.dataset_thresholds() == EXPECTED
+    assert preflight.HARD_MIN_CROPS_PER_CLASS == thresholds.HARD_MIN_CROPS_PER_CLASS
+    assert preflight.WARN_MIN_CROPS_PER_CLASS == thresholds.WARN_MIN_CROPS_PER_CLASS
+    assert preflight.MIN_TEST_CROPS_PER_CLASS == thresholds.MIN_TEST_CROPS_PER_CLASS
+    assert holdout.MIN_TEST_PER_CLASS == thresholds.MIN_TEST_CROPS_PER_CLASS
+    assert thresholds.dataset_thresholds() == EXPECTED
 
 
 class _Entry:
@@ -187,7 +187,7 @@ def test_stats_classes_serves_trainable_minus_holdout_and_excluded(
     assert rows[1]['trainable'] == 600 - 5 - 3
     assert rows[1]['trainable_gap'] == 0
     assert rows[2]['trainable'] == 10 - 5 - 0
-    assert rows[2]['trainable_gap'] == T.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
+    assert rows[2]['trainable_gap'] == thresholds.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
 
 
 def test_classes_list_serves_trainable_minus_holdout_and_excluded(
@@ -200,7 +200,7 @@ def test_classes_list_serves_trainable_minus_holdout_and_excluded(
     rows = {c['class_id']: c for c in r.json()['classes']}
     assert rows[1]['trainable'] == 600 - 5 - 3
     assert rows[2]['trainable'] == 10 - 5 - 0
-    assert rows[2]['trainable_gap'] == T.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
+    assert rows[2]['trainable_gap'] == thresholds.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
 
 
 def test_classes_has_no_cluster_aggregation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -231,7 +231,7 @@ def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) 
     r = _client(monkeypatch, resp).get('/curation/projects/default/test_holdout/stats')
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body['min_test_per_class'] == T.MIN_TEST_CROPS_PER_CLASS
+    assert body['min_test_per_class'] == thresholds.MIN_TEST_CROPS_PER_CLASS
     assert {b['key']: b['deficient'] for b in body['by_class']} == {1: False, 2: True}
 
 

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-from collections.abc import AsyncIterator  # noqa: TC003  # FastAPI reads the return annotation
+from collections.abc import AsyncIterator
 
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 

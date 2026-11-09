@@ -26,7 +26,7 @@ from src.config.projects import ProjectRecord, new_project_record
 from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace, Target, legacy_names
 from src.services.detection.geometry import crop_id as make_crop_id
 from src.services.near_duplicates.content_key import content_imohash
-from src.services.projects import registry as registry_module
+from src.services.projects import lifecycle, registry as registry_module
 from src.services.projects.combine import service as combine_service, spaces as combine_spaces
 from src.services.projects.combine.models import CombineRequest
 from src.services.projects.registry import ProjectRegistry
@@ -93,6 +93,10 @@ class StubRegistry(ProjectRegistry):
         return dict(self.records)
 
 
+async def _no_capacity(_client: Any) -> list[dict[str, str]]:
+    return []
+
+
 class World:
     def __init__(self, tmp_path: Path, monkeypatch: Any) -> None:
         import src.config.curation_accessors as curation_mod
@@ -108,6 +112,8 @@ class World:
         self._seed = 0
         monkeypatch.setattr(combine_service, 'target_space_keys', lambda: frozenset({DEFAULT_KEY}))
         monkeypatch.setattr(combine_spaces, 'embedding_space', self._embedding_space)
+        # the in-memory cluster has no health or node stats for the shard-budget check
+        monkeypatch.setattr(lifecycle, '_capacity_error_or_warning', _no_capacity)
         self.space_keys: dict[str, str] = {}
         """slug -> the space key of that project's primary spaces (default: ``DEFAULT_KEY``)."""
         self.settled: list[bool] = []

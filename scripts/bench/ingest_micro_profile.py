@@ -34,7 +34,6 @@ if _HERE.is_file():  # piped through stdin inside the API container there is no 
     sys.path.insert(0, str(_HERE.resolve().parents[2]))
 sys.path.insert(0, '/app')
 
-# ruff: noqa: E402
 
 from src.services.detection.geometry import letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_chw_from_bytes

@@ -262,7 +262,7 @@ class InMemoryRegistries(dict[str, Any]):
 
     override: Any = None
 
-    def get(self, key: Any, default: Any = None) -> Any:  # noqa: ARG002
+    def get(self, key: Any, default: Any = None) -> Any:
         if self.override is not None:
             return self.override
         if key not in self:

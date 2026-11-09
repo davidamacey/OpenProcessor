@@ -10,7 +10,6 @@ import asyncio
 from typing import Any
 
 import pytest
-from fixtures.job_fixtures import kinds, producer  # noqa: F401  # fixture registration: a DELETE queues its job on a fake producer
 from opensearchpy.exceptions import NotFoundError
 
 
@@ -26,7 +25,7 @@ class _FakeIndices:
         self.created[index] = body
         return {'acknowledged': True}
 
-    async def refresh(self, *, index: str | None = None) -> dict[str, Any]:  # noqa: ARG002
+    async def refresh(self, *, index: str | None = None) -> dict[str, Any]:
         if self._owner is not None:
             self._owner._refresh_all()
         return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}
@@ -54,7 +53,7 @@ class FakeRegistryOpenSearch:
     def _refresh_all(self) -> None:
         self._visible = set(self.docs.keys())
 
-    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:
         await asyncio.sleep(0)  # a real read yields; lets concurrent writers interleave
         if id not in self.docs:
             return {'found': False, '_id': id}
@@ -69,12 +68,12 @@ class FakeRegistryOpenSearch:
     async def index(
         self,
         *,
-        index: str,  # noqa: ARG002 - mirrors the client signature
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
         op_type: str | None = None,
         if_seq_no: int | None = None,
-        if_primary_term: int | None = None,  # noqa: ARG002 - one term in the fake
+        if_primary_term: int | None = None,
         refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         from opensearchpy.exceptions import ConflictError
@@ -91,7 +90,7 @@ class FakeRegistryOpenSearch:
             self._visible.discard(id)
         return {'_id': id, 'result': 'created'}
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         from opensearchpy.exceptions import RequestError
 
         query = body.get('query') or {}
@@ -160,23 +159,23 @@ class _FakeLifecycleIndices:
     def __init__(self, outer: FakeLifecycleOpenSearch) -> None:
         self._outer = outer
 
-    async def delete(self, *, index: str, ignore: Any = None) -> dict[str, Any]:  # noqa: ARG002
+    async def delete(self, *, index: str, ignore: Any = None) -> dict[str, Any]:
         self._outer.deleted_indexes.append(index)
         self._outer.indexes.pop(index, None)
         return {'acknowledged': True}
 
-    async def create(self, *, index: str, body: Any = None) -> dict[str, Any]:  # noqa: ARG002
+    async def create(self, *, index: str, body: Any = None) -> dict[str, Any]:
         self._outer.indexes[index] = self._outer.indexes.get(index, [])
         return {'acknowledged': True}
 
     async def exists(self, *, index: str) -> bool:
         return index in self._outer.indexes
 
-    async def get(self, *, index: str, **_kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def get(self, *, index: str, **_kw: Any) -> dict[str, Any]:
         # no schema marker recorded: the bootstrap shortcut reads "not current"
         return {}
 
-    async def refresh(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def refresh(self, *, index: str) -> dict[str, Any]:
         self._outer._refresh_all()
         return {'_shards': {'total': 0, 'successful': 0, 'failed': 0}}
 
@@ -187,10 +186,10 @@ class _FakeTransport:
 
     async def perform_request(
         self,
-        method: str,  # noqa: ARG002
+        method: str,
         url: str,
-        params: Any = None,  # noqa: ARG002
-        **kwargs: Any,  # noqa: ARG002
+        params: Any = None,
+        **kwargs: Any,
     ) -> Any:
         if url == '/_cluster/health':
             return {'active_shards': 5, 'number_of_data_nodes': 1}
@@ -224,7 +223,7 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         self.indices: Any = _FakeLifecycleIndices(self)
         self.transport = _FakeTransport()
 
-    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:
         # a real ``client.get()`` with no ``id`` raises
         # ``NotFoundError`` -- it never returns a ``found: False`` body.
         # Every production caller (``registry.get_record_with_seq``,
@@ -248,12 +247,12 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
     async def index(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
         op_type: str | None = None,
         if_seq_no: int | None = None,
-        if_primary_term: int | None = None,  # noqa: ARG002
+        if_primary_term: int | None = None,
         refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         if op_type == 'create' and id in self.docs:
@@ -271,11 +270,11 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
     async def update(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
-        retry_on_conflict: int = 0,  # noqa: ARG002
-        refresh: str | bool | None = None,  # noqa: ARG002
+        retry_on_conflict: int = 0,
+        refresh: str | bool | None = None,
     ) -> dict[str, Any]:
         # Model the real create-vs-bump distinction of a painless script with
         # an ``upsert``: a brand-new doc gets the ``upsert`` body verbatim
@@ -306,10 +305,10 @@ class FakeLifecycleOpenSearch(FakeRegistryOpenSearch):
         self._seq[id] = self._seq.get(id, 0) + 1
         return {'_id': id, 'result': 'updated'}
 
-    async def count(self, *, index: str, body: Any = None) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: Any = None) -> dict[str, Any]:
         return {'count': len(self.indexes.get(index, []))}
 
-    async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, *, body: list[Any], refresh: bool = False) -> dict[str, Any]:
         """Just enough of ``_bulk`` for a mirror write:
         every other-odd item is an action header, every even item its doc."""
         for action, doc in zip(body[0::2], body[1::2], strict=True):

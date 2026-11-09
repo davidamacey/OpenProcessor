@@ -130,10 +130,6 @@ def test_probe_architectures_is_imported_by_its_consumers() -> None:
 
     assert run_probe_mod.ARCHITECTURES is probe_models.PROBE_ARCHITECTURES
 
-    from src.services.curation import probe_predictions
-
-    assert probe_predictions.PROBE_ARCHITECTURES is probe_models.PROBE_ARCHITECTURES
-
     from src.routers.curation import probe as probe_router_mod
 
     assert probe_router_mod.PROBE_ARCHITECTURES is probe_models.PROBE_ARCHITECTURES

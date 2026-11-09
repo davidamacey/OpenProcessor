@@ -272,17 +272,17 @@ class _DetectorPool:
         self.anchors = anchors
         self.calls: list[str] = []
 
-    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+    async def get_model_input_datatype(self, model_name: str) -> str:
         return 'UINT8'
 
-    async def get_model_output_shape(self, model_name: str, output_name: str) -> tuple[int, ...]:  # noqa: ARG002
+    async def get_model_output_shape(self, model_name: str, output_name: str) -> tuple[int, ...]:
         return (-1, 5, -1)
 
     async def infer(
         self,
         model_name: str,
-        inputs: list[Any],  # noqa: ARG002
-        outputs: list[Any],  # noqa: ARG002
+        inputs: list[Any],
+        outputs: list[Any],
     ) -> Any:
         import numpy as np
 

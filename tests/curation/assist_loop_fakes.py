@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 import hashlib
 import sys
 import uuid
 from collections.abc import Callable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -22,13 +23,17 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import psycopg
 from _class_registry_fake import InMemoryRegistry, use_registry
+from fixtures.job_rows import seed_default_spaces
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.clients.storage.roots import RootedStore
 from src.config.curation_accessors import base_curation_config
+from src.config.project_context import bind_project
+from src.config.projects import new_project_record, resources_for_new
 from src.db import session as db
+from src.db.engine import bind_async_engine
 from src.db.repos import assist_loop as budget_repo, assist_loop_record as rows
 from src.domain.loop_tree import root_path
 from src.services.curation.assist.slot_write import RunMeta
@@ -55,10 +60,11 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Iterator
 
     import pytest
     from fixtures.postgres import PgDatabase
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'db'))
 from _research_seed import make_identity, make_loop_run, make_partition, make_project
@@ -349,13 +355,31 @@ class LoopEnv:
 
     pg: PgDatabase
     project: uuid.UUID
+    slug: str
     store: RootedStore
 
     @classmethod
     def make(cls, pg: PgDatabase, tmp_path: Path) -> LoopEnv:
+        slug = f'loop-{uuid.uuid4().hex[:8]}'
         with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-            project = make_project(conn, f'loop-{uuid.uuid4().hex[:8]}')
-        return cls(pg, project, RootedStore({'projects': tmp_path}))
+            project = make_project(conn, slug)
+        # the OCC writers read the project's live embedding spaces to exclude its vectors
+        seed_default_spaces(pg, project)
+        return cls(pg, project, slug, RootedStore({'projects': tmp_path}))
+
+    @contextmanager
+    def bound(self, engine: AsyncEngine) -> Iterator[None]:
+        """What a job's entry point binds before the handler runs: its own engine and its project."""
+        cfg = base_curation_config()
+        # The project's database row (slug, id) for the registry lookups; the in-memory store
+        # keeps its documents under the default index names, so those are the resources.
+        record = dataclasses.replace(
+            new_project_record(self.slug, cfg),
+            id=self.project,
+            resources=resources_for_new('default', cfg),
+        )
+        with bind_async_engine(engine), bind_project(record):
+            yield
 
     def new_run(
         self,
@@ -495,6 +519,16 @@ async def build_deps(
     return deps
 
 
+async def run_bound[T](env: LoopEnv, awaitable: Awaitable[T]) -> T:
+    """Await ``awaitable`` as a job body runs: on its own engine, with the project bound."""
+    engine = create_async_engine(env.pg.url('app'), poolclass=NullPool)
+    try:
+        with env.bound(engine):
+            return await awaitable
+    finally:
+        await engine.dispose()
+
+
 async def drive(
     world: World,
     env: LoopEnv,
@@ -526,6 +560,8 @@ async def drive(
         audit_max_crops=audit_max_crops,
     )
     engine = create_async_engine(env.pg.url('app'), poolclass=NullPool)
+    binding = ExitStack()
+    binding.enter_context(env.bound(engine))
     try:
         sessions = await env.sessions_for(engine)
         async with sessions() as session:
@@ -577,12 +613,11 @@ async def drive(
         await finish(loop_run, outcome)
         return Run(outcome, record, budget, ref)
     finally:
+        binding.close()
         await engine.dispose()
 
 
 def replace_run(row: rows.RunRow, **over: Any) -> rows.RunRow:
-    import dataclasses
-
     return dataclasses.replace(row, **over)
 
 

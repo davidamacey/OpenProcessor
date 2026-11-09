@@ -43,6 +43,8 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
+pytest_plugins = ['_records_world']
+
 ITEMS = 'test_items'
 CFG = CurationConfig(items_index=ITEMS)
 F = get_region_fields()
@@ -504,7 +506,7 @@ def _run_cli(monkeypatch, argv: list[str], fake: QueryFakeOpenSearch) -> int:
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_defaults_to_dry_run(monkeypatch, capsys):
     fake = _cli_fake()
     assert _run_cli(monkeypatch, ['--status', 'detection_failed'], fake) == 0
@@ -523,7 +525,7 @@ def test_cli_defaults_to_dry_run(monkeypatch, capsys):
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_apply_with_filters(monkeypatch):
     fake = _cli_fake()
     argv = ['--status', 'detection_failed', '--detector', 'det_b', '--apply']
@@ -532,7 +534,7 @@ def test_cli_apply_with_filters(monkeypatch):
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_pending_verification_reverifies_and_keeps_the_box(monkeypatch):
     """Was ``--clear-detection`` refused with ``--to pending_verification``:
     the flag is gone (a full re-detect always clears unlocked machine
@@ -553,7 +555,7 @@ def test_cli_pending_verification_reverifies_and_keeps_the_box(monkeypatch):
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_status_choices_exclude_human_and_success_states(monkeypatch):
     for status in ('detected', 'false_positive'):
         with pytest.raises(SystemExit):
@@ -613,7 +615,7 @@ async def test_unseeded_backfill_seeds_pending_detection_into_worker_queue():
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_missing_status_dry_run_then_apply(monkeypatch, capsys):
     fake = _cli_fake(_unseeded_corpus())
     assert _run_cli(monkeypatch, ['--missing-status'], fake) == 0
@@ -629,7 +631,7 @@ def test_cli_missing_status_dry_run_then_apply(monkeypatch, capsys):
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('pg_registry')
+@pytest.mark.usefixtures('world')
 def test_cli_requires_exactly_one_of_status_or_missing_status(monkeypatch):
     with pytest.raises(SystemExit):
         _run_cli(monkeypatch, [], _fake())

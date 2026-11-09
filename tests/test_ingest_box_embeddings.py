@@ -26,7 +26,7 @@ class _FakeAdapter:
 
     requested_outputs = ('det_boxes', 'det_scores', 'det_classes', 'num_dets')
 
-    def parse(self, response: Any, batch_size: int) -> list[dict]:  # noqa: ARG002
+    def parse(self, response: Any, batch_size: int) -> list[dict]:
         return [
             {
                 'num_dets': 1,
@@ -67,9 +67,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TritonClient:
         return object()  # yolo response; ignored by _FakeAdapter.parse
 
     monkeypatch.setattr(c, '_infer_with_retry', fake_infer_with_retry)
-    monkeypatch.setattr(c, '_get_detection_adapter', lambda model_name: _FakeAdapter())  # noqa: ARG005
-    monkeypatch.setattr(c, '_model_input_size', lambda model_name: 640)  # noqa: ARG005
-    monkeypatch.setattr(c, '_model_input_datatype', lambda model_name: 'UINT8')  # noqa: ARG005
+    monkeypatch.setattr(c, '_get_detection_adapter', lambda model_name: _FakeAdapter())
+    monkeypatch.setattr(c, '_model_input_size', lambda model_name: 640)
+    monkeypatch.setattr(c, '_model_input_datatype', lambda model_name: 'UINT8')
     return c
 
 
@@ -129,7 +129,7 @@ class _MultiSmallBoxAdapter:
         dtype=np.float32,
     )
 
-    def parse(self, response: Any, batch_size: int) -> list[dict]:  # noqa: ARG002
+    def parse(self, response: Any, batch_size: int) -> list[dict]:
         n = len(self._BOXES)
         return [
             {
@@ -151,7 +151,7 @@ def test_infer_yolo_clip_cpu_stacks_many_small_boxes_on_a_coco_image(
     monkeypatch.setattr(
         client,
         '_get_detection_adapter',
-        lambda model_name: _MultiSmallBoxAdapter(),  # noqa: ARG005
+        lambda model_name: _MultiSmallBoxAdapter(),
     )
 
     result = client.infer_yolo_clip_cpu(_make_jpeg_bytes(640, 480))
@@ -199,7 +199,7 @@ def test_infer_yolo_clip_cpu_no_detections_returns_empty_arrays(
     class _EmptyAdapter:
         requested_outputs = ('det_boxes', 'det_scores', 'det_classes', 'num_dets')
 
-        def parse(self, response, batch_size):  # noqa: ARG002
+        def parse(self, response, batch_size):
             return [
                 {
                     'num_dets': 0,
@@ -209,7 +209,7 @@ def test_infer_yolo_clip_cpu_no_detections_returns_empty_arrays(
                 }
             ]
 
-    monkeypatch.setattr(client, '_get_detection_adapter', lambda model_name: _EmptyAdapter())  # noqa: ARG005
+    monkeypatch.setattr(client, '_get_detection_adapter', lambda model_name: _EmptyAdapter())
 
     result = client.infer_yolo_clip_cpu(_make_jpeg_bytes(400, 300))
 

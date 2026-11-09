@@ -49,7 +49,7 @@ class TestSignalHandling:
         async def _search(*, index: str, body: dict[str, Any]) -> dict[str, Any]:
             return {'hits': {'hits': []}}
 
-        async def _get(*, index: str, id: str) -> dict[str, Any]:  # noqa: A002
+        async def _get(*, index: str, id: str) -> dict[str, Any]:
             return {'found': False}
 
         os_client = MagicMock()

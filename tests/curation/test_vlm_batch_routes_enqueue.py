@@ -1,5 +1,3 @@
-# ruff: noqa: F401, F811 - pytest fixtures are imported by name and used as test arguments
-
 from __future__ import annotations
 
 import base64
@@ -14,7 +12,6 @@ import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fixtures.job_fixtures import job_env, kinds, producer, wakes
 from fixtures.job_rows import make_project, sql
 
 from src.config.curation_accessors import base_curation_config

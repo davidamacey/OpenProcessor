@@ -15,18 +15,13 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.config import DetectionProfile, get_region_fields
+from src.config.curation_accessors import items_index
 from src.config.region_state import RegionStatus, region_status_catalog
 from src.domain.region_boxes import BOX_STATES, box_query
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegionProfileDep,
-    guard_page_depth,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, guard_page_depth, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.item_filter import item_filter_clauses

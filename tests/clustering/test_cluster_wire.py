@@ -28,6 +28,7 @@ def test_the_cluster_object_nests_the_served_fields() -> None:
         'score': 0.7,
         'margin': 0.1,
         'assigned_by': 'incremental',
+        'display_no': None,
     }
 
 

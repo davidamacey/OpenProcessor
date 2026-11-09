@@ -11,11 +11,10 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from curation.cross_project_leak import _env as _sweep
 from fastapi.testclient import TestClient
 
 from src.core.exceptions import RequestRejectedError
-from src.services.projects import lifecycle
+from src.services.projects import delete as delete_mod
 from src.services.projects.guard import make_curation_opensearch
 
 
@@ -26,8 +25,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
-
-leak_env = _sweep.leak_env
 
 API = '/curation/projects'
 
@@ -63,7 +60,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(
     # First real attempt at the finish hits the fault: record stays
     # 'deleting', never tombstoned.
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha'))
+        asyncio.run(delete_mod.delete_project_finish(guarded_client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'project_busy'
 
     get_resp = client_http.get(f'{API}/alpha')
@@ -80,7 +77,7 @@ def test_delete_retry_after_failed_index_delete_succeeds(
     assert len(producer.sent()) == 1
 
     # The transient fault has cleared; the retried finish now succeeds.
-    finished = asyncio.run(lifecycle.delete_project_finish(guarded_client, slug='alpha')).record
+    finished = asyncio.run(delete_mod.delete_project_finish(guarded_client, slug='alpha')).record
     assert finished.status == 'deleted'
 
     final = client_http.get(f'{API}/alpha')

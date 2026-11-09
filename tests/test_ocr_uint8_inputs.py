@@ -186,10 +186,10 @@ class _PoolStub:
         self.datatype = datatype
         self.sent: list[Any] = []
 
-    async def get_model_input_datatype(self, _m: str, *, input_name: str) -> str:  # noqa: ARG002 -- mirrors the pool signature
+    async def get_model_input_datatype(self, _m: str, *, input_name: str) -> str:
         return self.datatype
 
-    async def infer(self, _m: str, inputs: list, outputs: list) -> Any:  # noqa: ARG002 -- mirrors the pool signature
+    async def infer(self, _m: str, inputs: list, outputs: list) -> Any:
         self.sent = inputs
         raise _StopError
 

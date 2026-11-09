@@ -1,4 +1,3 @@
-# ruff: noqa: F811 - pytest fixtures are imported by name and used as test arguments
 """A loop does not start while a clustering run or projection of its project is live: its
 activation would re-project the items under the loop. Another project's run is none of its
 business."""
@@ -14,7 +13,6 @@ import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fixtures.job_fixtures import job_env  # noqa: F401
 from fixtures.job_rows import make_project, sql
 
 from src.config.curation_accessors import base_curation_config

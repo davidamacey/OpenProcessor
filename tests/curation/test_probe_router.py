@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
-import pytest  # noqa: TC002
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _client() -> TestClient:
@@ -19,7 +23,9 @@ def _client() -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: (
+        AsyncMock()
+    )  # FastAPI parses a class here as a dependency with parameters
 
     async def no_database():  # the refusals under test come before any job row
         yield None

@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config.batch_sync import batch_sync_max
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._batch_job_models import BatchJobAccepted
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, is_not_found, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES

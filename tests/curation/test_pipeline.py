@@ -90,7 +90,7 @@ class _FakeOpenSearch:
         self._hits_by_class = hits_by_class
         self.scroll_search_calls: list[dict[str, Any]] = []
 
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         if 'aggs' in body:
             # pipeline_health_snapshot's baseline/after rollup -- an empty
             # dict makes it degrade to all-zero counts (its own
@@ -111,20 +111,20 @@ class _FakeOpenSearch:
         ]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {}
 
-    async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         return {'count': 0}
 
-    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
         # No settings document: the VLM scope policy is the default (scope all).
         raise RuntimeError('404 not found: no settings document')
 
-    async def mget(self, *, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def mget(self, *, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         # Every doc reports not-found -- _run_chunk's `if not crops` guard
         # short-circuits before ever calling the VLM labeler, so this test
         # can prove the query scoping without mocking out VLM transport.
@@ -229,7 +229,7 @@ class TestVlmStageExplainsEmptySelection:
         install_registry((3, 'x'))
 
         class _Os(_FakeOpenSearch):
-            async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+            async def count(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
                 filters = body['query']['bool'].get('filter', [])
                 return {'count': 0 if len(filters) > 0 else 5}
 

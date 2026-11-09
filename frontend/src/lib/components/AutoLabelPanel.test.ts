@@ -24,7 +24,9 @@ function read(rel: string): string {
 }
 
 describe('AutoLabelPanel.svelte', () => {
-  const src = read('./AutoLabelPanel.svelte');
+  // The start call lives in the controller; the template stays in the view.
+  const view = read('./AutoLabelPanel.svelte');
+  const src = view + read('../autoLabelController.svelte.ts');
 
   it('spreads ...scope.toStartParams() into the startAutoLabel call', () => {
     expect(src).toMatch(/\.\.\.scope\.toStartParams\(\)/);

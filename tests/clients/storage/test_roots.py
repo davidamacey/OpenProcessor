@@ -24,6 +24,8 @@ def paths(tmp_path: Path) -> StorageRootPaths:
         models=tmp_path / 'models',
         cache=tmp_path / 'cache',
         upgrade=tmp_path / 'upgrade',
+        bakeoff_results=tmp_path / 'state' / 'projects',
+        pytorch_models=tmp_path / 'pytorch_models',
     )
 
 
@@ -69,3 +71,41 @@ def test_paths_come_from_the_existing_settings(
     assert got.cache == tmp_path / 'c'
     assert got.source == tmp_path / 's'
     assert got.upgrade == tmp_path / 'st' / 'upgrade'
+    assert got.bakeoff_results == tmp_path / 'st' / 'projects'
+
+
+def test_bakeoff_results_key_resolves_to_the_existing_results_directory(
+    paths: StorageRootPaths,
+) -> None:
+    out = paths.bakeoff_results / 'cats' / 'bakeoff_jobs' / 'out' / 'job1'
+    out.mkdir(parents=True)
+    (out / 'status.json').write_text('{}')
+    store = build_rooted_store(paths)
+    assert store.local_path('bakeoff_results/cats/job1') == out
+    assert store.exists('bakeoff_results/cats/job1/status.json')
+
+
+def test_an_uploaded_model_key_resolves_to_the_pytorch_models_mount(
+    paths: StorageRootPaths,
+) -> None:
+    paths.pytorch_models.mkdir()
+    (paths.pytorch_models / 'car.pt').write_bytes(b'w')
+    store = build_rooted_store(paths)
+    assert store.exists('models/pytorch_models/car.pt')
+    assert store.local_path('models/pytorch_models/car.pt') == paths.pytorch_models / 'car.pt'
+    assert not store.exists('models/pytorch_models/other.pt')
+
+
+def test_list_prefix_returns_keys_of_the_remapped_roots(paths: StorageRootPaths) -> None:
+    out = paths.bakeoff_results / 'cats' / 'bakeoff_jobs' / 'out' / 'job1'
+    out.mkdir(parents=True)
+    (out / 'status.json').write_text('{}')
+    paths.pytorch_models.mkdir()
+    (paths.pytorch_models / 'sub').mkdir()
+    (paths.pytorch_models / 'sub' / 'car.pt').write_bytes(b'w')
+    store = build_rooted_store(paths)
+    assert store.list_prefix('bakeoff_results/cats/job1') == [
+        'bakeoff_results/cats/job1/status.json'
+    ]
+    assert store.list_prefix('bakeoff_results/cats') == ['bakeoff_results/cats/job1/status.json']
+    assert store.list_prefix('models/pytorch_models/sub') == ['models/pytorch_models/sub/car.pt']

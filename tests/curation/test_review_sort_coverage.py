@@ -16,6 +16,7 @@ import pytest
 from config_store.memory_settings import install, revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
@@ -50,13 +51,13 @@ class _CoverageOpenSearch:
         self.coverage = coverage
         self.total = total
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         query = body['query']
         if 'exists' in query:
             return {'count': self.coverage.get(query['exists']['field'], 0)}
         return {'count': self.total}
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         """Coverage is one ``size: 0`` search with a ``filter: exists``
         sub-agg per field (plus ``track_total_hits`` for the denominator)."""
         aggs = {
@@ -108,8 +109,8 @@ async def test_unknown_coverage_never_triggers_a_fallback() -> None:
     from src.services.curation import review_sorts
 
     class _Broken:
-        async def count(self, **_kw: Any) -> dict[str, Any]:
-            raise RuntimeError('down')
+        async def search(self, **_kw: Any) -> dict[str, Any]:
+            raise OpenSearchException('down')
 
     _clause, applied, reason = await review_sorts.build_sort(
         None, tab='uncertainty', opensearch=_Broken()

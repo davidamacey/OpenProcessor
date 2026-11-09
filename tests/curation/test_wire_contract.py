@@ -24,7 +24,7 @@ from src.config.region_fields import RegionFields
 from src.domain.embedding_spaces import Target
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation import _common
-from src.routers.curation._common import ItemDoc
+from src.routers.curation._item_models import ItemDoc
 from src.services.curation import index_bootstrap, semantic_search_run, wire
 from src.services.curation.region_rows import INNER_HITS_NAME
 from src.services.curation.wire import (
@@ -111,15 +111,15 @@ class _FakeItemsOS:
             'inner_hits': {INNER_HITS_NAME: {'hits': {'hits': matched}}},
         }
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return {'hits': {'total': {'value': 1}, 'hits': [self._hit()]}}
 
-    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:
         if id != self.doc['crop_id']:
             raise NotFoundError(404, 'not_found', {})
         return {**self._hit(), 'found': True}
 
-    async def mget(self, *, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def mget(self, *, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         return {'docs': [{**self._hit(), 'found': True, '_seq_no': 1, '_primary_term': 1}]}
 
     async def bulk(self, *, body: list[dict[str, Any]], **_: Any) -> dict[str, Any]:
@@ -311,7 +311,7 @@ def test_region_write_responses_use_wire_names(monkeypatch: pytest.MonkeyPatch) 
     """The PUT response echoes wire keys, not the overridden storage keys."""
 
     class _WritableOS(_FakeItemsOS):
-        async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+        async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
             resp = await super().get(index=index, id=id, **kw)
             return {**resp, '_seq_no': 0, '_primary_term': 1}
 
@@ -465,7 +465,7 @@ async def test_worker_region_events_reach_subscribers_with_status(
     api = TestClient(app)
 
     class _ForwardingClient:
-        async def post(self, url: str, *, json: dict[str, Any], timeout: float) -> Any:  # noqa: ARG002
+        async def post(self, url: str, *, json: dict[str, Any], timeout: float) -> Any:
             return api.post(url.removeprefix('http://api'), json=json)
 
     monkeypatch.setattr(bulk_writer, '_EVENT_API_URL', 'http://api')

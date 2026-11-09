@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.config.settings import TritonModelConfig
 from src.schemas.curation.config_common import ActivateResponse, ActiveRef, ValidationReport
-from src.services.curation.region_impact import ActivationImpact  # noqa: TC001  # pydantic field type
+from src.services.curation.region_impact import ActivationImpact
 from src.utils.class_names import confine_labels_path
 
 

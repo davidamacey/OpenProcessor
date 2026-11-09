@@ -15,7 +15,7 @@ class FakeOpenSearch:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool = False,  # noqa: ARG002 - the client's signature
+        refresh: bool = False,
     ) -> dict[str, Any]:
         self.calls += 1
         items = []

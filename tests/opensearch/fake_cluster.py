@@ -119,7 +119,7 @@ class FakeIndices:
         self._c.closed.discard(index)
         return {'acknowledged': True}
 
-    async def stats(self, *, index: str, metric: str) -> dict[str, Any]:  # noqa: ARG002
+    async def stats(self, *, index: str, metric: str) -> dict[str, Any]:
         self._record('indices.stats', index)
         primaries = {'docs': {'count': 3}, 'store': {'size_in_bytes': 4096}}
         return {'_all': {'primaries': primaries}}
@@ -136,7 +136,7 @@ class FakeClusterApi:
     def __init__(self, cluster: FakeCluster) -> None:
         self._c = cluster
 
-    async def health(self, *, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:  # noqa: ARG002
+    async def health(self, *, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:
         self._c.calls.append(('cluster.health', index))
         return {'status': 'yellow', 'timed_out': False}
 
@@ -175,7 +175,7 @@ class FakeGlobalClient:
     def __init__(self, cluster: FakeCluster) -> None:
         self._c = cluster
 
-    async def create_all_indexes(self, force_recreate: bool = False) -> dict[str, bool]:  # noqa: ARG002
+    async def create_all_indexes(self, force_recreate: bool = False) -> dict[str, bool]:
         for name in self.NAMES:
             if name not in self._c.indexes:
                 self._c.indexes[name] = {

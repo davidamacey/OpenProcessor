@@ -20,7 +20,7 @@ class _FakeTransport:
             '/_nodes/stats/jvm': jvm_stats,
         }
 
-    async def perform_request(self, method, url, params=None, **kwargs):  # noqa: ARG002
+    async def perform_request(self, method, url, params=None, **kwargs):
         return self._responses[url]
 
 
@@ -75,7 +75,7 @@ def test_status_blocked_past_hard_limit() -> None:
 
 def test_unreachable_cluster_returns_none() -> None:
     class _BoomTransport:
-        async def perform_request(self, *args, **kwargs):  # noqa: ARG002
+        async def perform_request(self, *args, **kwargs):
             raise OpenSearchConnectionError('N/A', 'unreachable', Exception('down'))
 
     client = _FakeClient(_BoomTransport())

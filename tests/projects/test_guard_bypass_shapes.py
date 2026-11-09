@@ -71,7 +71,7 @@ def test_shape02_mget_dict_body_through_the_real_client_refused(snapshot) -> Non
     sent: list[tuple[str, str, Any]] = []
 
     class _Bottom:
-        async def perform_request(self, method, url, params=None, body=None, **_kw):  # noqa: ARG002
+        async def perform_request(self, method, url, params=None, body=None, **_kw):
             sent.append((method, url, body))
             return {'docs': []}
 

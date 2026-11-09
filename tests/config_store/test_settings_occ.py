@@ -8,6 +8,7 @@ import pytest
 from _config_fixtures import make_project
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from fixtures.job_rows import seed_default_spaces
 
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine', 'api_async_engine')]
@@ -17,7 +18,9 @@ URL = '/curation/projects/default/settings'
 
 @pytest.fixture(scope='module', autouse=True)
 def _default_project(pg):
-    return make_project(pg, 'default')
+    project = make_project(pg, 'default')
+    seed_default_spaces(pg, project)  # validating a default reads the primary item space
+    return project
 
 
 @pytest.fixture
@@ -31,7 +34,12 @@ def client(pg_env, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()  # noqa: PLW0108  # FastAPI reads a bare class as a dependency with parameters
+    # the strategy registry counts how many items carry each field a strategy needs
+    opensearch = AsyncMock()
+    opensearch.search = AsyncMock(
+        return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}}
+    )
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: opensearch
     return TestClient(app)
 
 

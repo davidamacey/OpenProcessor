@@ -121,7 +121,7 @@ def test_guarded_transport_delegates_and_checks() -> None:
     calls: list[tuple[str, str]] = []
 
     class _InnerTransport:
-        async def perform_request(self, method, url, params=None, body=None, **kwargs):  # noqa: ARG002
+        async def perform_request(self, method, url, params=None, body=None, **kwargs):
             calls.append((method, url))
             return {'ok': True}
 

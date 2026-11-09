@@ -334,9 +334,9 @@ async def test_https_handshake_uses_the_original_name_for_sni(
     class Stream(httpcore.AsyncNetworkStream):
         async def start_tls(
             self,
-            ssl_context: Any,  # noqa: ARG002 - protocol signature
+            ssl_context: Any,
             server_hostname: str | None = None,
-            timeout: float | None = None,  # noqa: ARG002 - protocol signature
+            timeout: float | None = None,
         ) -> Any:
             tls.append(server_hostname)
             raise httpcore.ConnectError('stop: the handshake target is known')

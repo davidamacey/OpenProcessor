@@ -36,7 +36,6 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-# ruff: noqa: E402
 import baselines
 import graph_lib as gl
 

@@ -28,18 +28,18 @@ class _RecordingOS:
         self.search_bodies: list[dict[str, Any]] = []
         self.get_calls: list[dict[str, Any]] = []
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         json.dumps(body)  # a FieldInfo leaking into the query would blow up here
         self.search_bodies.append(body)
         hits = [{'_id': k, '_source': v} for k, v in self.docs.items()]
         return {'hits': {'total': {'value': len(hits)}, 'hits': hits[: body.get('size', 10)]}}
 
-    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
         self.get_calls.append({'index': index, 'id': id, **kw})
         doc = self.docs.get(id, {'crop_id': id})
         return {'_id': id, '_source': dict(doc), 'found': True}
 
-    async def mget(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def mget(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         return {
             'docs': [
                 {'_id': i, '_source': self.docs[i], 'found': True}

@@ -19,7 +19,7 @@ class _FakeScrollOS:
     def __init__(self) -> None:
         self.search_bodies: list[dict[str, Any]] = []
 
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         self.search_bodies.append(body)
         return {'_scroll_id': None, 'hits': {'hits': []}}
 

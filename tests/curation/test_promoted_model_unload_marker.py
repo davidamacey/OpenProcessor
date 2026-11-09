@@ -111,7 +111,7 @@ def test_the_unload_route_records_the_marker(repo: Path, monkeypatch: pytest.Mon
     monkeypatch.setitem(
         app.dependency_overrides,
         get_curation_opensearch,
-        lambda: object(),  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+        lambda: object(),  # FastAPI parses a class here as a dependency with parameters
     )
     client = TestClient(app)
     assert client.post('/models/cars__det/unload').status_code == 200

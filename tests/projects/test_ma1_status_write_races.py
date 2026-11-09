@@ -86,9 +86,9 @@ def test_slow_create_cannot_resurrect_a_stale_building_delete(monkeypatch) -> No
         # registry snapshot in sync with the direct mutation above.
         await registry.refresh_strict()
 
-        deleting = await lifecycle.delete_project(slug='gamma', confirm='gamma')
+        deleting = await delete_mod.delete_project(slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
-        tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
+        tombstoned = (await delete_mod.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'
 
         release_create.set()
@@ -129,7 +129,7 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
     asyncio.run(lifecycle.create_project(client, slug='beta', display_name='Beta'))
     asyncio.run(registry.ensure_fresh())
 
-    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(delete_mod.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     # The first finish to start draining is A: it times out (and rolls back); B's drain outlasts
@@ -173,14 +173,14 @@ def test_second_finish_on_a_different_worker_cannot_destroy_a_project_a_first_fi
 
     async def _finish_a() -> None:
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project_finish(client, slug='alpha')
+            await delete_mod.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'project_busy'
 
     async def _finish_b_cross_worker() -> None:
         while not drains:  # A is draining
             await asyncio.sleep(0.005)
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project_finish(client, slug='alpha')
+            await delete_mod.delete_project_finish(client, slug='alpha')
         assert exc_info.value.detail['error'] == 'invalid_transition', (
             'F1: the claim write must be what stops B, once A has already rolled the '
             'record back -- not a swallowed exception further down the finish'
@@ -249,9 +249,9 @@ def test_create_best_effort_cleans_up_indexes_orphaned_by_a_stale_building_delet
         await amutate_project('gamma', updated_at=stale_updated_at)
         await registry.refresh_strict()
 
-        deleting = await lifecycle.delete_project(slug='gamma', confirm='gamma')
+        deleting = await delete_mod.delete_project(slug='gamma', confirm='gamma')
         assert deleting.status == 'deleting'
-        tombstoned = (await lifecycle.delete_project_finish(client, slug='gamma')).record
+        tombstoned = (await delete_mod.delete_project_finish(client, slug='gamma')).record
         assert tombstoned.status == 'deleted'
 
         release_create.set()

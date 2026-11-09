@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._autolabel_models import (
     AutoLabelActionResponse,
     AutoLabelCancelResponse,

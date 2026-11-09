@@ -15,7 +15,7 @@ from fixtures.job_rows import sql
 from projects.conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 from src.db.session import async_session_factory
-from src.services.projects import lifecycle
+from src.services.projects import delete as delete_mod, lifecycle
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
 
@@ -53,9 +53,9 @@ def worker_app(queue_env):
 async def _two_projects(client):
     await lifecycle.create_project(client, slug='alpha', display_name='Alpha')
     await lifecycle.create_project(client, slug='beta', display_name='Beta')
-    deleting = await lifecycle.delete_project(slug='alpha', confirm='alpha')
+    deleting = await delete_mod.delete_project(slug='alpha', confirm='alpha')
     async with async_session_factory()() as session:
-        started = await lifecycle.start_project_delete(session, 'alpha')
+        started = await delete_mod.start_project_delete(session, 'alpha')
     return deleting, started
 
 

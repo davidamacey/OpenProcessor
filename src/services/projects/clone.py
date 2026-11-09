@@ -2,9 +2,7 @@
 another, either during creation or into an existing ``active`` project.
 
 Split out of ``lifecycle.py`` to stay under the repo's 700-LOC
-pre-commit ratchet; ``lifecycle.py`` re-exports :func:`clone_settings`
-and :func:`clone_settings_into` so every existing caller
-(``lifecycle.clone_settings(...)``) keeps working unchanged.
+pre-commit ratchet; callers import it from here.
 """
 
 from __future__ import annotations

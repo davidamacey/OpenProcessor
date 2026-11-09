@@ -45,7 +45,7 @@ class FakeOpenSearch:
         self.queries: list[dict[str, Any]] = []
         self._served: set[str] = set()
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         self.queries.append(body['query'])
         docs = self._docs if not self._by_status else self._match(body['query'])
         scroll_id = f'scroll-{len(self.queries)}'
@@ -72,10 +72,10 @@ class FakeOpenSearch:
             return self._docs
         return [d for d in self._docs if d.get(FIELDS.status) in wanted]
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 
@@ -85,7 +85,8 @@ FIELDS = RegionFields()
 def generic_service(
     tmp_path: Path, docs: list[dict[str, Any]], names: list[str]
 ) -> GenericYoloExportService:
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    # no keep-last prune: it reads the pins (training runs, bake-offs) from PostgreSQL
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     registry = make_registry(tmp_path / 'registry', names)
     return GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=registry)
 
@@ -100,6 +101,7 @@ def single_class_service(
 ) -> SingleClassExportService:
     cfg = CurationConfig(
         export_root=tmp_path / 'exports',
+        export_keep_last=0,  # a prune reads its pins from PostgreSQL
         source_root=source_root or (tmp_path / 'images'),
     )
     return SingleClassExportService(

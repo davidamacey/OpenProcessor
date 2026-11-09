@@ -11,19 +11,17 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
-from fixtures.job_fixtures import FakeProducer, job_env, kinds, producer, queue_hooks, wakes
 from fixtures.job_rows import make_project, sql
 
 from src.clients.storage.roots import RootedStore
 from src.config import project_context
-from src.services.training import job_manifest, jobs, lineage
+from src.services.training import job_manifest, jobs, lineage, run_retention
 
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-__all__ = ['FakeProducer', 'job_env', 'kinds', 'producer', 'queue_hooks', 'wakes']
 
 REGISTRY_CLASSES = [(0, 'car'), (1, 'bus'), (2, 'person'), (3, 'bike')]
 
@@ -53,6 +51,7 @@ def run_env(pg, job_env, producer, wakes, monkeypatch, tmp_path: Path) -> Iterat
     )
     monkeypatch.setattr(jobs, 'run_store', lambda: store)
     monkeypatch.setattr(job_manifest, 'run_store', lambda: store)
+    monkeypatch.setattr(run_retention, 'run_store', lambda: store)
     monkeypatch.setattr(
         jobs,
         'get_curation_config',

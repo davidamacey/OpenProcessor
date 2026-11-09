@@ -15,10 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'frontend' / 'scripts'))
 sys.path.insert(0, str(ROOT / 'docker' / 'test'))
 
-import fake_segmenter  # noqa: E402  # path set above
-from docs_screenshots import ctx, registry, seed  # noqa: E402  # path set above
+import fake_segmenter
+from docs_screenshots import ctx, registry, seed
 
-from scripts.curation import seed_docs_run_results as results  # noqa: E402  # path set above
+from scripts.curation import seed_docs_run_results as results
 
 
 def _listing(*slugs: str) -> dict:

@@ -70,7 +70,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from src.clients.curation_opensearch import ClassRegistryFile, RegistryClassEntry
 from src.db.engine import run_with_engine
 from src.services.classes.registry import get_class_registry

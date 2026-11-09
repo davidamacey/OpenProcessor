@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 
-ROOT_NAMES = frozenset({'source', 'projects', 'models', 'cache', 'upgrade'})
+ROOT_NAMES = frozenset({'source', 'projects', 'models', 'cache', 'upgrade', 'bakeoff_results'})
 
 
 class ParsedKey(NamedTuple):

@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.ensure_overlay_fields import (
     ensure_items_probe_fields,
@@ -196,9 +197,17 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
 @pytest.mark.asyncio
 async def test_create_curation_indexes_handles_create_failure() -> None:
     client = _make_mock_client(exists_returns=False)
-    client.indices.create = AsyncMock(side_effect=RuntimeError('boom'))
+    client.indices.create = AsyncMock(side_effect=OpenSearchException('boom'))
     results = await create_curation_indexes(client, force_recreate=False)
     assert all(v is False for v in results.values())
+
+
+@pytest.mark.asyncio
+async def test_create_curation_indexes_propagates_a_programming_error() -> None:
+    client = _make_mock_client(exists_returns=False)
+    client.indices.create = AsyncMock(side_effect=RuntimeError('bug'))
+    with pytest.raises(RuntimeError, match='bug'):
+        await create_curation_indexes(client, force_recreate=False)
 
 
 # =============================================================================
@@ -246,7 +255,7 @@ async def test_ensure_score_fields_migration_swallows_field_conflict() -> None:
     not raised (matches the existing ensure_items_* pattern)."""
     client = _make_mock_client()
     client.indices.put_mapping = AsyncMock(
-        side_effect=RuntimeError('mapper_parsing_exception: field already exists')
+        side_effect=OpenSearchException('mapper_parsing_exception: field already exists')
     )
     result = await ensure_items_score_fields(client)
     assert result['acknowledged'] is False

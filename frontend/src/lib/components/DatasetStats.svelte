@@ -22,14 +22,21 @@
    *   - Last clustering run summary (timestamp, method, cluster_count,
    *     residual_count, noise_count)
    */
-  import { onDestroy } from 'svelte';
-  import { formatTimestamp } from '$lib/format/date';
   import { formatDuration } from '$lib/format/duration';
   import type { DatasetStats } from '$lib/api_stats';
-  import { subscribePipelineEvents, type CurationEventSubscription } from '$lib/sse';
   import { registeredSlots } from '$lib/annotations/registeredSlots';
   import { embeddingStateChips } from '$components/embedding/embeddingCopy';
-  import { resolveStatsUpdate, summarizeStatsError } from '$lib/datasetStats';
+  import { createDatasetStatsFeed } from '$lib/datasetStatsFeed.svelte';
+  import {
+    fmt,
+    fmtRelative,
+    formatRate,
+    labeledRowsOf,
+    labeledTotalOf,
+    slotRowsOf,
+    summarizeStatsError,
+  } from '$lib/datasetStats';
+  import { formatTimestamp } from '$lib/format/date';
 
   // The slot whose `stats` capability titles this panel (its stats key,
   // panel title and coverage title). No slot with a stats capability ->
@@ -47,204 +54,18 @@
   // exposed property set from a non-destructured declaration.
   let { pollMs: _pollMs }: Props = $props();
 
-  let stats = $state<DatasetStats | null>(null);
-  let error = $state<string | null>(null);
-  let lastUpdated = $state<number | null>(null);
-  let connected = $state<boolean>(false);
-  let subscription: CurationEventSubscription | null = null;
-
-  // Drain-rate samples for ETA. We keep a small ring buffer of
-  // (unfinished, t) samples so the displayed rate is averaged over the
-  // last ~minute instead of a single tick — kills the jitter when
-  // a worker bursts on a chunk of VLM-visible-filter results.
-  type Sample = { unfinished: number; t: number };
-  let samples = $state<Sample[]>([]);
-  const SAMPLE_WINDOW_MS = 60_000;
-
-  function applyStats(payload: Record<string, unknown>): void {
-    // The backend's {API_PREFIX}/stats/dataset response is usually
-    // DatasetStats-shaped, but can be an `{error}` envelope (G1 — see
-    // resolveStatsUpdate's doc comment). Never assign that blindly.
-    const result = resolveStatsUpdate(payload, stats);
-    stats = result.stats;
-    error = result.error;
-    if (result.error) return;
-    lastUpdated = Date.now();
-    const unfinished = stats?.in_progress?.region_drain_total_unfinished ?? 0;
-    const now = Date.now();
-    samples = [...samples, { unfinished, t: now }].filter(
-      (s) => now - s.t <= SAMPLE_WINDOW_MS * 2,
-    );
-  }
-
-  $effect(() => {
-    subscription = subscribePipelineEvents({
-      onSnapshot: (_state, statsPayload) => {
-        connected = true;
-        applyStats(statsPayload);
-      },
-      onStats: (statsPayload) => {
-        connected = true;
-        applyStats(statsPayload);
-      },
-      onError: () => {
-        connected = false;
-        // Don't clear stats — keep last-known values on the screen
-        // while the browser/helper reconnects.
-      },
-      onOpen: () => {
-        connected = true;
-      },
-    });
-    return () => {
-      subscription?.close();
-      subscription = null;
-    };
-  });
-
-  onDestroy(() => {
-    subscription?.close();
-    subscription = null;
-  });
+  const feed = createDatasetStatsFeed();
+  const stats = $derived(feed.stats);
+  const error = $derived(feed.error);
+  const lastUpdated = $derived(feed.lastUpdated);
+  const connected = $derived(feed.connected);
+  const drainRate = $derived(feed.drainRate);
+  const etaSeconds = $derived(feed.etaSeconds);
 
   const stateChips = $derived(embeddingStateChips(stats?.embedding?.by_state));
-  const labeledTotal = $derived.by(() => {
-    const l = stats?.labeled;
-    if (!l) return 0;
-    return l.by_human + l.by_vlm + l.by_classifier + l.other;
-  });
-
-  const labeledRows = $derived.by(() => {
-    const l = stats?.labeled;
-    if (!l || labeledTotal === 0) return [];
-    const rows: Array<{
-      key: string;
-      label: string;
-      count: number;
-      tone: string;
-    }> = [
-      {
-        key: 'by_human',
-        label: 'Human',
-        count: l.by_human,
-        tone: 'bg-green-500',
-      },
-      {
-        key: 'by_vlm',
-        label: 'VLM suggestions',
-        count: l.by_vlm,
-        tone: 'bg-blue-500',
-      },
-      {
-        key: 'by_classifier',
-        label: 'Classifier',
-        count: l.by_classifier,
-        tone: 'bg-purple-500',
-      },
-      { key: 'other', label: 'Other', count: l.other, tone: 'bg-zinc-500' },
-    ];
-    return rows.map((r) => ({
-      ...r,
-      pct: Math.round((r.count / labeledTotal) * 1000) / 10,
-    }));
-  });
-
-  // Region-detection breakdown — separate from class labeling. The
-  // backend's `regions` block counts by role in the active detection
-  // profile (detector, segmenter fallback, human), so these rows are
-  // generic. Denominator = total_crops (so % is "fraction of crops where
-  // a region was detected"), not labeledTotal.
-  const slotRows = $derived.by(() => {
-    const p = statsSlot?.stats
-      ? (stats as unknown as Record<string, DatasetStats['regions'] | undefined>)?.[
-          statsSlot.stats.key
-        ]
-      : undefined;
-    const total = stats?.total_crops ?? 0;
-    if (!p || total === 0) return [];
-    const rows: Array<{
-      key: string;
-      label: string;
-      count: number;
-      tone: string;
-    }> = [
-      {
-        key: 'by_detector',
-        label: 'Detector',
-        count: p.by_detector,
-        tone: 'bg-cyan-500',
-      },
-      {
-        key: 'by_segmenter',
-        label: 'Segmenter fallback',
-        count: p.by_segmenter,
-        tone: 'bg-teal-500',
-      },
-      {
-        key: 'by_human_drew',
-        label: 'Human-drew bbox',
-        count: p.by_human_drew,
-        tone: 'bg-green-500',
-      },
-      // Regions the operator confirmed (AI proposed the bbox, human
-      // hit Confirm). Distinct from by_human_drew (only when the
-      // operator created the bbox from scratch). validated_by_human is
-      // the union — every region the operator touched.
-      {
-        key: 'validated_by_human',
-        label: 'Confirmed by human',
-        count: p.validated_by_human,
-        tone: 'bg-emerald-500',
-      },
-    ];
-    return rows.map((r) => ({
-      ...r,
-      pct: Math.round((r.count / total) * 1000) / 10,
-    }));
-  });
-
-  // Drain rate (crops/sec) over the last ~minute. Returns null until we
-  // have at least 2 samples spanning ≥10s; returns 0 for "queue is empty
-  // or not draining at all"; returns a positive number when work is
-  // being processed (newest_unfinished < oldest_unfinished).
-  const drainRate = $derived.by<number | null>(() => {
-    if (samples.length < 2) return null;
-    const oldest = samples[0];
-    const newest = samples[samples.length - 1];
-    const dt = (newest.t - oldest.t) / 1000;
-    if (dt < 10) return null;
-    // Positive rate = queue draining. Negative = queue growing
-    // (ingest faster than worker). We clamp at 0 for ETA math but
-    // surface the negative case to the operator.
-    return (oldest.unfinished - newest.unfinished) / dt;
-  });
-
-  // ETA = remaining_crops / drain_rate. Returns null when we can't yet
-  // compute a rate (not enough samples) or the rate is non-positive
-  // (queue not shrinking). Operator sees "computing…" or "queue stalled".
-  const etaSeconds = $derived.by<number | null>(() => {
-    if (drainRate == null || drainRate <= 0) return null;
-    const remaining = stats?.in_progress?.region_drain_total_unfinished ?? 0;
-    return remaining / drainRate;
-  });
-
-  function formatRate(rate: number): string {
-    if (rate >= 10) return `${rate.toFixed(0)} crops/s`;
-    if (rate >= 1) return `${rate.toFixed(1)} crops/s`;
-    return `${(rate * 60).toFixed(1)} crops/min`;
-  }
-
-  function fmt(n: number | undefined | null): string {
-    return (n ?? 0).toLocaleString();
-  }
-
-  function fmtRelative(ms: number | null): string {
-    if (ms == null) return '—';
-    const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
-    if (secs < 60) return `${secs}s ago`;
-    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-    return `${Math.floor(secs / 3600)}h ago`;
-  }
+  const labeledTotal = $derived(labeledTotalOf(stats));
+  const labeledRows = $derived(labeledRowsOf(stats));
+  const slotRows = $derived(slotRowsOf(stats, statsSlot?.stats?.key));
 </script>
 
 <section class="space-y-4">

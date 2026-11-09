@@ -8,13 +8,13 @@ the wire are lineage ids. The profile routes are the ``near_dup_profiles`` famil
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import Annotated
 
 from fastapi import Query, Response
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import router
 from src.schemas.curation import near_duplicates as wire
 from src.services.near_duplicates import status as service

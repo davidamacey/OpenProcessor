@@ -22,7 +22,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.os_write_ceiling import ARMS as ARM_ORDER_MAP
 from scripts.bench.suite_lib import summarize
 from scripts.bench.suite_report import fmt, table

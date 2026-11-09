@@ -28,11 +28,11 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import export_pe_text_encoder as text_export  # noqa: E402
-import pe_text_constants  # noqa: E402
-import pe_text_parity  # noqa: E402
-import pe_text_triton_config  # noqa: E402
-import pe_text_validate  # noqa: E402
+import export_pe_text_encoder as text_export
+import pe_text_constants
+import pe_text_parity
+import pe_text_triton_config
+import pe_text_validate
 
 
 # =============================================================================

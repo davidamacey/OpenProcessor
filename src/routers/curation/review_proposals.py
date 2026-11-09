@@ -12,8 +12,9 @@ from typing import Annotated, Any
 
 from fastapi import Query
 
+from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.services.curation.new_class_terms import (
     PROPOSED_NAME_FIELD,
     classify_term,

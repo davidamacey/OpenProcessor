@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 import pytest
 from opensearchpy.exceptions import OpenSearchException
 
-from src.routers.curation._common import images_index, items_index
+from src.config.curation_accessors import images_index, items_index
 from src.services.curation.index_bootstrap import warm_knn_indexes
 
 

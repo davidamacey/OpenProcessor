@@ -52,7 +52,7 @@ class _FakeClient:
     (unknown counts, capacity None) without needing a live cluster."""
 
     class _Transport:
-        async def perform_request(self, method, url, params=None, **kwargs):  # noqa: ARG002
+        async def perform_request(self, method, url, params=None, **kwargs):
             raise _unreachable()
 
     def __init__(self) -> None:

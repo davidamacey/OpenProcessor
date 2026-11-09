@@ -26,7 +26,7 @@ class FakeCoreOpenSearch(FakeNearDupOpenSearch):
     async def check_duplicate_by_hash(self, _imohash: str) -> None:
         return None
 
-    async def bulk_ingest(self, documents: list[dict[str, Any]], refresh: bool = False) -> Any:  # noqa: ARG002
+    async def bulk_ingest(self, documents: list[dict[str, Any]], refresh: bool = False) -> Any:
         for doc in documents:
             self.docs[INDEX][doc['image_id']] = {
                 **doc,

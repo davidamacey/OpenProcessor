@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-def _load_script() -> ModuleType:
+def _load_script(monkeypatch: pytest.MonkeyPatch | None = None) -> ModuleType:
     repo_root = Path(__file__).resolve().parents[2]
     script_path = repo_root / 'scripts' / 'curation' / 'run_probe.py'
     spec = importlib.util.spec_from_file_location('curation_run_probe_cli_test', script_path)
@@ -31,6 +31,12 @@ def _load_script() -> ModuleType:
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    if monkeypatch is not None:
+
+        async def without_engine(awaitable: Any, _name: str, **_: Any) -> Any:
+            return await awaitable  # the in-memory OpenSearch fake needs no database engine
+
+        monkeypatch.setattr(module, 'run_with_engine', without_engine)
     return module
 
 
@@ -59,26 +65,26 @@ class _FakeOpenSearch:
                 out.append(doc)
         return out
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.count_bodies.append(body)
         return {'count': len(self._matches(body['query']))}
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         self.search_bodies.append(body)
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._matches(body['query'])]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits[: body['size']]}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
-    async def update(self, index: str, id: str, body: dict[str, Any]) -> None:  # noqa: A002, ARG002
+    async def update(self, index: str, id: str, body: dict[str, Any]) -> None:
         self.updates.append({'id': id, 'doc': body['doc']})
         self.docs[id].update(body['doc'])
 
-    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:  # noqa: ARG002
+    async def bulk(self, *, body: list[dict[str, Any]], refresh: bool | str = False) -> dict:
         for action, doc in zip(body[0::2], body[1::2], strict=True):
             crop_id = action['update']['_id']
             self.updates.append({'id': crop_id, 'doc': doc['doc']})
@@ -120,9 +126,9 @@ def canned_probe(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(
         pp,
         '_build_predictor',
-        lambda model_path, architecture: ((lambda crop: ('car', 0.9, 0.1, 0.8)), 'x'),  # noqa: ARG005
+        lambda model_path, architecture: ((lambda crop: ('car', 0.9, 0.1, 0.8)), 'x'),
     )
-    monkeypatch.setattr(pp, '_resolve_image', lambda image_path, *, config: image)  # noqa: ARG005
+    monkeypatch.setattr(pp, '_resolve_image', lambda image_path, *, config: image)
     return image
 
 
@@ -173,7 +179,7 @@ def test_default_model_version():
 
 
 def test_cli_defaults_to_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     captured: dict[str, Any] = {}
 
     async def fake_async_main(args):
@@ -192,7 +198,7 @@ def _patch_client(monkeypatch, mod, fake):
 
 
 def test_cli_dry_run_counts_without_scoring(monkeypatch, tmp_path, capsys) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     model = tmp_path / 'm.onnx'
     model.write_bytes(b'')
     fake = _FakeOpenSearch(_docs())
@@ -211,7 +217,7 @@ def test_cli_dry_run_counts_without_scoring(monkeypatch, tmp_path, capsys) -> No
 
 
 def test_cli_apply_calls_the_service_with_resume(monkeypatch, tmp_path) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     model = tmp_path / 'weights' / 'best.onnx'
     model.parent.mkdir()
     model.write_bytes(b'')
@@ -257,6 +263,6 @@ def test_cli_apply_calls_the_service_with_resume(monkeypatch, tmp_path) -> None:
 
 
 def test_cli_missing_model_fails(monkeypatch, tmp_path) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     monkeypatch.setattr(sys, 'argv', ['run_probe.py', '--model', str(tmp_path / 'nope.onnx')])
     assert mod.main() == 1

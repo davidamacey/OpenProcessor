@@ -22,14 +22,9 @@ from typing import Any, Literal
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    images_index,
-    items_index,
-    router,
-)
+from src.config.curation_accessors import images_index, items_index
+from src.core.dependencies import AsyncTritonDep
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._health_models import HealthResponse
 from src.services.classes.registry import ClassRegistryError
 from src.services.labeling.run_labeler import get_vlm_labeler

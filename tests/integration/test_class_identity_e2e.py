@@ -43,7 +43,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.dataset_import.harness import Harness
 
 from src.config.curation import CurationConfig

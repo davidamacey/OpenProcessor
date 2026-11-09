@@ -331,28 +331,28 @@ class _FakeMergeOS:
         self.update_calls: list[dict[str, Any]] = []
         self._source_validated = source_validated
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return {'count': 0}
 
     async def update_by_query(
         self,
         *,
-        index: str,  # noqa: ARG002
-        body: dict[str, Any],  # noqa: ARG002
-        **kw: Any,  # noqa: ARG002
+        index: str,
+        body: dict[str, Any],
+        **kw: Any,
     ) -> dict[str, Any]:
         return {'updated': 1}
 
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
         return {
             '_scroll_id': 'scroll-merge-1',
             'hits': {'hits': [{'_id': 'crop-b'}]},
         }
 
-    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {}
 
     async def mget(self, *, body: dict[str, Any]) -> dict[str, Any]:
@@ -368,7 +368,7 @@ class _FakeMergeOS:
         found = {d['_id']: source for d in body['docs']}
         return make_mget_response(found)
 
-    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, *, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
         from curation.occ_fakes import make_bulk_response, make_bulk_update_item
 
         items = []

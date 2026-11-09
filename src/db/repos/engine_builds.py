@@ -18,6 +18,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.models.training import Model, ModelEngine
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -78,7 +79,7 @@ def add_model_version(
         family=family,
         task='detect',
         labels=list(labels),
-        artifact_storage_key=artifact_storage_key,
+        artifact_storage_key=make_key(*artifact_storage_key.split('/')),
         created_by=created_by,
     )
     session.add(row)
@@ -176,7 +177,7 @@ def finish_engine(session: Session, engine_id: uuid.UUID, facts: EngineFacts) ->
             opt_batch=facts.opt_batch,
             trt_version=facts.trt_version,
             gpu_arch=facts.gpu_arch,
-            engine_storage_key=facts.engine_storage_key,
+            engine_storage_key=make_key(*facts.engine_storage_key.split('/')),
             status='ready',
             built_at=dt.datetime.now(dt.UTC),
         )

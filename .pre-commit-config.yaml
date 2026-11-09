@@ -183,7 +183,7 @@ repos:
         entry: python3 scripts/codegen/check_mypy_tests.py
         language: system
         pass_filenames: false
-        files: ^(pyproject\.toml|scripts/codegen/(check_mypy_tests\.py|baselines/mypy_tests\.txt)|tests/.*\.py)$
+        files: ^(pyproject\.toml|scripts/codegen/check_mypy_tests\.py|scripts/codegen/baselines/mypy_tests\.txt|tests/.*\.py)$
 
       # Lean frontend gate: only the staged frontend files, through the app's own
       # node_modules (npm ci in frontend/). svelte-check and vitest stay in CI and the

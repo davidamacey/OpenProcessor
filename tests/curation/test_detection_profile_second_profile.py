@@ -49,7 +49,7 @@ class _FakeInferResult:
     def __init__(self, output: np.ndarray) -> None:
         self._output = output
 
-    def as_numpy(self, name: str) -> np.ndarray:  # noqa: ARG002
+    def as_numpy(self, name: str) -> np.ndarray:
         return self._output
 
 

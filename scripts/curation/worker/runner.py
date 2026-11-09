@@ -15,7 +15,7 @@ import time
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
-from scripts.curation.worker.cascade import SegmenterClient
+from scripts.curation.worker.client import SegmenterClient
 from scripts.curation.worker.crash import log_drain_results, spawn_critical
 from scripts.curation.worker.crop_gate import CropGate
 from scripts.curation.worker.fairness import FairnessScheduler, liveness_loop

@@ -151,7 +151,7 @@ class _FakeOpenSearch:
         msg = f'_FakeOpenSearch.get is only wired for the settings doc, got {index}/{doc_id}'
         raise AttributeError(msg)
 
-    async def search(self, *, index: str | None = None, **_kw: Any) -> dict[str, Any]:  # noqa: ARG002 - mirrors the client signature
+    async def search(self, *, index: str | None = None, **_kw: Any) -> dict[str, Any]:
         if self._pending_refresh is not None:
             self._pending_refresh -= 1
             if self._pending_refresh <= 0:

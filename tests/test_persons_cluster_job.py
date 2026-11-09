@@ -6,7 +6,6 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from fixtures.job_fixtures import job_env, kinds, producer, queue_hooks, wakes  # noqa: F401 - fixtures
 from fixtures.job_rows import sql
 
 from src.config.faces import require_faces
@@ -21,7 +20,7 @@ pytestmark = [pytest.mark.db, pytest.mark.asyncio]
 
 
 @pytest_asyncio.fixture
-async def client(pg, pg_env, job_env, producer, wakes, monkeypatch):  # noqa: F811 - fixtures
+async def client(pg, pg_env, job_env, producer, wakes, monkeypatch):
     from src.db.engine import dispose_engines
 
     sql(pg, "DELETE FROM jobs WHERE kind = 'persons_cluster'")  # the module's database is shared
@@ -44,7 +43,7 @@ async def client(pg, pg_env, job_env, producer, wakes, monkeypatch):  # noqa: F8
 async def test_the_route_queues_one_deployment_job_and_runs_no_grouping(
     client,
     pg,
-    producer,  # noqa: F811 - the imported fixture
+    producer,
 ) -> None:
     reply = await client.post('/persons/cluster?similarity_threshold=0.6&min_faces_per_person=3')
     assert reply.status_code == 202

@@ -112,10 +112,10 @@ class _Client:
             idx = [i for i in idx if i > after[0]]
         return {'hits': {'hits': [self._hit(i) for i in idx[: body['size']]]}}
 
-    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, *, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str) -> None:
         return None
 
 

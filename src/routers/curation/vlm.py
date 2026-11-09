@@ -15,7 +15,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._vlm_route_models import (

@@ -151,18 +151,20 @@ class FakeTriton:
     def __init__(self, detections: list[tuple[float, float, float, float, float, int]]) -> None:
         self.detections = detections
         self.calls = 0
+        #: Models this fake repository serves; the GPU image-prep model is not one of them.
+        self.ready: frozenset[str] = frozenset()
 
-    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
-        return False
+    async def is_model_ready(self, model_name: str) -> bool:
+        return model_name in self.ready
 
     async def load_model(self, model_name: str) -> None:
         # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
         raise InferenceServerException(f'{model_name}: not in the repository')
 
-    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+    async def get_model_input_datatype(self, model_name: str) -> str:
         return 'UINT8'
 
-    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
+    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:
         self.calls += 1
         batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1
         n = len(self.detections)
@@ -188,11 +190,11 @@ class FakePE:
         self.crop_calls = 0
         self.frame_calls = 0
 
-    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:
         self.crop_calls += len(crops)
         return np.tile(np.array([0.0, 0.0, 1.0], dtype=np.float32), (len(crops), 1))
 
-    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
         self.frame_calls += 1
         return np.array([0.0, 1.0, 0.0], dtype=np.float32)
 

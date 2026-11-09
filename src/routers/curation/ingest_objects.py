@@ -20,10 +20,11 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 
 from src.config import get_curation_config
+from src.config.curation_accessors import images_index
 from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, RegistryDep, images_index, router
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,

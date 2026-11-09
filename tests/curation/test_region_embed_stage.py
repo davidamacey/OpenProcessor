@@ -64,7 +64,7 @@ class _FakePE:
         self.calls: list[int] = []
         self._fail = fail
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         if self._fail:
             raise InferenceServerException('triton down')
         self.calls.append(len(crops))
@@ -177,7 +177,7 @@ class _RecordingPE:
     def __init__(self) -> None:
         self.crops: list[np.ndarray] = []
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         self.crops.extend(crops)
         return np.tile(np.array([1.0, 0.0], dtype=np.float32), (len(crops), 1))
 

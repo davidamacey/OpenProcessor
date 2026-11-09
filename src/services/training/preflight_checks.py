@@ -66,8 +66,9 @@ MIN_FREE_DISK_GB = 50
 async def count_validated_and_test_per_class(
     opensearch: Any,
     class_ids: list[int],
-) -> tuple[dict[int, int], dict[int, int]]:
-    """Return ``({class_id: validated_crop_count}, {class_id: test_holdout_count})``.
+) -> tuple[dict[int, int], dict[int, int]] | None:
+    """Return ``({class_id: validated_crop_count}, {class_id: test_holdout_count})``, or ``None``
+    when OpenSearch could not be asked (an outage is not a class with zero crops).
 
     Preflight used to issue these as two separate ``_search`` round trips
     (identical ``class_id`` scope, one with an extra ``test_holdout``
@@ -110,7 +111,7 @@ async def count_validated_and_test_per_class(
         resp = await opensearch.search(index=items_index(), body=body)
     except OpenSearchException as exc:
         logger.warning('train_class_count_failed', error=str(exc))
-        return dict(empty), dict(empty)
+        return None
     aggs = resp.get('aggregations') or {}
 
     def _by_class(agg_name: str) -> dict[int, int]:

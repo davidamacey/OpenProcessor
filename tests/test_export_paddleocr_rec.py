@@ -39,7 +39,7 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import export_paddleocr_rec as rec_export  # noqa: E402
+import export_paddleocr_rec as rec_export
 
 
 class _FakeParser:

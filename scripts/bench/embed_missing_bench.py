@@ -32,7 +32,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# ruff: noqa: E402
 from scripts.bench.suite_ingest import post_batch
 from scripts.bench.suite_lib import triton_stats_delta
 from scripts.bench.suite_probes import Gauges, cgroup_cpu_s, chunks, triton_snapshot

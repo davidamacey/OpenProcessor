@@ -490,7 +490,7 @@ class QueryFakeOpenSearch:
 
     # ------------------------------------------------------------------ doc ops
 
-    async def get(self, *, index: str, id: str, _source: bool = True, **_kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, _source: bool = True, **_kw: Any) -> dict[str, Any]:
         doc = self.docs(index).get(id)
         if doc is None:
             # A real cluster 404s; a config store refreshed against this fake
@@ -511,7 +511,7 @@ class QueryFakeOpenSearch:
         self,
         *,
         index: str,
-        id: str,  # noqa: A002
+        id: str,
         body: dict[str, Any],
         op_type: str | None = None,
         if_seq_no: int | None = None,
@@ -533,7 +533,7 @@ class QueryFakeOpenSearch:
         self,
         *,
         index: str,
-        id: str,  # noqa: A002
+        id: str,
         body: dict[str, Any],
         if_seq_no: int | None = None,
         **_kw: Any,
@@ -659,7 +659,7 @@ class SettingsFakeOpenSearch(QueryFakeOpenSearch):
     ``KeyError``, which the config-store tests read as "OpenSearch unavailable"),
     an OCC-guarded ``index`` (create / ``if_seq_no``) and upserting ``update``."""
 
-    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
         if id not in self.docs(index):
             from opensearchpy.exceptions import NotFoundError
 
@@ -670,7 +670,7 @@ class SettingsFakeOpenSearch(QueryFakeOpenSearch):
         self,
         *,
         index: str,
-        id: str,  # noqa: A002
+        id: str,
         body: dict[str, Any],
         op_type: str | None = None,
         if_seq_no: int | None = None,
@@ -689,7 +689,7 @@ class SettingsFakeOpenSearch(QueryFakeOpenSearch):
         self,
         *,
         index: str,
-        id: str,  # noqa: A002
+        id: str,
         body: dict[str, Any],
         **kw: Any,
     ) -> dict[str, Any]:

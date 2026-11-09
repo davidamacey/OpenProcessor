@@ -61,7 +61,7 @@ def test_delete_refuses_when_project_owns_a_shared_model(tmp_path) -> None:
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project(slug='cars', confirm='cars')
+            await delete_mod.delete_project(slug='cars', confirm='cars')
         detail = exc_info.value.detail
         assert detail['error'] == 'in_use'
         assert 'cars__detector_v1' in detail['message']
@@ -91,7 +91,7 @@ def test_delete_force_bypasses_shared_model_block_and_logs(tmp_path, monkeypatch
         await promoted_seed.seed()
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        record = await lifecycle.delete_project(slug='cars', confirm='cars', force=True)
+        record = await delete_mod.delete_project(slug='cars', confirm='cars', force=True)
         assert record.status == 'deleting'
 
     asyncio.run(_run())
@@ -117,7 +117,7 @@ def test_delete_allowed_when_project_has_no_shared_models(tmp_path) -> None:
         await promoted_seed.seed()
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
-        record = await lifecycle.delete_project(slug='cars', confirm='cars')
+        record = await delete_mod.delete_project(slug='cars', confirm='cars')
         assert record.status == 'deleting'
 
     asyncio.run(_run())
@@ -143,7 +143,7 @@ def test_delete_refusal_names_the_project_whose_active_profile_uses_the_model(
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project(slug='cars', confirm='cars')
+            await delete_mod.delete_project(slug='cars', confirm='cars')
         detail = exc_info.value.detail
         assert detail['error'] == 'in_use'
         assert detail['projects'] == ['dogs']
@@ -169,7 +169,7 @@ def test_delete_fails_closed_when_another_project_cannot_be_read(tmp_path, monke
         await lifecycle.create_project(client, slug='dogs', display_name='Dogs')
 
         with pytest.raises(RequestRejectedError) as exc_info:
-            await lifecycle.delete_project(slug='cars', confirm='cars')
+            await delete_mod.delete_project(slug='cars', confirm='cars')
         assert exc_info.value.status_code == 503
         assert exc_info.value.detail['error'] == 'config_store_unavailable'
 

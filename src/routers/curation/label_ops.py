@@ -8,7 +8,7 @@ from fastapi import Query
 from fastapi.responses import JSONResponse
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._selection_write_models import LabelOpAccepted
 from src.schemas.curation.label_ops import LabelOpList, LabelOpUndoRequest, LabelOpUndoResponse

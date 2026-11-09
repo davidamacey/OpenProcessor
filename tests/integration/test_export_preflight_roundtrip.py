@@ -35,27 +35,31 @@ from src.services.training.preflight_scan import scan_export_labels
 pytestmark = pytest.mark.integration
 
 
+pytest_plugins = ['_records_world']
+
+
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
         self._docs = docs
         self.indices = FakeIndicesApi()
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 
+# the export's retention prune and item space are read from PostgreSQL
 @pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_include_classes_filter_actually_applies_to_a_real_export(
     tmp_path,
-    pg_registry,  # the export's retention prune reads PostgreSQL
 ):
     reg = InMemoryRegistry()
     car_id = reg.add('car')

@@ -12,12 +12,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from src.config import get_curation_config
-from src.config.curation_accessors import images_index, items_index  # noqa: F401 - re-exported for the router modules
 from src.core.dependencies import get_curation_opensearch
 from src.core.logging import get_logger
 from src.core.wire_json import WireRoute
 from src.routers.curation._api_error import api_error
-from src.routers.curation._item_models import CropsPageResponse, ItemDoc  # noqa: F401 - re-export
 from src.services.classes.registry import ClassRegistry
 
 

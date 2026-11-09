@@ -22,7 +22,7 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import pe_rope_layout as layout  # noqa: E402
+import pe_rope_layout as layout
 
 
 GEOMETRY = layout.Geometry(heads=2, head_dim=8, seq_len=5)

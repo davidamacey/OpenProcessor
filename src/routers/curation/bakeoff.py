@@ -47,7 +47,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.core.logging import get_logger
 from src.routers.curation._common import router
 from src.schemas.bakeoff.datasets import EvalDataset, EvalDatasetList

@@ -39,7 +39,7 @@ def _environment(pg, monkeypatch, tmp_path):
     monkeypatch.setattr(
         image_serving,
         '_configured_roots',
-        lambda config=None: (tmp_path.resolve(),),  # noqa: ARG005
+        lambda config=None: (tmp_path.resolve(),),
     )
 
 
@@ -289,14 +289,17 @@ async def test_an_interrupted_import_resumes_under_its_own_job_and_continues_the
     with pytest.raises(SystemExit):  # Celery requeues the message of an exited worker
         await _run(worker_app, 'dataset_import', started['job_id'])
     assert sql(pg, 'SELECT status FROM jobs WHERE id = %s', job) == [('interrupted',)]
-    ledger = lambda: [  # noqa: E731
-        r[0]
-        for r in sql(
-            pg,
-            'SELECT status FROM dataset_import_images WHERE import_id = %s',
-            uuid.UUID(started['import_id']),
-        )
-    ]
+
+    def ledger() -> list[Any]:
+        return [
+            r[0]
+            for r in sql(
+                pg,
+                'SELECT status FROM dataset_import_images WHERE import_id = %s',
+                uuid.UUID(started['import_id']),
+            )
+        ]
+
     assert sorted(ledger()) == ['pending', 'pending', 'written']
     monkeypatch.setattr(import_job, 'run_import_job', real)
 

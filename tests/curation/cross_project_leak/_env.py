@@ -44,7 +44,7 @@ class _LeakPEEncoder(FakePEEncoder):
     """The ingest fake, at the seed data's embedding width (so the
     clustering and scoring routes see one consistent pool)."""
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         return np.array([_vec(100 + i) for i in range(len(crops))], dtype=np.float32)
 
     async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
@@ -269,7 +269,9 @@ def leak_env(
     from src.main import app
 
     env.app = app
-    app.dependency_overrides[get_async_triton] = lambda: _DeadTriton()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[get_async_triton] = lambda: (
+        _DeadTriton()
+    )  # FastAPI parses a class here as a dependency with parameters
 
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
@@ -280,6 +282,16 @@ def leak_env(
             raise ConnectionError('triton disabled in the leak test')
 
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
+
+    # The repository index is the server's own list of models; with no server the control
+    # service fails closed (503 triton_unavailable), so the sweep serves an empty repository.
+    async def _empty_repository(_self: Any) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(
+        'src.services.models.triton_control.TritonControlService.get_repository_index',
+        _empty_repository,
+    )
     had_encoder = hasattr(app.state, 'pe_encoder')
     previous_encoder = getattr(app.state, 'pe_encoder', None)
     app.state.pe_encoder = _LeakPEEncoder()

@@ -102,14 +102,6 @@ def _fake_dataset_search_response() -> dict[str, Any]:
     }
 
 
-@pytest.fixture(autouse=True)
-def _default_spaces(world: Any, pg_env: Any) -> None:
-    """The stats route resolves the primary item space; a bare ``world`` row has none."""
-    from fixtures.job_rows import seed_default_spaces
-
-    seed_default_spaces(pg_env, world)
-
-
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

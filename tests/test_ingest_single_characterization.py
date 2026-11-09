@@ -238,8 +238,8 @@ async def run_scenario(
             raise RuntimeError(msg)
 
         monkeypatch.setattr('src.services.near_duplicates.content_key.resolve_many_core', down)
-    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)  # noqa: ARG005
-    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)  # noqa: ARG005
+    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)
+    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
     svc = VisualSearchService.__new__(VisualSearchService)
     svc.opensearch = opensearch  # type: ignore[assignment]

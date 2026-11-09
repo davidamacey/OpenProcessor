@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.services.training.preflight_checks import (
     ExportManifestUnreadableError,
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 class _Down:
     async def count(self, **_: Any) -> dict[str, int]:
-        raise RuntimeError('opensearch is down')
+        raise OpenSearchConnectionError('N/A', 'opensearch is down', OSError('refused'))
 
 
 @pytest.mark.asyncio

@@ -29,7 +29,7 @@
    *   assigns a cluster.
    */
 
-  import { jobPhase } from '$lib/jobs/jobPhase';
+  import { createVizRebuildJob } from '$lib/vizRebuildJob.svelte';
   import { getClusters, moveCropsToCluster } from '$lib/api_clusters';
   import { runLabelOp } from '$lib/labelOps/runLabelOp';
   import { undoStore } from '$stores/undo.svelte';
@@ -37,17 +37,9 @@
   import { getThumbUrl } from '$lib/api_cropRead';
   import { bulkLabel } from '$lib/api_cropWrites';
   import { apiErrorText } from '$lib/api_errors';
-  import {
-    cancelVizProjection,
-    getVizProjection,
-    getVizProjectionStatus,
-    rebuildVizProjection,
-    type VizPoint,
-    type VizProjectionJob,
-  } from '$lib/api_viz';
+  import { getVizProjection, type VizPoint } from '$lib/api_viz';
   import { isAssignableClass } from '$lib/classVisibility';
   import {
-    classifyRebuildPoll,
     colorForCluster,
     legendEntries,
     PALETTE_SIZE,
@@ -117,12 +109,6 @@
   let moveCandidates = $state<Cluster[]>([]);
   let moveCandidatesLoaded = false;
   let busy = $state<boolean>(false);
-  let rebuilding = $state<boolean>(false);
-  // The rebuild job, while one is running. Polled so the operator sees
-  // progress, can cancel, and gets the new projection without reloading.
-  let job = $state<VizProjectionJob | null>(null);
-  let jobPoll: ReturnType<typeof setInterval> | null = null;
-  const JOB_POLL_MS = 3000;
   // Which selected-preview thumbnail (if any) is shown enlarged. The strip
   // thumbnails are 56px -- too small to actually judge a crop by, per live
   // feedback ("I need to be able to individually select and click on them
@@ -324,117 +310,33 @@
     }
   }
 
-  function stopJobPoll(): void {
-    if (jobPoll) clearInterval(jobPoll);
-    jobPoll = null;
-  }
-
-  // See ScoresCard: `destroyed` stops an adopt read that resolves after
-  // unmount from starting an orphan poll; `polling` stops a slow read from
-  // overlapping the next tick.
-  let destroyed = false;
-  let polling = false;
-
-  async function pollJob(): Promise<void> {
-    if (polling) return;
-    polling = true;
-    let st: VizProjectionJob;
-    try {
-      st = await getVizProjectionStatus();
-    } catch {
-      return; // transient — keep polling
-    } finally {
-      polling = false;
-    }
-    if (destroyed || jobPoll === null) return;
-    const outcome = classifyRebuildPoll(st.status, job !== null);
-    if (outcome === 'running') {
-      job = st;
-      return;
-    }
-    job = null;
-    stopJobPoll();
-    if (outcome === 'completed') {
-      toastStore.success(`Embedding projection rebuilt (${st.n_written} points).`);
-      await load();
-    } else if (outcome === 'failed') {
-      toastStore.error(`Projection rebuild failed: ${st.error ?? 'unknown error'}`);
-    }
-  }
-
-  function startJobPoll(): void {
-    stopJobPoll();
-    if (destroyed) return;
-    jobPoll = setInterval(() => void pollJob(), JOB_POLL_MS);
-  }
-
-  // Adopt a rebuild already in flight (another tab, or before a reload).
-  $effect(() => {
-    destroyed = false;
-    void getVizProjectionStatus()
-      .then((st) => {
-        if (jobPhase(st.status) === 'active') {
-          job = st;
-          startJobPoll();
-        }
-      })
-      .catch(() => {});
-    return () => {
-      destroyed = true;
-      stopJobPoll();
-    };
-  });
-
-  async function triggerRebuild(): Promise<void> {
-    if (rebuilding || job) return;
-    rebuilding = true;
-    try {
-      job = await rebuildVizProjection();
-      startJobPoll();
-    } catch (e) {
-      toastStore.error(`Rebuild failed: ${apiErrorText(e)}`);
-    } finally {
-      rebuilding = false;
-    }
-  }
-
-  async function cancelRebuild(): Promise<void> {
-    try {
-      await cancelVizProjection();
-      toastStore.info('Projection rebuild cancelled.');
-    } catch (e) {
-      toastStore.error(`Cancel failed: ${apiErrorText(e)}`);
-    } finally {
-      job = null;
-      stopJobPoll();
-    }
-  }
+  const rebuild = createVizRebuildJob(load);
 </script>
 
 <div class="flex flex-col gap-2">
   <div class="flex items-center gap-2 text-xs text-zinc-400">
-    {#if job}
+    {#if rebuild.job}
       <span>
-        Rebuilding projection{job.n_pool
-          ? ` — ${job.n_written.toLocaleString()} / ${job.n_pool.toLocaleString()} points`
+        Rebuilding projection{rebuild.job.n_pool
+          ? ` — ${rebuild.job.n_written.toLocaleString()} / ${rebuild.job.n_pool.toLocaleString()} points`
           : '…'}
       </span>
       <button
         type="button"
         class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:bg-zinc-800"
-        onclick={() => void cancelRebuild()}
+        onclick={() => void rebuild.cancel()}
       >
         Cancel
       </button>
     {:else if built}
       <button
         type="button"
-        disabled={rebuilding}
+        disabled={rebuild.rebuilding}
         class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
         title="Refit the projection over the current pool (background job)"
-        onclick={() => void triggerRebuild()}
+        onclick={() => void rebuild.trigger()}
       >
-        {rebuilding ? 'Requesting…' : 'Rebuild'}
+        {rebuild.rebuilding ? 'Requesting…' : 'Rebuild'}
       </button>
     {/if}
   </div>
@@ -531,11 +433,15 @@
           </p>
           <button
             type="button"
-            disabled={rebuilding || job !== null}
+            disabled={rebuild.rebuilding || rebuild.job !== null}
             class="rounded border border-blue-500/50 bg-blue-500/20 px-3 py-1.5 text-xs text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-            onclick={() => void triggerRebuild()}
+            onclick={() => void rebuild.trigger()}
           >
-            {rebuilding ? 'Requesting…' : job ? 'Building…' : 'Build projection'}
+            {rebuild.rebuilding
+              ? 'Requesting…'
+              : rebuild.job
+                ? 'Building…'
+                : 'Build projection'}
           </button>
         </div>
       {:else if points.length === 0}

@@ -74,11 +74,11 @@ def test_delete_refuses_path_escape_for_corrupted_bakeoff_results_dir(
     )
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(delete_mod.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+        asyncio.run(delete_mod.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
     assert exc_info.value.status_code == 500
     assert escaped_dir.is_dir(), 'the escaped directory must survive, untouched'
@@ -146,11 +146,11 @@ def test_delete_refuses_path_escape_when_dir_points_at_the_shared_root_itself(
     )
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(delete_mod.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+        asyncio.run(delete_mod.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
     assert exc_info.value.status_code == 500
 
@@ -180,11 +180,11 @@ def test_path_escape_check_runs_before_the_irreversible_index_delete(monkeypatch
     )
     _corrupt_stored(monkeypatch, corrupted)
 
-    deleting = asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
+    deleting = asyncio.run(delete_mod.delete_project(slug='alpha', confirm='alpha'))
     assert deleting.status == 'deleting'
 
     with pytest.raises(RequestRejectedError) as exc_info:
-        asyncio.run(lifecycle.delete_project_finish(client, slug='alpha'))
+        asyncio.run(delete_mod.delete_project_finish(client, slug='alpha'))
     assert exc_info.value.detail['error'] == 'path_escape'
 
     assert client.deleted_indexes == [], (

@@ -7,8 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
-from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
+from src.core.db_session import DbSessionDep
+from src.routers.curation._common import OpenSearchDep
 from src.services.training import job_campaigns, jobs as train_jobs
 from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
 from src.services.training.preflight_checks import PreflightReport

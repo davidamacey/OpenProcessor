@@ -32,7 +32,7 @@ class _OpenSearchLike:
         ]
         return {'hits': {'hits': hits}}
 
-    async def get(self, *, index: str, id: str) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str) -> dict[str, Any]:
         raise RuntimeError('404 not found: no settings document (default VLM policy)')
 
 

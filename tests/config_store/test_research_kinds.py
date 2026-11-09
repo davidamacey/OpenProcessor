@@ -64,7 +64,9 @@ def client(pg_env) -> TestClient:
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.include_router(global_router, prefix='/curation')
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: object()  # noqa: PLW0108  # FastAPI reads a bare class as a dependency with parameters
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: (
+        object()
+    )  # FastAPI reads a bare class as a dependency with parameters
     return TestClient(app)
 
 

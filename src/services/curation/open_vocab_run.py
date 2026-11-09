@@ -42,7 +42,6 @@ from src.services.curation.metrics import (
     OP_OPEN_VOCAB_ITEMS_WRITTEN_TOTAL,
     OP_SEGMENTER_GATE_DECISIONS_TOTAL,
 )
-from src.services.curation.open_vocab_gate import VlmVisibleFn  # noqa: TC001 - dataclass field type
 from src.services.curation.reprocess_detect import load_image_context
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
@@ -64,6 +63,7 @@ if TYPE_CHECKING:
 
     from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.open_vocab_gate import VlmVisibleFn
     from src.services.detection.cascade_detect.candidate import RegionCandidate
     from src.services.detection.open_vocab_set import OpenVocabSet, OpenVocabTarget
 

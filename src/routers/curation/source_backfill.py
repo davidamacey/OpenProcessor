@@ -11,7 +11,7 @@ progress and the final counts are on ``GET .../jobs/{job_id}``.
 from __future__ import annotations
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import router
 from src.schemas.curation.source_backfill import SourceBackfillRequest, SourceBackfillStarted
 from src.services.jobs.service import start_job

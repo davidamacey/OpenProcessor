@@ -11,20 +11,14 @@ there, not here.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import TYPE_CHECKING, Any
 
+from src.config.curation_accessors import images_index, items_index
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegistryDep,
-    images_index,
-    is_not_found,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegistryDep, is_not_found, router
 from src.routers.curation._reprocess_models import (
     ReprocessJobInfo,
     ReprocessOneRequest,

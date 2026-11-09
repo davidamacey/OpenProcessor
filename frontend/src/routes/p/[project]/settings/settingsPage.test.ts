@@ -12,7 +12,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+const view = readFileSync(path.resolve(here, './+page.svelte'), 'utf-8');
+// The save / clear flow lives in the editor controller the page composes.
+const editorSrc = readFileSync(
+  path.resolve(here, '../../../../lib/curationSettingsEditor.svelte.ts'),
+  'utf-8',
+);
+const src = view + editorSrc;
 
 describe('/settings deployment-defaults page', () => {
   it('never calls addEventListener — pointer-only, no third global keydown listener', () => {
@@ -20,11 +26,13 @@ describe('/settings deployment-defaults page', () => {
   });
 
   it('imports settableAxes/advisoryAxes/axisOptions/effectiveDefaultId from $lib/curationSettings', () => {
-    const importBlock = src.match(
-      /import\s*\{([^}]*)\}\s*from\s*['"]\$lib\/curationSettings['"]/s,
-    );
-    expect(importBlock).not.toBeNull();
-    const names = importBlock![1];
+    const importBlocks = [
+      ...src.matchAll(
+        /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"]\$lib\/curationSettings['"]/gs,
+      ),
+    ];
+    expect(importBlocks.length).toBeGreaterThan(0);
+    const names = importBlocks.map((m) => m[1]).join(',');
     expect(names).toMatch(/settableAxes/);
     expect(names).toMatch(/advisoryAxes/);
     expect(names).toMatch(/axisOptions/);

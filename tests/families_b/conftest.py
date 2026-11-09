@@ -1,30 +1,10 @@
 """Fixtures of the family-B tests: the job fixtures, and the real routes over a database."""
 
 import pytest
-from families_b.support import app, client, worker_app
-from fixtures.job_fixtures import (
-    FakeProducer,
-    FakeQueueHooks,
-    job_env,
-    kinds,
-    producer,
-    queue_hooks,
-    wakes,
-)
+from families_b.support import app, client
 
 
-__all__ = [
-    'FakeProducer',
-    'FakeQueueHooks',
-    'app',
-    'client',
-    'job_env',
-    'kinds',
-    'producer',
-    'queue_hooks',
-    'wakes',
-    'worker_app',
-]
+__all__ = ['app', 'client']
 
 
 @pytest.fixture(autouse=True)

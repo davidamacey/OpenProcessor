@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.opensearch.ingest import IngestMixin
 
@@ -22,8 +23,7 @@ class FakeClient:
 
     async def index(self, **kw: Any) -> None:
         if kw['id'] in self.fail_ids:
-            msg = f'boom {kw["id"]}'
-            raise RuntimeError(msg)
+            raise OpenSearchException(f'boom {kw["id"]}')
         self.calls.append(kw)
 
 

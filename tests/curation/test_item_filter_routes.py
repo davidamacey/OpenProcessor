@@ -48,11 +48,11 @@ class _RecordingOS:
     def __init__(self) -> None:
         self.bodies: list[str] = []
 
-    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         self.bodies.append(json.dumps(body))
         return {'hits': {'total': {'value': 0}, 'hits': []}, 'aggregations': {}}
 
-    async def count(self, *, index: str, body: dict[str, Any] | None = None) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         self.bodies.append(json.dumps(body or {}))
         return {'count': 0}
 
@@ -119,7 +119,15 @@ def test_the_filter_reaches_the_query(
 
 
 @pytest.mark.parametrize('path', ['/crops', '/stats/classes', '/clusters'])
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_a_malformed_band_is_a_400(app: FastAPI, path: str) -> None:
+    from src.core.db_session import get_db
+
+    async def no_database() -> Any:  # the filter is refused before any session is used
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.get(
             f'{_common.config.api_prefix}/projects/default{path}',

@@ -25,6 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from src.db.models.jobs import Job
 from src.db.models.projects import Project
 from src.db.models.training import Model, ModelShare, Promotion
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -110,7 +111,7 @@ def _model_row(row: Model) -> ModelRow:
         family=row.family,
         task=row.task,
         labels=tuple(row.labels),
-        artifact_storage_key=row.artifact_storage_key,
+        artifact_storage_key=make_key(*row.artifact_storage_key.split('/')),
         created_at=row.created_at,
         created_by=row.created_by,
     )
@@ -157,7 +158,7 @@ async def insert_model(session: AsyncSession, new: NewModel) -> ModelRow:
         family=new.family,
         task=new.task,
         labels=list(new.labels),
-        artifact_storage_key=new.artifact_storage_key,
+        artifact_storage_key=make_key(*new.artifact_storage_key.split('/')),
         created_by=new.created_by,
     )
     session.add(row)

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
+from src.core.db_session import DbSessionDep
 from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router

@@ -46,21 +46,21 @@ class _Client:
         doc_id, vec = self.docs[i]
         return {'_id': doc_id, '_source': {FIELD: vec}, 'sort': [i]}
 
-    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         return {'count': len(self.docs)}
 
-    async def create_pit(self, *, index: str, keep_alive: str) -> dict[str, Any]:  # noqa: ARG002
+    async def create_pit(self, *, index: str, keep_alive: str) -> dict[str, Any]:
         return {'pit_id': 'pit'}
 
-    async def delete_pit(self, *, body: dict[str, Any]) -> None:  # noqa: ARG002
+    async def delete_pit(self, *, body: dict[str, Any]) -> None:
         return None
 
     async def search(
         self,
         *,
         body: dict[str, Any],
-        index: str | None = None,  # noqa: ARG002
-        scroll: str | None = None,  # noqa: ARG002
+        index: str | None = None,
+        scroll: str | None = None,
     ) -> dict[str, Any]:
         if 'pit' not in body:  # the scroll variant
             return {
@@ -74,10 +74,10 @@ class _Client:
             idx = [i for i in idx if i > after[0]]
         return {'hits': {'hits': [self._hit(i) for i in idx[: body['size']]]}}
 
-    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:  # noqa: ARG002
+    async def scroll(self, *, scroll_id: str, scroll: str) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, *, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, *, scroll_id: str) -> None:
         return None
 
 

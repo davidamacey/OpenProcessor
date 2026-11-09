@@ -36,6 +36,8 @@ from src.services.curation.export_readiness import (
 )
 
 
+pytest_plugins = ['_records_world']
+
 INDEX_UUID = 'uuid-current'
 INDEX_CREATED = datetime(2026, 9, 24, 13, 50, tzinfo=UTC)
 
@@ -54,7 +56,7 @@ class _Indices:
     def __init__(self, settings: dict[str, Any]) -> None:
         self._settings = settings
 
-    async def get_settings(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def get_settings(self, *, index: str) -> dict[str, Any]:
         return self._settings
 
 
@@ -63,14 +65,14 @@ class _FakeOpenSearch:
         self._docs = docs
         self.indices = _Indices(_settings())
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
         return {'_scroll_id': 's', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 
@@ -112,12 +114,11 @@ async def test_export_with_only_unregistered_classes_refuses(tmp_path: Path) -> 
     assert not (tmp_path / 'exports' / 'current').exists()
 
 
+# the export's retention prune and item space are read from PostgreSQL
 @pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
-async def test_export_manifest_records_the_items_index_generation(
-    tmp_path: Path,
-    pg_registry: Any,  # the export's retention prune reads PostgreSQL
-) -> None:
+async def test_export_manifest_records_the_items_index_generation(tmp_path: Path) -> None:
     service = _service(tmp_path, [_doc('a', 0)])
     result = await service.export_dataset(copy_images=False)
     manifest = json.loads(Path(result.manifest_path).open().read())  # noqa: SIM115
@@ -140,7 +141,9 @@ def test_export_router_maps_nothing_to_export_to_422(monkeypatch: pytest.MonkeyP
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: (
+        AsyncMock()
+    )  # FastAPI parses a class here as a dependency with parameters
     app.dependency_overrides[require_near_dup_fresh] = lambda: None  # the gate reads PostgreSQL
     r = TestClient(app).post('/curation/projects/default/export/yolo', json={})
     assert r.status_code == 422
@@ -312,7 +315,7 @@ class _FailingIndices:
     def __init__(self, exc: Exception) -> None:
         self._exc = exc
 
-    async def get_settings(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+    async def get_settings(self, *, index: str) -> dict[str, Any]:
         raise self._exc
 
 

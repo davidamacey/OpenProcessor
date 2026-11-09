@@ -291,7 +291,6 @@ See [Dataset import](../guides/dataset-import.mdx) and
 | `OP_TRITON_MODEL_REPO` | `/models` | Must match the directory Triton serves, or a promoted model lands where Triton never looks |
 | `OP_TRITON_HTTP_URL` | `http://triton-server:8000` | |
 | `OP_API_BASE_URL` | `http://api:8000` | Where the trainer posts a campaign's auto-promote |
-| `OP_TRAIN_LOG_LEVEL` | `INFO` | |
 | `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME`, `OP_MLFLOW_MODEL_NAME`, `OP_MLFLOW_CONFUSION_MATRIX_EVERY` | | MLflow; every hook degrades to a warning when unreachable. A project's runs use the experiment `openprocessor-{slug}` |
 | `OP_MLFLOW_PUBLIC_URL` | unset | Browser-reachable MLflow base for served `mlflow_run_url` |
 
