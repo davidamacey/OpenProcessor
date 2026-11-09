@@ -42,8 +42,8 @@ ALGORITHM_VERSION = 'nd-1'
 DEFAULT_IMAGE_DEDUP_COSINE = 0.98
 DEFAULT_ITEM_DEDUP_COSINE = 0.98
 DEFAULT_K = 64
-# The core global index has one cut, in cosine (the 0.99 of its old OpenSearch ``cosinesimil``
-# score is this cosine: score = (1 + cosine) / 2).
+# The core global index has one cut, in cosine. Its OpenSearch ``cosinesimil`` score is
+# (1 + cosine) / 2, so a cut read off a score is not a cosine.
 DEFAULT_CORE_DEDUP_COSINE = 0.98
 CORE_SPACE = 'mobileclip@core:global_embedding'
 DEFAULT_MAX_GROUP_SIZE = 1000

@@ -50,7 +50,7 @@ class DuplicateDetectionService:
         Returns:
             List of DuplicateGroup objects
         """
-        # Aggregate by duplicate_group_id
+        # Aggregate by group
         response = await self.opensearch.client.search(
             index=IndexName.GLOBAL.value,
             body=groups_aggregation_body(min_size),
