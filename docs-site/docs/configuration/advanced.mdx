@@ -31,13 +31,11 @@ What a project owns, resolved from those variables and the roots below:
 
 | Resource | Location |
 |---|---|
-| OpenSearch indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` for `images`, `items`, `labels_confirmed`, `classes`, `umap_state` and `configs`. Settings and projection state share the `configs` index |
-| Class registry | the `class_registry` document in the project's settings index (a legacy `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` is loaded by the 0.7.0 upgrade) |
+| OpenSearch indexes | `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` for `images` and `items` |
+| Class registry, config documents, settings, jobs | PostgreSQL rows carrying the project id (a legacy `{OP_PROJECTS_DATA_ROOT}/{slug}/class_registry.json` is loaded by the 0.7.0 upgrade) |
 | Exports | `{OP_PROJECTS_DATA_ROOT}/{slug}/exports/` |
 | Bake-off eval sets | `{OP_PROJECTS_DATA_ROOT}/{slug}/bakeoff_eval/{curated,public,sample}` |
-| Uploads, state, bake-off job queue | `{OP_STATE_DIR}/projects/{slug}/` (`uploads/`, `bakeoff_jobs/`) |
-| Training job files | `{OP_TRAIN_JOBS_DIR}/projects/{slug}/` |
-| Auto-label job state | `{OP_AUTO_LABEL_STATE_DIR}/projects/{slug}/` |
+| Uploads | `{OP_STATE_DIR}/projects/{slug}/uploads/` |
 | MLflow experiment | `openprocessor-{slug}` |
 | Promoted-model prefix | `{slug}__` (empty for `default`) |
 
@@ -101,7 +99,6 @@ checkout rarely needs them.
 | `OP_MAX_INGEST_CONCURRENCY` | `16` |
 | `OP_REGION_DRAIN_POLL_INTERVAL_S` | `10` |
 | `OP_REGION_DRAIN_STABLE_POLLS` | `3` (consecutive zero readings before `drained` is true) |
-| `OP_REGION_DRAIN_STATE_DIR` | `/jobs/region_drain` (shared, so every uvicorn worker sees one streak) |
 
 All of these are served back on `GET /curation/projects/{project}/ingest/config`.
 
@@ -252,25 +249,23 @@ Stored per-project packs are managed through the API; see
 
 | Group | Variables (defaults) |
 |---|---|
-| Item scores | `OP_SCORES_KNN_K` (10), `OP_SCORES_NPROBE` (8), `OP_SCORES_STATE_DIR` (`/jobs/scores`), `OP_CROP_DUP_THRESHOLD` (0.98), `OP_FIELD_COVERAGE_TTL_S` (60) |
-| Active-learning probe | `OP_PROBE_JOBS_DIR` (`/jobs/probe`), `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (0.5: a disagreeing probe below this confidence is never offered as a one-click fix) |
-| Diverse selection | `OP_SELECT_JOBS_DIR` (`/jobs/select`), `OP_SELECT_JOB_MAX_N` (200000), `OP_SELECT_MAX_N` (20000), `OP_SELECT_SYNC_MAX_OPS` (3000000), `OP_SELECT_CACHE_TTL_S` (600) |
-| Cluster-refresh daemon | `OP_CLUSTER_REFRESH_INTERVAL_S` (120), `OP_CLUSTER_REFRESH_GROWTH_THRESHOLD` (200), `OP_CLUSTER_REFRESH_MAX_DEFERRAL_S` (1800), `OP_CLUSTER_REFRESH_RETRY_BACKOFF_S` (600), `OP_CLUSTER_REFRESH_AUTO_LABEL` (true). A flag on the command overrides each. A project turns automatic clustering off with the ingest policy (`clustering.automatic`) |
-| Clustering / IVF | `OP_IVF_RETRAIN_CHECK_S` (1800), `OP_IVF_RETRAIN_GROWTH` (1.5), `OP_IVF_RETRAIN_MIN_INTERVAL_S` (86400), `OP_MAX_REFINE_MEMBERS` (8000), `OP_OUTLIER_CACHE_TTL_S` (600), `OP_OUTLIER_MAX_MEMBERS` (20000), `OP_RESIDUAL_EMBEDDING_FIELD` (`pe_embedding`) |
+| Item scores | `OP_SCORES_KNN_K` (10), `OP_SCORES_NPROBE` (8), `OP_CROP_DUP_THRESHOLD` (0.98), `OP_FIELD_COVERAGE_TTL_S` (60) |
+| Active-learning probe | `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (0.5: a disagreeing probe below this confidence is never offered as a one-click fix) |
+| Diverse selection | `OP_SELECT_JOB_MAX_N` (200000), `OP_SELECT_MAX_N` (20000), `OP_SELECT_SYNC_MAX_OPS` (3000000), `OP_SELECT_CACHE_TTL_S` (600) |
+| Cluster refresh | `OP_CLUSTER_REFRESH_INTERVAL_S` (120; `0` removes the beat tick). The growth threshold, deferral and retry backoff are the `refresh` rule of the active cluster profile. A project turns automatic clustering off with the ingest policy (`clustering.automatic`) |
+| Clustering | `OP_OUTLIER_CACHE_TTL_S` (600), `OP_OUTLIER_MAX_MEMBERS` (20000). The method and its parameters are the cluster profile |
 
 ## Reprocess, dataset import and combine
 
-All three keep their job state in files under the shared `/jobs` volume, so
-every uvicorn worker sees the same job.
+All three run as jobs: their state is rows in PostgreSQL, so every uvicorn worker
+and every replica sees the same job.
 
 | Group | Variables (defaults) |
 |---|---|
-| Reprocess (`POST .../reprocess`) | `OP_REPROCESS_JOBS_DIR` (`/jobs/reprocess`), `OP_REPROCESS_SYNC_MAX` (20: `detect` or `embed` over more images than this runs as a job), `OP_OPEN_VOCAB_CONCURRENCY` (4: images of the open-vocabulary pass in flight at once), `OP_OPEN_VOCAB_SWEEP_S` (120: sweep that resumes ingest-time passes left pending; 0 = off), `OP_OPEN_VOCAB_STALE_S` (240: age of a pending stamp before the sweep takes it over; floor 30) |
-| Assist runs (`POST .../assist/runs`) | `OP_ASSIST_JOBS_DIR` (`/jobs/assist`: run state, one live run per project, the newest 100 kept) |
-| Auto-label loops (`POST .../assist/loops`) | `OP_ASSIST_LOOP_JOBS_DIR` (`/jobs/assist_loop`: request, event log, budget, snapshots and audit of each loop, one live loop per project; keep it apart from `OP_ASSIST_JOBS_DIR`, which prunes) |
-| Dataset import (`.../datasets/imports`) | `OP_DATASET_IMPORTS_DIR` (`/jobs/imports`), `OP_DATASET_IMPORT_CHUNK` (64), `OP_DATASET_IMPORT_MAX_PENDING` (2000: region-worker backpressure), `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` (5), `OP_DATASET_PREVIEW_MAX_FILES` (500000) |
+| Reprocess (`POST .../reprocess`) | `OP_REPROCESS_SYNC_MAX` (20: `detect` or `embed` over more images than this runs as a job), `OP_OPEN_VOCAB_CONCURRENCY` (4: images of the open-vocabulary pass in flight at once), `OP_OPEN_VOCAB_SWEEP_S` (120: sweep that resumes ingest-time passes left pending; 0 = off) |
+| Dataset import (`.../datasets/imports`) | `OP_DATASET_IMPORT_CHUNK` (64), `OP_DATASET_IMPORT_MAX_PENDING` (2000: region-worker backpressure), `OP_DATASET_IMPORT_MAX_FAILED_CHUNKS` (5), `OP_DATASET_PREVIEW_MAX_FILES` (500000) |
 | Dataset upload (`.../datasets/uploads`) | `OP_DATASET_UPLOAD_MAX_BYTES` (2147483648), `OP_DATASET_UPLOAD_MAX_FILES` (200000), `OP_DATASET_UPLOAD_TTL_H` (72: extracted uploads are swept after this) |
-| Combine (`/curation/projects/combine*`) | `OP_COMBINE_JOBS_DIR` (`/jobs/combine`), `OP_COMBINE_PAGE_SIZE` (200) |
+| Combine (`/curation/projects/combine*`) | `OP_COMBINE_PAGE_SIZE` (200) |
 
 See [Dataset import](../guides/dataset-import.mdx) and
 [Combine projects](../guides/combine-projects.mdx).
@@ -279,7 +274,6 @@ See [Dataset import](../guides/dataset-import.mdx) and
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OP_TRAIN_JOBS_DIR` | `/jobs` | Shared job-file directory; each project's jobs nest under `projects/{slug}` |
 | `OP_TRAIN_RUNS_ROOT` | `/var/lib/openprocessor/training_runs` | Must be the same absolute path in the API and trainer |
 | `OP_TRAIN_STAGING` | `/var/lib/openprocessor/training_staging` | |
 | `OP_PREFLIGHT_SCAN_CAP` | `200000` | |
@@ -319,7 +313,6 @@ reads eval sets from its own `bakeoff_eval` directory (see
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_BUILD_SHA` | build arg | Overrides the baked commit recorded in manifests |
-| `OP_BAKEOFF_JOBS_DIR` | `/var/lib/openprocessor/bakeoff_jobs` | One more directory for the GPU arbiter to watch for queued jobs |
 | `OP_BAKEOFF_CONCURRENCY` / `OP_BAKEOFF_GPUS` | `4` / `0` | Evaluator parallelism and container-local GPU ids |
 | `OP_BAKEOFF_BASELINES_PATH` | empty registry | External baseline models |
 | `OP_BAKEOFF_PROFILE` / `OP_BAKEOFF_PROFILE_<FIELD>` | generic | Default comparison profile (a registered name or a profile `.json` path) and per-field overrides such as `_CLASS_FILTER` and `_CONTEXT_CLASS_IDS` |
@@ -329,11 +322,9 @@ reads eval sets from its own `bakeoff_eval` directory (see
 | Variable | Default | Meaning |
 |---|---|---|
 | `OP_API` | `http://localhost:4603` | API base for worker scripts |
-| `OP_AUTO_LABEL_STATE_DIR` | `/jobs/auto_label` | Parent of each project's auto-label job state |
 | `OP_EVENT_API_URL` | falls back to `OP_API_BASE_URL`, then `OP_API` | Where the detection worker publishes events |
 | `OP_HEARTBEAT_DIR` | `/tmp/openprocessor_heartbeat` | Worker heartbeat files (container-local) |
-| `OP_PAUSE_SENTINEL`, `OP_WORKER_PAUSE_SENTINEL` | `.../vlm_worker/pause.sentinel` | Global pause files (the GPU arbiter's). A project pauses itself with `POST .../pause` |
-| `OP_VIZ_JOBS_DIR`, `OP_VIZ_MAX_N` | `/jobs/viz`, `20000` | |
+| `OP_VIZ_MAX_N` | `20000` | |
 | `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS` | library default | Cap BLAS threads for the auto-label worker on shared hosts |
 
 ## VLM and segmenter

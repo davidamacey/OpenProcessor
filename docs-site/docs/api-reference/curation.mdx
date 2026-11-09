@@ -250,8 +250,13 @@ See [Keymaps](../guides/keymaps.mdx).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/clusters` | Cluster cards: `cluster_kind`, dominant class, `purity` (geometry), `label_agreement` (label share), validated count, sub-clusters, representatives |
+| GET | `/clusters` | Cluster cards of the serving partition: `cluster_uid`, dominant class, `label_agreement` (label share), validated count, flags, representatives; server-side sort and filters |
+| GET | `/clusters/{cluster_uid}/facets` | One cluster's members counted for filter chips |
 | GET | `/clusters/representatives` | Representatives only |
+| POST | `/clusters/runs` | Start a clustering run (202); it writes a new partition |
+| PUT | `/clusters/activation` | Serve a finished partition (202); `409 partition_conflict` when stale |
+| GET | `/clusters/partitions` | The partitions of a target, with their metrics |
+| GET | `/clusters/partitions/{partition_id}` | One partition |
 | POST | `/cluster/umap/rebuild` | Rebuild the residual reducer |
 | GET | `/viz/projection` | Cached 2-D coordinates for plotting; never fits inline |
 | POST | `/viz/projection/rebuild` | Start the projection fit job |
@@ -415,8 +420,8 @@ project with the VLM off is `409 vlm_not_configured`.
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/vlm/label_batch` | VLM class suggestions for up to 64 `crop_ids` |
-| POST | `/assist/runs` | VLM suggestions for a crop, a selection, a cluster, a sub-cluster or a filter, as a background run (dry run by default) |
-| GET | `/assist/runs` | The newest assist runs for a cluster or sub-cluster, each with `scope_now` |
+| POST | `/assist/runs` | VLM suggestions for a crop, a selection, a cluster or a filter, as a background run (dry run by default) |
+| GET | `/assist/runs` | The newest assist runs for a cluster, each with `scope_now` |
 | GET | `/assist/runs/{run_id}` | State, progress, result (with the cluster proposal) and `scope_now` of one assist run |
 | POST | `/assist/runs/{run_id}/cancel` | Stop a live assist run after its current chunk |
 | POST | `/assist/runs/{run_id}/apply` | Label the scope's current members with the proposed class, as a human would (dry run by default) |

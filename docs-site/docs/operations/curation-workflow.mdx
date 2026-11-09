@@ -92,29 +92,15 @@ curl -s "$API/curation/projects/$P/pipeline/auto_label/status"     # poll until 
 curl -s "$API/curation/projects/$P/clusters" | jq '.clusters[0]'
 ```
 
-Clustering groups items by embedding (residual clustering reduces
-`pe_embedding` by default). Cluster ids have fixed ranges: below 0 is
-unassigned/noise, `0..N` mirrors class ids, and ids from 10000 up are
-**candidate** clusters that still need a class. Each card carries
-`cluster_kind`, dominant class, purity, validated count, sub-clusters
-and representatives; the auto-promote step validates classifier-labelled
-items in high-purity clusters. Promotion is gated on the accuracy audit
-([section 5](#5-label-vlm-suggestions-and-review-queues)): every class a run
-would promote needs at least `min_per_class` audited crops and an audited
-detector precision of at least `promote_min_precision` (default 0.95), else
-the call answers `409 audit_required` or `409 audit_precision_low` with the
-classes listed and writes nothing. `force=true` bypasses the gate and is
-logged; a dry run is never gated. `curation-cluster-refresh` calls
-auto-promote as each project's pool grows, so it promotes nothing until the
-audit clears the classes.
-
-:::caution Known issue: a gated promote stops the retrain
-The daemon treats the `409 audit_required` answer as a failure. It logs
-`auto_promote failed` and returns before it queues the centroid retrain, so a
-project with an unaudited promotable class stops refreshing its clusters until the
-audit passes. (issue #280). See
-[Pipeline modes](../guides/pipeline-modes.mdx#4-known-issue-the-audit-gate-stops-the-retrain).
-:::
+Clustering groups items by embedding. A run writes a **partition**; one partition per
+target and level is serving, and every cluster has a stable `cluster_uid` that later runs keep
+when its members mostly stay together. A member is `assigned`, `review` or `unassigned`. Each
+card carries `cluster_uid`, dominant class, `label_agreement`, validated count, quality flags
+and representatives. A run starts when the project has grown (the cluster refresh tick, see
+[Pipeline modes](../guides/pipeline-modes.mdx#3-what-the-cluster-refresh-does)) or when you
+start one with `POST /curation/projects/{project}/clusters/runs`; a finished partition is
+served after `PUT /curation/projects/{project}/clusters/activation` unless the profile
+activates it at once. Review it first with `GET .../clusters/partitions/{partition_id}`.
 
 ## 5. Label: VLM suggestions and review queues
 
@@ -131,7 +117,7 @@ audit passes. (issue #280). See
   [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)), or run
   the VLM for one job only with `vlm=<name>` (see the
   [selective recipe](../guides/pipeline-modes.mdx#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing)). Run
-  `auto_label/start?run_vlm=true`, label a cluster, a sub-cluster or a
+  `auto_label/start?run_vlm=true`, label a cluster or a
   sample with `POST /assist/runs`, or let `curation-vlm-worker`
   suggest classes continuously. Register and activate other endpoints as
   in [VLM selection](../guides/vlm-selection.mdx); `?vlm=<name>` picks one

@@ -584,7 +584,7 @@ revisioned config document, `/curation/serving_profiles`: list, get, put, delete
 activate) names the servers (one per card: `name`, `grpc_url`, `metrics_url`, the card UUIDs),
 the models each keeps resident (`load_list`), the instances per model, the GPU image-prep
 settings and the interactive and bulk priorities. With no profile active the router is the single default server
-(`OP_TRITON_URL`), exactly as before.
+(`TRITON_URL`), exactly as before.
 
 `op.periodic.serving_inventory` (every 60 s) asks each server which models are ready and
 writes `serving_reports`; only `ready` rows count, so a server the inventory could not

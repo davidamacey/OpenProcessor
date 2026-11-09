@@ -42,7 +42,7 @@ It is a dry run by default.
 - **Sync or job.** `region` and `vlm` run inside the call. `detect` and
   `embed` run inside the call for a few images and as a background job above
   `OP_REPROCESS_SYNC_MAX` images (default 20). One live job per project.
-  Job state is kept under `OP_REPROCESS_JOBS_DIR`.
+  The job is a row in PostgreSQL, so every worker sees it.
 
 ## Routes
 
