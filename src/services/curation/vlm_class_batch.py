@@ -19,6 +19,7 @@ from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.events.publish import apublish_crops_classified
 from src.services.labeling.run_labeler import vlm_stamp
 
@@ -201,6 +202,7 @@ async def write_updates(
     try:
         await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_ids=list(updates_by_id.keys()),
             merger=merge,
             index=items_index(),

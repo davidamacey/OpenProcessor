@@ -18,14 +18,19 @@ async def item_vector_field() -> str:
     return (await embedding_space(Target.ITEM)).vector_field
 
 
-async def vector_source_excludes() -> list[str]:
-    """Every vector of the bound project's items index, for a ``_source`` exclude list.
+async def vector_source_excludes(index_role: str = 'items') -> list[str]:
+    """Every vector of one of the bound project's indexes, for a ``_source`` exclude list.
 
     A space's nested path stands for its whole box list, so one entry drops the nested vectors;
     the result is built from every live space, so a flipped or optional space is excluded too.
+    ``index_role`` is ``items`` or ``images``.
     """
     return sorted(
-        {(s.nested_path or s.vector_field) for s in await live_spaces() if s.index_role == 'items'}
+        {
+            (s.nested_path or s.vector_field)
+            for s in await live_spaces()
+            if s.index_role == index_role
+        }
     )
 
 

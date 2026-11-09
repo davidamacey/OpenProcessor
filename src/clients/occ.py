@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ_locks import is_locked_box, is_locked_class, is_locked_item
-from src.config import ITEM_EMBEDDING_FIELD, get_region_fields
+from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.config.env import env_int
 from src.core.logging import get_logger
@@ -59,17 +59,9 @@ _RETRY_BACKOFF_SEC = (0.05, 0.15, 0.45)
 # a different page.
 OCC_BULK_PAGE_SIZE = env_int('OCC_BULK_PAGE_SIZE', 500)
 
-# Embedding fields are large (512-d+ float vectors) and no existing
-# occ_skip_on_conflict_bulk merger reads them (verified: auto_promote,
-# the VLM label-batch merger, class-merge writers, and the
-# region-detection worker's bulk writer only touch
-# class_*/region_*/label_source/cluster_*/history fields) — excluding
-# them from the per-page mget keeps the batched fetch small regardless
-# of page size.
-OCC_BULK_MGET_SOURCE_EXCLUDES = [
-    ITEM_EMBEDDING_FIELD,
-    get_region_fields().box_embeddings,
-]
+# Vector fields are large (512-d+ float vectors) and no merger reads them, so every OCC fetch
+# excludes them. The caller passes the list (``vector_excludes``), built from the registry by
+# ``src.services.embedding_spaces.readers.vector_source_excludes``: a client cannot import it.
 
 
 class OCCFinalConflictError(Exception):
@@ -99,10 +91,11 @@ async def _fetch_with_version(
     *,
     index: str,
     doc_id: str,
+    vector_excludes: list[str],
 ) -> tuple[dict[str, Any], int, int]:
     """GET w/ seq_no/primary_term for OCC; excludes embedding vectors
     (no current merge closure reads them). Returns (source, seq_no, primary_term)."""
-    resp = await client.get(index=index, id=doc_id, _source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES)
+    resp = await client.get(index=index, id=doc_id, _source_excludes=vector_excludes)
     source = resp.get('_source') or {}
     seq_no = int(resp.get('_seq_no', 0))
     primary_term = int(resp.get('_primary_term', 0))
@@ -114,6 +107,7 @@ async def occ_update_one(
     *,
     doc_id: str,
     merger: Merger,
+    vector_excludes: list[str],
     index: str | None = None,
     max_retries: int = 3,
     refresh: bool | str = False,
@@ -126,6 +120,8 @@ async def occ_update_one(
         doc_id: Document id.
         merger: Callable that receives the current source and returns a
             partial update doc (only the changed fields).
+        vector_excludes: Every vector field of the items index, left out of the fetch
+            (``vector_source_excludes()``).
         index: Target index (defaults to the configured items index).
         max_retries: Max retries on ConflictError. Human endpoints use 3.
             Workers use ``occ_skip_on_conflict_bulk`` (max_retries=0).
@@ -144,7 +140,9 @@ async def occ_update_one(
         index = items_index()
     last_error: Exception | None = None
     for attempt in range(max_retries + 1):
-        source, seq_no, primary_term = await _fetch_with_version(client, index=index, doc_id=doc_id)
+        source, seq_no, primary_term = await _fetch_with_version(
+            client, index=index, doc_id=doc_id, vector_excludes=vector_excludes
+        )
         update_doc = merger(source)
         try:
             await client.update(
@@ -187,6 +185,7 @@ async def occ_skip_on_conflict_bulk(
     *,
     doc_ids: list[str],
     merger: Callable[[str, dict[str, Any]], dict[str, Any]],
+    vector_excludes: list[str],
     index: str | None = None,
     refresh: bool | str = False,
     writer_id: str = 'worker',
@@ -202,7 +201,7 @@ async def occ_skip_on_conflict_bulk(
 
     1. One ``_mget`` (via :func:`src.clients.curation_opensearch.crops.mget_crops`)
        fetching every doc's ``_source`` (minus large embedding fields,
-       see :data:`OCC_BULK_MGET_SOURCE_EXCLUDES`) + ``_seq_no``/
+       ``vector_excludes``) + ``_seq_no``/
        ``_primary_term``.
     2. ``merger(doc_id, source)`` computed in-process per fetched doc.
     3. One ``_bulk`` call with a conditional ``update`` action
@@ -258,7 +257,7 @@ async def occ_skip_on_conflict_bulk(
             client,
             page_ids,
             index=index,
-            source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+            source_excludes=vector_excludes,
             seq_no=True,
         )
 

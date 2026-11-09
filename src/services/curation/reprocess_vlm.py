@@ -20,6 +20,7 @@ from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPTED_AT_FIELD, VLM_CLASS
 from src.domain.history import record_class_snapshot, restore_class_state
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.reprocess_locks import class_locked, class_locked_clause
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -84,6 +85,7 @@ async def apply_vlm(opensearch: AsyncOpenSearch, ids: list[str]) -> int:
     for start in range(0, len(ids), 500):
         result = await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_ids=ids[start : start + 500],
             merger=_merge,
             index=cfg.items_index,

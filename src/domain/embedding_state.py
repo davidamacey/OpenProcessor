@@ -73,16 +73,16 @@ def legacy_embedded_backfill_body() -> dict[str, Any]:
     }
 
 
-def keep_stored_vector_state(merged: dict[str, Any], existing: dict[str, Any]) -> None:
-    """Drop (in place) an incoming ``embedding_state`` that would contradict a
-    stored vector.
+def keep_stored_vector_state(
+    merged: dict[str, Any], existing: dict[str, Any], vector_field: str, state_field: str
+) -> None:
+    """Drop (in place) an incoming state that would contradict a stored vector.
 
-    An update without a ``pe_embedding`` leaves the stored vector in place, so
-    a re-ingest whose encoder call failed must not relabel an ``embedded``
-    item as ``failed``.
+    An update without the vector leaves the stored vector in place, so a re-ingest whose
+    encoder call failed must not relabel an ``embedded`` item as ``failed``.
     """
-    if ITEM_EMBEDDING_FIELD not in merged and existing.get('embedding_state') == EMBEDDED:
-        merged.pop('embedding_state', None)
+    if vector_field not in merged and existing.get(state_field) == EMBEDDED:
+        merged.pop(state_field, None)
 
 
 __all__ = [

@@ -35,6 +35,7 @@ from src.services.detection.region_text import (
     ocr_engine_id,
     resolve_region_text,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -272,6 +273,7 @@ async def apply_region_text_repair(
         return {'updated': 0, 'skipped_due_to_conflict': 0, 'errors': []}
     return await occ_skip_on_conflict_bulk(
         client,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=list(plan.changes),
         merger=_merge,
         index=index,

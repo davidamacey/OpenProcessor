@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCCFinalConflictError, occ_update_one
+from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config import get_region_fields
 from src.domain.region_boxes import RegionBoxWriteError
@@ -48,6 +48,7 @@ from src.services.curation.region_writes import (
     post_write_item,
     reason_only_box_write,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -94,9 +95,16 @@ async def _write_one(
     opensearch: Any, crop_id: str, rec: _Recorder, writer_id: str, **kw: Any
 ) -> None:
     """One OCC write; RegionBoxWriteError -> 422, a missing doc -> 404."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
-            opensearch, doc_id=crop_id, merger=rec, refresh='wait_for', writer_id=writer_id, **kw
+            opensearch,
+            vector_excludes=excludes,
+            doc_id=crop_id,
+            merger=rec,
+            refresh='wait_for',
+            writer_id=writer_id,
+            **kw,
         )
     except OCCFinalConflictError:
         raise
@@ -251,7 +259,7 @@ async def _batch_write(
         max_retries=2,
         refresh='wait_for',
         retry_transport=False,
-        source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        source_excludes=await vector_source_excludes(),
     )
     return {'updated': len(items), 'conflicts': conflicts, 'invalid': invalid, 'items': items}
 

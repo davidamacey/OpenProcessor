@@ -51,6 +51,7 @@ from src.services.curation.region_writes import (
     parent_to_source_bbox,
     post_write_item,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -212,9 +213,15 @@ async def _write_one_boxes(opensearch: Any, crop_id: str, rec: _Recorder, writer
     """Like :func:`_write_one`, but a :class:`RegionConflictError` from the
     merger becomes 409 ``region_conflict`` instead of falling through to
     the generic 404 handler."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
-            opensearch, doc_id=crop_id, merger=rec, refresh='wait_for', writer_id=writer_id
+            opensearch,
+            vector_excludes=excludes,
+            doc_id=crop_id,
+            merger=rec,
+            refresh='wait_for',
+            writer_id=writer_id,
         )
     except OCCFinalConflictError:
         raise

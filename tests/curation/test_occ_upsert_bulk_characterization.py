@@ -12,10 +12,11 @@ from typing import Any
 
 import pytest
 import structlog
+from opensearchpy.exceptions import OpenSearchException
 from prometheus_client import REGISTRY
 
+from curation.occ_fakes import VECTOR_EXCLUDES
 from src.clients import occ_bulk, occ_upsert
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES
 from src.clients.occ_upsert import DocOutcome, occ_upsert_bulk
 
 
@@ -101,7 +102,14 @@ def update_script(monkeypatch: pytest.MonkeyPatch):
 async def _upsert(client: Any, docs: list[dict[str, Any]], **kw: Any) -> dict[str, int]:
     kw.setdefault('index', INDEX)
     kw.setdefault('human_field_guards', ['class_source'])
-    return await occ_upsert_bulk(client, docs, **kw)
+    return await occ_upsert_bulk(
+        client,
+        docs,
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        **kw,
+    )
 
 
 async def test_empty_docs_touch_nothing() -> None:
@@ -120,7 +128,14 @@ async def test_empty_docs_touch_nothing() -> None:
 async def test_index_defaults_to_items_index(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(occ_upsert, 'items_index', lambda: 'bound_items')
     client = ScriptedClient()
-    await occ_upsert_bulk(client, [{'crop_id': 'a'}], human_field_guards=[])
+    await occ_upsert_bulk(
+        client,
+        [{'crop_id': 'a'}],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        human_field_guards=[],
+    )
     assert client.mget_calls[0]['index'] == 'bound_items'
     assert client.bulk_calls[0]['body'][0] == {'create': {'_index': 'bound_items', '_id': 'a'}}
 
@@ -138,9 +153,7 @@ async def test_all_new_docs_are_created_in_one_bulk() -> None:
         'final_conflicts': 0,
         'filled_absent': 0,
     }
-    assert client.mget_calls == [
-        {'ids': ['a', 'b'], 'index': INDEX, 'excludes': OCC_BULK_MGET_SOURCE_EXCLUDES}
-    ]
+    assert client.mget_calls == [{'ids': ['a', 'b'], 'index': INDEX, 'excludes': VECTOR_EXCLUDES}]
     assert client.bulk_calls == [
         {
             'body': [
@@ -228,8 +241,16 @@ async def test_create_conflict_refetches_and_joins_update_path(update_script) ->
     # refetch asks for the conflicted ids sorted; 'c' vanished (found False) and is dropped
     assert client.mget_calls[1]['ids'] == ['a', 'b', 'c']
     assert client.mget_calls[1]['index'] == INDEX
-    assert client.mget_calls[1]['excludes'] == OCC_BULK_MGET_SOURCE_EXCLUDES
-    assert script.calls == [{'index': INDEX, 'ids': ['a', 'b'], 'max_retries': 1, 'refresh': True}]
+    assert client.mget_calls[1]['excludes'] == VECTOR_EXCLUDES
+    assert script.calls == [
+        {
+            'index': INDEX,
+            'ids': ['a', 'b'],
+            'vector_excludes': VECTOR_EXCLUDES,
+            'max_retries': 1,
+            'refresh': True,
+        }
+    ]
     assert result['created'] == 0
     assert result['updated'] == 2
     assert created == []
@@ -394,7 +415,7 @@ async def test_unknown_status_is_a_refetch_failure(update_script) -> None:
 
 async def test_update_exception_is_swallowed_and_logged(update_script) -> None:
     client = ScriptedClient({'a': {}, 'b': {}})
-    update_script(UpdateScript({}, {}, raises=RuntimeError('boom')))
+    update_script(UpdateScript({}, {}, raises=OpenSearchException('boom')))
     outcomes: dict[str, DocOutcome] = {}
     with structlog.testing.capture_logs() as logs:
         result = await _upsert(

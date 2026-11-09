@@ -39,6 +39,7 @@ from src.services.curation.class_sources import vlm_suggestion
 from src.services.curation.class_undo import class_undo_update, undo_class_writes
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -58,9 +59,11 @@ def _undo_merger(*, require_history: bool) -> Any:
 async def _undo_one(opensearch: Any, crop_id: str, *, require_history: bool) -> None:
     """Restore one crop. Raises NothingToUndoError, OCCFinalConflictError,
     or HTTPException(404)."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=_undo_merger(require_history=require_history),
             refresh='wait_for',
@@ -181,9 +184,11 @@ def _require_effect(payload: CropDiscardRequest) -> None:
 
 
 async def _discard_one(opensearch: Any, crop_id: str, payload: CropDiscardRequest) -> None:
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=_discard_merger(payload),
             refresh='wait_for',
@@ -230,6 +235,7 @@ async def discard_crops(
     merge = _discard_merger(payload)
     status = await occ_update_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         index=items_index(),
         ids=crop_ids,
         merge_fn=lambda _crop_id, source: merge(source),
@@ -279,9 +285,11 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
             'updated_at': now_iso(),
         }
 
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=_merge,
             refresh='wait_for',
@@ -341,9 +349,11 @@ async def review_undismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
     ``review_dismissed_at`` / ``review_dismissed_by``). For a dismissal made
     by ``POST /crops/{id}/discard``, ``label/undo`` does the same and also
     restores the class. Returns the post-write item."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=lambda _c: {
                 'review_dismissed_at': None,

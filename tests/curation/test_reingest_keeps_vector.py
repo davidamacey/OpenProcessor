@@ -11,27 +11,31 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from curation.occ_fakes import make_bulk_update_item, make_mget_response
+from curation.occ_fakes import VECTOR_EXCLUDES, make_bulk_update_item, make_mget_response
 from src.clients.occ_upsert import occ_upsert_bulk
 from src.domain.embedding_state import keep_stored_vector_state
 
 
 def test_failed_rerun_keeps_embedded_state() -> None:
     merged = {'crop_id': 'c', 'embedding_state': 'failed'}
-    keep_stored_vector_state(merged, {'embedding_state': 'embedded'})
+    keep_stored_vector_state(
+        merged, {'embedding_state': 'embedded'}, 'pe_embedding', 'embedding_state'
+    )
     assert 'embedding_state' not in merged
 
 
 def test_failed_rerun_over_failed_or_unknown_is_written() -> None:
     for existing in ({'embedding_state': 'failed'}, {}):
         merged = {'embedding_state': 'failed'}
-        keep_stored_vector_state(merged, existing)
+        keep_stored_vector_state(merged, existing, 'pe_embedding', 'embedding_state')
         assert merged['embedding_state'] == 'failed'
 
 
 def test_new_vector_always_restates_embedded() -> None:
     merged = {'pe_embedding': [0.1], 'embedding_state': 'embedded'}
-    keep_stored_vector_state(merged, {'embedding_state': 'failed'})
+    keep_stored_vector_state(
+        merged, {'embedding_state': 'failed'}, 'pe_embedding', 'embedding_state'
+    )
     assert merged['embedding_state'] == 'embedded'
 
 
@@ -51,6 +55,9 @@ async def test_upsert_bulk_does_not_write_failed_over_an_embedded_item() -> None
     await occ_upsert_bulk(
         client,
         [{'crop_id': 'c1', 'embedding_state': 'failed', 'confidence': 0.5}],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         human_field_guards=[],
     )
     updates = [x['doc'] for x in sent if isinstance(x, dict) and 'doc' in x]

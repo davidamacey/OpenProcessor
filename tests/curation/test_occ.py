@@ -13,8 +13,14 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
-from curation.occ_fakes import FakeOccOpenSearch, make_bulk_response, make_bulk_update_item
+from curation.occ_fakes import (
+    VECTOR_EXCLUDES,
+    FakeOccOpenSearch,
+    make_bulk_response,
+    make_bulk_update_item,
+)
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
 
@@ -45,6 +51,7 @@ class TestMixedPageOutcomes:
 
         result = await occ_skip_on_conflict_bulk(
             client,
+            vector_excludes=VECTOR_EXCLUDES,
             doc_ids=['conflict-doc', 'ok-doc', 'noop-doc', 'missing-doc'],
             merger=merger,
         )
@@ -72,7 +79,7 @@ class TestPaging:
             return {'field': 'value'}
 
         result = await occ_skip_on_conflict_bulk(
-            client, doc_ids=doc_ids, merger=merger, page_size=2
+            client, vector_excludes=VECTOR_EXCLUDES, doc_ids=doc_ids, merger=merger, page_size=2
         )
 
         assert result['updated'] == 5
@@ -103,12 +110,14 @@ class TestBulkExceptionDegradesGracefully:
                 ]
             }
         )
-        client.bulk = AsyncMock(side_effect=ConnectionError('OS unreachable'))
+        client.bulk = AsyncMock(side_effect=OpenSearchException('OS unreachable'))
 
         def merger(_doc_id: str, _source: dict[str, Any]) -> dict[str, Any]:
             return {'field': 'value'}
 
-        result = await occ_skip_on_conflict_bulk(client, doc_ids=['a', 'b'], merger=merger)
+        result = await occ_skip_on_conflict_bulk(
+            client, vector_excludes=VECTOR_EXCLUDES, doc_ids=['a', 'b'], merger=merger
+        )
 
         assert result['updated'] == 0
         assert result['skipped_due_to_conflict'] == 0
@@ -144,7 +153,11 @@ class TestRefreshForwarding:
                 return {'field': 'value'}
 
             await occ_skip_on_conflict_bulk(
-                client, doc_ids=['a'], merger=merger, refresh=refresh_value
+                client,
+                vector_excludes=VECTOR_EXCLUDES,
+                doc_ids=['a'],
+                merger=merger,
+                refresh=refresh_value,
             )
             bulk_call = client.bulk.await_args
             assert bulk_call is not None
@@ -155,7 +168,9 @@ class TestEmptyInput:
     @pytest.mark.asyncio
     async def test_empty_doc_ids_short_circuits(self) -> None:
         client = AsyncMock()
-        result = await occ_skip_on_conflict_bulk(client, doc_ids=[], merger=_noop_merger)
+        result = await occ_skip_on_conflict_bulk(
+            client, vector_excludes=VECTOR_EXCLUDES, doc_ids=[], merger=_noop_merger
+        )
         assert result == {
             'updated': 0,
             'updated_ids': [],
@@ -173,7 +188,9 @@ class TestMgetPayload:
         client = AsyncMock()
         client.mget.return_value = {'docs': []}
 
-        await occ_skip_on_conflict_bulk(client, doc_ids=['a'], merger=_noop_merger)
+        await occ_skip_on_conflict_bulk(
+            client, vector_excludes=VECTOR_EXCLUDES, doc_ids=['a'], merger=_noop_merger
+        )
 
         (doc,) = client.mget.await_args.kwargs['body']['docs']
         excludes = doc['_source']['excludes']

@@ -35,6 +35,7 @@ from src.services.curation.edit_history import (
     record_edit,
     restore_edit_state,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -74,9 +75,11 @@ def edit_undo_merger(kind: EditKind, writer: str) -> Any:
 async def undo_edit(opensearch: Any, crop_id: str, kind: EditKind, writer: str) -> None:
     """Restore one crop. Raises NothingToUndoError, OCCFinalConflictError,
     or HTTPException(404)."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=edit_undo_merger(kind, writer),
             refresh=True,

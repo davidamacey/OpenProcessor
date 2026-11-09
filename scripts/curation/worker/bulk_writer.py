@@ -25,6 +25,7 @@ from src.services.curation.region_box_pass import (
     worker_stamps,
 )
 from src.services.curation.wire import region_event_payload
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import pending as near_dup_pending
 
 
@@ -255,6 +256,7 @@ async def _bulk_update_one_project(
     )
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
         index=items_index(),

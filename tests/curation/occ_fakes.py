@@ -312,3 +312,7 @@ class FakeIngestOpenSearch:
             '_seq_no': self._seq.get(id, 1),
             '_primary_term': 1,
         }
+
+
+VECTOR_EXCLUDES = ['pe_embedding', 'region_box_embeddings']
+"""What ``vector_source_excludes()`` answers for a project on the 0.6.0 default spaces."""

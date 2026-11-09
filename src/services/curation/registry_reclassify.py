@@ -40,6 +40,7 @@ from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.domain.history import record_class_history
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -279,6 +280,7 @@ async def reclassify_unmatched(
 
             written = await occ_skip_on_conflict_bulk(
                 opensearch,
+                vector_excludes=await vector_source_excludes(),
                 doc_ids=list(targets),
                 merger=_merge,
                 index=cfg.items_index,

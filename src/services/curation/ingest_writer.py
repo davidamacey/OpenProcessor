@@ -49,6 +49,7 @@ from typing import Any
 
 from src.clients.occ_upsert import DocOutcome, occ_upsert_bulk
 from src.core.logging import get_logger
+from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
 
 
 logger = get_logger(__name__)
@@ -344,6 +345,8 @@ class IngestWriter:
             return
         first = units[0]
         outcomes: dict[str, DocOutcome] = {}
+        write_fields = await item_write_fields()
+        excludes = await vector_source_excludes()
         for pause in (*RETRY_429_PAUSES_S, None):
             try:
                 await occ_upsert_bulk(
@@ -351,6 +354,9 @@ class IngestWriter:
                     remaining,
                     index=first.items_index,
                     human_field_guards=list(first.guards),
+                    vector_excludes=excludes,
+                    vector_field=write_fields.vector_field,
+                    state_field=write_fields.state_field,
                     writer_id='ingest',
                     fill_if_absent=first.fill_if_absent,
                     outcomes=outcomes,

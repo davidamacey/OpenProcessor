@@ -12,8 +12,14 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import OpenSearchException
 
-from curation.occ_fakes import FakeOccOpenSearch, make_bulk_response, make_bulk_update_item
+from curation.occ_fakes import (
+    VECTOR_EXCLUDES,
+    FakeOccOpenSearch,
+    make_bulk_response,
+    make_bulk_update_item,
+)
 from src.clients.occ_bulk import occ_bulk_rounds, occ_update_bulk
 
 
@@ -29,6 +35,7 @@ class TestOccUpdateBulk:
 
         status = await occ_update_bulk(
             client,
+            vector_excludes=VECTOR_EXCLUDES,
             index='op_prj_default__items',
             ids=doc_ids,
             merge_fn=merge_fn,
@@ -47,7 +54,11 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_prj_default__items', ids=['a', 'missing'], merge_fn=merge_fn
+            client,
+            vector_excludes=VECTOR_EXCLUDES,
+            index='op_prj_default__items',
+            ids=['a', 'missing'],
+            merge_fn=merge_fn,
         )
         assert status['a'] == 'updated'
         assert status['missing'] == 'not-found'
@@ -87,7 +98,11 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_prj_default__items', ids=['a'], merge_fn=merge_fn
+            client,
+            vector_excludes=VECTOR_EXCLUDES,
+            index='op_prj_default__items',
+            ids=['a'],
+            merge_fn=merge_fn,
         )
         assert status['a'] == 'updated'
         assert len(client.bulk_calls) == 2
@@ -104,7 +119,12 @@ class TestOccUpdateBulk:
             return {'class_id': 2}
 
         status = await occ_update_bulk(
-            client, index='op_prj_default__items', ids=['a'], merge_fn=merge_fn, max_retries=1
+            client,
+            vector_excludes=VECTOR_EXCLUDES,
+            index='op_prj_default__items',
+            ids=['a'],
+            merge_fn=merge_fn,
+            max_retries=1,
         )
         assert status['a'] == 'conflict-exhausted'
 
@@ -126,7 +146,7 @@ class _AlwaysConflict(FakeOccOpenSearch):
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         if self.transport_error:
-            raise RuntimeError('boom')
+            raise OpenSearchException('boom')
         return make_bulk_response(
             [make_bulk_update_item('a', status=409, error_type='version_conflict_engine_exception')]
         )

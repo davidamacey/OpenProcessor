@@ -24,6 +24,7 @@ from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.domain.history import record_class_snapshot
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_locked
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 REPAIR_WRITER = 'operator:repair_unmatched_class'
@@ -151,7 +152,12 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
 
         try:
             await occ_update_one(
-                client, doc_id=plan.crop_id, merger=_merge, index=index, writer_id=REPAIR_WRITER
+                client,
+                vector_excludes=await vector_source_excludes(),
+                doc_id=plan.crop_id,
+                merger=_merge,
+                index=index,
+                writer_id=REPAIR_WRITER,
             )
         except (_StaleError, OCCFinalConflictError):
             counts['skipped_changed'] += 1

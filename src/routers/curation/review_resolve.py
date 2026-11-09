@@ -34,6 +34,7 @@ from src.services.classes.registry import ClassRegistryError
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.export_support import scroll_hits
 from src.services.curation.new_class_terms import is_open_proposal, proposal_term_query
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 _RESOLVE_WRITER = 'human:resolve_new_class'
@@ -75,9 +76,11 @@ async def _resolve_one(
     opensearch: Any, crop_id: str, merger: Any
 ) -> tuple[str, dict[str, Any] | None]:
     """``(outcome, conflict)`` — outcome is ``updated`` / ``skipped`` / ``conflict``."""
+    excludes = await vector_source_excludes()
     try:
         await occ_update_one(
             opensearch,
+            vector_excludes=excludes,
             doc_id=crop_id,
             merger=merger,
             max_retries=5,

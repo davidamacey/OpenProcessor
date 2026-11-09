@@ -8,6 +8,7 @@ from typing import Any
 from src.clients.occ_bulk import occ_update_bulk
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 logger = get_logger(__name__)
@@ -33,6 +34,7 @@ async def occ_bulk_human_relabel(
     """
     status_map = await occ_update_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         index=items_index(),
         ids=list(crop_ids),
         merge_fn=lambda _crop_id, source: merger(source),

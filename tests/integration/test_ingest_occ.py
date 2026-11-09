@@ -32,6 +32,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from curation.occ_fakes import VECTOR_EXCLUDES
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -233,6 +234,9 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
     result = await occ_upsert_bulk(
         client,
         [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         index=index,
         human_field_guards=_HUMAN_GUARDS,
         writer_id='ingest',
@@ -284,10 +288,24 @@ async def test_parallel_ingest_of_same_image_yields_n_crops_not_2n() -> None:
 
     results = await asyncio.gather(
         occ_upsert_bulk(
-            client, docs_a, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest-a'
+            client,
+            docs_a,
+            vector_excludes=VECTOR_EXCLUDES,
+            vector_field='pe_embedding',
+            state_field='embedding_state',
+            index=index,
+            human_field_guards=_HUMAN_GUARDS,
+            writer_id='ingest-a',
         ),
         occ_upsert_bulk(
-            client, docs_b, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest-b'
+            client,
+            docs_b,
+            vector_excludes=VECTOR_EXCLUDES,
+            vector_field='pe_embedding',
+            state_field='embedding_state',
+            index=index,
+            human_field_guards=_HUMAN_GUARDS,
+            writer_id='ingest-b',
         ),
     )
     total_created = sum(r['created'] for r in results)
@@ -337,6 +355,9 @@ async def test_non_human_doc_overwritten_normally() -> None:
     result = await occ_upsert_bulk(
         client,
         [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         index=index,
         human_field_guards=_HUMAN_GUARDS,
         writer_id='ingest',
@@ -392,7 +413,14 @@ async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
     bulk_calls_before = len(client.bulk_calls)
 
     result = await occ_upsert_bulk(
-        client, docs, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest'
+        client,
+        docs,
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        index=index,
+        human_field_guards=_HUMAN_GUARDS,
+        writer_id='ingest',
     )
 
     assert result['updated'] == 5
@@ -475,7 +503,14 @@ async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> N
         'test_holdout': False,
     }
     result = await occ_upsert_bulk(
-        client, [reingest_doc], index=index, human_field_guards=_CLASS_GUARDS, writer_id='ingest'
+        client,
+        [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        index=index,
+        human_field_guards=_CLASS_GUARDS,
+        writer_id='ingest',
     )
     assert result['preserved_human'] >= 1
 

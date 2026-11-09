@@ -37,6 +37,7 @@ from src.services.curation.proposal_merge import (
 from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.reprocess_targets import items_by_terms
 from src.services.detection.geometry import bbox_norm as _bbox_norm
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -115,6 +116,7 @@ async def _apply_plan(
     for crop_id, _prop in plan.merged_into_locked:
         await occ_update_one(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_id=crop_id,
             merger=_note_chain(note),
             index=cfg.items_index,

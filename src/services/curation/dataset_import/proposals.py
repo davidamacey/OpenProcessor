@@ -22,6 +22,7 @@ from src.services.curation.proposal_merge import (
 )
 from src.services.curation.region_scope import in_parent_classes
 from src.services.detection.geometry import bbox_norm as bbox_norm_of
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -108,6 +109,7 @@ async def note_matches(ctx: ImportContext, plan: MergePlan) -> None:
 
         await occ_update_one(
             ctx.opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_id=crop_id,
             merger=merger,
             index=ctx.items_index,

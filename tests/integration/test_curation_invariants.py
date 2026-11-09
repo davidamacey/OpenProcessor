@@ -26,6 +26,7 @@ import asyncio
 from typing import Any
 
 import pytest
+from curation.occ_fakes import VECTOR_EXCLUDES
 
 from integration.test_ingest_occ import FakeUpsertOpenSearch, _ConflictError
 
@@ -93,6 +94,7 @@ async def test_invariant_1_no_silent_overwrite_via_occ() -> None:
     async def writer(class_id: int, writer_id: str) -> dict[str, Any]:
         return await occ_update_one(
             client,
+            vector_excludes=VECTOR_EXCLUDES,
             doc_id=doc_id,
             merger=lambda _src: {'class_id': class_id, 'class_source': writer_id},
             index=index,
@@ -182,6 +184,7 @@ async def test_invariant_2_lone_vlm_signal_does_not_validate_class() -> None:
     # Layering an independent human-confirmation signal DOES validate.
     await occ_update_one(
         client,
+        vector_excludes=VECTOR_EXCLUDES,
         doc_id=doc_id,
         merger=lambda _src: {
             'class_source': 'vlm_human_confirmed',
@@ -227,6 +230,7 @@ async def test_invariant_3_class_and_region_fields_are_orthogonal() -> None:
     # Class-side write only.
     await occ_update_one(
         client,
+        vector_excludes=VECTOR_EXCLUDES,
         doc_id=doc_id,
         merger=lambda _src: {
             'class_id': 5,
@@ -255,6 +259,7 @@ async def test_invariant_3_class_and_region_fields_are_orthogonal() -> None:
     # Region-side write only; class side must remain unchanged.
     await occ_update_one(
         client,
+        vector_excludes=VECTOR_EXCLUDES,
         doc_id=doc_id,
         merger=lambda _src: {
             'region_validated': False,
@@ -316,6 +321,7 @@ async def test_invariant_4_history_preserved_across_two_relabels() -> None:
 
     await occ_update_one(
         client,
+        vector_excludes=VECTOR_EXCLUDES,
         doc_id=doc_id,
         merger=_merge_to(2, 'pickup'),
         index=index,
@@ -324,6 +330,7 @@ async def test_invariant_4_history_preserved_across_two_relabels() -> None:
     )
     await occ_update_one(
         client,
+        vector_excludes=VECTOR_EXCLUDES,
         doc_id=doc_id,
         merger=_merge_to(3, 'van'),
         index=index,

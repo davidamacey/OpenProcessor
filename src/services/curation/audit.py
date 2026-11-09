@@ -34,6 +34,7 @@ from src.domain.audit_math import (
 from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.reprocess_targets import scan_items
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 DEFAULT_MIN_PER_CLASS = 30
@@ -135,7 +136,9 @@ async def start_audit(
         return _marker(batch_id, stamp, source)
 
     if chosen:
-        await occ_update_bulk(opensearch, ids=chosen, merge_fn=merge)
+        await occ_update_bulk(
+            opensearch, vector_excludes=await vector_source_excludes(), ids=chosen, merge_fn=merge
+        )
     per_stratum = [
         {
             'detector_class': name,
