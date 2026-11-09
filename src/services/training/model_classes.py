@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from src.db.repos import models as repo
 from src.services.training import model_registry
 
 
@@ -74,9 +73,8 @@ async def model_owner_project(triton_name: str) -> str | None:
 async def model_sharing_revision(triton_name: str) -> int | None:
     """The revision the sharing PUT is conditioned on (Cropwright BA-P2-1) -- ``None`` for a
     model no project promoted."""
-    if await model_registry.live_model(triton_name) is None:
-        return None
-    return repo.sharing_revision(len(await model_registry.consumers(triton_name)))
+    live = await model_registry.live_model(triton_name)
+    return None if live is None else live.model.sharing_revision
 
 
 async def model_classes(triton_name: str) -> list[ModelClass]:
