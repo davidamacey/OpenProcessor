@@ -8,6 +8,7 @@ slow one is killed rather than overlapping the next.
 from __future__ import annotations
 
 from src.services.periodic import (
+    cache_prune,
     ingest_dispatch,
     job_stats,
     near_dup_ticks,
@@ -55,3 +56,9 @@ def near_dup_rescore_tick() -> None:
 def near_dup_full_build_tick() -> None:
     """Start the weekly full near-duplicate build that bounds incremental drift."""
     run_periodic('near_dup_full_build', near_dup_ticks.full_build_tick())
+
+
+@app.task(name='op.periodic.cache_prune', **_TICK)
+def cache_prune_tick() -> None:
+    """Evict the oldest crops once the tmpfs crop cache is over its cap."""
+    run_periodic('cache_prune', cache_prune.tick())

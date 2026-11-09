@@ -11,6 +11,7 @@ ROUTES: dict[str, str] = {
     'op.periodic.open_vocab_sweep': TaskQueues.PERIODIC,
     'op.periodic.upload_sweep': TaskQueues.PERIODIC,
     'op.periodic.job_stats': TaskQueues.PERIODIC,
+    'op.periodic.cache_prune': TaskQueues.PERIODIC,
     'op.periodic.near_dup_rescore': TaskQueues.PERIODIC,
     'op.periodic.near_dup_full_build': TaskQueues.PERIODIC,
 }

@@ -34,11 +34,7 @@ from src.services.curation.item_doc import (
     build_item_doc,
     region_seed_status,
 )
-from src.services.curation.source_image_cache import (
-    maybe_prune_crop_cache,
-    project_crop_cache_dir,
-    write_crop_cache,
-)
+from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import (
     bbox_norm as _bbox_norm_fn,
@@ -249,9 +245,6 @@ async def _cache_crops(
             )
             for cid, crop in zip(cids, crops, strict=True)
         )
-    )
-    await asyncio.to_thread(
-        maybe_prune_crop_cache, service.config.crop_cache_dir, service.config.crop_cache_max_bytes
     )
 
 

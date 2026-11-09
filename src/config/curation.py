@@ -106,7 +106,7 @@ class CurationConfig:
     crop_cache_dir: Path = Path('/dev/shm/openprocessor_crops')  # nosec B108 — intentional tmpfs cache
     # ST-1: crop-cache prune threshold. write_crop_cache had no cap, so a
     # tmpfs mount without an OS-level size limit grows unbounded. 0 disables
-    # pruning (source_image_cache.maybe_prune_crop_cache becomes a no-op).
+    # pruning (op.periodic.cache_prune becomes a no-op).
     # One cap over every project's directory under crop_cache_dir; an evicted
     # crop is a cache miss (re-cropped from the source image), not an error.
     crop_cache_max_bytes: int = 3 * 1024**3

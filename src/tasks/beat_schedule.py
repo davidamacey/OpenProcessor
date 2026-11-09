@@ -21,6 +21,7 @@ JOB_STATS_INTERVAL_S = 30
 VLM_STAGING_SWEEP_INTERVAL_S = 15 * 60
 UPLOAD_SWEEP_INTERVAL_S = 60 * 60
 NEAR_DUP_RESCORE_INTERVAL_S = 30
+CACHE_PRUNE_INTERVAL_S = 60
 NEAR_DUP_FULL_BUILD_INTERVAL_S = 7 * 24 * 60 * 60
 
 
@@ -41,6 +42,7 @@ def build_schedule() -> dict[str, dict[str, Any]]:
         'op.periodic.vlm_batch_staging_sweep', VLM_STAGING_SWEEP_INTERVAL_S
     )
     schedule['upload_sweep'] = _every('op.periodic.upload_sweep', UPLOAD_SWEEP_INTERVAL_S)
+    schedule['cache_prune'] = _every('op.periodic.cache_prune', CACHE_PRUNE_INTERVAL_S)
     schedule['near_dup_rescore'] = _every(
         'op.periodic.near_dup_rescore', NEAR_DUP_RESCORE_INTERVAL_S
     )
