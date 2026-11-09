@@ -160,7 +160,7 @@ Embedding dimensions: `embedding` 512, `pe_embedding` 1024 (PE-Core). HNSW on th
 
 One document per ingested source image: `image_id`, `image_path`,
 `source_identifier` (client name for an uploaded image), `ingest_run_id`,
-`source`, `width`, `height`, `imohash`, `phash`, `indexed_at`,
+`source`, `width`, `height`, `imohash`, `phash`, `indexed_at`, `capture` (object: `taken_local`, `taken_utc`, camera, `has_location`, `exif_status`, `parser`, and under the project's location policy the `geo_point` `location` with altitude, accuracy, heading and `location_precision`; items hold only `capture_taken_local` and `capture_taken_utc`),
 `original_resolution`, `error_kind`, `embedding` (512-d) and `pe_embedding`
 (1024-d, whole-frame). Import provenance: `dataset_split`, `import_ids`,
 `import_source_stem`, `import_stratum`, `import_hard_negative`,

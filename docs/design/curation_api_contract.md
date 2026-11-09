@@ -958,6 +958,8 @@ default state of a new box.
 | `dataset_split` | `train`, `val` or `test` as imported |
 | `on_negative_frame` | `true` keeps only items on a reviewed-negative frame, `false` hides them |
 | `proposed_by_import` | `true` keeps items an import proposed, `false` hides them |
+| `taken_from`, `taken_to` | inclusive ISO days on the capture time: `capture_taken_utc`, else `capture_taken_local` (floating wall-clock time read as UTC). Items with no capture time never match. `400` when `taken_from` is after `taken_to`. Part of the shared item filter, so every route that takes it accepts them |
+| `image_id` | repeatable, at most 200: only items on these images (the map opens the list on one cell's photos) |
 
 ### Human class writes
 
@@ -1733,6 +1735,43 @@ that project, and the auto-label worker's idle centroid retrain stays off. Inges
 nearest-centroid assignment continues. A `paused` loop does not hold; if clusters moved by the
 time it resumes, the affected nodes turn `stale` and nothing is written to a member that left its
 cluster.
+
+## Capture, location policy and the map
+
+### Item `capture`
+
+The item wire has `capture`: `null` for an item with no capture time, else `taken_local`,
+`taken_utc`, `offset_minutes`, `time_source`, `offset_source`, `time_precision`, `camera_make`,
+`camera_model`, `lens_model`, `focal_length_mm`, `focal_length_35mm`, `orientation`, `has_location`
+and `exif_status` (`ok`, `absent`, `malformed`, `unknown`). List rows carry only `taken_local` and
+`taken_utc` (the rest `null`); `GET /crops/{crop_id}` fills the rest from the image. It never carries
+a coordinate. `taken_local` has no zone; `taken_utc` is set only when the UTC offset is known.
+
+### Location policy
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | `/location_policy` | | `LocationPolicyResponse`: `location_policy` (`drop`, `store_coarse`, `store`), `revision` |
+| PUT | `/location_policy` | `{location_policy, expected_revision}` | `LocationPolicyResponse` with `purge_job_id` when the change started the purge |
+
+`409 revision_conflict` on a stale `expected_revision`. A policy that keeps less than the old one (or
+the same again) starts `source_backfill` with `{"steps": ["location_purge"]}`; if one is running the
+policy is saved and the answer is `409 job_busy` with the call that starts the purge later.
+`POST /source_backfill/runs` takes an optional body `{"steps": ["content" | "capture" | "location_purge"]}`;
+omitted, all three run in that order.
+
+### Map
+
+| Method | Path | Response |
+|---|---|---|
+| GET | `/map` | `MapMeta`: `available`, `location_policy`, `n_located`, `bounds`, `tile_url`, `tile_attribution`, `max_zoom`. `available` is false under `drop` or with no stored position |
+| GET | `/map/cells` | GeoJSON FeatureCollection (`application/geo+json`, RFC 7946): one `Point` per grid cell at the centroid of its images, `properties.count`, `properties.tile` (`z/x/y`); `precision`, `truncated` (more than 5000 cells matched), `join_truncated` |
+| GET | `/map/images` | `MapTileImages`: `tile`, `count`, `image_ids` (at most 200), `truncated` |
+
+`/map/cells` takes `zoom` (0 to 22, required) and `bbox` (`west,south,east,north`; `west > east`
+crosses the antimeridian), `/map/images` takes `tile`; both take the shared item filter with
+`taken_from` / `taken_to`. `400` for a malformed `bbox` or tile. Under `drop` nothing is served;
+under `store_coarse` cells are at most precision 15 and markers are rounded to 0.01 degree.
 
 ## Ingest
 
