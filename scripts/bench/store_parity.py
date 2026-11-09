@@ -32,6 +32,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.parity_metrics import adjusted_rand_index, normalized_mutual_info, purity
 from src.services.curation.semantic_search import _build_filter, build_knn_query
 
@@ -99,7 +100,10 @@ def review_default_filter(extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def ann_topk(
     client: httpx.Client, url: str, index: str, vec: list[float], flt: list[dict[str, Any]], k: int
 ) -> list[tuple[str, float]]:
-    query = build_knn_query(vec, k=k + 1, filter_clause=flt)
+    space = legacy_item_space()
+    query = build_knn_query(
+        vec, vector_space_key=space.space_key, space=space, k=k + 1, filter_clause=flt
+    )
     body = {'size': k + 1, 'query': query, '_source': ['crop_id']}
     hits = client.post(f'{url}/{index}/_search', json=body).raise_for_status().json()['hits']
     return [(h['_source']['crop_id'], h['_score']) for h in hits['hits']]

@@ -72,6 +72,7 @@ async def test_semantic_search_reports_items_it_could_not_search() -> None:
     os_fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     os_fake.count = AsyncMock(return_value={'count': 4})
     encoder = AsyncMock()
+    encoder.text_model = 'pe_text_encoder'
     encoder.encode_text = lambda texts: np.zeros((len(texts), 3), dtype=np.float32)
 
     out = await semantic_search.semantic_text_search(

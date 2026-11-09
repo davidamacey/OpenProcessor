@@ -14,18 +14,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _embedding_registry_fake import default_space
 
 from src.config import CurationConfig
 from src.core.exceptions import RequestRejectedError
+from src.domain.embedding_spaces import Target
 from src.services.curation import semantic_search
 from src.services.curation.item_filter import ItemFilter
 
 
 PE_DIM = 1024
+SPACE = default_space(Target.ITEM)
 
 
 def _fake_encoder() -> MagicMock:
     enc = MagicMock()
+    enc.text_model = 'pe_text_encoder'
     vec = np.zeros((1, PE_DIM), dtype=np.float32)
     vec[0, 0] = 1.0
     enc.encode_text = MagicMock(return_value=vec)
@@ -193,7 +197,13 @@ def test_build_filter_hide_near_duplicates():
 
 def test_build_knn_query_shape():
     vec = [0.1] * PE_DIM
-    q = semantic_search.build_knn_query(vec, k=50, filter_clause=[{'term': {'class_id': 1}}])
+    q = semantic_search.build_knn_query(
+        vec,
+        vector_space_key=SPACE.space_key,
+        space=SPACE,
+        k=50,
+        filter_clause=[{'term': {'class_id': 1}}],
+    )
     assert q == {
         'knn': {
             'pe_embedding': {
@@ -207,7 +217,9 @@ def test_build_knn_query_shape():
 
 def test_build_knn_query_no_filter_omits_filter_key():
     vec = [0.1] * PE_DIM
-    q = semantic_search.build_knn_query(vec, k=10, filter_clause=[])
+    q = semantic_search.build_knn_query(
+        vec, vector_space_key=SPACE.space_key, space=SPACE, k=10, filter_clause=[]
+    )
     assert 'filter' not in q['knn']['pe_embedding']
 
 

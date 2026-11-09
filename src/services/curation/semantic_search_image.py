@@ -19,12 +19,14 @@ import numpy as np
 from opensearchpy.exceptions import NotFoundError
 from PIL import Image
 
+from src.clients.pe_encoder import PE_IMAGE_MODEL
 from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation.image_decode import ImageDecodeError, decode_image
-from src.services.curation.semantic_search import _filter_for, _knn_page
+from src.services.curation.semantic_search import QueryVector, _filter_for, _knn_page, search_space
 from src.services.detection.geometry import crop_rect
 from src.services.rejections import rejection
 from src.utils.cpu_pool import run_cpu
@@ -160,6 +162,14 @@ async def semantic_image_search(
 
     if pe_encoder is None:
         raise rejection(503, 'image_encoder_unavailable', 'the PE image encoder is not loaded')
+    space = await search_space(target)
+    if space.triton_image_model != PE_IMAGE_MODEL:
+        raise EmbeddingSpaceError(
+            'embedding_model_unavailable',
+            f'space {space.space_key} needs the image model {space.triton_image_model!r}; '
+            f'this API encodes pictures with {PE_IMAGE_MODEL!r}',
+            status=422,
+        )
     try:
         vectors = await pe_encoder.embed_crops([crop])
     except Exception as exc:
@@ -179,7 +189,8 @@ async def semantic_image_search(
     )
     return await _knn_page(
         opensearch=opensearch,
-        vector=vectors[0].tolist(),
+        vector=QueryVector(vectors[0].tolist(), space.space_key),
+        space=space,
         filter_clause=filter_clause,
         page=page,
         page_size=page_size,

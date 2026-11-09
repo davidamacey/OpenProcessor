@@ -154,6 +154,18 @@ def model_registry_fake(request: pytest.FixtureRequest, monkeypatch: pytest.Monk
 
 
 @pytest.fixture(autouse=True)
+def embedding_registry(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Every project's embedding registry is the three default spaces of a fresh project unless
+    a test adds more (``embedding_registry.add(...)``); the real one is PostgreSQL, which a
+    ``db`` test uses."""
+    if request.node.get_closest_marker('db') is not None:
+        return None
+    from _embedding_registry_fake import EmbeddingRegistryFake
+
+    return EmbeddingRegistryFake().install(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
 def pending_calls(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> object:
     """Near-duplicate pending rows are PostgreSQL rows; the offline tier records the calls
     instead (``.calls``), and a ``db`` test writes the real rows."""

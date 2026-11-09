@@ -39,6 +39,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.bench.baseline_report import percentile
+from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.suite_probes import cgroup_cpu_s
 from src.config import get_curation_config
 from src.services.curation.ingest_writer import IngestWriter
@@ -127,6 +128,7 @@ async def run_arm(
     exact_real = docs_total = 0
     knn_lat: list[float] = []
     query_vectors = [it['pe_embedding'] for s in sources[:200] for it in s['items'][:1]]
+    item_space = legacy_item_space()
     flt = _build_filter(
         tab=None,
         cluster_uid=None,
@@ -173,7 +175,16 @@ async def run_arm(
             started = time.perf_counter()
             await client.search(
                 index=cfg.items_index,
-                body={'size': 10, 'query': build_knn_query(vec, k=10, filter_clause=flt)},
+                body={
+                    'size': 10,
+                    'query': build_knn_query(
+                        vec,
+                        vector_space_key=item_space.space_key,
+                        space=item_space,
+                        k=10,
+                        filter_clause=flt,
+                    ),
+                },
             )
             knn_lat.append(time.perf_counter() - started)
             await asyncio.sleep(1 / args.qps)

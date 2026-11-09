@@ -24,6 +24,7 @@ from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
+from src.routers.curation._space_refusals import space_refusals
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
@@ -134,25 +135,26 @@ async def search_text(
             executor = None
 
         try:
-            result = await semantic_search.semantic_text_search(
-                opensearch=opensearch,
-                pe_encoder=pe_encoder,
-                executor=executor,
-                query=q,
-                page=page,
-                page_size=page_size,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                tab=tab,
-                date_from=date_from,
-                date_to=date_to,
-                item_filter=item_filter,
-                min_blur_ratio=min_blur_ratio,
-                hide_near_duplicates=hide_near_duplicates,
-                min_score=min_score,
-                include_test=include_test,
-                target=target,
-            )
-        except HTTPException:
+            async with space_refusals():
+                result = await semantic_search.semantic_text_search(
+                    opensearch=opensearch,
+                    pe_encoder=pe_encoder,
+                    executor=executor,
+                    query=q,
+                    page=page,
+                    page_size=page_size,
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    tab=tab,
+                    date_from=date_from,
+                    date_to=date_to,
+                    item_filter=item_filter,
+                    min_blur_ratio=min_blur_ratio,
+                    hide_near_duplicates=hide_near_duplicates,
+                    min_score=min_score,
+                    include_test=include_test,
+                    target=target,
+                )
+        except (HTTPException, RequestRejectedError):
             raise
         except Exception as exc:
             logger.exception('semantic_search_failed')
@@ -227,24 +229,25 @@ async def search_similar(
 
     with bind_search_timer('similar') as timer:
         try:
-            result = await semantic_search.semantic_similar_search(
-                opensearch=opensearch,
-                crop_id=crop_id,
-                box_id=box_id,
-                target=target,
-                exclude_self=exclude_self,
-                page=page,
-                page_size=page_size,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                tab=tab,
-                date_from=date_from,
-                date_to=date_to,
-                item_filter=item_filter,
-                min_blur_ratio=min_blur_ratio,
-                hide_near_duplicates=hide_near_duplicates,
-                min_score=min_score,
-                include_test=include_test,
-            )
+            async with space_refusals():
+                result = await semantic_search.semantic_similar_search(
+                    opensearch=opensearch,
+                    crop_id=crop_id,
+                    box_id=box_id,
+                    target=target,
+                    exclude_self=exclude_self,
+                    page=page,
+                    page_size=page_size,
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    tab=tab,
+                    date_from=date_from,
+                    date_to=date_to,
+                    item_filter=item_filter,
+                    min_blur_ratio=min_blur_ratio,
+                    hide_near_duplicates=hide_near_duplicates,
+                    min_score=min_score,
+                    include_test=include_test,
+                )
         except (HTTPException, RequestRejectedError):
             raise
         except Exception as exc:
