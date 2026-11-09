@@ -13,7 +13,9 @@ descriptor that cannot be read, which ends the read with an ``OSError``.
 
 Failures are typed: :class:`ExifToolError` means the reader itself failed (binary missing, process
 died, timed out, unparseable answer), an outage the caller records as "capture unknown". A file
-ExifTool cannot read is not an outage: its dictionary carries ``ExifTool:Error``.
+ExifTool cannot read is not an outage: its dictionary carries ``ExifTool:Error``. Messages and
+log records name the exception type only: PyExifTool's own exception text embeds ExifTool's
+output, which can hold a coordinate.
 """
 
 from __future__ import annotations
@@ -142,10 +144,10 @@ class ExifToolClient:
                         'exiftool_read_failed',
                         attempt=attempt,
                         timed_out=timed_out,
-                        error=f'{type(exc).__name__}: {exc}',
+                        error=type(exc).__name__,
                     )
                     if timed_out or attempt == 2 or isinstance(exc, FileNotFoundError):
-                        msg = f'exiftool failed ({type(exc).__name__}: {exc})'
+                        msg = f'exiftool failed ({type(exc).__name__})'
                         raise ExifToolError(msg) from exc
         raise AssertionError  # unreachable: the loop returns or raises
 
@@ -167,7 +169,7 @@ class ExifToolClient:
                 helper.execute('-GPS*=', '-o', str(dest), str(src))
             except (ExifToolException, OSError, ValueError, RuntimeError) as exc:
                 self._reset()
-                msg = f'exiftool GPS strip failed ({type(exc).__name__}: {exc})'
+                msg = f'exiftool GPS strip failed ({type(exc).__name__})'
                 raise ExifToolError(msg) from exc
             if helper.last_status:
                 msg = f'exiftool GPS strip failed (exit {helper.last_status})'
