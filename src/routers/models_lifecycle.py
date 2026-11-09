@@ -66,7 +66,7 @@ async def get_model_status(model_name: str) -> ModelStatusResponse:
     Returns information about:
     - PyTorch model file presence
     - Triton TRT model status
-    - Triton TRT End2End model status
+    - Triton fused-detector (_trt_end2end) model status
     - Current export status (if exporting)
     - Model metadata (classes, file size)
     """

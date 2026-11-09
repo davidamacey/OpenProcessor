@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run end2end detector engines over a pinned image set and save their raw detections.
+"""Run fused detector engines over a pinned image set and save their raw detections.
 
 Input for ``detector_quality.py``. The preprocessing is the product's own
 (``letterbox_to_square``, fill 114, 640 px), so the boxes are what ingest sees

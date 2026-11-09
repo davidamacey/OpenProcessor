@@ -61,7 +61,7 @@ def analyze_image(
     Run all models on a single image: YOLO + faces + CLIP + OCR.
 
     Unified pipeline for comprehensive image analysis:
-    1. YOLO object detection (TensorRT End2End)
+    1. YOLO object detection (fused TensorRT detector)
     2. SCRFD face detection + ArcFace embedding extraction
     3. MobileCLIP global image embedding
     4. PP-OCRv5 text detection and recognition

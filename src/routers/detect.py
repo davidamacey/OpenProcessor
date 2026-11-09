@@ -3,7 +3,7 @@ Object Detection Router - CPU Preprocessing + Triton TRT Inference.
 
 Provides YOLO object detection:
 - CPU preprocessing (letterbox, normalize)
-- TensorRT End2End model with GPU NMS
+- TensorRT fused detector (NMS in the engine)
 
 Endpoints:
 - POST /detect - Single image detection
@@ -33,7 +33,7 @@ router = APIRouter(
 inference_service = InferenceService()
 
 # Default model configuration (env-overridable via YOLO_MODEL; both YOLO11
-# end2end and YOLO26 fused engines are accepted per-request via model_name)
+# `_trt_end2end` and `_trt` fused engines are accepted per-request via model_name)
 DEFAULT_MODEL = TritonModelConfig.YOLO_MODEL
 MAX_BATCH_SIZE = 64
 
@@ -51,7 +51,7 @@ def detect_single(
 
     Pipeline:
     - CPU letterbox preprocessing (Ultralytics LetterBox)
-    - TensorRT End2End model with compiled GPU NMS
+    - TensorRT fused detector with NMS compiled into the engine
     - Normalized bounding box coordinates [0, 1]
 
     Args:
@@ -70,13 +70,13 @@ def detect_single(
         if not image_bytes:
             raise HTTPException(status_code=400, detail='Empty image file')
 
-        # Use CPU preprocessing + TRT End2End inference
+        # Use CPU preprocessing + fused TensorRT detector
         result = inference_service.detect(
             image_bytes=image_bytes,
             model_name=model_name,
         )
 
-        # Always filter by confidence: end2end YOLO11 engines bake a 0.25
+        # Always filter by confidence: embedded-NMS YOLO11 engines bake a 0.25
         # floor at export, but NMS-free YOLO26 engines emit all top-K
         # candidates (including near-zero scores) and rely on this filter.
         result['detections'] = [
@@ -174,7 +174,7 @@ def detect_batch(
                 status='all_failed',
             )
 
-        # Process each image through CPU preprocessing + TRT End2End
+        # Process each image through CPU preprocessing + fused TensorRT detector
         for image_bytes, filename, idx in images_data:
             try:
                 result = inference_service.detect(

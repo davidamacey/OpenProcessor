@@ -49,13 +49,14 @@ router.include_router(models_lifecycle.router)
 async def test_model_inference(
     model_name: str,
     file: UploadFile = File(..., description='Test image (JPEG or PNG)'),
-    use_end2end: bool = Form(default=True),
+    embedded_nms: bool = Form(default=True),
 ) -> TestInferenceResponse:
     """
     Test inference on an uploaded/exported model.
 
     Runs a single inference to verify the model is working correctly.
-    Uses End2End by default for GPU NMS, or standard TensorRT for CPU NMS.
+    Tests the `{name}_trt_end2end` engine (embedded NMS head) by default, or the `{name}_trt` engine
+    (NMS-free head). Both serve the fused `output0` [300, 6] tensor.
 
     **Requirements:**
     - Model must be exported and loaded in Triton
@@ -84,7 +85,7 @@ async def test_model_inference(
         raise HTTPException(status_code=400, detail='Invalid image file')
 
     # Determine Triton model name
-    if use_end2end:
+    if embedded_nms:
         triton_model_name = f'{model_name}_trt_end2end'
         track = 'C'
     else:
@@ -126,7 +127,7 @@ async def test_model_inference(
         # Use InferenceService for detection
         inference_service = InferenceService()
 
-        # detect() uses YOLO End2End model by default
+        # detect() reads the fused [300, 6] tensor of either engine
         result = inference_service.detect(
             image_bytes=content,
             model_name=triton_model_name,

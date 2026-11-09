@@ -78,16 +78,16 @@ class TestSyncClient:
 
     def test_uint8_model_gets_uint8(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, sent = _sync_client('UINT8', monkeypatch)
-        client.infer_yolo_end2end_batch([self.IMG], 'm')
+        client.infer_fused_detector_batch([self.IMG], 'm')
         assert sent[0].datatype() == 'UINT8'
 
     def test_fp32_model_gets_the_same_letterbox_scaled(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         u8_client, u8_sent = _sync_client('UINT8', monkeypatch)
-        u8_client.infer_yolo_end2end_batch([self.IMG], 'm')
+        u8_client.infer_fused_detector_batch([self.IMG], 'm')
         fp_client, fp_sent = _sync_client('FP32', monkeypatch)
-        fp_client.infer_yolo_end2end_batch([self.IMG], 'm')
+        fp_client.infer_fused_detector_batch([self.IMG], 'm')
         assert fp_sent[0].datatype() == 'FP32'
         assert np.allclose(
             _tensor_values(fp_sent[0]), _tensor_values(u8_sent[0]).astype(np.float32) / 255.0
@@ -96,7 +96,7 @@ class TestSyncClient:
     def test_unknown_datatype_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client, sent = _sync_client('FP16', monkeypatch)
         with pytest.raises(ValueError, match='FP16'):
-            client.infer_yolo_end2end_batch([self.IMG], 'm')
+            client.infer_fused_detector_batch([self.IMG], 'm')
         assert sent == []
 
 

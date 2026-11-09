@@ -70,7 +70,7 @@ class InferenceService:
     Simplified inference service for object detection, face recognition, and embeddings.
 
     Public methods:
-    - detect(): Object detection using YOLOv11 TRT End2End
+    - detect(): Object detection using YOLOv11 fused TRT detector
     - detect_faces(): SCRFD face detection with ArcFace embeddings
     - recognize_faces(): Full pipeline (YOLO + faces + CLIP embedding)
     - encode_image(): MobileCLIP image encoding
@@ -98,7 +98,7 @@ class InferenceService:
         model_name: str | None = None,
     ) -> dict[str, Any]:
         """
-        Detect objects in image using YOLOv11 TensorRT End2End model.
+        Detect objects in image using YOLOv11 fused TensorRT detector.
 
         Uses CPU preprocessing with letterbox transform, then TensorRT inference
         with GPU NMS. Coordinates are normalized to [0, 1] range.
@@ -119,7 +119,7 @@ class InferenceService:
 
         # Run inference via Triton
         client = get_sync_triton_client(self.settings.triton_url)
-        result = client.infer_yolo_end2end(img, model_name)
+        result = client.infer_fused_detector(img, model_name)
         detections = client.format_detections(result, model_name=model_name)
 
         return build_response(

@@ -108,7 +108,7 @@ class TestInferenceServiceThreadsModelNameThrough:
         from src.services import inference as inference_module
 
         fake_client = MagicMock()
-        fake_client.infer_yolo_end2end.return_value = {'boxes': [], 'scores': [], 'classes': []}
+        fake_client.infer_fused_detector.return_value = {'boxes': [], 'scores': [], 'classes': []}
         fake_client.format_detections.return_value = []
         monkeypatch.setattr(
             inference_module, 'get_sync_triton_client', lambda *_a, **_k: fake_client
