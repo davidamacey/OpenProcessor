@@ -209,7 +209,10 @@ class TestHoldoutFreezeRequest(BaseModel):
 
 
 class TestHoldoutFreezeResponse(BaseModel):
-    n_frozen: int
+    n_frozen: int = Field(description='Items held out: the selection plus its near-duplicates.')
+    moved_by_near_dup: int = Field(
+        description='Items of n_frozen pulled in as near-duplicates of a selected item.'
+    )
     n_classes_covered: int
     test_holdout_sha: str
     per_class_counts: dict[str, int] = Field(default_factory=dict)

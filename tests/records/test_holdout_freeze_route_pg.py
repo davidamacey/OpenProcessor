@@ -67,14 +67,41 @@ def fake_opensearch() -> AsyncMock:
     fake.indices.put_mapping = AsyncMock(return_value={'acknowledged': True})
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})
-    fake.bulk = AsyncMock(return_value={'errors': False, 'items': []})
+    fake.mget = AsyncMock(side_effect=_mget_found)
+    fake.bulk = AsyncMock(side_effect=_bulk_result())
     return fake
+
+
+async def _mget_found(*, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+    return {
+        'docs': [
+            {'_id': i, 'found': True, '_source': {}, '_seq_no': 1, '_primary_term': 1}
+            for i in (d['_id'] for d in body['docs'])
+        ]
+    }
+
+
+def _bulk_result(failing: frozenset[str] = frozenset()) -> Any:
+    """A bulk answer with one result per update action; the ids in ``failing`` are 404."""
+
+    async def bulk(*, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
+        ids = [step['update']['_id'] for step in body if 'update' in step]
+        items = [
+            {'update': {'_id': i, 'status': 404, 'error': {'type': 'document_missing'}}}
+            if i in failing
+            else {'update': {'_id': i, 'status': 200}}
+            for i in ids
+        ]
+        return {'errors': bool(failing & set(ids)), 'items': items}
+
+    return bulk
 
 
 @pytest.fixture
 def app_client(fake_opensearch: AsyncMock, world):
     from src.core.dependencies import get_opensearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_fresh
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -82,6 +109,8 @@ def app_client(fake_opensearch: AsyncMock, world):
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
+    # a fresh near-duplicate state (the refusal itself is covered in tests/near_duplicates)
+    app.dependency_overrides[require_near_dup_fresh] = lambda: None
 
     with TestClient(app) as client:
         client.fake_os = fake_opensearch  # type: ignore[attr-defined]
@@ -569,7 +598,7 @@ def test_freeze_refuses_when_the_existing_holdout_cannot_be_counted(
 
 
 def _freeze_with_bulk(
-    app_client: Any, fake_opensearch: AsyncMock, bulk_resp: dict[str, Any]
+    app_client: Any, fake_opensearch: AsyncMock, failing: frozenset[str] = frozenset()
 ) -> Any:
     buckets = [_bucket(3, 'hdd:demo_hdd01', 6)]
     fake_opensearch.search = AsyncMock(
@@ -577,7 +606,7 @@ def _freeze_with_bulk(
             [(buckets, None)], {(3, 'hdd:demo_hdd01'): _crop_ids('a', 6)}
         )
     )
-    fake_opensearch.bulk = AsyncMock(return_value=bulk_resp)
+    fake_opensearch.bulk = AsyncMock(side_effect=_bulk_result(failing))
     return app_client.post('/curation/projects/default/test_holdout/freeze', json={'percent': 20})
 
 
@@ -586,14 +615,7 @@ def test_freeze_bulk_item_error_persists_no_record(
     app_client: Any, fake_opensearch: AsyncMock, world: Any
 ) -> None:
     """A bulk 200 with ``errors: true`` (item 404) rolls the freeze row back."""
-    resp = {
-        'errors': True,
-        'items': [
-            {'update': {'_id': 'a_000', 'status': 200}},
-            {'update': {'_id': 'a_001', 'status': 404, 'error': {'type': 'document_missing'}}},
-        ],
-    }
-    r = _freeze_with_bulk(app_client, fake_opensearch, resp)
+    r = _freeze_with_bulk(app_client, fake_opensearch, frozenset({'a_001'}))
     assert r.status_code >= 500, r.text
     assert _freezes(world) == []
 
@@ -603,8 +625,7 @@ def test_freeze_bulk_all_items_ok_persists_record(
     app_client: Any, fake_opensearch: AsyncMock, world: Any
 ) -> None:
     """Control: every item 200 leaves one current freeze."""
-    resp = {'errors': False, 'items': [{'update': {'_id': 'a_000', 'status': 200}}]}
-    r = _freeze_with_bulk(app_client, fake_opensearch, resp)
+    r = _freeze_with_bulk(app_client, fake_opensearch)
     assert r.status_code == 200, r.text
     [row] = _freezes(world)
     assert row.is_current
@@ -621,8 +642,7 @@ def test_freeze_fails_closed_on_a_database_error_before_any_item_changes(
         raise RuntimeError(msg)
 
     monkeypatch.setattr('src.services.curation.holdout.freeze_holdout', boom)
-    resp = {'errors': False, 'items': [{'update': {'_id': 'a_000', 'status': 200}}]}
     with pytest.raises(RuntimeError, match='database down'):
-        _freeze_with_bulk(app_client, fake_opensearch, resp)
+        _freeze_with_bulk(app_client, fake_opensearch)
     fake_opensearch.bulk.assert_not_called()
     assert _freezes(world) == []

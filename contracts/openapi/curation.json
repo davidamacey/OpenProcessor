@@ -33321,11 +33321,17 @@
             "title": "Min Per Class",
             "type": "integer"
           },
+          "moved_by_near_dup": {
+            "description": "Items of n_frozen pulled in as near-duplicates of a selected item.",
+            "title": "Moved By Near Dup",
+            "type": "integer"
+          },
           "n_classes_covered": {
             "title": "N Classes Covered",
             "type": "integer"
           },
           "n_frozen": {
+            "description": "Items held out: the selection plus its near-duplicates.",
             "title": "N Frozen",
             "type": "integer"
           },
@@ -33355,6 +33361,7 @@
         },
         "required": [
           "n_frozen",
+          "moved_by_near_dup",
           "n_classes_covered",
           "test_holdout_sha",
           "percent",
