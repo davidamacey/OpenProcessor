@@ -4,6 +4,7 @@ the run's scope, skipped when nothing is missing, cancellable at its boundary.""
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -76,7 +77,7 @@ async def test_the_stage_embeds_only_the_run_scope(
     fake = _world(tmp_path, monkeypatch)
     pe = FakePE()
     out = await run_embed_missing_stage(
-        fake, class_id=3, cluster_id=None, item_filter=None, encoder=pe
+        fake, class_id=3, cluster_uid=None, item_filter=None, encoder=pe
     )
     assert out == {'images': 1, 'images_failed': 0, 'embedded': 2}
     after = docs(fake)
@@ -94,7 +95,7 @@ async def test_the_item_filter_narrows_the_scope_further(
     out = await run_embed_missing_stage(
         fake,
         class_id=None,
-        cluster_id=None,
+        cluster_uid=None,
         item_filter={'class_names': ['dog']},
         encoder=FakePE(),
     )
@@ -114,7 +115,7 @@ async def test_nothing_missing_is_skipped_without_building_an_encoder(
 
     monkeypatch.setattr('src.clients.triton_pool_core.AsyncTritonPool', _no_pool)
     out = await run_embed_missing_stage(
-        fake, class_id=None, cluster_id=None, item_filter={'class_names': ['bird']}
+        fake, class_id=None, cluster_uid=None, item_filter={'class_names': ['bird']}
     )
     assert out == {'skipped': True, 'reason': 'nothing to embed'}
 
@@ -134,7 +135,12 @@ async def test_cancel_at_the_stage_boundary_stops_the_run(
     pe = FakePE()
     with pytest.raises(asyncio.CancelledError):
         await run_embed_missing_stage(
-            fake, class_id=None, cluster_id=None, item_filter=None, progress=Cancelled(), encoder=pe
+            fake,
+            class_id=None,
+            cluster_uid=None,
+            item_filter=None,
+            progress=Cancelled(),
+            encoder=pe,
         )
     assert pe.crop_calls == 0
 
@@ -149,7 +155,7 @@ async def test_an_encoder_outage_is_reported_and_does_not_fail_the_run(
 
     fake = _world(tmp_path, monkeypatch)
     out = await run_embed_missing_stage(
-        fake, class_id=None, cluster_id=None, item_filter=None, encoder=Down()
+        fake, class_id=None, cluster_uid=None, item_filter=None, encoder=Down()
     )
     assert out['embedded'] == 0
     assert out['images_failed'] == 1
@@ -158,13 +164,13 @@ async def test_an_encoder_outage_is_reported_and_does_not_fail_the_run(
 def test_the_vlm_selection_and_counts_honor_the_item_filter() -> None:
     flt = ItemFilter(class_names=['car'])
     selection = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8, item_filter=flt
+        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, item_filter=flt
     )
     assert 'case_insensitive' in str(selection)
     assert 'case_insensitive' in str(
-        unvalidated_count_query(class_id=None, cluster_id=None, item_filter=flt)
+        unvalidated_count_query(class_id=None, cluster_uid=None, item_filter=flt)
     )
-    plain = vlm_selection_query(class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8)
+    plain = vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
     assert 'case_insensitive' not in str(plain)
 
 
@@ -176,6 +182,20 @@ def test_the_stage_request_selects_only_vectorless_items_in_scope() -> None:
     assert flt.embedding_state == ['not_selected', 'deferred', 'failed']
     assert request.embed.only_missing is True
     assert request.dry_run is False
+
+
+def test_the_stage_request_scopes_to_the_cluster_uid() -> None:
+    uid = uuid.uuid4()
+    flt = stage_request(None, uid, ItemFilter()).targets.filter
+    assert flt is not None
+    assert flt.cluster_uid == uid
+    selection = vlm_selection_query(
+        class_id=None, cluster_uid=uid, classifier_confidence_skip_vlm=0.8
+    )
+    assert {'term': {'cluster_uid': str(uid)}} in selection['bool']['filter']
+    assert {'term': {'cluster_uid': str(uid)}} in unvalidated_count_query(
+        class_id=None, cluster_uid=uid
+    )['bool']['filter']
 
 
 @pytest.mark.usefixtures('packs', 'job_dir')

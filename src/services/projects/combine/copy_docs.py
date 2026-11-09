@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.domain.embedding_state import DEFERRED
 from src.services.detection.geometry import crop_id as make_crop_id
 
@@ -25,7 +26,9 @@ if TYPE_CHECKING:
 
 # Fields that hold a source registry id, a restorable snapshot keyed by source
 # ids, or a source clustering/UMAP result: none of them mean anything in the
-# target. ``class_id`` is rewritten, not listed.
+# target. ``class_id`` is rewritten, not listed. The integer cluster fields are what an index
+# upgraded from 0.6.0 still carries (OpenSearch cannot drop a mapped field); the served-cluster
+# fields (``CLUSTER_PARTITION_MAPPING``) name a partition of the source project.
 _SOURCE_NUMBERED_FIELDS = (
     'class_id_history',
     'label_op_id',
@@ -46,8 +49,9 @@ _SOURCE_NUMBERED_FIELDS = (
     'import_dataset_name',
     'import_dataset_sha',
     'proposed_by_import',
+    *CLUSTER_PARTITION_MAPPING,
 )
-_BOX_CLUSTER_KEYS = ('cluster_id', 'cluster_subid', 'cluster_distance')
+_BOX_CLUSTER_KEYS = ('cluster_id', 'cluster_subid', 'cluster_distance', *CLUSTER_PARTITION_MAPPING)
 
 LinkResult = Literal['linked', 'copied', 'exists']
 

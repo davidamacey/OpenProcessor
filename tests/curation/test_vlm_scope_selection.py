@@ -6,6 +6,7 @@ scope function, so one policy selects the same crops through either.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -26,6 +27,8 @@ from src.services.curation.vlm_scope import (
 
 
 ITEMS = base_curation_config().items_index
+CL1 = uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-1')
+CL2 = uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-2')
 
 
 def _doc(crop_id: str, **extra: Any) -> dict[str, Any]:
@@ -38,7 +41,6 @@ def _doc(crop_id: str, **extra: Any) -> dict[str, Any]:
         'confidence': 0.9,
         'pe_embedding': [0.1],
         'cluster_state': 'unassigned',
-        'cluster_id': -1,  # still read by the auto-label cluster scope
         **extra,
     }
 
@@ -48,24 +50,21 @@ def _docs() -> dict[str, dict[str, Any]]:
         # cluster 1, nearest first
         _doc(
             'c1a',
-            cluster_uid='cl1',
-            cluster_id=1,
+            cluster_uid=str(CL1),
             cluster_state='assigned',
             cluster_score=0.9,
             confidence=0.95,
         ),
         _doc(
             'c1b',
-            cluster_uid='cl1',
-            cluster_id=1,
+            cluster_uid=str(CL1),
             cluster_state='assigned',
             cluster_score=0.8,
             confidence=0.5,
         ),
         _doc(
             'c1c',
-            cluster_uid='cl1',
-            cluster_id=1,
+            cluster_uid=str(CL1),
             cluster_state='assigned',
             cluster_score=0.7,
             confidence=0.97,
@@ -73,16 +72,14 @@ def _docs() -> dict[str, dict[str, Any]]:
         # cluster 2
         _doc(
             'c2a',
-            cluster_uid='cl2',
-            cluster_id=2,
+            cluster_uid=str(CL2),
             cluster_state='assigned',
             cluster_score=0.9,
             confidence=0.99,
         ),
         _doc(
             'c2b',
-            cluster_uid='cl2',
-            cluster_id=2,
+            cluster_uid=str(CL2),
             cluster_state='assigned',
             cluster_score=0.6,
             confidence=0.99,
@@ -95,8 +92,7 @@ def _docs() -> dict[str, dict[str, Any]]:
         # unvalidated but out of the pipeline: never selected under any scope
         _doc(
             'frozen',
-            cluster_uid='cl1',
-            cluster_id=1,
+            cluster_uid=str(CL1),
             cluster_state='assigned',
             cluster_score=0.5,
             test_holdout=True,
@@ -106,16 +102,14 @@ def _docs() -> dict[str, dict[str, Any]]:
         # never selected under any scope
         _doc(
             'human',
-            cluster_uid='cl1',
-            cluster_id=1,
+            cluster_uid=str(CL1),
             cluster_state='assigned',
             cluster_score=0.95,
             class_validated=True,
         ),
         _doc(
             'excluded',
-            cluster_uid='cl2',
-            cluster_id=2,
+            cluster_uid=str(CL2),
             cluster_state='assigned',
             cluster_score=0.99,
             class_excluded=True,
@@ -157,7 +151,9 @@ async def test_default_policy_is_all_and_changes_nothing() -> None:
     assert (
         await _ids(
             fake,
-            vlm_selection_query(class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8),
+            vlm_selection_query(
+                class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8
+            ),
         )
         == ALL
     )
@@ -169,7 +165,7 @@ async def test_off_selects_nothing_through_both_selectors() -> None:
     policy = _policy(scope='off')
     assert await _ids(fake, _build_pending_query(0.8, policy=policy)) == set()
     sweep = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
     )
     assert await _ids(fake, sweep) == set()
 
@@ -181,7 +177,7 @@ async def test_uncertain_keeps_low_or_missing_detector_confidence_only() -> None
     expected = {'c1b', 'u2', 'noconf'}
     assert await _ids(fake, _build_pending_query(0.8, policy=policy)) == expected
     sweep = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
     )
     assert await _ids(fake, sweep) == expected
 
@@ -197,7 +193,7 @@ async def test_representatives_are_the_k_nearest_per_cluster_plus_unassigned() -
     worker = _build_pending_query(0.8, policy=policy, representative_ids=reps)
     sweep = vlm_selection_query(
         class_id=None,
-        cluster_id=None,
+        cluster_uid=None,
         classifier_confidence_skip_vlm=0.8,
         policy=policy,
         representative_ids=reps,
@@ -222,7 +218,7 @@ async def test_human_validated_and_excluded_are_never_selected(scope: str) -> No
         fake,
         vlm_selection_query(
             class_id=None,
-            cluster_id=None,
+            cluster_uid=None,
             classifier_confidence_skip_vlm=0.8,
             policy=policy,
             representative_ids=reps,
@@ -236,7 +232,7 @@ def test_worker_and_sweep_share_one_scope_function() -> None:
     clauses = vlm_scope_clauses(policy, representative_ids=None)
     worker = _build_pending_query(0.8, policy=policy)
     sweep = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
     )
     for clause in (*clauses.filter, *clauses.must_not):
         assert clause in worker['bool']['filter'] + worker['bool']['must_not']
@@ -260,7 +256,7 @@ async def test_cluster_scope_run_ignores_the_policy() -> None:
     fake = _fake()
     query = vlm_selection_query(
         class_id=None,
-        cluster_id=1,
+        cluster_uid=CL1,
         classifier_confidence_skip_vlm=0.8,
         policy=_policy(scope='off'),
     )
@@ -292,7 +288,7 @@ async def _resolve(fake: QueryFakeOpenSearch, **kw: Any) -> Any:
     return await resolve_vlm_selection(
         fake,
         class_id=None,
-        cluster_id=kw.pop('cluster_id', None),
+        cluster_uid=kw.pop('cluster_uid', None),
         classifier_confidence_skip_vlm=0.8,
         item_filter=None,
         max_vlm_crops=kw.pop('max_vlm_crops', 0),
@@ -309,7 +305,7 @@ async def test_pipeline_reads_the_stored_policy_and_a_query_override_wins() -> N
     assert await _ids(fake, (await _resolve(fake)).query) == set()
     assert await _ids(fake, (await _resolve(fake, scope_override='all')).query) == ALL
     # an explicit cluster request is never limited by the policy
-    assert await _ids(fake, (await _resolve(fake, cluster_id=2)).query) == {'c2a', 'c2b'}
+    assert await _ids(fake, (await _resolve(fake, cluster_uid=CL2)).query) == {'c2a', 'c2b'}
 
 
 @pytest.mark.asyncio
@@ -322,7 +318,7 @@ async def test_pipeline_cap_is_the_smaller_of_max_crops_and_the_daily_budget() -
     assert (await _resolve(fake, now=now)).cap == 3
     assert (await _resolve(fake, now=now, max_vlm_crops=2)).cap == 2
     assert (await _resolve(fake, now=now, max_vlm_crops=50)).cap == 3
-    assert (await _resolve(fake, now=now, cluster_id=1)).cap is None  # explicit request
+    assert (await _resolve(fake, now=now, cluster_uid=CL1)).cap is None  # explicit request
     await _stored(fake, revision=1, max_crops_per_day=1)  # one already attempted today
     exhausted = await _resolve(fake, now=now)
     assert exhausted.cap == 0

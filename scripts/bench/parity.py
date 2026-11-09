@@ -14,8 +14,8 @@ cluster fields, labels, optional MobileCLIP / face / OCR probes and VLM labels) 
 ``parity_gates.json``; it exits 0 on PASS, 1 on any FAIL (or any SKIP with ``--strict``), 2 when
 the inputs cannot be compared. Large capture files stay out of git; commit only the summary.
 
-Preconditions of ``capture``: a stack whose ingest embedding policy is ``all``, with the
-auto-label worker running (compose profile ``curation``; cluster training is its job), and the
+Preconditions of ``capture``: a stack whose ingest embedding policy is ``all``, with a
+job worker running for the cluster run (compose profile ``curation``), and the
 pinned images on the local disk. The curation API serves no embedding vectors, so the PE vectors
 are read by document id from the project's OpenSearch indexes through ``--opensearch-url``.
 Detector output varies slightly between identical runs (about 1 percent of crop rectangles

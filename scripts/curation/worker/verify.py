@@ -167,7 +167,6 @@ def _combined_class_update(
                 # class.
                 'label_source': 'vlm',
                 'class_validated': False,
-                'cluster_id': cid,
                 'vlm_confidence': reply.class_confidence or 'low',
                 'vlm_raw_label': cname,
                 **class_provenance(

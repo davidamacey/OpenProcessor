@@ -207,7 +207,7 @@ def test_scores_compute_writes_the_overlay_fields(api_client: Any, opensearch: A
 
 
 def test_embedding_scorers_report_their_missing_prerequisite(api_client: Any) -> None:
-    """``uniqueness`` and ``near_dup`` need a trained IVF centroid store.
+    """``uniqueness`` and ``near_dup`` need a serving item partition.
 
     The harness never runs the item-clustering pipeline, so this asserts
     the documented behaviour: the job fails loudly with an actionable
@@ -215,7 +215,7 @@ def test_embedding_scorers_report_their_missing_prerequisite(api_client: Any) ->
     """
     state = _run_scorer(api_client, 'uniqueness')
     assert state['status'] == 'failed', state
-    assert 'IVF centroid store' in (state['error'] or ''), state
+    assert 'serving item partition' in (state['error'] or ''), state
     assert state['processed'] == 0, state
 
 

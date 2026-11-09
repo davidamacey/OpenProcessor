@@ -19,6 +19,7 @@ The result enumerates each stage's counts so the labeler dashboard can show
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from src.config.curation import ITEM_EMBEDDING_FIELD
@@ -103,7 +104,7 @@ async def _embed_missing_stage(run: Run) -> dict[str, Any]:
     return await run_embed_missing_stage(
         run.opensearch,
         class_id=run.class_id,
-        cluster_id=run.cluster_id,
+        cluster_uid=run.cluster_uid,
         item_filter=run.item_filter,
         progress=run.progress,
     )
@@ -118,7 +119,7 @@ async def _finish_without_vlm(run: Run, summary: dict[str, Any]) -> dict[str, An
         run.progress.start_stage('vlm', total=0)
         run.progress.start_stage('finalize')
     summary['unvalidated_remaining'] = await count_unvalidated_remaining(
-        run.opensearch, items_index(), run.class_id, run.cluster_id, run.scope_filter
+        run.opensearch, items_index(), run.class_id, run.cluster_uid, run.scope_filter
     )
     summary['after'] = await pipeline_health_snapshot(run.opensearch)
     return summary
@@ -132,7 +133,8 @@ async def run_auto_label(
     classifier_confidence_skip_vlm: float = 0.80,
     run_vlm: bool = False,
     class_id: int | None = None,
-    cluster_id: int | None = None,
+    # A job's params carry the uid as text.
+    cluster_uid: uuid.UUID | str | None = None,
     detection_profile: str | None = None,
     prompt_pack: str | None = None,
     # Internal (job trigger only): the item filter scoping the embed and VLM stages.
@@ -159,6 +161,7 @@ async def run_auto_label(
 ) -> dict[str, Any]:
     """Run the full auto-labeling chain end-to-end (see the module docstring)."""
     reject_detection_profile(detection_profile)
+    scope_uid = None if cluster_uid is None else uuid.UUID(str(cluster_uid))
     if isinstance(vlm, str) and not vlm_resolved and not run_vlm:
         # Refused even when this run has no VLM stage, as /start does.
         await resolve_run_vlm(vlm, pack=None, acknowledge_external=acknowledge_external)
@@ -173,14 +176,14 @@ async def run_auto_label(
         opensearch=opensearch,
         progress=progress,
         class_id=class_id,
-        cluster_id=cluster_id,
+        cluster_uid=scope_uid,
         item_filter=item_filter,
         scope_filter=ItemFilter(**(item_filter or {})),
     )
     summary: dict[str, Any] = {
         'stages': {},
         'class_id': class_id,
-        'cluster_id': cluster_id,
+        'cluster_uid': None if scope_uid is None else str(scope_uid),
         'prompt_pack': prompt_pack,
         'prompt_pack_revision': prompt_pack_revision,
         # Snapshot counts at entry for a real before/after.
@@ -199,7 +202,7 @@ async def run_auto_label(
         selection = await resolve_vlm_selection(
             opensearch,
             class_id=class_id,
-            cluster_id=cluster_id,
+            cluster_uid=scope_uid,
             classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
             item_filter=run.scope_filter,
             max_vlm_crops=max_vlm_crops,
@@ -221,7 +224,7 @@ async def run_auto_label(
         stages['vlm'] = skipped_vlm_stage(
             selection.empty_reason
             or await explain_empty_vlm_selection(
-                opensearch, items_index(), class_id, cluster_id, run.scope_filter
+                opensearch, items_index(), class_id, scope_uid, run.scope_filter
             )
         )
         summary['final'] = {'unvalidated': 0, 'human_required': 0}

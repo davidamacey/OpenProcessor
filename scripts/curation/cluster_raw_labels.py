@@ -203,7 +203,7 @@ async def write_back(
             # Skip the write if this doc's label-cluster id already
             # matches the fresh assignment — a stable-hash re-cluster of an
             # unchanged label corpus would otherwise rewrite every row.
-            if src.get(CLUSTER_ID_FIELD) == int(assignment.cluster_id):
+            if src.get(CLUSTER_ID_FIELD) == int(assignment.label_cluster_id):
                 stats['unchanged'] += 1
                 continue
             ops.append({'update': {'_index': index, '_id': doc_id}})
@@ -268,11 +268,11 @@ async def run(
 
 
 def _print_ranked(ranked: list[dict[str, Any]], top: int) -> None:
-    print(f'\n{"cluster_id":>11}  {"n_items":>8}  {"n_terms":>7}  name  [samples]')
+    print(f'\n{"label_cluster_id":>16}  {"n_items":>8}  {"n_terms":>7}  name  [samples]')
     for c in ranked[:top]:
         samples = ', '.join(f'{s["label"]}({s["count"]})' for s in c['sample_terms'])
         print(
-            f'{c["cluster_id"]:>11}  {c["n_items"]:>8}  {c["n_terms"]:>7}  '
+            f'{c["label_cluster_id"]:>16}  {c["n_items"]:>8}  {c["n_terms"]:>7}  '
             f'{c["cluster_name"]}  [{samples}]'
         )
 

@@ -36,6 +36,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+OUTLIER_SCORE_MAX = 0.65
+"""An item whose served ``cluster_score`` (cosine to its cluster's centroid) is at or below this
+is an outlier of its cluster (the cutoff the retired centroid distance of 0.35 gave)."""
+
 # Both fields are keyword-mapped (see the model_disagreements note below), so the
 # comparison is plain doc-value equality. ``detector_class_name`` is stored in
 # registry-name form (item_doc.DETECTOR_FIELDS), the same form as ``class_name``.
@@ -111,7 +115,7 @@ def _all_tab(include_test: bool) -> _TabQuery:
                     # The VLM was asked and gave no class.
                     {'exists': {'field': VLM_CLASS_EMPTY_REASON_FIELD}},
                     {'terms': {'vlm_confidence': ['medium', 'low']}},
-                    {'range': {'cluster_distance': {'gte': 0.35}}},
+                    {'range': {'cluster_score': {'lte': OUTLIER_SCORE_MAX}}},
                     # `exists probe_pred_entropy` matches
                     # almost every non-holdout item after one probe
                     # run -- a no-op filter in practice. Gate on an
@@ -130,7 +134,7 @@ def _all_tab(include_test: bool) -> _TabQuery:
             },
         }
     ]
-    # Default sort: 'atypicality' (outliers first, highest cluster_distance,
+    # Default sort: 'atypicality' (outliers first, lowest cluster_score,
     # then unsorted) — see review_sorts.py.
     return must, _default_must_not(include_test), 'needs human review'
 
@@ -174,8 +178,8 @@ def _detector_disagreements_tab(include_test: bool) -> _TabQuery:
 
 def _outliers_tab(include_test: bool) -> _TabQuery:
     # outlier_flagged is never written anywhere in the
-    # repo -- deleted. This queue is cluster_distance >= 0.35 only.
-    must = [{'range': {'cluster_distance': {'gte': 0.35}}}]
+    # repo -- deleted. This queue is cluster_score <= OUTLIER_SCORE_MAX only.
+    must = [{'range': {'cluster_score': {'lte': OUTLIER_SCORE_MAX}}}]
     # Default sort: 'atypicality' — see review_sorts.py.
     reason = 'outlier — far from cluster centroid'
     return must, _default_must_not(include_test), reason

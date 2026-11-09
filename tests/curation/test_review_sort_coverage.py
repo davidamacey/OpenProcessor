@@ -70,7 +70,7 @@ class _CoverageOpenSearch:
 async def test_zero_coverage_tab_default_falls_back_with_reason() -> None:
     from src.services.curation import review_sorts
 
-    os_ = _CoverageOpenSearch({'cluster_distance': 5})
+    os_ = _CoverageOpenSearch({'cluster_score': 5})
     clause, applied, reason = await review_sorts.build_sort(None, tab='uncertainty', opensearch=os_)
     assert applied == 'atypicality'
     assert clause == review_sorts.get_review_sorts()['atypicality'].clause
@@ -150,7 +150,7 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     fake = QueryFakeOpenSearch(
-        {ITEMS: {'a': _item('a', cluster_distance=0.3), 'b': _item('b', cluster_distance=0.1)}}
+        {ITEMS: {'a': _item('a', cluster_score=0.3), 'b': _item('b', cluster_score=0.1)}}
     )
     app = FastAPI()
     from _curation_app import mount_curation_routers

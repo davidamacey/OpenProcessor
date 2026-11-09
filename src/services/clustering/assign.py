@@ -150,6 +150,18 @@ def place_vectors(prototypes: PrototypeSet, vectors: np.ndarray) -> list[tuple[i
     return out
 
 
+async def serving_centroids(
+    session: AsyncSession, *, project: uuid.UUID, target: str
+) -> np.ndarray | None:
+    """The unit-norm prototype rows of the serving partition of ``target``, or ``None`` when the
+    project has none (nothing served yet). Call inside ``project_tx``."""
+    partition_id = await serving_partition_id(session, project=project, target=target)
+    if partition_id is None:
+        return None
+    prototypes = await load_prototypes(session, partition_id)
+    return None if prototypes is None else prototypes.matrix
+
+
 async def place_new(
     session: AsyncSession,
     *,
@@ -191,4 +203,5 @@ __all__ = [
     'forget_prototypes',
     'place_new',
     'place_vectors',
+    'serving_centroids',
 ]

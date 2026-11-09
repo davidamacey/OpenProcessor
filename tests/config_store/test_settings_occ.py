@@ -37,22 +37,28 @@ def client(pg_env, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 def test_two_puts_with_the_same_revision_one_wins_and_one_is_409(client: TestClient) -> None:
     revision = client.get(URL).json()['revision']
-    first = client.put(URL, json={'defaults': {'cluster': 'ahc'}, 'expected_revision': revision})
-    second = client.put(URL, json={'defaults': {'cluster': 'ivf'}, 'expected_revision': revision})
+    first = client.put(
+        URL, json={'defaults': {'sort': 'atypicality'}, 'expected_revision': revision}
+    )
+    second = client.put(
+        URL, json={'defaults': {'sort': 'uncertainty_entropy'}, 'expected_revision': revision}
+    )
     assert first.status_code == 200, first.text
     assert second.status_code == 409, second.text
     assert second.json()['detail']['error'] == 'revision_conflict'
     stored = client.get(URL).json()
-    assert stored['defaults'] == {'cluster': 'ahc'}
+    assert stored['defaults'] == {'sort': 'atypicality'}
     assert stored['revision'] == revision + 1
 
 
 def test_a_put_without_expected_revision_is_refused(client: TestClient) -> None:
-    assert client.put(URL, json={'defaults': {'cluster': 'ahc'}}).status_code == 422
+    assert client.put(URL, json={'defaults': {'sort': 'atypicality'}}).status_code == 422
 
 
 def test_a_single_write_with_the_current_revision_succeeds(client: TestClient) -> None:
     revision = client.get(URL).json()['revision']
-    done = client.put(URL, json={'defaults': {'cluster': 'ivf'}, 'expected_revision': revision})
+    done = client.put(
+        URL, json={'defaults': {'sort': 'uncertainty_entropy'}, 'expected_revision': revision}
+    )
     assert done.status_code == 200, done.text
     assert done.json()['revision'] == revision + 1

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
+    import uuid
+
     from src.services.curation.item_filter import ItemFilter
 
 
@@ -17,7 +19,7 @@ class Run:
     opensearch: Any
     progress: Any
     class_id: int | None
-    cluster_id: int | None
+    cluster_uid: uuid.UUID | None
     item_filter: dict[str, Any] | None
     scope_filter: ItemFilter
 

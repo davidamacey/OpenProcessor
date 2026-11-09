@@ -1,8 +1,7 @@
 """Per-axis strategy entry builders for ``GET /curation/methods``.
 
-Each builder returns the list of entries for one axis (cluster, sort,
-score, overlay, export, prompt_pack). Heavy dependencies (cluster
-methods, scorers, review sorts) are imported lazily so the registry stays
+Each builder returns the list of entries for one axis (sort,
+score, overlay, export, prompt_pack). Heavy dependencies (scorers, review sorts) are imported lazily so the registry stays
 import-safe in a minimal environment.
 """
 
@@ -21,27 +20,6 @@ from src.services.curation.strategy_flags import (
     _viz_projection_enabled,
     effective_scorer_status,
 )
-
-
-def _cluster_strategies(default_id: str | None) -> list[dict[str, Any]]:
-    """Reflect the real ``cluster_methods`` registry — never hand-duplicated
-    names, so this can't drift from ``get_method``/``available_methods``.
-    ``default_id`` is :func:`resolve_effective_default`'s answer for the
-    ``'cluster'`` axis, resolved once by the caller (``get_registry``) so
-    every axis's default resolution happens against the same settings-doc
-    snapshot within one request."""
-    from src.services.curation.clustering.methods import available_methods
-
-    return [
-        {
-            'id': name,
-            'axis': 'cluster',
-            'label': name.upper() if name in {'ivf', 'ahc'} else name.replace('_', ' ').title(),
-            'status': 'stable',
-            'default': name == default_id,
-        }
-        for name in available_methods()
-    ]
 
 
 def _score_strategies() -> list[dict[str, Any]]:

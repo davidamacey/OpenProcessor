@@ -315,8 +315,8 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     Each entry is the item's class state *before* one write
     (``class_id``, ``class_name``, ``class_source``, ``label_source``,
     ``confidence``, ``class_detector*``, ``class_labeler``,
-    ``class_labeled_at``, ``class_validated``, ``cluster_id``,
-    ``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``
+    ``class_labeled_at``, ``class_validated``, the item's ``cluster_*``
+    placement; ``review_dismissed_*`` on discards) plus ``writer``
     (who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and
     ``at``. Keys a writer didn't record are ``null``.
     """

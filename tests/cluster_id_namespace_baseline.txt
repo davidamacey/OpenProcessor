@@ -1,25 +1,23 @@
 # file<TAB>occurrences of the retired integer cluster-id names (see tests/test_no_cluster_id_namespace.py).
 # Pins only go down; delete a line when its file reaches zero.
+#
+# What is left is reasoned, not owed:
+# * src/services/upgrade/from_060/**: the 0.6.0 upgrade reads the integer cluster_id the old
+#   items carry (candidate clusters become one ready partition); it is the only reader of them.
+# * src/services/projects/combine/copy_docs.py: strips the retired fields an index upgraded from
+#   0.6.0 still carries (OpenSearch cannot drop a mapped field) from the copies it makes.
+# * The core visual-search clusters (faces, images: src/routers/clusters.py, src/clients/opensearch,
+#   src/services/visual_search, src/schemas/query.py, src/services/image_admin.py) are a different
+#   namespace with their own FAISS integer ids, pinned until their own rebuild.
+# The VLM raw-label term clusters (vlm_label_cluster_*, src/services/curation/raw_label_clusters.py)
+# are a separate namespace too; their identifiers are spelled label_cluster_id and are not pinned.
 src/clients/opensearch/cluster_assigner.py	1
 src/clients/opensearch/clusters.py	9
 src/clients/opensearch/indexes.py	4
 src/clients/opensearch/ingest.py	2
 src/clients/opensearch/search.py	1
 src/routers/clusters.py	12
-src/routers/curation/classes.py	4
-src/routers/curation/pipeline_public.py	3
-src/routers/curation/pipeline_start.py	3
-src/routers/curation/select.py	4
 src/schemas/query.py	1
-src/services/classes/projection_sync.py	2
-src/services/curation/auto_label_run.py	11
-src/services/curation/autolabel/embed_stage.py	8
-src/services/curation/autolabel/run_state.py	1
-src/services/curation/autolabel/selection.py	18
-src/services/curation/autolabel/vlm_stage.py	2
-src/services/curation/cluster_ids.py	8
-src/services/curation/raw_label_clusters.py	7
-src/services/curation/review_terms.py	1
 src/services/image_admin.py	2
 src/services/projects/combine/copy_docs.py	4
 src/services/upgrade/from_060/model.py	1

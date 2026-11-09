@@ -10,11 +10,10 @@ from fixtures.job_rows import make_project
 from sqlalchemy import text
 
 from src.db.session import async_session_factory, deployment_tx
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.upgrade.from_060.steps import clustering as step
 
 
-OFFSET = RESIDUAL_CLUSTER_ID_OFFSET
+OFFSET = step.RESIDUAL_CLUSTER_ID_OFFSET
 
 
 def test_only_candidate_clusters_become_members_and_the_uid_is_stable() -> None:

@@ -28,7 +28,6 @@ from src.services.curation.clustering.backend import (
     BackendInfo,
     detect_cluster_backend,
     free_gpu_blocks,
-    gpu_used_vram_mb,
 )
 from src.services.curation.clustering.pool_size import (
     UMAP_METRIC,
@@ -108,7 +107,6 @@ async def get_or_fit_reducer(
     embeddings: np.ndarray,
     *,
     mode: UMapMode,
-    progress: Any | None = None,
 ) -> tuple[Any, np.ndarray, bool, BackendInfo]:
     """Return ``(reducer, reduced_embeddings, refit_happened, backend)``.
 
@@ -138,11 +136,6 @@ async def get_or_fit_reducer(
     if mode == 'transform':
         reducer = load_reducer(state_id=state_id)
 
-    # Sample VRAM before the heavy work so the dashboard's peak counter
-    # reflects the run's hot loop, not just the post-fit residual.
-    if progress is not None and backend.name == 'gpu':
-        progress.record_peak_vram(gpu_used_vram_mb())
-
     if reducer is None or mode == 'refit':
         if backend.name == 'gpu' and backend.build_algo is not None:
             reducer = _build_gpu_reducer(backend.build_algo, len(embeddings))
@@ -162,8 +155,6 @@ async def get_or_fit_reducer(
                 # cuml#4068: free residual pool to avoid VRAM creep
                 # across reclusters in a long-lived worker.
                 free_gpu_blocks()
-                if progress is not None:
-                    progress.record_peak_vram(gpu_used_vram_mb())
         reduced = _to_numpy_float32(reduced_raw)
         try:
             save_reducer(reducer, state_id=state_id)
@@ -176,8 +167,6 @@ async def get_or_fit_reducer(
         finally:
             if backend.name == 'gpu':
                 free_gpu_blocks()
-                if progress is not None:
-                    progress.record_peak_vram(gpu_used_vram_mb())
         reduced = _to_numpy_float32(reduced_raw)
 
     return reducer, reduced, refit_happened, backend

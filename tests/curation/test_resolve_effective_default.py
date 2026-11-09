@@ -33,48 +33,31 @@ def fake_os(memory_settings) -> object:
 
 
 @pytest.mark.asyncio
-async def test_no_override_falls_back_to_hardcoded_constant(
+async def test_the_retired_cluster_axis_resolves_to_nothing_even_with_a_stored_override(
     fake_os: object,
     memory_settings: MemorySettings,
 ) -> None:
-    from src.services.curation.clustering.methods import DEFAULT_METHOD
-
-    assert await resolve_effective_default('cluster', fake_os) == DEFAULT_METHOD
-
-
-@pytest.mark.asyncio
-async def test_no_opensearch_client_skips_lookup_and_returns_hardcoded() -> None:
-    from src.services.curation.clustering.methods import DEFAULT_METHOD
-
-    assert await resolve_effective_default('cluster') == DEFAULT_METHOD
-    assert await resolve_effective_default('cluster', None) == DEFAULT_METHOD
-
-
-@pytest.mark.asyncio
-async def test_valid_override_is_returned(fake_os: object, memory_settings) -> None:
-    from src.services.curation.clustering.methods import available_methods
-
-    non_default = next(m for m in available_methods() if m != 'ivf')
+    """Clustering takes its method per run now: a settings document that still carries a
+    ``cluster`` default (written before the axis went) must not resolve to anything."""
     await memory_settings.update_curation_settings(
-        {'cluster': non_default}, expected_revision=memory_settings.revision
+        {'cluster': 'ivf'}, expected_revision=memory_settings.revision
     )
-    assert await resolve_effective_default('cluster', fake_os) == non_default
+    assert await resolve_effective_default('cluster', fake_os) is None
+    assert await resolve_effective_default('cluster') is None
 
 
 @pytest.mark.asyncio
-async def test_stale_override_no_longer_advertised_falls_back(
+async def test_stale_sort_override_no_longer_advertised_falls_back(
     fake_os: object,
     memory_settings: MemorySettings,
 ) -> None:
     """An override that named a real id at PUT time but is no longer a
     currently-advertised id for the axis must fall back to the hardcoded
-    constant rather than returning the dead id."""
-    from src.services.curation.clustering.methods import DEFAULT_METHOD
-
+    default rather than returning the dead id."""
     await memory_settings.update_curation_settings(
-        {'cluster': 'a_method_that_no_longer_exists'}, expected_revision=memory_settings.revision
+        {'sort': 'a_sort_that_no_longer_exists'}, expected_revision=memory_settings.revision
     )
-    assert await resolve_effective_default('cluster', fake_os) == DEFAULT_METHOD
+    assert await resolve_effective_default('sort', fake_os) is None
 
 
 @pytest.mark.asyncio
@@ -128,9 +111,7 @@ async def test_broken_opensearch_client_falls_back_rather_than_raising() -> None
         async def get(self, *args: object, **kwargs: object) -> None:  # noqa: ARG002
             raise RuntimeError('opensearch unreachable')
 
-    from src.services.curation.clustering.methods import DEFAULT_METHOD
-
-    assert await resolve_effective_default('cluster', _Broken()) == DEFAULT_METHOD
+    assert await resolve_effective_default('sort', _Broken()) is None
 
 
 if __name__ == '__main__':

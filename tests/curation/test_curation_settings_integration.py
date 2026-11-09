@@ -40,21 +40,6 @@ def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     return client
 
 
-def test_methods_reflects_a_stored_cluster_override(app_client: TestClient) -> None:
-    from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
-
-    non_default = next(m for m in available_methods() if m != DEFAULT_METHOD)
-    app_client.put(
-        '/curation/projects/default/settings', json={'defaults': {'cluster': non_default}}
-    )
-
-    r = app_client.get('/curation/projects/default/methods')
-    body = r.json()
-    cluster_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'cluster'}
-    assert cluster_entries[non_default]['default'] is True
-    assert cluster_entries[DEFAULT_METHOD]['default'] is False
-
-
 @pytest.mark.asyncio
 async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_default(
     app_client: TestClient,

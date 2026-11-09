@@ -179,3 +179,12 @@ async def test_the_merge_job_merges_once_and_relabels_what_is_left(world, monkey
     assert seen == [(a, b, 'coupe')] * 2
     merge_rows = [k for _, k in await _pending(pid) if k == 'class_merge']
     assert len(merge_rows) == 1  # the registry merge ran once
+
+
+def test_a_class_merge_writes_no_cluster_field() -> None:
+    """A merge relabels the class only: the item's place in the serving partition is not a class
+    fact (it used to stamp the retired integer ``cluster_id = target class``)."""
+    relabel = sync._merge_crop_merger(3, 'target')('c1', {'class_validated': True})
+    assert relabel['class_id'] == 3
+    assert not {k for k in relabel if k.startswith('cluster_')}
+    assert 'cluster' not in sync._MERGE_SCRIPT['source']

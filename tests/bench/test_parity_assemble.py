@@ -78,7 +78,7 @@ def _item(item_id: str, image_id: str, box: list[float], **extra) -> dict:
         'detector_confidence': 0.9,
         'detector_class_name': 'cat',
         'class_name': 'cat',
-        'cluster_id': None,
+        'cluster': None,
         **extra,
     }
 
@@ -86,8 +86,13 @@ def _item(item_id: str, image_id: str, box: list[float], **extra) -> dict:
 def test_build_arrays_sorts_by_file_then_box_and_marks_missing_vectors() -> None:
     items = [
         _item('b1', 'ib', [0.5, 0.1, 0.9, 0.5]),
-        _item('a2', 'ia', [0.5, 0.1, 0.9, 0.5], cluster_id=3, cluster_is_core=True),
-        _item('a1', 'ia', [0.1, 0.1, 0.4, 0.5], cluster_distance=0.2),
+        _item(
+            'a2',
+            'ia',
+            [0.5, 0.1, 0.9, 0.5],
+            cluster={'uid': 'u-7', 'score': 0.75, 'state': 'assigned'},
+        ),
+        _item('a1', 'ia', [0.1, 0.1, 0.4, 0.5]),
     ]
     arrays = pa.build_arrays(
         items,
@@ -102,9 +107,11 @@ def test_build_arrays_sorts_by_file_then_box_and_marks_missing_vectors() -> None
     ps.validate(arrays)
     assert arrays['item_id'].tolist() == ['a1', 'a2', 'b1']
     assert arrays['item_has_vec'].tolist() == [True, True, False]
-    assert arrays['item_cluster'].tolist() == [-1, 3, -1]
+    assert arrays['item_cluster'].tolist() == [-1, 0, -1]
     assert arrays['item_cluster_core'].tolist() == [-1, 1, -1]
-    assert np.isnan(arrays['item_cluster_distance'][1])
+    assert arrays['item_cluster_similarity'][1] == pytest.approx(0.75)
+    assert arrays['item_cluster_distance'][1] == pytest.approx(0.25)
+    assert np.isnan(arrays['item_cluster_distance'][0])
     assert arrays['item_vlm'].tolist() == ['', 'dog', '']
     assert arrays['item_gt'].tolist() == ['', '', '']
     assert arrays['frame_image'].tolist() == ['a.jpg']

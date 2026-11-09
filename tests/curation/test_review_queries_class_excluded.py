@@ -34,7 +34,7 @@ def test_excluded_outlier_item_disappears_from_the_outliers_tab() -> None:
     query = {'bool': {'must': must, 'must_not': must_not}}
 
     # A textbook outlier: far from its cluster centroid.
-    outlier_doc = {'cluster_distance': 0.9, 'class_validated': False}
+    outlier_doc = {'cluster_score': 0.1, 'class_validated': False}
     assert matches(outlier_doc, query)
 
     excluded_outlier_doc = {**outlier_doc, 'class_excluded': True}

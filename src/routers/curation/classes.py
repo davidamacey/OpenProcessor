@@ -15,7 +15,6 @@ from src.routers.curation._common import (
     router,
 )
 from src.services.curation.class_sources import class_source_catalog
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
@@ -35,18 +34,11 @@ async def list_class_sources() -> dict[str, list[dict[str, str]]]:
 async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     """List every class in the registry, with live counts from the items index."""
     reg = await get_class_registry().snapshot()
-    # Three counts per class, aggregated in one round-trip:
+    # Counts per class, aggregated in one round-trip:
     #   * counts[cid]      = items whose class_id == cid (labeled)
     #   * validated[cid]   = items with class_id == cid AND class_validated=true
-    #   * cluster_size[cid]= items whose cluster_id == cid (FAISS bucket, may
-    #                        include unlabeled candidates the operator hasn't
-    #                        triaged yet). Operators expect the sidebar chip
-    #                        to match what they'll see when they click in,
-    #                        which is the cluster bucket — not just labeled
-    #                        items.
     counts: dict[int, int] = {}
     validated: dict[int, int] = {}
-    cluster_size: dict[int, int] = {}
     validated_test_holdout: dict[int, int] = {}
     validated_excluded: dict[int, int] = {}
     try:
@@ -83,22 +75,6 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                         },
                     },
                 },
-                # Restrict to class-kind cluster ids (cluster_id ==
-                # class_id by invariant) via a filter agg before
-                # terms-aggregating, so candidate/residual cluster ids
-                # (>= RESIDUAL_CLUSTER_ID_OFFSET, often far more numerous
-                # than the ~80 class ids) can't crowd real class buckets
-                # out of the size-1000 cap.
-                'by_cluster': {
-                    'filter': {
-                        'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}
-                    },
-                    'aggs': {
-                        'classes': {
-                            'terms': {'field': 'cluster_id', 'size': 1000},
-                        },
-                    },
-                },
             },
         }
         resp = await opensearch.search(index=items_index(), body=body)
@@ -113,10 +89,6 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
             validated_excluded[cid] = int(
                 (bucket.get('validated_excluded') or {}).get('doc_count', 0)
             )
-        by_cluster_buckets = (aggs.get('by_cluster') or {}).get('classes', {}).get('buckets', [])
-        for bucket in by_cluster_buckets:
-            cid = int(bucket['key'])
-            cluster_size[cid] = int(bucket.get('doc_count', 0))
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
 
@@ -125,7 +97,7 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     # one, NOT as a separate doc whose primary class_id == that class. The
     # class-aggregation count above only captures the rare mis-labels.
     #
-    # This used to override sample_count/validated_count/cluster_size
+    # This used to override sample_count/validated_count
     # with the region inventory total, which made the region "class" look
     # like an item class with thousands of validated crops -- it inflated
     # /train's class picker and /export's per-class table (the served
@@ -150,7 +122,6 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
                 group=c.group,
                 sample_count=counts.get(c.class_id, 0),
                 validated_count=validated.get(c.class_id, 0),
-                cluster_size=cluster_size.get(c.class_id, 0),
                 deprecated=c.deprecated,
                 merged_into=getattr(c, 'merged_into', None),
                 hotkey_letter=getattr(c, 'hotkey_letter', None),

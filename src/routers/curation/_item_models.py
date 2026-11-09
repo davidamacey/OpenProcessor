@@ -135,11 +135,6 @@ class ItemDoc(BaseModel):
     needs_new_class: bool = False
     needs_new_class_note: str | None = None
     cluster: ClusterRef | None = None
-    cluster_distance: float | None = None
-    # Similarity to the centroid (one minus the cosine distance, clamped);
-    # core when at or above GET /clusters core_similarity_min.
-    cluster_similarity: float | None = None
-    cluster_is_core: bool | None = None
     class_excluded: bool = False
     excluded_reason: str | None = None
     excluded_at: str | None = None

@@ -10,7 +10,7 @@ Two scopes:
   empty (``vlm_class_empty_reason``).
   Optionally narrowed to one ``class_id`` and by the project's VLM scope
   policy (:mod:`~src.services.curation.vlm_policy`).
-* **Cluster scope** (``cluster_id`` set, ``POST /vlm/label_cluster/{id}``):
+* **Cluster scope** (``cluster_uid`` set on ``POST /pipeline/auto_label[/start]``):
   an operator explicitly asked for this cluster, so every unvalidated
   member is labeled — only validated, test-holdout and excluded items are
   left out. The scope policy does not apply to an explicit request.
@@ -18,6 +18,7 @@ Two scopes:
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -40,6 +41,7 @@ from src.services.curation.vlm_scope import (
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Collection
 
 
@@ -51,7 +53,7 @@ COMBINED_RECENT_WINDOW = timedelta(hours=24)
 def vlm_selection_query(
     *,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     classifier_confidence_skip_vlm: float,
     now: datetime | None = None,
     item_filter: ItemFilter | None = None,
@@ -59,7 +61,7 @@ def vlm_selection_query(
     representative_ids: Collection[str] | None = None,
 ) -> dict[str, Any]:
     """The ``query`` for the VLM stage's scroll. ``policy`` (default: scope ``all``)
-    narrows the global sweep only; a ``cluster_id`` run ignores it."""
+    narrows the global sweep only; a ``cluster_uid`` run ignores it."""
     # Only embedded items reach the VLM (the working set), same as the worker.
     filters: list[dict[str, Any]] = [
         embedded_clause(),
@@ -67,8 +69,8 @@ def vlm_selection_query(
     ]
     if class_id is not None:
         filters.append({'term': {'class_id': class_id}})
-    if cluster_id is not None:
-        filters.append({'term': {'cluster_id': cluster_id}})
+    if cluster_uid is not None:
+        filters.append({'term': {'cluster_uid': str(cluster_uid)}})
         must_not: list[dict[str, Any]] = [
             {'term': {'class_validated': True}},
             {'term': {'test_holdout': True}},
@@ -113,7 +115,7 @@ async def resolve_vlm_selection(
     opensearch: Any,
     *,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     classifier_confidence_skip_vlm: float,
     item_filter: ItemFilter | None,
     max_vlm_crops: int,
@@ -125,13 +127,13 @@ async def resolve_vlm_selection(
     ``scope_override`` (the ``vlm_scope`` request parameter) replaces the stored
     scope for this run. The cap is the smaller of ``max_vlm_crops`` (0 = all) and
     what is left of the policy's daily budget; an exhausted budget selects
-    nothing. A ``cluster_id`` run is an explicit request: no policy, no budget.
+    nothing. A ``cluster_uid`` run is an explicit request: no policy, no budget.
     """
     cap = max_vlm_crops if max_vlm_crops > 0 else None
-    if cluster_id is not None:
+    if cluster_uid is not None:
         query = vlm_selection_query(
             class_id=class_id,
-            cluster_id=cluster_id,
+            cluster_uid=cluster_uid,
             classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
             now=now,
             item_filter=item_filter,
@@ -147,7 +149,7 @@ async def resolve_vlm_selection(
     )
     query = vlm_selection_query(
         class_id=class_id,
-        cluster_id=None,
+        cluster_uid=None,
         classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
         now=now,
         item_filter=item_filter,
@@ -166,14 +168,14 @@ async def resolve_vlm_selection(
 
 
 def unvalidated_count_query(
-    *, class_id: int | None, cluster_id: int | None, item_filter: ItemFilter | None = None
+    *, class_id: int | None, cluster_uid: uuid.UUID | None, item_filter: ItemFilter | None = None
 ) -> dict[str, Any]:
     """Unvalidated items left in the run's scope (the dashboard's count)."""
-    filters = [
-        {'term': {field: value}}
-        for field, value in (('class_id', class_id), ('cluster_id', cluster_id))
-        if value is not None
-    ]
+    filters: list[dict[str, Any]] = []
+    if class_id is not None:
+        filters.append({'term': {'class_id': class_id}})
+    if cluster_uid is not None:
+        filters.append({'term': {'cluster_uid': str(cluster_uid)}})
     filters.extend(item_filter_clauses(item_filter or ItemFilter()))
     bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
     if filters:
@@ -192,12 +194,12 @@ async def count_unvalidated_remaining(
     opensearch: Any,
     index: str,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     item_filter: ItemFilter | None,
 ) -> int:
     """Dashboard count of unvalidated items left in scope; ``-1`` when unavailable."""
     query = unvalidated_count_query(
-        class_id=class_id, cluster_id=cluster_id, item_filter=item_filter
+        class_id=class_id, cluster_uid=cluster_uid, item_filter=item_filter
     )
     try:
         return int((await opensearch.count(index=index, body={'query': query})).get('count', 0))
@@ -209,14 +211,14 @@ async def explain_empty_vlm_selection(
     opensearch: Any,
     index: str,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     item_filter: ItemFilter | None,
 ) -> str:
     """Why the VLM stage selected nothing, so an empty run is never a silent
     ``0/0``: no items in scope, none embedded yet (the VLM only sees embedded
     items), or every unvalidated one excluded by the sweep rules."""
     scope = unvalidated_count_query(
-        class_id=class_id, cluster_id=cluster_id, item_filter=item_filter
+        class_id=class_id, cluster_uid=cluster_uid, item_filter=item_filter
     )
     try:
         unvalidated = int(
@@ -245,7 +247,7 @@ async def explain_empty_vlm_selection(
         f'all {embedded} embedded unvalidated item(s) were excluded from the sweep '
         '(classifier-labeled at/above classifier_confidence_skip_vlm, vlm_unmatched, '
         'verified by the region worker in the last 24 h, or an empty VLM answer in the '
-        'retry window); use cluster_id scope to force a cluster'
+        'retry window); use cluster_uid scope to force a cluster'
     )
 
 

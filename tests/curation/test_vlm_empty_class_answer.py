@@ -51,7 +51,6 @@ CLASS_KEYS = {
     'class_source',
     'label_source',
     'class_validated',
-    'cluster_id',
     'vlm_confidence',
     'vlm_raw_class',
     'vlm_raw_label',
@@ -401,7 +400,7 @@ async def test_selectors_skip_items_with_a_recent_empty_answer() -> None:
         body={
             'size': 50,
             'query': vlm_selection_query(
-                class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8, now=now
+                class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, now=now
             ),
         },
     )

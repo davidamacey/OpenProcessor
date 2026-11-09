@@ -15,11 +15,6 @@ class ClassEntry(BaseModel):
     group: str = ''
     sample_count: int = 0
     validated_count: int = 0
-    # FAISS-cluster bucket size: crops whose cluster_id == this class_id.
-    # Includes unlabeled candidates that landed near the cluster — i.e.
-    # everything visible on /clusters/{id}. The sidebar chip shows this
-    # so the operator's eyes match what they'll see when they click in.
-    cluster_size: int = 0
     deprecated: bool = False
     # Set when this class was merged into another via POST /classes/merge
     # (RegistryClassEntry.merged_into) -- the target class_id, or None for
@@ -40,7 +35,7 @@ class ClassEntry(BaseModel):
     # region_class_name (DetectionProfile.region_class_name) -- i.e. this
     # "class" is really a sub-bbox slot on parent items, not a class item
     # crops get primarily labeled into. Region classes must not have their
-    # sample_count/validated_count/cluster_size inflated with the region
+    # sample_count/validated_count inflated with the region
     # inventory total -- those fields stay real item counts (usually the
     # rare mis-labels). Callers (e.g. the /train class picker) that must
     # only offer item classes should filter on kind == 'item'.

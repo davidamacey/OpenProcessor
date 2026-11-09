@@ -225,8 +225,7 @@ async def ensure_items_score_fields(
 
     Purely additive — these fields are written **only** by the dedicated
     scoring job (``src/services/curation/item_scores/``) and never by the
-    production clustering pipeline. No overlay/scorer writes ``cluster_id``
-    / ``cluster_subid`` / ``cluster_distance``.
+    production clustering pipeline. No overlay/scorer writes a ``cluster_*`` field.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
     """

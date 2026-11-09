@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.clients.curation_opensearch.bodies_core import _images_body, _items_body
-from src.clients.curation_opensearch.cluster_fields import CLUSTER_ITEM_MAPPING
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
 
@@ -20,8 +20,6 @@ CLUSTER_BEFORE = {
     'cluster_score': {'type': 'float'},
     'cluster_margin': {'type': 'float'},
     'cluster_assigned_by': {'type': 'keyword'},
-    'cluster_distance': {'type': 'float'},
-    'cluster_auto_suggest': {'type': 'keyword'},
 }
 NEAR_DUP_FIELDS = {
     'near_dup_group_id': {'type': 'keyword'},
@@ -33,7 +31,7 @@ NEAR_DUP_FIELDS = {
 
 
 def test_the_cluster_module_holds_the_cluster_fields_unchanged() -> None:
-    assert CLUSTER_ITEM_MAPPING == CLUSTER_BEFORE
+    assert CLUSTER_PARTITION_MAPPING == CLUSTER_BEFORE
 
 
 def test_the_near_duplicate_module_holds_the_projection_fields() -> None:

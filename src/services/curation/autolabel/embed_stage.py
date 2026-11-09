@@ -1,7 +1,7 @@
 """The auto-label run's optional first stage: embed the items in scope that
 have no vector yet, so the clustering and VLM stages that follow work on them.
 
-The scope is the run's ``class_id`` / ``cluster_id`` plus the shared item
+The scope is the run's ``class_id`` / ``cluster_uid`` plus the shared item
 filter; only items stored without a vector for a recorded reason
 (``not_selected``, ``deferred``, ``failed``) are embedded, by the same code the
 ``embed`` reprocess scope runs. The worker has no resident encoder, so one is
@@ -31,6 +31,8 @@ from src.services.curation.reprocess_targets import existing_images
 
 
 if TYPE_CHECKING:
+    import uuid
+
     from opensearchpy import AsyncOpenSearch
 
 logger = get_logger(__name__)
@@ -43,14 +45,14 @@ def triton_url() -> str:
 
 
 def stage_request(
-    class_id: int | None, cluster_id: int | None, item_filter: ItemFilter
+    class_id: int | None, cluster_uid: uuid.UUID | None, item_filter: ItemFilter
 ) -> ReprocessRequest:
     """The ``embed`` reprocess (only the missing) for a run's scope."""
     scope = item_filter.model_copy(
         update={
             'embedding_state': [NOT_SELECTED, DEFERRED, FAILED],
             **({'class_id': class_id} if class_id is not None else {}),
-            **({'cluster_id': cluster_id} if cluster_id is not None else {}),
+            **({'cluster_uid': cluster_uid} if cluster_uid is not None else {}),
         }
     )
     return ReprocessRequest(
@@ -65,7 +67,7 @@ async def run_embed_missing_stage(
     opensearch: AsyncOpenSearch,
     *,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     item_filter: dict[str, Any] | None,
     progress: Any = None,
     encoder: Any = None,
@@ -76,7 +78,7 @@ async def run_embed_missing_stage(
     ``encoder`` is injectable for tests."""
     try:
         return await _embed_missing(
-            opensearch, class_id, cluster_id, item_filter, progress, encoder
+            opensearch, class_id, cluster_uid, item_filter, progress, encoder
         )
     except asyncio.CancelledError:
         raise
@@ -88,12 +90,12 @@ async def run_embed_missing_stage(
 async def _embed_missing(
     opensearch: AsyncOpenSearch,
     class_id: int | None,
-    cluster_id: int | None,
+    cluster_uid: uuid.UUID | None,
     item_filter: dict[str, Any] | None,
     progress: Any,
     encoder: Any,
 ) -> dict[str, Any]:
-    request = stage_request(class_id, cluster_id, ItemFilter(**(item_filter or {})))
+    request = stage_request(class_id, cluster_uid, ItemFilter(**(item_filter or {})))
     plan = await plan_reprocess(opensearch, request)
     if not plan.image_ids or plan.embed is None:
         return {'skipped': True, 'reason': 'nothing to embed'}

@@ -10,24 +10,16 @@ sorted by document id, which makes every fit that follows a function of the docu
 from __future__ import annotations
 
 from functools import partial
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
-from unittest import mock
+from typing import Any
 
 import numpy as np
 import pytest
 
-from scripts.bench.parity_metrics import adjusted_rand_index
-from src.services.curation.clustering.methods import ivf_store
-from src.services.curation.clustering.methods.ivf import IVFMethod
 from src.services.curation.clustering.residual_fetch import (
     fetch_residual_embeddings as _fetch_scroll,
     fetch_residual_embeddings_parallel as _fetch_parallel,
 )
 
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 N_DOCS = 400
 DIM = 16
@@ -114,42 +106,3 @@ async def test_two_shard_orders_fetch_identical_pools(fetch: Any) -> None:
     ids_b, mat_b = await fetch(_Client(_permuted(docs, 2)))
     assert ids_a == ids_b
     assert np.array_equal(mat_a, mat_b)
-
-
-async def _ivf_labels_by_id(ids: list[str], matrix: np.ndarray, state: Path) -> dict[str, int]:
-    cfg = SimpleNamespace(project_state_dir=state)
-    with mock.patch.object(ivf_store, 'get_curation_config', return_value=cfg):
-        result = await IVFMethod().fit_predict(
-            matrix,
-            backend_info=SimpleNamespace(name='cpu'),  # type: ignore[arg-type]
-        )
-    return dict(zip(ids, result.labels.tolist(), strict=True))
-
-
-@pytest.mark.asyncio
-async def test_ivf_partition_is_the_same_for_any_shard_order(tmp_path: Path) -> None:
-    docs = _corpus()
-    fetched = [
-        await fetch_residual_embeddings_parallel(_Client(_permuted(docs, seed)))
-        for seed in (11, 12)
-    ]
-    # the fixture would not catch the bug if k-means did not care about row order
-    unsorted_a = np.asarray([v for _, v in _permuted(docs, 11)], dtype=np.float32)
-    unsorted_b = np.asarray([v for _, v in _permuted(docs, 12)], dtype=np.float32)
-    raw_a = await _ivf_labels_by_id(
-        [d for d, _ in _permuted(docs, 11)], unsorted_a, tmp_path / 'ra'
-    )
-    raw_b = await _ivf_labels_by_id(
-        [d for d, _ in _permuted(docs, 12)], unsorted_b, tmp_path / 'rb'
-    )
-    keys = sorted(raw_a)
-    sensitive = adjusted_rand_index(
-        np.array([raw_a[k] for k in keys]), np.array([raw_b[k] for k in keys])
-    )
-    assert sensitive < 0.95, 'k-means no longer depends on row order; this test proves nothing'
-
-    parts = [
-        await _ivf_labels_by_id(ids, mat, tmp_path / f'f{n}')
-        for n, (ids, mat) in enumerate(fetched)
-    ]
-    assert parts[0] == parts[1]

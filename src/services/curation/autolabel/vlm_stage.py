@@ -186,7 +186,7 @@ async def _remaining_unvalidated(run: Run) -> int:
             body={
                 'query': unvalidated_count_query(
                     class_id=run.class_id,
-                    cluster_id=run.cluster_id,
+                    cluster_uid=run.cluster_uid,
                     item_filter=run.scope_filter,
                 )
             },

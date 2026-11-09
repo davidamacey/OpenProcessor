@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from scripts.bench.baseline_report import metrics_delta, percentile
-from scripts.bench.run_baseline import API_METRIC_PREFIXES, map_path
+from scripts.bench.run_baseline import API_METRIC_PREFIXES, JOB_TERMINAL, map_path
 from scripts.bench.suite_lib import (
     storage_summary,
     summarize_runs,
@@ -156,35 +156,45 @@ def _knn_fields(
     return out
 
 
-def run_autolabel(
-    client: httpx.Client, base: str, params: dict[str, str], timeout: float = 3600.0
-) -> dict[str, Any]:
+def run_cluster_job(client: httpx.Client, base: str, timeout: float = 3600.0) -> dict[str, Any]:
+    """One item-clustering run: ``POST .../clusters/runs``, poll ``GET .../jobs/{id}``, and, when
+    the run activated its partition, wait for the projection job that writes it onto the items.
+
+    A 409 means a run for the space is already active (the refresh worker); wait for it, then start ours.
+    """
     started = time.monotonic()
-    # The cluster-refresh worker may hold the single auto_label slot; wait for it, then start ours.
     while True:
-        resp = client.post(f'{base}/pipeline/auto_label/start', params=params)
+        resp = client.post(f'{base}/clusters/runs', json={'target': 'item'})
         if resp.status_code != 409:
             break
         if time.monotonic() - started > timeout:
-            raise TimeoutError('auto_label slot stayed busy')
+            raise TimeoutError('a cluster run stayed active')
         time.sleep(5)
-    job = resp.raise_for_status().json()
+    job_id = resp.raise_for_status().json()['job_id']
     started = time.monotonic()
     while True:
-        state = (
-            client.get(f'{base}/pipeline/auto_label/status/{job["job_id"]}')
-            .raise_for_status()
-            .json()
-        )
-        if state['status'] in ('completed', 'failed', 'cancelled'):
-            return {
-                'status': state['status'],
-                'wall_s': time.monotonic() - started,
-                'stage_durations': state.get('stage_durations') or {},
-            }
+        state = client.get(f'{base}/jobs/{job_id}').raise_for_status().json()
+        if state['status'] in JOB_TERMINAL:
+            break
         if time.monotonic() - started > timeout:
-            raise TimeoutError('auto_label did not finish')
+            raise TimeoutError('the cluster run did not finish')
         time.sleep(2)
+    if (state.get('result') or {}).get('activated'):
+        while True:
+            active = client.get(
+                f'{base}/jobs',
+                params=[
+                    ('kind', 'cluster_projection_sync'),
+                    ('status', 'queued'),
+                    ('status', 'running'),
+                ],
+            )
+            if not active.raise_for_status().json()['items']:
+                break
+            if time.monotonic() - started > timeout:
+                raise TimeoutError('the cluster projection did not finish')
+            time.sleep(2)
+    return {'status': state['status'], 'wall_s': time.monotonic() - started, 'stage_durations': {}}
 
 
 def set_embedding_mode(client: httpx.Client, base: str, mode: str) -> None:
@@ -246,7 +256,7 @@ def ingest_rep(
         cluster = (
             {'status': 'skipped', 'wall_s': 0.0, 'stage_durations': {}}
             if getattr(args, 'skip_cluster', False)
-            else run_autolabel(client, base, {'train_clusters': 'true', 'run_vlm': 'false'})
+            else run_cluster_job(client, base)
         )
         names = list(client.get(base).raise_for_status().json()['resources']['indexes'].values())
         store: dict[str, Any] = (

@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from src.db.session import async_session_factory, project_tx
 from src.services.clustering.partitions import PartitionSpace
-from src.services.clustering.run import fit_pool, run_partition, unit_rows
+from src.services.clustering.run import run_partition
 
 
 pytestmark = [pytest.mark.db, pytest.mark.asyncio]
@@ -124,19 +124,3 @@ async def test_anchored_members_are_pinned_and_counted(pg_env, pg, project) -> N
         b = await _assignment(session, second.partition_id)
     assert b == a  # every anchored identity keeps all of its members
     assert second.anchored_moves > 0
-
-
-def test_ivf_fit_matches_the_existing_kmeans_on_a_thousand_items() -> None:
-    from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
-
-    _, vectors, _ = _blobs(n_per=125, n_blobs=8)
-    x = unit_rows(vectors)
-    ours = fit_pool('ivf', x, {'n_clusters': 8}, seed=42).labels
-    store = IVFCentroidStore(store_dir='/tmp/op-test-ivf-unused')
-    centroids, _ = store.train(x, n_clusters=8, niter=50, nredo=1, use_gpu=False)
-    import faiss
-
-    index = faiss.IndexFlatL2(centroids.shape[1])
-    index.add(np.ascontiguousarray(centroids, dtype=np.float32))
-    theirs = index.search(x, 1)[1][:, 0]
-    assert adjusted_rand_score(theirs, ours) == 1.0

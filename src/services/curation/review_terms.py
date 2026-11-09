@@ -95,7 +95,7 @@ def raw_label_clusters_response(resp: dict[str, Any]) -> dict[str, Any]:
         parent = str(parent_buckets[0]['key']) if parent_buckets else None
         clusters.append(
             {
-                'cluster_id': cid,
+                'label_cluster_id': cid,
                 'cluster_name': cluster_name,
                 'n_crops': n_crops,
                 'n_unmatched': unmatched,

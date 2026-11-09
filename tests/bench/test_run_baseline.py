@@ -28,7 +28,7 @@ class FakeStack:
         self.policy: dict | None = None
         self.metric_reads = 0
         self.drain_polls = 0
-        self.autolabel_polls = 0
+        self.cluster_polls = 0
 
     def handler(self, request: httpx.Request) -> httpx.Response:  # noqa: PLR0911
         path = request.url.path
@@ -76,18 +76,12 @@ class FakeStack:
                     'total_unfinished': 0 if self.drain_polls >= 3 else 5,
                 },
             )
-        if path.endswith('/pipeline/auto_label/start'):
-            return httpx.Response(200, json={'job_id': 'j1', 'status': 'queued'})
-        if path.endswith('/pipeline/auto_label/status/j1'):
-            self.autolabel_polls += 1
-            done = self.autolabel_polls >= 2
-            return httpx.Response(
-                200,
-                json={
-                    'status': 'completed' if done else 'running',
-                    'stage_durations': {'cluster_residuals': 4.5} if done else {},
-                },
-            )
+        if path.endswith('/clusters/runs'):
+            return httpx.Response(202, json={'job_id': 'j1'})
+        if path.endswith('/jobs/j1'):
+            self.cluster_polls += 1
+            done = self.cluster_polls >= 2
+            return httpx.Response(200, json={'status': 'completed' if done else 'running'})
         if path == '/op_p__items,op_p__images/_refresh' or path.endswith('/_refresh'):
             return httpx.Response(200, json={})
         if path.endswith('/_forcemerge'):
@@ -149,7 +143,7 @@ def test_full_run_report_math_and_calls(manifest: Path, tmp_path: Path) -> None:
     delta = report['metrics']['api']['histograms']['op_pipeline_stage_seconds{stage=decode}']
     assert delta['count'] == 8
     assert report['stages']['region_drain']['wall_s'] > 0
-    assert report['stages']['cluster']['wall_s'] == 4.5
+    assert report['stages']['cluster']['wall_s'] == 1.0  # two clock ticks past the start
     assert report['storage']['store_bytes'] == 1_000_000
     assert report['storage']['store_bytes_per_image'] == 100_000.0
     assert report['gpu'] == {}
@@ -163,9 +157,10 @@ def test_full_run_report_math_and_calls(manifest: Path, tmp_path: Path) -> None:
     assert stack.policy['expected_revision'] == 3
     batches = [c for c in stack.calls if c[1].endswith('/ingest/batch')]
     assert len(batches) == 3  # 4 warmup + 4 + 2
-    start = next(c for c in stack.calls if c[1].endswith('/pipeline/auto_label/start'))
-    assert 'train_clusters=true' in start[2]
-    assert 'run_vlm=false' in start[2]
+    start = next(c for c in stack.calls if c[1].endswith('/clusters/runs'))
+    assert start[0] == 'POST'
+    assert json.loads(start[2]) == {'target': 'item'}
+    assert not any('auto_label' in c[1] for c in stack.calls)
 
 
 def test_outputs_contain_no_image_paths(manifest: Path, tmp_path: Path) -> None:
@@ -180,7 +175,10 @@ def test_only_requested_stages_run(manifest: Path, tmp_path: Path) -> None:
     stack = FakeStack()
     args = _args(manifest, tmp_path, ['--stages', 'ingest'])
     _run(args, stack)
-    assert not any('region_drain' in c[1] or 'auto_label' in c[1] for c in stack.calls)
+    assert not any(
+        'region_drain' in c[1] or 'auto_label' in c[1] or 'clusters/runs' in c[1]
+        for c in stack.calls
+    )
 
 
 def test_path_map_rewrites_host_paths_for_the_container(manifest: Path, tmp_path: Path) -> None:

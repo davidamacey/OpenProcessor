@@ -1,6 +1,6 @@
 """The auto-label job scoped to one cluster; direct calls get real defaults.
 
-- ``cluster_id`` scopes the auto-label job to one cluster: the server selects
+- ``cluster_uid`` scopes the auto-label job to one cluster: the server selects
   every unvalidated, non-holdout, non-excluded member (no silent 200-item
   truncation) and reports how many it selected.
 - ``pipeline_auto_label`` is also called straight from Python by the
@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -24,7 +25,8 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
 ITEMS = base_curation_config().items_index
-CLUSTER = 10005
+CLUSTER = uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-scope')
+OTHER_CLUSTER = uuid.uuid5(uuid.NAMESPACE_URL, 'other-cluster')
 
 
 pytestmark = pytest.mark.usefixtures('vlm_env_active', 'readable_crops')
@@ -38,21 +40,21 @@ def _docs() -> dict[str, dict[str, Any]]:
         'pe_embedding': [0.1],
     }
     return {
-        'a': {**base, 'crop_id': 'a', 'cluster_id': CLUSTER},
-        'b': {**base, 'crop_id': 'b', 'cluster_id': CLUSTER, 'class_source': 'vlm_unmatched'},
+        'a': {**base, 'crop_id': 'a', 'cluster_uid': str(CLUSTER)},
+        'b': {**base, 'crop_id': 'b', 'cluster_uid': str(CLUSTER), 'class_source': 'vlm_unmatched'},
         # Classifier-confident: skipped by the global sweep, but an explicit
         # cluster request labels it.
         'c': {
             **base,
             'crop_id': 'c',
-            'cluster_id': CLUSTER,
+            'cluster_uid': str(CLUSTER),
             'class_source': 'det_model',
             'confidence': 0.99,
         },
-        'v': {**base, 'crop_id': 'v', 'cluster_id': CLUSTER, 'class_validated': True},
-        'h': {**base, 'crop_id': 'h', 'cluster_id': CLUSTER, 'test_holdout': True},
-        'x': {**base, 'crop_id': 'x', 'cluster_id': CLUSTER, 'class_excluded': True},
-        'other': {**base, 'crop_id': 'other', 'cluster_id': 3},
+        'v': {**base, 'crop_id': 'v', 'cluster_uid': str(CLUSTER), 'class_validated': True},
+        'h': {**base, 'crop_id': 'h', 'cluster_uid': str(CLUSTER), 'test_holdout': True},
+        'x': {**base, 'crop_id': 'x', 'cluster_uid': str(CLUSTER), 'class_excluded': True},
+        'other': {**base, 'crop_id': 'other', 'cluster_uid': str(OTHER_CLUSTER)},
     }
 
 
@@ -96,7 +98,7 @@ async def test_direct_call_with_omitted_args_uses_plain_defaults(pipeline_env: _
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
     summary = await pipeline_auto_label(opensearch=fake, run_vlm=True)
     assert summary['class_id'] is None
-    assert summary['cluster_id'] is None
+    assert summary['cluster_uid'] is None
     assert summary['prompt_pack'] is None
     # Global sweep: every unvalidated item minus the cost skips (b is
     # vlm_unmatched, c classifier-confident) and minus the frozen holdout (h) and
@@ -109,7 +111,7 @@ async def test_cluster_scope_selects_every_unvalidated_member(pipeline_env: _Lab
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
-    summary = await pipeline_auto_label(opensearch=fake, run_vlm=True, cluster_id=CLUSTER)
-    assert summary['cluster_id'] == CLUSTER
+    summary = await pipeline_auto_label(opensearch=fake, run_vlm=True, cluster_uid=CLUSTER)
+    assert summary['cluster_uid'] == str(CLUSTER)
     # a, b (vlm_unmatched) and c (classifier-confident); never v/h/x/other.
     assert summary['stages']['unvalidated_after_promote'] == 3

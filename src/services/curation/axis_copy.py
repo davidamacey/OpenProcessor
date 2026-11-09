@@ -16,11 +16,6 @@ def axis_copy() -> list[dict[str, str]]:
     """One entry per axis the registry builds strategy entries for."""
     return [
         {
-            'axis': 'cluster',
-            'label': 'Cluster method',
-            'description': 'How crops are grouped into clusters for review.',
-        },
-        {
             'axis': 'score',
             'label': 'Crop scores',
             'description': 'Additive per-crop signals (mistakenness, uniqueness, near-dup).',

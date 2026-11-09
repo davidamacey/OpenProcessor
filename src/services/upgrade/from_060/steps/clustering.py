@@ -20,13 +20,14 @@ from sqlalchemy import text
 from src.domain.embedding_spaces import Target, legacy_names, space_key
 from src.services.clustering.activation import activate
 from src.services.clustering.partitions import PartitionMember, PartitionSpace, record_partition
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 
 
 if TYPE_CHECKING:
     from src.services.upgrade.from_060.steps import StepContext
 
 ORDER = 40
+RESIDUAL_CLUSTER_ID_OFFSET = 10000
+"""0.6.0's first candidate-cluster id; below it a cluster_id was the item's class id."""
 MODEL_KEY = 'pe_core_l14_336'
 MODEL_VERSION = 1
 ACTOR = 'upgrade'

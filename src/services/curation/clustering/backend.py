@@ -16,8 +16,6 @@ Public API:
   current call. Cheap.
 * :func:`free_gpu_blocks` — drain cuML/cupy memory pool after each UMAP
   fit; mitigates the known VRAM-creep gotcha (cuml#4068).
-* :func:`gpu_used_vram_mb` — best-effort "how much is used right now" for
-  the peak-VRAM telemetry on the dashboard.
 """
 
 from __future__ import annotations
@@ -199,23 +197,6 @@ def free_gpu_blocks() -> None:
         logger.debug('curation_cluster_backend_free_blocks_failed', error=str(exc))
 
 
-def gpu_used_vram_mb() -> int | None:
-    """Current VRAM usage on the active device, in MB.
-
-    Returns None when GPU support is unavailable. Used for the peak-VRAM
-    telemetry on the dashboard — sample before/after UMAP fit and report
-    the max.
-    """
-    _, cupy = _try_import_cuml()
-    if cupy is None:
-        return None
-    try:
-        free_bytes, total_bytes = cupy.cuda.runtime.memGetInfo()
-    except Exception:
-        return None
-    return int((total_bytes - free_bytes) // (1024 * 1024))
-
-
 __all__ = [
     'MIN_FREE_VRAM_GB_BRUTE_FORCE',
     'MIN_FREE_VRAM_GB_NN_DESCENT',
@@ -224,5 +205,4 @@ __all__ = [
     'UMapBuildAlgo',
     'detect_cluster_backend',
     'free_gpu_blocks',
-    'gpu_used_vram_mb',
 ]

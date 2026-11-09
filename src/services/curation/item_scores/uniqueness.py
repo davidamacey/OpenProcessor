@@ -6,9 +6,9 @@ already available today as ``cluster_distance``, zero new math).
 A crop with few near neighbours in embedding space is locally novel even if
 it sits close to its cluster's centroid.
 
-Implementation reuses the already-persisted 512 IVF centroids
-(:class:`src.services.curation.clustering.methods.ivf_store.IVFCentroidStore`)
-as the coarse quantizer for a ``faiss.IndexIVFFlat`` — this is the validated
+Implementation reuses the prototypes of the item partition the project is serving
+(:func:`src.services.clustering.assign.serving_centroids`, the centroids the ``cluster_run``
+job fitted) as the coarse quantizer for a ``faiss.IndexIVFFlat`` — this is the validated
 production partition, not a new geometry. ``nprobe`` buckets are
 searched per query instead of a brute-force flat kNN, which is the
 difference between ~2-8 min and ~30-60 min CPU at 350k crops.
@@ -107,8 +107,7 @@ def compute_uniqueness(
             # Degenerate: every returned hit was self (tiny nlist/nprobe in
             # tests) — fall back to including them rather than scoring 0.
             neighbor_d = [float(row_d[j]) for j in range(kk) if row_idx[j] != -1]
-        # cosine_dist = sq_l2 / 2 for unit-norm vectors (matches ivf_store's
-        # assign_batch_with_distances convention).
+        # cosine_dist = sq_l2 / 2 for unit-norm vectors.
         scores[i] = float(np.mean(neighbor_d)) / 2.0 if neighbor_d else 0.0
 
     lo, hi = float(scores.min()), float(scores.max())
@@ -131,25 +130,26 @@ class UniquenessScorer:
     pool: ClassVar[str] = 'residual'
 
     def __init__(self, centroids: np.ndarray | None = None) -> None:
-        """``centroids`` overrides the persisted IVF store — used by tests
+        """``centroids`` overrides the serving partition's prototypes — used by tests
         to inject synthetic centroids without touching disk."""
         self._centroids_override = centroids
 
-    def _load_centroids(self) -> np.ndarray:
+    async def _load_centroids(self) -> np.ndarray:
         if self._centroids_override is not None:
             return self._centroids_override
-        from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
+        from src.db.session import async_session_factory, project_tx
+        from src.services.clustering.assign import serving_centroids
+        from src.services.config_store.bound_project import bound_project_id
 
-        store = IVFCentroidStore()
-        if not store.load():
+        project = await bound_project_id()
+        async with async_session_factory()() as session, project_tx(session, project):
+            centroids = await serving_centroids(session, project=project, target='item')
+        if centroids is None:
             raise RuntimeError(
-                'uniqueness scorer requires a trained IVF centroid store '
-                '(none found — run the clustering pipeline at least once first)'
+                'uniqueness scorer requires a serving item partition '
+                '(none found — start a cluster run and activate it first)'
             )
-        # reconstruct_n pulls the K stored centroid vectors back out of the
-        # flat index so we can hand them to a fresh IVFFlat as coarse quantizer.
-        index = store._index
-        return np.asarray(index.reconstruct_n(0, index.ntotal), dtype=np.float32)
+        return np.asarray(centroids, dtype=np.float32)
 
     async def score(
         self,
@@ -159,7 +159,7 @@ class UniquenessScorer:
         opensearch: AsyncOpenSearch | None = None,  # noqa: ARG002 - protocol uniformity
         progress: Any = None,  # noqa: ARG002 - protocol uniformity
     ) -> ScoreResult:
-        centroids = self._load_centroids()
+        centroids = await self._load_centroids()
         scores = compute_uniqueness(embeddings, centroids, k=_knn_k(), nprobe=_nprobe())
         now = now_iso()
         fields: dict[str, dict[str, Any]] = {

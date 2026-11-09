@@ -13,6 +13,7 @@ that no longer reachable from any request at all.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import Query
@@ -21,7 +22,7 @@ from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
-    CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
+    CLUSTER_UID_DESC as _CLUSTER_UID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     VLM_ATTRIBUTES_DESC,
     VLM_DESC,
@@ -56,7 +57,7 @@ async def pipeline_auto_label(
     ] = 0.80,
     run_vlm: Annotated[bool, Query(description='Run the VLM stage. See /start.')] = False,
     class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
-    cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
+    cluster_uid: Annotated[uuid.UUID | None, Query(description=_CLUSTER_UID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
     vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
@@ -82,7 +83,7 @@ async def pipeline_auto_label(
         classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
         run_vlm=run_vlm,
         class_id=class_id,
-        cluster_id=cluster_id,
+        cluster_uid=cluster_uid,
         detection_profile=detection_profile,
         prompt_pack=prompt_pack,
         prompt_pack_revision=None,

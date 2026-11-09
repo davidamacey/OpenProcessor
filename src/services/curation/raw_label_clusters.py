@@ -49,12 +49,12 @@ UNMATCHED_CLASS_SOURCE = 'vlm_unmatched'
 
 @dataclass(frozen=True)
 class ClusterAssignment:
-    cluster_id: int
+    label_cluster_id: int
     cluster_name: str
     distance: float
 
 
-def stable_cluster_id(cluster_name: str) -> int:
+def stable_label_cluster_id(cluster_name: str) -> int:
     """Deterministic positive int32 id from a cluster name (fits an ``integer`` mapping)."""
     digest = hashlib.blake2b(cluster_name.encode('utf-8'), digest_size=4).digest()
     return int.from_bytes(digest, 'big') & 0x7FFFFFFF
@@ -143,19 +143,19 @@ def cluster_terms(
             # Ties broken by term text so the name (and so the id) is deterministic.
             best = max(members, key=lambda m: (counts[common[m]], terms[common[m]]))
             name = terms[common[best]]
-            cid = stable_cluster_id(name)
+            cid = stable_label_cluster_id(name)
             centroid = vecs[members].mean(axis=0)
             centroid /= float(np.linalg.norm(centroid)) or 1.0
             for m in members:
                 out[terms[common[m]]] = ClusterAssignment(
-                    cluster_id=cid,
+                    label_cluster_id=cid,
                     cluster_name=name,
                     distance=float(1.0 - float(np.dot(vecs[m], centroid))),
                 )
 
     for i in rare:
         out[terms[i]] = ClusterAssignment(
-            cluster_id=stable_cluster_id(terms[i]), cluster_name=terms[i], distance=0.0
+            label_cluster_id=stable_label_cluster_id(terms[i]), cluster_name=terms[i], distance=0.0
         )
     return out
 
@@ -170,8 +170,13 @@ def rank_clusters(
     by_id: dict[int, dict[str, Any]] = {}
     for term, a in assignments.items():
         bucket = by_id.setdefault(
-            a.cluster_id,
-            {'cluster_id': a.cluster_id, 'cluster_name': a.cluster_name, 'n_items': 0, 'terms': []},
+            a.label_cluster_id,
+            {
+                'label_cluster_id': a.label_cluster_id,
+                'cluster_name': a.cluster_name,
+                'n_items': 0,
+                'terms': [],
+            },
         )
         n = int(counts.get(term, 0))
         bucket['n_items'] += n
@@ -188,7 +193,7 @@ def rank_clusters(
 def cluster_update_doc(assignment: ClusterAssignment, now: str) -> dict[str, Any]:
     """Partial item-document update written for one clustered item."""
     return {
-        CLUSTER_ID_FIELD: int(assignment.cluster_id),
+        CLUSTER_ID_FIELD: int(assignment.label_cluster_id),
         CLUSTER_NAME_FIELD: str(assignment.cluster_name),
         CLUSTER_DISTANCE_FIELD: float(assignment.distance),
         'updated_at': now,
@@ -206,5 +211,5 @@ __all__ = [
     'cluster_update_doc',
     'hash_embed',
     'rank_clusters',
-    'stable_cluster_id',
+    'stable_label_cluster_id',
 ]

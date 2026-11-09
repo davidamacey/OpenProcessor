@@ -125,7 +125,7 @@ class _Progress:
 
 def _run(progress: _Progress) -> Run:
     return Run(
-        opensearch=None, progress=progress, class_id=None, cluster_id=None, item_filter=None,
+        opensearch=None, progress=progress, class_id=None, cluster_uid=None, item_filter=None,
         scope_filter=None,  # type: ignore[arg-type]
     )  # fmt: skip
 

@@ -293,7 +293,7 @@ def _docs() -> dict[str, dict[str, Any]]:
     docs = [
         _item('a1', 1, vlm_confidence='low'),
         _item('a2', 1, detector_class_name='gadget'),
-        _item('a3', 1, cluster_distance=0.5),
+        _item('a3', 1, cluster_score=0.5),
         _item('a4', 1, class_source='vlm_unmatched', class_name=None, class_id=None),
         _item('a5', 1),
         _item('a6', 1, class_validated=True, class_source='human'),

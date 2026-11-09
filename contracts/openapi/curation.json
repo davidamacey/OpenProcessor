@@ -1857,17 +1857,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -1950,7 +1939,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
@@ -2032,17 +2020,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -2125,7 +2102,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
@@ -2202,17 +2178,6 @@
             "description": "Why the job is paused or pausing; null otherwise.",
             "title": "Pause Reason"
           },
-          "peak_vram_mb": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Peak Vram Mb"
-          },
           "pipeline": {
             "title": "Pipeline",
             "type": "string"
@@ -2295,7 +2260,6 @@
           "result",
           "args",
           "pipeline",
-          "peak_vram_mb",
           "stage_durations",
           "eta_seconds",
           "elapsed_seconds",
@@ -4473,11 +4437,6 @@
           "class_name": {
             "title": "Class Name",
             "type": "string"
-          },
-          "cluster_size": {
-            "default": 0,
-            "title": "Cluster Size",
-            "type": "integer"
           },
           "deprecated": {
             "default": false,
@@ -14108,39 +14067,6 @@
                 "type": "null"
               }
             ]
-          },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
           },
           "combine_conflict": {
             "default": false,
@@ -25487,39 +25413,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -29427,39 +29320,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -31058,39 +30918,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -32463,18 +32290,19 @@
         "type": "object"
       },
       "SelectDiverseScope": {
-        "description": "Which crops the selection draws from. Every field optional;\ncombining ``cluster_id`` + ``review_tab`` + ``filters`` intersects\nthem (AND), matching ``GET /curation/crops``'s own filter-combination style.",
+        "description": "Which crops the selection draws from. Every field optional;\ncombining ``cluster_uid`` + ``review_tab`` + ``filters`` intersects\nthem (AND), matching ``GET /curation/crops``'s own filter-combination style.",
         "properties": {
-          "cluster_id": {
+          "cluster_uid": {
             "anyOf": [
               {
-                "type": "integer"
+                "format": "uuid",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Cluster Id"
+            "title": "Cluster Uid"
           },
           "filters": {
             "anyOf": [
@@ -42384,7 +42212,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -42397,7 +42225,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },
@@ -43084,7 +42912,7 @@
     },
     "/curation/projects/{project}/crops/batch_exclude": {
       "post": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nSets ``class_excluded=true`` plus provenance (``excluded_at``,\n``excluded_by``, ``excluded_reason``) and moves the crop out of its\ncandidate bucket (``cluster_id=-2``, the excluded sentinel). The\nresidual-pool fetch, the trainer export, the cluster listing, and\nthe default crop browse all filter ``class_excluded=true`` out, so\nan excluded crop never re-appears in a cluster or training set until\nit's un-excluded.\n\nNon-destructive: the crop document stays in OpenSearch for audit and\nprovenance, and the pre-exclusion validation is\nrecorded (``excluded_prior_*``) so un-exclude can restore them.\n``reason`` defaults to ``'ignore'``; pass a tag like\n``'blurry'`` to record why (e.g. a whole cluster of blurry items).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nSets ``class_excluded=true`` plus provenance (``excluded_at``,\n``excluded_by``, ``excluded_reason``); the crop keeps its place in the\nserving partition. The\nresidual-pool fetch, the trainer export, the cluster listing, and\nthe default crop browse all filter ``class_excluded=true`` out, so\nan excluded crop never re-appears in a cluster or training set until\nit's un-excluded.\n\nNon-destructive: the crop document stays in OpenSearch for audit and\nprovenance, and the pre-exclusion validation is\nrecorded (``excluded_prior_*``) so un-exclude can restore them.\n``reason`` defaults to ``'ignore'``; pass a tag like\n``'blurry'`` to record why (e.g. a whole cluster of blurry items).",
         "operationId": "batch_exclude_crops_curation_projects__project__crops_batch_exclude_post",
         "parameters": [
           {
@@ -43791,7 +43619,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/history": {
       "get": {
-        "description": "The item's class history, oldest first: ``{crop_id, entries}``.\n\nEach entry is the item's class state *before* one write\n(``class_id``, ``class_name``, ``class_source``, ``label_source``,\n``confidence``, ``class_detector*``, ``class_labeler``,\n``class_labeled_at``, ``class_validated``, ``cluster_id``,\n``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``\n(who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and\n``at``. Keys a writer didn't record are ``null``.",
+        "description": "The item's class history, oldest first: ``{crop_id, entries}``.\n\nEach entry is the item's class state *before* one write\n(``class_id``, ``class_name``, ``class_source``, ``label_source``,\n``confidence``, ``class_detector*``, ``class_labeler``,\n``class_labeled_at``, ``class_validated``, the item's ``cluster_*``\nplacement; ``review_dismissed_*`` on discards) plus ``writer``\n(who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and\n``at``. Keys a writer didn't record are ``null``.",
         "operationId": "crop_history_curation_projects__project__crops__crop_id__history_get",
         "parameters": [
           {
@@ -49870,7 +49698,7 @@
     },
     "/curation/projects/{project}/methods": {
       "get": {
-        "description": "Every strategy across every axis (cluster / score / sort / overlay),\nplus the feature flags that gated each entry's status and a real\n``field_coverage`` (exists-count) / ``field_coverage_total`` (pool\nsize) per entry that declares a ``requires_field``. Frontend renders\nonly ``stable``/``experimental`` entries; ``shadow``/``disabled`` are\ncomputed+logged (or not computed at all) but never offered as a\n``?sort=`` value. Frontend also hides an entry whose ``field_coverage``\nis exactly ``0`` (genuinely inert — no data has ever been backfilled)\nwhile still showing one whose coverage is ``None`` (unknown, e.g. a\ntransient OpenSearch failure) — see ``StrategyBar.svelte``'s\n``hasFieldCoverage``.",
+        "description": "Every strategy across every axis (score / sort / overlay),\nplus the feature flags that gated each entry's status and a real\n``field_coverage`` (exists-count) / ``field_coverage_total`` (pool\nsize) per entry that declares a ``requires_field``. Frontend renders\nonly ``stable``/``experimental`` entries; ``shadow``/``disabled`` are\ncomputed+logged (or not computed at all) but never offered as a\n``?sort=`` value. Frontend also hides an entry whose ``field_coverage``\nis exactly ``0`` (genuinely inert — no data has ever been backfilled)\nwhile still showing one whose coverage is ``None`` (unknown, e.g. a\ntransient OpenSearch failure) — see ``StrategyBar.svelte``'s\n``hasFieldCoverage``.",
         "operationId": "get_methods_curation_projects__project__methods_get",
         "parameters": [
           {
@@ -52017,21 +51845,22 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
-              "title": "Cluster Id"
+              "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -52083,7 +51912,7 @@
             }
           },
           {
-            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
             "in": "query",
             "name": "vlm_scope",
             "required": false,
@@ -52102,7 +51931,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
               "title": "Vlm Scope"
             }
           },
@@ -52371,21 +52200,22 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
-              "title": "Cluster Id"
+              "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -52437,19 +52267,19 @@
             }
           },
           {
-            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
+            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_uid and the item filter.",
             "in": "query",
             "name": "embed_missing",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
+              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_uid and the item filter.",
               "title": "Embed Missing",
               "type": "boolean"
             }
           },
           {
-            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
             "in": "query",
             "name": "vlm_scope",
             "required": false,
@@ -52468,7 +52298,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
               "title": "Vlm Scope"
             }
           },
@@ -56349,7 +56179,7 @@
     },
     "/curation/projects/{project}/review/raw_label_clusters": {
       "get": {
-        "description": "Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.\n\nSurfaces the output of ``scripts/curation/cluster_raw_labels.py``\n(field contract: :mod:`src.services.curation.raw_label_clusters`) so\nthe labeler can:\n\n1. Show fine-grained sub-classes the registry doesn't have yet\n   (e.g. \"ford f150\" + \"ford ranger\" rolled up under\n   ``ford_pickup`` → suggested registry parent ``pickup``).\n2. Surface candidate registry promotions ranked by crop volume.\n3. Let curators bulk-relabel a whole cluster at once instead of\n   clicking through individual ``vlm_unmatched`` crops.\n\nThe endpoint runs purely against the configured items index — no clustering\nhappens here, only aggregation. Cluster ids / names are written by\nthe offline script; if no crops have ``vlm_label_cluster_id`` yet\nthe endpoint returns an empty list with a populated ``hint``.\n\nNOTE on route ordering: this endpoint MUST be declared before the\nparameterised ``/review/{tab}`` below — FastAPI dispatches the first\nmatching route, and ``raw_label_clusters`` would otherwise be eaten\nby the ``{tab}`` matcher.\n\nArgs:\n    size: Number of clusters to return (default 50).\n    samples_per_cluster: How many ``vlm_raw_label`` samples to\n        include per cluster (default 5 — enough to read at a glance).\n\nReturns:\n    ``{\"status\": \"ok|empty\", \"clusters\": [{cluster_id, cluster_name,\n    n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``",
+        "description": "Top-N hierarchical clusters of ``vlm_raw_label`` for the labeler UI.\n\nSurfaces the output of ``scripts/curation/cluster_raw_labels.py``\n(field contract: :mod:`src.services.curation.raw_label_clusters`) so\nthe labeler can:\n\n1. Show fine-grained sub-classes the registry doesn't have yet\n   (e.g. \"ford f150\" + \"ford ranger\" rolled up under\n   ``ford_pickup`` → suggested registry parent ``pickup``).\n2. Surface candidate registry promotions ranked by crop volume.\n3. Let curators bulk-relabel a whole cluster at once instead of\n   clicking through individual ``vlm_unmatched`` crops.\n\nThe endpoint runs purely against the configured items index — no clustering\nhappens here, only aggregation. Cluster ids / names are written by\nthe offline script; if no crops have ``vlm_label_cluster_id`` yet\nthe endpoint returns an empty list with a populated ``hint``.\n\nNOTE on route ordering: this endpoint MUST be declared before the\nparameterised ``/review/{tab}`` below — FastAPI dispatches the first\nmatching route, and ``raw_label_clusters`` would otherwise be eaten\nby the ``{tab}`` matcher.\n\nArgs:\n    size: Number of clusters to return (default 50).\n    samples_per_cluster: How many ``vlm_raw_label`` samples to\n        include per cluster (default 5 — enough to read at a glance).\n\nReturns:\n    ``{\"status\": \"ok|empty\", \"clusters\": [{label_cluster_id, cluster_name,\n    n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``",
         "operationId": "review_raw_label_clusters_curation_projects__project__review_raw_label_clusters_get",
         "parameters": [
           {
