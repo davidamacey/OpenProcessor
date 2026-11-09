@@ -20,22 +20,15 @@ module ships no domain-specific class taxonomy or detector weights.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.config import DetectionProfile, RegionStatus, get_region_fields
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
 from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    RegistryDep,
-    images_index,
-    items_index,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
@@ -63,9 +56,14 @@ from src.services.curation.ingest_detector import (
 )
 from src.services.curation.ingest_models import ERROR_KIND_DECODE_FAILED, ERROR_KIND_UNSERVABLE_PATH
 from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.ingest_reads import ingest_summary, known_image_paths
 from src.services.curation.ingest_service_factory import get_ingest_service
 from src.services.curation.open_vocab_ingest import schedule_open_vocab_after_ingest
 from src.utils.file_read import read_files
+
+
+if TYPE_CHECKING:
+    from src.config import DetectionProfile
 
 
 class IngestBatchItem(IngestImageRequest):
@@ -262,46 +260,11 @@ async def ingest_status(
     that ``ingest_run_id`` -- an upload run's own images doc field,
     set by ``POST /ingest/upload``'s optional ``run_id`` form field.
     """
-    query: dict[str, Any] = (
-        {'term': {'ingest_run_id': run_id}} if run_id is not None else {'match_all': {}}
-    )
-    body = {
-        'size': 0,
-        'track_total_hits': True,
-        'query': query,
-        'aggs': {
-            'by_source': {
-                'terms': {'field': 'source', 'size': 64},
-            },
-            # Filter to the last 14 days in the query rather than
-            # date-histogramming the whole index and slicing to [:14] in
-            # Python -- the histogram used to run over every doc ever
-            # indexed just to keep the first 14 desc-sorted buckets.
-            'by_day': {
-                'filter': {'range': {'indexed_at': {'gte': 'now-14d/d'}}},
-                'aggs': {
-                    'days': {
-                        'date_histogram': {
-                            'field': 'indexed_at',
-                            'calendar_interval': 'day',
-                            'order': {'_key': 'desc'},
-                        },
-                    },
-                },
-            },
-        },
-    }
     try:
-        resp = await opensearch.search(index=images_index(), body=body)
+        summary = await ingest_summary(opensearch, run_id)
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    aggs = resp.get('aggregations') or {}
-    return IngestStatusResponse(
-        total=total,
-        by_source=(aggs.get('by_source') or {}).get('buckets', []),
-        by_day=((aggs.get('by_day') or {}).get('days') or {}).get('buckets', []),
-    )
+    return IngestStatusResponse(**summary)
 
 
 def _detector_info(profile: DetectionProfile) -> IngestDetectorInfo | None:
@@ -406,30 +369,16 @@ async def ingest_region_drain(
         check_region_dependencies,
         stall_reason as _stall_reason,
     )
-    from src.services.curation.region_drain import observe_drain
+    from src.services.curation.region_drain import observe_drain, pending_region_counts
     from src.services.detection.profile_registry import region_profile_or_neutral
     from src.services.triton_control import TritonControlService
 
-    fields = get_region_fields()
-    body = {
-        'size': 0,
-        'aggs': {
-            'by_status': {
-                'terms': {'field': fields.status, 'size': 16},
-            },
-        },
-    }
     try:
-        resp = await opensearch.search(index=items_index(), body=body)
+        pending_detection, pending_verification = await pending_region_counts(opensearch)
     except Exception as exc:
         # Never answer zeros on an outage: total_unfinished == 0 is the
         # "worker caught up" signal a walker proceeds on.
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    raw: dict[str, int] = {}
-    for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
-        raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))
-    pending_detection = raw.get(RegionStatus.PENDING_DETECTION, 0)
-    pending_verification = raw.get(RegionStatus.PENDING_VERIFICATION, 0)
     total_unfinished = pending_detection + pending_verification
     verdict = await observe_drain(session, total_unfinished)
 
@@ -482,40 +431,4 @@ async def curation_ingest_path_lookup(
     if not body.image_paths:
         return _PathLookupResponse(known_paths={})
 
-    # OpenSearch terms-query has a default 65,536 limit per call; we
-    # accept up to 10k client-side and chunk internally as a margin.
-    result: dict[str, str] = {}
-    chunk_size = 10_000
-    for i in range(0, len(body.image_paths), chunk_size):
-        chunk = body.image_paths[i : i + chunk_size]
-        resp = await opensearch.search(
-            index=images_index(),
-            body={
-                'size': len(chunk),
-                '_source': ['image_id', 'image_path', 'source_identifier'],
-                'query': {
-                    'bool': {
-                        'should': [
-                            {'terms': {'image_path': chunk}},
-                            {'terms': {'source_identifier': chunk}},
-                        ],
-                        'minimum_should_match': 1,
-                    }
-                },
-            },
-        )
-        chunk_set = set(chunk)
-        for hit in resp.get('hits', {}).get('hits', []):
-            src = hit.get('_source') or {}
-            iid = src.get('image_id')
-            if not iid:
-                continue
-            # Key the result by whichever of the two fields is one of the
-            # requested paths -- a doc found via source_identifier keys
-            # under that identifier, not the (unrelated to the caller)
-            # persisted image_path.
-            for field in ('image_path', 'source_identifier'):
-                p = src.get(field)
-                if p and p in chunk_set:
-                    result[p] = iid
-    return _PathLookupResponse(known_paths=result)
+    return _PathLookupResponse(known_paths=await known_image_paths(opensearch, body.image_paths))
