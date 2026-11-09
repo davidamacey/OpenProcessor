@@ -54,7 +54,7 @@
       {
         "id": "training-promote",
         "title": "Training and Promote",
-        "description": "The API and the trainer exchange only files on the shared /jobs volume, in each project's own directory. The GPU arbiter claims GPUs for the run and releases them afterwards; promote checks the eval gate, writes the project-prefixed model into the repository and loads it into Triton.",
+        "description": "The API enqueues a train job and the trainer claims it from the gpu_train queue; both read and write only that project's job and run rows in PostgreSQL. The GPU arbiter claims GPUs for the run and releases them afterwards; promote checks the eval gate, writes the project-prefixed model into the repository and loads it into Triton.",
         "height": 1300
       }
     ]

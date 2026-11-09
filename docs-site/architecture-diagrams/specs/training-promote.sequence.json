@@ -20,7 +20,7 @@
           "arbiter",
           "jobs"
         ],
-        "note": "The API checks the spec, claims GPUs and writes job.json. It never calls the trainer."
+        "note": "The API checks the spec, claims GPUs and enqueues a train job on the gpu_train queue. It never calls the trainer."
       },
       {
         "id": "train",
@@ -30,7 +30,7 @@
           "jobs",
           "api"
         ],
-        "note": "The trainer owns the run; the API only reads the files it writes."
+        "note": "The trainer owns the run; the API only reads the job and run rows it updates."
       },
       {
         "id": "promote",
@@ -67,8 +67,8 @@
     {
       "id": "jobs",
       "type": "database",
-      "label": "/jobs volume",
-      "sublabel": "shared files"
+      "label": "PostgreSQL",
+      "sublabel": "jobs + training_runs"
     },
     {
       "id": "trainer",
@@ -132,7 +132,7 @@
       "from": "api",
       "to": "jobs",
       "y": 340,
-      "label": "write job.json (project dir)",
+      "label": "enqueue train job (training_runs row)",
       "variant": "emphasis"
     },
     {
@@ -146,14 +146,14 @@
       "from": "trainer",
       "to": "jobs",
       "y": 450,
-      "label": "claim job.json",
+      "label": "claim job (gpu_train queue)",
       "variant": "emphasis"
     },
     {
       "from": "trainer",
       "to": "jobs",
       "y": 490,
-      "label": "status.json every ~5 s",
+      "label": "progress + run log events",
       "variant": "dashed"
     },
     {
@@ -166,13 +166,13 @@
       "from": "api",
       "to": "jobs",
       "y": 566,
-      "label": "read status.json"
+      "label": "read job + run row"
     },
     {
       "from": "trainer",
       "to": "jobs",
       "y": 604,
-      "label": "manifest + ONNX",
+      "label": "manifest stored + ONNX",
       "variant": "emphasis"
     },
     {
@@ -193,7 +193,7 @@
       "from": "api",
       "to": "jobs",
       "y": 730,
-      "label": "eval gate + ONNX"
+      "label": "eval gate (manifest) + ONNX"
     },
     {
       "from": "api",
@@ -252,10 +252,10 @@
   "cards": [
     {
       "dot": "cyan",
-      "title": "Files, not RPC",
+      "title": "Jobs, not RPC",
       "items": [
-        "job.json in; status.json, run.log and manifest.json out, in /jobs/projects/<slug>/",
-        "One trainer serves every project; any trainer speaking this protocol can replace it"
+        "The API enqueues the job; the trainer claims it, heartbeats, and stores the manifest and run log against the training_runs row",
+        "One trainer serves every project; any worker handling the train job can replace it"
       ]
     },
     {
