@@ -12,10 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from curation.assist_loop_fakes import BOXES, ITEMS, FakeVlm, World, drive, make_world
+from curation.assist_loop_fakes import BOXES, ITEMS, FakeVlm, World, WorldRoots, drive, make_world
 from src.domain.loop_stats import required_sample
 from src.domain.loop_tree import child_sample, root_path
-from src.services.curation.assist_loop.partition import ClusterFieldPartition
 from src.services.curation.assist_loop.propagate import propagate_node
 from src.services.curation.class_label import ItemLabel
 from src.services.curation.class_write_guard import class_state_token
@@ -174,7 +173,7 @@ def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None
     result = asyncio.run(
         propagate_node(
             world.os,  # type: ignore[arg-type]
-            ClusterFieldPartition(world.os),  # type: ignore[arg-type]
+            WorldRoots(world),  # type: ignore[arg-type]
             root_key=root_path(ROOT),
             eligible=ids,
             answers={},
@@ -202,7 +201,7 @@ def test_propagation_writes_the_machine_kind_with_the_run_in_its_provenance(
     result = asyncio.run(
         propagate_node(
             world.os,  # type: ignore[arg-type]
-            ClusterFieldPartition(world.os),  # type: ignore[arg-type]
+            WorldRoots(world),  # type: ignore[arg-type]
             root_key=root_path(ROOT),
             eligible=ids,
             answers={},

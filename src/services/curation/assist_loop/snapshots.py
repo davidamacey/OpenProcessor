@@ -50,7 +50,8 @@ class SnapshotStore:
     async def write_root(self, root: RootRef) -> str:
         body = {
             'root': root.key,
-            'cluster_id': root.cluster_id,
+            'display_no': root.display_no,
+            'cluster_uid': root.cluster_uid,
             'version': root.version,
             'members': [
                 {
@@ -69,8 +70,8 @@ class SnapshotStore:
         raw = await asyncio.to_thread(self._read, key)
         try:
             return RootRef(
-                key=raw['root'],
-                cluster_id=int(raw['cluster_id']),
+                display_no=int(raw['display_no']),
+                cluster_uid=str(raw['cluster_uid']),
                 version=raw['version'],
                 members=[
                     MemberState(

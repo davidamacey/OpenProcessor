@@ -17776,7 +17776,7 @@
             "title": "Parent"
           },
           "path": {
-            "description": "r<cluster_id>, then .<child index> per level.",
+            "description": "r<display_no> (the cluster card number), then .<child index> per level.",
             "title": "Path",
             "type": "string"
           },
@@ -18163,11 +18163,11 @@
       "LoopScope": {
         "additionalProperties": false,
         "properties": {
-          "cluster_ids": {
+          "cluster_uids": {
             "anyOf": [
               {
                 "items": {
-                  "type": "integer"
+                  "type": "string"
                 },
                 "type": "array"
               },
@@ -18175,8 +18175,8 @@
                 "type": "null"
               }
             ],
-            "description": "Clusters to work on; null = every candidate cluster of the project.",
-            "title": "Cluster Ids"
+            "description": "Clusters (their `cluster_uid`) of the serving partition to work on; null = every cluster of it.",
+            "title": "Cluster Uids"
           },
           "min_root_size": {
             "default": 40,
@@ -38861,7 +38861,7 @@
         ]
       },
       "post": {
-        "description": "Size an auto-label loop, and queue it unless ``dry_run`` (the default).\n\nThe response is the plan: the clusters and eligible items in scope, the sample each\nneeds, the VLM crops the first draws cost and whether that fits ``budget``, plus the\nendpoints and prompt pack pinned. A start needs ``budget.max_vlm_crops``. Refusals:\n409 ``assist_loop_busy``, ``vlm_not_configured``, ``clustering_running`` (an auto-label\njob is live); 422 ``invalid_request``, ``no_class_names``, ``no_roots``,\n``vlm_external_not_acknowledged`` and the other external-endpoint refusals (the main or\nthe audit endpoint). A loop never overwrites a human,\nvalidated, imported-validated, excluded or holdout item; what it propagates is a machine\nlabel (``assist_propagated``) that rollback can undo.",
+        "description": "Size an auto-label loop, and queue it unless ``dry_run`` (the default).\n\nThe response is the plan: the clusters and eligible items in scope, the sample each\nneeds, the VLM crops the first draws cost and whether that fits ``budget``, plus the\nendpoints and prompt pack pinned. A start needs ``budget.max_vlm_crops``. Refusals:\n409 ``assist_loop_busy``, ``vlm_not_configured``, ``clustering_running`` (a clustering\nrun is live); 422 ``invalid_request``, ``no_class_names``, ``no_roots``,\n``vlm_external_not_acknowledged`` and the other external-endpoint refusals (the main or\nthe audit endpoint). A loop never overwrites a human,\nvalidated, imported-validated, excluded or holdout item; what it propagates is a machine\nlabel (``assist_propagated``) that rollback can undo.",
         "operationId": "create_assist_loop_curation_projects__project__assist_loops_post",
         "parameters": [
           {

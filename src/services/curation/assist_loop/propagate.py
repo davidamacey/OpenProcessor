@@ -10,8 +10,8 @@ with the snapshot class-state tokens, so an item locked, validated, put in the h
 changed by anyone since the snapshot is skipped under OCC and counted.
 
 On a resume (``resuming``) the members that already carry this loop's write are counted as
-written, not read as drift (the write moved them to their class cluster) and not written
-again.
+written and not written again (a class write leaves the item in its cluster of the pinned
+partition, so they are not drift either).
 """
 
 from __future__ import annotations

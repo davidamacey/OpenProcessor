@@ -48,7 +48,7 @@ def alpha_loop(records: dict[str, Any], producer: Any, wakes: Any) -> Iterator[s
         pack=SimpleNamespace(name='pack'),
         pack_revision=1,
         images_per_call=4,
-        roots=[RootSize(10001, 300, 300)],
+        roots=[RootSize(str(uuid.uuid4()), 1, 300, 300)],
     )
 
     async def start() -> str:

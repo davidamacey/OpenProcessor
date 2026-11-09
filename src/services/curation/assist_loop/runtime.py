@@ -19,7 +19,7 @@ from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.assist_loop.audit import AuditJudge, Auditor, AuditParams
 from src.services.curation.assist_loop.driver import LoopDeps, LoopParams
 from src.services.curation.assist_loop.evaluate import VlmAsker
-from src.services.curation.assist_loop.partition import ClusterFieldPartition, PartitionScope
+from src.services.curation.assist_loop.partition import PartitionReader, PartitionScope
 from src.services.curation.autolabel.run_vlm import job_endpoint
 from src.services.curation.class_write_guard import ClassWriteGuard
 from src.services.curation.vlm_class_batch import class_context
@@ -143,7 +143,9 @@ async def build(opensearch: AsyncOpenSearch, record: LoopRecord, budget: LoopBud
     judge = await _resolve(pinned['audit_vlm'], pack) if pinned.get('audit_vlm') else None
     deps = LoopDeps(
         opensearch=opensearch,
-        reader=ClusterFieldPartition(opensearch),
+        reader=PartitionReader.for_run(
+            opensearch, record.sessions, project=run.project_id, pinned=pinned
+        ),
         asker=await _asker(opensearch, run, request, primary, pack),
         auditor=(
             await _auditor(opensearch, record, budget, request, judge, pack.get('revision'))
@@ -164,7 +166,7 @@ async def build(opensearch: AsyncOpenSearch, record: LoopRecord, budget: LoopBud
         on_budget=request.on_budget,
     )
     scope = PartitionScope(
-        cluster_ids=request.scope.cluster_ids, min_root_size=request.scope.min_root_size
+        cluster_uids=request.scope.cluster_uids, min_root_size=request.scope.min_root_size
     )
     return Built(deps, params, scope, request)
 

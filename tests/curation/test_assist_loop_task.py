@@ -100,7 +100,15 @@ def harness(world: World, loop_env: LoopEnv, monkeypatch: pytest.MonkeyPatch) ->
 
     async def build(_os: Any, rec: Any, budget: Any) -> Any:
         lp = loop_params(node_concurrency=1, max_depth=0, on_budget='pause')
-        deps = await build_deps(world, state.vlm, lp, rec, budget, vlm_concurrency=1)
+        deps = await build_deps(
+            world,
+            state.vlm,
+            lp,
+            rec,
+            budget,
+            vlm_concurrency=1,
+            reader=world.reader(loop_env, rec),
+        )
         request = SimpleNamespace()
         return runtime.Built(deps, lp, PartitionScope(None, 40), request)  # type: ignore[arg-type]
 

@@ -1,4 +1,4 @@
-"""The loop's roots carry (partition_id, cluster_uid) and never an integer cluster id."""
+"""The loop's roots carry (partition_id, cluster_uid, display_no) and never an integer cluster id."""
 
 from __future__ import annotations
 
@@ -64,7 +64,10 @@ async def test_the_roots_are_the_serving_partitions_clusters(pg_env, project) ->
     partition, uids = await _serve(project)
     async with async_session_factory()() as session, project_tx(session, project):
         roots = await PartitionReader.roots(session, project=project, target='item')
-    assert roots == [ClusterRoot(partition, uids[0], 7), ClusterRoot(partition, uids[1], 3)]
+    assert roots == [
+        ClusterRoot(partition, uids[0], 7, display_no=1),
+        ClusterRoot(partition, uids[1], 3, display_no=2),
+    ]
 
 
 async def test_a_project_with_no_serving_partition_has_no_roots(pg_env, project) -> None:

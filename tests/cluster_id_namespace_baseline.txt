@@ -13,7 +13,6 @@ src/db/models/config.py	1
 src/db/repos/settings.py	5
 src/domain/history.py	5
 src/domain/label_ops.py	9
-src/domain/loop_tree.py	2
 src/routers/clusters.py	12
 src/routers/curation/_common_models.py	1
 src/routers/curation/_config_test_models.py	2
@@ -36,8 +35,6 @@ src/services/curation/assist/job.py	9
 src/services/curation/assist/models.py	5
 src/services/curation/assist/scope.py	14
 src/services/curation/assist/scope_now.py	3
-src/services/curation/assist_loop/partition.py	29
-src/services/curation/assist_loop/snapshots.py	4
 src/services/curation/auto_label_run.py	13
 src/services/curation/autolabel/embed_stage.py	8
 src/services/curation/autolabel/run_state.py	1

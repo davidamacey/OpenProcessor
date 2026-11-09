@@ -48,7 +48,7 @@ def _prepared(crops: int = 500):
         pack=SimpleNamespace(name='pack'),
         pack_revision=1,
         images_per_call=4,
-        roots=[RootSize(10001, 300, 300)],
+        roots=[RootSize(str(uuid.uuid4()), 1, 300, 300)],
     )
 
 

@@ -40,13 +40,13 @@ async def create_assist_loop(
     The response is the plan: the clusters and eligible items in scope, the sample each
     needs, the VLM crops the first draws cost and whether that fits ``budget``, plus the
     endpoints and prompt pack pinned. A start needs ``budget.max_vlm_crops``. Refusals:
-    409 ``assist_loop_busy``, ``vlm_not_configured``, ``clustering_running`` (an auto-label
-    job is live); 422 ``invalid_request``, ``no_class_names``, ``no_roots``,
+    409 ``assist_loop_busy``, ``vlm_not_configured``, ``clustering_running`` (a clustering
+    run is live); 422 ``invalid_request``, ``no_class_names``, ``no_roots``,
     ``vlm_external_not_acknowledged`` and the other external-endpoint refusals (the main or
     the audit endpoint). A loop never overwrites a human,
     validated, imported-validated, excluded or holdout item; what it propagates is a machine
     label (``assist_propagated``) that rollback can undo."""
-    prepared = await prepare_loop(opensearch, body)
+    prepared = await prepare_loop(opensearch, session, body)
     if body.dry_run:
         return service.dry_run_state(prepared)
     return await service.start_loop(session, prepared, idempotency_key=idempotency_key)

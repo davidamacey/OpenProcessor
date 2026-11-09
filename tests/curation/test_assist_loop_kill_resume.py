@@ -15,14 +15,13 @@ import pytest
 from curation.assist_loop_fakes import (
     ITEMS,
     FakeVlm,
-    Killed,
-    KillSwitch,
     World,
     decisions,
     drive,
     make_world,
     without_times,
 )
+from curation.assist_loop_kill import Killed, KillSwitch
 
 
 if TYPE_CHECKING:

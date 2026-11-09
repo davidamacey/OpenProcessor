@@ -39,6 +39,7 @@ from src.services.curation.assist_loop.node_step import (
     finished,
     leave_unvisited,
 )
+from src.services.curation.assist_loop.partition import PINNED_KIND
 from src.services.curation.assist_loop.progress import level_rows, totals
 from src.services.curation.assist_loop.tree import VLM
 from src.services.curation.assist_loop.undo import undo_loop
@@ -115,11 +116,13 @@ async def _pin_roots(
 ) -> list[RootRef]:
     if any(n.level == 0 for n in record.tree.nodes.values()):
         return await record.root_snapshots()
-    roots = await reader.roots(scope)
+    partition_id = await reader.pin()
+    roots = await reader.snapshots(scope)
     await record.pin_roots(
         roots,
         {
-            'kind': 'cluster_field',
+            'kind': PINNED_KIND,
+            'partition_id': str(partition_id),
             'digest': membership_digest([f'{r.key}:{r.version}' for r in roots]),
             'snapshot_at': now_iso(),
             'roots': len(roots),

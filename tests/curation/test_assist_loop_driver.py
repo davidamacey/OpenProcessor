@@ -127,7 +127,7 @@ def test_the_largest_node_is_scheduled_first_and_the_rest_go_unvisited(
             FakeVlm(world.truth),
             max_crops=cap,
             node_concurrency=8,
-            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+            scope=PartitionScope(cluster_uids=None, min_root_size=10),
         )
     )
 
@@ -175,6 +175,7 @@ def test_cancel_stops_new_work_and_a_resume_finishes_the_same_tree(
     world: World, loop_env: LoopEnv
 ) -> None:
     world.add_cluster(10001, {'car': 60, 'truck': 60, 'bus': 60, 'van': 60}, prefix='a')
+    world.serve(loop_env)
     pristine = world.snapshot()
     reference = asyncio.run(drive(world, loop_env, FakeVlm(world.truth), node_concurrency=8))
     expected = decisions(reference.record)
@@ -267,7 +268,7 @@ def test_a_tight_budget_is_not_spent_on_nodes_it_cannot_finish(
             vlm,
             max_crops=cap,
             node_concurrency=8,
-            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+            scope=PartitionScope(cluster_uids=None, min_root_size=10),
         )
     )
 
@@ -281,6 +282,7 @@ def test_a_tight_budget_is_not_spent_on_nodes_it_cannot_finish(
 def _dissenting_first_draw(world: World, loop_env: LoopEnv, cluster: int, prefix: str) -> FakeVlm:
     """A VLM that contradicts exactly one crop of the first draw of ``prefix``'s root, so the
     node passes only after its dissent top-up. The draw is read off a probe run."""
+    world.serve(loop_env)
     pristine = world.snapshot()
     probe = FakeVlm(world.truth)
     asyncio.run(
@@ -289,7 +291,7 @@ def _dissenting_first_draw(world: World, loop_env: LoopEnv, cluster: int, prefix
             loop_env,
             probe,
             max_depth=0,
-            scope=PartitionScope(cluster_ids=[cluster], min_root_size=10),
+            scope=PartitionScope(cluster_uids=[str(world.uids[cluster])], min_root_size=10),
         )
     )
     world.restore(pristine)
@@ -330,7 +332,7 @@ def test_a_node_that_needs_its_dissent_top_up_does_not_starve_the_next_one(
             max_crops=cap,
             node_concurrency=2,
             max_depth=0,
-            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+            scope=PartitionScope(cluster_uids=None, min_root_size=10),
         )
     )
 
@@ -359,7 +361,7 @@ def test_a_request_limit_admits_nodes_like_the_crop_limit(world: World, loop_env
             node_concurrency=2,
             max_depth=0,
             images_per_call=size,
-            scope=PartitionScope(cluster_ids=None, min_root_size=10),
+            scope=PartitionScope(cluster_uids=None, min_root_size=10),
         )
     )
 
@@ -376,7 +378,7 @@ def test_a_resume_restarts_admitted_nodes_without_deciding_their_admission_again
     world.add_cluster(10002, {'car': 20}, prefix='b')
     ref = loop_env.new_run()
     vlm = FakeVlm(world.truth)
-    scope = PartitionScope(cluster_ids=None, min_root_size=10)
+    scope = PartitionScope(cluster_uids=None, min_root_size=10)
 
     def cancel(_ids: list[str]) -> None:
         ref.cancel = True
