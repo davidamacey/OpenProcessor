@@ -8,12 +8,30 @@ from typing import TYPE_CHECKING, Any
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import box_query
 from src.services.curation import stats_imports as imp
+from src.services.curation.item_filter import item_filter_query
 from src.services.curation.stats_embedding import embedding_aggregations
 
 
 if TYPE_CHECKING:
     from src.config.region_fields import RegionFields
+    from src.services.curation.item_filter import ItemFilter
     from src.services.embedding_spaces.readers import WriteFields
+
+
+class InvalidItemFilterError(ValueError):
+    """The item filter cannot be turned into a query."""
+
+
+class StatsQueryError(Exception):
+    """The stats search against the items index failed."""
+
+
+def filter_query(item_filter: ItemFilter, embedding: WriteFields) -> dict[str, Any]:
+    """The query selecting the items ``item_filter`` names."""
+    try:
+        return item_filter_query(item_filter, embedding=embedding)
+    except ValueError as exc:
+        raise InvalidItemFilterError(str(exc)) from exc
 
 
 def build_dataset_query_body(fields: RegionFields, embedding: WriteFields) -> dict[str, Any]:
@@ -178,4 +196,4 @@ def build_dataset_query_body(fields: RegionFields, embedding: WriteFields) -> di
     }
 
 
-__all__ = ['build_dataset_query_body']
+__all__ = ['InvalidItemFilterError', 'StatsQueryError', 'build_dataset_query_body', 'filter_query']

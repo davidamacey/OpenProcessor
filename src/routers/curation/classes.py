@@ -11,9 +11,9 @@ from src.routers.curation._common import (
     OpenSearchDep,
     _raw_opensearch_dep,
     get_class_registry,
-    items_index,
     router,
 )
+from src.services.curation.class_counts import fetch_class_counts
 from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
@@ -34,61 +34,8 @@ async def list_class_sources() -> dict[str, list[dict[str, str]]]:
 async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     """List every class in the registry, with live counts from the items index."""
     reg = await get_class_registry().snapshot()
-    # Counts per class, aggregated in one round-trip:
-    #   * counts[cid]      = items whose class_id == cid (labeled)
-    #   * validated[cid]   = items with class_id == cid AND class_validated=true
-    counts: dict[int, int] = {}
-    validated: dict[int, int] = {}
-    validated_test_holdout: dict[int, int] = {}
-    validated_excluded: dict[int, int] = {}
     try:
-        body = {
-            'size': 0,
-            'aggs': {
-                'by_class': {
-                    'terms': {'field': 'class_id', 'size': 1000},
-                    'aggs': {
-                        'validated': {
-                            'filter': {'term': {'class_validated': True}},
-                        },
-                        # Trainable = validated minus these two (frozen
-                        # test-holdout, human-excluded) -- see ClassEntry.trainable.
-                        'validated_test_holdout': {
-                            'filter': {
-                                'bool': {
-                                    'filter': [
-                                        {'term': {'class_validated': True}},
-                                        {'term': {'test_holdout': True}},
-                                    ]
-                                }
-                            }
-                        },
-                        'validated_excluded': {
-                            'filter': {
-                                'bool': {
-                                    'filter': [
-                                        {'term': {'class_validated': True}},
-                                        {'term': {'class_excluded': True}},
-                                    ]
-                                }
-                            }
-                        },
-                    },
-                },
-            },
-        }
-        resp = await opensearch.search(index=items_index(), body=body)
-        aggs = resp.get('aggregations') or {}
-        for bucket in aggs.get('by_class', {}).get('buckets', []):
-            cid = int(bucket['key'])
-            counts[cid] = int(bucket.get('doc_count', 0))
-            validated[cid] = int((bucket.get('validated') or {}).get('doc_count', 0))
-            validated_test_holdout[cid] = int(
-                (bucket.get('validated_test_holdout') or {}).get('doc_count', 0)
-            )
-            validated_excluded[cid] = int(
-                (bucket.get('validated_excluded') or {}).get('doc_count', 0)
-            )
+        counts, _aggs = await fetch_class_counts(opensearch)
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
 
@@ -111,28 +58,22 @@ async def list_classes(opensearch: OpenSearchDep) -> ClassListResponse:
     thresholds = dataset_thresholds()
     hard_min = int(thresholds.get('block_below', 0))
 
-    def _trainable(cid: int, n_valid: int) -> int:
-        return n_valid - validated_test_holdout.get(cid, 0) - validated_excluded.get(cid, 0)
-
     return ClassListResponse(
         classes=[
             ClassEntry(
                 class_id=c.class_id,
                 class_name=c.class_name,
                 group=c.group,
-                sample_count=counts.get(c.class_id, 0),
-                validated_count=validated.get(c.class_id, 0),
+                sample_count=counts.count.get(c.class_id, 0),
+                validated_count=counts.validated.get(c.class_id, 0),
                 deprecated=c.deprecated,
                 merged_into=getattr(c, 'merged_into', None),
                 hotkey_letter=getattr(c, 'hotkey_letter', None),
-                adequacy=adequacy(validated.get(c.class_id, 0)),
+                adequacy=adequacy(counts.validated.get(c.class_id, 0)),
                 added_at=getattr(c, 'added_at', None),
                 kind='region' if is_region_class(c) else 'item',
-                trainable=_trainable(c.class_id, validated.get(c.class_id, 0)),
-                trainable_gap=max(
-                    0,
-                    hard_min - _trainable(c.class_id, validated.get(c.class_id, 0)),
-                ),
+                trainable=counts.trainable(c.class_id),
+                trainable_gap=max(0, hard_min - counts.trainable(c.class_id)),
             )
             for c in reg.classes
         ],

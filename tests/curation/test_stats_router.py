@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock
 import pytest
 from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
-from src.routers.curation.stats import _rollup_class_sources, stats_dataset
+from src.routers.curation.stats import stats_dataset
+from src.services.curation.stats_dataset import rollup_class_sources
 from src.services.curation.stats_dataset_query import build_dataset_query_body
 
 
@@ -34,7 +35,7 @@ def test_missing_class_source_bucket_key_lands_in_other() -> None:
         {'key': 'human', 'doc_count': 5},
         {'key': '__none__', 'doc_count': 3},
     ]
-    rollup = _rollup_class_sources(buckets)
+    rollup = rollup_class_sources(buckets)
     assert rollup['by_human'] == 5
     assert rollup['other'] == 3
     assert sum(rollup.values()) == 8

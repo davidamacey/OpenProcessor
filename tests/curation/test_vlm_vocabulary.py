@@ -14,8 +14,8 @@ import pytest
 from _route_helpers import api_routes
 
 from src.domain import ingest_class_sources
-from src.routers.curation.stats import _count_by_proposal, _rollup_class_sources
 from src.services.curation.review_tabs import KNOWN_TABS
+from src.services.curation.stats_dataset import count_by_proposal, rollup_class_sources
 
 
 if TYPE_CHECKING:
@@ -61,8 +61,8 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
     # detector's "no class assigned yet" marker), so this function --
     # which callers only ever feed class_id-scoped buckets -- no longer
     # special-cases them; they fall into 'other' here. The real count is
-    # `_count_by_proposal`, fed the class-less buckets instead (below).
-    assert _rollup_class_sources(buckets) == {
+    # `count_by_proposal`, fed the class-less buckets instead (below).
+    assert rollup_class_sources(buckets) == {
         'by_human': 1,
         'by_vlm': 5,
         'by_classifier': 17,
@@ -84,7 +84,7 @@ def test_count_by_proposal_sums_proposal_and_low_conf_and_default_sources(
         {'key': 'vlm_unmatched', 'doc_count': 3},
         {'key': '__none__', 'doc_count': 2},
     ]
-    assert _count_by_proposal(no_class_buckets) == 23
+    assert count_by_proposal(no_class_buckets) == 23
 
 
 @pytest.fixture(scope='module')

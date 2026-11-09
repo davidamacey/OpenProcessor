@@ -223,15 +223,14 @@ def test_op_write_undone_follows_the_stack() -> None:
 
 
 def test_class_undo_update_matches_per_item_undo(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.routers.curation import label_undo
-    from src.services.curation import class_undo
+    from src.services.curation import class_undo, label_undo
 
     monkeypatch.setattr(class_undo, 'now_iso', lambda: AFTER)
     monkeypatch.setattr('src.domain.history.now_iso', lambda: AFTER)
     for excluded in (False, True):
         doc = {**_written(), 'class_excluded': excluded}
         shared = class_undo.class_undo_update(copy.deepcopy(doc))
-        per_item = label_undo._undo_merger(require_history=True)(copy.deepcopy(doc))
+        per_item = label_undo.undo_merger(require_history=True)(copy.deepcopy(doc))
         assert shared == per_item
         assert shared['class_id_history'][-1]['op_id'] == OP
         assert shared['class_id_history'][-1]['writer'] == HUMAN_UNLABEL_WRITER
