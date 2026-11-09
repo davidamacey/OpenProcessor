@@ -84,6 +84,7 @@ export interface CurationEventSubscribeOptions {
   onEvent: (event: CurationEvent) => void;
   onError?: (err: Event | Error) => void;
   onOpen?: () => void;
+  onResync?: () => void;
 }
 
 export interface CurationEventSubscription {
@@ -116,21 +117,40 @@ interface StreamOptions {
   onFrame: (type: string, payload: unknown) => void;
   onError?: (err: Event | Error) => void;
   onOpen?: () => void;
+  /** The caller's state may be stale: re-read it. Runs on a server `reset`
+   *  (the cursor was too old to replay) and on a reconnect that could not
+   *  carry `Last-Event-ID`. */
+  onResync?: () => void;
 }
 
 /**
- * Open an EventSource and keep it open: on any error close it and reconnect
- * after a capped exponential backoff (the browser retries on its own, but
- * Firefox gives up after a few rapid retries). A successful open resets the
- * backoff so one old blip does not slow a later reconnect. A frame that is
- * not valid JSON is logged and skipped; it never closes the channel. The
- * caller must `close()` on unmount, otherwise it reconnects forever.
+ * Open an EventSource and keep it open. Frames carry an opaque `id`; the
+ * browser's own reconnect (readyState CONNECTING) sends it back as
+ * `Last-Event-ID` and the server replays what was missed, so that path needs
+ * no client work. Only when the browser has given up (readyState CLOSED, which
+ * Firefox does after a few rapid retries) or the server ended the stream with
+ * `reconnect` (this client fell behind) is a new EventSource opened here after
+ * a capped exponential backoff; that one cannot carry the cursor, so it asks
+ * the caller to resync once it is open. A successful open resets the backoff.
+ * A frame that is not valid JSON is logged and skipped; it never closes the
+ * channel. The caller must `close()` on unmount, otherwise it reconnects forever.
  */
 function openStream(opts: StreamOptions): CurationEventSubscription {
   let es: EventSource | null = null;
   let backoff = RECONNECT_INITIAL_MS;
   let closed = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let resyncOnOpen = false;
+
+  function reopenLater(): void {
+    es?.close();
+    es = null;
+    resyncOnOpen = true;
+    reconnectTimer = setTimeout(() => {
+      backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
+      open();
+    }, backoff);
+  }
 
   function open(): void {
     if (closed) return;
@@ -138,7 +158,15 @@ function openStream(opts: StreamOptions): CurationEventSubscription {
     es.onopen = () => {
       backoff = RECONNECT_INITIAL_MS;
       opts.onOpen?.();
+      if (resyncOnOpen) {
+        resyncOnOpen = false;
+        opts.onResync?.();
+      }
     };
+    es.addEventListener('reset', () => opts.onResync?.());
+    es.addEventListener('reconnect', () => {
+      if (!closed) reopenLater();
+    });
     // The backend names each frame with an `event:` line, so EventSource
     // dispatches typed events and `message` never fires.
     for (const type of opts.eventTypes()) {
@@ -153,12 +181,9 @@ function openStream(opts: StreamOptions): CurationEventSubscription {
     es.onerror = (err) => {
       opts.onError?.(err);
       if (closed) return;
-      es?.close();
-      es = null;
-      reconnectTimer = setTimeout(() => {
-        backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
-        open();
-      }, backoff);
+      // CONNECTING: the browser is reconnecting with Last-Event-ID itself.
+      if (es && es.readyState !== EventSource.CLOSED) return;
+      reopenLater();
     };
   }
 
@@ -225,23 +250,11 @@ export function subscribeCurationEvents(
     onFrame: (_type, payload) => opts.onEvent(payload as CurationEvent),
     onError: opts.onError,
     onOpen: opts.onOpen,
+    onResync: opts.onResync,
   });
 }
 
-/**
- * An `onOpen` handler that calls `onResync` on every open after the first.
- * The backend sends no SSE `id:`, so events missed while a connection was
- * down are lost; the caller re-reads what it shows instead.
- */
-export function resyncOnReopen(onResync: (() => void) | undefined): () => void {
-  let opened = false;
-  return () => {
-    if (opened) onResync?.();
-    opened = true;
-  };
-}
-
-/** The project's `config` topic; `onResync` runs after each reconnection. */
+/** The project's `config` topic; `onResync` runs on a server `reset` and after a reconnect that lost the replay cursor. */
 export function subscribeConfigEvents(
   onEvent: (event: CurationEvent) => void,
   onResync?: () => void,
@@ -249,7 +262,7 @@ export function subscribeConfigEvents(
   return subscribeCurationEvents({
     topic: 'config',
     onEvent,
-    onOpen: resyncOnReopen(onResync),
+    onResync,
   });
 }
 
@@ -346,6 +359,7 @@ export interface GlobalEventSubscribeOptions {
   onEvent: (event: ProjectEvent) => void;
   onError?: (err: Event | Error) => void;
   onOpen?: () => void;
+  onResync?: () => void;
 }
 
 const GLOBAL_EVENT_TYPES = [
@@ -377,5 +391,6 @@ export function subscribeGlobalEvents(
     onFrame: (_type, payload) => opts.onEvent(payload as ProjectEvent),
     onError: opts.onError,
     onOpen: opts.onOpen,
+    onResync: opts.onResync,
   });
 }

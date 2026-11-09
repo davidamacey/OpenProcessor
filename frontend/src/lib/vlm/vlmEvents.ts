@@ -6,7 +6,7 @@
  * only source. The payload's `axis` (`registry` | `local_vlm`) is all that
  * is read (question A-4: `name` may not be served on a registry write).
  */
-import { resyncOnReopen, subscribeConfigEvents, subscribeGlobalEvents } from '$lib/sse';
+import { subscribeConfigEvents, subscribeGlobalEvents } from '$lib/sse';
 import type { CurationEvent, ProjectEvent } from '$lib/sse';
 import { isConfigAxisEvent } from '$lib/config/validationIssues';
 
@@ -37,7 +37,7 @@ export function subscribeVlmEvents(
 } {
   const global = subscribeGlobalEvents({
     onEvent: (e) => onEvent(e),
-    onOpen: resyncOnReopen(onResync),
+    onResync,
   });
   const scoped = subscribeConfigEvents(onEvent, onResync);
   return {

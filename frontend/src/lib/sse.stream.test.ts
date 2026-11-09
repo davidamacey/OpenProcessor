@@ -11,8 +11,11 @@ import {
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
+  static CLOSED = 2;
   url: string;
   closed = false;
+  // The browser gave up on this connection (a CONNECTING one is retried by the browser itself).
+  readyState = 2;
   onopen: (() => void) | null = null;
   onerror: ((e: Event) => void) | null = null;
   listeners = new Map<string, (ev: MessageEvent) => void>();
