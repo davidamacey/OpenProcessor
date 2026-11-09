@@ -48,6 +48,18 @@
       />
       Only images whose every object is labeled
     </label>
+    <label
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-zinc-300"
+      title="Keep one item per near-duplicate group. Needs a current near-duplicate run."
+    >
+      <input
+        type="checkbox"
+        data-testid="export-collapse-near-dup"
+        bind:checked={run.collapseNearDuplicates}
+        class="h-4 w-4 cursor-pointer accent-blue-500"
+      />
+      Collapse near-duplicates
+    </label>
     <button
       type="button"
       class="btn btn-primary"

@@ -31,6 +31,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   // has an unlabeled object on it, rather than teaching the detector to
   // treat that object as background.
   let requireFullyLabeled = $state<boolean>(false);
+  let collapseNearDuplicates = $state<boolean>(false);
   // Optional: limit the export to the items a filter matches. Empty sends
   // no `item_filter` at all (the whole dataset).
   const exportFilter = new ItemFilterState();
@@ -91,6 +92,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
       const res = await exportYolo({
         version_tag: versionTag.trim() || undefined,
         require_fully_labeled_images: requireFullyLabeled,
+        collapse_near_duplicates: collapseNearDuplicates,
         item_filter: exportFilter.toBody(),
       });
       exportState = {
@@ -164,6 +166,12 @@ export function createExportRunController(loadAll: () => Promise<void>) {
     },
     set versionTag(v: string) {
       versionTag = v;
+    },
+    get collapseNearDuplicates() {
+      return collapseNearDuplicates;
+    },
+    set collapseNearDuplicates(v: boolean) {
+      collapseNearDuplicates = v;
     },
     get requireFullyLabeled() {
       return requireFullyLabeled;

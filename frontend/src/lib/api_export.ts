@@ -22,6 +22,8 @@ export function exportYolo(
   opts: {
     version_tag?: string;
     require_fully_labeled_images?: boolean;
+    /** Keep one item per near-duplicate group; needs a current near-duplicate run. */
+    collapse_near_duplicates?: boolean;
     /** The shared item filter; sent only when it names something. */
     item_filter?: ItemFilter;
   } = {},
@@ -37,6 +39,7 @@ export function exportYolo(
   if (opts.require_fully_labeled_images) {
     body.require_fully_labeled_images = true;
   }
+  if (opts.collapse_near_duplicates) body.collapse_near_duplicates = true;
   return apiFetch<ExportResult>(
     `${scoped()}/export/yolo`,
     { method: 'POST', body: JSON.stringify(body) },
@@ -55,7 +58,8 @@ export interface SingleClassExportOptions {
   empty_bg_ratio?: number;
   max_positive_images?: number;
   skip_test_split?: boolean;
-  dedup_threshold?: number | null;
+  /** Keep one item per near-duplicate group; needs a current near-duplicate run (else 4xx). */
+  collapse_near_duplicates?: boolean;
   image_mode?: 'whole_frame' | 'item_crop';
   img_max_side?: 640 | 1280;
 }

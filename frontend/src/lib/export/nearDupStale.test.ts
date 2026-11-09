@@ -82,4 +82,19 @@ describe('export', () => {
     expect(toastStore.error).not.toHaveBeenCalled();
     run.dispose();
   });
+
+  it('sends collapse_near_duplicates only when the box is ticked', async () => {
+    vi.mocked(exportYolo).mockResolvedValue({ status: 'success' } as never);
+    const run = createExportRunController(async () => {});
+    await run.runExport();
+    expect(vi.mocked(exportYolo).mock.calls[0]![0]).toMatchObject({
+      collapse_near_duplicates: false,
+    });
+    run.collapseNearDuplicates = true;
+    await run.runExport();
+    expect(vi.mocked(exportYolo).mock.calls[1]![0]).toMatchObject({
+      collapse_near_duplicates: true,
+    });
+    run.dispose();
+  });
 });
