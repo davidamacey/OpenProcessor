@@ -48,7 +48,10 @@ def test_the_registered_task_drains_every_pending_image_once(
     registry = StatefulRegistry()
     monkeypatch.setattr('src.services.curation.open_vocab_run.get_class_registry', lambda: registry)
 
-    fake, service, ids = asyncio.run(ingested_world(tmp_path, monkeypatch, n=3))
+    # ingest resolves the bound project's row (the content key), so seed it before ingesting
+    record = asyncio.run(seed_default_project())
+    with bind_project(record):
+        fake, service, ids = asyncio.run(ingested_world(tmp_path, monkeypatch, n=3))
     for image_id in ids:
         fake.docs(images_index())[image_id]['open_vocab_status'] = 'pending'
     seg = FakeSegmenter()
@@ -70,7 +73,6 @@ def test_the_registered_task_drains_every_pending_image_once(
     monkeypatch.setattr('src.services.detection.segmenter_http.segment_image_http', seg)
 
     # the fake world's indexes are the default project's: the job runs as that project
-    record = asyncio.run(seed_default_project())
     with bind_project(record):
         assert asyncio.run(start_drain()) is True
     [(job_id,)] = sql(pg, "SELECT id FROM jobs WHERE kind = 'open_vocab_drain'")
