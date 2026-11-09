@@ -21,9 +21,9 @@ fixture-driven mock.
 
 Usage:
     npm run test:e2e   # once, to provision e2e/.venv with Playwright
-    e2e/.venv/bin/python scripts/capture_docs_screenshots.py \\
+    e2e/.venv/bin/python frontend/scripts/capture_docs_screenshots.py \\
         --base-url http://localhost:<port-of-a-public-data-instance>
-    # or: OP_CROPWRIGHT_URL=... e2e/.venv/bin/python scripts/capture_docs_screenshots.py
+    # or: OP_CROPWRIGHT_URL=... e2e/.venv/bin/python frontend/scripts/capture_docs_screenshots.py
     # or, from the repo root: make docs-screenshots OP_CROPWRIGHT_URL=...
 
 The capture is read-only: every non-GET/HEAD request is aborted, so a

@@ -1,7 +1,3 @@
-frontend/scripts/capture_docs_screenshots.py	2	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/scripts/docs_screenshot_fixtures.py	3	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/scripts/repro_chromium_network_change.py	1	cites a design note that left the tree; drop the citation when the file is next touched
-frontend/scripts/run-e2e.mjs	1	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/cohorts.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/config/allowLists.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
 frontend/src/lib/annotations/config/parseSlotConfig.ts	2	cites a design note that left the tree; drop the citation when the file is next touched
