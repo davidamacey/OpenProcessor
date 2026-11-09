@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Hardened NVIDIA Triton Inference Server — CVE-scan-gate build.
-# Base: latest NGC Triton (v2.70.0 / 26.06), which already fixes the Aug-2025
+# Base: latest NGC Triton (v2.74.0 / 26.10), which already fixes the Aug-2025
 # HTTP RCE chain (CVE-2025-23310/23311/23317, fixed 25.07) and the Dec-2025
 # DoS pair (CVE-2025-33201/33211, fixed 25.10).
 #
@@ -15,12 +15,12 @@
 #           and serving still work.
 #   Runtime non-root user, cleaned caches.
 #
-# Build:  docker build -f docker/hardened/triton/Dockerfile -t triton-hardened:26.06 .
-# Scan:   trivy image --scanners vuln --severity CRITICAL,HIGH triton-hardened:26.06
+# Build:  docker build -f docker/hardened/triton/Dockerfile -t triton-hardened:26.10 .
+# Scan:   trivy image --scanners vuln --severity CRITICAL,HIGH triton-hardened:26.10
 
 # Bump TRITON_TAG and TRITON_DIGEST together (docs/releases/RELEASE_CHECKLIST.md, base image digests).
-ARG TRITON_TAG=26.06-py3
-ARG TRITON_DIGEST=sha256:58df7489c3f2276f9591d500a012dee03e23d35543ce3c390b4c001e6bf90794
+ARG TRITON_TAG=26.10-py3
+ARG TRITON_DIGEST=sha256:b404f7de5dbeeefe0b17d7d149745a50d0989a25d0d831433b5ba63c716c2fcd
 FROM nvcr.io/nvidia/tritonserver:${TRITON_TAG}@${TRITON_DIGEST}
 
 COPY docker/hardened/triton/requirements-security.txt /tmp/requirements-security.txt
@@ -70,7 +70,7 @@ RUN set -eux; \
     if ldd "$(command -v trtexec)" | grep -q 'not found'; then echo 'SMOKE FAIL: trtexec libs'; exit 1; fi; \
     trtexec --help > /dev/null 2>&1 && echo "smoke: tritonserver + trtexec shared libs resolved"
 
-# Non-root runtime (26.06 keeps /opt/tritonserver root-owned, triton-server user
+# Non-root runtime (the NGC image keeps /opt/tritonserver root-owned, triton-server user
 # reads it via group/other perms). Model repos are mounted read-only at runtime.
 USER triton-server
 

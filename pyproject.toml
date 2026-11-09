@@ -89,7 +89,7 @@ dependencies = [
 # The engine-build toolchain: image-only (requirements-export.txt), installed on top of the
 # runtime set into the export image.
 export = [
-    "tensorrt-cu13==11.1.0.106",
+    "tensorrt-cu13==11.4.0.106",
     "nvidia-modelopt[onnx]==0.48.0",
     "onnx-graphsurgeon==0.6.1",
     "onnxsim==0.8.1",
