@@ -11,6 +11,7 @@ keeps ``created`` vs ``updated`` truthful across that re-run.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -108,18 +109,21 @@ class _Rejected:
     message: str = ''
 
 
-async def _ingest_entry_image(ctx: ImportContext, entry: ScanEntry) -> ImageContext | _Rejected:
+async def _ingest_entry_image(
+    ctx: ImportContext, entry: ScanEntry, stored: dict[str, Any] | None
+) -> ImageContext | _Rejected:
     """Load and ingest the entry's image; a load error, an unreadable image or a
-    declared size that disagrees with the pixels rejects the entry."""
+    declared size that disagrees with the pixels rejects the entry. ``stored`` is the image
+    already known to hold these bytes, when the caller has it."""
     try:
-        data, stored = load_image_bytes(ctx, entry)
+        data, path = load_image_bytes(ctx, entry)
     except ImageLoadError as exc:
         return _Rejected('failed', exc.kind, str(exc))
 
-    known = ctx.seen_images.get(_hash_of(data))
+    known = stored or await _seen_copy(ctx, data)
     img = await ctx.service.ingest_image(
         data,
-        str(stored),
+        str(path),
         ctx.options.source_tag,
         ingest_run_id=ctx.import_id,
         adopt_existing=True,
@@ -202,7 +206,10 @@ def _tally_image(
 
 
 async def _import_one(
-    ctx: ImportContext, entry: ScanEntry, prior: dict[str, Any] | None
+    ctx: ImportContext,
+    entry: ScanEntry,
+    prior: dict[str, Any] | None,
+    stored: dict[str, Any] | None = None,
 ) -> ImportReport:
     report = ImportReport()
     base: dict[str, Any] = {
@@ -218,7 +225,7 @@ async def _import_one(
     if state == 'labeled' and not boxes.items and not boxes.regions:
         state = 'unlabeled'  # every box was skipped: says nothing about the frame
 
-    img = await _ingest_entry_image(ctx, entry)
+    img = await _ingest_entry_image(ctx, entry, stored)
     if isinstance(img, _Rejected):
         return await _reject(ctx, base, img, report)
     created_image = prior.get('image_created') if prior else img.created
@@ -248,7 +255,7 @@ async def _import_one(
             outcome.result.error or '',
             report,
         )
-    ctx.seen_images[img.content_sha256] = {'image_id': img.image_id, 'image_path': img.image_path}
+    ctx.seen_images[img.imohash] = {'image_id': img.image_id, 'image_path': img.image_path}
     if not img.created:
         await _stamp_existing_image(ctx, img.image_id, entry, state)
     await stamp_matched_noops(ctx, plans)
@@ -307,14 +314,20 @@ async def _import_onto_stored(
     if stored is None:
         message = f'images doc {img.image_id} was refused as existing but cannot be read'
         return await _failed(ctx, base, 'bulk_index', message, ImportReport())
-    ctx.seen_images[img.content_sha256] = stored
-    return await _import_one(ctx, entry, prior)
+    return await _import_one(ctx, entry, prior, stored)
 
 
-def _hash_of(data: bytes) -> str:
-    from src.services.near_duplicates.content_key import content_sha256
+async def _seen_copy(ctx: ImportContext, data: bytes) -> dict[str, Any] | None:
+    """The image this import already stored with exactly these bytes, or None. ``imohash`` only
+    picks the candidate; its stored file is compared, so another file that shares the
+    ``imohash`` is never taken for it."""
+    from src.services.near_duplicates.content_key import content_imohash, read_stored_file
 
-    return content_sha256(data)
+    seen = ctx.seen_images.get(content_imohash(data))
+    if seen is None:
+        return None
+    stored = await asyncio.to_thread(read_stored_file, str(seen.get('image_path') or ''))
+    return seen if stored == data else None
 
 
 def _count_plans(

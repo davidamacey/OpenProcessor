@@ -11962,11 +11962,6 @@
       },
       "IngestImageResponse": {
         "properties": {
-          "content_sha256": {
-            "default": "",
-            "title": "Content Sha256",
-            "type": "string"
-          },
           "error": {
             "anyOf": [
               {
@@ -11996,6 +11991,11 @@
           },
           "image_path": {
             "title": "Image Path",
+            "type": "string"
+          },
+          "imohash": {
+            "default": "",
+            "title": "Imohash",
             "type": "string"
           },
           "n_crops": {
@@ -48295,7 +48295,7 @@
     },
     "/curation/projects/{project}/ingest/upload": {
       "post": {
-        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nThe uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(SHA-256 over the uploaded bytes) and one already stored in the project\ncomes back as ``duplicate`` without re-running inference — and since\nthe persisted path is itself content-addressed by that same hash, the\nsame bytes are only ever written to disk once, so a crashed upload run\ncan simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
+        "description": "Ingest a batch of images sent as bytes (multipart), not server-side paths.\n\nFor storage the API container cannot mount (a laptop, a remote NAS, a\nhigh-latency share): the client reads the files and uploads them.\n\nThe uploaded bytes are now persisted server-side, content-addressed,\nunder ``CurationConfig.upload_root`` (see\n:func:`src.services.curation.image_serving.persist_uploaded_bytes`) —\nthat path is stored as ``image_path`` (so thumbnails, the region worker\nand the VLM can all re-open it), and the client's own identifier is kept\nverbatim in the new ``source_identifier`` field. ``POST\n/curation/ingest/path_lookup`` matches on either field.\n\nResume is server-side content dedup: every image is fingerprinted\n(``imohash`` of the uploaded bytes, confirmed by SHA-256 on a match) and\none already stored in the project comes back as ``duplicate`` without\nre-running inference — and since the persisted path is itself\ncontent-addressed by that same hash, the same bytes are only ever\nwritten to disk once, so a crashed upload run can simply be restarted. The whole-frame embedding is computed from the\nuploaded bytes, not by re-opening the path.",
         "operationId": "curation_ingest_upload_curation_projects__project__ingest_upload_post",
         "parameters": [
           {

@@ -45,7 +45,7 @@ class ImportContext:
     stem_resolutions: dict[str, Any] = field(default_factory=dict)
     """OpenProcessor-export stems resolved to existing docs (per chunk)."""
     seen_images: dict[str, dict[str, Any]] = field(default_factory=dict)
-    """content hash -> the image this run already indexed (search may not see it yet)."""
+    """imohash -> the image this run already indexed (search may not see it yet)."""
     enqueue_pending: Callable[[list[str]], Awaitable[None]] | None = None
     """Records imported image ids as near-duplicate pending rows (reason ``added``), awaited
     before the image's documents are written."""

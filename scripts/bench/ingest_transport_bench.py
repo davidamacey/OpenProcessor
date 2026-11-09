@@ -87,14 +87,14 @@ def _result_payload(count: int) -> bytes:
 def serve_http(port: int) -> None:
     import uvicorn
 
-    from src.services.near_duplicates.content_key import content_sha256
+    from src.services.near_duplicates.content_key import content_imohash
 
     app = FastAPI()
 
     @app.post('/ingest')
     async def ingest(images: list[UploadFile] = File(...)) -> Response:  # noqa: B008  # FastAPI File() default
         for upload in images:
-            content_sha256(await upload.read())
+            content_imohash(await upload.read())
         return Response(_result_payload(len(images)), media_type='application/json')
 
     uvicorn.run(
@@ -112,7 +112,7 @@ def serve_http(port: int) -> None:
 def serve_grpc(port: int) -> None:
     import grpc
 
-    from src.services.near_duplicates.content_key import content_sha256
+    from src.services.near_duplicates.content_key import content_imohash
 
     async def stream(request_iterator: Any, _context: Any) -> bytes:
         count = 0
@@ -125,7 +125,7 @@ def serve_grpc(port: int) -> None:
             else:
                 buf += msg[1:]
             if len(buf) == total:
-                content_sha256(bytes(buf))
+                content_imohash(bytes(buf))
                 count += 1
         return _result_payload(count)
 
@@ -134,7 +134,7 @@ def serve_grpc(port: int) -> None:
         offset = 0
         while offset < len(request):
             size = int.from_bytes(request[offset : offset + 4], 'big')
-            content_sha256(request[offset + 4 : offset + 4 + size])
+            content_imohash(request[offset + 4 : offset + 4 + size])
             offset += 4 + size
             count += 1
         return _result_payload(count)

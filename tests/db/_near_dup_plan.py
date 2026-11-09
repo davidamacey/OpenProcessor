@@ -15,7 +15,7 @@ TABLES = {
 UNPROTECTED: set[str] = set()
 
 UNIQUE_CONSTRAINTS = {
-    'uq_image_contents_content', 'uq_image_contents_image', 'uq_near_dup_runs_id_project_id',
+    'uq_image_contents_image', 'uq_near_dup_runs_id_project_id',
     'uq_near_dup_groups_id_project_id', 'uq_near_dup_edges_pair', 'uq_near_dup_decisions_pair',
     'uq_near_dup_pending_member', 'uq_holdout_near_dup_moves_item',
 }  # fmt: skip
@@ -24,15 +24,17 @@ PARTIAL_INDEXES = {
     'uq_near_dup_runs_current',
     'uq_near_dup_runs_building',
     'uq_near_dup_members_rep',
+    'uq_image_contents_sha256',
 }
 
 PLAIN_INDEXES = {
-    'ix_near_dup_runs_recent', 'ix_near_dup_groups_run', 'ix_near_dup_groups_lineage',
-    'ix_near_dup_members_group', 'ix_near_dup_edges_b', 'ix_near_dup_pending_age',
+    'ix_image_contents_imohash', 'ix_near_dup_runs_recent', 'ix_near_dup_groups_run',
+    'ix_near_dup_groups_lineage', 'ix_near_dup_members_group', 'ix_near_dup_edges_b',
+    'ix_near_dup_pending_age',
 }  # fmt: skip
 
 NULLS_NOT_DISTINCT = {
-    'uq_image_contents_content', 'uq_image_contents_image', 'uq_near_dup_runs_current',
+    'uq_image_contents_image', 'uq_image_contents_sha256', 'uq_near_dup_runs_current',
     'uq_near_dup_runs_building', 'uq_near_dup_edges_pair', 'uq_near_dup_pending_member',
 }  # fmt: skip
 

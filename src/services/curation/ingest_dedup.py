@@ -8,6 +8,7 @@ row and the document) is released and the content treated as new, so it can be i
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.clients.optional_doc import get_doc_or_none
@@ -16,10 +17,23 @@ from src.services.near_duplicates import content_key
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import CurationConfig
 
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class Resolved:
+    """One file against the stored contents."""
+
+    existing: dict[str, Any] | None
+    """The images doc view (``image_id``, ``image_path``, ``dataset_split``) that holds these
+    exact bytes, or None."""
+    key: str
+    """What a new image of these bytes derives its id from (:func:`content_key.content_image_id`)."""
 
 
 class IngestDedupMixin:
@@ -28,10 +42,9 @@ class IngestDedupMixin:
     opensearch: Any
     config: CurationConfig
 
-    async def _lookup_image(self, content_sha256: str) -> dict[str, Any] | None:
-        """The stored image (``image_id``, ``image_path``, ``dataset_split``) that holds this
-        content, or None."""
-        return (await self._stored_holders([content_sha256]))[content_sha256]
+    async def _lookup_image(self, imohash: str, data: bytes) -> Resolved:
+        """The stored image that holds these exact bytes (if any) and the key a new one uses."""
+        return (await self._resolve([(imohash, data)]))[0]
 
     async def stored_image(self, image_id: str) -> dict[str, Any] | None:
         """The images doc ``image_id`` (``image_id``, ``image_path``, ``dataset_split``)
@@ -41,33 +54,41 @@ class IngestDedupMixin:
             return None
         return _stored_view(image_id, resp['_source'])
 
-    async def _check_duplicates(self, content_sha256s: list[str]) -> dict[str, str | None]:
-        """Maps each content hash to the image id that holds it (or None)."""
-        held = await self._stored_holders(content_sha256s)
-        return {h: (doc['image_id'] if doc is not None else None) for h, doc in held.items()}
+    async def _check_duplicates(self, entries: Sequence[tuple[str, bytes]]) -> list[str | None]:
+        """The image id that holds each ``(imohash, bytes)`` file's content, or None."""
+        resolved = await self._resolve(entries)
+        return [r.existing['image_id'] if r.existing is not None else None for r in resolved]
 
-    async def _stored_holders(self, content_sha256s: list[str]) -> dict[str, dict[str, Any] | None]:
-        """Maps each content hash to the images doc that holds it (or None).
+    async def _resolve(self, entries: Sequence[tuple[str, bytes]]) -> list[Resolved]:
+        """Each ``(imohash, bytes)`` file against the stored contents.
 
-        One query for the rows and one ``mget`` to confirm their documents exist; a row whose
-        document is gone is released and answers None.
+        One query finds the imohashes the project stores; only those files are compared by
+        SHA-256 (:mod:`~src.services.near_duplicates.content_key`), and one ``mget`` confirms the
+        holders' documents exist. A row whose document is gone is released and answers None.
         """
-        if not content_sha256s:
-            return {}
-        holders = await content_key.find_bound(content_sha256s)
-        if not holders:
-            return dict.fromkeys(content_sha256s)
-        ids = sorted(set(holders.values()))
-        resp = await self.opensearch.mget(index=self.config.images_index, body={'ids': ids})
-        docs = {d['_id']: d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')}
-        orphans = [i for i in ids if i not in docs]
-        if orphans:
-            logger.warning('ingest_content_row_without_image', n=len(orphans))
-            await content_key.release_bound(orphans)
-        return {
-            h: _stored_view(holders[h], docs[holders[h]]) if holders.get(h) in docs else None
-            for h in content_sha256s
-        }
+        if not entries:
+            return []
+        verdicts = await content_key.resolve_many_bound(entries)
+        ids = sorted({v.holder for v in verdicts if v.holder is not None})
+        docs: dict[str, dict[str, Any]] = {}
+        if ids:
+            resp = await self.opensearch.mget(index=self.config.images_index, body={'ids': ids})
+            docs = {
+                d['_id']: d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')
+            }
+            orphans = [i for i in ids if i not in docs]
+            if orphans:
+                logger.warning('ingest_content_row_without_image', n=len(orphans))
+                await content_key.release_bound(orphans)
+        return [
+            Resolved(
+                _stored_view(v.holder, docs[v.holder])
+                if v.holder is not None and v.holder in docs
+                else None,
+                v.key,
+            )
+            for v in verdicts
+        ]
 
 
 def _stored_view(image_id: str, source: dict[str, Any]) -> dict[str, Any]:

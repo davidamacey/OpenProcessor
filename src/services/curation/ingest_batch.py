@@ -10,7 +10,8 @@ of images is fanned out efficiently.
 Triton round-trips and is measurably slower for identical output. It is:
 
 1. **Dedup once, for everyone** — a single query resolves every
-   image's content hash against ``image_contents``. This ONLY resolves against
+   image's ``imohash`` against ``image_contents`` (only files on a match are compared
+   by SHA-256). This ONLY resolves against
    the index, i.e. images already committed before this batch started —
    see :func:`run_ingest_batch` for the separate in-batch dedup pass (D3)
    that also collapses byte-identical repeats *within* one request onto a
@@ -179,6 +180,40 @@ async def _prefill_detections(
     return prefilled_imgs, prefilled_items, prefilled_secondary, frames
 
 
+def _group_batch(
+    hashes: list[str], images: list[bytes], existing_ids: list[str | None]
+) -> tuple[dict[int, int], dict[int, int], list[int]]:
+    """``(batch_dup_of, after_peer, non_dup)`` for one batch.
+
+    D3: ``existing_ids`` only resolves content already committed *before* this batch started --
+    two byte-identical files uploaded together share a content neither has stored yet, and
+    since every image in the batch is ingested concurrently, both would otherwise land as
+    separate 'success' items with 0 duplicates reported. Same-batch repeats collapse onto one
+    representative index per content (the first occurrence) before deciding what needs
+    detection/inference at all (``batch_dup_of``). The imohash is only the candidate key: a
+    repeat is a duplicate when its bytes are equal, and a same-imohash file with other bytes (an
+    imohash collision) is its own image (``after_peer``) that waits for the earlier one to be
+    stored, so the content key sees the collision instead of two writers racing it.
+    """
+    by_hash: dict[str, list[int]] = {}
+    batch_dup_of: dict[int, int] = {}
+    after_peer: dict[int, int] = {}
+    non_dup: list[int] = []
+    for i, h in enumerate(hashes):
+        if existing_ids[i] is not None:
+            continue
+        peers = by_hash.setdefault(h, [])
+        same = next((p for p in peers if images[p] == images[i]), None)
+        if same is not None:
+            batch_dup_of[i] = same
+            continue
+        if peers:
+            after_peer[i] = peers[-1]
+        peers.append(i)
+        non_dup.append(i)
+    return batch_dup_of, after_peer, non_dup
+
+
 async def run_ingest_batch(
     service: CurationIngestService,
     images: list[bytes],
@@ -193,7 +228,7 @@ async def run_ingest_batch(
     """
     from src.services.curation.ingest_gpu_decode import gpu_route
     from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
-    from src.services.near_duplicates.content_key import content_sha256
+    from src.services.near_duplicates.content_key import content_imohash
 
     if len(images) != len(image_paths):
         raise ValueError('images and image_paths must be same length')
@@ -201,29 +236,10 @@ async def run_ingest_batch(
         raise ValueError('source_identifiers must match images length')
 
     summary = IngestSummary()
-    hashes = [content_sha256(b) for b in images]
-    hash_to_existing = await service._check_duplicates(hashes)
+    hashes = [content_imohash(b) for b in images]
+    existing_ids = await service._check_duplicates(list(zip(hashes, images, strict=True)))
 
-    # D3: `hash_to_existing` only resolves hashes already committed to the
-    # index *before* this batch started — two byte-identical files
-    # uploaded together share a hash neither has seen yet, and since every
-    # image in the batch is ingested concurrently below, both would
-    # otherwise land as separate 'success' items with 0 duplicates
-    # reported. Collapse same-batch repeats onto one representative index
-    # per hash (the first occurrence) before deciding what needs
-    # detection/inference at all.
-    first_seen: dict[str, int] = {}
-    batch_dup_of: dict[int, int] = {}
-    non_dup: list[int] = []
-    for i, h in enumerate(hashes):
-        if hash_to_existing.get(h) is not None:
-            continue
-        rep = first_seen.get(h)
-        if rep is None:
-            first_seen[h] = i
-            non_dup.append(i)
-        else:
-            batch_dup_of[i] = rep
+    batch_dup_of, after_peer, non_dup = _group_batch(hashes, images, existing_ids)
 
     # Hold the decoded megabytes this request will bring against the process's in-flight cap,
     # so more clients queue here instead of all decoding at once (#241).
@@ -248,7 +264,8 @@ async def run_ingest_batch(
         # (the same wire field the cross-batch duplicate path uses) instead of
         # re-ingesting byte-identical content.
         rep_futures: dict[int, asyncio.Future[IngestResult]] = {
-            rep: asyncio.get_running_loop().create_future() for rep in set(batch_dup_of.values())
+            rep: asyncio.get_running_loop().create_future()
+            for rep in {*batch_dup_of.values(), *after_peer.values()}
         }
 
         async def _one(
@@ -257,14 +274,14 @@ async def run_ingest_batch(
             # Clients match results to request entries by source_identifier, so
             # every duplicate carries its own, even though image_id is shared.
             source_identifier = source_identifiers[i] if source_identifiers else None
-            existing_id = hash_to_existing.get(image_hash)
+            existing_id = existing_ids[i]
             if existing_id:
                 return record_ingest_result(
                     IngestResult(
                         status='duplicate',
                         image_id=existing_id,
                         image_path=image_path,
-                        content_sha256=image_hash,
+                        imohash=image_hash,
                         source_identifier=source_identifier,
                     )
                 )
@@ -279,7 +296,7 @@ async def run_ingest_batch(
                             status='duplicate',
                             image_id=rep_result.image_id,
                             image_path=image_path,
-                            content_sha256=image_hash,
+                            imohash=image_hash,
                             source_identifier=source_identifier,
                         )
                     )
@@ -287,6 +304,9 @@ async def run_ingest_batch(
                 # guess a duplicate-of relationship against a failed ingest;
                 # give this copy its own real attempt instead (falls back to
                 # ingest_one's own decode/detect since it wasn't prefilled).
+            peer = after_peer.get(i)
+            if peer is not None:
+                await rep_futures[peer]
             async with sem:
                 result = await service.ingest_one(
                     image_bytes,

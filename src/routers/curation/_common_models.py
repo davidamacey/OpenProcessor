@@ -43,7 +43,7 @@ class IngestImageResponse(BaseModel):
     status: Literal['success', 'duplicate', 'failed']
     image_id: str = ''
     image_path: str
-    content_sha256: str = ''
+    imohash: str = ''
     n_crops: int = 0
     n_regions: int = 0
     # Of n_crops: items stored with / without a vector. n_not_embedded mixes policy

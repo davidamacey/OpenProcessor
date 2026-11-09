@@ -23,6 +23,7 @@ _RUN = (
 )
 _PROFILES: dict[uuid.UUID, tuple[uuid.UUID, int]] = {}
 _SHA = 'a' * 64
+_HASH = 'b' * 32
 
 
 def _run(conn, project, level='image', status='current'):
@@ -105,16 +106,19 @@ def test_one_representative_per_group(conn, world) -> None:
         conn.execute(sql, (run, 'm2', group))
 
 
-def test_a_content_key_is_stored_once_per_project(conn, world) -> None:
+def test_an_imohash_may_repeat_and_a_sha256_is_stored_once_per_project(conn, world) -> None:
     sql = (
-        'INSERT INTO image_contents (project_id, content_sha256, image_id, size_bytes) '
-        'VALUES (%s, %s, %s, 1) ON CONFLICT DO NOTHING RETURNING id'
+        'INSERT INTO image_contents (project_id, imohash, content_sha256, image_id, image_path, '
+        'size_bytes) VALUES (%s, %s, %s, %s, %s, 1) ON CONFLICT DO NOTHING RETURNING id'
     )
-    assert conn.execute(sql, (world['a'], _SHA, 'img-1')).fetchone() is not None
-    assert conn.execute(sql, (world['a'], _SHA, 'img-2')).fetchone() is None
-    assert conn.execute(sql, (world['b'], _SHA, 'img-1')).fetchone() is not None
-    assert conn.execute(sql, (None, _SHA, 'img-1')).fetchone() is not None
-    assert conn.execute(sql, (None, _SHA, 'img-3')).fetchone() is None
+    for index, owner in enumerate((world['a'], world['b'], None)):
+        assert conn.execute(sql, (owner, _HASH, None, f'img-{index}', '/p')).fetchone() is not None
+        assert conn.execute(sql, (owner, _HASH, None, f'dup-{index}', '/p')).fetchone() is not None
+        assert conn.execute(sql, (owner, _HASH, _SHA, f'sha-{index}', '/p')).fetchone() is not None
+        assert conn.execute(sql, (owner, _HASH, _SHA, f'again-{index}', '/p')).fetchone() is None
+    assert conn.execute(sql, (world['a'], _HASH, None, 'img-0', '/p')).fetchone() is None
+    with pytest.raises(errors.CheckViolation):
+        conn.execute(sql, (world['a'], 'not-a-hash', None, 'bad', '/p'))
 
 
 def test_a_pair_is_stored_in_order(conn, world) -> None:

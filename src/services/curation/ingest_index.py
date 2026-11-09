@@ -14,7 +14,6 @@ exactly the code a detected one is.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -81,8 +80,9 @@ class ImageContext:
     """The decoded frame; ``None`` when the GPU decode decoded the image (``gpu_frame``)."""
     width: int
     height: int
-    content_sha256: str
-    content_bytes: int
+    imohash: str
+    content: bytes
+    """The file's bytes: the claim compares them with a stored file on an ``imohash`` match."""
     source: str
     source_identifier: str | None = None
     ingest_run_id: str | None = None
@@ -286,7 +286,7 @@ def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
         image_id=holder,
         image_path=ctx.image_path,
         source_identifier=ctx.source_identifier,
-        content_sha256=ctx.content_sha256,
+        imohash=ctx.imohash,
     )
 
 
@@ -307,7 +307,7 @@ async def _write_documents(
     try:
         if image_doc is not None:
             holder = await content_key.claim_bound(
-                ctx.content_sha256, ctx.image_id, ctx.content_bytes
+                ctx.imohash, ctx.image_id, ctx.image_path, ctx.content
             )
             if holder is not None:
                 return _held_elsewhere(ctx, holder)
@@ -322,7 +322,7 @@ async def _write_documents(
             status='failed',
             image_path=ctx.image_path,
             source_identifier=ctx.source_identifier,
-            content_sha256=ctx.content_sha256,
+            imohash=ctx.imohash,
             error=str(exc),
             error_kind=ERROR_KIND_BULK_INDEX,
         )
@@ -367,7 +367,7 @@ async def index_items(
                 source=ctx.source,
                 width=full_w,
                 height=full_h,
-                content_sha256=ctx.content_sha256,
+                imohash=ctx.imohash,
                 now=now,
                 whole_frame_embedding=whole_frame_embedding,
                 source_identifier=ctx.source_identifier,
@@ -470,7 +470,7 @@ async def index_items(
                 image_id=ctx.image_id,
                 image_path=image_path,
                 source_identifier=ctx.source_identifier,
-                content_sha256=ctx.content_sha256,
+                imohash=ctx.imohash,
             )
         )
     await _cache_crops(service, cids, crop_items)
@@ -482,7 +482,7 @@ async def index_items(
             image_id=ctx.image_id,
             image_path=image_path,
             source_identifier=ctx.source_identifier,
-            content_sha256=ctx.content_sha256,
+            imohash=ctx.imohash,
             n_crops=len(crop_docs),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
@@ -499,19 +499,10 @@ async def index_items(
     )
 
 
-def content_image_id(content_sha256: str) -> str:
-    """``sha256(content_sha256)[:32]``: the images-doc id every ingest path (detector
-    ingest and dataset import) derives. It names the content, not the path, so
-    the ``create`` of the images doc stays a second guard behind the ``image_contents``
-    unique key when copies race (#358)."""
-    return hashlib.sha256(content_sha256.encode()).hexdigest()[:32]
-
-
 __all__ = [
     'PARKED_CLUSTER_ID',
     'ImageContext',
     'IndexOutcome',
-    'content_image_id',
     'crop_pil',
     'index_items',
     'residual_placement',

@@ -220,7 +220,7 @@ def _write_images(source_root: Path, count: int) -> list[dict[str, Any]]:
                 'source': SEED_SOURCE,
                 'width': 96,
                 'height': 96,
-                'content_sha256': f'{i:064x}',
+                'imohash': f'{i:032x}',
                 'indexed_at': _utc_now().isoformat(),
             }
         )

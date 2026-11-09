@@ -19,10 +19,9 @@ import pytest
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import get_curation_config
-from src.services.curation.ingest_index import content_image_id
 from src.services.curation.ingest_writer import IngestWriter
 from src.services.near_duplicates import content_key
-from src.services.near_duplicates.content_key import content_sha256
+from src.services.near_duplicates.content_key import content_image_id, content_imohash
 
 
 if TYPE_CHECKING:
@@ -38,11 +37,11 @@ def _hold_writes_until_lookups(
     see another copy's claim or write, as when they land after the lookups."""
     looked_up = asyncio.Event()
     count = 0
-    real_find, real_bulk = content_key.find_bound, os_fake.bulk
+    real_resolve, real_bulk = content_key.resolve_many_bound, os_fake.bulk
 
-    async def find_bound(sha256s: Any) -> Any:
+    async def resolve_many_bound(entries: Any) -> Any:
         nonlocal count
-        found = await real_find(sha256s)
+        found = await real_resolve(entries)
         count += 1
         if count >= n_lookups:
             looked_up.set()
@@ -52,7 +51,7 @@ def _hold_writes_until_lookups(
         await asyncio.wait_for(looked_up.wait(), timeout=10)
         return await real_bulk(**kw)
 
-    monkeypatch.setattr(content_key, 'find_bound', find_bound)
+    monkeypatch.setattr(content_key, 'resolve_many_bound', resolve_many_bound)
     os_fake.bulk = bulk  # type: ignore[method-assign]
 
 
@@ -63,7 +62,7 @@ def _cache_in(svc: CurationIngestService, tmp_path: Path) -> Path:
 
 
 def _assert_stored_once(os_fake: FakeIngestOpenSearch, cache: Path) -> None:
-    hashes = [d['content_sha256'] for d in os_fake.images.values()]
+    hashes = [d['imohash'] for d in os_fake.images.values()]
     assert len(hashes) == len(set(hashes)), 'the same content is stored as two images'
     assert {d['image_id'] for d in os_fake.items.values()} <= set(os_fake.images)
     assert {p.stem for p in (cache / 'default').glob('*.jpg')} == set(os_fake.items)
@@ -92,9 +91,7 @@ async def test_same_content_in_two_concurrent_batches_is_stored_once(
     assert batch_a.summary.crops_indexed + batch_b.summary.crops_indexed == 3
     assert {batch_a.status, batch_b.status} == {'success'}
     (dup,) = [r for r in results if r.status == 'duplicate']
-    (kept,) = [
-        r for r in results if r.status == 'success' and r.content_sha256 == dup.content_sha256
-    ]
+    (kept,) = [r for r in results if r.status == 'success' and r.imohash == dup.imohash]
     assert dup.image_id == kept.image_id
     assert dup.image_id in os_fake.images
     assert (dup.n_crops, dup.crops_created) == (0, 0)
@@ -138,7 +135,7 @@ async def test_an_in_batch_copy_follows_a_representative_that_lost() -> None:
     from it instead of being decoded and detected again."""
     svc, os_fake, triton = _make_service()
     data = _jpeg_bytes(seed=11)
-    image_id = content_image_id(content_sha256(data))
+    image_id = content_image_id(content_imohash(data))
     os_fake.images[image_id] = {'image_id': image_id, 'image_path': '/elsewhere/x.jpg'}
 
     batch = await svc.ingest_batch([data, data], ['/b/x.jpg', '/b/x-copy.jpg'])

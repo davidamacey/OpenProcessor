@@ -1,18 +1,21 @@
-"""The content step: one read of each stored image's file, its SHA-256 into ``image_contents``.
+"""The content step: each stored image's ``imohash`` into ``image_contents``.
 
 Images the 0.6.0 upgrade carried over have no content row, so re-ingesting one of them would
-not be refused as an exact duplicate (RR-10). The step is idempotent: an image that already has
-a row is not read again, and a second image with identical bytes keeps no row of its own (the
-first image holds the content, as at ingest).
+not be refused as an exact duplicate (RR-10). The step reads only the sampled regions of each file
+(``imohash.hashfile``), never the whole of it, and writes no SHA-256: that is computed later, from
+the stored file, the first time another file lands on the same ``imohash``. The step is
+idempotent: an image that already has a row is not read again, and two images with identical bytes
+each keep a row (the lookup treats them as one content).
 """
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import imohash
 
 from src.db.repos import image_contents as repo
 
@@ -28,14 +31,12 @@ if TYPE_CHECKING:
 class ContentCounts:
     recorded: int = 0
     already: int = 0
-    same_bytes_as_another: int = 0
     unreadable: int = 0
     changed: int = 0
 
     def add(self, other: ContentCounts) -> None:
         self.recorded += other.recorded
         self.already += other.already
-        self.same_bytes_as_another += other.same_bytes_as_another
         self.unreadable += other.unreadable
         self.changed += other.changed
 
@@ -43,15 +44,16 @@ class ContentCounts:
         return dict(self.__dict__)
 
 
-def _read_and_hash(path: str) -> tuple[str, int] | None:
-    """The SHA-256 and size of the file's bytes, or None when the file cannot be read."""
+def _sample_hash(path: str) -> tuple[str, int] | None:
+    """The ``imohash`` and size of the file, or None when the file cannot be read."""
     if not path:
         return None
     try:
-        data = Path(path).read_bytes()
+        size = Path(path).stat().st_size
+        digest: str = imohash.hashfile(path, hexdigest=True)
     except OSError:
         return None
-    return hashlib.sha256(data).hexdigest(), len(data)
+    return digest, size
 
 
 async def record_contents(
@@ -64,18 +66,23 @@ async def record_contents(
     for image_id, path in images:
         if image_id in done:
             continue
-        hashed = await asyncio.to_thread(_read_and_hash, path)
+        hashed = await asyncio.to_thread(_sample_hash, path)
         if hashed is None:
             counts.unreadable += 1
             continue
-        sha256, size = hashed
+        digest, size = hashed
         try:
-            holder = await repo.claim_content(session, project_id, sha256, image_id, size)
+            await repo.insert_content(
+                session,
+                project_id,
+                imohash=digest,
+                sha256=None,
+                image_id=image_id,
+                image_path=path,
+                size_bytes=size,
+            )
         except repo.ContentKeyConflictError:
             counts.changed += 1
             continue
-        if holder is None:
-            counts.recorded += 1
-        else:
-            counts.same_bytes_as_another += 1
+        counts.recorded += 1
     return counts

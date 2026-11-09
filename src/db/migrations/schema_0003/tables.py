@@ -43,23 +43,36 @@ def _create_contents() -> None:
     op.create_table(
         'image_contents',
         sa.Column('id', sa.BigInteger(), sa.Identity(always=True), nullable=False),
-        sa.Column('content_sha256', sa.Text(), nullable=False),
+        sa.Column('imohash', sa.Text(), nullable=False),
+        sa.Column('content_sha256', sa.Text(), nullable=True),
         sa.Column('image_id', sa.Text(), nullable=False),
+        sa.Column('image_path', sa.Text(), nullable=False),
         sa.Column('size_bytes', sa.BigInteger(), nullable=False),
         _timestamp('created_at'),
         *_project(nullable=True, name='image_contents'),
-        sa.CheckConstraint("content_sha256 ~ '^[0-9a-f]{64}$'", name=op.f('ck_image_contents_sha256')),
+        sa.CheckConstraint("imohash ~ '^[0-9a-f]{32}$'", name=op.f('ck_image_contents_imohash')),
+        sa.CheckConstraint(
+            "content_sha256 IS NULL OR content_sha256 ~ '^[0-9a-f]{64}$'",
+            name=op.f('ck_image_contents_sha256'),
+        ),
         sa.CheckConstraint('size_bytes >= 0', name=op.f('ck_image_contents_size')),
         sa.PrimaryKeyConstraint('id', name=op.f('pk_image_contents')),
-        sa.UniqueConstraint(
-            'project_id', 'content_sha256', name='uq_image_contents_content',
-            postgresql_nulls_not_distinct=True,
-        ),
         sa.UniqueConstraint(
             'project_id', 'image_id', name='uq_image_contents_image',
             postgresql_nulls_not_distinct=True,
         ),
     )  # fmt: skip
+    op.create_index(
+        'ix_image_contents_imohash', 'image_contents', ['project_id', 'imohash'], unique=False
+    )
+    op.create_index(
+        'uq_image_contents_sha256',
+        'image_contents',
+        ['project_id', 'content_sha256'],
+        unique=True,
+        postgresql_where=sa.text('content_sha256 IS NOT NULL'),
+        postgresql_nulls_not_distinct=True,
+    )
 
 
 def _create_runs() -> None:

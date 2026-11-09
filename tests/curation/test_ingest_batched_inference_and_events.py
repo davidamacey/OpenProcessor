@@ -8,7 +8,7 @@ import pytest
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
-from src.services.near_duplicates.content_key import content_sha256
+from src.services.near_duplicates.content_key import content_imohash
 
 
 class TestBatchedTritonInference:
@@ -55,7 +55,7 @@ class TestBatchedTritonInference:
         the non-duplicate images."""
         dup = _jpeg_bytes(seed=200)
         os_fake = FakeIngestOpenSearch(images={'existing': {'image_id': 'existing'}})
-        content_rows.rows[content_sha256(dup)] = 'existing'
+        content_rows.rows[content_imohash(dup)] = 'existing'
         svc, _, triton = _make_service(opensearch=os_fake, batch_limit=8)
         images = [dup, _jpeg_bytes(seed=201), _jpeg_bytes(seed=202)]
         paths = ['/tmp/dup.jpg', '/tmp/d1.jpg', '/tmp/d2.jpg']

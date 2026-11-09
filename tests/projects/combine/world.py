@@ -25,6 +25,7 @@ from src.config.project_context import current_project
 from src.config.projects import ProjectRecord, new_project_record
 from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace, Target, legacy_names
 from src.services.detection.geometry import crop_id as make_crop_id
+from src.services.near_duplicates.content_key import content_imohash
 from src.services.projects import registry as registry_module
 from src.services.projects.combine import service as combine_service, spaces as combine_spaces
 from src.services.projects.combine.models import CombineRequest
@@ -193,13 +194,13 @@ class World:
         ``cls`` (class name), ``bbox`` and any item-doc field."""
         seed = self.next_seed() if seed is None else seed
         data = jpeg_bytes(seed)
-        content_sha256 = hashlib.sha256(data).hexdigest()
-        name = content_sha256[:32]
+        imohash = content_imohash(data)
+        name = imohash
         path = self.records[slug].resources.upload_root / name[:2] / f'{name}.jpg'
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         # A path-and-hash id, as ingest wrote before #358: one content at two paths is two ids.
-        image_id = hashlib.sha256(f'{path}|{content_sha256}'.encode()).hexdigest()[:32]
+        image_id = hashlib.sha256(f'{path}|{imohash}'.encode()).hexdigest()[:32]
         names = self.registry_ids(slug)
         image_doc: dict[str, Any] = {
             'image_id': image_id,
@@ -207,7 +208,7 @@ class World:
             'source': 'test',
             'width': 32 + seed,
             'height': 32,
-            'content_sha256': content_sha256,
+            'imohash': imohash,
             'indexed_at': NOW,
         }
         if split:

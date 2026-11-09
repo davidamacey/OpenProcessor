@@ -24,6 +24,7 @@ from src.services.curation.ingest_policy import (
     embedding_states,
 )
 from src.services.curation.item_doc import DetectedItem
+from src.services.near_duplicates.content_key import content_image_id
 
 
 if TYPE_CHECKING:
@@ -79,14 +80,14 @@ def _index(policy: IngestPolicy, tmp_path: Any) -> tuple[_Encoder, list[dict[str
     buf = io.BytesIO()
     Image.fromarray(np.zeros((96, 128, 3), dtype=np.uint8)).save(buf, 'JPEG')
     ctx = ImageContext(
-        image_id='img',
+        image_id=content_image_id('h'),
         image_path='/x.jpg',
         created=True,
         pil=Image.open(io.BytesIO(buf.getvalue())).convert('RGB'),
         width=128,
         height=96,
-        content_sha256='h',
-        content_bytes=1,
+        imohash='h',
+        content=b'x',
         source='t',
     )
     items = [DetectedItem(bbox_pixel=(10.0, 10.0, 60.0, 50.0), score=0.9)]

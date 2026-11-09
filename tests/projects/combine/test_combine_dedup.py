@@ -37,14 +37,14 @@ def test_identical_bytes_are_duplicates_and_the_first_source_is_the_priority(
 
 
 def test_a_source_image_fingerprints_by_the_stored_content_key() -> None:
-    # ingest stores ``content_sha256`` (no ``imohash`` any more): reading any other field
+    # ingest stores ``imohash``: reading any other field
     # leaves every fingerprint empty and the dedup silently matches nothing
-    image = SourceImage('i', {'content_sha256': 'abc', 'image_path': '/x.jpg'})
-    assert image.content_sha256 == 'abc'
+    image = SourceImage('i', {'imohash': 'abc', 'image_path': '/x.jpg'})
+    assert image.imohash == 'abc'
     assert image.path == '/x.jpg'
 
 
-def test_equal_content_sha256_with_different_bytes_is_not_a_duplicate(tmp_path: Path) -> None:
+def test_equal_imohash_with_different_bytes_is_not_a_duplicate(tmp_path: Path) -> None:
     # a stored key that disagrees with the file's bytes must not pass as a duplicate.
     a = _file(tmp_path, 'a.jpg', b'one')
     b = _file(tmp_path, 'b.jpg', b'two')
