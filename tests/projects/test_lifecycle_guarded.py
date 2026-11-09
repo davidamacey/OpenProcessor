@@ -39,7 +39,8 @@ def _not_refused_by_the_guard(resp: Any) -> None:
 def test_create_project_writes_the_registry(leak_env: LeakEnv) -> None:
     resp = _client(leak_env).post(API, json={'slug': 'gamma', 'display_name': 'Gamma'})
     _not_refused_by_the_guard(resp)
-    assert resp.status_code in (200, 201), resp.text
+    assert resp.status_code == 202, resp.text
+    assert resp.json()['project']['status'] == 'building'
 
 
 def test_patch_and_archive_write_the_registry(leak_env: LeakEnv) -> None:
