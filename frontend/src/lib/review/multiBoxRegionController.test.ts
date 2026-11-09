@@ -41,9 +41,7 @@ function cropWithBoxes(
     label_validated: false,
     class_validated: false,
     label_confidence: null,
-    cluster_id: null,
-    similarity_to_centroid: null,
-    cluster_subid: null,
+    cluster: null,
     test_holdout: false,
     updated_at: '',
     slots: {

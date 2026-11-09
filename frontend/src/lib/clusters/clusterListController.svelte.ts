@@ -46,9 +46,6 @@ const PAGE_SIZE = 24;
 export function createClusterListController(deps: ClusterListDeps) {
   const { slotInventory } = deps;
 
-  // The served purity thresholds, so the border legend renders the real
-  // pure_min/mixed_min. null until the first page resolves.
-  let purityThresholds = $state<{ pure_min: number; mixed_min: number } | null>(null);
   let appliedSort = $state<string | null>(null);
   let sortOptions = $state<ClusterSortOption[]>([]);
   let flagVocabulary = $state<ClusterFlag[]>([]);
@@ -72,7 +69,6 @@ export function createClusterListController(deps: ClusterListDeps) {
   const clusterPager = createPager<Cluster>({
     fetchPage: async () => {
       const res = await getClusters(clusterQuery(0));
-      if (res.purity_thresholds) purityThresholds = res.purity_thresholds;
       appliedSort = res.sort;
       sortOptions = res.sort_options;
       flagVocabulary = res.flag_vocabulary;
@@ -81,7 +77,7 @@ export function createClusterListController(deps: ClusterListDeps) {
       rememberDetectorClasses(res.items);
       return res;
     },
-    keyOf: (c) => String(c.id),
+    keyOf: (c) => c.uid,
   });
 
   function rememberDetectorClasses(items: Cluster[]): void {
@@ -182,14 +178,14 @@ export function createClusterListController(deps: ClusterListDeps) {
     try {
       const res = await getClusters(clusterQuery(windowStart));
       if (myGeneration !== generation) return;
-      const repsById: Record<number, string[]> = {};
+      const repsById: Record<string, string[]> = {};
       for (const c of res.items) {
         if (c.representative_crop_ids.length > 0)
-          repsById[c.id] = c.representative_crop_ids;
+          repsById[c.uid] = c.representative_crop_ids;
       }
       // Merged in place by id so selection, drag and scroll state survive.
       for (const item of clusterPager.items) {
-        const reps = repsById[item.id];
+        const reps = repsById[item.uid];
         if (reps) item.representative_crop_ids = reps;
       }
     } catch {
@@ -235,9 +231,6 @@ export function createClusterListController(deps: ClusterListDeps) {
   });
 
   return {
-    get purityThresholds() {
-      return purityThresholds;
-    },
     get clusterPager() {
       return clusterPager;
     },

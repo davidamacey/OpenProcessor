@@ -1,12 +1,11 @@
 /**
- * The /clusters/[id] view state: the cluster card, the crop pager and its
- * race guard, the source / subject / clarity / order filters that feed one
- * crop query, the sub-cluster grouping and core cut line, and selection.
+ * The /clusters/[id] view state (the route param is the cluster uid): the
+ * cluster card, the crop pager and its race guard, the source / subject /
+ * clarity / order filters that feed one crop query, and selection.
  */
 import { page } from '$app/state';
 import { getCluster, getClusterFacets } from '$lib/api_clusters';
 import { createExclusionGuard } from '$lib/clusters/clusterController.svelte';
-import { computeCutLine } from '$lib/clusters/cutLine';
 import { SLOW_LOAD_MS } from '$lib/clusters/firstLoad';
 import { createGridGroups } from '$lib/gridGroups.svelte';
 import { createPager } from '$lib/pager.svelte';
@@ -23,22 +22,19 @@ import { keyboardStore } from '$stores/keyboard.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
 
 export function createClusterDetailController() {
-  const clusterIdParam = $derived(page.params.id);
-  const clusterId = $derived(Number(clusterIdParam));
+  const clusterUid = $derived(page.params.id ?? '');
 
   let cluster = $state<Cluster | null>(null);
   // Set when the cluster card read failed but the crops loaded: the header
   // would otherwise show a fabricated unlabeled identity with no hint why.
   let cardError = $state<string | null>(null);
 
-  // The served `cluster_kind` (not an id-equality guess) decides whether
-  // this cluster has a class at all — 'class' clusters carry their own
-  // `dominant_class_id`, and a candidate/unassigned cluster has no class
-  // regardless of what its numeric id happens to collide with. Drives the
-  // validated / labeled / cluster-total banner in the header.
+  // The registry class whose name is the card's served dominant class; drives the
+  // validated / labeled / cluster-total banner in the header. Class identity is the name.
   const clsForCluster = $derived(
-    cluster?.cluster_kind === 'class' && cluster.dominant_class_id != null
-      ? (classesStore.classes.find((c) => c.id === cluster!.dominant_class_id) ?? null)
+    cluster?.dominant_class_name != null
+      ? (classesStore.classes.find((c) => c.name === cluster!.dominant_class_name) ??
+          null)
       : null,
   );
 
@@ -64,8 +60,7 @@ export function createClusterDetailController() {
   // Human-readable cluster name for the header: the served
   // `dominant_class_name` (class-id-display-audit-2026-09-26), falling back
   // to a registry lookup only when the cluster card itself failed to load
-  // (getCluster's null-identity stub). Candidate clusters (>= 10000) have no name yet —
-  // label them so the operator knows it's unlabeled by design, not a bug.
+  // (getCluster's null-identity stub).
   const clusterName = $derived(
     cluster?.dominant_class_name ?? clsForCluster?.name ?? null,
   );
@@ -95,7 +90,7 @@ export function createClusterDetailController() {
   const cropPager = createPager<Crop>({
     fetchPage: async (page) => {
       const query = cropQuery();
-      const res = await getCluster(clusterId, page, pageSize, undefined, query);
+      const res = await getCluster(clusterUid, page, pageSize, undefined, query);
       cluster = res.cluster;
       cardError = res.cardError;
       orderMeta =
@@ -121,12 +116,6 @@ export function createClusterDetailController() {
 
   // Selection set (crop_id) + shift-range anchor.
   const sel = createSelection({ plainClick: 'replace' });
-
-  // Sub-cluster tab (null = all). Backend stores cluster_subid as a
-  // keyword string ("47a", "47b", "47aa", ...). The tab belongs to the
-  // cluster it was picked on, so moving to another cluster reads as "all".
-  let subTabPick = $state<{ cluster: number; subid: string | null } | null>(null);
-  const subTab = $derived(subTabPick?.cluster === clusterId ? subTabPick.subid : null);
 
   // class_source filter (null = all). Drives the chip-group in the
   // header and propagates to {API_PREFIX}/crops?class_source=... so the grid
@@ -253,14 +242,14 @@ export function createClusterDetailController() {
   }
 
   async function loadFacets(): Promise<void> {
-    const id = clusterId;
+    const uid = clusterUid;
     try {
-      const res = await getClusterFacets(id);
-      if (id !== clusterId) return;
+      const res = await getClusterFacets(uid);
+      if (uid !== clusterUid) return;
       facets = res;
       facetsError = null;
     } catch (e) {
-      if (id !== clusterId) return;
+      if (uid !== clusterUid) return;
       facets = null;
       facetsError = apiErrorText(e);
     }
@@ -275,12 +264,10 @@ export function createClusterDetailController() {
       labelValidated: facetValidated,
       sort: detectorSort === 'default' ? null : `detector_confidence:${detectorSort}`,
       classSource: classSourceFilter,
-      clusterSubid: subTab,
       maxRank,
       minBlurRatio,
       // Unless the operator picked an explicit order, ask for the server's
-      // core-first order: nearest to the centroid first, each item serving
-      // its `cluster_is_core`, which is what the cut line reads.
+      // core-first order: best-scored against the partition first.
       order:
         orderMode === 'default'
           ? detectorSort === 'default'
@@ -292,12 +279,12 @@ export function createClusterDetailController() {
   }
 
   async function loadFirst(): Promise<void> {
-    if (!Number.isFinite(clusterId)) return;
+    if (!clusterUid) return;
     await Promise.all([cropPager.loadFirst(), loadFacets()]);
   }
 
   async function loadMore(): Promise<void> {
-    if (!Number.isFinite(clusterId)) return;
+    if (!clusterUid) return;
     await cropPager.loadMore();
   }
 
@@ -323,9 +310,8 @@ export function createClusterDetailController() {
   $effect(() => {
     keyboardStore.setScope('cluster');
     // Track every filter input so a change triggers a fresh load.
-    void clusterId;
+    void clusterUid;
     void classSourceFilter;
-    void subTab;
     void maxRank;
     void minBlurRatio;
     void orderMode;
@@ -338,62 +324,20 @@ export function createClusterDetailController() {
     void loadFirst();
   });
 
-  // The crops on screen. A sub-cluster tab is filtered by the server
-  // (`/crops?cluster_subid=`), so a sub-cluster larger than a page is shown
-  // whole; the loaded page is never filtered here.
+  // The crops on screen: the loaded pages, filtered by the server.
   const filteredCrops = $derived(cropPager.items);
 
-  // The tabs are the ids the server serves on the cluster card, not a guess from the
-  // loaded page.
-  const subClusterIds = $derived(cluster?.subcluster_ids ?? []);
-
-  // When refine has produced sub-clusters and we're viewing "all", group
-  // the grid inline by cluster_subid (contiguous groups + a labeled
-  // separator before each) so the operator sees what refine found at a
-  // glance instead of clicking through sub-cluster tabs one at a time.
-  // Outliers-first (and, Phase 4, diverse mode) wins over sub-cluster
-  // grouping: when ranking by centroid distance, or when the server
-  // already hand-picked a diverse subset/order, we want one flat,
-  // server-ordered list — not a regroup by subid that would scramble it.
-  const groupBySubcluster = $derived(
-    !outliersFirst &&
-      detectorSort === 'default' &&
-      orderMode !== 'diverse' &&
-      subTab == null &&
-      subClusterIds.length > 0,
-  );
-
-  // The rendered grid. `groups` is a real $derived of filteredCrops +
-  // groupBySubcluster, so it can never fall behind cropPager.items; the dnd
-  // handlers below install a *transient*, id-reconciled override for the
-  // duration of a drag and drop it again on finalize. Before this it was a
-  // plain $state snapshot that consider/finalize wrote the dnd library's own
-  // (pre-drop) list into, with nothing to re-derive it afterwards — which is
-  // how a labelled-away crop could get painted back into the grid and stay
-  // there until a hard reload. See src/lib/gridGroups.svelte.ts.
+  // The rendered grid. `groups` is a real $derived of filteredCrops, so it can
+  // never fall behind cropPager.items; the dnd handlers below install a
+  // *transient*, id-reconciled override for the duration of a drag and drop it
+  // again on finalize. See src/lib/gridGroups.svelte.ts.
   const grid = createGridGroups<Crop>({
     source: () => filteredCrops,
-    grouped: () => groupBySubcluster,
     keyOf: (c) => c.id,
-    subidOf: (c) => c.cluster_subid ?? null,
     // eslint-disable-next-line svelte/prefer-svelte-reactivity -- a throwaway id lookup the grid reads synchronously
     liveIds: () => new Set(cropPager.items.map((c) => c.id)),
   });
   const gridGroups = $derived(grid.groups);
-
-  // Cut-line index: the server's own `cluster_is_core` flag (computed
-  // against `{API_PREFIX}/clusters`' `core_similarity_min`, echoed onto
-  // `cluster.core_similarity_min` — no client 0.75 constant) decides which
-  // leading crops are "core". Only meaningful in the single '__all__'
-  // group; suppressed while grouping by sub-cluster (subid order wins).
-  //
-  // The cut is the first item the server serves as `cluster_is_core === false`,
-  // and only in the core-first order requested above.
-  const cutLine = $derived.by(() =>
-    computeCutLine(filteredCrops, orderMode === 'default' && detectorSort === 'default'),
-  );
-  const cutLineIndex = $derived(cutLine.index);
-  const cutLineVisible = $derived(cutLine.visible);
 
   // totalPages was used by the Next/Prev buttons — gone now that infinite scroll
   // owns the pagination. Server-side pageSize stays at 60 per request, but the
@@ -420,11 +364,8 @@ export function createClusterDetailController() {
   }
 
   return {
-    get clusterIdParam() {
-      return clusterIdParam;
-    },
-    get clusterId() {
-      return clusterId;
+    get clusterUid() {
+      return clusterUid;
     },
     get cluster() {
       return cluster;
@@ -452,12 +393,6 @@ export function createClusterDetailController() {
     },
     get sel() {
       return sel;
-    },
-    get subTab() {
-      return subTab;
-    },
-    set subTab(v: string | null) {
-      subTabPick = { cluster: clusterId, subid: v };
     },
     get facets() {
       return facets;
@@ -563,23 +498,11 @@ export function createClusterDetailController() {
     get filteredCrops() {
       return filteredCrops;
     },
-    get subClusterIds() {
-      return subClusterIds;
-    },
-    get groupBySubcluster() {
-      return groupBySubcluster;
-    },
     get grid() {
       return grid;
     },
     get gridGroups() {
       return gridGroups;
-    },
-    get cutLineIndex() {
-      return cutLineIndex;
-    },
-    get cutLineVisible() {
-      return cutLineVisible;
     },
     pageSize,
     BLUR_MAX,

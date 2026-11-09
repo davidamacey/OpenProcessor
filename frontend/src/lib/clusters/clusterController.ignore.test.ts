@@ -102,7 +102,7 @@ describe('ignoreSelected / undoIgnore', () => {
 
     expect(unexcludeCrops).toHaveBeenCalledWith(['a']);
     expect(exclusionGuard.accept(a)).toBe(true);
-    expect(successSpy).toHaveBeenCalledWith('Restored 1. Re-cluster to re-sort them.');
+    expect(successSpy).toHaveBeenCalledWith('Restored 1.');
 
     // A second undoIgnore right after must be a no-op (info toast) --
     // lastExcludedIds must actually have been cleared to [], not left

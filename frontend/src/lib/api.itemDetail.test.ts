@@ -73,11 +73,15 @@ describe('getCrops: include_excluded / item_text params', () => {
       .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 20, crops: [] }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await getCrops({ cluster_id: -2, include_excluded: true, item_text: 'ABC' });
+    await getCrops({
+      cluster_uid: 'uid-1',
+      include_excluded: true,
+      item_text: 'ABC',
+    });
 
     const [url] = fetchMock.mock.calls[0];
     const parsed = new URL(url as string, 'http://x');
-    expect(parsed.searchParams.get('cluster_id')).toBe('-2');
+    expect(parsed.searchParams.get('cluster_uid')).toBe('uid-1');
     expect(parsed.searchParams.get('include_excluded')).toBe('true');
     expect(parsed.searchParams.get('item_text')).toBe('ABC');
   });

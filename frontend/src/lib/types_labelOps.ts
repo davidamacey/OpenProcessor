@@ -30,8 +30,7 @@ export interface LabelOp {
   at: string;
   finished_at: string | null;
   class_name: string | null;
-  target_cluster_id: number | null;
-  target_kind: 'class' | 'candidate' | null;
+  target_cluster_uid: string | null;
   label_source: string | null;
   target: 'crop_ids' | 'selection';
   selected: number;
@@ -42,6 +41,16 @@ export interface LabelOp {
   undone: boolean;
   undoable: boolean;
   last_undo: LabelOpUndoPass | null;
+}
+
+/** `LabelOpAccepted`: the 202 of a queued relabel, move or undo. Follow
+ *  `job_id` at `GET /jobs/{job_id}`; its `result` is `{op_id, updated, conflicts,
+ *  complete}` for a relabel or move. An empty selection is answered with all
+ *  three fields null (nothing was queued). */
+export interface LabelOpAccepted {
+  op_id: string | null;
+  job_id: string | null;
+  status: string | null;
 }
 
 /** `LabelOpList`. */

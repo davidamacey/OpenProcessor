@@ -2,7 +2,7 @@
   /**
    * 2-d embedding-projection scatter plot (curation-strategy plan Phase 5 —
    * curation strategy plan §2.7/§5.6). UMAP-as-visualization
-   * -only overlay: it decorates the existing FAISS-IVF `cluster_id`
+   * -only overlay: it decorates the served cluster (`cluster_uid`)
    * assignment, it never decides one, and it is never fit on a request
    * path — `getVizProjection` only ever serves whatever the last backend
    * rebuild job produced.
@@ -24,12 +24,15 @@
    * - Lasso-select feeds the EXISTING `bulkLabel`/`moveCropsToCluster`
    *   API paths (same functions the cluster-detail page's class-drop and
    *   move-picker already call) — no new mutation endpoint.
-   * - Point color is derived from `cluster_id` only (`colorForCluster` in
+   * - Point color is derived from `cluster_uid` only (`colorForCluster` in
    *   `$lib/embeddingPlot.ts`); this component never computes or
    *   assigns a cluster.
    */
 
-  import { moveCropsToCluster } from '$lib/api_clusters';
+  import { getClusters, moveCropsToCluster } from '$lib/api_clusters';
+  import { runLabelOp } from '$lib/labelOps/runLabelOp';
+  import { undoStore } from '$stores/undo.svelte';
+  import type { Cluster } from '$lib/types';
   import { getThumbUrl } from '$lib/api_cropRead';
   import { bulkLabel } from '$lib/api_cropWrites';
   import { apiErrorText } from '$lib/api_errors';
@@ -59,7 +62,7 @@
   interface Props {
     /** Scope the projection to one cluster. `null` = pool-wide (today's
      *  only caller, `/clusters`, always passes `null`). */
-    clusterId?: number | null;
+    clusterUid?: string | null;
     /** Scope the projection to one class (mirrors `/clusters`'s
      *  `?class=` filter). */
     classId?: number | null;
@@ -81,7 +84,7 @@
   }
 
   let {
-    clusterId = null,
+    clusterUid = null,
     classId = null,
     maxPoints = 4000,
     bannerRequired = false,
@@ -109,7 +112,9 @@
   let lassoPath = $state<ScreenPoint[]>([]);
 
   let assignClassId = $state<number | null>(null);
-  let moveTargetInput = $state<string>('');
+  let moveTargetUid = $state<string>('');
+  let moveCandidates = $state<Cluster[]>([]);
+  let moveCandidatesLoaded = false;
   let busy = $state<boolean>(false);
   let rebuilding = $state<boolean>(false);
   // The rebuild job, while one is running. Polled so the operator sees
@@ -128,7 +133,7 @@
     loadError = null;
     try {
       const res = await getVizProjection({
-        cluster_id: clusterId ?? undefined,
+        cluster_uid: clusterUid ?? undefined,
         class_id: classId ?? undefined,
         max_points: maxPoints,
       });
@@ -143,7 +148,7 @@
   }
 
   $effect(() => {
-    void clusterId;
+    void clusterUid;
     void classId;
     void maxPoints;
     void load();
@@ -156,7 +161,7 @@
   const scaledPoints = $derived.by(() =>
     points.map((p) => {
       const s = scale.toScreen(p.x, p.y);
-      return { ...s, id: p.crop_id, cluster_id: p.cluster_id };
+      return { ...s, id: p.crop_id, cluster_uid: p.cluster_uid };
     }),
   );
 
@@ -225,7 +230,7 @@
       const selected = selectedIds.has(p.id);
       ctx.beginPath();
       ctx.arc(p.x, p.y, selected ? SELECTED_RADIUS : POINT_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = colorForCluster(p.cluster_id);
+      ctx.fillStyle = colorForCluster(p.cluster_uid);
       ctx.globalAlpha = selected || selectedIds.size === 0 ? 0.9 : 0.25;
       ctx.fill();
       if (selected) {
@@ -272,12 +277,11 @@
     const cls = classesStore.classes.find((c) => c.id === assignClassId);
     busy = true;
     try {
-      const res = await bulkLabel(ids, assignClassId);
-      toastStore.success(
-        `Labeled ${res.updated ?? ids.length} → ${cls?.name ?? assignClassId}.`,
-      );
-      // bulkLabel doesn't move cluster_id, so the points' positions/colors
-      // are unaffected — just clear the selection, no reload needed.
+      const out = await runLabelOp(await bulkLabel(ids, assignClassId));
+      undoStore.recordLabelOp(out.opId, ids);
+      toastStore.success(`Labeled ${out.updated} → ${cls?.name ?? assignClassId}.`);
+      // A label does not move an item between clusters, so the points' positions
+      // and colors are unaffected — just clear the selection, no reload needed.
       clearSelection();
     } catch (e) {
       toastStore.error(`Label failed: ${apiErrorText(e)}`);
@@ -286,17 +290,30 @@
     }
   }
 
+  // The move target must be a cluster of the serving partition: offer the served cards.
+  async function loadMoveCandidates(): Promise<void> {
+    if (moveCandidatesLoaded) return;
+    moveCandidatesLoaded = true;
+    try {
+      moveCandidates = (await getClusters({ per_cluster: 0 })).items;
+    } catch (e) {
+      moveCandidatesLoaded = false;
+      toastStore.error(`Could not load the clusters: ${apiErrorText(e)}`);
+    }
+  }
+
   async function moveSelectedToCluster(): Promise<void> {
-    const target = Number(moveTargetInput);
-    if (!Number.isFinite(target) || target < 0 || selectedIds.size === 0 || busy) return;
+    if (moveTargetUid === '' || selectedIds.size === 0 || busy) return;
     const ids = [...selectedIds];
+    const target = moveTargetUid;
     busy = true;
     try {
-      const res = await moveCropsToCluster(ids, target);
-      toastStore.success(`Moved ${res.updated ?? ids.length} → cluster #${target}.`);
+      const out = await runLabelOp(await moveCropsToCluster(ids, target));
+      undoStore.recordLabelOp(out.opId, ids);
+      toastStore.success(`Moved ${out.updated} → cluster ${target.slice(0, 8)}.`);
       clearSelection();
-      moveTargetInput = '';
-      // Moving changes cluster_id, which this plot colors by — reload so
+      moveTargetUid = '';
+      // Moving changes the cluster, which this plot colors by — reload so
       // the moved points render with their new color/bucket.
       await load();
     } catch (e) {
@@ -456,18 +473,22 @@
       <span class="mx-1 h-4 w-px bg-zinc-700"></span>
       <label class="flex items-center gap-1 text-zinc-400">
         move to cluster
-        <input
-          type="number"
-          min="0"
-          step="1"
-          bind:value={moveTargetInput}
-          class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-100"
-          placeholder="id"
-        />
+        <select
+          bind:value={moveTargetUid}
+          onfocus={() => void loadMoveCandidates()}
+          class="w-40 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-zinc-100"
+        >
+          <option value="">— cluster —</option>
+          {#each moveCandidates as c (c.uid)}
+            <option value={c.uid}>
+              {c.uid.slice(0, 8)} · {c.dominant_class_name ?? 'unlabeled'}
+            </option>
+          {/each}
+        </select>
       </label>
       <button
         type="button"
-        disabled={busy || moveTargetInput === ''}
+        disabled={busy || moveTargetUid === ''}
         class="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
         onclick={() => void moveSelectedToCluster()}
       >
@@ -542,20 +563,20 @@
       {/if}
     </div>
     {#if points.length > 0}
-      <!-- What the colors mean. Color = cluster id; the biggest
+      <!-- What the colors mean. Color = cluster; the biggest
            clusters in this projection are listed. -->
       <div
         class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-400"
         data-testid="embedding-legend"
       >
         <span class="text-zinc-500">Color = cluster:</span>
-        {#each legendEntries(points) as e (e.clusterId ?? 'none')}
+        {#each legendEntries(points) as e (e.clusterUid ?? 'none')}
           <span class="flex items-center gap-1">
             <span
               class="inline-block h-2.5 w-2.5 rounded-full"
               style:background-color={e.color}
             ></span>
-            {e.clusterId == null ? 'no cluster' : `#${e.clusterId}`}{e.className
+            {e.clusterUid == null ? 'no cluster' : e.clusterUid.slice(0, 8)}{e.className
               ? ` ${e.className}`
               : ''}
             <span class="text-zinc-600">({e.count})</span>

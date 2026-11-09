@@ -1,17 +1,17 @@
 /**
  * The /clusters/[id] actions: class assignment and advance, the M-key move
- * picker, flag / ignore / refine, the drag-and-drop handlers and
+ * picker, flag / ignore, the drag-and-drop handlers and
  * every keyboard action. Optimistic writes go through the shared
  * `createClusterActionController`; the move-picker state stays together
  * here with the drag set it races against.
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
-import { refineCluster } from '$lib/api_clusters';
+import { getClusters } from '$lib/api_clusters';
 import { flagNeedsNewClass, type ExcludeReason } from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
 import { createClusterActionController } from '$lib/clusters/clusterController.svelte';
 import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
-import type { Crop } from '$lib/types';
+import type { Cluster, Crop } from '$lib/types';
 import { dropOnClassStore } from '$stores/dropOnClass.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { keymapStore } from '$stores/keymap.svelte';
@@ -25,26 +25,19 @@ export function createClusterDetailActions(view: ClusterDetailController) {
   let confirmClassId = $state<number | null>(null);
 
   // ---- Move/DnD state ----------------------------------------------------
-  // Recent target cluster ids the labeler has typed in this session (LRU 8).
-  let recentTargets = $state<number[]>([]);
-  // The grid is rendered as one dndzone PER sub-cluster group so the
-  // refine (AHC) delineation can show headers between groups without
-  // putting non-item elements inside a dndzone (svelte-dnd-action maps
-  // each zone's direct children 1:1 to its items array — interleaved
-  // separators break that and the drag). When not grouping, there's a
-  // single '__all__' group == the whole cluster. Each group.items is a
-  // separate mutable array the dnd action shuffles during a drag.
-  //
-  // The grouping itself is DERIVED from the pager (see gridGroups below), not
+  // Recent target cluster uids the labeler picked in this session (LRU 8).
+  let recentTargets = $state<string[]>([]);
+  // The grid's rendered list is DERIVED from the pager (see gridGroups below), not
   // a snapshot the dnd handlers own — see gridGroups.svelte.ts for why that
   // distinction is the whole fix for "moved crops flicker back and stay".
-  // Declared after filteredCrops/groupBySubcluster, which it reads.
   // Tracks the in-flight drag's payload (one or many crops). Set on dragStart.
   let dragIds = $state<string[]>([]);
-  // Inline cluster-picker (opened by M-key) state.
+  // Cluster picker (opened by M-key): the served cards, the chosen cluster uid.
   let movePickerOpen = $state<boolean>(false);
   let movePickerValue = $state<string>('');
-  let movePickerInput = $state<HTMLInputElement | null>(null);
+  let movePickerInput = $state<HTMLSelectElement | null>(null);
+  let moveCandidates = $state<Cluster[]>([]);
+  let moveCandidatesError = $state<string | null>(null);
 
   // Action controller (see clusterController.svelte.ts) — owns every
   // optimistic mutation below; shares `exclusionGuard` (declared next to
@@ -62,8 +55,8 @@ export function createClusterDetailActions(view: ClusterDetailController) {
       dragIds = ids;
     },
     getVisibleCrops: () => view.filteredCrops,
-    getClusterId: () => view.clusterId,
-    rememberTarget: (id) => rememberTarget(id),
+    getClusterUid: () => view.clusterUid,
+    rememberTarget: (uid) => rememberTarget(uid),
     loadFirst,
   });
 
@@ -108,10 +101,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     }
   }
 
-  // In-flight guards so the operator gets feedback and can't double-fire
-  // these long-running cluster ops.
-  let refining = $state<boolean>(false);
-
   // -- Ignore / exclude --------------------------------------------------
   // Excluded crops drop out of training + clustering (reversible). Actual
   // request + excludedCropIds claim/release + last-batch bookkeeping now
@@ -130,22 +119,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
   async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
     if (sel.size > 0) ignoreMenuOpen = false;
     await controller.ignoreSelected(reason);
-  }
-
-  async function refine(): Promise<void> {
-    if (refining) return;
-    refining = true;
-    try {
-      const res = await refineCluster(view.clusterId);
-      toastStore.success(`Refine produced ${res.n_subclusters ?? 0} sub-clusters.`);
-      // A refine renames every sub-cluster, so the tab that was open means nothing now.
-      view.subTab = null;
-      await loadFirst();
-    } catch (e) {
-      toastStore.error(`Refine failed: ${apiErrorText(e)}`);
-    } finally {
-      refining = false;
-    }
   }
 
   async function confirmSelected(): Promise<void> {
@@ -178,22 +151,30 @@ export function createClusterDetailActions(view: ClusterDetailController) {
 
   // ---------------- move (DnD + hotkey) ----------------
 
-  function rememberTarget(id: number): void {
-    const next = [id, ...recentTargets.filter((x) => x !== id)].slice(0, 8);
-    recentTargets = next;
+  function rememberTarget(uid: string): void {
+    recentTargets = [uid, ...recentTargets.filter((x) => x !== uid)].slice(0, 8);
   }
 
   // moveCropIds (the excludedCropIds claim/release + conflict resync +
   // revert-on-failure) now lives in clusterController.svelte.ts.
 
-  function openMovePicker(): void {
+  async function openMovePicker(): Promise<void> {
     if (sel.size === 0) {
       toastStore.warn('Select crops to move first.');
       return;
     }
     movePickerValue = '';
+    moveCandidatesError = null;
     movePickerOpen = true;
     queueMicrotask(() => movePickerInput?.focus());
+    try {
+      // The target must be a cluster of the serving partition: offer the served cards.
+      const res = await getClusters({ per_cluster: 0 });
+      moveCandidates = res.items.filter((c) => c.uid !== view.clusterUid);
+    } catch (e) {
+      moveCandidates = [];
+      moveCandidatesError = apiErrorText(e);
+    }
   }
 
   function cancelMovePicker(): void {
@@ -202,18 +183,12 @@ export function createClusterDetailActions(view: ClusterDetailController) {
   }
 
   async function confirmMovePicker(): Promise<void> {
-    const id = Number(movePickerValue);
-    // A negative (or otherwise invalid-as-a-cluster-id) value is no
-    // longer rejected client-side — the server owns that rule and
-    // returns its own 400 detail (see moveCropIds/M10), which the
-    // toast then shows verbatim. Only a genuinely non-numeric entry is
-    // caught here, since NaN can't even be sent as a JSON int.
-    if (!Number.isFinite(id)) {
-      toastStore.error('Cluster id must be a number.');
+    if (!movePickerValue) {
+      toastStore.error('Pick a cluster to move to.');
       return;
     }
     movePickerOpen = false;
-    await controller.moveCropIds([...sel.ids], id);
+    await controller.moveCropIds([...sel.ids], movePickerValue);
   }
 
   /**
@@ -260,7 +235,7 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     // Adopting it is exactly how a labelled-away crop got painted back into
     // its old slot. Nothing here is worth keeping either way: real label RPCs
     // fire from the sidebar's finalize, and dropping into another grid
-    // sub-group has no semantic meaning (all groups share cluster_id).
+    // a drop inside the grid has no semantic meaning.
     grid.reset();
     if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ANOTHER) {
       // The crop landed in the sidebar zone. The ClassSidebar finalize
@@ -341,7 +316,7 @@ export function createClusterDetailActions(view: ClusterDetailController) {
       sel.anchorId = ids[next]!;
       if (next === ids.length - 1 && cropPager.hasMore) void loadMore();
     });
-    reg('cluster.move', openMovePicker);
+    reg('cluster.move', () => void openMovePicker());
     reg('cluster.cancel', () => {
       if (movePickerOpen) {
         cancelMovePicker();
@@ -389,11 +364,17 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     get movePickerInput() {
       return movePickerInput;
     },
-    set movePickerInput(v: HTMLInputElement | null) {
+    set movePickerInput(v: HTMLSelectElement | null) {
       movePickerInput = v;
     },
-    get refining() {
-      return refining;
+    get moveCandidates() {
+      return moveCandidates;
+    },
+    get moveCandidatesError() {
+      return moveCandidatesError;
+    },
+    get recentTargets() {
+      return recentTargets;
     },
     get ignoreMenuOpen() {
       return ignoreMenuOpen;
@@ -407,7 +388,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     kc,
     flagSelectedForNewClass,
     ignoreSelected,
-    refine,
     confirmSelected,
     openMovePicker,
     cancelMovePicker,

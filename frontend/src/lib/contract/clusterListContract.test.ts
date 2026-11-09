@@ -75,7 +75,7 @@ describe('cluster list contract', () => {
     );
     expect(
       keys<keyof ClusterFacets>({
-        cluster_id: true,
+        cluster_uid: true,
         total: true,
         detector_classes: true,
         class_sources: true,
@@ -89,7 +89,7 @@ describe('cluster list contract', () => {
 
   it('the facets route exists', () => {
     expect(
-      S.paths['/curation/projects/{project}/clusters/{cluster_id}/facets'],
+      S.paths['/curation/projects/{project}/clusters/{cluster_uid}/facets'],
     ).toBeDefined();
   });
 });

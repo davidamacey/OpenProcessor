@@ -96,7 +96,7 @@ describe('region gallery filter reload', () => {
   it('control: leaving a selected bucket refreshes the cluster grid', async () => {
     const gallery = wire();
     await vi.advanceTimersByTimeAsync(1000);
-    gallery.openCluster(7);
+    gallery.openCluster('uid-7');
     flushSync();
     await vi.advanceTimersByTimeAsync(0);
     vi.mocked(getRegionClusters).mockClear();

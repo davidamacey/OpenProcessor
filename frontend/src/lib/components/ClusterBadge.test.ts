@@ -5,8 +5,8 @@
  * scan rather than a mount harness). This asserts the two contractual
  * behaviors the global-search feature (docs: /clusters search-mode plan)
  * depends on:
- *  - the amber "Unlabeled #{id}" fallback when there's no dominant class
- *  - navigation to `/clusters/{id}` on click, via `goto`, not a raw <a>
+ *  - the amber "Unlabeled {uid}" fallback when there's no dominant class
+ *  - navigation to `/clusters/{uid}` on click, via `goto`, not a raw <a>
  *    (so it composes inside the absolutely-positioned overlay without a
  *    full page reload)
  */
@@ -25,18 +25,18 @@ function read(rel: string): string {
 describe('ClusterBadge.svelte', () => {
   const src = read('./ClusterBadge.svelte');
 
-  it('renders an amber "Unlabeled #{id}" variant when dominantClassName is null', () => {
-    expect(src).toMatch(/Unlabeled #\{clusterId\}/);
+  it('renders an amber "Unlabeled {uid}" variant when dominantClassName is null', () => {
+    expect(src).toMatch(/Unlabeled \{shortUid\}/);
     expect(src).toMatch(/amber/);
   });
 
-  it('renders "#{id} · {dominant_class_name}" in the labeled case', () => {
-    expect(src).toMatch(/#\{clusterId\} · \{dominantClassName\}/);
+  it('renders "{short uid} · {dominant_class_name}" in the labeled case', () => {
+    expect(src).toMatch(/\{shortUid\} · \{dominantClassName\}/);
   });
 
   it('navigates via goto, not a raw anchor tag', () => {
     expect(src).toMatch(
-      /goto\(resolve\(projectHref\(`\/clusters\/\$\{clusterId\}`\)\)\)/,
+      /goto\(resolve\(projectHref\(`\/clusters\/\$\{encodeURIComponent\(clusterUid\)\}`\)\)\)/,
     );
     expect(src).not.toMatch(/<a\s/);
   });

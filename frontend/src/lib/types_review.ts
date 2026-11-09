@@ -94,7 +94,7 @@ export interface SearchCrop extends Crop {
  * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/region `text`.
  */
 export interface SelectDiverseScope {
-  cluster_id?: number | null;
+  cluster_uid?: string | null;
   review_tab?: string | null;
   filters?: Record<string, unknown>;
 }

@@ -16,6 +16,7 @@ import {
   type ImageSearchQuery,
 } from '$lib/api_cropRead';
 import { bulkLabel, excludeCrops, unexcludeCrops } from '$lib/api_cropWrites';
+import { runLabelOp } from '$lib/labelOps/runLabelOp';
 import { ApiError, apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
 import { projectHref } from '$lib/projectPaths';
@@ -106,7 +107,9 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     void ensureClusterMeta([
       // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedupe consumed synchronously
       ...new Set(
-        res.items.map((it) => it.cluster_id).filter((id): id is number => id != null),
+        res.items
+          .map((it) => it.cluster?.uid)
+          .filter((uid): uid is string => uid != null),
       ),
     ]);
   }
@@ -173,7 +176,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
   });
 
   // ---------------- Ignored bucket (G7) ----------------
-  // Excluded crops (`class_excluded=true`, cluster_id=-2) — a mode swap
+  // Excluded crops (`class_excluded=true`; they keep their cluster) — a mode swap
   // over the card grid, same pattern as searchModeActive above. The
   // default crop browse filters class_excluded out, so `include_excluded`
   // is required to see them at all.
@@ -188,7 +191,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     ignoredLoading = true;
     try {
       const res = await getCrops({
-        cluster_id: -2,
+        review_status: ['excluded'],
         include_excluded: true,
         limit: 200,
       });
@@ -275,22 +278,22 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
   // the card grid (getClusters({}) returns every cluster, up to 2000, in
   // one call with dominant_class_name precomputed server-side — never
   // recompute dominant class client-side, per CLAUDE.md). If a search
-  // result's cluster_id isn't in that map (e.g. the grid was itself
+  // result's cluster uid isn't in that map (e.g. the grid was itself
   // filtered by class), fall back to one additional unfiltered call
   // rather than showing a blank badge.
-  const clusterMetaMap = new SvelteMap<number, Cluster>();
+  const clusterMetaMap = new SvelteMap<string, Cluster>();
   $effect(() => {
     clusterMetaMap.clear();
-    for (const c of s.clusterPager.items) clusterMetaMap.set(c.id, c);
+    for (const c of s.clusterPager.items) clusterMetaMap.set(c.uid, c);
   });
-  async function ensureClusterMeta(ids: number[]): Promise<void> {
-    const missing = ids.filter((id) => !clusterMetaMap.has(id));
+  async function ensureClusterMeta(uids: string[]): Promise<void> {
+    const missing = uids.filter((uid) => !clusterMetaMap.has(uid));
     if (missing.length === 0) return;
     try {
-      // Badge lookup only reads dominant_class_name/purity/etc, so skip the
+      // Badge lookup only reads dominant_class_name, so skip the
       // representatives (`limit` has a minimum of 1; `per_cluster` may be 0).
       const res = await getClusters({ per_cluster: 0 });
-      for (const c of res.items) clusterMetaMap.set(c.id, c);
+      for (const c of res.items) clusterMetaMap.set(c.uid, c);
     } catch (e) {
       toastStore.warn(`Could not load cluster info for badges: ${apiErrorText(e)}`);
     }
@@ -356,7 +359,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     if (!searchModeActive) return;
     // Force the embedding plot off — same guard pattern the slot-gallery
     // view already uses (the page's isSlotFilter effect): the plot
-    // colors by cluster_id over the card grid's own crops, which search
+    // colors by cluster over the card grid's own crops, which search
     // mode replaces entirely.
     if (s.showEmbeddingViz) s.showEmbeddingViz = false;
 
@@ -371,15 +374,14 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
         for (const id of ids) applyLocalSearchLabel(id, cls.id, cls.name);
         searchSel.clear();
         try {
-          const res = await bulkLabel(ids, cls.id);
-          undoStore.recordWrites(res.updated_ids);
-          const conflicts = res.conflicts?.length ?? 0;
-          if (conflicts > 0) {
+          const out = await runLabelOp(await bulkLabel(ids, cls.id));
+          undoStore.recordLabelOp(out.opId, ids);
+          if (out.conflicts > 0) {
             toastStore.warn(
-              `Labeled ${res.updated} of ${ids.length} → ${cls.name} (${conflicts} blocked by worker).`,
+              `Labeled ${out.updated} of ${ids.length} → ${cls.name} (${out.conflicts} blocked by worker).`,
             );
           } else {
-            toastStore.success(`Labeled ${res.updated ?? ids.length} → ${cls.name}.`);
+            toastStore.success(`Labeled ${out.updated} → ${cls.name}.`);
           }
         } catch (e) {
           toastStore.error(`Label failed: ${apiErrorText(e)}`);

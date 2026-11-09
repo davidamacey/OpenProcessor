@@ -67,6 +67,7 @@ const SCANNED_FILES = [
   'lib/api_labelOps.ts',
   'lib/api_bulkIngest.ts',
   'lib/api_ingestSources.ts',
+  'lib/api_jobs.ts',
 ] as const;
 
 /** The HTTP core (`apiFetch`, `scoped()`): composes no backend URL itself. */
@@ -175,10 +176,10 @@ const MANUAL_OVERRIDES: Array<{
     file: 'lib/api_reprocess.ts',
     marker: 'export function runServedNextStep(',
     // step.method/step.path: a finished import's served `next_steps`
-    // entry. The spec's one documented example is
-    // `POST /regions/cluster`; anything else it serves is the server's
-    // own route.
-    path: '/regions/cluster',
+    // entry: `POST /clusters/runs` (cluster_regions) or
+    // `POST /cluster/umap/rebuild` (recluster); anything else it serves is
+    // the server's own route.
+    path: '/clusters/runs',
     method: 'POST',
     queryParams: [],
   },

@@ -136,29 +136,30 @@ describe('selectIdsInLasso', () => {
 });
 
 describe('colorForCluster', () => {
-  it('is deterministic — the same cluster_id always returns the same color', () => {
-    expect(colorForCluster(17)).toBe(colorForCluster(17));
+  const UIDS = Array.from(
+    { length: 12 },
+    (_, i) => `0b9f9a38-0000-4000-8000-0000000000${i}a`,
+  );
+
+  it('is deterministic — the same cluster uid always returns the same color', () => {
+    expect(colorForCluster(UIDS[0]!)).toBe(colorForCluster(UIDS[0]!));
   });
 
   it('returns a distinct neutral color for null (unassigned)', () => {
     const unassigned = colorForCluster(null);
-    // Distinct from at least a spread sample of real cluster ids — not
-    // asserting against the whole palette, just that null doesn't
-    // silently collide with a "real" cluster color.
-    for (const id of [0, 1, 2, 3, 10173, 99999]) {
-      expect(colorForCluster(id)).not.toBe(unassigned);
+    // null must not silently collide with a "real" cluster color.
+    for (const uid of UIDS) {
+      expect(colorForCluster(uid)).not.toBe(unassigned);
     }
   });
 
-  it('never throws on a non-finite or negative cluster_id', () => {
-    expect(() => colorForCluster(Number.NaN)).not.toThrow();
-    expect(() => colorForCluster(Number.POSITIVE_INFINITY)).not.toThrow();
-    expect(() => colorForCluster(-5)).not.toThrow();
-    expect(colorForCluster(Number.NaN)).toBe(colorForCluster(null));
+  it('treats an empty uid as unassigned and never throws', () => {
+    expect(() => colorForCluster('')).not.toThrow();
+    expect(colorForCluster('')).toBe(colorForCluster(null));
   });
 
-  it('produces more than one distinct color across a spread of cluster ids', () => {
-    const colors = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(colorForCluster));
+  it('produces more than one distinct color across a spread of cluster uids', () => {
+    const colors = new Set(UIDS.map((u) => colorForCluster(u)));
     expect(colors.size).toBeGreaterThan(1);
   });
 });
@@ -204,17 +205,22 @@ describe('embeddingCoverageSuffix (m20, 2026-09-24 interactive pass)', () => {
 describe('legendEntries (F-68)', () => {
   it('lists the biggest clusters with their color and most common class name', () => {
     const pts = [
-      { cluster_id: 3, class_name: 'widget_a' },
-      { cluster_id: 3, class_name: 'widget_a' },
-      { cluster_id: 3, class_name: 'widget_b' },
-      { cluster_id: 7, class_name: null },
-      { cluster_id: null, class_name: null },
-      { cluster_id: null, class_name: null },
+      { cluster_uid: 'uid-3', class_name: 'widget_a' },
+      { cluster_uid: 'uid-3', class_name: 'widget_a' },
+      { cluster_uid: 'uid-3', class_name: 'widget_b' },
+      { cluster_uid: 'uid-7', class_name: null },
+      { cluster_uid: null, class_name: null },
+      { cluster_uid: null, class_name: null },
     ];
     const e = legendEntries(pts, 2);
     expect(e).toEqual([
-      { clusterId: 3, color: colorForCluster(3), count: 3, className: 'widget_a' },
-      { clusterId: null, color: colorForCluster(null), count: 2, className: null },
+      {
+        clusterUid: 'uid-3',
+        color: colorForCluster('uid-3'),
+        count: 3,
+        className: 'widget_a',
+      },
+      { clusterUid: null, color: colorForCluster(null), count: 2, className: null },
     ]);
   });
 });

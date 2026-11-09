@@ -1,5 +1,5 @@
 /**
- * A cluster card's class link uses the served `dominant_class_id`, and a
+ * A cluster card's class link carries the served `dominant_class_name`, and a
  * name lookup (deep link, slot inventory card) resolves to the ACTIVE class
  * when a deprecated class carries the same name. Static source scan, like
  * the sibling /clusters page tests.
@@ -31,9 +31,10 @@ const src = [
 ].join('\n');
 
 describe('/clusters class lookups', () => {
-  it('a slot-bound card click routes by the served dominant_class_id, not a name lookup', () => {
+  it('a slot-bound card click routes by the served dominant_class_name (class identity is the name)', () => {
     const fn = cardSrc.slice(cardSrc.indexOf('P2.11 fix'), cardSrc.indexOf('</script>'));
-    expect(fn).toMatch(/c\.dominant_class_id/);
+    expect(fn).toMatch(/encodeURIComponent\(c\.dominant_class_name\)/);
+    expect(fn).not.toMatch(/dominant_class_id/);
     expect(fn).not.toMatch(/toLowerCase/);
   });
 

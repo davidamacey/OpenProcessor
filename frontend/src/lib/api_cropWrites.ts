@@ -6,13 +6,13 @@ import { apiFetch, assertNonEmptyBatch, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type {
   BulkLabelConflict,
-  BulkLabelResult,
   Crop,
   CropRegionUndoBatchResult,
   CropUndoBatchResult,
 } from '$lib/types';
 import type { SlotSpec } from '$lib/annotations/types';
 import type { SelectionExcludeResult } from '$lib/types_itemFilter';
+import type { LabelOpAccepted } from '$lib/types_labelOps';
 
 export function putCropLabel(
   cropId: string,
@@ -29,13 +29,14 @@ export function putCropLabel(
   );
 }
 
+/** Queue a recorded relabel (202 + job id); follow it with `runLabelOp`. */
 export function bulkLabel(
   cropIds: string[],
   classId: number,
   signal?: AbortSignal,
-): Promise<BulkLabelResult> {
+): Promise<LabelOpAccepted> {
   // Backend route is PUT (matches the single-crop /label PUT shape).
-  return apiFetch<BulkLabelResult>(
+  return apiFetch<LabelOpAccepted>(
     `${scoped()}/crops/batch_label`,
     {
       method: 'PUT',

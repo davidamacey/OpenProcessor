@@ -2,6 +2,7 @@
  * The raw item wire (`RawCrop`, `RAW_CROP_KEYS`) and its mapping onto the
  * labeler's `Crop`. A leaf: imports no other `api*` module.
  */
+import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { EmbeddingState } from '$lib/types_itemFilter';
 import type { Crop, ItemTextLine } from '$lib/types';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
@@ -42,21 +43,8 @@ export type RawCrop = {
   vlm_class_attempted_at?: string | null;
   /** `no_answer | no_match | invalid_index | unparseable | null`. */
   vlm_class_empty_reason?: string | null;
-  cluster_id?: number | null;
-  cluster_distance?: number | null;
-  /** Nearest cluster centroid id when it differs from `cluster_id` (the
-   *  item has left its cluster) — null together with cluster_distance/
-   *  cluster_similarity/cluster_is_core in that case. */
-  cluster_nearest_id?: number | null;
-  /** Server-computed cosine similarity to this crop's cluster centroid
-   *  (0..1) — the served replacement for the old client `1 -
-   *  cluster_distance` estimate. Null when the backend hasn't computed
-   *  it for this crop. */
-  cluster_similarity?: number | null;
-  /** Server-computed: `cluster_similarity >= core_similarity_min`. Drives
-   *  the cluster-detail cut line — see `Crop.cluster_is_core`. */
-  cluster_is_core?: boolean | null;
-  cluster_subid?: string | null;
+  /** The item's cluster in the serving partition (`ClusterRef`); null when it has none. */
+  cluster?: ClusterRef | null;
   label_validated?: boolean;
   /** G2: the class-label-specific validation flag. `label_validated` is
    *  `class_validated OR region_validated` server-side and over-reports
@@ -133,7 +121,7 @@ export type RawCrop = {
   combine_merged_origins?: string[];
   // v0.4.0 embedding state and open-vocabulary provenance (contract
   // fce17771 `ItemDoc`); a missing key maps to null.
-  embedding_state?: EmbeddingState | null;
+  embedding_states?: Record<string, EmbeddingState>;
   source_prompt?: string | null;
   open_vocab_set?: string | null;
   open_vocab_revision?: number | null;
@@ -164,12 +152,7 @@ export const RAW_CROP_KEYS = [
   'vlm_raw_class',
   'vlm_class_attempted_at',
   'vlm_class_empty_reason',
-  'cluster_id',
-  'cluster_distance',
-  'cluster_nearest_id',
-  'cluster_similarity',
-  'cluster_is_core',
-  'cluster_subid',
+  'cluster',
   'label_validated',
   'class_validated',
   'label_source',
@@ -229,7 +212,7 @@ export const RAW_CROP_KEYS = [
   'combine_conflict',
   'combine_conflict_origins',
   'combine_merged_origins',
-  'embedding_state',
+  'embedding_states',
   'source_prompt',
   'open_vocab_set',
   'open_vocab_revision',
@@ -298,13 +281,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     vlm_raw_class: c.vlm_raw_class ?? null,
     vlm_class_attempted_at: c.vlm_class_attempted_at ?? null,
     vlm_class_empty_reason: c.vlm_class_empty_reason ?? null,
-    cluster_id: c.cluster_id ?? null,
-    cluster_distance: c.cluster_distance ?? null,
-    cluster_nearest_id: c.cluster_nearest_id ?? null,
-    // Served directly — no client 1-cosine-distance estimate.
-    similarity_to_centroid: c.cluster_similarity ?? null,
-    cluster_is_core: c.cluster_is_core ?? null,
-    cluster_subid: c.cluster_subid ?? null,
+    cluster: c.cluster ?? null,
     class_detector: c.class_detector ?? null,
     class_detector_version: c.class_detector_version ?? null,
     class_labeled_at: c.class_labeled_at ?? null,
@@ -351,7 +328,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     combine_conflict: !!c.combine_conflict,
     combine_conflict_origins: asStringArray(c.combine_conflict_origins),
     combine_merged_origins: asStringArray(c.combine_merged_origins),
-    embedding_state: c.embedding_state ?? null,
+    embedding_states: c.embedding_states ?? {},
     source_prompt: c.source_prompt ?? null,
     open_vocab_set: c.open_vocab_set ?? null,
     open_vocab_revision: c.open_vocab_revision ?? null,

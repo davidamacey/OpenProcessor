@@ -2,15 +2,14 @@
  * class-id-display-audit-2026-09-26 LOW finding: `clusterName` used to
  * resolve `dominant_class_id` against the registry (`classesStore`) before
  * falling back to the served `dominant_class_name`. Both are safe by
- * construction for a real class cluster (`cluster_kind === 'class'` implies
- * `cluster_id === class_id`), but for consistency with the thin-frontend
- * rule the served name should be preferred. `clsForCluster` (the registry
+ * construction, but for consistency with the thin-frontend rule the served
+ * name should be preferred. `clsForCluster` (the registry
  * object) is kept only for what genuinely needs a live registry row —
  * `liveClassId` (hotkey/assign) and the validated/count figures — not for
  * display naming.
  *
  * Same static source-scan convention as the other clusters/[id]
- * tests (clusterCutLineVisibility.test.ts) — no mount harness for a
+ * tests (clusterDetailServedFields.test.ts) — no mount harness for a
  * page this size.
  */
 import { readFileSync } from 'node:fs';

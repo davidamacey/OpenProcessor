@@ -84,17 +84,17 @@ describe('selection writes', () => {
     });
   });
 
-  it('moveSelectionToCluster: POST crops/move with cluster_id', async () => {
-    const f = stub({ updated: 2, updated_ids: ['a', 'b'], conflicts: [] });
-    const res = await moveSelectionToCluster(SEL, 9, false);
+  it('moveSelectionToCluster: POST crops/move with cluster_uid', async () => {
+    const f = stub({ op_id: 'op1', job_id: 'job1', status: 'queued' });
+    const res = await moveSelectionToCluster(SEL, 'uid-9', false);
     const [url, init] = f.mock.calls[0]!;
     expect(url).toBe(`${API_PREFIX}/crops/move`);
     expect(JSON.parse(String(init?.body))).toEqual({
       selection: SEL,
-      cluster_id: 9,
+      cluster_uid: 'uid-9',
       dry_run: false,
     });
-    expect('updated_ids' in res && res.updated_ids).toEqual(['a', 'b']);
+    expect(res).toEqual({ op_id: 'op1', job_id: 'job1', status: 'queued' });
   });
 
   it('the crop-id exclude/unexclude callers keep their bodies and now read updated_ids', async () => {

@@ -12,7 +12,7 @@ import type {
   SelectionExcludeResult,
   VectorRefresh,
 } from '$lib/types_itemFilter';
-import type { BulkLabelResult } from '$lib/types';
+import type { LabelOpAccepted } from '$lib/types_labelOps';
 
 type Prop = { $ref?: string; anyOf?: Prop[] };
 type Schema = { properties?: Record<string, Prop>; required?: string[] };
@@ -50,14 +50,13 @@ describe('selection responses', () => {
     expect(Object.keys(local).sort()).toEqual(props('SelectionDryRunResponse'));
   });
 
-  it('the relabel / move response carries updated, updated_ids, conflicts, op_id', () => {
+  it('the relabel / move 202 carries op_id, job_id and status', () => {
     const local = {
-      updated: true,
-      updated_ids: true,
-      conflicts: true,
       op_id: true,
-    } satisfies Record<keyof BulkLabelResult, true>;
-    expect(Object.keys(local).sort()).toEqual(props('BatchRelabelResponse'));
+      job_id: true,
+      status: true,
+    } satisfies Record<keyof LabelOpAccepted, true>;
+    expect(Object.keys(local).sort()).toEqual(props('LabelOpAccepted'));
   });
 
   it('exclude / unexclude carry updated_ids and errors', () => {

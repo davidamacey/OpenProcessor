@@ -126,9 +126,13 @@ export interface RegionTestCandidate {
   bbox_in_parent: number[] | null;
   box_id: string | null;
   candidate_index: number;
-  cluster_distance: number | null;
-  cluster_id: number | null;
-  cluster_subid: string | null;
+  /** Where the serving region partition would place the candidate. */
+  cluster_assigned_by: string | null;
+  cluster_margin: number | null;
+  cluster_partition_id: string | null;
+  cluster_score: number | null;
+  cluster_state: string | null;
+  cluster_uid: string | null;
   confidence: string | null;
   detected_at: string | null;
   detector: string | null;

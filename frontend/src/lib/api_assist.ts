@@ -1,6 +1,6 @@
 /**
  * The selectable assist runs (`{prefix}/assist/runs`): one request shape for a
- * crop, a selection, a box, a cluster, a sub-cluster or a filter. A request
+ * crop, a selection, a box, a cluster or a filter. A request
  * with `dry_run` (the server's default) plans and writes nothing; the same
  * request with `dry_run: false` starts the run. Every count, refusal and
  * decision in the responses is the server's.
@@ -38,13 +38,12 @@ export function getAssistRun(
 
 /** The newest runs (newest first) that name this cluster, each with `scope_now`. */
 export function listAssistRuns(
-  scope: { clusterId?: number; clusterSubid?: string | null; limit?: number } = {},
+  scope: { clusterUid?: string; limit?: number } = {},
   signal?: AbortSignal,
 ): Promise<AssistRunList> {
   return apiFetch<AssistRunList>(
     `${scoped()}/assist/runs${qs({
-      cluster_id: scope.clusterId,
-      cluster_subid: scope.clusterSubid ?? undefined,
+      cluster_uid: scope.clusterUid,
       limit: scope.limit,
     })}`,
     {},

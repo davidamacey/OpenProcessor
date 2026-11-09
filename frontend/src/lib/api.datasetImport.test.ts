@@ -157,10 +157,27 @@ describe('W10 wrappers hit the scoped routes', () => {
     await runServedNextStep({
       action: 'cluster_regions',
       method: 'post',
-      path: '/regions/cluster',
+      path: '/clusters/runs',
       reason: 'r',
     });
-    expect(sent()).toMatchObject({ url: `${P}/regions/cluster`, method: 'POST' });
+    // POST /clusters/runs needs its target; the step's reason names it.
+    expect(sent()).toMatchObject({
+      url: `${P}/clusters/runs`,
+      method: 'POST',
+      body: { target: 'region_box' },
+    });
+  });
+
+  it('a served next step with no body to send sends none', async () => {
+    const sent = capture();
+    await runServedNextStep({
+      action: 'recluster',
+      method: 'post',
+      path: '/cluster/umap/rebuild',
+      reason: 'r',
+    });
+    expect(sent()).toMatchObject({ url: `${P}/cluster/umap/rebuild`, method: 'POST' });
+    expect(sent().body).toBeUndefined();
   });
 
   it('reprocess batch, single crop, job read and cancel', async () => {

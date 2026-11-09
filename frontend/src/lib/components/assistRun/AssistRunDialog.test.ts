@@ -65,13 +65,13 @@ const q = (id: string) =>
   document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 const open = (ctl: AssistRunController) => {
   ctl.open({
-    title: 'Sub-cluster 10000b',
+    title: 'Cluster 0b9f9a38',
     selected: {
       kind: 'crops',
       crop_ids: ['c1', 'c2', 'c3'],
-      context: { cluster_id: 10000, cluster_subid: '10000b' },
+      context: { cluster_uid: '0b9f9a38-0000-4000-8000-000000010000' },
     },
-    whole: { kind: 'cluster', cluster_id: 10000, cluster_subid: '10000b' },
+    whole: { kind: 'cluster', cluster_uid: '0b9f9a38-0000-4000-8000-000000010000' },
   });
   flushSync();
 };

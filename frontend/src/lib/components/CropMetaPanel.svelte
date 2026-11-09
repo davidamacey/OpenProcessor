@@ -194,9 +194,20 @@
 
   <dt class="text-zinc-500">Cluster</dt>
   <dd class="font-mono text-zinc-200">
-    #{crop.cluster_id ?? '—'}
-    {#if crop.similarity_to_centroid != null}
-      <span class="ml-1 text-zinc-500">sim {pct(crop.similarity_to_centroid)}</span>
+    {#if crop.cluster}
+      <span title={crop.cluster.uid ?? crop.cluster.partition_id}
+        >{crop.cluster.uid
+          ? crop.cluster.uid.slice(0, 8)
+          : (crop.cluster.state ?? '—')}</span
+      >
+      {#if crop.cluster.state && crop.cluster.uid}
+        <span class="ml-1 text-zinc-500">{crop.cluster.state}</span>
+      {/if}
+      {#if crop.cluster.score != null}
+        <span class="ml-1 text-zinc-500">score {pct(crop.cluster.score)}</span>
+      {/if}
+    {:else}
+      —
     {/if}
   </dd>
 

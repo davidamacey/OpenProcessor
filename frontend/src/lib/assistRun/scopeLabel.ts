@@ -8,11 +8,7 @@ export function scopeLabel(target: AssistTarget): string {
       : target.kind === 'crops' && target.context
         ? target.context
         : null;
-  if (scope) {
-    return scope.cluster_subid
-      ? `sub-cluster ${scope.cluster_subid}`
-      : `cluster #${scope.cluster_id}`;
-  }
+  if (scope) return `cluster ${scope.cluster_uid.slice(0, 8)}`;
   if (target.kind === 'crops') {
     return target.crop_ids.length === 1 ? '1 crop' : `${target.crop_ids.length} crops`;
   }

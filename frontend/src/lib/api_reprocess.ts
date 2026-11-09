@@ -2,6 +2,7 @@
  * Reprocess: the served next step, batch / crop / image reprocess and the job.
  */
 import { apiFetch, scoped } from '$lib/api';
+import { nextStepInit } from '$lib/nextStep';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type {
   NextStep,
@@ -13,17 +14,13 @@ import type {
 import type { Crop } from '$lib/types';
 
 /** A finished import's served `next_steps` entry, run as served: its
- *  `method` against its `path` under the project's prefix, no body
- *  (plan §8 question 10). */
+ *  `method` against its `path` under the project's prefix (`nextStepInit`
+ *  says which step needs a body). Returns the answer: a run is a 202 job. */
 export function runServedNextStep(
   step: NextStep,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  return apiFetch<unknown>(
-    `${scoped()}${step.path}`,
-    { method: step.method.toUpperCase() },
-    signal,
-  );
+  return apiFetch<unknown>(`${scoped()}${step.path}`, nextStepInit(step), signal);
 }
 
 /** Batch Reprocess. `dry_run` defaults to true on the server; the caller

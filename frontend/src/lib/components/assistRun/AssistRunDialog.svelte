@@ -19,11 +19,7 @@
     type SampleChoice,
   } from '$lib/assistRun/assistRunController.svelte';
   import { isPromptPackAvailable, selectableAxisEntries } from '$lib/strategies';
-  import {
-    MIN_AGREEMENT_RANGE,
-    type AssistAction,
-    type AssistStratifyBy,
-  } from '$lib/types_assist';
+  import { MIN_AGREEMENT_RANGE, type AssistAction } from '$lib/types_assist';
   import { strategiesStore } from '$stores/strategies.svelte';
 
   interface Props {
@@ -60,7 +56,7 @@
     selected: 'Only the crops or boxes you picked.',
     all: 'Every member of the cluster or filter the VLM may see.',
     representative:
-      'A seeded sample that grows with the size of the scope, spread over the sub-clusters. The answers are votes for a proposed label.',
+      'A seeded sample that grows with the size of the scope. The answers are votes for a proposed label.',
   };
   const ACTION_LABEL: Record<AssistAction, { name: string; hint: string }> = {
     classify: {
@@ -80,12 +76,6 @@
       hint: 'Re-queue the items for the segmenter in the region worker.',
     },
   };
-  const STRATIFY: { id: AssistStratifyBy; label: string }[] = [
-    { id: 'auto', label: 'By sub-cluster when there are several' },
-    { id: 'cluster_subid', label: 'By sub-cluster' },
-    { id: 'none', label: 'Not stratified' },
-  ];
-
   function selectedCount(): string {
     const t = ctl.opener?.selected;
     if (t?.kind === 'crops') return ` (${t.crop_ids.length})`;
@@ -173,21 +163,6 @@
                   oninput={(e) => (ctl.seed = numberOrNull(e) ?? 0)}
                   data-testid="assist-seed"
                 />
-              </label>
-              <label class="flex flex-col gap-1 text-xs text-zinc-300">
-                Spread
-                <select
-                  class="select"
-                  value={ctl.stratifyBy}
-                  onchange={(e) =>
-                    (ctl.stratifyBy = (e.currentTarget as HTMLSelectElement)
-                      .value as AssistStratifyBy)}
-                  data-testid="assist-stratify"
-                >
-                  {#each STRATIFY as s (s.id)}
-                    <option value={s.id}>{s.label}</option>
-                  {/each}
-                </select>
               </label>
             </div>
           {/if}

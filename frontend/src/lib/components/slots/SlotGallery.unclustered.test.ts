@@ -23,22 +23,13 @@ import { getRegionClusters, getRegions } from '$lib/api_regions';
 
 function fpCluster(): Cluster {
   return {
-    id: -100,
-    cluster_kind: 'false_positive',
+    uid: '0b9f9a38-0000-4000-8000-0000000000ff',
     size: 12,
     validated_count: 0,
-    dominant_class_id: null,
     dominant_class_name: null,
     dominant_pct: null,
-    purity: null,
-    purity_tier: null,
-    promotable: false,
-    core_similarity_min: null,
     is_unlabeled: false,
     representative_crop_ids: [],
-    has_subclusters: false,
-    n_subclusters: 0,
-    subcluster_ids: [],
     updated_at: null,
   };
 }
@@ -75,7 +66,7 @@ describe('SlotGallery — regions reachable when only the FP bucket is clustered
     expect(btn).toBeDefined();
   });
 
-  it('clicking it opens the flat gallery view (viewingAll) with no region_cluster_id filter', async () => {
+  it('clicking it opens the flat gallery view (viewingAll) with no cluster_uid filter', async () => {
     vi.mocked(getRegionClusters).mockResolvedValue({ clusters: [fpCluster()] } as never);
     vi.mocked(getRegions).mockResolvedValue({ items: [], total: 0 } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
@@ -93,8 +84,8 @@ describe('SlotGallery — regions reachable when only the FP bucket is clustered
     expect(gallery.selectedCluster).toBeNull();
     expect(getRegions).toHaveBeenCalled();
     const lastCallParams = vi.mocked(getRegions).mock.calls.at(-1)?.[1] as
-      { region_cluster_id?: number } | undefined;
-    expect(lastCallParams?.region_cluster_id).toBeUndefined();
+      { cluster_uid?: string } | undefined;
+    expect(lastCallParams?.cluster_uid).toBeUndefined();
     // The bucket grid ("← FALSE POSITIVES" card etc.) must no longer be
     // the only thing rendered — the header now reads "All tags".
     expect(el.textContent).toContain('All tags');

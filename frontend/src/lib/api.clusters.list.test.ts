@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
 import { getClusterFacets, getClusters } from '$lib/api_clusters';
 
+const UID = '0b9f9a38-0000-4000-8000-000000000007';
+
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), {
     status: 200,
@@ -15,24 +17,15 @@ const json = (body: unknown) =>
 
 function card(extra: Record<string, unknown> = {}) {
   return {
-    cluster_id: 10001,
-    cluster_kind: 'candidate',
+    cluster_uid: '0b9f9a38-0000-4000-8000-000000000001',
     size: 40,
     validated_count: 4,
     labelled_count: 20,
-    dominant_class_id: null,
     dominant_class_name: null,
     dominant_count: 0,
-    purity: 0.5,
-    purity_n: 40,
-    purity_basis: 'nearest_centroid',
-    purity_tier: 'mixed',
     label_agreement: 0.75,
     labelled_share: 0.5,
-    promotable: false,
     is_unlabeled: true,
-    n_subclusters: 0,
-    subcluster_ids: [],
     updated_at: null,
     representatives: [],
     detector_top_class: 'widget_x',
@@ -49,11 +42,6 @@ function card(extra: Record<string, unknown> = {}) {
 const LIST = {
   items: [card()],
   total: 1,
-  total_class_clusters: 0,
-  total_candidate_clusters: 1,
-  cluster_id_offset: 10000,
-  purity_thresholds: null,
-  core_similarity_min: 0.75,
   representatives_offset: 0,
   representatives_limit: 24,
   sort: 'needs_review_desc',
@@ -76,23 +64,23 @@ describe('getClusters query', () => {
   it('sends the sort and every card filter as served parameters', async () => {
     const m = stubFetch();
     await getClusters({
-      sort: 'purity_desc',
+      sort: 'label_agreement_asc',
       dominant_class: ['class_a', 'class_b'],
       detector_class: ['widget_x'],
       min_size: 5,
       max_size: 90,
       validation_state: 'none',
-      flag: ['unvalidated', 'promotable'],
+      flag: ['unvalidated', 'low_label_agreement'],
       needs_review: true,
     });
     const q = urlOf(m).searchParams;
-    expect(q.get('sort')).toBe('purity_desc');
+    expect(q.get('sort')).toBe('label_agreement_asc');
     expect(q.getAll('dominant_class')).toEqual(['class_a', 'class_b']);
     expect(q.getAll('detector_class')).toEqual(['widget_x']);
     expect(q.get('min_size')).toBe('5');
     expect(q.get('max_size')).toBe('90');
     expect(q.get('validation_state')).toBe('none');
-    expect(q.getAll('flag')).toEqual(['unvalidated', 'promotable']);
+    expect(q.getAll('flag')).toEqual(['unvalidated', 'low_label_agreement']);
     expect(q.get('needs_review')).toBe('true');
   });
 
@@ -151,7 +139,7 @@ describe('getClusters response', () => {
 describe('getClusterFacets', () => {
   it('reads the cluster facets route and returns the body as served', async () => {
     const facets = {
-      cluster_id: 7,
+      cluster_uid: UID,
       total: 3,
       detector_classes: [{ value: 'widget_x', count: 2 }],
       class_sources: [],
@@ -161,8 +149,8 @@ describe('getClusterFacets', () => {
       detector_confidence_missing: 0,
     };
     const m = stubFetch(facets);
-    const res = await getClusterFacets(7);
-    expect(String(m.mock.calls[0]![0])).toBe(`${API_PREFIX}/clusters/7/facets`);
+    const res = await getClusterFacets(UID);
+    expect(String(m.mock.calls[0]![0])).toBe(`${API_PREFIX}/clusters/${UID}/facets`);
     expect(res).toEqual(facets);
   });
 });

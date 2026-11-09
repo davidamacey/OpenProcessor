@@ -16,7 +16,6 @@ import type {
   AssistRunRequest,
   AssistRunState,
   AssistStatus,
-  AssistStratifyBy,
   AssistTarget,
 } from '$lib/types_assist';
 
@@ -69,7 +68,6 @@ export class AssistRunController {
   actions = $state<AssistAction[]>(['classify']);
   size = $state<number | null>(null);
   seed = $state(0);
-  stratifyBy = $state<AssistStratifyBy>('auto');
   vlm = $state<string | null>(null);
   acknowledgeExternal = $state(false);
   promptPack = $state<string | null>(null);
@@ -129,12 +127,7 @@ export class AssistRunController {
       target,
       sample:
         this.choice === 'representative'
-          ? {
-              mode: 'representative',
-              size: this.size,
-              seed: this.seed,
-              stratify_by: this.stratifyBy,
-            }
+          ? { mode: 'representative', size: this.size, seed: this.seed }
           : { mode: 'all' },
       actions: this.actions,
       dry_run: true,
@@ -169,7 +162,6 @@ export class AssistRunController {
     this.#resetActions();
     this.size = null;
     this.seed = 0;
-    this.stratifyBy = 'auto';
     this.minAgreement = null;
     this.preview = null;
     this.planError = null;

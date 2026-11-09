@@ -4,7 +4,6 @@
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import ShortcutsButton from '$components/ShortcutsButton.svelte';
   import { isAssignableClass } from '$lib/classVisibility';
-  import { cohesionText, COHESION_TOOLTIP } from '$lib/clusters/clusterCardText';
   import { projectHref } from '$lib/projectPaths';
   import { classesStore } from '$stores/classes.svelte';
   import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
@@ -36,12 +35,16 @@
   <h1 class="flex items-baseline gap-2 text-lg font-semibold">
     {#if view.clusterName}
       <span class="capitalize text-zinc-100">{view.clusterName}</span>
-      <span class="text-sm font-normal text-zinc-500">#{view.clusterIdParam}</span>
-    {:else if view.cluster?.cluster_kind === 'candidate'}
-      <span class="text-zinc-100">Cluster #{view.clusterIdParam}</span>
-      <span class="text-sm font-normal text-amber-400/80">unlabeled candidate</span>
+      <span class="font-mono text-sm font-normal text-zinc-500" title={view.clusterUid}
+        >{view.clusterUid.slice(0, 8)}</span
+      >
     {:else}
-      <span class="text-zinc-100">Cluster #{view.clusterIdParam}</span>
+      <span class="text-zinc-100" title={view.clusterUid}
+        >Cluster {view.clusterUid.slice(0, 8)}</span
+      >
+      {#if view.cluster?.is_unlabeled}
+        <span class="text-sm font-normal text-amber-400/80">unlabeled</span>
+      {/if}
     {/if}
   </h1>
   <ShortcutsButton />
@@ -55,23 +58,16 @@
       size {view.cluster.size.toLocaleString()} · dominant
       <strong class="text-zinc-200">{view.cluster.dominant_class_name ?? '—'}</strong>
     </span>
-    <!-- DQ-M2 fix (dq-queues cutover, 2026-09-24): purity is now the
-         nearest-centroid geometry share — purity_tier stays the badge
-         elsewhere (the sidebar/card border), this is the number + its
-         basis/n, with label_agreement/labelled_share in the tooltip so an
-         operator can tell "geometrically coherent" from "the labels we
-         have agree with each other". -->
-    {#if view.cluster.purity != null}
+    {#if view.cluster.label_agreement != null}
       <span
         class="font-mono text-xs text-zinc-500"
-        data-testid="cluster-cohesion"
-        title="{COHESION_TOOLTIP} · label agreement {view.cluster.label_agreement != null
-          ? `${(view.cluster.label_agreement * 100).toFixed(0)}%`
-          : '—'} · labelled share {view.cluster.labelled_share != null
+        data-testid="cluster-agreement"
+        title="Label agreement: the top class's share of the labelled members · labelled share {view
+          .cluster.labelled_share != null
           ? `${(view.cluster.labelled_share * 100).toFixed(0)}%`
           : '—'}"
       >
-        · {cohesionText(view.cluster)}
+        · agreement {(view.cluster.label_agreement * 100).toFixed(0)}%
       </span>
     {/if}
   {/if}
@@ -200,33 +196,16 @@
 
     <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
-    <!-- Assist with the VLM on this (sub-)cluster, or on the crops selected in it. -->
+    <!-- Assist with the VLM on this cluster, or on the crops selected in it. -->
     <button
       class="btn"
       type="button"
       onclick={clusterAssist.openAssist}
-      title="Ask the VLM about the selected crops, this cluster or sub-cluster, or a representative sample of it"
+      title="Ask the VLM about the selected crops, this cluster, or a representative sample of it"
       data-testid="assist-open"
     >
       Assist…
     </button>
-    <button
-      class="btn"
-      type="button"
-      onclick={actions.refine}
-      disabled={actions.refining}
-      title="Sub-cluster this cluster with AHC"
-    >
-      {#if actions.refining}
-        <span
-          class="mr-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-zinc-100 align-[-1px]"
-        ></span>
-        Refining…
-      {:else}
-        Refine (AHC)
-      {/if}
-    </button>
-
     <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
     <!-- Ignore: one-click default (generic), dropdown for a reason.

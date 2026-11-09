@@ -25,9 +25,9 @@
 
   interface Props {
     /** Extra query params threaded to `GET {API_PREFIX}/search/text` — e.g.
-     *  `{cluster_id}` on `/clusters/[id]`, or the effective tab + live
+     *  `{cluster_uid}` on `/clusters/[id]`, or the effective tab + live
      *  filter object on `/review`. Omitting any scoping key (e.g. no
-     *  `cluster_id`) means "search everything" — the global `/clusters`
+     *  `cluster_uid`) means "search everything" — the global `/clusters`
      *  search deliberately passes no cluster/tab scope. */
     filter?: Record<string, unknown>;
     pageSize?: number;
