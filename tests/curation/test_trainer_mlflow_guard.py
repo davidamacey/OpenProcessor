@@ -26,7 +26,7 @@ TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'
 if str(TRAINER_DIR) not in sys.path:
     sys.path.insert(0, str(TRAINER_DIR))
 
-import trainer_callbacks  # noqa: E402
+import trainer_callbacks
 
 
 def test_guard_disables_ultralytics_mlflow_when_artifact_root_is_unwritable(

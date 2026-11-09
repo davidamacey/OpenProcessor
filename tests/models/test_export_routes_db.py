@@ -35,7 +35,10 @@ def weights(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(model_export, 'PYTORCH_MODELS_DIR', directory)
     monkeypatch.setattr(models_export, 'PYTORCH_MODELS_DIR', directory)
     monkeypatch.setattr(model_export_jobs, '_consumer_listens', lambda: True)
-    valid = lambda _path: (True, '', dict(INFO))  # noqa: E731
+
+    def valid(_path: object) -> tuple[bool, str, dict[str, object]]:
+        return (True, '', dict(INFO))
+
     monkeypatch.setattr(model_export, 'validate_pytorch_model', valid)
     monkeypatch.setattr(models_export, 'validate_pytorch_model', valid)
     return directory

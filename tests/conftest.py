@@ -24,6 +24,7 @@ pytest_plugins = [
     'fixtures.event_capture',
     'fixtures.postgres_events',
     'fixtures.job_fixtures',
+    '_records_world',
     'curation.cross_project_leak._env',
     'curation.dataset_import.db_fixture',
     'config_store.memory_settings',

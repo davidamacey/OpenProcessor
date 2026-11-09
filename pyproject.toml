@@ -262,6 +262,29 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/validation/validate_models.py" = ["E402"]
 # The whitelist is read by vulture, never run: each line is a bare attribute read on purpose.
 "scripts/codegen/vulture_whitelist.py" = ["B018"]
+# Tests that import a script or tool module by bare name put its directory on sys.path (or
+# `pytest.importorskip` an optional dependency) first, so the import cannot precede that setup.
+"tests/curation/test_backfill_region_embeddings.py" = ["E402"]
+"tests/curation/test_mlflow_callbacks.py" = ["E402"]
+"tests/curation/test_test_split_identity.py" = ["E402"]
+"tests/curation/test_trainer_mlflow_guard.py" = ["E402"]
+"tests/installer/test_trt_build_target.py" = ["E402"]
+"tests/records/test_holdout_freeze_route_pg.py" = ["E402"]
+"tests/test_docs_screenshot_public_data_guard.py" = ["E402"]
+"tests/test_docs_screenshot_seed.py" = ["E402"]
+"tests/test_download_paddleocr_flow.py" = ["E402"]
+"tests/test_export_config_write.py" = ["E402"]
+"tests/test_export_face_recognition.py" = ["E402"]
+"tests/test_export_paddleocr_rec.py" = ["E402"]
+"tests/test_pe_download_weights.py" = ["E402"]
+"tests/test_pe_image_encoder_export.py" = ["E402"]
+"tests/test_pe_rearrange_shim.py" = ["E402"]
+"tests/test_pe_rope_layout.py" = ["E402"]
+"tests/test_pe_text_encoder_export.py" = ["E402"]
+"tests/test_trt_build_settings.py" = ["E402"]
+"tests/test_uint8_input.py" = ["E402"]
+"tests/test_validate_pytorch_model_restricted.py" = ["E402"]
+
 # Test files can have additional flexibility
 "tests/**/*.py" = [
     "A002",    # Argument shadows a builtin: fakes of the OpenSearch/Triton clients keep the real keyword (`id=`)

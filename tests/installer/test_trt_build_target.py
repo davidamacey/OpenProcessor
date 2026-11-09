@@ -16,7 +16,7 @@ from test_model_setup import LIB, STAMP_STUBS
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'export'))
-import trt_build_settings as tbs  # noqa: E402  # path set up above
+import trt_build_settings as tbs
 
 
 GB = 1 << 30

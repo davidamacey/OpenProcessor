@@ -142,7 +142,11 @@ def test_undo_outcome_decision_table(name: str, mutate: Any, expected: UndoOutco
     doc = mutate(written)
     registry = _registry_name
     if doc is not None and doc.pop('_rename', False):
-        registry = lambda cid: 'renamed' if cid == 2 else _registry_name(cid)  # type: ignore[assignment]  # noqa: E731
+
+        def renamed_registry(class_id: int) -> str | None:
+            return 'renamed' if class_id == 2 else _registry_name(class_id)
+
+        registry = renamed_registry
     assert undo_outcome(doc, _fp(), prior=prior, registry_name=registry) is expected
 
 

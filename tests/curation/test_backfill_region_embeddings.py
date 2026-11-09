@@ -28,7 +28,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / 'scripts' / 'curation'
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-import backfill_region_embeddings as backfill_script  # noqa: E402
+import backfill_region_embeddings as backfill_script
 
 
 F = get_region_fields()

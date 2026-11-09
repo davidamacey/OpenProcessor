@@ -21,7 +21,7 @@ EXPORT_DIR = ROOT / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import trt_build_settings as tbs  # noqa: E402  # path set up above
+import trt_build_settings as tbs
 
 
 GB = 1 << 30

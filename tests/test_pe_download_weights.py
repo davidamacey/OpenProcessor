@@ -19,7 +19,7 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-import download_pe_weights as dl  # noqa: E402
+import download_pe_weights as dl
 
 
 def _pin_for_file(path: Path, *, size: bool = True) -> dl.PECheckpointPin:
