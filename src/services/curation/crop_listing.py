@@ -4,13 +4,17 @@ the ordered-id fetch. Kept out of the router so it stays a thin HTTP layer."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import items_index
 from src.services.curation.crop_browse import parse_crop_sort
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 MAX_IDS = 500
 
@@ -59,7 +63,9 @@ def build_crop_list_query(
     return CropListQuery(sort_clause=sort_clause, item_filter=flt, query_clause=query_clause)
 
 
-def crop_list_body(query: CropListQuery, *, page: int, page_size: int) -> dict[str, Any]:
+def crop_list_body(
+    query: CropListQuery, *, page: int, page_size: int, vector_excludes: Sequence[str]
+) -> dict[str, Any]:
     """The paginated search body for ``query``."""
     return {
         'from': (page - 1) * page_size,
@@ -72,7 +78,7 @@ def crop_list_body(query: CropListQuery, *, page: int, page_size: int) -> dict[s
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors or class_id_history
         # to the card grid (history is undo-only).
-        '_source': {'excludes': item_list_source_excludes()},
+        '_source': {'excludes': item_list_source_excludes(vector_excludes)},
     }
 
 
@@ -83,7 +89,7 @@ async def crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:
     resp = await opensearch.mget(
         index=items_index(),
         body={'ids': ids},
-        _source_excludes=item_list_source_excludes(),
+        _source_excludes=item_list_source_excludes(await vector_source_excludes()),
     )
     return [
         serialize_item(d.get('_source') or {}, d.get('_id', ''))

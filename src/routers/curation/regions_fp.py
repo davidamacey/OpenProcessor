@@ -30,7 +30,7 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, items_index, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_row_models import RegionRowPage
-from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
+from src.routers.curation.regions import region_source_excludes
 from src.schemas.curation.region_fp import RegionFpCentroidsStarted
 from src.services.curation.clustering.pool_snapshot import GOOD_BOX_STATES
 from src.services.curation.clustering.region_box_rows import box_state_clause
@@ -171,7 +171,7 @@ async def list_region_clusters(
         opensearch,
         index=items_index(),
         pairs=rep_pairs,
-        source_excludes=_REGION_SOURCE_EXCLUDES,
+        source_excludes=await region_source_excludes(),
     )
     by_key = {(r['crop_id'], r['region_box_id']): r for r in rows}
     for c in clusters:
@@ -311,7 +311,7 @@ async def suspected_false_positives(
             (crop_id, box_id, {'suspected_fp_distance': d, 'nearest_fp_subid': sub})
             for d, crop_id, box_id, sub in page_slice
         ],
-        source_excludes=_REGION_SOURCE_EXCLUDES,
+        source_excludes=await region_source_excludes(),
     )
     return {
         'items': items,

@@ -56,7 +56,7 @@ def test_an_ordinary_item_has_the_keys_with_null_values() -> None:
 
 
 def test_list_endpoints_do_not_fetch_the_outline() -> None:
-    assert 'mask_polygon' in item_list_source_excludes()
+    assert 'mask_polygon' in item_list_source_excludes(['pe_embedding'])
 
 
 @pytest.fixture

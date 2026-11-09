@@ -30,6 +30,7 @@ from src.services.curation.audit import (
     start_audit,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 @router.post(
@@ -63,6 +64,7 @@ async def audit_queue(
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
     guard_page_depth(page, page_size)
+    excludes = await vector_source_excludes()
     try:
         resp = await opensearch.search(
             index=items_index(),
@@ -72,7 +74,7 @@ async def audit_queue(
                 'query': pending_query(batch_id),
                 'sort': [{'crop_id': 'asc'}],
                 'track_total_hits': True,
-                '_source': {'excludes': item_list_source_excludes()},
+                '_source': {'excludes': item_list_source_excludes(excludes)},
             },
         )
     except Exception as exc:

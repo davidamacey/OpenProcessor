@@ -264,7 +264,6 @@ def test_suspected_fp_hydrates_rows_with_source_excludes_not_a_source_dict(
     """Regression: the mget must pass ``_source_excludes=`` (a real
     opensearch-py kwarg), not ``_source={'excludes': [...]}`` (silently
     stringified into a useless include pattern -> an empty ``_source``)."""
-    from src.routers.curation.regions import _REGION_SOURCE_EXCLUDES
 
     _save_centroid(B)
     fake = _CountingOS({ITEMS: {'x': _item('x', [(_box('b1'), B)])}})
@@ -272,7 +271,12 @@ def test_suspected_fp_hydrates_rows_with_source_excludes_not_a_source_dict(
     body = _client(fake).get(f'{PREFIX}/regions/suspected_false_positives').json()
 
     (call,) = fake.mget_kwargs
-    assert call['_source_excludes'] == _REGION_SOURCE_EXCLUDES
+    assert call['_source_excludes'] == [
+        'pe_embedding',
+        'region_box_embeddings',
+        'class_id_history',
+        'mask_polygon',
+    ]
     assert '_source' not in call
     assert body['items'][0]['image_path'] == '/data/x.jpg'
 

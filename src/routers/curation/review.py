@@ -49,6 +49,7 @@ from src.services.curation.review_request import (
 )
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -171,6 +172,7 @@ async def review_queue(
         on_negative_frame,
     )
     req = await _request(tab, filters, sort, opensearch)
+    excludes = await vector_source_excludes()
     body = {
         'from': (page - 1) * page_size,
         'size': page_size,
@@ -180,7 +182,7 @@ async def review_queue(
         'track_total_hits': True,
         # Never ship the 1024-d embedding vectors or class_id_history to
         # the review grid (history is undo-only).
-        '_source': {'excludes': item_list_source_excludes()},
+        '_source': {'excludes': item_list_source_excludes(excludes)},
     }
     try:
         resp = await opensearch.search(index=items_index(), body=body)

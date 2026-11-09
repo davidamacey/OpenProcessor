@@ -20,7 +20,6 @@ from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_item
-from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
@@ -33,6 +32,8 @@ from src.services.curation.class_sources import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.domain.region_boxes import RegionBox
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
@@ -79,19 +80,15 @@ def region_wire_key(attr: str) -> str:
 
 REGION_WIRE_KEYS: tuple[str, ...] = tuple(region_wire_key(a) for a in REGION_WIRE_ATTRS)
 
-# Heavy vectors never shipped to a client. Callers pass the storage
-# instance so an overridden embedding key is excluded too.
-_EMBEDDING_SOURCE_EXCLUDES = (ITEM_EMBEDDING_FIELD,)
 
-
-def item_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """``_source.excludes`` list for any item search/get that feeds
-    :func:`serialize_item`."""
-    f = storage or get_region_fields()
-    return [*_EMBEDDING_SOURCE_EXCLUDES, f.box_embeddings]
+    :func:`serialize_item`: heavy vectors are never shipped to a client, so it is every vector
+    field of the index (``vector_excludes``, ``vector_source_excludes()``)."""
+    return list(vector_excludes)
 
 
-def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_list_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """``_source.excludes`` for a *list* endpoint (card grid / review queue
     / regions browse / semantic search) — :func:`item_source_excludes`
     plus ``class_id_history``.
@@ -103,14 +100,14 @@ def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
     renderer reads it. Shipping it in every row of a paginated list
     response decompresses + serializes a field nobody displays.
     """
-    return [*item_source_excludes(storage), 'class_id_history', 'mask_polygon']
+    return [*item_source_excludes(vector_excludes), 'class_id_history', 'mask_polygon']
 
 
-def item_context_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_context_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """:func:`item_list_source_excludes` keeping ``mask_polygon``: the items of
     ``GET /crops/{id}/context`` are drawn together over the source image, so
     each carries its outline (bounded by that route's sibling cap)."""
-    return [e for e in item_list_source_excludes(storage) if e != 'mask_polygon']
+    return [e for e in item_list_source_excludes(vector_excludes) if e != 'mask_polygon']
 
 
 def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> dict[str, Any]:

@@ -81,7 +81,7 @@ async def _items_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]
     resp = await opensearch.mget(
         index=items_index(),
         body={'ids': ids},
-        _source_excludes=item_source_excludes(),
+        _source_excludes=item_source_excludes(await vector_source_excludes()),
     )
     return [
         serialize_item(d.get('_source') or {}, d.get('_id', ''))

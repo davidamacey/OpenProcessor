@@ -22,6 +22,7 @@ from src.services.curation.wire import (
     item_source_excludes,
     serialize_item,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 _MAX_SIBLINGS = 500
@@ -105,8 +106,12 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
     # single-item fetch (item_source_excludes), and the sibling list
     # below additionally drops class_id_history (item_list_source_excludes
     # -- undo-only, no list renderer reads it).
+    vector_excludes = await vector_source_excludes()
     item = await _get_source(
-        opensearch, items_index(), crop_id, _source_excludes=item_source_excludes()
+        opensearch,
+        items_index(),
+        crop_id,
+        _source_excludes=item_source_excludes(vector_excludes),
     )
     if item is None:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
@@ -139,7 +144,7 @@ async def crop_image_context(crop_id: str, opensearch: OpenSearchDep) -> dict[st
             'size': _MAX_SIBLINGS,
             'query': {'term': {'image_id': image_id}},
             'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-            '_source': {'excludes': item_context_source_excludes()},
+            '_source': {'excludes': item_context_source_excludes(vector_excludes)},
         }
         try:
             resp = await opensearch.search(index=items_index(), body=body)

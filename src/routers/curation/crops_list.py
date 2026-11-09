@@ -28,6 +28,7 @@ from src.services.curation.crop_listing import (
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -185,7 +186,12 @@ async def list_crops(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    body = crop_list_body(listing, page=page, page_size=page_size)
+    body = crop_list_body(
+        listing,
+        page=page,
+        page_size=page_size,
+        vector_excludes=await vector_source_excludes(),
+    )
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
@@ -227,14 +233,13 @@ async def get_crop(
     OpenSearch ``_source``, whose region keys follow ``RegionFields``
     storage names.
     """
+    excludes = item_source_excludes(await vector_source_excludes())
     try:
         # Still excludes the 1024-d embedding vectors (matching
         # every other item endpoint's behavior) -- but not
         # class_id_history, since a single-item view may legitimately
         # want it, unlike a paginated list.
-        resp = await opensearch.get(
-            index=items_index(), id=crop_id, _source_excludes=item_source_excludes()
-        )
+        resp = await opensearch.get(index=items_index(), id=crop_id, _source_excludes=excludes)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}

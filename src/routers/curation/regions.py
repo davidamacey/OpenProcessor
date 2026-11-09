@@ -36,6 +36,7 @@ from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
@@ -47,9 +48,10 @@ def _reason(mode: str) -> str:
     return TRAINING_CANDIDATE_MODES[mode].description
 
 
-# Large embedding fields (1024 floats) + class_id_history (a
-# list-only field no browse renderer reads) — excluded from browse _source.
-_REGION_SOURCE_EXCLUDES = item_list_source_excludes()
+async def region_source_excludes() -> list[str]:
+    """Large embedding fields (1024 floats) + class_id_history (a list-only field no browse
+    renderer reads): excluded from the browse ``_source``."""
+    return item_list_source_excludes(await vector_source_excludes())
 
 
 def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -221,6 +223,7 @@ async def list_regions(
 
     sort = _region_sort(cluster_uid)
     guard_page_depth(page, page_size)
+    excludes = await region_source_excludes()
     try:
         return await search_region_rows(
             opensearch,
@@ -231,7 +234,7 @@ async def list_regions(
             page=page,
             page_size=page_size,
             box_clause=_box_clause(parts),
-            source_excludes=_REGION_SOURCE_EXCLUDES,
+            source_excludes=excludes,
         )
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
@@ -389,6 +392,7 @@ async def training_candidates(
         },
         {'crop_id': {'order': 'asc'}},
     ]
+    excludes = await region_source_excludes()
     try:
         page_body = await search_region_rows(
             opensearch,
@@ -399,7 +403,7 @@ async def training_candidates(
             page=page,
             page_size=page_size,
             box_clause=box_clause,
-            source_excludes=_REGION_SOURCE_EXCLUDES,
+            source_excludes=excludes,
             row_keys={'selection_reason': reason},
         )
     except Exception as exc:

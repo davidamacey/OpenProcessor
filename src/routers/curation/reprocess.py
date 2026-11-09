@@ -36,6 +36,7 @@ from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_job import job_info
 from src.services.curation.reprocess_targets import ReprocessTargetsError
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.jobs import status as job_status
 from src.services.jobs.service import cancel_job
 
@@ -70,7 +71,7 @@ async def _items_where(opensearch: Any, field: str, value: str) -> list[dict[str
         index=items_index(),
         body={
             'size': 1000,
-            '_source': {'excludes': item_source_excludes()},
+            '_source': {'excludes': item_source_excludes(await vector_source_excludes())},
             'query': {'bool': {'filter': [{'term': {field: value}}]}},
             'sort': [{'crop_id': 'asc'}],
         },

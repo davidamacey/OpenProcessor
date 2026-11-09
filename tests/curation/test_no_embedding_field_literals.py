@@ -36,11 +36,9 @@ ALLOWED: dict[str, str] = {
 # list only shrinks (``test_pending_entries_still_offend`` fails for a file that was converted),
 # and a new offender fails the first test.
 PENDING: dict[str, str] = {
-    'src/clients/occ.py': 'OCC_BULK_MGET_SOURCE_EXCLUDES: every OCC caller passes the vector excludes',
     'src/config/__init__.py': 'exports ITEM_EMBEDDING_FIELD until the last reader is converted',
     'src/config/curation.py': 'defines ITEM_EMBEDDING_FIELD',
     'src/domain/embedding_state.py': 'the clause helpers default to the constant',
-    'src/services/curation/wire.py': 'item_source_excludes: every serializer caller passes the excludes',
     'src/services/curation/review_tab_clauses.py': 'the all tab: build_tab_query takes the field',
     'src/services/curation/strategy_builders.py': 'the requires_field descriptor of semantic search',
     'scripts/bench/export_project_embeddings.py': 'standalone httpx harness over a 0.6.0 export',

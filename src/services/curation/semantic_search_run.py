@@ -24,6 +24,7 @@ from src.services.curation.semantic_search_box import (
     no_box_vectors_clause,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.embedding_spaces.resolve import embedding_space
 from src.utils.search_timing import search_annotate, search_span
 
@@ -57,12 +58,6 @@ class QueryVector:
 
 
 VectorFor = Callable[[ResolvedSpace], Awaitable[QueryVector]]
-
-
-def source_excludes(fields: RegionFields) -> list[str]:
-    """Never ship raw embedding vectors or class_id_history (this
-    is a paginated list endpoint; history is undo-only)."""
-    return item_list_source_excludes(fields)
 
 
 def build_knn_query(
@@ -164,7 +159,7 @@ def _search_body(
     size: int,
     depth: int,
     min_score: float | None,
-    fields: RegionFields,
+    vector_excludes: Sequence[str],
     target: SearchTarget,
     skip_box: tuple[str, str] | None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -174,7 +169,8 @@ def _search_body(
     it must cover through the end of the requested page. ``from_``/``size`` are a separate
     concern, which slice of those candidates the response carries; OpenSearch slices
     server-side, so only that slice crosses the wire."""
-    excludes = source_excludes(fields)
+    # A paginated list endpoint: never ship raw vectors or class_id_history (undo-only).
+    excludes = item_list_source_excludes(vector_excludes)
     match target:
         case SearchTarget.ITEM:
             knn_query = build_knn_query(
@@ -282,6 +278,7 @@ async def run_search(
     depth = min(MAX_K, page * page_size)
     bodies: list[dict[str, Any]] = []
     unsearchable: dict[str, Any] = {}
+    vector_excludes = await vector_source_excludes()
     for space, vector in queries:
         body, clause = _search_body(
             vector=vector,
@@ -291,7 +288,7 @@ async def run_search(
             size=depth if fused else page_size,
             depth=depth,
             min_score=min_score,
-            fields=fields,
+            vector_excludes=vector_excludes,
             target=target,
             skip_box=skip_box,
         )
