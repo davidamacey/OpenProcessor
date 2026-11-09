@@ -108,6 +108,7 @@ jobs:
               - 'docker/trainer/requirements.txt'
             segmenter:
               - 'docker/segmenter/Dockerfile'
+              - 'docker/segmenter/requirements.txt'
             cropwright:
               - 'frontend/Dockerfile'
               - 'frontend/package.json'

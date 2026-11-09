@@ -131,14 +131,22 @@ def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags()
     text = (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text()
     runtime_start = text.rindex('FROM pytorch/pytorch')
     builder, runtime = text[:runtime_start], text[runtime_start:]
-    for requirement in (
-        "'fastapi==0.162.0'",
-        "'pillow>=13.0.0'",
-        "'certifi>=2026.10.18'",
-        "'filelock>=4.2.1'",
-        "'dnspython>=2.9.0'",
-    ):
-        assert requirement in builder
+    assert (
+        'pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt'
+        in builder
+    )
+    pins = (REPO_ROOT / 'docker' / 'segmenter' / 'requirements.txt').read_text()
+    floors = {
+        'fastapi': (0, 162, 0),
+        'pillow': (13, 0, 0),
+        'certifi': (2026, 10, 18),
+        'filelock': (4, 2, 1),
+        'dnspython': (2, 9, 0),
+    }
+    for package, floor in floors.items():
+        match = re.search(rf'^{package}==([0-9.]+)\s*$', pins, re.M)
+        assert match, package
+        assert tuple(int(p) for p in match.group(1).split('.')) >= floor, package
     assert 'pip install' not in runtime
     for stale in (
         '"$site"/PIL ',
