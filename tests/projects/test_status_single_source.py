@@ -11,6 +11,7 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.services.projects.registry import ProjectRegistry, set_project_registry
 
@@ -43,7 +44,7 @@ def test_guard_and_get_agree_in_the_flip_window(monkeypatch) -> None:
     from src.routers.curation import projects as routes
 
     async def _no_os():
-        raise RuntimeError('no opensearch in this test')
+        raise OpenSearchConnectionError('N/A', 'no opensearch in this test', None)
 
     monkeypatch.setattr(routes, 'make_curation_opensearch', _no_os)
 

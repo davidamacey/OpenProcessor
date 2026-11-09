@@ -114,3 +114,33 @@ async def test_one_project_shows_unknown_counts_when_opensearch_is_unreachable(
 
     assert response.counts.images is None
     assert response.counts.items is None
+
+
+class _UnpingableClient:
+    """What ``OpenSearchClient`` is when the cluster cannot be reached at creation."""
+
+    def __init__(self, **_: Any) -> None:
+        self.client = object()
+
+    async def ping(self) -> bool:
+        return False
+
+
+@pytest.mark.asyncio
+async def test_the_project_list_shows_unknown_counts_when_the_client_cannot_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The outage surfaces from the real client factory (its ping fails), not from a
+    stand-in raising the right class: the list route must still answer."""
+    from src.core import dependencies
+    from src.routers.curation import projects as router
+
+    monkeypatch.setattr(dependencies.app_state, '_opensearch_client', None)
+    monkeypatch.setattr(dependencies, 'OpenSearchClient', _UnpingableClient)
+    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+
+    response = await router.list_projects()
+
+    (alpha,) = response.projects
+    assert alpha.counts.images is None
+    assert response.capacity is None

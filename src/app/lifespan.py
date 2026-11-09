@@ -77,7 +77,7 @@ async def _report_stored_face_data() -> None:
 
     try:
         counts = await stored_face_counts()
-    except (TimeoutError, OSError, RuntimeError, OpenSearchException) as exc:
+    except (TimeoutError, OSError, OpenSearchException) as exc:
         logger.warning('faces_disabled_state_unknown', error_type=type(exc).__name__)
         return
     if counts.is_empty():

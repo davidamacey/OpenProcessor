@@ -96,7 +96,7 @@ async def test_label_files_on_disk_use_dense_ids_not_registry_ids(tmp_path):
             'class_name': 'truck',
         }
     ]
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
@@ -129,7 +129,7 @@ async def test_manifest_export_id_map_is_invertible(tmp_path):
         }
         for i, name in enumerate(['car', 'truck', 'bus'])
     ]
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 
@@ -161,7 +161,7 @@ async def test_manifest_counts_rows_dropped_for_unregistered_class_ids(tmp_path)
         }
         for cid, class_id, name in [('ok', 0, 'car'), ('ghost1', 10000, ''), ('ghost2', 10000, '')]
     ]
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset()
 

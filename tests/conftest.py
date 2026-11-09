@@ -312,9 +312,11 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     async def _no_mapping_check() -> None:
         from contextlib import suppress
 
+        from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
+
         from src.core.dependencies import OpenSearchClientFactory
 
-        with suppress(RuntimeError):
+        with suppress(OpenSearchConnectionError):
             await OpenSearchClientFactory.get_client()
 
     monkeypatch.setattr('src.core.dependencies.bootstrap_opensearch_indexes', _no_mapping_check)

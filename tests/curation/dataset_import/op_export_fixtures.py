@@ -28,7 +28,9 @@ F = RegionFields()
 
 
 def config(tmp_path: Path) -> CurationConfig:
-    return CurationConfig(items_index=ITEMS, images_index=IMAGES, export_root=tmp_path / 'exports')
+    return CurationConfig(
+        items_index=ITEMS, images_index=IMAGES, export_root=tmp_path / 'exports', export_keep_last=0
+    )
 
 
 def item(

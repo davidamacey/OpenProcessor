@@ -37,7 +37,7 @@ HOLDOUT_PER_CLASS = 5
 
 
 def _service(tmp_path: Path, docs: list[dict[str, Any]]) -> GenericYoloExportService:
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     registry = InMemoryRegistry()
     for name in CLASS_NAMES:
         registry.add(name)
@@ -282,7 +282,12 @@ def status_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: AsyncMock()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    # The status route counts the validated cohort: a bare AsyncMock would answer with a coroutine.
+    opensearch = AsyncMock()
+    opensearch.count.return_value = {'count': 1}
+    app.dependency_overrides[_raw_opensearch_dep] = lambda: (
+        opensearch
+    )  # FastAPI parses a class here as a dependency with parameters
     return TestClient(app)
 
 
