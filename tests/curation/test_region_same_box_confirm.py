@@ -34,7 +34,6 @@ F = get_region_fields()
 INDEX = base_curation_config().items_index
 BOX = [0.6430511474609375, 0.5797716302772215, 0.6966705322265625, 0.6243825534416916]
 PARENT = [0.2421875, 0.38985655737704916, 0.7890625, 0.8000585480093677]
-HUMAN = region_profile_or_neutral().human_detector_name
 DETECTED_AT = '2026-09-24T03:08:19.221513+00:00'
 
 
@@ -119,7 +118,7 @@ def test_same_box_put_keeps_detector_and_score(
     assert doc[F.status] == 'detected'
     assert doc[F.verified] is True
     assert doc[F.validated] is True
-    assert doc[F.verifier] == HUMAN
+    assert doc[F.verifier] == region_profile_or_neutral().human_detector_name
     assert doc[F.label_source] == 'human'
     (wire_box,) = resp.json()['item']['region_boxes']
     assert wire_box['detector'] == 'det_model'
@@ -181,7 +180,7 @@ def test_moved_box_is_human_geometry(client: TestClient, fake_os: QueryFakeOpenS
     assert resp.status_code == 200, resp.text
     doc = _doc(fake_os, 'c1')
     (box,) = doc[F.boxes]
-    assert box['detector'] == HUMAN
+    assert box['detector'] == region_profile_or_neutral().human_detector_name
     assert box['source'] == 'human'
     assert box['score'] == 1.0
     assert box['bbox_norm'] == moved

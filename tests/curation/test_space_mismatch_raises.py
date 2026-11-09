@@ -126,3 +126,31 @@ async def test_a_vector_of_the_wrong_space_reaching_the_search_raises(
             page=1,
             page_size=10,
         )
+
+
+@pytest.mark.asyncio
+async def test_search_filters_use_the_primary_item_space_when_another_space_is_searched(
+    embedding_registry,
+) -> None:
+    """Deliberate: the item filters (here ``embedding_state=embedded``) read the primary item
+    space's vector field, not the field of the space the kNN query targets."""
+    from src.services.curation.item_filter import ItemFilter
+
+    embedding_registry.add(OTHER_ITEM)
+    fake = _opensearch()
+    await semantic_search.semantic_text_search(
+        opensearch=fake,
+        pe_encoder=_encoder(),
+        executor=None,
+        query='q',
+        page=1,
+        page_size=10,
+        target=SearchTarget.ITEM,
+        space_key=OTHER_ITEM.space_key,
+        item_filter=ItemFilter(embedding_state=['embedded']),
+    )
+    body = fake.search.await_args.kwargs['body']
+    assert list(body['query']['knn']) == ['vec_mobileclip2_s2_v1']
+    filter_clause = body['query']['knn']['vec_mobileclip2_s2_v1']['filter']
+    assert {'exists': {'field': 'pe_embedding'}} in filter_clause['bool']['filter']
+    assert 'vec_mobileclip2_s2_v1' not in str(filter_clause)
