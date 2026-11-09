@@ -208,10 +208,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
     from src.services.triton_control import TritonControlService
 
     registry = await bound_registry()
-    try:
-        repo = await TritonControlService().get_repository_index()
-    except Exception:
-        repo = []
+    repo = await TritonControlService().get_repository_index()
     state_by_name: dict[str, dict[str, Any]] = {e['name']: e for e in repo if 'name' in e}
 
     raw: dict[str, dict[str, Any]] = {}
@@ -342,10 +339,7 @@ async def _build_ocr() -> OcrBlock:
     from src.config.settings import TritonModelConfig
     from src.services.triton_control import TritonControlService
 
-    try:
-        repo = await TritonControlService().get_repository_index()
-    except Exception:
-        repo = []
+    repo = await TritonControlService().get_repository_index()
     state_by_name = {e['name']: e for e in repo if 'name' in e}
 
     def _entry(name: str) -> OcrModelEntry:
