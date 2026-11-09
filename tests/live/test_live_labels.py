@@ -159,21 +159,16 @@ def test_exclude_then_unexclude_round_trip(
         assert src['cluster_id'] is None
 
 
-def test_move_relabels_into_the_destination_cluster(
+def test_move_into_an_unknown_cluster_is_refused_and_writes_nothing(
     api_client: Any, opensearch: Any, label_cohort: list[str]
 ) -> None:
     batch = label_cohort[14:17]
-    resp = api_client.post('/crops/move', json={'crop_ids': batch, 'cluster_id': 6})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['updated'] == len(batch)
-    for crop_id in batch:
-        src = _source(opensearch, crop_id)
-        assert src['cluster_id'] == 6
-        assert src['class_id'] == 6
-        assert src['class_name'] == CLASS_NAMES[6]
-        assert src['class_source'] == 'human_move'
-        assert src['class_validated'] is True
-        assert src['cluster_subid'] is None
+    before = {c: _source(opensearch, c) for c in batch}
+    unknown = '01a1b00f-8d37-77d2-a545-50e87fe15f60'
+    resp = api_client.post('/crops/move', json={'crop_ids': batch, 'cluster_uid': unknown})
+    assert resp.status_code == 400, resp.text
+    assert unknown in resp.text
+    assert {c: _source(opensearch, c) for c in batch} == before
 
 
 def test_flag_new_class_queues_for_the_curator(

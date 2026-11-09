@@ -31,6 +31,9 @@ from src.services.detection.cascade_detect.sanity import class_provenance
 from src.utils.timeutil import now_iso
 
 
+MOVE_ASSIGNED_BY = 'edit'
+"""``cluster_assigned_by`` of an item a human moved into a cluster."""
+
 ASSIST_LOOP = 'assist_loop'
 """``label_source``, detector and labeler of a propagated class."""
 
@@ -208,44 +211,17 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     return fields
 
 
-def human_move_class_update(
+def candidate_move_update(
     current: dict[str, Any],
     *,
-    class_id: int,
-    class_name: str,
+    partition_id: str,
+    cluster_uid: str,
     now: str,
     op_id: str | None = None,
 ) -> dict[str, Any]:
-    """Merge body for ``move_crops`` into a CLASS cluster: relabel via
-    ``class_source='human_move'`` (crops.py's ``move_crops`` docstring:
-    "move this to the X cluster" means "this is an X")."""
-    from src.domain.history import record_class_snapshot
+    """Merge body for ``move_crops`` into a cluster of the serving partition: placement only.
 
-    history = record_class_snapshot(
-        current, writer='human:move_crops', restorable=True, op_id=op_id
-    )
-    return {
-        'cluster_id': class_id,
-        'class_id': class_id,
-        'class_name': class_name,
-        'class_source': 'human_move',
-        'class_validated': True,
-        'label_source': 'human',
-        'class_id_history': history,
-        'cluster_subid': None,
-        'label_op_id': op_id,
-        **human_class_provenance(),
-        **audit_outcome_fields(current, class_name),
-        'updated_at': now,
-    }
-
-
-def candidate_move_update(
-    current: dict[str, Any], *, cluster_id: int, now: str, op_id: str | None = None
-) -> dict[str, Any]:
-    """Merge body for ``move_crops`` into a candidate cluster: placement only.
-
-    The item joins the group unvalidated. A locked (human- or
+    The item joins the cluster (``cluster_assigned_by='edit'``, no score) unvalidated. A locked (human- or
     import-owned, validated) class is cleared -- the human just said the
     item isn't that class -- while a machine suggestion is kept. The
     pre-write state is snapshotted so undo restores it exactly.
@@ -262,8 +238,12 @@ def candidate_move_update(
         update.update(dict.fromkeys(CLASS_STATE_FIELDS))
     update.update(
         {
-            'cluster_id': cluster_id,
-            'cluster_subid': None,
+            'cluster_partition_id': partition_id,
+            'cluster_uid': cluster_uid,
+            'cluster_state': 'assigned',
+            'cluster_score': None,
+            'cluster_margin': None,
+            'cluster_assigned_by': MOVE_ASSIGNED_BY,
             'class_validated': False,
             'label_op_id': op_id,
             'updated_at': now,
@@ -278,6 +258,5 @@ __all__ = [
     'class_label_fields',
     'class_label_update',
     'human_class_provenance',
-    'human_move_class_update',
     'import_class_provenance',
 ]

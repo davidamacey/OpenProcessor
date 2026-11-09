@@ -8,6 +8,7 @@ implementation detail, not a new import surface.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 -- pydantic resolves the annotation from module globals
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -105,7 +106,7 @@ class CropBatchLabelRequest(SelectionTargets):
 
 
 class CropMoveRequest(SelectionTargets):
-    cluster_id: int
+    cluster_uid: uuid.UUID
 
 
 class CropExcludeRequest(SelectionTargets):

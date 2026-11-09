@@ -56,7 +56,7 @@ async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_f
     after = fake.docs(ITEMS)['c1']
     assert after['class_id'] is None
     assert after['class_validated'] is False
-    assert after['cluster_id'] is None
+    assert after['cluster_uid'] is None
     assert r.json()['class_id'] is None
 
     r = client.post('/curation/projects/default/crops/c1/label/undo')
@@ -98,7 +98,7 @@ async def test_review_dismiss_only_keeps_class_and_is_undoable(
     after = fake.docs(ITEMS)['c1']
     assert after['review_dismissed_at']
     assert _class_state(after) == _class_state(fake.docs(ITEMS)['c1'])
-    assert after['cluster_id'] == before['cluster_id']
+    assert after['cluster_uid'] == before['cluster_uid']
 
     assert client.post('/curation/projects/default/crops/c1/label/undo').status_code == 200
     assert _state(fake.docs(ITEMS)['c1']) == before
@@ -177,8 +177,10 @@ async def test_class_source_is_always_human_on_a_human_write(crops, registry, id
 @pytest.mark.usefixtures('world', 'fake_queue')
 async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F811
     from curation.queued_label import call_route
+    from curation.serving_partition import serve_clusters
     from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
 
+    _, (uid, _other) = await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('a', 'b')}})
     out = await call_route(
         crops.batch_label_crops,
@@ -188,7 +190,7 @@ async def test_batch_writes_return_updated_ids(crops, ids) -> None:  # noqa: F81
     assert out['updated_ids'] == ['a']
     assert out['conflicts'] == 1, 'the unknown id is the one conflict'
     out = await call_route(
-        crops.move_crops, CropMoveRequest(crop_ids=['b', 'gone'], cluster_id=ids['gadget']), fake
+        crops.move_crops, CropMoveRequest(crop_ids=['b', 'gone'], cluster_uid=uid), fake
     )
     assert out['updated_ids'] == ['b']
 

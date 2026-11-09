@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 from src.domain.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE
-from src.services.curation.class_label import ItemLabel, class_label_update, human_move_class_update
+from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.holdout import build_cohort_query
 
 
@@ -234,15 +234,6 @@ def test_an_undone_verdict_drops_out_of_the_report(
     assert client.get(f'{BASE}/report').json()['audited'] == 1
     fake.docs(ITEMS)['car1']['class_validated'] = False  # the label was undone
     assert client.get(f'{BASE}/report').json()['audited'] == 0
-
-
-def test_a_move_into_a_class_is_a_human_verdict_too(fake: QueryFakeOpenSearch) -> None:
-    _run_start(fake)
-    crop_id = sorted(_sampled(fake))[0]
-    doc = fake.docs(ITEMS)[crop_id]
-    doc.update(human_move_class_update(doc, class_id=1, class_name='person', now='2026-10-09'))
-    assert doc[AUDIT_OUTCOME] in {'both_wrong', 'detector_wrong', 'vlm_wrong', 'agree'}
-    assert doc['audit_human_name'] == 'person'
 
 
 def test_only_a_human_verdict_on_a_sampled_crop_is_stamped() -> None:

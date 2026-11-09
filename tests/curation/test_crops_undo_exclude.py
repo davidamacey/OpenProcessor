@@ -21,6 +21,7 @@ from _class_registry_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.queued_label import call_raw, call_route
+from curation.serving_partition import serve_clusters
 from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
@@ -47,8 +48,12 @@ CLASS_STATE_FIELDS = (
     'class_labeler',
     'class_labeled_at',
     'class_validated',
-    'cluster_id',
-    'cluster_subid',
+    'cluster_partition_id',
+    'cluster_uid',
+    'cluster_state',
+    'cluster_score',
+    'cluster_margin',
+    'cluster_assigned_by',
 )
 
 
@@ -191,14 +196,13 @@ async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
 
     fake = QueryFakeOpenSearch({ITEMS: {'b': _proposal_doc('b'), 'm': _proposal_doc('m')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
+    _, (uid, _other) = await serve_clusters()
 
     await call_route(
         crops.batch_label_crops, CropBatchLabelRequest(crop_ids=['b'], class_id=ids['gadget']), fake
     )
-    await call_route(
-        crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=ids['widget']), fake
-    )
-    assert fake.docs(ITEMS)['m']['class_source'] == 'human_move'
+    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_uid=uid), fake)
+    assert fake.docs(ITEMS)['m']['cluster_uid'] == str(uid)
 
     await label_undo.unlabel_crop('b', fake)
     await label_undo.unlabel_crop('m', fake)
@@ -365,32 +369,30 @@ async def test_unexclude_unvalidated_item_from_another_class_cluster_goes_residu
 
 
 # =============================================================================
-# Bug C — moving into a candidate cluster is placement, not a class label
+# A move is placement in the serving partition, not a class label
 # =============================================================================
 
 
 @pytest.mark.asyncio
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
-async def test_move_into_candidate_cluster_sets_placement_not_class(crops, registry, ids) -> None:
+async def test_move_sets_the_partition_placement_not_the_class(crops, registry, ids) -> None:
     from src.routers.curation._common_models import CropMoveRequest
 
-    doc = _proposal_doc('m')
-    doc.update(cluster_id=None, cluster_subid=None)
-    peer = _proposal_doc('peer')
-    peer.update(cluster_id=10000, cluster_subid=None)
-    fake = QueryFakeOpenSearch({ITEMS: {'m': doc, 'peer': peer}})
+    partition, (uid, _other) = await serve_clusters()
+    fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m'), 'peer': _proposal_doc('peer')}})
     before = _class_state(fake.docs(ITEMS)['m'])
 
-    out = await call_route(
-        crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=10000), fake
-    )
+    out = await call_route(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_uid=uid), fake)
     assert out['updated'] == 1
     m = fake.docs(ITEMS)['m']
-    assert m['cluster_id'] == 10000
+    assert (m['cluster_partition_id'], m['cluster_uid']) == (str(partition), str(uid))
+    assert (m['cluster_state'], m['cluster_assigned_by']) == ('assigned', 'edit')
+    assert m['cluster_score'] is None
     assert m.get('class_id') is None
     assert m['class_validated'] is False
     assert m['class_source'] == 'detector_proposal'
+    assert 'cluster_uid' not in fake.docs(ITEMS)['peer']
 
     await label_undo.unlabel_crop('m', fake)
     assert _class_state(fake.docs(ITEMS)['m']) == before
@@ -399,16 +401,17 @@ async def test_move_into_candidate_cluster_sets_placement_not_class(crops, regis
 @pytest.mark.asyncio
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
-async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) -> None:
-    """A human-validated crop moved into a candidate group is no longer that
-    class; keeping it validated would leak the old class into export."""
+async def test_move_clears_a_human_class(crops, registry, ids) -> None:
+    """A human-validated crop moved into a cluster is no longer that class; keeping it
+    validated would leak the old class into export."""
     from src.routers.curation._common_models import CropMoveRequest
 
+    _, (uid, _other) = await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
     await _label(crops, fake, registry, 'h', ids['widget'])
-    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['h'], cluster_id=10003), fake)
+    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['h'], cluster_uid=uid), fake)
     h = fake.docs(ITEMS)['h']
-    assert h['cluster_id'] == 10003
+    assert h['cluster_uid'] == str(uid)
     assert h['class_id'] is None
     assert h['class_validated'] is False
 
@@ -416,36 +419,27 @@ async def test_move_into_candidate_clears_a_human_class(crops, registry, ids) ->
 @pytest.mark.asyncio
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
-@pytest.mark.parametrize('target', [-2, 9999])
-async def test_move_rejects_unassigned_and_unregistered_targets(crops, registry, target) -> None:
+@pytest.mark.parametrize('serving', [True, False])
+async def test_move_rejects_a_cluster_the_serving_partition_does_not_hold(
+    crops, registry, serving
+) -> None:
+    """A uid that is not a cluster of the serving partition (unknown, or nothing is serving)
+    is not a move target; writing it would invent a phantom cluster."""
+    import uuid
+
     from fastapi import HTTPException
 
     from src.routers.curation._common_models import CropMoveRequest
 
+    if serving:
+        await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
     before = dict(fake.docs(ITEMS)['m'])
+    target = uuid.uuid4()
     with pytest.raises(HTTPException) as exc:
-        await call_raw(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=target), fake)
+        await call_raw(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_uid=target), fake)
     assert exc.value.status_code == 400
-    assert fake.docs(ITEMS)['m'] == before
-
-
-@pytest.mark.asyncio
-@pytest.mark.db
-@pytest.mark.usefixtures('world', 'fake_queue')
-async def test_move_rejects_a_candidate_target_with_no_members(crops, registry) -> None:
-    """A candidate id nobody is in (never existed, or renumbered away) is
-    not a move target; writing it would invent a phantom cluster."""
-    from fastapi import HTTPException
-
-    from src.routers.curation._common_models import CropMoveRequest
-
-    fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m')}})
-    before = dict(fake.docs(ITEMS)['m'])
-    with pytest.raises(HTTPException) as exc:
-        await call_raw(crops.move_crops, CropMoveRequest(crop_ids=['m'], cluster_id=99999), fake)
-    assert exc.value.status_code == 400
-    assert '99999' in str(exc.value.detail)
+    assert str(target) in str(exc.value.detail)
     assert fake.docs(ITEMS)['m'] == before
 
 

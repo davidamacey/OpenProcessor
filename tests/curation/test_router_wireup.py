@@ -362,7 +362,7 @@ def test_unlabel_crop_clears_stale_human_provenance(
         (
             'post',
             '/curation/projects/default/crops/move',
-            {'crop_ids': ['crop-xyz'], 'cluster_id': 3},
+            {'crop_ids': ['crop-xyz'], 'cluster_uid': '01a1b00f-8d37-77d2-a545-50e87fe15f60'},
         ),
     ],
 )
@@ -412,6 +412,11 @@ def test_human_class_writers_replace_detector_provenance(
     reg = InMemoryRegistry()
     reg.seed_rows([{'class_id': 3, 'class_name': 'gadget'}])
 
+    if 'cluster_uid' in body:
+        from curation.serving_partition import serve_clusters
+
+        _, (uid, _other) = asyncio.run(serve_clusters())
+        body = {**body, 'cluster_uid': str(uid)}
     with patch('src.routers.curation.crops_write.get_class_registry', return_value=reg):
         r = getattr(app_client, method)(url, json=body)
         assert r.status_code == 202, r.text

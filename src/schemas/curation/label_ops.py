@@ -29,8 +29,7 @@ class LabelOp(BaseModel):
     at: str
     finished_at: str | None
     class_name: str | None
-    target_cluster_id: int | None
-    target_kind: Literal['class', 'candidate'] | None
+    target_cluster_uid: str | None
     label_source: str | None
     target: Literal['crop_ids', 'selection']
     selected: int

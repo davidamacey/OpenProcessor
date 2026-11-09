@@ -69,8 +69,7 @@ class LabelOpRecord(BaseModel):
     finished_at: str | None = None
     class_name: str | None = None
     class_id: int | None = None
-    target_cluster_id: int | None = None
-    target_kind: Literal['class', 'candidate'] | None = None
+    target_cluster_uid: str | None = None
     label_source: str | None = None
     target: Literal['crop_ids', 'selection']
     selected: int
@@ -88,8 +87,7 @@ class NewLabelOp(BaseModel):
     writer: str
     class_name: str | None
     class_id: int | None
-    target_cluster_id: int | None = None
-    target_kind: Literal['class', 'candidate'] | None = None
+    target_cluster_uid: str | None = None
     label_source: str | None = None
     target: Literal['crop_ids', 'selection']
     selected: int
@@ -139,12 +137,9 @@ async def create_op_in(
         make = label_fingerprint if new.kind == 'label' else propagated_fingerprint
         fingerprint = make(op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name)
     else:
+        assert new.target_cluster_uid is not None
         fingerprint = move_fingerprint(
-            op_id=str(op_id),
-            writer=new.writer,
-            at=at,
-            class_name=new.class_name if new.target_kind == 'class' else None,
-            cluster_id=new.target_cluster_id,
+            op_id=str(op_id), writer=new.writer, at=at, cluster_uid=new.target_cluster_uid
         )
     record = LabelOpRecord(op_id=str(op_id), at=at, fingerprint=fingerprint, **new.model_dump())
     await create_label_operation(

@@ -31,6 +31,8 @@ from src.domain.label_ops import (
 
 OP = '01a1b00f-8d37-77d2-a545-50e87fe15f52'
 OTHER = '01a1b00f-8d37-77d2-a545-50e87fe15f53'
+UID_A = '01a1b00f-8d37-77d2-a545-50e87fe15f60'
+UID_B = '01a1b00f-8d37-77d2-a545-50e87fe15f61'
 AT = '2026-03-01T12:00:00.000000+00:00'
 BEFORE = '2026-03-01T11:00:00.000000+00:00'
 AFTER = '2026-03-01T13:00:00.000000+00:00'
@@ -63,7 +65,6 @@ def _written(prior: dict[str, Any] | None = None, op_id: str = OP) -> dict[str, 
         'class_name': 'widget',
         'class_source': 'human',
         'class_validated': True,
-        'cluster_id': 1,
         'label_op_id': op_id,
         'class_id_history': history,
     }
@@ -177,16 +178,14 @@ def test_undo_outcome_class_names_compare_normalized() -> None:
 
 
 def test_a_candidate_move_fingerprint_compares_the_cluster_not_the_class() -> None:
-    fp = move_fingerprint(
-        op_id=OP, writer='human:move_crops', at=AT, class_name=None, cluster_id=10_005
-    )
+    fp = move_fingerprint(op_id=OP, writer='human:move_crops', at=AT, cluster_uid=UID_A)
     base = {'class_id': 3, 'class_name': 'gizmo', 'class_source': 'vlm'}
     history = record_class_snapshot(
         base, writer='human:move_crops', restorable=True, op_id=OP, now=AT
     )
     doc = {
         **base,
-        'cluster_id': 10_005,
+        'cluster_uid': UID_A,
         'class_validated': False,
         'label_op_id': OP,
         'class_id_history': history,
@@ -197,7 +196,7 @@ def test_a_candidate_move_fingerprint_compares_the_cluster_not_the_class() -> No
         return undo_outcome(d, fp, prior=prior, registry_name=_registry_name)
 
     assert outcome(doc) is UndoOutcome.RESTORE
-    assert outcome({**doc, 'cluster_id': 10_006}) is UndoOutcome.KEPT_CHANGED
+    assert outcome({**doc, 'cluster_uid': UID_B}) is UndoOutcome.KEPT_CHANGED
     assert outcome({**doc, 'class_validated': True}) is UndoOutcome.KEPT_CHANGED
 
 
@@ -297,12 +296,10 @@ def test_current_query_matches_undo_outcome_restore() -> None:
     selected = {i for i, d in docs.items() if matches(d, current_query(fp))}
     assert selected == expected
     # The same holds for a move to a candidate cluster.
-    cfp = move_fingerprint(
-        op_id=OP, writer='human:move_crops', at=AT, class_name=None, cluster_id=9
-    )
+    cfp = move_fingerprint(op_id=OP, writer='human:move_crops', at=AT, cluster_uid=UID_A)
     cdocs = {
-        'a': {'label_op_id': OP, 'cluster_id': 9, 'class_validated': False},
-        'b': {'label_op_id': OP, 'cluster_id': 8, 'class_validated': False},
-        'c': {'label_op_id': OP, 'cluster_id': 9, 'class_validated': True},
+        'a': {'label_op_id': OP, 'cluster_uid': UID_A, 'class_validated': False},
+        'b': {'label_op_id': OP, 'cluster_uid': UID_B, 'class_validated': False},
+        'c': {'label_op_id': OP, 'cluster_uid': UID_A, 'class_validated': True},
     }
     assert {i for i, d in cdocs.items() if matches(d, current_query(cfp))} == {'a'}
