@@ -7,11 +7,16 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from fused_output import fused_tensor
 from PIL import Image
 
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import CurationConfig, DetectionProfile
 from src.services.curation.ingest import CurationIngestService
+
+
+#: The network input size of the primary profile these tests build.
+PRIMARY_NET = 320
 
 
 @dataclass
@@ -44,12 +49,12 @@ class FakeInferResult:
 
 
 class FakeTritonPool:
-    """Returns pre-scripted end2end detections for the primary detector.
+    """Returns the pre-scripted fused ``output0`` tensor for the primary detector.
 
     ``detections`` is a list of ``(x1, y1, x2, y2, score, class_id)`` with
-    box coordinates normalized to ``[0, 1]`` of the network input square —
-    the same convention the real end2end TRT export uses (ingest multiplies
-    by ``input_size`` before undoing the letterbox).
+    box coordinates as fractions of the network input square; the fake scales
+    them to the letterbox pixels (``net`` = the primary profile's ``input_size``)
+    the real engine emits.
 
     The fake honors the *request's* batch dimension — it replies with one
     detection row per input image, exactly as Triton would. Tests assert
@@ -77,21 +82,8 @@ class FakeTritonPool:
             raise RuntimeError(f'model does not support batch={batch}')
         self.calls.append(model_name)
         self.batch_sizes.append(batch)
-        n = len(self.detections)
-        boxes = np.array([[d[0], d[1], d[2], d[3]] for d in self.detections], dtype=np.float32)
-        scores = np.array([d[4] for d in self.detections], dtype=np.float32)
-        classes = np.array([d[5] for d in self.detections], dtype=np.float32)
         return FakeInferResult(
-            {
-                'num_dets': np.tile(np.array([[n]], dtype=np.int32), (batch, 1)),
-                'det_boxes': (
-                    np.tile(boxes.reshape(1, n, 4), (batch, 1, 1))
-                    if n
-                    else np.zeros((batch, 0, 4), dtype=np.float32)
-                ),
-                'det_scores': np.tile(scores.reshape(1, n), (batch, 1)),
-                'det_classes': np.tile(classes.reshape(1, n), (batch, 1)),
-            }
+            {'output0': fused_tensor(self.detections, net=PRIMARY_NET, batch=batch)}
         )
 
 
@@ -145,7 +137,7 @@ def _make_service(
         detector_model='primary_end2end',
         assigns_class=True,
         detector_version=detector_version,
-        input_size=320,
+        input_size=PRIMARY_NET,
         confidence_floor=confidence_floor,
         batch_limit=batch_limit,
     )

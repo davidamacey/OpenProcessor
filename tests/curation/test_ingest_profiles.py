@@ -140,13 +140,11 @@ def _decode(profile: DetectionProfile, classes: list[int]) -> list[Any]:
     detector = WholeImageDetector(triton_pool=None, registry=_Registry(), profile=profile)
     n = len(classes)
     return detector.decode_primary_row(
-        np.array([n]),
-        np.array([[0.1, 0.1, 0.5, 0.5]] * n, dtype=np.float32),
+        np.array([[64.0, 64.0, 320.0, 320.0]] * n, dtype=np.float32),
         np.array([0.9] * n, dtype=np.float32),
         np.array(classes, dtype=np.float32),
         1.0,
         (0.0, 0.0),
-        640,
     )
 
 
@@ -194,13 +192,11 @@ def test_default_primary_does_not_assign_class(tmp_path: Any) -> None:
     profile = DetectionProfile(name='item', labels_path=str(labels))
     detector = WholeImageDetector(triton_pool=None, registry=_DomainRegistry(), profile=profile)
     items = detector.decode_primary_row(
-        np.array([2]),
-        np.array([[0.1, 0.1, 0.5, 0.5]] * 2, dtype=np.float32),
+        np.array([[64.0, 64.0, 320.0, 320.0]] * 2, dtype=np.float32),
         np.array([0.99, 0.2], dtype=np.float32),
         np.array([2, 7], dtype=np.float32),
         1.0,
         (0.0, 0.0),
-        640,
     )
     assert [i.class_id for i in items] == [None, None]
     assert [i.class_name for i in items] == [None, None]
@@ -221,13 +217,11 @@ def test_assigning_primary_labels_with_the_registry_class_of_the_same_name(
         triton_pool=None, registry=_named_registry(('car', 7)), profile=profile
     )
     items = detector.decode_primary_row(
-        np.array([1]),
-        np.array([[0.1, 0.1, 0.5, 0.5]], dtype=np.float32),
+        np.array([[64.0, 64.0, 320.0, 320.0]], dtype=np.float32),
         np.array([0.99], dtype=np.float32),
         np.array([2], dtype=np.float32),
         1.0,
         (0.0, 0.0),
-        640,
     )
     # model index 2 is "car"; the registry's "car" has id 7
     assert items[0].class_id == 7

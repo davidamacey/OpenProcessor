@@ -15,7 +15,8 @@
 #   - status:          [1] STRING
 #   - size:            [2] INT32, width and height after EXIF orientation
 #   - letterbox:       [3] FP64, scale, pad_w, pad_h of the detector letterbox
-#   - det_boxes:       [-1, 4] FP32, det_scores [-1] FP32, det_classes [-1] INT32 (end2end rows)
+#   - det_boxes:       [-1, 4] FP32 in letterboxed network-input pixels, det_scores [-1] FP32,
+#                      det_classes [-1] INT32 (the rows of the detector's fused [300, 6] tensor)
 #   - whole_embedding: [-1] FP32, PE embedding of the whole-frame square (not normalized)
 #   - crop_embeddings: [-1, -1] FP32, one per detection when embed_crops, or one per stored box
 #                      (not normalized)

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 from src.clients.pe_encoder import _l2_normalize
 from src.config.settings import TritonModelConfig
@@ -43,6 +44,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 GPU_IMAGE_PREP_MODEL = TritonModelConfig.GPU_IMAGE_PREP_MODEL
+
+# What a Triton call or a closed stream raises: the image (or the readiness verdict) is retried on
+# the CPU path, anything else is a bug and propagates.
+_TRITON_ERRORS = (InferenceServerException, OSError, TimeoutError, RuntimeError)
 
 
 @dataclass
@@ -84,7 +89,7 @@ def megapixels(data: bytes) -> float | None:
     try:
         with Image.open(io.BytesIO(data)) as img:
             w, h = img.size
-    except Exception:
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
         return None
     return w * h / 1e6
 
@@ -119,7 +124,7 @@ async def gpu_decode_ready(service: CurationIngestService) -> bool:
             logger.warning(
                 'ingest_gpu_decode_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
             )
-    except Exception as exc:
+    except _TRITON_ERRORS as exc:
         # A failed call is not a verdict on the model: do not pin the worker to the CPU path.
         logger.warning('ingest_gpu_decode_unavailable', error=str(exc))
         return False
@@ -175,7 +180,7 @@ async def call_gpu_image_prep(
     inputs.extend(_input(name, arr, dtype) for name, arr, dtype in extra)
     try:
         result = await triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
-    except Exception as exc:
+    except _TRITON_ERRORS as exc:
         logger.warning('gpu_image_prep_call_failed', caller=caller, error=str(exc))
         return 'call_failed'
     status = result.as_numpy('status')[0]
@@ -201,13 +206,7 @@ async def run_gpu_decode(
     boxes = result.as_numpy('det_boxes').reshape(-1, 4)
     n = boxes.shape[0]
     items = service.detector.decode_primary_row(
-        np.array([n]),
-        boxes,
-        result.as_numpy('det_scores'),
-        result.as_numpy('det_classes'),
-        scale,
-        (pad_w, pad_h),
-        service.profile.input_size,
+        boxes, result.as_numpy('det_scores'), result.as_numpy('det_classes'), scale, (pad_w, pad_h)
     )
     crops = result.as_numpy('crop_embeddings').reshape(
         -1, result.as_numpy('whole_embedding').shape[0]

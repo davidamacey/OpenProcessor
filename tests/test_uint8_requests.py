@@ -44,12 +44,7 @@ class _Pool:
     async def infer(self, _model: str, inputs: list[Any], **_kw: Any) -> Any:
         self.inputs.extend(inputs)
         n = inputs[0].shape()[0]
-        outputs = {
-            'num_dets': np.zeros((n, 1), dtype=np.int32),
-            'det_boxes': np.zeros((n, 300, 4), dtype=np.float32),
-            'det_scores': np.zeros((n, 300), dtype=np.float16),
-            'det_classes': np.zeros((n, 300), dtype=np.int32),
-        }
+        outputs = {'output0': np.zeros((n, 300, 6), dtype=np.float32)}
         return SimpleNamespace(as_numpy=lambda name: outputs[name])
 
 

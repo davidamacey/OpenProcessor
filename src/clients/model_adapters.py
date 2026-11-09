@@ -18,15 +18,26 @@ result dict consumed by the rest of the pipeline:
 ``{'num_dets', 'boxes', 'scores', 'classes', 'box_frame'}`` per image.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-from src.utils.affine import BoxFrame
+from src.domain.model_families import MAX_DET
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from src.utils.affine import BoxFrame
 
 logger = logging.getLogger(__name__)
+
+#: The tensor a fused detector serves: ``[batch, MAX_DET, 6]`` rows of ``x1, y1, x2, y2, score,
+#: class`` in letterboxed input pixels. The export writes this name into the model config.
+FUSED_OUTPUT = 'output0'
 
 END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 
@@ -101,6 +112,15 @@ class FusedDetAdapter:
                 }
             )
         return results
+
+
+def is_fused_shape(shape: Sequence[int]) -> bool:
+    """Whether a declared output shape is the fused ``[..., MAX_DET, 6]`` detection tensor.
+
+    The batch axis is optional (a model config with ``max_batch_size`` omits it) and ``-1``
+    marks a dynamic dim; the detection rows are always the last two axes.
+    """
+    return [int(d) for d in shape][-2:] == [MAX_DET, 6]
 
 
 def resolve_adapter(metadata: Any) -> DetectionAdapter:

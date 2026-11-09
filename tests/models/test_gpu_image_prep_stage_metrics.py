@@ -130,14 +130,9 @@ class _BlsRequest:
     def exec(self) -> _Response:
         n = self.inputs[0].arr.shape[0]
         if self.model == 'det':
-            return _Response(
-                [
-                    _Tensor('num_dets', np.array([[2]], np.int32)),
-                    _Tensor('det_boxes', np.array([[[100, 120, 300, 400], [320, 320, 600, 600]]])),
-                    _Tensor('det_scores', np.array([[0.9, 0.8]], np.float32)),
-                    _Tensor('det_classes', np.array([[1, 2]], np.int32)),
-                ]
-            )
+            fused = np.zeros((1, 300, 6), np.float32)
+            fused[0, :2] = [[100, 120, 300, 400, 0.9, 1], [320, 320, 600, 600, 0.8, 2]]
+            return _Response([_Tensor('output0', fused)])
         vec = np.tile(np.arange(8, dtype=np.float32), (n, 1)) + np.arange(n)[:, None]
         return _Response([_Tensor('image_embeddings', vec)])
 

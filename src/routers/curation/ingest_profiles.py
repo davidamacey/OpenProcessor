@@ -113,7 +113,7 @@ def _schema_rows() -> list[IngestProfileFieldSchema]:
                     field='model',
                     label='Triton model',
                     type='string',
-                    help='A model loaded on Triton. The primary serves the end2end outputs; '
+                    help='A model loaded on Triton. The primary serves the fused [300, 6] output0 tensor; '
                     'the secondary the raw output0 tensor.',
                 ),
                 IngestProfileFieldSchema(

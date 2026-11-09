@@ -2,8 +2,8 @@
 
 Two :class:`~src.config.DetectionProfile` instances drive ingest:
 
-* **Primary** (``OP_INGEST_PRIMARY_<FIELD>``, default name ``item``) — an
-  end2end item proposer. ``assigns_class`` says whether its label space
+* **Primary** (``OP_INGEST_PRIMARY_<FIELD>``, default name ``item``) — a
+  fused-output item proposer. ``assigns_class`` says whether its label space
   *is* the class registry. When false (the default) its detections are
   always unlabeled proposals: no ``class_id``/``class_name``, a
   ``{name}_proposal`` class_source, and the proposer's own label (from
