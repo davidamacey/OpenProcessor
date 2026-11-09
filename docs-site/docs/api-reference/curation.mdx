@@ -99,7 +99,9 @@ already-labeled dataset, use [Dataset import](#dataset-import).
 Each image result carries `status` (`success` / `duplicate` / `failed`),
 `image_id`, `n_crops`, `n_regions`, and on failure an `error_kind`
 (`empty`, `unservable_path`, `unsupported_type`, `decode_failed`,
-`detector_infer`, `bulk_index`, ...). Byte-identical files are
+`detector_infer`, `bulk_index`, `blur_failed`, ...). A blur computation that fails now fails the
+image (`blur_failed`, nothing written, a bulk run retries it); it used to store the crop with a blur of 0.0.
+Byte-identical files are
 deduplicated within a batch as well as against the index.
 
 ## Dataset import

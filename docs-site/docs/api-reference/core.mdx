@@ -143,6 +143,11 @@ five x/y pairs):
 }
 ```
 
+Status codes of the face routes (`/faces/*` and the face search routes): `400` when the image
+cannot be decoded, `503` when the face models fail (the Triton call, or a landmark count that does
+not match the boxes), `400 faces_disabled` while `OP_FACES_ENABLED=false`. They used to answer `500`
+with `status: error` for the first two.
+
 `POST /embed/image`: `{"embedding": [...512 floats], "embedding_norm": 1.0, "indexed": false, "status": "success"}`.
 
 `POST /search/text` and the other search routes: `{"status": "success", "query_type": "text",
@@ -160,7 +165,9 @@ five x/y pairs):
 `box`, `box_normalized`, `det_score`, `rec_score`).
 
 `POST /analyze`: `detections`, `faces`, `num_detections`, `num_faces`, `ocr`,
-`global_embedding` (with `include_embedding`) and `total_time_ms` in one body.
+`global_embedding` (with `include_embedding`) and `total_time_ms` in one body. A stage that fails
+does not fail the call: `ocr_error` or `faces_error` carries the reason (otherwise `null`) and the
+other stages are returned. `POST /analyze/batch` lists such an image under `failures`.
 
 Search, ingest and curation schemas in full: the running API's `/docs` and
 `docs/design/curation_api_contract.md`.
