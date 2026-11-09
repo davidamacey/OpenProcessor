@@ -318,7 +318,26 @@ generate_configs_step() {
     # --force was passed)
     generate_env_file "$SELECTED_PROFILE" "$GPU_ID" "$FORCE_ENV"
 
+    write_triton_cards_overlay
     log_success "Configuration generated"
+}
+
+# Two or more cards in TRITON_GPU_ID: one Triton server per card, each pinned to its card's NUMA
+# node (docker-compose.triton-cards.yml, read by ./openprocessor). One card: no overlay, and a
+# stale one is removed. A topology the installer cannot read leaves the single-server layout.
+write_triton_cards_overlay() {
+    local overlay="${PROJECT_DIR}/docker-compose.triton-cards.yml" ids topo out
+    rm -f "$overlay"
+    ids="$(env_port TRITON_GPU_ID 0)"
+    [[ "$ids" == *,* ]] || return 0
+    command -v nvidia-smi &> /dev/null || return 0
+    topo="$(nvidia-smi topo -m 2>/dev/null)" || return 0
+    if out="$(gpu_triton_cards_overlay "$ids" "$topo")"; then
+        printf '%s\n' "$out" > "$overlay"
+        log_info "One Triton server per card: ${overlay##*/} (TRITON_GPU_ID=${ids})"
+    else
+        log_warn "TRITON_GPU_ID=${ids}: no per-card Triton servers (topology unreadable); one server uses all listed cards"
+    fi
 }
 
 # =============================================================================

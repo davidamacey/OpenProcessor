@@ -55,6 +55,23 @@ scrape_configs:
           group: 'worker'
           service: 'curation-auto-label-worker'
 
+  # Celery workers: each container serves its merged multiprocess registry on
+  # OP_WORKER_METRICS_PORT (src/tasks/worker_metrics.py); one A-record target per replica.
+  - job_name: 'celery-workers'
+    dns_sd_configs:
+      - names:
+          - jobs-worker
+          - periodic-worker
+          - open-vocab-worker
+          - cluster-worker
+          - curation-auto-label-worker
+          - curation-assist-loop-worker
+        type: A
+        port: 9808
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service
+
   - job_name: 'valkey'
     static_configs:
       - targets: ['valkey-exporter:9121']

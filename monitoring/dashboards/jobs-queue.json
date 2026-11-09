@@ -410,6 +410,72 @@
         "x": 12,
         "y": 16
       }
+    },
+    {
+      "type": "timeseries",
+      "title": "Job duration percentiles (p50, p95)",
+      "description": "Seconds one delivery ran, from op_job_duration_seconds.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${ds}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le, kind) (rate(op_job_duration_seconds_bucket{kind=~\"$kind\"}[15m])))",
+          "legendFormat": "{{kind}} p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(op_job_duration_seconds_bucket{kind=~\"$kind\"}[15m])))",
+          "legendFormat": "{{kind}} p95",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 7,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      }
     }
   ]
 }

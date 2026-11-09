@@ -123,6 +123,11 @@ _API_METRICS = frozenset(
         'op_jobs_oldest_queued_seconds',
         'op_jobs_failed_24h',
         'op_disk_free_ratio',
+        # src/tasks/runtime/job_metrics.py (served by every Celery worker).
+        'op_job_duration_seconds_bucket',
+        'op_job_duration_seconds_count',
+        'op_job_duration_seconds_sum',
+        'op_jobs_failed_total',
         'http_request_duration_seconds_count',
         'http_request_duration_seconds_bucket',
         'op_pipeline_stage_seconds_count',

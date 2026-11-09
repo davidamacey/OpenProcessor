@@ -391,3 +391,82 @@ print_gpu_summary() {
     check_gpu_memory_usage "${GPU_ID:-0}"
     echo ""
 }
+
+# =============================================================================
+# One Triton server per card (installer-generated overlay)
+# =============================================================================
+
+# gpu_topo_cpusets TOPO_TEXT
+#   TOPO_TEXT  the output of `nvidia-smi topo -m`
+# Prints one line per GPU row: index|cpu_list (the "CPU Affinity" column, e.g. 0-11,24-35).
+# Returns 1 when the matrix has no GPU row with a CPU affinity. The affinity column sits right
+# after the matrix cells: one cell per header entry before the "CPU" column (GPUs and NICs).
+gpu_topo_cpusets() {
+    local text="$1" line cells=0 found=0 tok
+    local -a f
+    text="$(sed -E 's/\x1B\[[0-9;]*m//g' <<< "$text")"
+    while IFS= read -r line; do
+        read -ra f <<< "$line"
+        if (( cells == 0 )); then
+            for tok in "${f[@]}"; do
+                [[ "$tok" == CPU ]] && break
+                [[ "$tok" =~ ^(GPU|NIC)[0-9]+$ ]] && cells=$(( cells + 1 ))
+            done
+            continue
+        fi
+        if [[ "${f[0]:-}" =~ ^GPU([0-9]+)$ && -n "${f[$(( cells + 1 ))]:-}" ]]; then
+            echo "${BASH_REMATCH[1]}|${f[$(( cells + 1 ))]}"
+            found=1
+        fi
+    done <<< "$text"
+    (( found == 1 ))
+}
+
+# gpu_triton_cards_overlay IDS TOPO_TEXT
+#   IDS  TRITON_GPU_ID as written in .env ("0,2": host indexes, two or more cards)
+# Prints docker-compose.triton-cards.yml: `triton-server` keeps the lowest listed card (the
+# primary, where every Triton model runs) and every other card gets `triton-server-<slot>`,
+# an extension of it with no published ports; each is pinned (cpuset) to the CPUs of the
+# card's NUMA node, from the topology matrix. Fails closed: a card with no CPU affinity in
+# the matrix, a repeated or non-numeric id, or fewer than two cards prints nothing, returns 1.
+gpu_triton_cards_overlay() {
+    local ids_csv="$1" topo="$2" id primary="" seen=" " map
+    local -a want=() sorted=()
+    local -A cpus=()
+    map="$(gpu_topo_cpusets "$topo")" || { echo "no CPU affinity in the topology matrix" >&2; return 1; }
+    while IFS='|' read -r id c; do cpus[$id]="$c"; done <<< "$map"
+    IFS=',' read -ra want <<< "$ids_csv"
+    for id in "${want[@]}"; do
+        id="${id// /}"
+        [[ "$id" =~ ^[0-9]+$ ]] || { echo "GPU id '${id}' is not an index" >&2; return 1; }
+        [[ "$seen" == *" ${id} "* ]] && { echo "GPU ${id} is listed twice" >&2; return 1; }
+        [[ -n "${cpus[$id]:-}" ]] || { echo "GPU ${id} has no CPU affinity in the matrix" >&2; return 1; }
+        seen+="${id} "
+        sorted+=("$id")
+    done
+    (( ${#sorted[@]} >= 2 )) || { echo "one card needs no per-card overlay" >&2; return 1; }
+    mapfile -t sorted < <(printf '%s\n' "${sorted[@]}" | sort -n)
+    primary="${sorted[0]}"
+    echo "# Written by the installer from TRITON_GPU_ID and \`nvidia-smi topo -m\`; do not edit."
+    echo "services:"
+    for id in "${sorted[@]}"; do
+        if [[ "$id" == "$primary" ]]; then
+            echo "  triton-server:"
+        else
+            echo "  triton-server-${id}:"
+            echo "    extends:"
+            echo "      file: docker-compose.yml"
+            echo "      service: triton-server"
+            echo "    ports: !override []"
+        fi
+        echo "    cpuset: \"${cpus[$id]}\""
+        echo "    deploy:"
+        echo "      resources:"
+        echo "        reservations:"
+        echo "          devices: !override"
+        echo "            - driver: nvidia"
+        echo "              device_ids: [ '${id}' ]"
+        echo "              capabilities:"
+        echo "                - gpu"
+    done
+}
