@@ -21,6 +21,8 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from tritonclient.utils import InferenceServerException
 
+from src.domain.location_policy import DEFAULT_LOCATION_POLICY
+
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -362,6 +364,14 @@ def curation_app(
         main_module.app.dependency_overrides[_registry_dep] = lambda: reg
 
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
+
+    async def default_policy(**_kw: Any) -> tuple[str, int]:
+        # The project's location policy is a settings row; these tests run with no database.
+        return DEFAULT_LOCATION_POLICY, 0
+
+    monkeypatch.setattr(
+        'src.services.curation.location_policy_store.read_location_policy', default_policy
+    )
     # ingest.py's service factory reaches AppResources.async_triton_pool /
     # app.state.pe_encoder directly (not via FastAPI Depends()), and the
     # lifespan startup below unconditionally (re)builds both -- so these
