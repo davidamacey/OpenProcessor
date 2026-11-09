@@ -7,13 +7,6 @@
 export const METHODS_TODAY = {
   strategies: [
     {
-      id: 'ivf',
-      axis: 'cluster',
-      label: 'FAISS IVF-512 (production)',
-      status: 'stable',
-      default: true,
-    },
-    {
       id: 'default',
       axis: 'sort',
       label: 'Recent first',

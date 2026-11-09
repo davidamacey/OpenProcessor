@@ -201,9 +201,14 @@ repos:
         files: ^frontend/.*\.(js|ts|svelte)$
       # knip is whole-project (a file is unused only relative to every entry point), so
       # it takes no filenames and runs whenever frontend source, config or deps change.
+      # `svelte-kit sync` first: it writes node_modules/$app/tsconfig.json, which
+      # tsconfig.json extends and vite.config.ts needs; without it knip cannot load the
+      # vite config, loses the $lib/$components/$stores aliases and reports every
+      # aliased import as unresolved and its target file as unused
+      # (https://knip.dev/reference/known-issues, "Error loading vite.config.ts").
       - id: frontend-knip
         name: frontend knip (unused files, exports, dependencies)
-        entry: bash -c 'cd frontend && exec node_modules/.bin/knip'
+        entry: bash -c 'cd frontend && node_modules/.bin/svelte-kit sync && exec node_modules/.bin/knip'
         language: system
         pass_filenames: false
         files: ^frontend/(src|scripts|static)/|^frontend/(knip\.json|package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$

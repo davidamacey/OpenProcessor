@@ -56,7 +56,7 @@ describe('curationSettingsStore', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          defaults: { cluster: 'ivf' },
+          defaults: { vlm: 'a' },
           updated_at: '2026-09-20T23:04:39+00:00',
           updated_by: null,
         }),
@@ -66,7 +66,7 @@ describe('curationSettingsStore', () => {
     await curationSettingsStore.init();
 
     expect(curationSettingsStore.error).toBeNull();
-    expect(curationSettingsStore.settings.defaults).toEqual({ cluster: 'ivf' });
+    expect(curationSettingsStore.settings.defaults).toEqual({ vlm: 'a' });
   });
 
   it('404 -> an ordinary load error, no throw, settings stays empty', async () => {
@@ -159,14 +159,14 @@ describe('curationSettingsStore', () => {
   });
 
   it('adopts the response, not an optimistic guess', async () => {
-    // The mock returns a record the client never sent (cluster + future_axis
+    // The mock returns a record the client never sent (vlm + future_axis
     // alongside the sort key that was actually PUT) — an optimistic
     // `defaults[axis] = id` implementation would only ever show `sort`.
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          defaults: { cluster: 'ivf', sort: 'uncertainty_entropy', future_axis: 'z' },
+          defaults: { vlm: 'a', sort: 'uncertainty_entropy', future_axis: 'z' },
           updated_at: '2026-09-21T00:00:00+00:00',
           updated_by: null,
         }),
@@ -176,7 +176,7 @@ describe('curationSettingsStore', () => {
     await curationSettingsStore.saveDefault('sort', 'uncertainty_entropy');
 
     expect(curationSettingsStore.settings.defaults).toEqual({
-      cluster: 'ivf',
+      vlm: 'a',
       sort: 'uncertainty_entropy',
       future_axis: 'z',
     });
@@ -234,7 +234,7 @@ describe('curationSettingsStore', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          defaults: { cluster: 'ivf' },
+          defaults: { vlm: 'a' },
           updated_at: '2026-09-21T00:00:00+00:00',
           updated_by: null,
         }),
@@ -243,7 +243,7 @@ describe('curationSettingsStore', () => {
 
     await curationSettingsStore.clearDefault('sort');
 
-    expect(curationSettingsStore.settings.defaults).toEqual({ cluster: 'ivf' });
+    expect(curationSettingsStore.settings.defaults).toEqual({ vlm: 'a' });
   });
 
   it('clearDefault for an unknown axis throws "unknown settings axis"', async () => {
@@ -372,7 +372,7 @@ describe('curationSettingsStore', () => {
       )
       .mockImplementationOnce(() =>
         jsonResponse({
-          defaults: { cluster: 'ivf' },
+          defaults: { vlm: 'a' },
           revision: 9,
           updated_at: null,
           updated_by: null,
@@ -380,7 +380,7 @@ describe('curationSettingsStore', () => {
       )
       .mockImplementationOnce(() =>
         jsonResponse({
-          defaults: { cluster: 'ivf', sort: 'recent' },
+          defaults: { vlm: 'a', sort: 'recent' },
           revision: 10,
           updated_at: null,
           updated_by: null,
@@ -393,7 +393,7 @@ describe('curationSettingsStore', () => {
 
     expect(fetchMock.mock.calls[2]![1]?.method ?? 'GET').toBe('GET');
     expect(curationSettingsStore.settings).toMatchObject({
-      defaults: { cluster: 'ivf' },
+      defaults: { vlm: 'a' },
       revision: 9,
     });
 
