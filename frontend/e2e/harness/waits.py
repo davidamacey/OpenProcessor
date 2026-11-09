@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 
-
 class _Handled:
     """Context manager whose `.value` is the matched *request*, resolved only
     once the stub has answered it."""
@@ -47,5 +46,5 @@ def wait_for_paint(page: Any) -> None:
     without picking an arbitrary millisecond budget.
     """
     page.evaluate(
-        "() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+        '() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))'
     )

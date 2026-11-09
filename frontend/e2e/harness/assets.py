@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 
@@ -14,7 +15,7 @@ class AppAssets:
 
 
 # Both are how Node reports `vite preview` closing an idle keep-alive socket.
-_RETRYABLE = ("ECONNRESET", "socket hang up")
+_RETRYABLE = ('ECONNRESET', 'socket hang up')
 
 
 def fetch_app_asset(route: Any, attempts: int = 3) -> Any:
@@ -29,10 +30,10 @@ def fetch_app_asset(route: Any, attempts: int = 3) -> Any:
             # 3xx goes to the browser as-is, so a navigation lands on the
             # URL the server actually redirected to.
             return route.fetch(max_redirects=0)
-        except Exception as exc:  # noqa: BLE001 — re-raised unless a retryable reset
+        except Exception as exc:
             if not any(k in str(exc) for k in _RETRYABLE) or attempt == attempts - 1:
                 raise
-    raise AssertionError("unreachable")  # pragma: no cover
+    raise AssertionError('unreachable')  # pragma: no cover
 
 
 def serve_app_through_harness(page: Any, app_url: str) -> AppAssets:
@@ -65,12 +66,10 @@ def serve_app_through_harness(page: Any, app_url: str) -> AppAssets:
             # can be dispatched while `fulfill` is still waiting.
             assets.served.append(route.request.url)
             route.fulfill(response=response)
-        except Exception as exc:  # noqa: BLE001 — must never leave the route unresolved
-            assets.errors.append(f"{route.request.method} {route.request.url}: {exc!r}")
-            try:
-                route.abort("failed")
-            except Exception:  # noqa: BLE001 — already resolved; nothing else to do
-                pass
+        except Exception as exc:
+            assets.errors.append(f'{route.request.method} {route.request.url}: {exc!r}')
+            with contextlib.suppress(Exception):
+                route.abort('failed')
 
-    page.route(f"{app_url.rstrip('/')}/**", handler)
+    page.route(f'{app_url.rstrip("/")}/**', handler)
     return assets

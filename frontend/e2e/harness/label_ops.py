@@ -17,29 +17,29 @@ def stub_label_op(
     *,
     updated: int = 1,
     conflicts: int = 0,
-    method: str = "POST",
+    method: str = 'POST',
     calls: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> str:
     """Register the POST and its job; return the job id. ``calls`` collects
     ``(path, body)`` of each request so a test can assert the sent body."""
-    job_id = f"job-{op_id}"
+    job_id = f'job-{op_id}'
 
-    def accept(request: Any, match: "re.Match[str]") -> Any:
+    def accept(request: Any, match: re.Match[str]) -> Any:
         if calls is not None:
             calls.append((match.string, request.post_data_json or {}))
         return (202, label_op_accepted(op_id, job_id))
 
     stub.on(method, post_pattern, accept)
     stub.on(
-        "GET",
-        rf"/jobs/{re.escape(job_id)}$",
+        'GET',
+        rf'/jobs/{re.escape(job_id)}$',
         job(
             job_id,
             result={
-                "op_id": op_id,
-                "updated": updated,
-                "conflicts": conflicts,
-                "complete": True,
+                'op_id': op_id,
+                'updated': updated,
+                'conflicts': conflicts,
+                'complete': True,
             },
         ),
     )
@@ -56,16 +56,16 @@ def stub_label_op_undo(
 ) -> None:
     """``POST /label_ops/{op_id}/undo``: a dry run answers the counts at once; a
     real undo is queued as a ``label_undo`` job whose result is the same body."""
-    job_id = f"job-undo-{op_id}"
+    job_id = f'job-undo-{op_id}'
     result = undo_response(op_id, restored=restored, kept_changed=kept_changed, matched=restored)
 
-    def undo(request: Any, _match: "re.Match[str]") -> Any:
+    def undo(request: Any, _match: re.Match[str]) -> Any:
         body = request.post_data_json or {}
         if calls is not None:
             calls.append(body)
-        if body.get("dry_run", True):
-            return (200, {**result, "dry_run": True})
+        if body.get('dry_run', True):
+            return (200, {**result, 'dry_run': True})
         return (202, label_op_accepted(op_id, job_id))
 
-    stub.on("POST", rf"/label_ops/{re.escape(op_id)}/undo$", undo)
-    stub.on("GET", rf"/jobs/{re.escape(job_id)}$", job(job_id, kind="label_undo", result=result))
+    stub.on('POST', rf'/label_ops/{re.escape(op_id)}/undo$', undo)
+    stub.on('GET', rf'/jobs/{re.escape(job_id)}$', job(job_id, kind='label_undo', result=result))

@@ -12,23 +12,41 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from playwright.sync_api import expect
-
 from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
+from playwright.sync_api import expect
 
-SHOTS = Path(__file__).resolve().parents[2] / "artifacts_local" / "assist-ui"
+
+SHOTS = Path(__file__).resolve().parents[2] / 'artifacts_local' / 'assist-ui'
 
 CLASSES = [
-    {"class_id": 1, "class_name": "widget_a", "kind": "item", "group": "widgets", "hotkey_letter": "a",
-     "sample_count": 40, "validated_count": 12, "cluster_size": 44, "deprecated": False},
-    {"class_id": 2, "class_name": "widget_b", "kind": "item", "group": "widgets", "hotkey_letter": "b",
-     "sample_count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
+    {
+        'class_id': 1,
+        'class_name': 'widget_a',
+        'kind': 'item',
+        'group': 'widgets',
+        'hotkey_letter': 'a',
+        'sample_count': 40,
+        'validated_count': 12,
+        'cluster_size': 44,
+        'deprecated': False,
+    },
+    {
+        'class_id': 2,
+        'class_name': 'widget_b',
+        'kind': 'item',
+        'group': 'widgets',
+        'hotkey_letter': 'b',
+        'sample_count': 20,
+        'validated_count': 5,
+        'cluster_size': 22,
+        'deprecated': False,
+    },
 ]
 
-CLUSTER_UID = "cl-assist-0001"
+CLUSTER_UID = 'cl-assist-0001'
 CLUSTERS = cluster_list(
     cluster_card(
         CLUSTER_UID,
@@ -43,58 +61,71 @@ CLUSTERS = cluster_list(
 )
 
 METHODS = {
-    "strategies": [
-        {"id": "local_vlm", "axis": "vlm", "label": "Local VLM", "status": "stable",
-         "endpoint_status_label": "Ready", "per_run_ack_required": False},
-        {"id": "widgets", "axis": "prompt_pack", "label": "Widget pack", "status": "stable"},
+    'strategies': [
+        {
+            'id': 'local_vlm',
+            'axis': 'vlm',
+            'label': 'Local VLM',
+            'status': 'stable',
+            'endpoint_status_label': 'Ready',
+            'per_run_ack_required': False,
+        },
+        {'id': 'widgets', 'axis': 'prompt_pack', 'label': 'Widget pack', 'status': 'stable'},
     ]
 }
 
 RESOLVED = {
-    "scope_count": 412,
-    "scope_digest": "sha256:abc",
-    "sampled": 41,
-    "sample_seed": 0,
-    "skipped": {"holdout": 3, "excluded": 1, "class_locked": 27},
-    "vlm": {"name": "env", "revision": 3, "model": "vlm-model"},
-    "prompt_pack": {"name": "widgets", "revision": 7},
-    "estimated_vlm_calls": 6,
+    'scope_count': 412,
+    'scope_digest': 'sha256:abc',
+    'sampled': 41,
+    'sample_seed': 0,
+    'skipped': {'holdout': 3, 'excluded': 1, 'class_locked': 27},
+    'vlm': {'name': 'env', 'revision': 3, 'model': 'vlm-model'},
+    'prompt_pack': {'name': 'widgets', 'revision': 7},
+    'estimated_vlm_calls': 6,
 }
 
 PROPOSAL = {
-    "class_name": "widget_a",
-    "in_registry": True,
-    "agreement": 0.83,
-    "answered": 41,
-    "min_agreement": 0.6,
-    "passes_gate": True,
-    "distribution": [{"class_name": "widget_a", "votes": 34}, {"class_name": "widget_b", "votes": 7}],
-    "new_class_proposals": [{"name": "widget_c", "votes": 2}],
-    "attribute_summary": [
-        {"key": "finish", "answered": 38, "values": [{"value": "matte", "count": 27}, {"value": "gloss", "count": 11}]}
+    'class_name': 'widget_a',
+    'in_registry': True,
+    'agreement': 0.83,
+    'answered': 41,
+    'min_agreement': 0.6,
+    'passes_gate': True,
+    'distribution': [
+        {'class_name': 'widget_a', 'votes': 34},
+        {'class_name': 'widget_b', 'votes': 7},
+    ],
+    'new_class_proposals': [{'name': 'widget_c', 'votes': 2}],
+    'attribute_summary': [
+        {
+            'key': 'finish',
+            'answered': 38,
+            'values': [{'value': 'matte', 'count': 27}, {'value': 'gloss', 'count': 11}],
+        }
     ],
 }
 
 
 def crop(i: int) -> dict:
     return make_item(
-        crop_id=f"crop-{i}",
-        image_id=f"img-{i}",
+        crop_id=f'crop-{i}',
+        image_id=f'img-{i}',
         class_id=None,
         class_name=None,
         cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         class_validated=False,
-        label_source="model_suggestion",
-        thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
+        label_source='model_suggestion',
+        thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
         assist=(
             {
-                "run_id": "asr_old",
-                "run_created_at": "2026-10-15T00:00:00Z",
-                "class_name": "widget_a",
-                "class_confidence": "high",
-                "attributes": [{"key": "finish", "value": "matte", "confidence": "high"}],
-                "boxes": [],
+                'run_id': 'asr_old',
+                'run_created_at': '2026-10-15T00:00:00Z',
+                'class_name': 'widget_a',
+                'class_confidence': 'high',
+                'attributes': [{'key': 'finish', 'value': 'matte', 'confidence': 'high'}],
+                'boxes': [],
             }
             if i == 0
             else None
@@ -104,181 +135,249 @@ def crop(i: int) -> dict:
 
 def state(status: str, run_id: str | None, **over) -> dict:
     out = {
-        "run_id": run_id,
-        "status": status,
-        "created_at": "2026-10-15T10:00:00Z",
-        "finished_at": None,
-        "error": None,
-        "request": {"target": {"kind": "cluster", "cluster_uid": CLUSTER_UID},
-                    "actions": ["classify"], "dry_run": status == "dry_run"},
-        "resolved": RESOLVED,
-        "progress": {"processed": 0, "total": 41},
-        "result": None,
-        "scope_now": None,
+        'run_id': run_id,
+        'status': status,
+        'created_at': '2026-10-15T10:00:00Z',
+        'finished_at': None,
+        'error': None,
+        'request': {
+            'target': {'kind': 'cluster', 'cluster_uid': CLUSTER_UID},
+            'actions': ['classify'],
+            'dry_run': status == 'dry_run',
+        },
+        'resolved': RESOLVED,
+        'progress': {'processed': 0, 'total': 41},
+        'result': None,
+        'scope_now': None,
     }
     out.update(over)
     return out
 
 
 COMPLETED = state(
-    "completed", "asr_1",
-    progress={"processed": 41, "total": 41},
-    result={"classify": {"predicted": 41, "updated": 14, "failed": 0, "unreadable": 0, "locked_suggest_only": 27},
-            "attributes": None, "verify": None, "segment": None, "proposal": PROPOSAL},
-    scope_now={"count": 412, "overlap": 412, "jaccard": 1.0, "changed": False},
+    'completed',
+    'asr_1',
+    progress={'processed': 41, 'total': 41},
+    result={
+        'classify': {
+            'predicted': 41,
+            'updated': 14,
+            'failed': 0,
+            'unreadable': 0,
+            'locked_suggest_only': 27,
+        },
+        'attributes': None,
+        'verify': None,
+        'segment': None,
+        'proposal': PROPOSAL,
+    },
+    scope_now={'count': 412, 'overlap': 412, 'jaccard': 1.0, 'changed': False},
 )
 
 
 def register(stub, *, apply_refusal=None, listed=None):
-    seen = {"crops_queries": [], "polls": 0}
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
-    stub.on("GET", r"/methods(\?|$)", METHODS)
+    seen = {'crops_queries': [], 'polls': 0}
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
+    stub.on('GET', r'/methods(\?|$)', METHODS)
 
     def crops(request, _m):
-        seen["crops_queries"].append(parse_qs(urlsplit(request.url).query))
+        seen['crops_queries'].append(parse_qs(urlsplit(request.url).query))
         items = [crop(i) for i in range(4)]
-        return {"total": len(items), "page": 1, "page_size": 60, "crops": items}
+        return {'total': len(items), 'page': 1, 'page_size': 60, 'crops': items}
 
-    stub.on("GET", r"/crops(\?|$)", crops)
-    stub.on("GET", r"/assist/runs(\?|$)", {"runs": listed if listed is not None else [COMPLETED]})
+    stub.on('GET', r'/crops(\?|$)', crops)
+    stub.on('GET', r'/assist/runs(\?|$)', {'runs': listed if listed is not None else [COMPLETED]})
 
     def create(request, _m):
         body = request.post_data_json or {}
-        return (200, state("dry_run" if body.get("dry_run", True) else "queued", None if body.get("dry_run", True) else "asr_1"))
+        return (
+            200,
+            state(
+                'dry_run' if body.get('dry_run', True) else 'queued',
+                None if body.get('dry_run', True) else 'asr_1',
+            ),
+        )
 
-    stub.on("POST", r"/assist/runs$", create)
+    stub.on('POST', r'/assist/runs$', create)
 
     def poll(_request, _m):
-        seen["polls"] += 1
-        return state("running", "asr_1", progress={"processed": 12, "total": 41}) if seen["polls"] == 1 else COMPLETED
+        seen['polls'] += 1
+        return (
+            state('running', 'asr_1', progress={'processed': 12, 'total': 41})
+            if seen['polls'] == 1
+            else COMPLETED
+        )
 
-    stub.on("GET", r"/assist/runs/asr_1$", poll)
+    stub.on('GET', r'/assist/runs/asr_1$', poll)
 
     def apply(request, _m):
         body = request.post_data_json or {}
-        if apply_refusal and not body.get("allow_changed_scope"):
-            return (409, {"detail": {"error": "scope_changed", "message": apply_refusal}})
-        dry = body.get("dry_run", True)
+        if apply_refusal and not body.get('allow_changed_scope'):
+            return (409, {'detail': {'error': 'scope_changed', 'message': apply_refusal}})
+        dry = body.get('dry_run', True)
         return {
-            "dry_run": dry, "class_name": body["class_name"], "selected": 380, "skipped_locked": 32,
-            "updated": 0 if dry else 380, "updated_ids": [], "conflicts": [],
-            "scope_now": {"count": 412, "overlap": 412, "jaccard": 1.0, "changed": False},
+            'dry_run': dry,
+            'class_name': body['class_name'],
+            'selected': 380,
+            'skipped_locked': 32,
+            'updated': 0 if dry else 380,
+            'updated_ids': [],
+            'conflicts': [],
+            'scope_now': {'count': 412, 'overlap': 412, 'jaccard': 1.0, 'changed': False},
         }
 
-    stub.on("POST", r"/assist/runs/asr_1/apply$", apply)
+    stub.on('POST', r'/assist/runs/asr_1/apply$', apply)
     return seen
 
 
 def shots(page, name: str) -> None:
     SHOTS.mkdir(parents=True, exist_ok=True)
     for width, height in ((1600, 1000), (430, 1100)):
-        page.set_viewport_size({"width": width, "height": height})
+        page.set_viewport_size({'width': width, 'height': height})
         wait_for_paint(page)
-        page.screenshot(path=str(SHOTS / f"{name}-{width}.png"), full_page=True)
-    page.set_viewport_size({"width": 1280, "height": 720})
+        page.screenshot(path=str(SHOTS / f'{name}-{width}.png'), full_page=True)
+    page.set_viewport_size({'width': 1280, 'height': 720})
 
 
 def open_cluster(stub, page, app_url, **kw):
     seen = register(stub, **kw)
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
-    page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     return seen
 
 
 def test_assist_dialog_dry_run_then_run_then_apply(stub, page, app_url):
     open_cluster(stub, page, app_url)
-    panel = page.get_by_test_id("cluster-assist-proposal")
+    panel = page.get_by_test_id('cluster-assist-proposal')
     expect(panel).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("proposal-summary-class")).to_have_text("widget_a")
-    shots(page, "cluster-proposal-folded")
-    panel.locator("summary").click()
-    expect(panel.get_by_test_id("proposal-class")).to_be_visible()
-    shots(page, "cluster-proposal")
-    panel.locator("summary").click()
+    expect(page.get_by_test_id('proposal-summary-class')).to_have_text('widget_a')
+    shots(page, 'cluster-proposal-folded')
+    panel.locator('summary').click()
+    expect(panel.get_by_test_id('proposal-class')).to_be_visible()
+    shots(page, 'cluster-proposal')
+    panel.locator('summary').click()
 
-    page.locator("img").nth(0).click()
-    page.locator("img").nth(1).click(modifiers=["Control"])
-    expect(page.get_by_text("2 selected").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id("assist-open").click()
-    dialog = page.get_by_test_id("assist-dialog")
+    page.locator('img').nth(0).click()
+    page.locator('img').nth(1).click(modifiers=['Control'])
+    expect(page.get_by_text('2 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('assist-open').click()
+    dialog = page.get_by_test_id('assist-dialog')
     expect(dialog).to_be_visible()
-    expect(page.get_by_test_id("assist-choice-selected")).to_contain_text("(2)")
+    expect(page.get_by_test_id('assist-choice-selected')).to_contain_text('(2)')
 
     # The dry run is the server's: its counts are on screen before anything starts.
-    expect(page.get_by_test_id("assist-plan-sampled")).to_have_text("41", timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("assist-plan-calls")).to_have_text("6")
-    assert all(c[2].get("dry_run") is True for c in stub.calls if c[1].endswith("/assist/runs")), stub.calls
+    expect(page.get_by_test_id('assist-plan-sampled')).to_have_text('41', timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('assist-plan-calls')).to_have_text('6')
+    assert all(c[2].get('dry_run') is True for c in stub.calls if c[1].endswith('/assist/runs')), (
+        stub.calls
+    )
 
-    page.get_by_test_id("assist-choice-representative").locator("input").check()
-    page.get_by_test_id("assist-size").fill("40")
-    page.get_by_test_id("assist-action-attributes").locator("input").check()
-    page.get_by_test_id("assist-pack").select_option("widgets")
-    expect(page.get_by_test_id("assist-plan-sampled")).to_be_visible()
-    shots(page, "dialog-configure")
+    page.get_by_test_id('assist-choice-representative').locator('input').check()
+    page.get_by_test_id('assist-size').fill('40')
+    page.get_by_test_id('assist-action-attributes').locator('input').check()
+    page.get_by_test_id('assist-pack').select_option('widgets')
+    expect(page.get_by_test_id('assist-plan-sampled')).to_be_visible()
+    shots(page, 'dialog-configure')
 
     # The footer stays reachable on a phone-width viewport: the body scrolls, the buttons do not.
-    page.set_viewport_size({"width": 430, "height": 700})
+    page.set_viewport_size({'width': 430, 'height': 700})
     wait_for_paint(page)
-    start_box = page.get_by_test_id("assist-start").bounding_box()
-    assert start_box and start_box["y"] + start_box["height"] <= 700, start_box
-    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-    page.set_viewport_size({"width": 1280, "height": 720})
+    start_box = page.get_by_test_id('assist-start').bounding_box()
+    assert start_box and start_box['y'] + start_box['height'] <= 700, start_box
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.set_viewport_size({'width': 1280, 'height': 720})
 
-    with page.expect_response(lambda r: r.request.method == "POST" and r.url.endswith("/assist/runs")
-                              and r.request.post_data_json.get("dry_run") is False, timeout=ACTION_TIMEOUT_MS):
-        page.get_by_test_id("assist-start").click()
-    start = [c for c in stub.calls if c[1].endswith("/assist/runs") and c[2].get("dry_run") is False][-1][2]
-    assert start["target"] == {"kind": "cluster", "cluster_uid": CLUSTER_UID}
-    assert start["sample"] == {"mode": "representative", "size": 40, "seed": 0}
-    assert start["actions"] == ["classify", "attributes"]
-    assert start["prompt_pack"] == "widgets"
+    with page.expect_response(
+        lambda r: (
+            r.request.method == 'POST'
+            and r.url.endswith('/assist/runs')
+            and r.request.post_data_json.get('dry_run') is False
+        ),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.get_by_test_id('assist-start').click()
+    start = [
+        c for c in stub.calls if c[1].endswith('/assist/runs') and c[2].get('dry_run') is False
+    ][-1][2]
+    assert start['target'] == {'kind': 'cluster', 'cluster_uid': CLUSTER_UID}
+    assert start['sample'] == {'mode': 'representative', 'size': 40, 'seed': 0}
+    assert start['actions'] == ['classify', 'attributes']
+    assert start['prompt_pack'] == 'widgets'
 
-    expect(page.get_by_test_id("assist-status")).to_contain_text("Completed", timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("assist-result")).to_contain_text("41 answered")
-    card = page.get_by_test_id("assist-dialog").get_by_test_id("assist-proposal-card")
-    expect(card.get_by_test_id("proposal-class")).to_have_text("widget_a")
-    apply_btn = card.get_by_test_id("proposal-apply")
-    expect(apply_btn).to_contain_text("380", timeout=ACTION_TIMEOUT_MS)
-    shots(page, "dialog-proposal")
+    expect(page.get_by_test_id('assist-status')).to_contain_text(
+        'Completed', timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_test_id('assist-result')).to_contain_text('41 answered')
+    card = page.get_by_test_id('assist-dialog').get_by_test_id('assist-proposal-card')
+    expect(card.get_by_test_id('proposal-class')).to_have_text('widget_a')
+    apply_btn = card.get_by_test_id('proposal-apply')
+    expect(apply_btn).to_contain_text('380', timeout=ACTION_TIMEOUT_MS)
+    shots(page, 'dialog-proposal')
 
     # Only the dry run has gone out so far.
-    applies = [c for c in stub.calls if c[1].endswith("/apply")]
-    assert applies and all(c[2]["dry_run"] is True for c in applies)
-    with page.expect_response(lambda r: r.url.endswith("/apply") and r.request.post_data_json.get("dry_run") is False,
-                              timeout=ACTION_TIMEOUT_MS):
+    applies = [c for c in stub.calls if c[1].endswith('/apply')]
+    assert applies
+    assert all(c[2]['dry_run'] is True for c in applies)
+    with page.expect_response(
+        lambda r: r.url.endswith('/apply') and r.request.post_data_json.get('dry_run') is False,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
         apply_btn.click()
-    last = [c for c in stub.calls if c[1].endswith("/apply")][-1][2]
-    assert last["class_name"] == "widget_a" and last["label_source"] == "human"
-    expect(card.get_by_test_id("proposal-applied")).to_contain_text("380")
+    last = [c for c in stub.calls if c[1].endswith('/apply')][-1][2]
+    assert last['class_name'] == 'widget_a'
+    assert last['label_source'] == 'human'
+    expect(card.get_by_test_id('proposal-applied')).to_contain_text('380')
 
 
 def test_stale_proposal_shows_the_servers_scope_changed_refusal(stub, page, app_url):
-    stale = {**COMPLETED, "scope_now": {"count": 300, "overlap": 186, "jaccard": 0.62, "changed": True}}
-    open_cluster(stub, page, app_url, listed=[stale],
-                 apply_refusal="only 62% of the scope is what the run saw (items moved between clusters)")
-    page.get_by_test_id("cluster-assist-proposal").locator("summary").click()
-    banner = page.get_by_test_id("proposal-stale")
-    expect(banner).to_contain_text("186", timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("proposal-error")).to_contain_text("only 62% of the scope")
-    expect(page.get_by_test_id("proposal-apply")).to_have_count(0)
-    shots(page, "proposal-stale")
-    page.get_by_test_id("proposal-anyway").click()
-    expect(page.get_by_test_id("proposal-apply")).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert [c for c in stub.calls if c[1].endswith("/apply")][-1][2]["allow_changed_scope"] is True
+    stale = {
+        **COMPLETED,
+        'scope_now': {'count': 300, 'overlap': 186, 'jaccard': 0.62, 'changed': True},
+    }
+    open_cluster(
+        stub,
+        page,
+        app_url,
+        listed=[stale],
+        apply_refusal='only 62% of the scope is what the run saw (items moved between clusters)',
+    )
+    page.get_by_test_id('cluster-assist-proposal').locator('summary').click()
+    banner = page.get_by_test_id('proposal-stale')
+    expect(banner).to_contain_text('186', timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('proposal-error')).to_contain_text('only 62% of the scope')
+    expect(page.get_by_test_id('proposal-apply')).to_have_count(0)
+    shots(page, 'proposal-stale')
+    page.get_by_test_id('proposal-anyway').click()
+    expect(page.get_by_test_id('proposal-apply')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert [c for c in stub.calls if c[1].endswith('/apply')][-1][2]['allow_changed_scope'] is True
 
 
 def test_dialog_shows_a_served_refusal_and_blocks_start(stub, page, app_url):
     open_cluster(stub, page, app_url)
-    stub.on("POST", r"/assist/runs$", (409, {"detail": {"error": "vlm_not_configured", "message": "This project has no VLM; activate one first."}}))
-    page.get_by_test_id("assist-open").click()
-    expect(page.get_by_test_id("assist-plan-error")).to_contain_text("activate one first", timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id("assist-start")).to_be_disabled()
-    shots(page, "dialog-refusal")
+    stub.on(
+        'POST',
+        r'/assist/runs$',
+        (
+            409,
+            {
+                'detail': {
+                    'error': 'vlm_not_configured',
+                    'message': 'This project has no VLM; activate one first.',
+                }
+            },
+        ),
+    )
+    page.get_by_test_id('assist-open').click()
+    expect(page.get_by_test_id('assist-plan-error')).to_contain_text(
+        'activate one first', timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_test_id('assist-start')).to_be_disabled()
+    shots(page, 'dialog-refusal')
 
 
 def test_attribute_chips_show_on_the_card_as_suggestions(stub, page, app_url):
     open_cluster(stub, page, app_url)
-    chips = page.get_by_test_id("card-assist").first
-    expect(chips).to_contain_text("VLM suggests", timeout=ACTION_TIMEOUT_MS)
-    expect(chips.get_by_test_id("assist-chip")).to_contain_text("matte")
+    chips = page.get_by_test_id('card-assist').first
+    expect(chips).to_contain_text('VLM suggests', timeout=ACTION_TIMEOUT_MS)
+    expect(chips.get_by_test_id('assist-chip')).to_contain_text('matte')

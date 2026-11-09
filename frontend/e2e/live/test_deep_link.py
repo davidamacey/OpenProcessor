@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from conftest import api_get, page_path, wait_for_stable_text
 from fixtures.wire import REGION_TAB_URL_ID
 
@@ -25,23 +24,23 @@ def test_deep_link_lands_on_the_requested_crop(
     require_region_profile: dict[str, Any],
 ) -> None:
     rejected = api_get(
-        live_url, live_project, "/review/regions?region_status=verify_rejected&page_size=1"
+        live_url, live_project, '/review/regions?region_status=verify_rejected&page_size=1'
     )
-    items = rejected.get("items", [])
+    items = rejected.get('items', [])
     if not items:
-        pytest.skip("no verify_rejected items in the live dataset right now")
-    crop_id = items[0]["crop_id"]
+        pytest.skip('no verify_rejected items in the live dataset right now')
+    crop_id = items[0]['crop_id']
 
     page = guarded_page.page
     page.goto(
-        f"{live_url}{page_path(live_project, f'/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected&crop_id={crop_id}')}",
-        wait_until="domcontentloaded",
+        f'{live_url}{page_path(live_project, f"/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected&crop_id={crop_id}")}',
+        wait_until='domcontentloaded',
     )
 
     # Whether or not "Locating crop…" ever shows (a shallow rank resolves
     # near-instantly), it must not still be showing once we're done
     # waiting for the queue counter to report a real position.
-    page.wait_for_selector("text=Locating crop", state="detached", timeout=20_000)
+    page.wait_for_selector('text=Locating crop', state='detached', timeout=20_000)
 
     counter = page.locator('[data-testid="queue-counter"]')
     counter.wait_for(timeout=15_000)
@@ -56,8 +55,8 @@ def test_deep_link_lands_on_the_requested_crop(
     )
     wait_for_stable_text(page, '[data-testid="queue-counter"]')
 
-    not_in_queue = page.get_by_text("not in this review queue", exact=False)
+    not_in_queue = page.get_by_text('not in this review queue', exact=False)
     assert not_in_queue.count() == 0, (
         f"deep link for crop {crop_id} reported it isn't in the queue: "
-        f"{not_in_queue.first.inner_text() if not_in_queue.count() else ''}"
+        f'{not_in_queue.first.inner_text() if not_in_queue.count() else ""}'
     )

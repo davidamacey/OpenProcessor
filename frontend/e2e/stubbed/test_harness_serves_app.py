@@ -21,28 +21,28 @@ from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
 
 
 def test_every_app_origin_request_is_fulfilled_by_the_harness(stub, page, app_url):
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": []})
-    stub.on("GET", r"/models/status(\?|$)", {"models": []})
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
+    stub.on('GET', r'/models/status(\?|$)', {'models': []})
 
     origin = urlparse(app_url).netloc
     app_requests: list[str] = []
 
     def record(request) -> None:
         url = urlparse(request.url)
-        if url.netloc == origin and not url.path.startswith(f"{API_PREFIX}/"):
+        if url.netloc == origin and not url.path.startswith(f'{API_PREFIX}/'):
             app_requests.append(request.url)
 
-    page.on("requestfinished", record)
-    page.goto(f"{app_url}/p/default/models")
-    page.get_by_role("heading", name="Models").wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.on('requestfinished', record)
+    page.goto(f'{app_url}/p/default/models')
+    page.get_by_role('heading', name='Models').wait_for(timeout=ACTION_TIMEOUT_MS)
 
     served = stub.app_assets.served
     assert stub.app_assets.errors == []
-    assert f"{app_url}/p/default/models" in served
-    chunks = [u for u in served if "/_app/immutable/" in u and u.endswith(".js")]
+    assert f'{app_url}/p/default/models' in served
+    chunks = [u for u in served if '/_app/immutable/' in u and u.endswith('.js')]
     assert len(chunks) >= 10, served
     missed = [u for u in app_requests if u not in served]
-    assert missed == [], f"app-origin requests loaded by the browser itself: {missed}"
+    assert missed == [], f'app-origin requests loaded by the browser itself: {missed}'
 
 
 class _FlakyRoute:
@@ -55,34 +55,34 @@ class _FlakyRoute:
         self.calls += 1
         if self.calls <= self.fail:
             raise Exception(self.error)
-        return "response"
+        return 'response'
 
 
 def test_a_connection_reset_on_an_app_file_is_retried():
     """CI flake: `vite preview` closed an idle keep-alive socket and one boot
     chunk failed with `read ECONNRESET`, aborting the page's first load."""
-    route = _FlakyRoute("Route.fetch: read ECONNRESET", fail=2)
-    assert fetch_app_asset(route) == "response"
+    route = _FlakyRoute('Route.fetch: read ECONNRESET', fail=2)
+    assert fetch_app_asset(route) == 'response'
     assert route.calls == 3
 
 
 def test_a_socket_hang_up_on_an_app_file_is_retried():
     """Same closed keep-alive socket, other spelling: a slow runner got
     `socket hang up` on a boot chunk and the page failed to import it."""
-    route = _FlakyRoute("Route.fetch: socket hang up", fail=2)
-    assert fetch_app_asset(route) == "response"
+    route = _FlakyRoute('Route.fetch: socket hang up', fail=2)
+    assert fetch_app_asset(route) == 'response'
     assert route.calls == 3
 
 
 def test_a_persistent_reset_and_other_errors_still_surface():
     import pytest
 
-    stuck = _FlakyRoute("Route.fetch: read ECONNRESET", fail=99)
-    with pytest.raises(Exception, match="ECONNRESET"):
+    stuck = _FlakyRoute('Route.fetch: read ECONNRESET', fail=99)
+    with pytest.raises(Exception, match='ECONNRESET'):
         fetch_app_asset(stuck)
     assert stuck.calls == 3
 
-    refused = _FlakyRoute("Route.fetch: connect ECONNREFUSED", fail=99)
-    with pytest.raises(Exception, match="ECONNREFUSED"):
+    refused = _FlakyRoute('Route.fetch: connect ECONNREFUSED', fail=99)
+    with pytest.raises(Exception, match='ECONNREFUSED'):
         fetch_app_asset(refused)
     assert refused.calls == 1

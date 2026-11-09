@@ -143,6 +143,8 @@ include = [
     # the app package, but they are first-party code and held to the same
     # lint bar.
     "docker/**/*.py",
+    # Playwright e2e suite and docs-screenshot scripts under frontend/.
+    "frontend/**/*.py",
 ]
 exclude = [
     ".git",
@@ -156,9 +158,9 @@ exclude = [
     "cache",
     "benchmarks/results",
     "*.egg-info",
-    # The frontend's Playwright e2e suite and docs scripts are their own
-    # Python project (own pytest.ini and conventions), outside the backend lint scope.
-    "frontend",
+    "frontend/node_modules",
+    "frontend/build",
+    "frontend/.svelte-kit",
 ]
 # Apply `exclude` even when pre-commit passes file paths explicitly.
 force-exclude = true
@@ -236,6 +238,21 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "PT028",   # Default arguments in test-like functions (standalone test scripts, not pytest)
     "RUF001",  # Ambiguous Unicode characters (intentional for display)
     "TID251",  # Tests set and read os.environ directly; the ban is for src/
+]
+
+# Playwright e2e suite and docs-screenshot scripts: same latitude as tests/, plus the
+# route-handler callback signatures Playwright dictates (unused request/match arguments).
+"frontend/**/*.py" = [
+    "ARG001",  # Unused function argument (fixtures, Playwright handler signatures)
+    "ARG002",  # Unused method argument (same)
+    "ARG005",  # Unused lambda argument (route handlers take (route, request))
+    "PLR2004", # Magic values
+    "PT018",   # Composite assertions carry a (values) message; splitting loses nothing worth the churn
+    "PT028",   # Default arguments in test-like functions (standalone scripts)
+    "RUF001",  # Ambiguous Unicode characters (asserting on rendered text)
+    "RUF002",  # Ambiguous Unicode characters in docstrings
+    "T201",    # print() allowed in the screenshot scripts
+    "TID251",  # Separate program; the env ban is for src/
 ]
 
 # Scripts can be less strict
