@@ -19,9 +19,17 @@ import statistics
 import sys
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.curation._project_worker_utils import curation_api_prefix
 
 
 POLL_S = 0.25
@@ -55,9 +63,7 @@ def render_table(runs: list[dict[str, Any]]) -> str:
 
 def one_create(http: httpx.Client, base: str, slug: str) -> dict[str, Any]:
     start = time.perf_counter()
-    posted = http.post(
-        f'{base}/curation/projects', json={'slug': slug, 'display_name': slug}, timeout=60
-    )
+    posted = http.post(f'{base}/projects', json={'slug': slug, 'display_name': slug}, timeout=60)
     post_s = time.perf_counter() - start
     posted.raise_for_status()
     if posted.status_code != 202:
@@ -65,7 +71,7 @@ def one_create(http: httpx.Client, base: str, slug: str) -> dict[str, Any]:
     job_id = posted.json()['job_id']
     job: dict[str, Any] = {}
     while time.perf_counter() - start < JOB_TIMEOUT_S:
-        job = http.get(f'{base}/curation/jobs/{job_id}', timeout=30).json()
+        job = http.get(f'{base}/jobs/{job_id}', timeout=30).json()
         if job['status'] in DONE:
             break
         time.sleep(POLL_S)
@@ -80,16 +86,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--api', default='http://127.0.0.1:4603')
     parser.add_argument('--runs', type=int, default=10)
     args = parser.parse_args(argv)
+    base = f'{args.api}{curation_api_prefix()}'
     prefix = f'stage-{uuid.uuid4().hex[:6]}'
     runs: list[dict[str, Any]] = []
     with httpx.Client() as http:
         for i in range(args.runs):
             slug = f'{prefix}-{i}'
             try:
-                runs.append(one_create(http, args.api, slug))
+                runs.append(one_create(http, base, slug))
             finally:
                 http.delete(
-                    f'{args.api}/curation/projects/{slug}',
+                    f'{base}/projects/{slug}',
                     params={'confirm': slug},
                     timeout=120,
                 )
