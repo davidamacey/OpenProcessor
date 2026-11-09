@@ -1,4 +1,4 @@
-"""/review and top-nav fixes from docs/design/visual-audit-2026-09-24.md.
+"""/review and top-nav fixes from the visual audit.
 
 - R1: the slot-bound region class (most validated) topped the `/` picker
   and was the first quick-assign chip, so `/` + Enter labeled an item as

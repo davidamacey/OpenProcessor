@@ -1,4 +1,4 @@
-"""K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md): the backend
+"""K6: the backend
 is removing its server-side burned-in box overlay from
 `GET {API_PREFIX}/crops/{id}/image`. `/review`'s source panel now draws
 every box itself from `GET {API_PREFIX}/crops/{id}/context`

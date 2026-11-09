@@ -1,4 +1,4 @@
-"""M5 (docs/design/interactive-pass-2026-09-24.md): `/clusters/[id]` M
+"""M5 (interactive pass): `/clusters/[id]` M
 (move selected to another cluster) followed by Z must undo the move
 through the same label-undo route as every other write here — before
 this fix `moveCropIds` never called `undoStore.recordWrites`, so Z after

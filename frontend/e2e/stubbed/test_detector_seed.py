@@ -1,5 +1,5 @@
 """OpenProcessor v0.4.0 "Create classes from the detector" on `/classes`
-(docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §7.3).
+(v0.4.0 backend deltas plan §7.3).
 
 A dry run first (served created / skipped / conflicts, reasons shown), the
 real call only after the confirm; absent when the deployment reports no

@@ -295,7 +295,7 @@ def test_rejection_reason_label_renders_for_a_live_item(
 
 
 def test_ingest_status_agrees(guarded_page: Any, live_url: str, live_project: dict[str, Any]) -> None:
-    """docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.5 —
+    """Ingest UI plan B.5 —
     the /ingest status table's total agrees with GET {prefix}/ingest/status."""
     page = guarded_page.page
     page.goto(f"{live_url}{page_path(live_project, '/ingest')}", wait_until="domcontentloaded")

@@ -1,5 +1,5 @@
-"""Ported from scripts/playwright_assist_scope.py (deleted; see
-docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
+"""Ported from the deleted playwright_assist_scope script (see
+the test audit, recommendation 5 / P1-1).
 
 Rewritten against current `AssistScopeBar.svelte`: the original script
 assumed a detection-profile `<select>` alongside the prompt-pack one.

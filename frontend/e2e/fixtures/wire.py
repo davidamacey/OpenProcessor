@@ -39,7 +39,7 @@ _BBOX = [0.1, 0.2, 0.6, 0.8]
 
 # The served region profile (`{API_PREFIX}/health` `region_profile`,
 # OpenProcessor naming-w2) of the neutral fixture domain: widgets carrying
-# a tag region (docs/design/domain-neutral-audit-2026-09-24.md §4.4).
+# a tag region.
 # harness/stub.py serves it by default; a test that needs a deployment with no
 # region profile overrides `/health` with `region_profile: None`.
 REGION_PROFILE: dict[str, Any] = {

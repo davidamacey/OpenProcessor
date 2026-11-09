@@ -1,4 +1,4 @@
-"""New coverage (docs/design/test-audit-2026-09-24.md recommendation 5):
+"""New coverage (test audit recommendation 5):
 `/train` renders the GPU picker from `GET {API_PREFIX}/train/gpus`
 (TrainForm.svelte). A restricted allowlist renders one radio per option,
 preselecting the server's `default: true` entry.

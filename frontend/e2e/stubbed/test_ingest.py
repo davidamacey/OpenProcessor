@@ -1,5 +1,5 @@
 """Stubbed e2e coverage for `/ingest`
-(docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.4).
+(Ingest UI plan §B.4).
 
 Fixtures live under `e2e/fixtures/ingest/batch1/` — `a.jpg` at the root,
 `sub/a.jpg` (a duplicate basename in a nested folder, proving the

@@ -1,5 +1,5 @@
 """Region features follow the served region profile (OpenProcessor
-naming-w2; docs/design/domain-neutral-audit-2026-09-24.md §5.4, §7.3).
+naming-w2; domain-neutral audit §5.4, §7.3).
 
 With `{API_PREFIX}/health` serving `region_profile: null`, every region
 surface is absent (not disabled) and no request ever reaches a region

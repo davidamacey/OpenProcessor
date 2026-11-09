@@ -1,5 +1,5 @@
-"""Ported from scripts/playwright_labeling_flow.py (deleted; see
-docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
+"""Ported from the deleted playwright_labeling_flow script (see
+the test audit, recommendation 5 / P1-1).
 
 Drives the real UI against the fail-closed `stub` fixture (harness/stub.py) so
 it exercises: 1.1 class-letter hotkey labels the SELECTION; 1.2 Shift+N

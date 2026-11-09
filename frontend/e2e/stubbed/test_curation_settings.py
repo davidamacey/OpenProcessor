@@ -1,5 +1,5 @@
-"""Ported from scripts/playwright_curation_settings.py (deleted; see
-docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
+"""Ported from the deleted playwright_curation_settings script (see
+the test audit, recommendation 5 / P1-1).
 
 Four passes against `/settings`:
 

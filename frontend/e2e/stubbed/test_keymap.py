@@ -1,4 +1,4 @@
-"""K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md):
+"""K2 (configurable keyboard shortcuts plan):
 the served keymap applies to real keypresses end to end.
 
   1. `test_keymap_absent_when_404` — the default stub (harness/stub.py's

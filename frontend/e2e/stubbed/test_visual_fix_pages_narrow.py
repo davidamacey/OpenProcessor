@@ -1,5 +1,5 @@
 """Narrow-viewport (800px) layout regressions from the 2026-09-24 visual
-audit (docs/design/visual-audit-2026-09-24.md) on /clusters,
+audit on /clusters,
 /clusters/[id] and /dashboard. jsdom has no layout, so these run in a real
 browser: each asserts on measured geometry, not on class names.
 """

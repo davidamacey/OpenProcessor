@@ -1,4 +1,4 @@
-"""New coverage (docs/design/test-audit-2026-09-24.md recommendation 5):
+"""New coverage (test audit recommendation 5):
 `/clusters/[id]` D discards the current selection.
 
 Single selection -> `POST {API_PREFIX}/crops/{id}/discard` (discardCrop).
