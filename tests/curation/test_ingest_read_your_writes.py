@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 
@@ -19,7 +20,7 @@ class _Indices:
     async def refresh(self, index: str, **_kw: Any) -> dict[str, Any]:
         self.calls.append(index)
         if self._fail:
-            raise RuntimeError('refresh unavailable')
+            raise OpenSearchConnectionError('N/A', 'refresh unavailable', OSError('refused'))
         return {}
 
 

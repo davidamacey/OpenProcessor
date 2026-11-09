@@ -51,6 +51,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -482,7 +484,7 @@ async def _seed(args: argparse.Namespace) -> int:
             for name in (cfg.images_index, cfg.items_index):
                 try:
                     await client.indices.delete(index=name, ignore=[404])
-                except Exception as exc:
+                except OpenSearchException as exc:
                     print(f'  (wipe) {name}: {exc}')
             for sub in ('projects', 'state', 'crop_cache'):
                 target = Path(args.data_root) / sub

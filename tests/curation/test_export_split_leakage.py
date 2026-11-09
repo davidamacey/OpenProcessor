@@ -25,6 +25,7 @@ from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation.index_fakes import FakeIndicesApi
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_split import stratified_split
@@ -37,6 +38,7 @@ HOLDOUT_PER_CLASS = 5
 
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
+        self.indices = FakeIndicesApi()
         self._docs = docs
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002

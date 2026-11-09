@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from src.services.curation.dataset_import.paths import DatasetPathNotAllowedError
+from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 
 
 if TYPE_CHECKING:
@@ -104,7 +105,7 @@ def exif_transposed_size(path: Path) -> tuple[int, int] | None:
         with Image.open(path) as img:
             width, height = img.size
             orientation = img.getexif().get(0x0112, 1)
-    except Exception:
+    except IMAGE_DECODE_ERRORS:
         return None
     return (height, width) if orientation in (5, 6, 7, 8) else (width, height)
 

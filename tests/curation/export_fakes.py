@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from _class_registry_fake import make_registry
 
+from curation.index_fakes import FakeIndicesApi
 from src.config import CurationConfig
 from src.config.region_fields import RegionFields
 from src.services.curation.export import GenericYoloExportService
@@ -38,6 +39,7 @@ class FakeOpenSearch:
     """
 
     def __init__(self, docs: list[dict[str, Any]], *, by_status: bool = False) -> None:
+        self.indices = FakeIndicesApi()
         self._docs = docs
         self._by_status = by_status
         self.queries: list[dict[str, Any]] = []

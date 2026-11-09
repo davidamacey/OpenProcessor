@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from _class_registry_fake import InMemoryRegistry
 
+from curation.index_fakes import FakeIndicesApi
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
 from src.services.curation.export_support import (
@@ -26,6 +27,7 @@ from src.services.curation.export_support import (
 
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
+        self.indices = FakeIndicesApi()
         self._docs = docs
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002

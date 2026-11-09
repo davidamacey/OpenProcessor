@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import IndexRole
 from src.config.project_context import bind_project
@@ -77,6 +78,10 @@ async def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -
     )
 
 
+#: What a project shows when OpenSearch could not be asked at all: unknown, never a made-up 0.
+UNKNOWN_COUNTS = ProjectCounts(images=None, items=None)
+
+
 async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, ProjectCounts]:
     """Per project, under that project's own read-only binding: how many
     images and items it holds (``_count``, which counts top-level documents --
@@ -120,10 +125,10 @@ async def list_projects(
     try:
         client = await make_curation_opensearch()
         counts = await _fetch_counts(client, listed)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('project_counts_unavailable', error=str(exc))
     summaries = [
-        summarize(record, counts.get(slug, ProjectCounts()))
+        summarize(record, counts.get(slug, UNKNOWN_COUNTS))
         for slug, record in sorted(listed.items())
     ]
 
@@ -151,11 +156,11 @@ async def get_project(
     if record is None:
         raise api_error(404, 'project_not_found', f"no project named '{project}'", project=project)
 
-    counts = ProjectCounts()
+    counts = UNKNOWN_COUNTS
     try:
         client = await make_curation_opensearch()
         counts = (await _fetch_counts(client, {project: record})).get(project, counts)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('project_counts_unavailable', project=project, error=str(exc))
     summary = summarize(record, counts)
     return ProjectRecordResponse(

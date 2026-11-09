@@ -62,3 +62,55 @@ def test_the_wire_models_carry_null() -> None:
         classes=0,
         promoted_models=0,
     )
+
+
+class _Registry:
+    def __init__(self, *records: Any) -> None:
+        self._records = {r.slug: r for r in records}
+
+    async def ensure_fresh(self) -> None:
+        return None
+
+    def snapshot(self) -> dict[str, Any]:
+        return dict(self._records)
+
+    def retired_slugs(self) -> list[str]:
+        return []
+
+    async def lookup(self, slug: str) -> Any:
+        return self._records.get(slug)
+
+
+async def _unreachable() -> Any:
+    raise OpenSearchConnectionError('N/A', 'opensearch is down', Exception('down'))
+
+
+@pytest.mark.asyncio
+async def test_the_project_list_shows_unknown_counts_when_opensearch_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers.curation import projects as router
+
+    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    monkeypatch.setattr(router, 'make_curation_opensearch', _unreachable)
+
+    response = await router.list_projects()
+
+    (alpha,) = response.projects
+    assert alpha.counts.images is None
+    assert alpha.counts.items is None
+
+
+@pytest.mark.asyncio
+async def test_one_project_shows_unknown_counts_when_opensearch_is_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers.curation import projects as router
+
+    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    monkeypatch.setattr(router, 'make_curation_opensearch', _unreachable)
+
+    response = await router.get_project('alpha')
+
+    assert response.counts.images is None
+    assert response.counts.items is None

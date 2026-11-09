@@ -31,12 +31,10 @@ scripts/bench/gpu_decode_parity.py	1	bench boundary: a GPU decode failure is rec
 scripts/bench/ingest_write_path.py	1	bench boundary: a failed request is counted as a failure
 scripts/bench/vectordb/orchestrate.py	1	readiness poll: any connect error means not ready yet, retried then raises
 scripts/curation/_vlm_activity.py	1	per-project boundary: an unreadable VLM state skips that project, logged
-scripts/curation/backfill_region_embeddings.py	2	script boundary: advisory scroll clear / index refresh failures are logged
 scripts/curation/bakeoff/bakeoff_runner.py	2	job boundary: a failed quantize/throughput step is recorded, scoring continues
 scripts/curation/bakeoff/report.py	2	optional boundary: MLflow logging failure must not fail the report
 scripts/curation/cluster_raw_labels.py	1	backend probe: any embedder load failure tries the next backend, logged
 scripts/curation/ingest_upload.py	1	task boundary: a crashed batch is counted and logged so the bounded queue cannot deadlock
-scripts/curation/seed_live_harness.py	1	harness boundary: a failed wipe step is printed, seeding continues
 scripts/curation/vlm_worker.py	2	worker-loop boundary: one project fetch or consumer error must not stop the loop
 scripts/curation/worker/bulk_writer.py	3	writer boundary: stamp/embedding-write failures are logged and never block a region write
 scripts/curation/worker/flow.py	2	worker-loop boundary: a failed fetch, embed stage or bulk write is logged and the loop goes on
@@ -47,8 +45,6 @@ scripts/curation/worker/stage_b.py	1	per-task boundary: failure is recorded in m
 scripts/curation/worker/stage_sam.py	1	per-task boundary: a failed segmenter task is logged and released for re-fetch
 scripts/download_ocr_test_images.py	1	CLI boundary: a failed download is printed, others continue
 scripts/resize_images.py	1	CLI boundary: a failed image is printed, others continue
-src/clients/curation_opensearch/ensure_overlay_fields.py	7	triage every return-empty handler in PR 3; ratchet: may only go down
-src/clients/opensearch/ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/triton_client_manager.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/triton_pool_core.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/app/factory.py	1	middleware boundary: an unparsable body is returned unchanged
@@ -56,14 +52,11 @@ src/app/lifespan.py	2	lifespan boundary: startup/shutdown steps are best-effort 
 src/routers/analyze.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/routers/curation/_models_vlm.py	2	status boundary: a VLM probe failure is reported as unavailable
 src/routers/curation/crop_context.py	1	route boundary: pixel-size read failure yields None, logged
-src/routers/curation/datasets.py	1	route boundary: a class-creation failure is mapped to 422
 src/routers/curation/edit_undo.py	1	route boundary: a failed undo is reported as a conflict, logged
 src/routers/curation/global_status.py	1	health boundary: the probe error text is returned as detail
 src/routers/curation/health.py	3	health boundary: the probe error text is returned as detail
 src/routers/curation/pipeline_events.py	1	stats boundary: the error is cached and returned as the payload
-src/routers/curation/projects.py	2	listing boundary: unavailable counts are logged, the list still serves
 src/routers/curation/review_resolve.py	1	per-crop boundary: a failed update is reported as a conflict, logged
-src/routers/curation/vlm_endpoints.py	1	listing boundary: unavailable activations are logged, the list still serves
 src/routers/detect.py	2	route boundary: mapped to a 500 or a per-file failure entry
 src/routers/embed.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/routers/health.py	1	readiness boundary: a probe that cannot run reports not ready
@@ -78,14 +71,11 @@ src/services/curation/bulk_ingest/s3_listing.py	1	collects the first error of ev
 src/services/curation/clustering/backend.py	2	optional GPU probe/cleanup: any cupy or driver failure means the CPU path or a skipped free
 src/services/curation/clustering/embedding_reduce.py	1	tries alternate array conversion methods; any failure moves to the next
 src/services/curation/clustering/umap_state.py	1	unpickling a stored reducer can raise anything; a failed load means refit, logged
-src/services/curation/crop_bytes.py	1	image decoders and the thumbnail cache raise heterogeneous types; the crop is skipped and logged
 src/services/curation/dataset_import/runner.py	1	chunk boundary: a failed chunk is recorded as a chunk_failed issue and the import continues
-src/services/curation/dataset_import/scan.py	1	PIL header/EXIF parsing raises heterogeneous types; unreadable image reports no size
 src/services/curation/empty_vlm_answer_repair.py	1	per-item boundary: any write failure is counted in errors and the sweep continues
 src/services/curation/export_readiness.py	1	best-effort index generation read: any failure is logged and the generation is reported unknown
-src/services/curation/export_support.py	1	per-image export boundary: the failure text is returned to the caller and counted
 src/services/curation/index_bootstrap.py	2	bootstrap boundary: any migration or create failure is logged and reported as not bootstrapped
-src/services/curation/ingest.py	3	per-image boundary: decode and detector failures become a failed IngestResult; the post-ingest refresh failure is logged, the writes already succeeded
+src/services/curation/ingest.py	1	per-image boundary: a primary detector failure becomes a failed IngestResult (error_kind detector_infer), logged
 src/services/curation/ingest_batch.py	1	batch detector failure falls back to the per-image path, logged
 src/services/curation/ingest_index.py	2	per-image boundary: a bulk-index failure marks the item failed and releases the claim, logged; a failed full-frame blur is logged and the item is written without it
 src/services/curation/ingest_writer.py	1	drain-loop boundary: a crash fails every pending caller with the same exception
@@ -112,7 +102,6 @@ src/services/projects/delete.py	2	triage every return-empty handler in PR 3; rat
 src/services/projects/delete_models.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/lifecycle.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/visual_search/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/visual_search/ingest_single.py	2	single-image ingest boundary: the failure is returned as status=error with the message; a failed near-duplicate check never fails the ingest, logged
 src/utils/image_processing.py	1	decoder fallback: OpenCV failure tries PIL, both failing raises ValueError
 src/utils/pytorch_utils.py	1	loader boundary: a model that fails to load is logged, others load
