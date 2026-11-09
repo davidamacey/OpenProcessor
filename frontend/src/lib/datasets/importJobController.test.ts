@@ -212,6 +212,7 @@ describe('actions', () => {
       method: 'POST',
       path: '/clusters/runs',
       reason: 'r',
+      body: { target: 'region_box' },
     };
     expect(await job.runNextStep(step)).toBe(true);
     expect(deps.runServedNextStep).toHaveBeenCalledWith(step);

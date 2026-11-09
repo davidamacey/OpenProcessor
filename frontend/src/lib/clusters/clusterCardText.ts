@@ -6,6 +6,11 @@
 import type { Cluster } from '$lib/types';
 import type { ValidationState } from '$lib/types_clusterList';
 
+/** "#7", or "" when the serving partition gave the cluster no number. */
+export function displayNoText(c: { display_no?: number | null }): string {
+  return c.display_no == null ? '' : `#${c.display_no}`;
+}
+
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Modal from '$components/Modal.svelte';
-  import { dominantShareText } from '$lib/clusters/clusterCardText';
+  import { displayNoText, dominantShareText } from '$lib/clusters/clusterCardText';
   import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import type { ClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
 
@@ -50,9 +50,8 @@
         <option value="">Choose a cluster…</option>
         {#each actions.moveCandidates as c (c.uid)}
           <option value={c.uid}>
-            {c.uid.slice(0, 8)} · {c.dominant_class_name ?? 'unlabeled'} · {c.size.toLocaleString()}{dominantShareText(
-              c,
-            )
+            {displayNoText(c) ? `${displayNoText(c)} · ` : ''}{c.dominant_class_name ??
+              'unlabeled'} · {c.size.toLocaleString()}{dominantShareText(c)
               ? ` · ${dominantShareText(c)}`
               : ''}
           </option>

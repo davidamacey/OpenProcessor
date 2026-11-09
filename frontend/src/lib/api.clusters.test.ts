@@ -21,6 +21,7 @@ const jsonResponse = (body: unknown) =>
 function card(over: Record<string, unknown> = {}) {
   return {
     cluster_uid: UID_A,
+    display_no: 3,
     size: 37,
     validated_count: 30,
     labelled_count: 37,
@@ -85,6 +86,19 @@ describe('getClusters card mapping', () => {
       expect(res.items[0]).not.toHaveProperty(gone);
     }
     expect(res).not.toHaveProperty('purity_thresholds');
+  });
+
+  it('carries the served display_no, null when no partition numbers the cluster', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse({ items: [card(), card({ display_no: null })], total: 2 }),
+        ),
+    );
+    const res = await getClusters();
+    expect(res.items.map((c) => c.display_no)).toEqual([3, null]);
   });
 
   it('dominant_pct is the served label_agreement', async () => {

@@ -290,6 +290,7 @@ export interface NextStep {
   method: string;
   path: string;
   reason: string;
+  body: Record<string, unknown> | null;
 }
 
 export interface DatasetUndoReport {

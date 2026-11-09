@@ -5,6 +5,7 @@
   import { getThumbUrl } from '$lib/api_cropRead';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import {
+    displayNoText,
     dominantShareText,
     dominantShareTitle,
     DETECTOR_TOOLTIP,
@@ -51,7 +52,7 @@
     void goto(resolve(projectHref(`/clusters/${encodeURIComponent(c.uid)}`)));
   }
 
-  const shortUid = $derived(c.uid.slice(0, 8));
+  const numberText = $derived(displayNoText(c));
   const detector = $derived(c.isSlotCard ? null : detectorText(c));
   const flagById = $derived(new Map(flagVocabulary.map((f) => [f.id, f])));
 </script>
@@ -97,7 +98,7 @@
           <span
             class="font-mono text-sm font-semibold"
             title={c.uid}
-            data-testid="cluster-uid">{shortUid}</span
+            data-testid="cluster-uid">{numberText}</span
           >
           {#if c.label_agreement != null}
             <span
@@ -144,7 +145,7 @@
             </span>
           {/if}
         {:else}
-          <span class="text-amber-300">Unlabeled {shortUid}</span>
+          <span class="text-amber-300">Unlabeled {numberText}</span>
           <span class="text-zinc-500">· needs label</span>
         {/if}
       </div>

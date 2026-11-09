@@ -24,6 +24,7 @@ import type {
  *  dominant class, the agreement or is_unlabeled. */
 type RawCluster = {
   cluster_uid: string;
+  display_no: number | null;
   size: number;
   validated_count: number;
   labelled_count: number;
@@ -67,6 +68,7 @@ function _rawClusterToCluster(c: RawCluster): Cluster {
   const label_agreement = c.label_agreement ?? null;
   return {
     uid: c.cluster_uid,
+    display_no: c.display_no ?? null,
     size: c.size,
     validated_count: c.validated_count,
     dominant_class_name: c.dominant_class_name,

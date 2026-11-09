@@ -6,6 +6,7 @@
    * (`slotGalleryController.svelte.ts`), which carries the slot; this
    * component renders it, naming regions by `gallery.slot.label`.
    */
+  import { displayNoText } from '$lib/clusters/clusterCardText';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { resolveApiUrl } from '$lib/api';
   import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
@@ -361,7 +362,7 @@
             </div>
             <div class="flex items-center justify-between gap-1 p-2 text-xs">
               <span class="font-mono font-semibold text-zinc-200" title={c.uid}
-                >{c.uid.slice(0, 8)}</span
+                >{displayNoText(c)}</span
               >
               <span
                 class="text-zinc-400"

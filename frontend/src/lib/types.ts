@@ -239,6 +239,9 @@ export interface Crop {
 export interface Cluster {
   /** The cluster's identity in the serving partition (`cluster_uid`). */
   uid: string;
+  /** The number the serving partition gave the cluster (`display_no`); null or
+   *  absent when none names it. */
+  display_no?: number | null;
   /** Items with >=1 box in the cluster. For a region cluster, this
    *  is DISTINCT from `box_count` below — an item can have more than one
    *  box in the same cluster. */

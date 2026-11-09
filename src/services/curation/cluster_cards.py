@@ -12,8 +12,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.curation_accessors import items_index
+from src.config.project_context import current_project_id
 from src.core.exceptions import RequestRejectedError
+from src.db.session import project_tx
 from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flags, validation_state
+from src.services.clustering.partitions import display_numbers
 from src.services.curation import review_queries
 from src.services.curation.cluster_representatives import partition_representatives_body
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
@@ -23,6 +26,8 @@ from src.utils.class_names import normalize_class_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.schemas.curation.clusters import (
         ClusterCard,
@@ -151,6 +156,7 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
     state: ValidationState = validation_state(size, validated_count)
     return {
         'cluster_uid': str(bucket['key']),
+        'display_no': None,
         'size': size,
         'validated_count': validated_count,
         'labelled_count': labelled_total,
@@ -275,6 +281,14 @@ async def fetch_representatives(
         )
         for i in range(len(cluster_uids))
     ]
+
+
+async def attach_display_nos(session: AsyncSession, cards: list[ClusterCard]) -> None:
+    """Set each card's ``display_no`` from the serving partition; a card it does not name keeps null."""
+    async with project_tx(session, current_project_id()):
+        numbers = await display_numbers(session, [c['cluster_uid'] for c in cards])
+    for card in cards:
+        card['display_no'] = numbers.get(card['cluster_uid'])
 
 
 async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> ClusterListResponse:

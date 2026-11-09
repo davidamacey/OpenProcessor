@@ -4932,6 +4932,18 @@
             "description": "That class as a share of the members that have a detector class.",
             "title": "Detector Top Share"
           },
+          "display_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the serving partition gave the cluster (r<display_no>); null when no serving partition names it.",
+            "title": "Display No"
+          },
           "dominant_class_name": {
             "anyOf": [
               {
@@ -5037,6 +5049,7 @@
         },
         "required": [
           "cluster_uid",
+          "display_no",
           "size",
           "validated_count",
           "labelled_count",
@@ -19256,6 +19269,19 @@
           "action": {
             "title": "Action",
             "type": "string"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON request body to send with the step, when it needs one.",
+            "title": "Body"
           },
           "method": {
             "title": "Method",
