@@ -86,6 +86,10 @@ RETIRED_ENV: dict[str, str] = {
     # A model export is a jobs row on the gpu_export queue, not a task file.
     'EXPORT_TASK_DIR': f'{_REMOVED} model-export tasks are job rows; read them at GET /models/export/{{task_id}}',
     'OP_BAKEOFF_JOBS_DIR': f'{_REMOVED} bake-offs are bakeoff jobs; there is no job directory',
+    'OP_CROP_DUP_THRESHOLD': (
+        f'{_REMOVED} the bucketed near-duplicate scorer is gone; near duplicates are run-scoped '
+        'groups configured by a near_dup_profile'
+    ),
 }
 
 

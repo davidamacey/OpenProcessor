@@ -272,8 +272,13 @@ def _cache_parity(
 
 @pytest.mark.parametrize(('first', 'second'), [('alpha', 'beta'), ('beta', 'alpha')])
 def test_every_scoped_route_stays_inside_the_bound_project(
-    leak_env: LeakEnv, first: str, second: str
+    leak_env: LeakEnv, first: str, second: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    async def item_space(_target: object) -> object:  # the sweep has no embedding-space rows
+        return type('Space', (), {'vector_field': 'pe_embedding'})()
+
+    monkeypatch.setattr('src.routers.curation.select.embedding_space', item_space)
+    monkeypatch.setattr('src.services.curation.embedding_viz_read.embedding_space', item_space)
     app = leak_env.app
     routes = _scoped_routes(app)
     assert len(routes) > 100, f'expected the full scoped surface, got {len(routes)} routes'

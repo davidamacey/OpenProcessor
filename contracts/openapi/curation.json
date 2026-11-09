@@ -3316,32 +3316,6 @@
         "title": "BatchBoxStateTarget",
         "type": "object"
       },
-      "BatchConflict": {
-        "properties": {
-          "crop_id": {
-            "title": "Crop Id",
-            "type": "string"
-          },
-          "current_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The class_source that won the race.",
-            "title": "Current Source"
-          }
-        },
-        "required": [
-          "crop_id",
-          "current_source"
-        ],
-        "title": "BatchConflict",
-        "type": "object"
-      },
       "BatchExcludeResponse": {
         "description": "``POST /crops/batch_exclude``.",
         "properties": {
@@ -3419,50 +3393,6 @@
           }
         },
         "title": "BatchIngestSummaryResponse",
-        "type": "object"
-      },
-      "BatchRelabelResponse": {
-        "description": "``PUT /crops/batch_label`` and ``POST /crops/move``.",
-        "properties": {
-          "conflicts": {
-            "items": {
-              "$ref": "#/components/schemas/BatchConflict"
-            },
-            "title": "Conflicts",
-            "type": "array"
-          },
-          "op_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The recorded operation (undo it by id); null when nothing was selected.",
-            "title": "Op Id"
-          },
-          "updated": {
-            "title": "Updated",
-            "type": "integer"
-          },
-          "updated_ids": {
-            "description": "The items actually written (the undo target).",
-            "items": {
-              "type": "string"
-            },
-            "title": "Updated Ids",
-            "type": "array"
-          }
-        },
-        "required": [
-          "updated",
-          "updated_ids",
-          "conflicts",
-          "op_id"
-        ],
-        "title": "BatchRelabelResponse",
         "type": "object"
       },
       "BatchUnexcludeResponse": {
@@ -7100,7 +7030,6 @@
               "dataset_changed",
               "import_not_resumable",
               "import_not_undoable",
-              "reprocess_busy",
               "upload_too_large",
               "dataset_path_not_allowed",
               "format_undetected",
@@ -7133,7 +7062,6 @@
               "pack_declares_no_attributes",
               "invalid_request",
               "assist_too_large",
-              "assist_busy",
               "assist_loop_busy",
               "assist_loop_running",
               "assist_loop_not_resumable",
@@ -16537,6 +16465,33 @@
           "last_undo"
         ],
         "title": "LabelOp",
+        "type": "object"
+      },
+      "LabelOpAccepted": {
+        "description": "``PUT /crops/batch_label``, ``POST /crops/move`` and a real undo: the job is queued (202).",
+        "properties": {
+          "job_id": {
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "op_id": {
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "default": "queued",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "op_id",
+          "job_id"
+        ],
+        "title": "LabelOpAccepted",
         "type": "object"
       },
       "LabelOpList": {
@@ -38966,7 +38921,7 @@
     },
     "/curation/projects/{project}/assist/runs": {
       "get": {
-        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are kept.",
+        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are scanned.",
         "operationId": "list_assist_runs_curation_projects__project__assist_runs_get",
         "parameters": [
           {
@@ -39051,7 +39006,7 @@
         ]
       },
       "post": {
-        "description": "Plan an assist run, and start it unless ``dry_run`` (the default).\n\nThe response says what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect). Refusals:\n409 ``vlm_not_configured`` (the project's VLM is off and ``vlm`` names none),\n409 ``assist_busy``, 404 ``not_found`` (an empty cluster), 422\n``invalid_request``, ``assist_too_large``, ``pack_declares_no_attributes``,\n``no_class_names``. Class suggestions never overwrite a locked, validated or\nholdout item; attributes are stored apart from the labels.",
+        "description": "Plan an assist run, and queue it unless ``dry_run`` (the default).\n\nA dry run answers 200 with what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect); a queued run answers\n202 with the same plan and its job id as ``run_id``. Refusals: 409 ``vlm_not_configured``\n(the project's VLM is off and ``vlm`` names none), 409 ``job_busy`` (a run is active),\n404 ``not_found`` (an empty cluster), 422 ``invalid_request``, ``assist_too_large``,\n``pack_declares_no_attributes``, ``no_class_names``. The worker plans the run again and\nfails it if the endpoint or the pack changed in between. Class suggestions never\noverwrite a locked, validated or holdout item; attributes are stored apart from the\nlabels.",
         "operationId": "create_assist_run_curation_projects__project__assist_runs_post",
         "parameters": [
           {
@@ -39076,6 +39031,16 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunState"
+                }
+              }
+            },
+            "description": "A dry run: nothing was queued."
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -43473,19 +43438,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BatchRelabelResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SelectionDryRunResponse"
-                    }
-                  ],
-                  "title": "Response 200 Batch Label Crops Curation Projects  Project  Crops Batch Label Put"
+                  "$ref": "#/components/schemas/SelectionDryRunResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -43821,19 +43788,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/BatchRelabelResponse"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SelectionDryRunResponse"
-                    }
-                  ],
-                  "title": "Response 200 Move Crops Curation Projects  Project  Crops Move Post"
+                  "$ref": "#/components/schemas/SelectionDryRunResponse"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -49611,7 +49580,7 @@
     },
     "/curation/projects/{project}/label_ops/{op_id}/undo": {
       "post": {
-        "description": "Undo a bulk label or move, item by item, from the stored operation.\n\nAn item is restored only while it still carries the operation's label and\nnothing changed it since: a later edit, an exclusion, a class merge or the\ntest holdout keeps the item as it is, and a restore target whose class was\nrenamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts\nwhat would happen and writes nothing; send ``{\"dry_run\": false}`` to write.\nThe whole pass runs inside this request, one paged bulk at a time.",
+        "description": "Undo a bulk label or move, item by item, from the stored operation.\n\nAn item is restored only while it still carries the operation's label and\nnothing changed it since: a later edit, an exclusion, a class merge or the\ntest holdout keeps the item as it is, and a restore target whose class was\nrenamed is refused (``kept_stale_class``). ``dry_run`` (the default) counts\nwhat would happen and writes nothing; send ``{\"dry_run\": false}`` to queue\nthe pass as a ``label_undo`` job (202 with the job id and the ``op_id``).",
         "operationId": "undo_op_curation_projects__project__label_ops__op_id__undo_post",
         "parameters": [
           {
@@ -49652,13 +49621,23 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "A dry run: counts, nothing written."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabelOpAccepted"
+                }
+              }
+            },
+            "description": "The undo pass is queued as a job."
           },
           "404": {
             "description": "label_op_not_found: unknown, malformed or pruned operation."
           },
           "409": {
-            "description": "already_undone, label_op_busy (another undo is running) or label_op_in_progress (the operation is still being written)."
+            "description": "already_undone, job_busy (another undo is running) or label_op_in_progress (the operation is still being written)."
           },
           "422": {
             "content": {
@@ -53058,7 +53037,7 @@
     },
     "/curation/projects/{project}/probe/cancel": {
       "post": {
-        "description": "Best-effort cancel of the active probe job.",
+        "description": "Cancel the active probe job, if there is one.",
         "operationId": "probe_cancel_curation_projects__project__probe_cancel_post",
         "parameters": [
           {
@@ -53103,7 +53082,7 @@
     },
     "/curation/projects/{project}/probe/run": {
       "post": {
-        "description": "Start a probe pass from a finished training run's export.\n\n``409`` when: the referenced training job isn't finished or has no\nexported checkpoint, or a probe job is already running. ``422`` when\n``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU\nclaim (when ``gpu`` is given) goes through the same arbiter\n``POST /train/start`` uses; a claim failure is also ``409`` (never\nsilent -- see ``src.services.curation.probe_job``).",
+        "description": "Queue a probe pass from a finished training run's export (202 with the job).\n\n``409`` when the referenced training job isn't finished or has no exported checkpoint, and\n``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. A requested ``gpu`` is\nclaimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails\nthe job (see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_projects__project__probe_run_post",
         "parameters": [
           {
@@ -53127,7 +53106,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -56465,6 +56444,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Job Id",
               "type": "string"
             }
@@ -56509,7 +56489,7 @@
     },
     "/curation/projects/{project}/reprocess/jobs/{job_id}/cancel": {
       "post": {
-        "description": "Ask a live job to stop after its current chunk.",
+        "description": "Ask a live job to stop after its current slice of images.",
         "operationId": "cancel_reprocess_job_curation_projects__project__reprocess_jobs__job_id__cancel_post",
         "parameters": [
           {
@@ -56517,6 +56497,7 @@
             "name": "job_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Job Id",
               "type": "string"
             }
@@ -58105,6 +58086,7 @@
     },
     "/curation/projects/{project}/scores/compute": {
       "post": {
+        "description": "Queue the scoring job (202 with its state; 409 `job_busy` while one is active).",
         "operationId": "scores_compute_curation_projects__project__scores_compute_post",
         "parameters": [
           {
@@ -58128,7 +58110,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
@@ -59928,7 +59910,7 @@
     },
     "/curation/projects/{project}/select/diverse": {
       "post": {
-        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise starts a background job and returns ``202`` with\n``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection).",
+        "description": "Pool-scale diversity selection — k-center-greedy over an arbitrary\nscope (cluster / review tab / generic filters), bigger than what fits\nin one ``GET /curation/crops`` page.\n\nAnswers inline (``200``, ``{crop_ids, method, version, n_pool}``) when\nthe scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;\notherwise queues a ``selection`` job and returns ``202`` with\n``{job_id, status: 'queued', ...}`` (409 ``job_busy`` while one is active) — poll ``GET /curation/select/status``.\nNever writes anything to OpenSearch (read-only selection).",
         "operationId": "select_diverse_curation_projects__project__select_diverse_post",
         "parameters": [
           {
@@ -59981,7 +59963,7 @@
     },
     "/curation/projects/{project}/select/status": {
       "get": {
-        "description": "Poll a backgrounded ``POST /curation/select/diverse`` job. ``result`` is\npopulated once ``status == 'completed'`` with the same\n``{crop_ids, method, version, n_pool}`` shape the sync path returns\ndirectly.",
+        "description": "Poll a queued ``POST /curation/select/diverse`` job. ``result`` is populated once\n``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the\nsync path returns directly.",
         "operationId": "select_status_curation_projects__project__select_status_get",
         "parameters": [
           {
@@ -62310,7 +62292,7 @@
     },
     "/curation/projects/{project}/viz/projection/rebuild": {
       "post": {
-        "description": "Start the background UMAP-viz fit job. Never fits inline — always\nreturns immediately with the job's initial ``{status: 'running', ...}``\nstate (``202``); poll ``GET {prefix}/viz/projection/status``.",
+        "description": "Queue the UMAP-viz fit job. Never fits inline: answers `202` with the job's state (`409\njob_busy` while one is active); poll ``GET {prefix}/viz/projection/status``.",
         "operationId": "viz_projection_rebuild_curation_projects__project__viz_projection_rebuild_post",
         "parameters": [
           {
@@ -62351,7 +62333,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {

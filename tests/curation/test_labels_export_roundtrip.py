@@ -39,7 +39,7 @@ ITEMS = CFG.items_index
 IMAGES = CFG.images_index
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 
 
 def _item(doc_id: str, *, image: str, cluster_id: int = 7, **extra: Any) -> dict[str, Any]:
@@ -106,6 +106,7 @@ async def _export(fake: QueryFakeOpenSearch, registry: InMemoryRegistry, tmp_pat
 
 
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
+    from curation.queued_label import call_route
     from src.routers.curation import crops_write as crops
     from src.routers.curation._common_models import (
         CropBatchLabelRequest,
@@ -115,13 +116,15 @@ async def _human_label_paths(fake, registry, monkeypatch) -> None:
 
     monkeypatch.setattr(crops, 'get_class_registry', lambda: registry)
     await crops.label_crop('h1', CropLabelRequest(class_id=1), fake, registry)
-    await crops.batch_label_crops(CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=1), fake)
-    await crops.move_crops(CropMoveRequest(crop_ids=['m1'], cluster_id=0), fake)
+    await call_route(
+        crops.batch_label_crops, CropBatchLabelRequest(crop_ids=['b1', 'b2'], class_id=1), fake
+    )
+    await call_route(crops.move_crops, CropMoveRequest(crop_ids=['m1'], cluster_id=0), fake)
 
 
 @pytest.mark.asyncio
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp_path, monkeypatch):
     """The exact scenario of the reference hole: humans label, nothing is
     imported, export must not."""
@@ -137,7 +140,7 @@ async def test_human_labels_alone_produce_a_non_empty_export(fake, registry, tmp
 @pytest.mark.asyncio
 @pytest.mark.usefixtures('reference_ingest_profiles')
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 async def test_every_label_path_reaches_the_export(fake, registry, tmp_path, monkeypatch):
     """The fifth "every label path" writer: dataset import.
 

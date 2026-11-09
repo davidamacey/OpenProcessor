@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -179,6 +180,7 @@ def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None
             answers={},
             tokens=tokens,
             label=label,
+            job_id=uuid.uuid4(),
         )
     )
 
@@ -206,6 +208,7 @@ def test_propagation_writes_the_machine_kind_with_the_run_in_its_provenance(
             answers={},
             tokens=tokens,
             label=label,
+            job_id=uuid.uuid4(),
         )
     )
 

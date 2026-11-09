@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.services.curation.assist.job import read_members
 from src.services.curation.assist.models import AssistRunRequest, ClusterTarget, CropsTarget
 from src.services.curation.assist.proposal_models import ScopeNow
 from src.services.curation.assist.scope import filter_members, membership_overlap, proposal_scope
@@ -48,16 +47,16 @@ async def current_members(
 
 async def scope_now(
     opensearch: AsyncOpenSearch,
-    run_id: str,
     request: AssistRunRequest,
     *,
+    before: list[str] | None,
     members: list[tuple[str, dict[str, Any]]] | None = None,
 ) -> ScopeNow | None:
-    """How the scope changed since the run resolved it, or ``None`` when the run
-    has no cluster scope or kept no member list. ``members`` is the caller's
+    """How the scope changed since the run resolved it (``before``: the member ids the run
+    kept, from :func:`~src.services.curation.assist.job.read_members`), or ``None`` when the
+    run has no cluster scope or kept no member list. ``members`` is the caller's
     ``current_members`` when it already has them."""
     now = members if members is not None else await current_members(opensearch, request)
-    before = read_members(run_id)
     if now is None or before is None:
         return None
     return ScopeNow(**membership_overlap(before, [cid for cid, _ in now]))

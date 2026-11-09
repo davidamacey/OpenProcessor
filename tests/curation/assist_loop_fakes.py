@@ -238,7 +238,9 @@ def make_world(monkeypatch: pytest.MonkeyPatch) -> World:
         registry.add(name)
     use_registry(registry)
 
-    async def recorded(opensearch: Any, ids: list[str], *, op: Any, merger_for: Any) -> Any:
+    async def recorded(
+        opensearch: Any, ids: list[str], *, op: Any, merger_for: Any, job_id: Any
+    ) -> Any:
         out = await occ_bulk_human_relabel(
             opensearch, ids, merger_for(str(uuid.uuid4())), writer_id=op.writer
         )

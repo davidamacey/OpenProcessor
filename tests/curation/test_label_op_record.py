@@ -7,7 +7,6 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from _lease_hold import held
 
 from curation.label_ops_env import build_env, proposal
 from src.domain.history import find_undo_snapshot
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
     from curation.label_ops_env import OpsEnv
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.autoqueue']
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
 
 
@@ -96,10 +95,10 @@ def test_a_write_without_a_record_never_happens(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
 
-    async def refuse(_new: Any) -> Any:
+    async def refuse(*_args: Any) -> Any:
         raise RuntimeError('database down')
 
-    monkeypatch.setattr('src.services.curation.label_ops.record.create_op', refuse)
+    monkeypatch.setattr('src.services.curation.label_ops.record.create_op_in', refuse)
     resp = env.client.put(
         f'{env.prefix}/crops/batch_label',
         json={'class_id': env.class_ids['widget'], 'crop_ids': ['c0']},
@@ -171,11 +170,11 @@ def test_interrupted_and_writing_operations_are_served_and_not_undoable(
     op_id = env.label('widget', crop_ids=['c0'])['op_id']
     env.set_status(op_id, 'writing')
     item = env.list_ops().json()['items'][0]
-    assert item['status'] == 'interrupted'  # no live lease guards the write
+    assert item['status'] == 'interrupted'  # no active job owns the write
     assert item['undoable'] is True
 
-    with held('label_op', op_id):
-        live = env.list_ops().json()['items'][0]
+    live_op = env.queue_label('gadget', crop_ids=['c1']).json()['op_id']  # job queued, not run
+    live = next(o for o in env.list_ops().json()['items'] if o['op_id'] == live_op)
     assert live['status'] == 'writing'
     assert live['undoable'] is False
 

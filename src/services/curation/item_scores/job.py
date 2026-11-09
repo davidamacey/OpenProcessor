@@ -1,15 +1,8 @@
-"""Singleton job runner for ``POST /curation/scores/compute``.
+"""The queued ``item_scores`` job behind ``POST /curation/scores/compute``.
 
-Mirrors :mod:`src.services.curation.auto_label_job`'s state.json / heartbeat /
-cancel.flag file-backed conventions, simplified for in-process execution —
-there is no separate scores worker container; the job runs as an
-``asyncio`` background task inside the api process itself, started
-by the router handler and polled via the same state-file pattern the
-labeler already knows how to render.
-
-Directory resolved lazily via ``OP_SCORES_STATE_DIR`` (default ``/jobs/scores``)
-so tests can override with ``monkeypatch.setenv`` + ``tmp_path`` without
-reimporting — same convention as ``train_jobs._resolve_jobs_dir``.
+The route queues the job (one at a time per project); a Celery worker runs
+:func:`run_scoring_job` over the requested scorers and returns the per-scorer results as the
+job's result.
 
 **Per-pool single-fetch design (load-bearing):** not every scorer wants the
 same items. Each scorer declares a :attr:`~item_scores.base.CropScorer.pool`
@@ -39,162 +32,62 @@ pool it asked for:
   ``n_scored=1``, ``n_skipped_outside_probe_classes=1350``, while 7,936
   items were actually probe-scored).
 
-``state.total`` / ``state.processed`` are the SUM of each requested
+``progress.total`` / ``progress.done`` are the SUM of each requested
 scorer's own pool size (a scorer sharing a pool with another requested
 scorer counts that pool's size again — this is "work units across
 requested scorers", not "distinct items touched this job"). Per-scorer
 detail (which pool, how many items in it, how many it actually wrote) is
-in ``state.results[scorer_name]`` — additive fields on the existing shape,
+in ``result.results[scorer_name]`` — additive fields on the existing shape,
 not a breaking change to ``/curation/scores/status``.
 """
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
-import time
-import uuid
-from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.config.curation_accessors import get_curation_config
-from src.config.env import env_path
-from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
-from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
+from src.services.curation.latest_job import common_state
+from src.services.jobs.service import start_job
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    import uuid
 
     from opensearchpy import AsyncOpenSearch
+    from sqlalchemy.ext.asyncio import AsyncSession
 
+    from src.db.repos.jobs import JobRow
+    from src.schemas.jobs import JobView
     from src.services.curation.item_scores.base import ScoreResult
+    from src.tasks.runtime.context import JobContext
 
 
 logger = get_logger(__name__)
 
-
-_ACTIVE = frozenset({'running'})
-
-# Reference to the scheduled background task — asyncio only holds a weak
-# reference internally, so an unreferenced task can be garbage-collected
-# mid-run. Module-level singleton matches the one-job-at-a-time contract
-# start_job()/_is_busy() already enforce via the state file.
-_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
+KIND = 'item_scores'
 
 
-def _state_dir() -> Path:
-    """Resolved fresh each call so tests can override via monkeypatch."""
-    return project_jobs_dir(env_path('OP_SCORES_STATE_DIR', '/jobs/scores'))
-
-
-def _job() -> FileJob:
-    return FileJob(_state_dir())
-
-
-@dataclass
-class _JobState:
-    job_id: str = ''
-    status: str = 'idle'  # 'idle' | 'running' | 'completed' | 'failed' | 'cancelled'
-    scorers: list[str] = field(default_factory=list)
-    processed: int = 0
-    total: int = 0
-    started_at: float = 0.0
-    finished_at: float = 0.0
-    error: str | None = None
-    results: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _read_state() -> _JobState:
-    state = _JobState()
-    for k, v in _job().read().items():
-        if hasattr(state, k):
-            setattr(state, k, v)
-    return state
-
-
-def is_cancelled() -> bool:
-    return _job().cancel_requested()
-
-
-def _is_busy() -> bool:
-    return _job().is_live(_ACTIVE)
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
-
-    Called from ``src.main``'s lifespan before any request is served, so
-    nothing in this process can legitimately hold ``status='running'``
-    yet — a leftover 'running' state.json is necessarily orphaned by a
-    prior process. Returns True if the file was rewritten.
-    """
-    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='scoring job')
-
-
-def get_state() -> dict[str, Any]:
-    """Read-only snapshot. A stale heartbeat is reported as ``failed`` in the returned view
-    only: a status poll never writes state (persisting stays with the lease/startup
-    reconcile and ``FileJob.served_state``; mirrors ``auto_label_job.get_state``'s contract)."""
-    state = _read_state()
-    if state.status == 'running':
-        age = _job().heartbeat_age()
-        if age is not None and age > HEARTBEAT_STALE_S:
-            state.status = 'failed'
-            state.error = state.error or f'scoring job heartbeat stale ({age:.1f}s ago)'
-            state.finished_at = state.finished_at or time.time()
-    return state.to_dict()
-
-
-async def start_job(opensearch: AsyncOpenSearch, scorer_names: list[str]) -> dict[str, Any]:
-    """Take the scoring lease, write 'running' state, then schedule the background task.
-    Raises ``RuntimeError`` if a run is already in flight -- the router surfaces this as
-    HTTP 409.
-
-    The record-based busy check comes first (a run from before leases has a fresh
-    heartbeat and no lease document); the lease then closes the race between two
-    ``api`` worker processes that both pass it.
-    """
-    busy = RuntimeError('scoring job already in progress')
-    if _is_busy():
-        raise busy
-    job_id = uuid.uuid4().hex
-    beat = await acquire_heartbeat(
-        opensearch, LeaseKind.ITEM_SCORES, None, job_id, job=_job(), busy=lambda _holder: busy
+async def start(session: AsyncSession, project: uuid.UUID, scorer_names: list[str]) -> JobRow:
+    """Queue the scoring job (409 ``job_busy`` while one is active)."""
+    started = await start_job(
+        session, KIND, project, params={'scorers': list(scorer_names)}, requested_by='api'
     )
-    try:
-        _job().clear_signals()
-        state = _JobState(
-            job_id=job_id,
-            status='running',
-            scorers=list(scorer_names),
-            started_at=time.time(),
-        )
-        _job().write(state.to_dict())
-    except BaseException:
-        await beat.release(opensearch)
-        raise
-    beat.start()
-    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-        run_leased(beat, opensearch, run_scoring_job(job_id, opensearch, scorer_names))
-    )
-    return state.to_dict()
+    return started.job
 
 
-def cancel_job() -> bool:
-    """Touch the cancel flag. Returns True if a run was active."""
-    if not _is_busy():
-        return False
-    _job().request_cancel()
-    return True
+def state_dict(view: JobView | None) -> dict[str, Any]:
+    """The ``/scores/status`` wire of a job row."""
+    progress = (view.progress if view else None) or {}
+    return {
+        **common_state(view),
+        'scorers': list((view.params or {}).get('scorers', [])) if view else [],
+        'processed': int(progress.get('done') or 0),
+        'total': int(progress.get('total') or 0),
+        'results': dict(((view.result or {}).get('results') or {}) if view else {}),
+    }
 
 
 async def bulk_write_result(
@@ -304,76 +197,39 @@ async def _build_pools(
 
 
 async def run_scoring_job(
-    job_id: str,
-    opensearch: AsyncOpenSearch,
-    scorer_names: list[str],
-) -> None:
-    """Actual compute body: fetch each pool the requested scorers need
-    (once each), then one scorer at a time, writing results back via bulk
-    update + checkpointing state.json between scorers so
-    ``/curation/scores/status`` reflects real progress.
-
-    A dedicated (non-underscore) symbol so tests can monkeypatch it
-    wholesale for deterministic job-lifecycle testing without racing a
-    real background task against synchronous test-client HTTP calls.
-    """
+    ctx: JobContext, opensearch: AsyncOpenSearch, scorer_names: list[str]
+) -> dict[str, Any]:
+    """Actual compute body: fetch each pool the requested scorers need (once each), then one
+    scorer at a time, writing results back by bulk update and reporting progress between
+    scorers. A cancel is seen between scorers."""
     from src.services.curation.item_scores import get_scorer
 
-    state = _read_state()
-    if state.job_id != job_id:
-        # Superseded by a newer job (shouldn't happen — start_job is a
-        # singleton gate) — bail out rather than clobber someone else's run.
-        return
-    _job().touch_heartbeat()
-    try:
-        scorers = {name: get_scorer(name) for name in scorer_names}
-        needed_pools = {scorer.pool for scorer in scorers.values()}
-        pools = await _build_pools(opensearch, needed_pools)
-
-        state.total = sum(len(pools[scorer.pool][0]) for scorer in scorers.values())
-        _job().write(state.to_dict())
-        _job().touch_heartbeat()
-
-        results: dict[str, Any] = {}
-        for name in scorer_names:
-            if is_cancelled():
-                state.status = 'cancelled'
-                state.finished_at = time.time()
-                _job().write(state.to_dict())
-                return
-            scorer = scorers[name]
-            ids, embeddings = pools[scorer.pool]
-            result = await scorer.score(ids, embeddings, opensearch=opensearch)
-            n_failed = await bulk_write_result(opensearch, result)
-            if n_failed and n_failed >= len(result.fields):
-                msg = f'{name}: no score was written ({n_failed} bulk item errors)'
-                raise RuntimeError(msg)
-            results[name] = {
-                'n_scored': result.n_scored,
-                'n_failed': n_failed,
-                'extra': result.extra,
-                'pool': scorer.pool,
-                'pool_size': len(ids),
-            }
-            state.results = results
-            state.processed += len(ids)
-            _job().write(state.to_dict())
-            _job().touch_heartbeat()
-
-        state.status = 'completed'
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
-    except asyncio.CancelledError:
-        state.status = 'cancelled'
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
-        raise
-    except Exception as exc:
-        logger.error('curation_scores_job_failed', job_id=job_id, error=str(exc))
-        state.status = 'failed'
-        state.error = str(exc)
-        state.finished_at = time.time()
-        _job().write(state.to_dict())
+    scorers = {name: get_scorer(name) for name in scorer_names}
+    pools = await _build_pools(opensearch, {scorer.pool for scorer in scorers.values()})
+    total = sum(len(pools[scorer.pool][0]) for scorer in scorers.values())
+    await ctx.progress(0, total, 'scoring')
+    results: dict[str, Any] = {}
+    processed = 0
+    for name in scorer_names:
+        if ctx.cancelled():
+            break
+        scorer = scorers[name]
+        ids, embeddings = pools[scorer.pool]
+        result = await scorer.score(ids, embeddings, opensearch=opensearch)
+        n_failed = await bulk_write_result(opensearch, result)
+        if n_failed and n_failed >= len(result.fields):
+            msg = f'{name}: no score was written ({n_failed} bulk item errors)'
+            raise RuntimeError(msg)
+        results[name] = {
+            'n_scored': result.n_scored,
+            'n_failed': n_failed,
+            'extra': result.extra,
+            'pool': scorer.pool,
+            'pool_size': len(ids),
+        }
+        processed += len(ids)
+        await ctx.progress(processed, total, name)
+    return {'results': results, 'cancelled': ctx.cancelled()}
 
 
 async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
@@ -409,12 +265,10 @@ async def compute_coverage(opensearch: AsyncOpenSearch) -> dict[str, Any]:
 
 
 __all__ = [
+    'KIND',
     'bulk_write_result',
-    'cancel_job',
     'compute_coverage',
-    'get_state',
-    'is_cancelled',
-    'reconcile_orphaned_jobs',
     'run_scoring_job',
-    'start_job',
+    'start',
+    'state_dict',
 ]

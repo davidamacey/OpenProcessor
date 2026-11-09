@@ -2,16 +2,14 @@
 /curation/viz/projection/rebuild`` + ``status``/``cancel`` lifecycle, and
 ``GET /curation/viz/projection``.
 
-Mirrors the select/scores router test conventions:
-mount the real curation router with OpenSearch stubbed, monkeypatch
-the background job runner wholesale to control the async lifecycle
-deterministically instead of racing a real ``asyncio.create_task``
-against synchronous ``TestClient`` calls.
+Mount the real curation router with OpenSearch stubbed and the job seam (``embedding_viz.start``,
+``latest_job``, ``cancel_latest``) replaced; the queue, busy and run paths are covered by
+``tests/curation/jobs_a``.
 """
 
 from __future__ import annotations
 
-import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -21,10 +19,15 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
+def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from src.core.db_session import get_db
     from src.routers.curation._common import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
+    async def space(_target):
+        return SimpleNamespace(vector_field='pe_embedding')
+
+    monkeypatch.setattr('src.services.curation.embedding_viz_read.embedding_space', space)
+    monkeypatch.setattr('src.routers.curation.viz.current_project_id', lambda: 'project-id')
 
     fake_os = AsyncMock()
     app = FastAPI()
@@ -32,6 +35,11 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+
+    async def no_database():
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
@@ -65,6 +73,7 @@ def test_status_and_cancel_are_not_gated_by_the_flag(
     endpoints work regardless of the feature flag, so an operator can
     always see current state."""
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
+    _job_seam(monkeypatch, None)
     r_status = app_client.get('/curation/projects/default/viz/projection/status')
     assert r_status.status_code == 200
     assert r_status.json()['status'] == 'idle'
@@ -98,70 +107,64 @@ def test_rebuild_unknown_scope_422(app_client: TestClient, monkeypatch: pytest.M
     assert r.status_code == 422  # FastAPI Query(pattern=...) rejects before the handler runs
 
 
-def test_rebuild_then_status_running_then_double_start_409_then_cancel(
+def _queued_view(scope: str = 'residual', cluster_id: int | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id='j1',
+        status='queued',
+        started_at=None,
+        finished_at=None,
+        error_message=None,
+        params={'scope': scope, 'cluster_id': cluster_id},
+        progress={},
+        result=None,
+    )
+
+
+def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
+    start = AsyncMock()
+    monkeypatch.setattr('src.services.curation.embedding_viz.start', start)
+    monkeypatch.setattr(
+        'src.services.curation.latest_job.latest_job', AsyncMock(return_value=latest)
+    )
+    return start
+
+
+def test_rebuild_queues_the_job_and_answers_202_with_its_state(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation import embedding_viz
-
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-
-    hang_forever = asyncio.Event()
-
-    async def _fake_run_projection_job(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._job().touch_heartbeat()
-        await hang_forever.wait()
-
-    monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)
-
+    start = _job_seam(monkeypatch, _queued_view())
     r = app_client.post(
         '/curation/projects/default/viz/projection/rebuild', params={'scope': 'residual'}
     )
     assert r.status_code == 202
-    body = r.json()
-    assert body['status'] == 'running'
-    assert body['scope'] == 'residual'
-
-    r_status = app_client.get('/curation/projects/default/viz/projection/status')
-    assert r_status.json()['status'] == 'running'
-
-    r_double = app_client.post(
-        '/curation/projects/default/viz/projection/rebuild', params={'scope': 'residual'}
-    )
-    assert r_double.status_code == 409
-
-    r_cancel = app_client.post('/curation/projects/default/viz/projection/cancel')
-    assert r_cancel.status_code == 200
-    assert r_cancel.json()['cancelled'] is True
-    assert embedding_viz.is_cancelled()
-
-    hang_forever.set()
+    assert (r.json()['status'], r.json()['scope']) == ('queued', 'residual')
+    assert start.await_args.kwargs['scope'] == 'residual'
 
 
 def test_rebuild_cluster_scope_passes_cluster_id_through(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.curation import embedding_viz
-
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
-
-    hang_forever = asyncio.Event()
-
-    async def _fake_run_projection_job(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._job().touch_heartbeat()
-        await hang_forever.wait()
-
-    monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run_projection_job)
-
+    start = _job_seam(monkeypatch, _queued_view('cluster', 10173))
     r = app_client.post(
         '/curation/projects/default/viz/projection/rebuild',
         params={'scope': 'cluster', 'cluster_id': 10173},
     )
     assert r.status_code == 202
-    body = r.json()
-    assert body['scope'] == 'cluster'
-    assert body['cluster_id'] == 10173
+    assert (r.json()['scope'], r.json()['cluster_id']) == ('cluster', 10173)
+    assert start.await_args.kwargs['cluster_id'] == 10173
 
-    hang_forever.set()
+
+def test_cancel_reports_whether_a_job_was_cancelled(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _job_seam(monkeypatch, _queued_view())
+    cancel = AsyncMock(return_value=True)
+    monkeypatch.setattr('src.services.curation.latest_job.cancel_latest', cancel)
+    r = app_client.post('/curation/projects/default/viz/projection/cancel')
+    assert r.status_code == 200
+    assert r.json()['cancelled'] is True
 
 
 # =============================================================================
@@ -286,7 +289,7 @@ def test_get_projection_never_imports_or_calls_fit(
     monkeypatch.setattr(embedding_viz, 'fit_projection', _boom)
     monkeypatch.setattr(embedding_viz, '_build_reducer', _boom)
     monkeypatch.setattr(embedding_viz, 'run_projection_job', _boom)
-    monkeypatch.setattr(embedding_viz, 'start_job', _boom)
+    monkeypatch.setattr(embedding_viz, 'start', _boom)
 
     current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     app_client.fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})

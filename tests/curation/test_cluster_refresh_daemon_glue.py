@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import time
 from typing import TYPE_CHECKING
 
 import httpx
 
 from scripts.curation import cluster_refresh_daemon as d
 from src.services.curation.clustering.refresh_schedule import ScheduleBook
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
 
 def _client(handler: Callable[[httpx.Request], httpx.Response]) -> httpx.AsyncClient:
@@ -76,15 +72,3 @@ def test_a_deleted_project_is_forgotten_without_an_api_call() -> None:
 
     asyncio.run(go())
     assert book.slugs() == []
-
-
-def test_a_dead_workers_job_is_repaired_to_interrupted_for_the_retry(tmp_path: Path) -> None:
-    """The status route the daemon polls repairs a stale heartbeat, so the
-    schedule sees ``interrupted`` and retries after its backoff."""
-    job = FileJob(tmp_path)
-    job.write({'job_id': 'j', 'status': 'running'})
-    job.touch_heartbeat()
-    old = time.time() - HEARTBEAT_STALE_S - 5
-    os.utime(job.heartbeat_file, (old, old))
-    state = job.served_state(frozenset({'running'}), error_prefix='auto_label')
-    assert state['status'] == 'interrupted'

@@ -13,13 +13,15 @@ from curation.config_test_stack import ITEMS
 from src.services.curation.assist.slot_write import RunMeta, build_slot, write_slots
 
 
+pytest_plugins = ['curation.assist_queue']
+pytestmark = pytest.mark.db
+
 RUNS = '/assist/runs'
 CLUSTER = 10000
 
 
 @pytest.fixture
-def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
     return stack
 
 
@@ -31,7 +33,7 @@ def _run(stack: Any) -> dict[str, Any]:
     }
     with stack.client:
         started = stack.post(RUNS, **body)
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         run_id = started.json()['run_id']
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:

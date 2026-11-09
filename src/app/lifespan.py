@@ -127,17 +127,6 @@ async def _start_event_listener() -> None:
         logger.warning('event_listener_start_skipped', error=str(exc))
 
 
-async def _reconcile_orphaned_state() -> None:
-    """Fix up job state left behind by a killed process (export tasks belong to the worker)."""
-    # Reconcile job state.json files left at status='running' by a killed
-    # process; best-effort and isolated per module (see each module's
-    # reconcile_orphaned_jobs() docstring).
-    from src.services.curation.startup_reconcile import reconcile_all_jobs
-    from src.services.projects.guard import make_curation_opensearch
-
-    await reconcile_all_jobs(await make_curation_opensearch())
-
-
 async def _arbiter_reconcile_loop(
     reconcile_on_startup: Callable[[], Awaitable[object]],
     reload_promoted_models_best_effort: Callable[..., Awaitable[None]],
@@ -415,7 +404,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _start_pools(settings)
     await _start_background_tasks()
     await _start_event_listener()
-    await _reconcile_orphaned_state()
     await _start_gpu_arbiter()
     await _reload_promoted_models()
     _warm_pe_encoder(app)

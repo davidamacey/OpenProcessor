@@ -1,159 +1,145 @@
-"""The file-backed assist run: one run per project at a time, state on the shared
-``/jobs`` volume, executed as a task in the API process.
+"""The queued assist run: one ``assist_run`` job per project at a time, state in the ``jobs`` row.
 
-State lives under ``<OP_ASSIST_JOBS_DIR>/projects/<slug>/<run_id>/``
-(:class:`~src.services.curation.file_job.FileJob`): ``state.json``, ``request.json``,
-and ``members.json`` (the resolved scope ids, for the staleness check). Every API
-worker process sees the same files, so status and cancel work whichever process a
-request lands on. A restart ends a live run as ``interrupted``
-(:func:`reconcile_orphaned_jobs`); the user re-runs it. The newest
-:data:`KEEP_RUNS` runs are kept.
+``POST /assist/runs`` inserts the row through ``start_job`` (a second start while one is
+active is the queue's 409 ``job_busy``) and keeps the scope's members in ``job_items`` for the
+staleness check; the request, the resolved scope and the sampled ids are the job's params, so
+the worker runs exactly the sample the user was shown. Progress, the result and the error are
+the row's. :func:`state_from_view` is the one place a row becomes an :class:`AssistRunState`.
 """
 
 from __future__ import annotations
 
-import json
-import shutil
 import uuid
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from src.config.env import env_path
-from src.config.project_context import ensure_marked_dir, mark_project_dir, project_jobs_dir
-from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
-from src.services.curation.assist.models import ACTIVE_STATUSES, AssistRunState
-from src.services.curation.file_job import FileJob
-from src.services.curation.lease_heartbeat import acquire_heartbeat
-from src.services.rejections import rejection
+from src.config.project_context import current_project_id
+from src.core.exceptions import RequestRejectedError
+from src.db.repos import job_items
+from src.db.session import project_tx
+from src.services.curation.assist.models import (
+    AssistProgress,
+    AssistResult,
+    AssistRunRequest,
+    AssistRunState,
+    ResolvedScope,
+)
+from src.services.jobs import status as job_status
+from src.services.jobs.service import cancel_job, start_job
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from sqlalchemy.ext.asyncio import AsyncSession
 
-    from src.services.curation.lease_heartbeat import LeaseHeartbeat
+    from src.db.repos.jobs import JobRow
+    from src.schemas.jobs import JobView
+    from src.services.curation.assist.prepare import PreparedRun
 
-logger = get_logger(__name__)
-
-ACTIVE = ACTIVE_STATUSES
+KIND = 'assist_run'
+ACTIVE = frozenset({'queued', 'running', 'paused', 'cancelling'})
 KEEP_RUNS = 100
+"""How many of the newest runs the list scans (the 0.6 file store kept this many)."""
+WAITING_STAGE = 'waiting_region'
 
 
-def jobs_root() -> Path:
-    """The bound project's assist runs dir (resolved per call so tests can
-    ``monkeypatch.setenv``)."""
-    return mark_project_dir(project_jobs_dir(env_path('OP_ASSIST_JOBS_DIR', '/jobs/assist')))
-
-
-def _job(run_id: str) -> FileJob:
-    # run ids are minted here; never let a path segment through.
-    if not run_id or '/' in run_id or '\\' in run_id or run_id.startswith('.'):
-        raise KeyError(run_id)
-    return FileJob(jobs_root() / run_id)
-
-
-def _run_dirs() -> list[Path]:
-    root = jobs_root()
-    return sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
-
-
-def live_run_ids() -> list[str]:
-    return [p.name for p in _run_dirs() if FileJob(p).is_live(ACTIVE)]
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup repair for the bound project: a run left active by a dead process
-    becomes ``interrupted``."""
-    repaired = False
-    for path in _run_dirs():
-        repaired |= FileJob(path).reconcile(active_statuses=ACTIVE, error_prefix='assist run')
-    return repaired
-
-
-def _busy(run_id: str | None) -> Exception:
-    return rejection(
-        409,
-        'assist_busy',
-        'an assist run is already running for this project; cancel it or wait',
-        run_id=run_id,
-    )
-
-
-async def create_run(
-    opensearch: Any,
+async def start(
+    session: AsyncSession,
+    project: uuid.UUID,
+    prepared: PreparedRun,
     *,
-    state: dict[str, Any],
-    request: dict[str, Any],
     members: list[str] | None,
-) -> tuple[FileJob, LeaseHeartbeat]:
-    """Claim the per-project singleton (the ``assist_run`` lease) and persist the run.
-    ``state`` is the ``queued`` :class:`AssistRunState` dump without ``run_id``. Raises the
-    409 ``assist_busy`` refusal when a run is live. The caller starts the heartbeat."""
-    ensure_marked_dir(jobs_root())
-    live = live_run_ids()
-    if live:
-        raise _busy(live[0])
-    run_id = f'asr_{datetime.now(UTC):%Y%m%dT%H%M%S%f}_{uuid.uuid4().hex[:6]}'
-    job = _job(run_id)
-    beat = await acquire_heartbeat(
-        opensearch, LeaseKind.ASSIST_RUN, None, run_id, job=job, busy=_busy
+) -> JobRow:
+    """Queue the run. ``members`` is the cluster scope the proposal is about (``None`` for a
+    bare selection or a filter). 409 ``job_busy`` while another run of the project is active."""
+    params: dict[str, Any] = {
+        'request': prepared.request.model_dump(mode='json'),
+        'resolved': prepared.resolved().model_dump(mode='json'),
+        'sampled_ids': list(prepared.scope.sampled_ids),
+        'box_ids': prepared.scope.box_ids,
+        'members_total': None if members is None else len(members),
+    }
+
+    async def rows(inner: AsyncSession, job: JobRow) -> None:
+        if members:
+            await job_items.add_items(inner, job.id, members)
+
+    started = await start_job(
+        session, KIND, project, params=params, requested_by='api', with_rows=rows
     )
+    return started.job
+
+
+def _iso(value: Any) -> str | None:
+    return None if value is None else str(value.isoformat())
+
+
+def _status(view: JobView) -> str:
+    if view.status == 'running' and view.progress.get('stage') == WAITING_STAGE:
+        return 'waiting_region'
+    return 'running' if view.status in ('paused', 'cancelling') else view.status
+
+
+def state_from_view(view: JobView) -> AssistRunState:
+    """The wire state of an ``assist_run`` job row read with its params."""
+    params = view.params or {}
+    resolved = ResolvedScope.model_validate(params['resolved'])
+    progress = view.progress
+    return AssistRunState(
+        run_id=view.id,
+        status=_status(view),
+        created_at=_iso(view.created_at),
+        finished_at=_iso(view.finished_at),
+        error=view.error_message,
+        request=AssistRunRequest.model_validate(params['request']),
+        resolved=resolved,
+        progress=AssistProgress(
+            processed=int(progress.get('done') or 0),
+            total=int(progress.get('total') or resolved.sampled),
+        ),
+        result=None if view.result is None else AssistResult.model_validate(view.result),
+    )
+
+
+def queued_state(job: JobRow, prepared: PreparedRun) -> AssistRunState:
+    """The answer to the start request: the run as it was just queued."""
+    return AssistRunState(
+        run_id=str(job.id),
+        status='queued',
+        created_at=_iso(job.created_at),
+        request=prepared.request,
+        resolved=prepared.resolved(),
+        progress=AssistProgress(total=len(prepared.scope.sampled_ids)),
+    )
+
+
+def _parse(run_id: str) -> uuid.UUID | None:
     try:
-        job.directory.mkdir(parents=True)
-        (job.directory / 'request.json').write_text(json.dumps(request), encoding='utf-8')
-        if members is not None:
-            (job.directory / 'members.json').write_text(json.dumps(members), encoding='utf-8')
-        job.clear_signals()
-        job.write({**state, 'run_id': run_id})
-        job.touch_heartbeat()
-    except BaseException:
-        await beat.release(opensearch)
+        return uuid.UUID(run_id)
+    except ValueError:
+        return None
+
+
+async def read_view(session: AsyncSession, run_id: str) -> JobView | None:
+    """The bound project's ``assist_run`` job ``run_id``, or ``None`` for any other id."""
+    job_id = _parse(run_id)
+    if job_id is None:
+        return None
+    try:
+        view = await job_status.get_job(session, job_id, project=current_project_id())
+    except RequestRejectedError as exc:
+        if exc.status_code == 404:
+            return None
         raise
-    _prune(keep=run_id)
-    return job, beat
+    return view if view.kind == KIND else None
 
 
-def _prune(*, keep: str) -> None:
-    dirs = _run_dirs()
-    for path in dirs[: max(0, len(dirs) - KEEP_RUNS)]:
-        if path.name != keep and not FileJob(path).is_live(ACTIVE):
-            shutil.rmtree(path, ignore_errors=True)
-
-
-def read_state(run_id: str) -> AssistRunState | None:
-    try:
-        job = _job(run_id)
-    except KeyError:
-        return None
-    if not job.read():
-        return None
-    state = job.served_state(ACTIVE, error_prefix='assist run')
-    return AssistRunState.model_validate(state)
-
-
-def read_members(run_id: str) -> list[str] | None:
+async def read_members(session: AsyncSession, view: JobView) -> list[str] | None:
     """The member ids the run resolved, or ``None`` when it kept none (a filter target)."""
-    try:
-        path = _job(run_id).directory / 'members.json'
-        data = json.loads(path.read_text(encoding='utf-8'))
-    except (KeyError, OSError, ValueError):
+    total = (view.params or {}).get('members_total')
+    if total is None:
         return None
-    return [str(i) for i in data] if isinstance(data, list) else None
-
-
-def list_runs(
-    *, cluster_id: int | None, cluster_subid: str | None, limit: int
-) -> list[AssistRunState]:
-    """The newest runs, newest first, whose target or context names that scope."""
-    out: list[AssistRunState] = []
-    for path in reversed(_run_dirs()):
-        state = read_state(path.name)
-        if state is None or not _names_scope(state, cluster_id, cluster_subid):
-            continue
-        out.append(state)
-        if len(out) >= limit:
-            break
-    return out
+    project = current_project_id()
+    async with project_tx(session, project):
+        return await job_items.read_items(session, uuid.UUID(view.id), limit=int(total))
 
 
 def _names_scope(state: AssistRunState, cluster_id: int | None, subid: str | None) -> bool:
@@ -166,27 +152,46 @@ def _names_scope(state: AssistRunState, cluster_id: int | None, subid: str | Non
     return got_id == cluster_id and (subid is None or got_subid == subid)
 
 
-def cancel_run(run_id: str) -> bool:
-    """Touch the cancel flag of a live run; ``False`` when there is none."""
-    try:
-        job = _job(run_id)
-    except KeyError:
+async def list_runs(
+    session: AsyncSession, *, cluster_id: int | None, cluster_subid: str | None, limit: int
+) -> list[tuple[AssistRunState, list[str] | None]]:
+    """The newest runs, newest first, whose target or context names that scope, each with the
+    member ids it kept (``None`` when it kept none)."""
+    page = await job_status.list_jobs(
+        session, project=current_project_id(), kinds=[KIND], limit=KEEP_RUNS
+    )
+    out: list[tuple[AssistRunState, list[str] | None]] = []
+    for item in page.items:
+        view = await read_view(session, item.id)
+        if view is None:
+            continue
+        state = state_from_view(view)
+        if _names_scope(state, cluster_id, cluster_subid):
+            out.append((state, await read_members(session, view)))
+            if len(out) >= limit:
+                break
+    return out
+
+
+async def cancel_run(session: AsyncSession, run_id: str) -> bool:
+    """Ask a live run to stop after its current chunk; ``False`` when there is none."""
+    view = await read_view(session, run_id)
+    if view is None or view.status not in ACTIVE:
         return False
-    if not job.is_live(ACTIVE):
-        return False
-    job.request_cancel()
+    await cancel_job(session, uuid.UUID(view.id), current_project_id(), requested_by='api')
     return True
 
 
 __all__ = [
     'ACTIVE',
     'KEEP_RUNS',
+    'KIND',
+    'WAITING_STAGE',
     'cancel_run',
-    'create_run',
-    'jobs_root',
     'list_runs',
-    'live_run_ids',
+    'queued_state',
     'read_members',
-    'read_state',
-    'reconcile_orphaned_jobs',
+    'read_view',
+    'start',
+    'state_from_view',
 ]

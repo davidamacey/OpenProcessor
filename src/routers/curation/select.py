@@ -14,18 +14,17 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.services.curation import review_queries
 from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.diverse_order import diverse_enabled, job_max_n, max_n, sync_max_ops
 from src.services.curation.selection import k_center_greedy
-from src.services.curation.selection.pool_fetch import (
-    EMBEDDING_FIELD,
-    fetch_pool_embeddings,
-    l2_normalize,
-)
-from src.utils.upstream_errors import UpstreamError
+from src.services.curation.selection.pool_fetch import fetch_pool_embeddings, l2_normalize
+from src.services.embedding_spaces.resolve import embedding_space
 
 
 # =============================================================================
@@ -58,7 +57,7 @@ class SelectDiverseRequest(BaseModel):
     seed_crop_id: str | None = None
 
 
-def _build_scope_query(scope: SelectDiverseScope) -> dict[str, Any]:
+def _build_scope_query(scope: SelectDiverseScope, embedding_field: str) -> dict[str, Any]:
     """Translate a ``SelectDiverseScope`` into an OpenSearch bool query.
 
     ``test_holdout=true`` crops are always excluded — no scope can opt
@@ -66,7 +65,7 @@ def _build_scope_query(scope: SelectDiverseScope) -> dict[str, Any]:
     operation and must never leak the frozen holdout into what gets
     labeled next).
     """
-    must: list[dict[str, Any]] = [embedded_clause(EMBEDDING_FIELD)]
+    must: list[dict[str, Any]] = [embedded_clause(embedding_field)]
     must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
 
     if scope.cluster_id is not None:
@@ -94,8 +93,7 @@ def _build_scope_query(scope: SelectDiverseScope) -> dict[str, Any]:
 
 @router.post('/select/diverse')
 async def select_diverse(
-    payload: SelectDiverseRequest,
-    opensearch: OpenSearchDep,
+    payload: SelectDiverseRequest, opensearch: OpenSearchDep, session: DbSessionDep
 ) -> Any:
     """Pool-scale diversity selection — k-center-greedy over an arbitrary
     scope (cluster / review tab / generic filters), bigger than what fits
@@ -103,8 +101,8 @@ async def select_diverse(
 
     Answers inline (``200``, ``{crop_ids, method, version, n_pool}``) when
     the scoped pool is small enough per ``OP_SELECT_SYNC_MAX_OPS``;
-    otherwise starts a background job and returns ``202`` with
-    ``{job_id, status: 'running', ...}`` — poll ``GET /curation/select/status``.
+    otherwise queues a ``selection`` job and returns ``202`` with
+    ``{job_id, status: 'queued', ...}`` (409 ``job_busy`` while one is active) — poll ``GET /curation/select/status``.
     Never writes anything to OpenSearch (read-only selection).
     """
     if not diverse_enabled():
@@ -113,7 +111,8 @@ async def select_diverse(
             detail='diversity selection is disabled (set OP_SELECT_DIVERSE_ENABLED=1 to enable)',
         )
 
-    query = _build_scope_query(payload.scope)
+    embedding_field = (await embedding_space(Target.ITEM)).vector_field
+    query = _build_scope_query(payload.scope, embedding_field)
 
     # Peek at the pool size first (a cheap count, not a fetch) so we can
     # decide sync-vs-job without paying for an embeddings fetch we might
@@ -133,7 +132,7 @@ async def select_diverse(
 
     if fits_sync_fetch and fits_sync_ops:
         ids, embeddings, truncated = await fetch_pool_embeddings(
-            opensearch, items_index(), query, cap=fetch_cap
+            opensearch, items_index(), query, cap=fetch_cap, embedding_field=embedding_field
         )
         if truncated:
             # The count-based estimate underestimated (race with concurrent
@@ -157,40 +156,42 @@ async def select_diverse(
 
     from src.services.curation.selection import job as select_job
 
-    try:
-        state = await select_job.start_job(
-            opensearch,
-            index=items_index(),
-            query=query,
-            k=payload.k,
-            seed_crop_id=payload.seed_crop_id,
-            scope=payload.scope.model_dump(),
-            max_n=job_max_n(),
-        )
-    except UpstreamError:
-        raise
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return JSONResponse(status_code=202, content=state)
+    await select_job.start(
+        session,
+        current_project_id(),
+        index=items_index(),
+        query=query,
+        k=payload.k,
+        seed_crop_id=payload.seed_crop_id,
+        scope=payload.scope.model_dump(),
+        max_n=job_max_n(),
+        embedding_field=embedding_field,
+    )
+    return JSONResponse(status_code=202, content=await _state(session))
+
+
+async def _state(session: Any) -> dict[str, Any]:
+    from src.services.curation.latest_job import latest_job
+    from src.services.curation.selection import job as select_job
+
+    return select_job.state_dict(await latest_job(session, select_job.KIND))
 
 
 @router.get('/select/status')
-async def select_status() -> dict[str, Any]:
-    """Poll a backgrounded ``POST /curation/select/diverse`` job. ``result`` is
-    populated once ``status == 'completed'`` with the same
-    ``{crop_ids, method, version, n_pool}`` shape the sync path returns
-    directly."""
-    from src.services.curation.selection import job as select_job
-
-    return select_job.get_state()
+async def select_status(session: DbSessionDep) -> dict[str, Any]:
+    """Poll a queued ``POST /curation/select/diverse`` job. ``result`` is populated once
+    ``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the
+    sync path returns directly."""
+    return await _state(session)
 
 
 @router.post('/select/cancel')
-async def select_cancel() -> dict[str, Any]:
+async def select_cancel(session: DbSessionDep) -> dict[str, Any]:
+    from src.services.curation.latest_job import cancel_latest
     from src.services.curation.selection import job as select_job
 
-    cancelled = select_job.cancel_job()
-    return {'cancelled': cancelled, **select_job.get_state()}
+    cancelled = await cancel_latest(session, select_job.KIND)
+    return {'cancelled': cancelled, **await _state(session)}
 
 
 __all__ = ['SelectDiverseRequest', 'SelectDiverseScope']

@@ -20,8 +20,9 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
 from src.config.env import env_bool
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._common import OpenSearchDep, router
-from src.utils.upstream_errors import UpstreamError
 
 
 def _scores_enabled() -> bool:
@@ -35,11 +36,9 @@ class ScoresComputeRequest(BaseModel):
     )
 
 
-@router.post('/scores/compute')
-async def scores_compute(
-    payload: ScoresComputeRequest,
-    opensearch: OpenSearchDep,
-) -> dict[str, Any]:
+@router.post('/scores/compute', status_code=202)
+async def scores_compute(payload: ScoresComputeRequest, session: DbSessionDep) -> dict[str, Any]:
+    """Queue the scoring job (202 with its state; 409 `job_busy` while one is active)."""
     if not _scores_enabled():
         raise HTTPException(
             status_code=400,
@@ -57,28 +56,29 @@ async def scores_compute(
             detail=f'unknown scorer(s): {unknown}; valid: {sorted(valid)}',
         )
 
-    try:
-        state = await scores_job.start_job(opensearch, requested)
-    except UpstreamError:
-        raise
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return state
+    await scores_job.start(session, current_project_id(), requested)
+    return await _state(session)
+
+
+async def _state(session: Any) -> dict[str, Any]:
+    from src.services.curation.item_scores import job as scores_job
+    from src.services.curation.latest_job import latest_job
+
+    return scores_job.state_dict(await latest_job(session, scores_job.KIND))
 
 
 @router.get('/scores/status')
-async def scores_status() -> dict[str, Any]:
-    from src.services.curation.item_scores import job as scores_job
-
-    return scores_job.get_state()
+async def scores_status(session: DbSessionDep) -> dict[str, Any]:
+    return await _state(session)
 
 
 @router.post('/scores/cancel')
-async def scores_cancel() -> dict[str, Any]:
-    from src.services.curation.item_scores import job as scores_job
+async def scores_cancel(session: DbSessionDep) -> dict[str, Any]:
+    from src.services.curation.item_scores.job import KIND
+    from src.services.curation.latest_job import cancel_latest
 
-    cancelled = scores_job.cancel_job()
-    return {'cancelled': cancelled, **scores_job.get_state()}
+    cancelled = await cancel_latest(session, KIND)
+    return {'cancelled': cancelled, **await _state(session)}
 
 
 @router.get('/scores/coverage')

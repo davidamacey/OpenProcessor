@@ -38,7 +38,6 @@ from src.domain.job_lease import (
     Lost,
     Renewed,
     doc_id,
-    is_expired,
     is_takeable,
     next_generation,
     owner_id,
@@ -126,8 +125,6 @@ async def _claim(
     job_id: str,
     owner: str | None,
     ttl_s: float,
-    *,
-    allow_released: bool,
 ) -> Acquired | Busy:
     did = doc_id(kind, scope)
     who = owner or owner_id()
@@ -143,7 +140,7 @@ async def _claim(
             generation = 1
         else:
             current, cur_seq, cur_term = found
-            takeable = is_takeable(current, now) if allow_released else is_expired(current, now)
+            takeable = is_takeable(current, now)
             if not takeable:
                 return Busy(current.get('job_id'), float(current.get('heartbeat_at', 0.0)))
             generation = next_generation(current)
@@ -166,19 +163,7 @@ async def acquire(
     ttl_s: float = LEASE_TTL_S,
 ) -> Acquired | Busy:
     """Take the lease when it is absent, released or expired; otherwise :class:`Busy`."""
-    return await _claim(client, kind, scope, job_id, owner, ttl_s, allow_released=True)
-
-
-async def takeover_expired(
-    client: AsyncOpenSearch,
-    kind: LeaseKind | str,
-    scope: str | None,
-    job_id: str,
-    owner: str | None = None,
-) -> Acquired | Busy:
-    """Take the lease only when it is absent or expired (a released lease means its
-    holder finished cleanly, so a repair has nothing to take over)."""
-    return await _claim(client, kind, scope, job_id, owner, LEASE_TTL_S, allow_released=False)
+    return await _claim(client, kind, scope, job_id, owner, ttl_s)
 
 
 async def _rewrite(
@@ -231,12 +216,3 @@ async def release(client: AsyncOpenSearch, lease: HeldLease) -> bool:
     if done is None:
         logger.warning('job_lease_release_lost', lease=lease.doc_id, generation=lease.generation)
     return done is not None
-
-
-async def is_live(client: AsyncOpenSearch, kind: LeaseKind | str, scope: str | None = None) -> bool:
-    """Whether a live holder has the lease right now: a held, unexpired document. An
-    absent, released or expired lease means whoever wrote the record it guards is gone."""
-    found = await _get(client, doc_id(kind, scope))
-    if found is None:
-        return False
-    return not is_takeable(found[0], time.time())

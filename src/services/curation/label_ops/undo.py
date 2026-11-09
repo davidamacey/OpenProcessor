@@ -9,14 +9,13 @@ flight at a time; the pages are those of :func:`~src.clients.occ_bulk.occ_bulk_r
 from __future__ import annotations
 
 from collections import Counter
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.clients.occ_bulk import occ_bulk_rounds
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
 from src.domain.label_ops import UndoOutcome, undo_outcome
 from src.services.curation.class_undo import UNDO_READ_FIELDS, restore_update
 from src.services.curation.label_ops.store import (
@@ -29,17 +28,24 @@ from src.services.curation.label_ops.store import (
     served_status,
 )
 from src.services.curation.label_ops.views import current_counts
-from src.services.curation.lease_heartbeat import leased
+from src.services.jobs.service import start_job
 from src.services.rejections import rejection
 from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.db.repos.jobs import JobRow
     from src.db.repos.records import LabelOperationMemberLoad
+    from src.tasks.runtime.context import JobContext
 
 logger = get_logger(__name__)
+
+KIND = 'label_undo'
 
 _PASS_KEYS = (
     'restored',
@@ -151,60 +157,78 @@ async def _refuse_if_nothing_left(opensearch: Any, record: LabelOpRecord) -> Non
         raise rejection(409, 'already_undone', f'{record.op_id} was already undone')
 
 
-async def undo_label_op(
+async def undo_dry_run(
+    opensearch: Any, op_id: str, *, registry_name: Callable[[int], str | None]
+) -> dict[str, Any]:
+    """The :class:`LabelOpUndoResponse` of a dry pass: counts, nothing written."""
+    record = await read_op(op_id)
+    await _refuse_if_nothing_left(opensearch, record)
+    outcomes: dict[str, str] = {}
+    async for members in member_pages(record):
+        outcomes.update(await _classify(opensearch, record, members, registry_name))
+    return _response(record, outcomes, dry_run=True, status=await served_status(record))
+
+
+async def start(session: AsyncSession, project: uuid.UUID, op_id: str, opensearch: Any) -> JobRow:
+    """Queue an undo pass: 404 for an unknown op, 409 ``label_op_in_progress`` while its writer
+    runs, ``already_undone`` when nothing is left, 409 ``job_busy`` while another undo runs."""
+    record = await read_op(op_id)
+    if await served_status(record) == 'writing':
+        raise rejection(409, 'label_op_in_progress', f'{op_id} is still being written')
+    await _refuse_if_nothing_left(opensearch, record)
+    started = await start_job(session, KIND, project, params={'op_id': op_id}, requested_by='api')
+    return started.job
+
+
+@overload
+async def restore_op(
+    opensearch: Any, op_id: str, registry_name: Callable[[int], str | None], *, ctx: None = None
+) -> dict[str, Any]: ...
+@overload
+async def restore_op(
+    opensearch: Any, op_id: str, registry_name: Callable[[int], str | None], *, ctx: JobContext
+) -> dict[str, Any] | None: ...
+async def restore_op(
     opensearch: Any,
     op_id: str,
-    *,
-    dry_run: bool,
     registry_name: Callable[[int], str | None],
-) -> dict[str, Any]:
-    """The :class:`LabelOpUndoResponse` of an undo pass over the operation."""
-    if dry_run:
-        record = await read_op(op_id)
-        await _refuse_if_nothing_left(opensearch, record)
-        outcomes: dict[str, str] = {}
-        async for members in member_pages(record):
-            outcomes.update(await _classify(opensearch, record, members, registry_name))
-        return _response(
-            record, outcomes, dry_run=True, status=await served_status(opensearch, record)
-        )
-    await read_op(op_id)  # 404 before any lease is taken
-    async with (
-        leased(
-            opensearch,
-            LeaseKind.LABEL_UNDO,
-            None,
-            op_id,
-            busy=lambda _h: rejection(
-                409, 'label_op_busy', 'another undo is running in this project'
-            ),
-        ),
-        leased(
-            opensearch,
-            LeaseKind.LABEL_OP,
-            op_id,
-            op_id,
-            busy=lambda _h: rejection(
-                409, 'label_op_in_progress', f'{op_id} is still being written'
-            ),
-        ),
-    ):
-        record = await read_op(op_id)  # fresh: a pass that just finished changed it
-        await _refuse_if_nothing_left(opensearch, record)
-        record.status = 'undoing'
-        await save_op(record)
-        outcomes = {}
-        async for members in member_pages(record):
-            outcomes.update(await _restore(opensearch, record, members, registry_name))
-        response = _response(record, outcomes, dry_run=False, status='undone')
-        record.status = 'undone'
-        record.undo_passes = [
-            *record.undo_passes,
-            {
-                'at': now_iso(),
-                **{k: response[k] for k in _PASS_KEYS},
-            },
-        ][-UNDO_PASSES_KEPT:]
-        await save_op(record)
+    *,
+    ctx: JobContext | None = None,
+) -> dict[str, Any] | None:
+    """Run an undo pass over the operation in this process: the :class:`LabelOpUndoResponse`, or
+    ``None`` when ``ctx`` (the queued undo's job) was cancelled between pages.
+
+    An item's outcome is decided inside the OCC merge, so a rerun after any failure restores
+    exactly the remainder."""
+    record = await read_op(op_id)  # fresh: a pass that just finished changed it
+    await _refuse_if_nothing_left(opensearch, record)
+    record.status = 'undoing'
+    await save_op(record)
+    outcomes: dict[str, str] = {}
+    async for members in member_pages(record):
+        if ctx is not None and ctx.cancelled():
+            return None
+        outcomes.update(await _restore(opensearch, record, members, registry_name))
+        if ctx is not None:
+            await ctx.progress(len(outcomes), None, 'restoring')
+    response = _response(record, outcomes, dry_run=False, status='undone')
+    record.status = 'undone'
+    record.undo_passes = [
+        *record.undo_passes,
+        {
+            'at': now_iso(),
+            **{k: response[k] for k in _PASS_KEYS},
+        },
+    ][-UNDO_PASSES_KEPT:]
+    await save_op(record)
     logger.info('label_op_undone', op_id=op_id, **{k: response[k] for k in _PASS_KEYS})
     return response
+
+
+async def run_undo(
+    ctx: JobContext, opensearch: Any, registry_name: Callable[[int], str | None]
+) -> dict[str, Any]:
+    """Execute the queued undo pass."""
+    op_id = ctx.params['op_id']
+    response = await restore_op(opensearch, op_id, registry_name, ctx=ctx)
+    return {'op_id': op_id, 'cancelled': True} if response is None else response

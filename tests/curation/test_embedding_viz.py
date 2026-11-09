@@ -9,7 +9,8 @@ uses for its own job entrypoint.
 
 from __future__ import annotations
 
-import asyncio
+import uuid
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -17,6 +18,7 @@ import numpy as np
 import pytest
 from config_store.memory_settings import current
 
+from curation.jobs_a.ctx import FakeCtx
 from src.services.curation import embedding_viz_read
 
 
@@ -64,46 +66,24 @@ def test_subsample_deterministic_and_capped() -> None:
 
 
 # =============================================================================
-# start_job — scope validation
+# run_projection_job — full run over a synthetic pool, fit mocked (the queue, busy and scope
+# validation of the start are in tests/curation/jobs_a)
 # =============================================================================
 
 
-@pytest.mark.asyncio
-async def test_start_job_rejects_unknown_scope(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation import embedding_viz
+@pytest.fixture(autouse=True)
+def _item_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def space(_target):
+        return SimpleNamespace(vector_field='pe_embedding')
 
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    with pytest.raises(ValueError, match='scope'):
-        await embedding_viz.start_job(AsyncMock(), scope='bogus')
-
-
-@pytest.mark.asyncio
-async def test_start_job_requires_cluster_id_for_cluster_scope(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from src.services.curation import embedding_viz
-
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    with pytest.raises(ValueError, match='cluster_id'):
-        await embedding_viz.start_job(AsyncMock(), scope='cluster', cluster_id=None)
+    monkeypatch.setattr('src.services.curation.embedding_viz.embedding_space', space)
+    monkeypatch.setattr('src.services.curation.embedding_viz_read.embedding_space', space)
 
 
-# =============================================================================
-# run_projection_job — full lifecycle over a synthetic pool, fit mocked
-# =============================================================================
-
-
-async def _await_active_task() -> None:
-    """``start_job`` schedules a real ``asyncio.create_task`` -- await it
-    directly instead of racing the event loop (these tests don't go
-    through a ``TestClient``, so there's no separate loop iteration to
-    lean on). The task is kept per project; these tests run bound to
-    ``default``."""
-    from src.services.curation import embedding_viz
-
-    task = embedding_viz._active_tasks.get('default')
-    assert task is not None
-    await task
+def _ctx(**params: Any) -> FakeCtx:
+    return FakeCtx(
+        uuid.uuid4(), uuid.uuid4(), {'scope': 'residual', 'cluster_id': None, 'max_n': 100} | params
+    )
 
 
 def _fake_residual_fetch(ids_and_embeddings: list[tuple[str, list[float]]]):
@@ -118,11 +98,9 @@ def _fake_residual_fetch(ids_and_embeddings: list[tuple[str, list[float]]]):
 
 @pytest.mark.asyncio
 async def test_run_projection_job_writes_only_viz_fields_and_metadata(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.services.curation import embedding_viz
-
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
 
     pool = [(f'crop-{i}', [float(i), float(i + 1)]) for i in range(6)]
     monkeypatch.setattr(
@@ -147,15 +125,10 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
     fake_os.bulk = AsyncMock(side_effect=_capture_bulk)
     fake_os.index = AsyncMock(return_value=None)
 
-    state = await embedding_viz.start_job(fake_os, scope='residual', max_n=100)
-    job_id = state['job_id']
-    await _await_active_task()
+    result = await embedding_viz.run_projection_job(_ctx(), fake_os)
 
-    final_state = embedding_viz.get_state()
-    assert final_state['job_id'] == job_id
-    assert final_state['status'] == 'completed'
-    assert final_state['n_written'] == len(pool)
-    assert final_state['projection_version'] == embedding_viz.VIZ_PROJECTION_VERSION
+    assert result['n_written'] == len(pool)
+    assert result['projection_version'] == embedding_viz.VIZ_PROJECTION_VERSION
 
     # Metadata was saved as the project's view state, nothing was indexed.
     fake_os.index.assert_not_awaited()
@@ -179,11 +152,10 @@ async def test_run_projection_job_writes_only_viz_fields_and_metadata(
 
 @pytest.mark.asyncio
 async def test_run_projection_job_empty_pool_completes_with_zero_written(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.services.curation import embedding_viz
 
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
     monkeypatch.setattr(
         'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
         _fake_residual_fetch([]),
@@ -195,37 +167,9 @@ async def test_run_projection_job_empty_pool_completes_with_zero_written(
     monkeypatch.setattr(embedding_viz, 'fit_projection', _boom)
 
     fake_os = AsyncMock()
-    await embedding_viz.start_job(fake_os, scope='residual', max_n=100)
-    await _await_active_task()
-
-    final_state = embedding_viz.get_state()
-    assert final_state['status'] == 'completed'
-    assert final_state['n_written'] == 0
+    result = await embedding_viz.run_projection_job(_ctx(), fake_os)
+    assert result == {'n_written': 0}
     fake_os.bulk.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_double_start_raises_runtime_error(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation import embedding_viz
-
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-
-    hang_forever = asyncio.Event()
-
-    async def _fake_run(job_id, opensearch, *, scope, cluster_id, max_n) -> None:
-        embedding_viz._job().touch_heartbeat()
-        await hang_forever.wait()
-
-    monkeypatch.setattr(embedding_viz, 'run_projection_job', _fake_run)
-
-    fake_os = AsyncMock()
-    await embedding_viz.start_job(fake_os, scope='residual')
-    with pytest.raises(RuntimeError, match='already in progress'):
-        await embedding_viz.start_job(fake_os, scope='residual')
-
-    assert embedding_viz.cancel_job() is True
-    hang_forever.set()
-    await _await_active_task()
 
 
 # =============================================================================

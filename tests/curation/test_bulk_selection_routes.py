@@ -3,6 +3,7 @@ dry run that counts exactly what the write then changes."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -10,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
+from curation.queued_label import written
 from src.config import get_curation_config
 from src.routers.curation import _common
 from src.services.curation import index_bootstrap
@@ -21,7 +23,7 @@ pytestmark = pytest.mark.usefixtures('label_ops_state')
 P = f'{_common.config.api_prefix}/projects/default'
 
 
-pytest_plugins = ['_records_world']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 
 
 def _items() -> dict[str, dict[str, Any]]:
@@ -134,12 +136,13 @@ def test_a_cap_limits_how_many_are_changed(client: TestClient, fake: QueryFakeOp
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
+@pytest.mark.usefixtures('world', 'fake_queue')
 def test_label_by_filter(client: TestClient, fake: QueryFakeOpenSearch) -> None:
     body = {'selection': {'filter': {'class_names': ['car']}}, 'class_id': 1}
     r = client.put(f'{P}/crops/batch_label', json=body)
-    assert r.status_code == 200, r.text
-    assert r.json()['updated_ids'] == ['c0']
+    assert r.status_code == 202, r.text
+    done = asyncio.run(written(fake, r.json()))
+    assert done['updated_ids'] == ['c0']
     doc = fake.docs(get_curation_config().items_index)['c0']
     assert doc['class_id'] == 1
     assert doc['class_source'] == 'human'

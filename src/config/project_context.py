@@ -137,14 +137,6 @@ def bind_process_project(record: ProjectRecord | None, *, read_only: bool = Fals
     _PROCESS_BOUND = None if record is None else BoundProject(record=record, read_only=read_only)
 
 
-def project_jobs_dir(base: Path) -> Path:
-    """A job/state dir configured by one env var for the whole deployment
-    (``base``), nested per project: ``<base>/projects/<slug>`` -- the same
-    nesting §2.2 uses for the train and auto-label dirs, for every
-    project alike."""
-    return base / 'projects' / current_project().record.slug
-
-
 class ProjectDirMismatchError(RuntimeError):
     """A per-project state dir is marked as another project's."""
 
@@ -172,15 +164,6 @@ def mark_project_dir(directory: Path) -> Path:
             f'{directory} belongs to project {found!r}, not {bound.record.slug!r}'
         )
     return directory
-
-
-def ensure_marked_dir(directory: Path) -> Path:
-    """Create ``directory`` (and parents) and stamp it with the bound
-    project's slug (:func:`mark_project_dir`). The claim of a job dir that
-    may not exist yet calls this, so no window leaves a fresh dir unmarked;
-    a read-only binding verifies a marker but never writes one."""
-    directory.mkdir(parents=True, exist_ok=True)
-    return mark_project_dir(directory)
 
 
 def project_api_base() -> str:

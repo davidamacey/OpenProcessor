@@ -3,7 +3,7 @@
 ``POST /probe/run`` resolves the given training ``job_id``'s exported
 weights (the same ``checkpoint_path`` ``POST /train/promote`` reads) and
 runs :func:`src.services.curation.probe_predictions.run_probe_inference`
-as a background task -- ``scripts/curation/run_probe.py`` stays the
+as a queued job -- ``scripts/curation/run_probe.py`` stays the
 operator-driven equivalent for an ad-hoc/manual checkpoint; this route
 is the API path for "score the pool with the run I just trained" without
 a shell into the container.
@@ -11,13 +11,16 @@ a shell into the container.
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from src.routers.curation._common import OpenSearchDep, router
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.routers.curation._common import router
 from src.services.curation.probe_models import PROBE_ARCHITECTURES
 
 
@@ -27,7 +30,7 @@ class ProbeRunRequest(BaseModel):
     # yolo26 is the only trained family (G-22); the rest of
     # PROBE_ARCHITECTURES remains valid for older checkpoints or a
     # second-family reuse. Validated against PROBE_ARCHITECTURES in
-    # start_probe_job (422 on mismatch) rather than here, so the error
+    # probe_job.start (422 on mismatch) rather than here, so the error
     # message stays in one place.
     architecture: str = Field(default='yolo26', description=f'One of {PROBE_ARCHITECTURES}.')
     resume: bool = False
@@ -85,64 +88,62 @@ async def _resolve_probe_weights(train_job_id: str) -> Path:
     return weights
 
 
-@router.post('/probe/run', response_model=ProbeStatusResponse)
-async def probe_run(payload: ProbeRunRequest, opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Start a probe pass from a finished training run's export.
+@router.post('/probe/run', response_model=ProbeStatusResponse, status_code=202)
+async def probe_run(payload: ProbeRunRequest, session: DbSessionDep) -> dict[str, Any]:
+    """Queue a probe pass from a finished training run's export (202 with the job).
 
-    ``409`` when: the referenced training job isn't finished or has no
-    exported checkpoint, or a probe job is already running. ``422`` when
-    ``architecture`` is outside
-    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. GPU
-    claim (when ``gpu`` is given) goes through the same arbiter
-    ``POST /train/start`` uses; a claim failure is also ``409`` (never
-    silent -- see ``src.services.curation.probe_job``).
+    ``409`` when the referenced training job isn't finished or has no exported checkpoint, and
+    ``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside
+    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. A requested ``gpu`` is
+    claimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails
+    the job (see ``src.services.curation.probe_job``).
     """
-    from src.services.curation.probe_job import ProbeJobBusyError, start_probe_job
-    from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
+    from src.services.curation import probe_job
 
     weights = await _resolve_probe_weights(payload.job_id)
     try:
-        return await start_probe_job(
-            payload.job_id,
-            payload.job_id,
-            weights,
-            opensearch,
+        await probe_job.start(
+            session,
+            current_project_id(),
+            train_job_id=payload.job_id,
+            model_path=weights,
             gpu=payload.gpu,
             architecture=payload.architecture,
             resume=payload.resume,
         )
-    except ProbeJobBusyError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except GpuArbiterStopFailedError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f'cannot claim GPU {payload.gpu!r} for the probe run: a configured '
-                f'GPU-resident container could not be stopped ({exc})'
-            ),
-        ) from exc
+    return await _status(session)
 
 
-@router.get('/probe/status', response_model=ProbeStatusResponse)
-async def probe_status() -> dict[str, Any]:
-    """Poll the current/last probe job, plus the read-only
-    ``actionable_min_confidence`` threshold gating the item wire's
-    ``probe_actionable`` field."""
+async def _status(session: Any) -> dict[str, Any]:
     from src.config import get_curation_config
-    from src.services.curation.probe_job import get_status
+    from src.services.curation.latest_job import latest_job
+    from src.services.curation.probe_job import status_dict
 
     return {
-        **get_status(),
+        **status_dict(await latest_job(session, 'probe')),
         'actionable_min_confidence': get_curation_config().probe_actionable_min_confidence,
     }
 
 
-@router.post('/probe/cancel')
-async def probe_cancel() -> dict[str, Any]:
-    """Best-effort cancel of the active probe job."""
-    from src.services.curation.probe_job import cancel_probe_job, get_status
+@router.get('/probe/status', response_model=ProbeStatusResponse)
+async def probe_status(session: DbSessionDep) -> dict[str, Any]:
+    """Poll the current/last probe job, plus the read-only
+    ``actionable_min_confidence`` threshold gating the item wire's
+    ``probe_actionable`` field."""
+    return await _status(session)
 
-    cancelled = cancel_probe_job()
-    return {'cancelled': cancelled, **get_status()}
+
+@router.post('/probe/cancel')
+async def probe_cancel(session: DbSessionDep) -> dict[str, Any]:
+    """Cancel the active probe job, if there is one."""
+    from src.services.curation.latest_job import ACTIVE_STATUSES, latest_job
+    from src.services.jobs.service import cancel_job
+
+    current = await latest_job(session, 'probe')
+    cancelled = current is not None and current.status in ACTIVE_STATUSES
+    if cancelled:
+        assert current is not None
+        await cancel_job(session, uuid.UUID(current.id), current_project_id(), requested_by='api')
+    return {'cancelled': cancelled, **await _status(session)}

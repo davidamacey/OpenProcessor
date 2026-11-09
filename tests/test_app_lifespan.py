@@ -144,11 +144,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         ('src.services.events.listener', 'start_listener', _async_step(w, 'event_listener_start')),
         ('src.services.events.listener', 'stop_listener', _async_step(w, 'event_listener_stop')),
         (
-            'src.services.curation.startup_reconcile',
-            'reconcile_all_jobs',
-            _async_step(w, 'reconcile_jobs'),
-        ),
-        (
             'src.services.projects.guard',
             'make_curation_opensearch',
             _fake_lease_client,
@@ -208,7 +203,6 @@ EXPECTED_STARTUP = [
     'opensearch_bootstrap',
     'config_store_bootstrap',
     'event_listener_start',
-    'reconcile_jobs',
     'arbiter_config',
     'arbiter_reconcile',
     'reload:promoted_models_reload_on_startup',
@@ -277,7 +271,6 @@ def test_a_failing_event_listener_start_is_skipped_and_its_stop_is_not_attempted
     _run_lifespan()
     assert 'event_listener_start' in world.events
     assert 'event_listener_stop' not in world.events
-    assert 'reconcile_jobs' in world.events
     assert 'start_background_jobs' in world.events
 
 

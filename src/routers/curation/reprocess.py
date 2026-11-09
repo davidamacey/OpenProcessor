@@ -11,8 +11,11 @@ there, not here.
 
 from __future__ import annotations
 
-from typing import Any
+import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+from typing import TYPE_CHECKING, Any
 
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -30,9 +33,15 @@ from src.routers.curation._reprocess_models import (
     ReprocessWireResponse,
 )
 from src.services.curation.reprocess import apply_reprocess
-from src.services.curation.reprocess_job import ReprocessBusyError, cancel_job, read_job
+from src.services.curation.reprocess_job import job_info
 from src.services.curation.reprocess_targets import ReprocessTargetsError
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.jobs import status as job_status
+from src.services.jobs.service import cancel_job
+
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _service_factory(opensearch: Any, registry: Any) -> Any:
@@ -41,16 +50,18 @@ async def _service_factory(opensearch: Any, registry: Any) -> Any:
     return await get_ingest_service(opensearch, registry)
 
 
-async def _run(request: ReprocessRequest, opensearch: Any, registry: Any) -> ReprocessWireResponse:
+async def _run(
+    request: ReprocessRequest, opensearch: Any, registry: Any, session: AsyncSession
+) -> ReprocessWireResponse:
     async def factory() -> Any:
         return await _service_factory(opensearch, registry)
 
     try:
-        result = await apply_reprocess(opensearch, request, service_factory=factory)
+        result = await apply_reprocess(
+            opensearch, request, service_factory=factory, session=session
+        )
     except ReprocessTargetsError as exc:
         raise api_error(422, 'reprocess_targets_invalid', str(exc)) from exc
-    except ReprocessBusyError as exc:
-        raise api_error(409, 'reprocess_busy', str(exc)) from exc
     return ReprocessWireResponse(**result.model_dump())
 
 
@@ -80,19 +91,23 @@ async def _with_items(
 
 @router.post('/reprocess', response_model=ReprocessWireResponse)
 async def reprocess_batch(
-    body: ReprocessRequest, opensearch: OpenSearchDep, registry: RegistryDep
+    body: ReprocessRequest, opensearch: OpenSearchDep, registry: RegistryDep, session: DbSessionDep
 ) -> ReprocessWireResponse:
     """Re-run one or more scopes (``detect`` / ``open_vocab`` / ``region`` / ``vlm`` /
     ``embed``) over images, items or a filter. Dry run by default: the
     response counts, per scope, what is selected and what the lock rule
     skips (``locked_skipped``). Detect and embed over many images return a
     ``job`` to poll at ``GET /reprocess/jobs/{job_id}``."""
-    return await _run(body, opensearch, registry)
+    return await _run(body, opensearch, registry, session)
 
 
 @router.post('/images/{image_id}/reprocess', response_model=ReprocessWireResponse)
 async def reprocess_image(
-    image_id: str, body: ReprocessOneRequest, opensearch: OpenSearchDep, registry: RegistryDep
+    image_id: str,
+    body: ReprocessOneRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    session: DbSessionDep,
 ) -> ReprocessWireResponse:
     """The explicit per-image button: apply (``dry_run`` false) by default.
     The response carries the image's items as written."""
@@ -116,13 +131,18 @@ async def reprocess_image(
         ),
         opensearch,
         registry,
+        session,
     )
     return await _with_items(result, opensearch, 'image_id', image_id, body.dry_run)
 
 
 @router.post('/crops/{crop_id}/reprocess', response_model=ReprocessWireResponse)
 async def reprocess_crop(
-    crop_id: str, body: ReprocessOneRequest, opensearch: OpenSearchDep, registry: RegistryDep
+    crop_id: str,
+    body: ReprocessOneRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    session: DbSessionDep,
 ) -> ReprocessWireResponse:
     """The explicit per-item button: apply by default. The response carries
     the item as written; a locked set with nothing to regenerate reports
@@ -138,24 +158,27 @@ async def reprocess_crop(
         ),
         opensearch,
         registry,
+        session,
     )
     return await _with_items(result, opensearch, 'crop_id', crop_id, body.dry_run)
 
 
 @router.get('/reprocess/jobs/{job_id}', response_model=ReprocessJobInfo)
-async def get_reprocess_job(job_id: str) -> ReprocessJobInfo:
-    job = read_job(job_id)
-    if job is None:
-        raise api_error(404, 'not_found', f'no reprocess job {job_id}')
-    return job
+async def get_reprocess_job(job_id: uuid.UUID, session: DbSessionDep) -> ReprocessJobInfo:
+    return await _job_info(session, job_id)
 
 
 @router.post('/reprocess/jobs/{job_id}/cancel', response_model=ReprocessJobInfo)
-async def cancel_reprocess_job(job_id: str) -> ReprocessJobInfo:
-    """Ask a live job to stop after its current chunk."""
-    if read_job(job_id) is None:
+async def cancel_reprocess_job(job_id: uuid.UUID, session: DbSessionDep) -> ReprocessJobInfo:
+    """Ask a live job to stop after its current slice of images."""
+    project = current_project_id()
+    await _job_info(session, job_id)
+    await cancel_job(session, job_id, project, requested_by='api')
+    return await _job_info(session, job_id)
+
+
+async def _job_info(session: AsyncSession, job_id: uuid.UUID) -> ReprocessJobInfo:
+    view = await job_status.get_job(session, job_id, project=current_project_id())
+    if view.kind != 'reprocess':
         raise api_error(404, 'not_found', f'no reprocess job {job_id}')
-    cancel_job(job_id)
-    job = read_job(job_id)
-    assert job is not None
-    return job
+    return job_info(view)

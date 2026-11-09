@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.label_ops.store import list_ops
-from src.services.curation.label_ops.undo import undo_label_op
+from src.services.curation.label_ops.undo import restore_op, undo_dry_run
 from src.services.curation.registry_access import current_registry
 
 
@@ -64,7 +64,11 @@ async def undo_loop(
     result = UndoResult(dry_run=dry_run)
     for op_id in await loop_op_ids(loop_id, links, node_paths):
         try:
-            one = await undo_label_op(opensearch, op_id, dry_run=dry_run, registry_name=names.get)
+            one = (
+                await undo_dry_run(opensearch, op_id, registry_name=names.get)
+                if dry_run
+                else await restore_op(opensearch, op_id, names.get)
+            )
         except RequestRejectedError as refusal:
             if getattr(refusal, 'detail', {}).get('error') == 'already_undone':
                 continue

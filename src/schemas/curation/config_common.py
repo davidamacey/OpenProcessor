@@ -105,7 +105,6 @@ ErrorCode = Literal[
     'dataset_changed',
     'import_not_resumable',
     'import_not_undoable',
-    'reprocess_busy',
     'upload_too_large',
     'dataset_path_not_allowed',
     'format_undetected',
@@ -143,7 +142,6 @@ ErrorCode = Literal[
     # assist runs
     'invalid_request',
     'assist_too_large',
-    'assist_busy',
     'assist_loop_busy',
     'assist_loop_running',
     'assist_loop_not_resumable',

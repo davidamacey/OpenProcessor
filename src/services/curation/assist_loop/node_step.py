@@ -278,6 +278,7 @@ async def _propagate(run: LoopRun, record: NodeRecord) -> None:
         answers={**node.reused, **record.answers},
         tokens={i: run.states[i].token for i in node.eligible},
         label=run.label(*found),
+        job_id=rec.job_id,
         resuming=resuming,
     )
     if result.stale:

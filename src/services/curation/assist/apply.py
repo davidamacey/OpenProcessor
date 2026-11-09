@@ -64,7 +64,12 @@ def _label(body: AssistApplyRequest, run_id: str, class_id: int, class_name: str
 
 
 async def apply_proposal(
-    opensearch: AsyncOpenSearch, run_id: str, state: AssistRunState, body: AssistApplyRequest
+    opensearch: AsyncOpenSearch,
+    run_id: str,
+    state: AssistRunState,
+    body: AssistApplyRequest,
+    *,
+    before: list[str] | None,
 ) -> AssistApplyResponse:
     members = await current_members(opensearch, state.request)
     if members is None:
@@ -75,7 +80,7 @@ async def apply_proposal(
             run_id=run_id,
         )
     class_id, class_name = await _registry_class(body.class_name)
-    now = await scope_now(opensearch, run_id, state.request, members=members)
+    now = await scope_now(opensearch, state.request, before=before, members=members)
     if now is None:
         raise rejection(409, 'run_has_no_scope', 'this run kept no scope members', run_id=run_id)
     if now.jaccard < SAME_SCOPE_JACCARD and not body.allow_changed_scope:

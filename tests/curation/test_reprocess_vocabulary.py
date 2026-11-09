@@ -28,14 +28,10 @@ def test_filter_labels_cover_the_reprocess_only_selectors() -> None:
     assert own == set(FILTER_FIELD_LABELS)
 
 
-def test_job_statuses_are_the_ones_the_runner_writes() -> None:
-    import inspect
+def test_job_statuses_are_statuses_a_job_row_can_hold() -> None:
+    from src.domain.job_states import STATUSES
 
-    from src.services.curation import reprocess_job
-
-    src = inspect.getsource(reprocess_job)
-    for status in JOB_STATUS_LABELS:
-        assert f"'{status}'" in src, status
+    assert set(JOB_STATUS_LABELS) <= set(STATUSES)
 
 
 def test_lock_reasons_have_human_text() -> None:

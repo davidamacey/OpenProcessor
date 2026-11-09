@@ -1,212 +1,106 @@
-"""A file-backed job runner wrapping
-:func:`src.services.curation.probe_predictions.run_probe_inference`, so
-``POST /curation/probe/run`` doesn't block the request on a
-potentially-long CPU/GPU inference pass over the whole items index.
+"""The queued probe job: :func:`run_probe_inference` over the whole items index.
 
-Runs in-process (an ``asyncio.Task`` inside the api process itself,
-sharing the same GPU-claim path ``POST /train/start`` uses) -- unlike
-:mod:`src.services.curation.autolabel.job`, there is no separate probe
-worker container, so this mirrors :mod:`src.services.curation.item_scores.job`
-/ :mod:`src.services.curation.embedding_viz`'s simpler in-process
-state.json/heartbeat/cancel.flag convention instead of ``autolabel.job``'s
-trigger-file dispatch to a long-lived worker.
-
-**Multi-worker correctness (2026-09-25 fix).** ``api`` runs under
-``uvicorn --workers=8`` -- eight separate OS processes. The previous
-module-level ``_ProbeJobState`` dataclass plus ``_task`` handle were
-invisible across workers: ``POST /probe/run`` landing on worker A and a
-subsequent ``GET /probe/status`` landing on worker B always read
-``idle`` on B regardless of what A was doing (verified live: 8 consecutive
-status polls after a run start all read ``idle``), a cancel request could
-never reach the job unless it happened to land back on worker A, and a
-second ``POST /probe/run`` landing on a different worker could pass the
-busy check and start a parallel run against the same items index. Fixed
-by moving to the same on-disk, atomically-written state.json + heartbeat
-+ cancel.flag convention ``item_scores.job``/``embedding_viz`` already
-use, resolved fresh per call from ``OP_PROBE_JOBS_DIR`` (default
-``/jobs/probe`` -- the shared ``/jobs`` volume every api worker
-process mounts, consistent with ``item_scores``' ``/jobs/scores`` and
-``embedding_viz``'s ``/jobs/viz``).
-
-Singleton start is guarded by the ``probe`` job lease
-(:mod:`src.clients.job_lease`), so the check-is-busy + write-'running'
-sequence is atomic across processes, not just within one; a heartbeat thread
-keeps the lease and the file heartbeat alive for the whole run.
-
-GPU: this module never decides whether to use one -- the caller passes
-``gpu`` (a ``cuda_visible_devices`` string) or ``None`` for CPU. When a
-GPU is requested it is claimed through the exact same
-:mod:`src.services.training.gpu_arbiter` path ``POST /train/start`` uses
-(:func:`claim_gpus_for_training` / :func:`release_gpus_after_training`)
-so a probe run pauses/stops the same GPU-resident services a training
-run would, and is released the same way. A claim failure
-(:class:`GpuArbiterStopFailedError`) is a hard error -- it propagates to
-the caller (mapped to 409) rather than silently running the probe
-unclaimed next to whatever else is on that GPU.
+``POST /probe/run`` queues a ``probe`` job (one at a time per project); a Celery worker runs
+:func:`run_probe`. A requested GPU is claimed through the same
+:mod:`src.services.training.gpu_arbiter` path ``POST /train/start`` uses, inside the worker,
+and released when the run ends; a claim failure fails the job (never a silent unclaimed run).
 """
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
-from src.config.curation_accessors import get_curation_config
-from src.config.env import env_path
-from src.config.project_context import project_jobs_dir
 from src.core.logging import get_logger
-from src.domain.job_lease import LeaseKind
-from src.services.curation.file_job import HEARTBEAT_STALE_S, FileJob
-from src.services.curation.lease_heartbeat import acquire_heartbeat, run_leased
-from src.utils.timeutil import now_iso
+from src.services.jobs.service import start_job
 
 
 if TYPE_CHECKING:
+    import uuid
     from pathlib import Path
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from src.db.repos.jobs import JobRow
+    from src.schemas.jobs import JobView
+    from src.tasks.runtime.context import JobContext
 
 logger = get_logger(__name__)
 
-_ACTIVE = frozenset({'running'})
-
-# Reference to the scheduled background task -- asyncio only holds a weak
-# reference internally, so an unreferenced task can be garbage-collected
-# mid-run. Per-process only (not consulted for cross-process state; that
-# all lives in the state file) -- kept for parity with the other job
-# modules' identical comment.
-_active_tasks: dict[str, asyncio.Task[None]] = {}  # per project slug
+KIND = 'probe'
 
 
-class ProbeJobBusyError(Exception):
-    """A probe job is already running; only one may run at a time."""
-
-
-def _jobs_dir() -> Path:
-    """Resolved fresh each call so tests can override via monkeypatch
-    (same convention as ``item_scores.job._state_dir`` /
-    ``embedding_viz._jobs_dir``)."""
-    return project_jobs_dir(env_path('OP_PROBE_JOBS_DIR', '/jobs/probe'))
-
-
-def _job() -> FileJob:
-    return FileJob(_jobs_dir())
-
-
-@dataclass
-class _ProbeJobState:
-    job_id: str | None = None
-    status: str = 'idle'  # idle | running | completed | failed | cancelled
-    train_job_id: str | None = None
-    model_path: str | None = None
-    gpu: str | None = None
-    started_at: str | None = None
-    finished_at: str | None = None
-    updated_count: int | None = None
-    error: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def _read_state() -> _ProbeJobState:
-    state = _ProbeJobState()
-    for k, v in _job().read().items():
-        if hasattr(state, k):
-            setattr(state, k, v)
-    return state
-
-
-def is_cancelled() -> bool:
-    """Cheap, file-existence check -- passed as ``run_probe_inference``'s
-    ``should_cancel`` callable, checked once per scroll page."""
-    return _job().cancel_requested()
-
-
-def _is_busy() -> bool:
-    return _job().is_live(_ACTIVE)
-
-
-def reconcile_orphaned_jobs() -> bool:
-    """Startup-only repair: see :mod:`src.services.curation.job_reconcile`.
-
-    Called from ``src.main``'s lifespan before any request is served, so
-    nothing in this process can legitimately hold ``status='running'``
-    yet -- a leftover 'running' state.json is necessarily orphaned by a
-    prior process. Returns True if the file was rewritten.
-    """
-    return _job().reconcile(active_statuses=_ACTIVE, error_prefix='probe job')
-
-
-def get_status() -> dict[str, Any]:
-    """The current/last probe job's state (BA-style poll endpoint), with
-    stale-heartbeat repair mirroring ``item_scores.job.get_state``'s
-    liveness contract: a worker process that died mid-run (or was killed)
-    must not leave the job 'running' forever for every other worker's
-    status poll -- the next poll (from any process) that notices the
-    heartbeat is stale rewrites the state to 'failed' itself."""
-    state = _read_state()
-    if state.status == 'running':
-        age = _job().heartbeat_age()
-        if age is not None and age > HEARTBEAT_STALE_S:
-            state.status = 'failed'
-            state.error = state.error or f'probe job heartbeat stale ({age:.1f}s ago)'
-            state.finished_at = state.finished_at or now_iso()
-            _job().write(state.to_dict())
-    return state.to_dict()
-
-
-async def _run(
-    job_id: str,
+async def start(
+    session: AsyncSession,
+    project: uuid.UUID,
+    *,
     train_job_id: str,
     model_path: Path,
-    opensearch: Any,
-    *,
-    config: Any,
     gpu: str | None,
     architecture: str,
     resume: bool,
-) -> None:
+) -> JobRow:
+    """Queue the probe pass. ``ValueError`` for an unknown ``architecture`` (422 at the router),
+    409 ``job_busy`` while another probe of the project is active."""
+    from src.services.curation.probe_models import PROBE_ARCHITECTURES
+
+    if architecture not in PROBE_ARCHITECTURES:
+        msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
+        raise ValueError(msg)
+    started = await start_job(
+        session,
+        KIND,
+        project,
+        params={
+            'train_job_id': train_job_id,
+            'model_path': str(model_path),
+            'gpu': gpu,
+            'architecture': architecture,
+            'resume': resume,
+        },
+        requested_by='api',
+    )
+    return started.job
+
+
+def status_dict(view: JobView | None) -> dict[str, Any]:
+    """The probe status wire (``ProbeStatusResponse`` minus the threshold) of a job row."""
+    if view is None:
+        return {'status': 'idle'}
+    params = view.params or {}
+    return {
+        'job_id': view.id,
+        'status': view.status,
+        'train_job_id': params.get('train_job_id'),
+        'model_path': params.get('model_path'),
+        'gpu': params.get('gpu'),
+        'started_at': None if view.started_at is None else view.started_at.isoformat(),
+        'finished_at': None if view.finished_at is None else view.finished_at.isoformat(),
+        'updated_count': (view.result or {}).get('updated_count'),
+        'error': view.error_message,
+    }
+
+
+async def run_probe(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
+    """Execute the job: the existing probe inference, checking for a cancel once per page."""
     from src.services.curation.probe_predictions import run_probe_inference
 
-    state = _read_state()
-    if state.job_id != job_id:
-        # Superseded by a newer job (shouldn't happen -- start_probe_job
-        # is a cross-process singleton gate) -- bail rather than clobber
-        # someone else's run.
-        return
-    _job().touch_heartbeat()
+    params = ctx.params
+    gpu = params.get('gpu')
+    if gpu is not None:
+        from src.services.training.gpu_arbiter import claim_gpus_for_training
+
+        await claim_gpus_for_training(gpu)  # GpuArbiterStopFailedError fails the job
     try:
+        from pathlib import Path
+
         updated = await run_probe_inference(
-            model_path,
+            Path(params['model_path']),
             opensearch,
-            config=config,
-            model_version=job_id,
-            architecture=architecture,
-            resume=resume,
-            should_cancel=is_cancelled,
+            model_version=params['train_job_id'],
+            architecture=params['architecture'],
+            resume=bool(params['resume']),
+            should_cancel=ctx.cancelled,
         )
-        state = _read_state()
-        if is_cancelled():
-            state.status = 'cancelled'
-        else:
-            state.status = 'completed'
-            state.updated_count = updated
-        state.finished_at = now_iso()
-        _job().write(state.to_dict())
-    except asyncio.CancelledError:
-        state = _read_state()
-        state.status = 'cancelled'
-        state.finished_at = now_iso()
-        _job().write(state.to_dict())
-        raise
-    except Exception as exc:
-        logger.error('probe_job_failed', job_id=job_id, train_job_id=train_job_id, error=str(exc))
-        state = _read_state()
-        state.status = 'failed'
-        state.error = str(exc)
-        state.finished_at = now_iso()
-        _job().write(state.to_dict())
     finally:
         if gpu is not None:
             from src.services.training.gpu_arbiter import release_gpus_after_training
@@ -214,118 +108,8 @@ async def _run(
             try:
                 await release_gpus_after_training(gpu)
             except Exception as exc:
-                logger.error('probe_job_gpu_release_failed', job_id=job_id, error=str(exc))
+                logger.error('probe_job_gpu_release_failed', job_id=str(ctx.job_id), error=str(exc))
+    return {'updated_count': updated, 'cancelled': ctx.cancelled()}
 
 
-async def start_probe_job(
-    job_id: str,
-    train_job_id: str,
-    model_path: Path,
-    opensearch: Any,
-    *,
-    config: Any = None,
-    gpu: str | None = None,
-    architecture: str = 'yolo26',
-    resume: bool = False,
-) -> dict[str, Any]:
-    """Start a probe job. Raises :class:`ProbeJobBusyError` if one is
-    already running anywhere in the fleet (409 at the router) -- the
-    check-and-claim is atomic across processes, not just within one (see
-    module docstring / :mod:`src.services.curation.job_lock`). If ``gpu``
-    is set, claims it via the training GPU arbiter first -- a
-    :class:`~src.services.training.gpu_arbiter_policy.GpuArbiterStopFailedError`
-    propagates (never silently ignored). Raises ``ValueError`` immediately
-    (before claiming the lock or a GPU) for an ``architecture`` outside
-    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`, rather
-    than letting the background task fail after the caller already got a
-    200."""
-    from src.services.curation.probe_models import PROBE_ARCHITECTURES
-
-    if architecture not in PROBE_ARCHITECTURES:
-        msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
-        raise ValueError(msg)
-
-    if _is_busy():
-        msg = f'a probe job is already running: {_read_state().job_id!r}'
-        raise ProbeJobBusyError(msg)
-    beat = await acquire_heartbeat(
-        opensearch,
-        LeaseKind.PROBE,
-        None,
-        job_id,
-        job=_job(),
-        busy=lambda holder: ProbeJobBusyError(f'a probe job is already running: {holder!r}'),
-    )
-    try:
-        if gpu is not None:
-            from src.services.training.gpu_arbiter import claim_gpus_for_training
-
-            await claim_gpus_for_training(gpu)  # GpuArbiterStopFailedError propagates -- hard fail
-
-        _job().clear_signals()
-
-        state = _ProbeJobState(
-            job_id=job_id,
-            status='running',
-            train_job_id=train_job_id,
-            model_path=str(model_path),
-            gpu=gpu,
-            started_at=now_iso(),
-        )
-        _job().write(state.to_dict())
-    except BaseException:
-        await beat.release(opensearch)
-        raise
-    beat.start()
-    _active_tasks[get_curation_config().project_slug] = asyncio.create_task(
-        run_leased(
-            beat,
-            opensearch,
-            _run(
-                job_id,
-                train_job_id,
-                model_path,
-                opensearch,
-                config=config,
-                gpu=gpu,
-                architecture=architecture,
-                resume=resume,
-            ),
-        )
-    )
-    return state.to_dict()
-
-
-def cancel_probe_job() -> bool:
-    """Touch the cross-process cancel flag if a job appears to be
-    running. Best-effort and cooperative: the running
-    :func:`~src.services.curation.probe_predictions.run_probe_inference`
-    call notices at its next per-page ``should_cancel`` check, not
-    mid-page -- and (unlike the old in-process ``asyncio.Task.cancel()``)
-    this reaches the job regardless of which worker process is actually
-    running it, since every process shares the same cancel.flag file."""
-    if not _is_busy():
-        return False
-    _job().request_cancel()
-    return True
-
-
-def _reset_for_tests() -> None:
-    """Kept for API-compat with any caller expecting it, but a file-backed
-    job has no meaningful module-level state left to reset -- tests
-    should instead point ``OP_PROBE_JOBS_DIR`` at a fresh ``tmp_path``."""
-    _active_tasks.clear()
-    job = _job()
-    with contextlib.suppress(FileNotFoundError):
-        job.state_file.unlink()
-    job.clear_signals()
-
-
-__all__ = [
-    'ProbeJobBusyError',
-    'cancel_probe_job',
-    'get_status',
-    'is_cancelled',
-    'reconcile_orphaned_jobs',
-    'start_probe_job',
-]
+__all__ = ['KIND', 'run_probe', 'start', 'status_dict']

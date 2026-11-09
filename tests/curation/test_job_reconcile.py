@@ -5,7 +5,8 @@ Each of ``item_scores.job``, ``selection.job`` and ``embedding_viz`` shares
 the same state.json/heartbeat/cancel.flag file-backed job-runner shape and
 delegates its ``reconcile_orphaned_jobs()`` to the shared
 :func:`src.services.curation.job_reconcile.reconcile_stale_running` helper.
-``autolabel`` is a queue job: the reaper recovers it, not a startup repair.
+``autolabel.job`` has a materially different shape (a separate worker
+container + a pending-trigger file) and is tested on its own below.
 
 Every test redirects the module's state-dir env var to a per-test
 ``tmp_path`` (same convention ``test_scores_router.py`` /
@@ -18,11 +19,6 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-    import pytest
 
 
 # =============================================================================
@@ -106,170 +102,3 @@ def test_reconcile_stale_running_fresh_heartbeat_is_left_alone(tmp_path) -> None
     )
     assert changed is False
     assert json.loads(state_file.read_text())['status'] == 'running'
-
-
-# =============================================================================
-# item_scores.job.reconcile_orphaned_jobs
-# =============================================================================
-
-
-def test_item_scores_job_reconciles_orphaned_running_state(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
-    from src.services.curation.item_scores import job
-
-    (tmp_path / 'scores' / 'projects' / 'default').mkdir(parents=True)
-    state = {'job_id': 'j1', 'status': 'running', 'scorers': ['uniqueness']}
-    (tmp_path / 'scores' / 'projects' / 'default' / 'state.json').write_text(json.dumps(state))
-    heartbeat = tmp_path / 'scores' / 'projects' / 'default' / 'heartbeat'
-    heartbeat.touch()
-    old = time.time() - 120
-    os.utime(heartbeat, (old, old))
-
-    assert job.reconcile_orphaned_jobs() is True
-    on_disk = json.loads((tmp_path / 'scores' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'interrupted'
-
-
-def test_item_scores_job_leaves_fresh_running_state_alone(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
-    from src.services.curation.item_scores import job
-
-    (tmp_path / 'scores' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'scores' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j1', 'status': 'running'})
-    )
-    (tmp_path / 'scores' / 'projects' / 'default' / 'heartbeat').touch()
-
-    assert job.reconcile_orphaned_jobs() is False
-    on_disk = json.loads((tmp_path / 'scores' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'running'
-
-
-# =============================================================================
-# selection.job.reconcile_orphaned_jobs
-# =============================================================================
-
-
-def test_selection_job_reconciles_orphaned_running_state(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
-    from src.services.curation.selection import job
-
-    (tmp_path / 'select' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'select' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j2', 'status': 'running', 'k': 100})
-    )
-    heartbeat = tmp_path / 'select' / 'projects' / 'default' / 'heartbeat'
-    heartbeat.touch()
-    old = time.time() - 120
-    os.utime(heartbeat, (old, old))
-
-    assert job.reconcile_orphaned_jobs() is True
-    on_disk = json.loads((tmp_path / 'select' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'interrupted'
-
-
-def test_selection_job_leaves_fresh_running_state_alone(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_SELECT_JOBS_DIR', str(tmp_path / 'select'))
-    from src.services.curation.selection import job
-
-    (tmp_path / 'select' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'select' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j2', 'status': 'running'})
-    )
-    (tmp_path / 'select' / 'projects' / 'default' / 'heartbeat').touch()
-
-    assert job.reconcile_orphaned_jobs() is False
-    on_disk = json.loads((tmp_path / 'select' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'running'
-
-
-# =============================================================================
-# probe_job.reconcile_orphaned_jobs
-# =============================================================================
-
-
-def test_probe_job_reconciles_orphaned_running_state(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
-    from src.services.curation import probe_job
-
-    (tmp_path / 'probe' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'probe' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j6', 'status': 'running', 'train_job_id': 't1'})
-    )
-    heartbeat = tmp_path / 'probe' / 'projects' / 'default' / 'heartbeat'
-    heartbeat.touch()
-    old = time.time() - 120
-    os.utime(heartbeat, (old, old))
-
-    assert probe_job.reconcile_orphaned_jobs() is True
-    on_disk = json.loads((tmp_path / 'probe' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'interrupted'
-
-
-def test_probe_job_leaves_fresh_running_state_alone(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_PROBE_JOBS_DIR', str(tmp_path / 'probe'))
-    from src.services.curation import probe_job
-
-    (tmp_path / 'probe' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'probe' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j6', 'status': 'running'})
-    )
-    (tmp_path / 'probe' / 'projects' / 'default' / 'heartbeat').touch()
-
-    assert probe_job.reconcile_orphaned_jobs() is False
-    on_disk = json.loads((tmp_path / 'probe' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'running'
-
-
-# =============================================================================
-# embedding_viz.reconcile_orphaned_jobs
-# =============================================================================
-
-
-def test_embedding_viz_reconciles_orphaned_running_state(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    from src.services.curation import embedding_viz
-
-    (tmp_path / 'viz' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'viz' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j3', 'status': 'running', 'scope': 'residual'})
-    )
-    heartbeat = tmp_path / 'viz' / 'projects' / 'default' / 'heartbeat'
-    heartbeat.touch()
-    old = time.time() - 120
-    os.utime(heartbeat, (old, old))
-
-    assert embedding_viz.reconcile_orphaned_jobs() is True
-    on_disk = json.loads((tmp_path / 'viz' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'interrupted'
-
-
-def test_embedding_viz_leaves_fresh_running_state_alone(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_VIZ_JOBS_DIR', str(tmp_path / 'viz'))
-    from src.services.curation import embedding_viz
-
-    (tmp_path / 'viz' / 'projects' / 'default').mkdir(parents=True)
-    (tmp_path / 'viz' / 'projects' / 'default' / 'state.json').write_text(
-        json.dumps({'job_id': 'j3', 'status': 'running'})
-    )
-    (tmp_path / 'viz' / 'projects' / 'default' / 'heartbeat').touch()
-
-    assert embedding_viz.reconcile_orphaned_jobs() is False
-    on_disk = json.loads((tmp_path / 'viz' / 'projects' / 'default' / 'state.json').read_text())
-    assert on_disk['status'] == 'running'

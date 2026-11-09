@@ -186,10 +186,3 @@ def test_a_sweep_survives_an_incoming_file_that_vanishes_underfoot(
         scoped.setattr(RealPath, 'stat', stat_then_gone)
         sweep_uploads(tmp_path, referenced=set())
     assert not (incoming / 'stale.part').exists()
-
-
-def test_a_job_dir_is_marked_in_the_call_that_creates_it(tmp_path: Path) -> None:
-    from src.config.project_context import ensure_marked_dir
-
-    created = ensure_marked_dir(tmp_path / 'a' / 'b')
-    assert (created / '.project').read_text() == 'default'

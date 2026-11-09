@@ -17,7 +17,8 @@ from src.services.labeling.vlm_attributes import AttributeSpec
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
-pytestmark = pytest.mark.usefixtures('readable_crops')
+pytest_plugins = ['curation.assist_queue']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
 RUNS = '/assist/runs'
 CLUSTER = 10000
@@ -25,8 +26,8 @@ MAKE = {'key': 'make', 'description': 'car manufacturer', 'values': []}
 
 
 @pytest.fixture(autouse=True)
-def _jobs_dir(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def _queue(assist_queue: Any) -> None:
+    """Every test starts its runs through the queue, with a stand-in worker."""
 
 
 def _seed(stack: Any, crop_id: str, **doc: Any) -> None:
@@ -65,7 +66,7 @@ def _wait(stack: Any, run_id: str) -> dict[str, Any]:
 def _run(stack: Any, **body: Any) -> dict[str, Any]:
     with stack.client:
         started = stack.post(RUNS, **_cluster_body(**body))
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         assert started.json()['status'] == 'queued'
         return _wait(stack, started.json()['run_id'])
 
@@ -240,15 +241,15 @@ def test_a_second_run_while_one_is_live_is_busy(stack: Any) -> None:
     stack.upstream.vlm_delay = hold
     with stack.client:
         first = stack.post(RUNS, **_cluster_body())
-        assert first.status_code == 200, first.text
+        assert first.status_code == 202, first.text
         deadline = time.monotonic() + 10
         while not gate.get('reached') and time.monotonic() < deadline:
             time.sleep(0.01)
         second = stack.post(RUNS, **_cluster_body())
         gate['release'] = True
         _wait(stack, first.json()['run_id'])
-    assert (second.status_code, second.json()['detail']['error']) == (409, 'assist_busy')
-    assert second.json()['detail']['run_id'] == first.json()['run_id']
+    assert (second.status_code, second.json()['detail']['error']) == (409, 'job_busy')
+    assert second.json()['detail']['active_job_id'] == first.json()['run_id']
 
 
 def test_an_unknown_cluster_is_a_404_and_an_empty_filter_a_422(stack: Any) -> None:

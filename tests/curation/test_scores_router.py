@@ -1,22 +1,12 @@
 """Tests for POST /curation/scores/compute + status/cancel/coverage.
 
-Job lifecycle: start -> 409 on double-start -> status -> cancel. The actual
-scoring coroutine (``crop_scores.job.run_scoring_job``) is monkeypatched to
-block on an ``asyncio.Event`` the test controls — a real background task
-scheduled via ``asyncio.create_task`` would otherwise race the synchronous
-TestClient calls (it could complete before the test's next HTTP call,
-making a "double-start returns 409" assertion flaky). This is deliberate
-test-side control, not a production behavior change — ``job.py``'s own
-docstring documents the monkeypatch seam.
-
-Every test redirects ``OP_SCORES_STATE_DIR`` to a per-test ``tmp_path`` so
-nothing touches the real ``/jobs/scores`` volume (mirrors
-the ``train_jobs`` tests' ``OP_TRAIN_JOBS_DIR`` convention).
+The job itself (queue, busy, run) is covered by ``tests/curation/jobs_a``; these tests drive the
+routes with the job seam (``scores_job.start``, ``latest_job``, ``cancel_latest``) replaced.
 """
 
 from __future__ import annotations
 
-import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -25,14 +15,15 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
+def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    monkeypatch.setenv('OP_SCORES_STATE_DIR', str(tmp_path / 'scores'))
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    monkeypatch.setattr('src.routers.curation.scores.current_project_id', lambda: 'project-id')
 
     fake_os = AsyncMock()
     fake_os.count = AsyncMock(return_value={'count': 0})
@@ -43,81 +34,75 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path) -> TestClient:
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
+    async def no_database():
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
+
     client = TestClient(app)
     client.fake_os = fake_os  # type: ignore[attr-defined]
     return client
 
 
-def _block_run_scoring_job(monkeypatch: pytest.MonkeyPatch) -> asyncio.Event:
-    """Monkeypatch run_scoring_job to hang on an Event the test controls,
-    keeping the job 'running' deterministically across multiple sync
-    TestClient calls. Returns the Event (never set — the job never
-    actually completes during these tests, matching the lifecycle we want
-    to observe: running -> cancel)."""
-    from src.services.curation.item_scores import job as scores_job
-
-    hang_forever = asyncio.Event()
-
-    async def _fake_run_scoring_job(job_id, opensearch, scorer_names) -> None:
-        scores_job._job().touch_heartbeat()
-        await hang_forever.wait()
-
-    monkeypatch.setattr(scores_job, 'run_scoring_job', _fake_run_scoring_job)
-    return hang_forever
+def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
+    start = AsyncMock()
+    monkeypatch.setattr('src.services.curation.item_scores.job.start', start)
+    monkeypatch.setattr(
+        'src.services.curation.latest_job.latest_job', AsyncMock(return_value=latest)
+    )
+    return start
 
 
-def test_start_then_double_start_409(
+def _queued_view() -> SimpleNamespace:
+    return SimpleNamespace(
+        id='j1',
+        status='queued',
+        started_at=None,
+        finished_at=None,
+        error_message=None,
+        params={'scorers': ['uniqueness']},
+        progress={},
+        result=None,
+    )
+
+
+def test_compute_queues_the_job_and_answers_202_with_its_state(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _block_run_scoring_job(monkeypatch)
-
-    r1 = app_client.post(
+    start = _job_seam(monkeypatch, _queued_view())
+    r = app_client.post(
         '/curation/projects/default/scores/compute', json={'scorers': ['uniqueness']}
     )
-    assert r1.status_code == 200, r1.text
-    assert r1.json()['status'] == 'running'
-
-    r2 = app_client.post(
-        '/curation/projects/default/scores/compute', json={'scorers': ['uniqueness']}
-    )
-    assert r2.status_code == 409
+    assert r.status_code == 202, r.text
+    assert (r.json()['job_id'], r.json()['status']) == ('j1', 'queued')
+    assert start.await_args.args[1:] == ('project-id', ['uniqueness'])
 
 
-def test_status_reflects_running_job(
+def test_status_reflects_the_newest_job(
     app_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _block_run_scoring_job(monkeypatch)
-    app_client.post('/curation/projects/default/scores/compute', json={})
-
+    _job_seam(monkeypatch, _queued_view())
     r = app_client.get('/curation/projects/default/scores/status')
-    assert r.status_code == 200
-    body = r.json()
-    assert body['status'] == 'running'
-    assert set(body['scorers']) == {'mistakenness', 'near_dup', 'uniqueness'}
+    assert r.json()['scorers'] == ['uniqueness']
+    assert r.json()['status'] == 'queued'
 
 
-def test_cancel_running_job(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation.item_scores import job as scores_job
-
-    _block_run_scoring_job(monkeypatch)
-    app_client.post('/curation/projects/default/scores/compute', json={'scorers': ['near_dup']})
-
-    r = app_client.post('/curation/projects/default/scores/cancel')
-    assert r.status_code == 200
-    assert r.json()['cancelled'] is True
-    assert scores_job.is_cancelled()
-
-
-def test_cancel_with_no_job_running(app_client: TestClient) -> None:
-    r = app_client.post('/curation/projects/default/scores/cancel')
-    assert r.status_code == 200
-    assert r.json()['cancelled'] is False
-
-
-def test_status_idle_with_no_job(app_client: TestClient) -> None:
+def test_status_idle_with_no_job(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _job_seam(monkeypatch, None)
     r = app_client.get('/curation/projects/default/scores/status')
     assert r.status_code == 200
     assert r.json()['status'] == 'idle'
+
+
+def test_cancel_reports_whether_a_job_was_cancelled(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _job_seam(monkeypatch, _queued_view())
+    cancel = AsyncMock(return_value=True)
+    monkeypatch.setattr('src.services.curation.latest_job.cancel_latest', cancel)
+    r = app_client.post('/curation/projects/default/scores/cancel')
+    assert r.json()['cancelled'] is True
+    cancel.assert_awaited_once()
 
 
 def test_unknown_scorer_400(app_client: TestClient) -> None:
@@ -152,11 +137,11 @@ def test_coverage_reports_per_field_counts(app_client: TestClient) -> None:
     r = app_client.get('/curation/projects/default/scores/coverage')
     assert r.status_code == 200
     coverage = r.json()['coverage']
-    assert set(coverage) == {'uniqueness', 'near_dup', 'mistakenness'}
+    assert set(coverage) == {'uniqueness', 'mistakenness'}
     assert coverage['uniqueness']['n_scored'] == 7
     assert coverage['uniqueness']['field'] == 'uniqueness_score'
     assert coverage['uniqueness']['total'] == 100
-    assert coverage['near_dup']['n_scored'] == 3
+    assert coverage['mistakenness']['n_scored'] == 3
 
 
 if __name__ == '__main__':

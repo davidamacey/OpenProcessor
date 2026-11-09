@@ -105,7 +105,7 @@ selection or projection job, a probe, a promote, a combine, an auto-label loop, 
 operation, the region-cluster jobs) starts under a lease: an OpenSearch document in the
 project, taken create-only, renewed every 15 seconds by a thread of its own and released at
 the end. Two requests on two workers cannot both start the job; the second gets the family's
-409 busy refusal (`reprocess_busy`, `import_busy`, `assist_busy`, `assist_loop_busy`,
+409 busy refusal (`import_busy`, `assist_busy`, `assist_loop_busy`,
 `probe_busy`, `label_op_busy`, or a plain 409 for scores, selection and projection). If
 OpenSearch is down the start answers 503; a job never starts without its lease.
 

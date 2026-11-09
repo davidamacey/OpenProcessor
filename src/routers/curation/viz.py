@@ -35,8 +35,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.config.env import env_bool, env_int
+from src.config.project_context import current_project_id
+from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.routers.curation._common import OpenSearchDep, router
-from src.utils.upstream_errors import UpstreamError
 
 
 DEFAULT_MAX_N = 20_000
@@ -56,15 +57,14 @@ def _max_n() -> int:
         return DEFAULT_MAX_N
 
 
-@router.post('/viz/projection/rebuild')
+@router.post('/viz/projection/rebuild', status_code=202)
 async def viz_projection_rebuild(
-    opensearch: OpenSearchDep,
+    session: DbSessionDep,
     scope: str = Query('residual', pattern='^(residual|cluster)$'),
     cluster_id: int | None = Query(None),
 ) -> Any:
-    """Start the background UMAP-viz fit job. Never fits inline — always
-    returns immediately with the job's initial ``{status: 'running', ...}``
-    state (``202``); poll ``GET {prefix}/viz/projection/status``."""
+    """Queue the UMAP-viz fit job. Never fits inline: answers `202` with the job's state (`409
+    job_busy` while one is active); poll ``GET {prefix}/viz/projection/status``."""
     if not _viz_enabled():
         raise HTTPException(
             status_code=400,
@@ -75,30 +75,31 @@ async def viz_projection_rebuild(
 
     from src.services.curation import embedding_viz
 
-    try:
-        state = await embedding_viz.start_job(
-            opensearch, scope=scope, cluster_id=cluster_id, max_n=_max_n()
-        )
-    except UpstreamError:
-        raise
-    except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return JSONResponse(status_code=202, content=state)
+    await embedding_viz.start(
+        session, current_project_id(), scope=scope, cluster_id=cluster_id, max_n=_max_n()
+    )
+    return JSONResponse(status_code=202, content=await _state(session))
+
+
+async def _state(session: Any) -> dict[str, Any]:
+    from src.services.curation import embedding_viz
+    from src.services.curation.latest_job import latest_job
+
+    return embedding_viz.state_dict(await latest_job(session, embedding_viz.KIND))
 
 
 @router.get('/viz/projection/status')
-async def viz_projection_status() -> dict[str, Any]:
-    from src.services.curation import embedding_viz
-
-    return embedding_viz.get_state()
+async def viz_projection_status(session: DbSessionDep) -> dict[str, Any]:
+    return await _state(session)
 
 
 @router.post('/viz/projection/cancel')
-async def viz_projection_cancel() -> dict[str, Any]:
+async def viz_projection_cancel(session: DbSessionDep) -> dict[str, Any]:
     from src.services.curation import embedding_viz
+    from src.services.curation.latest_job import cancel_latest
 
-    cancelled = embedding_viz.cancel_job()
-    return {'cancelled': cancelled, **embedding_viz.get_state()}
+    cancelled = await cancel_latest(session, embedding_viz.KIND)
+    return {'cancelled': cancelled, **await _state(session)}
 
 
 class ProjectionPoint(BaseModel):

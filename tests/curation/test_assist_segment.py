@@ -16,6 +16,9 @@ from src.config import get_region_fields
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 
 
+pytest_plugins = ['curation.assist_queue']
+pytestmark = pytest.mark.db
+
 F = get_region_fields()
 RUNS = '/assist/runs'
 SCOPED = '/curation/projects/default'
@@ -23,8 +26,13 @@ VERIFY_YES = json.dumps({'is_region': True, 'confidence': 'high', 'reason': 'a w
 
 
 @pytest.fixture
-def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def world(
+    assist_queue: Any,
+    stack: Any,
+    readable_crops: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> Any:
     monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr('src.services.curation.assist.segment.POLL_S', 0.05)
     return stack
@@ -182,7 +190,7 @@ def test_segment_requeues_with_the_choice_waits_and_completes(world: Any) -> Non
     stop = threading.Event()
     with world.client:
         started = world.post(RUNS, **_body('segment'))
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         run_id = started.json()['run_id']
         waiting = _wait(world, run_id, 'waiting_region')
         stamped = {
@@ -213,7 +221,7 @@ def test_segment_then_verify_judges_the_new_boxes_with_the_runs_endpoint(world: 
         started = world.post(
             RUNS, **_body('segment', 'verify', target={'kind': 'crops', 'crop_ids': ['c1']})
         )
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         run_id = started.json()['run_id']
         _wait(world, run_id, 'waiting_region')
         worker = _fake_region_worker(world, stop)

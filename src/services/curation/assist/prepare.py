@@ -137,7 +137,10 @@ async def _check_classes(request: AssistRunRequest) -> None:
         await require_item_classes()
 
 
-async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) -> PreparedRun:
+async def _resolve_inputs(
+    opensearch: AsyncOpenSearch, request: AssistRunRequest
+) -> tuple[str | None, int | None, PromptPack, RunVlm]:
+    """Validate the request against what the project has now and pin the pack and endpoint."""
     validate_request(request)
     pack_name, pack_revision = await resolve_run_prompt_pack(opensearch, request.prompt_pack)
     pack = resolve_pack(pack_name, pack_revision)
@@ -150,7 +153,53 @@ async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) ->
     )
     require_run_vlm(vlm)
     _check_segment(request, vlm)
+    return pack_name, pack_revision, pack, vlm
+
+
+async def prepare_run(opensearch: AsyncOpenSearch, request: AssistRunRequest) -> PreparedRun:
+    pack_name, pack_revision, pack, vlm = await _resolve_inputs(opensearch, request)
     scope = await resolve_scope(opensearch, request)
+    return PreparedRun(
+        request=request,
+        scope=scope,
+        vlm=vlm,
+        pack=pack,
+        pack_name=pack_name,
+        pack_revision=pack_revision,
+        images_per_call=images_per_call_for(vlm.endpoint),
+    )
+
+
+async def prepare_queued(
+    opensearch: AsyncOpenSearch,
+    request: AssistRunRequest,
+    resolved: ResolvedScope,
+    *,
+    sampled_ids: list[str],
+    box_ids: dict[str, list[str]] | None,
+) -> PreparedRun:
+    """The run a worker executes: the request validated again against the project as it is
+    now, with the sample the start request resolved. Raises ``RuntimeError`` (the job fails)
+    when the endpoint or the pack is no longer the one the user was shown."""
+    pack_name, pack_revision, pack, vlm = await _resolve_inputs(opensearch, request)
+    planned = (
+        (resolved.vlm or {}).get('name'),
+        (resolved.vlm or {}).get('revision'),
+        (resolved.prompt_pack or {}).get('name'),
+        (resolved.prompt_pack or {}).get('revision'),
+    )
+    if planned != (vlm.name, vlm.revision, pack.name, pack_revision):
+        msg = 'the VLM endpoint or the prompt pack changed since the run was planned; plan it again'
+        raise RuntimeError(msg)
+    scope = ScopeResolution(
+        members=[],
+        digest=resolved.scope_digest,
+        skipped=resolved.skipped,
+        sampled_ids=sampled_ids,
+        strata=resolved.strata,
+        seed=resolved.sample_seed,
+        box_ids=box_ids,
+    )
     return PreparedRun(
         request=request,
         scope=scope,
@@ -170,4 +219,10 @@ def images_per_call_for(endpoint: Any) -> int:
     return max(1, min(DEFAULT_OPEN_IMAGES_PER_CALL, limit))
 
 
-__all__ = ['PreparedRun', 'images_per_call_for', 'prepare_run', 'require_item_classes']
+__all__ = [
+    'PreparedRun',
+    'images_per_call_for',
+    'prepare_queued',
+    'prepare_run',
+    'require_item_classes',
+]

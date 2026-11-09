@@ -1,5 +1,4 @@
-"""Reprocess entry points: the routes, the file-backed job, the CLI, the
-startup repair and the busy inventory. One test walks every entry point
+"""Reprocess entry points: the routes, the queued job's run, and the CLI. One test walks every entry point
 with a locked input that must be skipped and counted."""
 
 from __future__ import annotations
@@ -7,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import copy
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,25 +21,18 @@ from curation.reprocess_fixtures import (
     RegionStatus,
     box,
     docs,
-    images_index,
     item,
     jpeg_bytes,
     make_fake,
     make_service,
     servable_root,
 )
-from src.services.curation import reprocess_job
 from src.services.curation.reprocess import apply_reprocess
 from src.services.curation.reprocess_models import ReprocessRequest, ReprocessTargets
 
 
 FAILED = RegionStatus.DETECTION_FAILED.value
 LOCKED_SET = {'validated': True, 'verifier': 'human'}
-
-
-@pytest.fixture(autouse=True)
-def _jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_REPROCESS_JOBS_DIR', str(tmp_path / 'jobs'))
 
 
 def _factory(service: Any) -> Any:
@@ -54,11 +45,17 @@ def _factory(service: Any) -> Any:
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch, service: Any = None) -> TestClient:
     from _curation_app import mount_curation_routers
 
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, reprocess as route_mod, router
 
     app = FastAPI()
     mount_curation_routers(app, router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+
+    async def no_database() -> Any:  # these requests stay under the sync limit: no job, no session
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
 
     async def factory(_opensearch: Any, _registry: Any) -> Any:
         return service
@@ -176,135 +173,6 @@ def _embed_world(
     return fake, ids, make_service(fake, FakeTriton([]), FakePE())
 
 
-@pytest.mark.asyncio
-async def test_many_images_run_as_a_job_and_a_second_start_is_busy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_REPROCESS_SYNC_MAX', '1')
-    fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    request = ReprocessRequest(
-        targets=ReprocessTargets(image_ids=ids), scopes=['embed'], dry_run=False
-    )
-    resp = await apply_reprocess(fake, request, service_factory=_factory(service))
-    assert resp.job is not None
-    assert resp.scopes[0].queued == 0  # the job, not this call, does the work
-    job_id = resp.job.job_id
-    # the job is live until its task finishes: a second start is refused
-    with pytest.raises(reprocess_job.ReprocessBusyError):
-        await apply_reprocess(fake, request, service_factory=_factory(service))
-    await reprocess_job._tasks[job_id]
-    done = reprocess_job.read_job(job_id)
-    assert done is not None
-    assert (done.status, done.images_done, done.images_total) == ('completed', 3, 3)
-    assert done.results[0].queued == 3
-    assert all(docs(fake)[f'c{i}']['pe_embedding'] == [0.0, 0.0, 1.0] for i in range(3))
-    assert done.poll_after_s is None
-
-
-@pytest.mark.asyncio
-async def test_a_cold_process_runs_the_request_an_api_call_persisted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The API persisted ``request.json``; a process that never saw the call
-    (fresh OpenSearch client, fresh service) consumes it from the files."""
-    fake, ids, _api_service = _embed_world(tmp_path, monkeypatch)
-    job, beat = await reprocess_job.create_job(
-        object(), request={'scopes': ['embed']}, scopes=['embed'], image_ids=ids
-    )
-    cold_fake = make_fake(list(docs(fake).values()), list(fake.docs(images_index()).values()))
-    cold_service = make_service(cold_fake, FakeTriton([]), FakePE())
-
-    await reprocess_job.run_job(job, cold_fake, cold_service, beat)
-
-    state = reprocess_job.read_job(job.directory.name)
-    assert state is not None
-    assert state.status == 'completed'
-    assert docs(cold_fake)['c0']['pe_embedding'] == [0.0, 0.0, 1.0]
-
-
-@pytest.mark.asyncio
-async def test_a_job_planned_for_other_indexes_refuses_to_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    job, beat = await reprocess_job.create_job(
-        object(), request={}, scopes=['embed'], image_ids=ids
-    )
-    path = job.directory / 'request.json'
-    payload = json.loads(path.read_text())
-    payload['items_index'] = 'op_prj_other__items'
-    path.write_text(json.dumps(payload))
-    await reprocess_job.run_job(job, fake, service, beat)
-    state = reprocess_job.read_job(job.directory.name)
-    assert state is not None
-    assert state.status == 'failed'
-    assert 'indexes' in (state.error or '')
-    assert 'pe_embedding' not in docs(fake)['c0']
-
-
-@pytest.mark.asyncio
-async def test_cancel_stops_a_job_before_its_next_chunk(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    job, beat = await reprocess_job.create_job(
-        object(), request={}, scopes=['embed'], image_ids=ids
-    )
-    assert reprocess_job.cancel_job(job.directory.name) is True
-    await reprocess_job.run_job(job, fake, service, beat)
-    state = reprocess_job.read_job(job.directory.name)
-    assert state is not None
-    assert state.status == 'cancelled'
-    assert 'pe_embedding' not in docs(fake)['c0']
-    assert reprocess_job.cancel_job(job.directory.name) is False  # no longer live
-    assert reprocess_job.cancel_job('../escape') is False
-
-
-def test_job_status_and_cancel_routes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _client(make_fake([]), monkeypatch)
-    assert client.get(f'{BASE}/reprocess/jobs/rp_nope').status_code == 404
-    job, _beat = asyncio.run(
-        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
-    )
-    got = client.get(f'{BASE}/reprocess/jobs/{job.directory.name}')
-    assert got.status_code == 200
-    assert got.json()['status'] == 'queued'
-    cancelled = client.post(f'{BASE}/reprocess/jobs/{job.directory.name}/cancel')
-    assert cancelled.status_code == 200
-    assert job.cancel_requested()
-
-
-def test_busy_route_error_is_a_409(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_REPROCESS_SYNC_MAX', '1')
-    fake, ids, service = _embed_world(tmp_path, monkeypatch)
-    asyncio.run(
-        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=ids)
-    )  # a live job
-    client = _client(fake, monkeypatch, service)
-    r = client.post(
-        f'{BASE}/reprocess',
-        json={'targets': {'image_ids': ids}, 'scopes': ['embed'], 'dry_run': False},
-    )
-    assert (r.status_code, r.json()['detail']['error']) == (409, 'reprocess_busy')
-
-
-def test_orphaned_job_is_marked_interrupted_at_startup_and_leaves_the_live_list() -> None:
-    # The project busy check reads the jobs table now (src/services/projects/busy.py); the
-    # reprocess family is file-backed until it moves there, so its own live list is the one
-    # that must drop a dead job.
-    job, _beat = asyncio.run(
-        reprocess_job.create_job(object(), request={}, scopes=['embed'], image_ids=['a'])
-    )
-    assert [job_id for job_id, _started in reprocess_job.running_job_ids()] == [job.directory.name]
-
-    job.heartbeat_file.unlink()  # the owning process died before ticking
-    assert reprocess_job.reconcile_orphaned_jobs() is True
-    state = reprocess_job.read_job(job.directory.name)
-    assert state is not None
-    assert state.status == 'interrupted'
-    assert reprocess_job.running_job_ids() == []
-
-
 # ------------------------------------------------- every entry point, locked
 
 
@@ -399,37 +267,3 @@ def test_every_entry_point_skips_a_locked_set_and_counts_it(
         'service call': 1,
         'cli': 1,
     }
-
-
-@pytest.mark.asyncio
-async def test_the_job_entry_point_never_writes_a_locked_item_either(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from curation.reprocess_fixtures import make_service as make
-
-    root = servable_root(tmp_path, monkeypatch)
-    path = root / 'a.jpg'
-    path.write_bytes(jpeg_bytes())
-    fake = make_fake([])
-    triton = FakeTriton([(0.05, 0.05, 0.6, 0.6, 0.9, 1)])
-    service = make(fake, triton)
-    res = await service.ingest_one(path.read_bytes(), str(path))
-    crop_id = next(iter(docs(fake)))
-    docs(fake)[crop_id].update(
-        {'class_source': 'human', 'label_source': 'human', 'class_id': 0, 'class_name': 'gadget',
-         'class_validated': True}
-    )  # fmt: skip
-    before = copy.deepcopy(docs(fake)[crop_id])
-    triton.detections = []  # nothing found: a stale-removal pass
-
-    job, beat = await reprocess_job.create_job(
-        object(), request={}, scopes=['detect'], image_ids=[res.image_id]
-    )
-    await reprocess_job.run_job(job, fake, service, beat)
-
-    state = reprocess_job.read_job(job.directory.name)
-    assert state is not None
-    assert state.status == 'completed'
-    assert state.results[0].locked_skipped == 1
-    after = docs(fake)[crop_id]
-    assert {k for k in after if after[k] != before.get(k)} == set()

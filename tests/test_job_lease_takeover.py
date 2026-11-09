@@ -69,7 +69,7 @@ async def test_a_renew_after_a_takeover_is_lost_and_the_old_release_overwrites_n
     # The holder stalls past the TTL; a sibling takes the lease over.
     real_time = job_lease.time.time
     monkeypatch.setattr(job_lease.time, 'time', lambda: real_time() + 500)
-    taken = await job_lease.takeover_expired(client, 'probe', None, 'j2')
+    taken = await job_lease.acquire(client, 'probe', None, 'j2')
     monkeypatch.setattr(job_lease.time, 'time', real_time)
     assert isinstance(taken, Acquired)
     assert taken.lease.generation == 2
@@ -80,18 +80,6 @@ async def test_a_renew_after_a_takeover_is_lost_and_the_old_release_overwrites_n
     now_held = await job_lease.acquire(client, 'probe', None, 'j3')
     assert isinstance(now_held, Busy)
     assert now_held.job_id == 'j2'
-
-
-@pytest.mark.asyncio
-async def test_takeover_expired_leaves_a_fresh_lease_alone() -> None:
-    client = _client()
-    held = await job_lease.acquire(client, 'probe', None, 'j1')
-    assert isinstance(held, Acquired)
-
-    result = await job_lease.takeover_expired(client, 'probe', None, 'j2')
-
-    assert isinstance(result, Busy)
-    assert isinstance(await job_lease.renew(client, held.lease), Renewed)
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,4 @@
 """The curation wire is fully typed and consistent: every served filter has a spec,
-pytest_plugins = ['_records_world']
-
-
 class identity is by name, and the responses that gained fields declare them."""
 
 from __future__ import annotations
@@ -20,6 +17,9 @@ from src.services.curation import review_tabs
 from src.services.curation.item_filter import Origin, ReviewStatus
 from src.services.curation.review_filter_specs import EMBEDDING_STATE_LABELS, FILTER_SPECS
 from src.services.curation.stats_embedding import EmbeddingByState, embedding_summary
+
+
+pytest_plugins = ['_records_world']
 
 
 CONTRACT = Path(__file__).resolve().parents[2] / 'contracts' / 'openapi' / 'curation.json'
@@ -147,8 +147,10 @@ async def test_the_stats_model_names_every_key_the_route_emits() -> None:
 
 def test_the_selection_writes_publish_updated_ids() -> None:
     schemas = _contract()['components']['schemas']
-    for name in ('BatchRelabelResponse', 'BatchExcludeResponse', 'BatchUnexcludeResponse'):
+    for name in ('BatchExcludeResponse', 'BatchUnexcludeResponse'):
         assert 'updated_ids' in schemas[name]['properties']
+    # A relabel or move is queued: its ids are the job's result, the 202 names the job.
+    assert {'job_id', 'op_id'} <= set(schemas['LabelOpAccepted']['properties'])
 
 
 # --- reprocess detail ---------------------------------------------------------

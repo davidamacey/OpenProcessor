@@ -92,22 +92,74 @@ class OpsEnv:
     def docs(self) -> dict[str, dict[str, Any]]:
         return self.fake.docs(items_index())
 
+    def _run_job(self, job_id: str, runner: Any) -> Any:
+        """Run a queued job's handler body in this process, as the worker would."""
+        from curation.queued_label import run_job
+
+        return asyncio.run(run_job(job_id, runner))
+
+    def queue_label(self, class_name: str, **target: Any) -> Any:
+        """Queue a relabel and leave its job active (a writer that has not finished)."""
+        body = {'class_id': self.class_ids[class_name], **target}
+        return self.client.put(f'{self.prefix}/crops/batch_label', json=body)
+
+    def end_job(self, job_id: str) -> None:
+        """End a job that was left active, as the reaper would a dead writer."""
+        import uuid
+
+        from src.services.jobs.service import cancel_job
+
+        async def go() -> None:
+            from src.db.session import async_session_factory
+
+            async with async_session_factory()() as session:
+                await cancel_job(
+                    session, uuid.UUID(job_id), current_project_id(), requested_by='test'
+                )
+
+        asyncio.run(go())
+
+    def _written(self, accepted: dict[str, Any]) -> dict[str, Any]:
+        from curation.queued_label import written
+
+        return asyncio.run(written(self.fake, accepted))
+
+    def _answer(self, resp: Any) -> dict[str, Any]:
+        body = resp.json()
+        if resp.status_code == 202:
+            return self._written(body)
+        if body.get('op_id', 1) is None:  # an empty selection queues nothing
+            return {'updated': 0, 'updated_ids': [], 'conflicts': [], 'op_id': None}
+        return body  # a dry run
+
     def label(self, class_name: str, **target: Any) -> dict[str, Any]:
         body = {'class_id': self.class_ids[class_name], **target}
         resp = self.client.put(f'{self.prefix}/crops/batch_label', json=body)
-        assert resp.status_code == 200, resp.text
-        return resp.json()
+        assert resp.status_code in (200, 202), resp.text
+        return self._answer(resp)
 
     def move(self, cluster_id: int, **target: Any) -> dict[str, Any]:
         resp = self.client.post(
             f'{self.prefix}/crops/move', json={'cluster_id': cluster_id, **target}
         )
-        assert resp.status_code == 200, resp.text
-        return resp.json()
+        assert resp.status_code in (200, 202), resp.text
+        return self._answer(resp)
 
     def undo(self, op_id: str, *, dry_run: bool | None = False) -> Any:
+        from types import SimpleNamespace
+
+        from src.services.curation.label_ops.undo import run_undo
+
         body = {} if dry_run is None else {'dry_run': dry_run}
-        return self.client.post(f'{self.prefix}/label_ops/{op_id}/undo', json=body)
+        resp = self.client.post(f'{self.prefix}/label_ops/{op_id}/undo', json=body)
+        if resp.status_code != 202:
+            return resp
+        classes = asyncio.run(self.registry.snapshot()).classes
+        by_id = {c.class_id: c.class_name for c in classes}
+        result = self._run_job(
+            resp.json()['job_id'], lambda ctx: run_undo(ctx, self.fake, by_id.get)
+        )
+        return SimpleNamespace(status_code=200, json=lambda: result, text=str(result))
 
     def list_ops(self, **params: Any) -> Any:
         return self.client.get(f'{self.prefix}/label_ops', params=params)

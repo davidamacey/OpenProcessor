@@ -30,6 +30,7 @@ from src.services.curation.label_ops.store import NewLabelOp
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Mapping, Sequence
 
     from opensearchpy import AsyncOpenSearch
@@ -70,6 +71,7 @@ async def _write_recorded(
     ids: list[str],
     label: ItemLabel,
     tokens: Mapping[str, tuple[Any, ...]],
+    job_id: uuid.UUID,
 ) -> _Written:
     """:func:`write_class_to_ids`' merge, written as a recorded label operation."""
     if not ids:
@@ -100,7 +102,7 @@ async def _write_recorded(
         target='crop_ids',
         selected=len(ids),
     )
-    out = await recorded_relabel(opensearch, ids, op=op, merger_for=merger_for)
+    out = await recorded_relabel(opensearch, ids, op=op, merger_for=merger_for, job_id=job_id)
     skipped = locked | changed
     return _Written(
         [i for i in out['updated_ids'] if i not in skipped],
@@ -134,6 +136,7 @@ async def propagate_node(
     answers: Mapping[str, ClassAnswer],
     tokens: Mapping[str, tuple[Any, ...]],
     label: ItemLabel,
+    job_id: uuid.UUID,
     resuming: bool = False,
 ) -> PropagateResult:
     """Propagate ``label`` over the node whose snapshot-eligible members are ``eligible``."""
@@ -150,7 +153,7 @@ async def propagate_node(
         return PropagateResult(stale=True, drift=round(drift, 4), skipped=skipped)
     ids = [i for i in rest if where.get(i) == root_key]
     written = await _write_recorded(
-        opensearch, ids, label, {i: tokens[i] for i in ids if i in tokens}
+        opensearch, ids, label, {i: tokens[i] for i in ids if i in tokens}, job_id
     )
     skipped['locked'] = written.locked
     skipped['token_changed'] = written.changed
