@@ -1,5 +1,10 @@
 # Selectable VLM and segmenter assist: per run, cluster, sub-cluster, selection, box and crop
 
+> **Rebuild note.** Sub-clusters and the refine route no longer exist: a run targets a cluster by
+> `cluster_uid` (the served partition), and a run is a job. Read the cluster and sub-cluster wording
+> below as the 0.6.0 design; the as-built wire is in
+> [curation_api_contract.md](curation_api_contract.md#assist-runs).
+
 Status: implemented (waves A, B and C; reference). The "Deviations" section is the as-built
 record; the base and PR notes below are the original plan. Audience: a fresh implementation agent (Sonnet) with no
 conversation memory. Base: `origin/main` at `bbe929a2` **plus** PR #329

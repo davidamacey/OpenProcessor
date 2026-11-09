@@ -23,7 +23,6 @@ what it is served. Frozen test-holdout and excluded items are never counted.
 | `needs_review_desc` | Members in the review queue, most first |
 | `size_desc`, `size_asc` | Member count |
 | `label_agreement_asc` | Least label agreement first |
-| `purity_asc`, `purity_desc` | Geometry purity |
 | `detector_conf_asc` | Mean detector confidence, lowest first |
 | `unvalidated_desc` | Members without a human-validated class, most first |
 | `updated_desc` | Most recently updated |
@@ -64,8 +63,8 @@ curl -s "$API/curation/projects/cars/clusters?sort=label_agreement_asc&flag=labe
 
 Beyond size, dominant class and representatives, each card serves
 `label_agreement` (share of the labelled members that name the top class;
-replaces the removed `label_purity`), a geometry purity tier,
-`detector_top_class`, `detector_top_share`, `detector_conf_mean`,
+replaces the removed `label_purity`; geometry purity is gone with the
+partition rebuild), `detector_top_class`, `detector_top_share`, `detector_conf_mean`,
 `validation_state`, `review_counts` per review tab, `needs_review_count` and
 `flags`. The response also carries `sort`, `sort_options`, `flag_vocabulary`
 and `truncated`.
@@ -78,16 +77,12 @@ Flags are decided by the server (`src/domain/cluster_flags.py`); the response's
 | Flag | Raised when |
 |---|---|
 | `mixed_detector_classes` | The detector's top class covers under 80 percent of the members that have a detector class, in a cluster of at least 10 members |
-| `low_geometry_purity` | The geometry tier is `noisy`: many members sit closer to another cluster centroid than to their own |
 | `label_disagreement` | The top class covers under 90 percent of the labelled members, with at least 5 labelled |
-| `promotable` | A candidate cluster that clears the auto-promote gate |
 | `needs_review` | At least one member is in the unified review queue |
 | `unvalidated` | No member has a human-validated class |
 
 How to read them: `label_disagreement` and `mixed_detector_classes` mean a
 person should look at the cluster before trusting a bulk label on it;
-`low_geometry_purity` means the cluster boundary is soft (often a split
-candidate); `promotable` is a candidate worth turning into a class;
 `unvalidated` plus `needs_review` is the natural work queue. A flag is a
 prompt to look, not a verdict.
 
