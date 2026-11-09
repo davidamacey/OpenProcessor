@@ -127,6 +127,7 @@ def test_a_scoped_claim_stops_its_service_and_is_confirmed(world) -> None:
     assert client.by('vlm').status == 'exited'
     assert client.by('triton-server').status == 'running'  # unscoped: only a multi-GPU claim
     record = section(pg)
+    assert record is not None
     assert record['claims'] == [str(job)]
     assert record['acknowledged'] == [str(job)]
     assert record['stopped'] == ['vlm']
@@ -201,6 +202,7 @@ def test_a_docker_failure_confirms_nothing_it_did_not_stop(world) -> None:
     tick()
 
     record = section(pg)
+    assert record is not None
     assert record['claims'] == [str(job)]
     assert record['acknowledged'] == []
     assert 'stop vlm: daemon refused' in record['error']
@@ -218,6 +220,7 @@ def test_an_unreachable_daemon_confirms_nothing(world, monkeypatch) -> None:
     tick()
 
     record = section(pg)
+    assert record is not None
     assert record['acknowledged'] == []
     assert 'not reachable' in record['error']
 

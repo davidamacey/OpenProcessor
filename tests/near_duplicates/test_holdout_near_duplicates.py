@@ -112,6 +112,7 @@ async def test_the_moves_and_the_freeze_record_are_written(pg, project) -> None:
         ).fetchone()
     assert [(r[0], r[1]) for r in rows] == [('i2', 'i1'), ('i3', 'i1')]
     assert {r[2] for r in rows} == {freeze_id}
+    assert freeze is not None
     assert freeze[0] == 2
     assert freeze[1] == closure.item_run_id
 

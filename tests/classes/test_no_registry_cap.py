@@ -29,7 +29,9 @@ async def test_ten_thousand_and_one_classes_are_accepted(
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         make_project(conn, slug)
         # 10,000 classes straight into the table, then the service adds the 10,001st.
-        pid = conn.execute('SELECT id FROM projects WHERE slug = %s', (slug,)).fetchone()[0]
+        pid = (
+            conn.execute('SELECT id FROM projects WHERE slug = %s', (slug,)).fetchone() or (None,)
+        )[0]
         conn.execute(
             'INSERT INTO class_registries (project_id, next_class_id) VALUES (%s, 10000)', (pid,)
         )

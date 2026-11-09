@@ -153,6 +153,7 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
 
     written = dataset_prep.write_full_class_remap(spec)
     assert written == spec.full_class_remap_path
+    assert written is not None
     payload = json.loads(written.read_text())
     assert payload['original_to_new'] == {'5': 0, '9': 1, '12': 2}
     assert payload['names'] == ['widget', 'serial_plate', 'gadget']

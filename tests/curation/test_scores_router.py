@@ -75,6 +75,7 @@ def test_compute_queues_the_job_and_answers_202_with_its_state(
     )
     assert r.status_code == 202, r.text
     assert (r.json()['job_id'], r.json()['status']) == ('j1', 'queued')
+    assert start.await_args is not None
     assert start.await_args.args[1:] == ('project-id', ['uniqueness'])
 
 

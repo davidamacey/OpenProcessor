@@ -90,6 +90,7 @@ def test_run_resolves_run_model_class_map(env: dict[str, Path], client: TestClie
         640,
         'full',
     )
+    assert jm.class_map_by_dataset is not None
     assert jm.class_map_by_dataset['export:20260924T233203Z']['model_to_eval'] == {
         '0': 37,
         '1': 38,

@@ -444,6 +444,7 @@ def test_select_diverse_job_path_for_large_pool(
 
     assert r.status_code == 202
     assert (r.json()['status'], r.json()['k']) == ('queued', 1000)
+    assert start.await_args is not None
     assert start.await_args.kwargs['k'] == 1000
     assert start.await_args.kwargs['embedding_field'] == 'pe_embedding'
 

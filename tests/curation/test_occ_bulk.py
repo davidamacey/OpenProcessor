@@ -160,7 +160,7 @@ async def _run_rounds(client: FakeOccOpenSearch, **kwargs: Any) -> list[tuple[An
         ids=['a'],
         prepare=lambda _id, doc: None if doc is None else {'class_id': 2},
         on_written=lambda i: seen.append(('written', i)),
-        on_failed=lambda i, doc, why: seen.append(('failed', i, why, doc['_source'])),
+        on_failed=lambda i, doc, why: seen.append(('failed', i, why, (doc or {})['_source'])),
         **kwargs,
     )
     return seen

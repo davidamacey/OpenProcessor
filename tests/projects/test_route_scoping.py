@@ -89,6 +89,7 @@ def test_every_curation_route_is_scoped_or_global() -> None:
     global_endpoints = {r.endpoint for r in global_router.routes}
     unexpected = []
     for route in _curation_routes():
+        assert route.path is not None
         if route.path.startswith(f'{SCOPED}/'):
             continue
         pairs = {(m, route.path) for m in route.methods}

@@ -170,6 +170,7 @@ async def test_in_flight_ids_are_excluded_from_the_next_fetch_and_released(
     async def _fetch(opensearch: Any, **kw: Any) -> list[str]:
         ids = await original_fetch(opensearch, **kw)
         if len(fakes.fetch_calls) >= 2:
+            assert fakes.label_gate is not None
             fakes.label_gate.set()
         return ids
 

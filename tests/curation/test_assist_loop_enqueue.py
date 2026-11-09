@@ -112,6 +112,7 @@ async def test_pause_and_resume_a_queued_loop_and_the_flags_follow(
     async with async_session_factory()() as session:
         paused = await service.pause(session, started.loop_id)
     assert (paused.status, paused.pause_reason) == ('paused', 'user')
+    assert paused.control is not None
     assert (paused.control.can_resume, paused.control.can_pause) == (True, False)
 
     async with async_session_factory()() as session:
@@ -130,6 +131,7 @@ async def test_a_resume_is_blocked_with_the_reason_while_the_project_is_paused(
 
     async with async_session_factory()() as session:
         state = await service.get_state(session, started.loop_id)
+        assert state.control is not None
         assert state.control.resume_blocked_reason == 'project_paused'
         assert state.control.can_resume is False
         with pytest.raises(RequestRejectedError) as blocked:
@@ -147,6 +149,7 @@ async def test_cancel_is_terminal_and_a_cancelled_loop_cannot_resume_or_edit_its
     async with async_session_factory()() as session:
         cancelled = await service.cancel(session, started.loop_id)
     assert cancelled.status == 'cancelled'
+    assert cancelled.control is not None
     assert cancelled.control.can_cancel is False
     assert cancelled.control.can_rollback is True
 
@@ -175,6 +178,7 @@ async def test_a_budget_edit_raises_a_limit_and_refuses_one_below_what_is_spent(
     raised = AssistLoopBudgetEdit(limits=[{'pool': 'vlm', 'unit': 'crops', 'limit_value': 900}])
     async with async_session_factory()() as session:
         state = await service.edit_budget(session, started.loop_id, raised)
+    assert state.budget is not None
     assert state.budget.vlm.max_crops == 900
     assert state.status == 'queued', 'an edit never resumes or starts the loop'
 

@@ -39,6 +39,7 @@ async def test_the_merge_route_queues_one_job_and_sends_one_message(
     rows = sql(pg, 'SELECT kind, status, params FROM jobs WHERE project_id = %s', pid)
     assert rows == [('class_merge', 'queued', {'source_id': a, 'target_id': b})]
     merged = (await ClassRegistry(slug).snapshot()).get(a)
+    assert merged is not None
     assert merged.merged_into is None  # the registry changes in the job, not the request
 
 

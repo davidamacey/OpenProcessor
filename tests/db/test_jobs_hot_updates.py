@@ -37,6 +37,7 @@ def test_a_thousand_progress_updates_are_almost_all_hot(pg) -> None:
         after = conn.execute(
             "SELECT n_tup_upd, n_tup_hot_upd FROM pg_stat_user_tables WHERE relname = 'jobs'"
         ).fetchone()
+    assert after is not None
     updates, hot = after[0] - before[0], after[1] - before[1]
     assert updates >= 1000
     assert hot >= 0.95 * updates, f'{hot} of {updates} updates were HOT'

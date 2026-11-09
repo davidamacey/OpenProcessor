@@ -9,7 +9,7 @@ is a stub returning fixed unit vectors. The stage embeds each ACCEPTED box of
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
@@ -196,12 +196,17 @@ class TestDecodeOncePerPhoto:
         ]
         decoded: list[str] = []
         real = stage.decode_source_rgb
-        monkeypatch.setattr(stage, 'decode_source_rgb', lambda p: (decoded.append(p), real(p))[1])
+
+        def recording_decode(p: str) -> Any:
+            decoded.append(p)
+            return real(p)
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', recording_decode)
 
         await stage.embed_written_regions(tasks, _FakePE())
 
         assert sorted(decoded) == sorted([photo, other])
-        assert all(set(t.box_vectors) == {t.pending_boxes[0].box_id} for t in tasks)
+        assert all(set(t.box_vectors) == {(t.pending_boxes or [])[0].box_id} for t in tasks)
 
     async def test_concurrent_decodes_are_bounded(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -95,7 +95,9 @@ def test_a_core_partition_keeps_its_null_project_and_stays_in_core_scope(pg, wor
         ).fetchone() == (0,)
         conn.rollback()
         bind_scope(conn, 'core')
-        assert conn.execute('SELECT count(*) FROM cluster_partitions').fetchone()[0] == 1
+        assert (conn.execute('SELECT count(*) FROM cluster_partitions').fetchone() or (None,))[
+            0
+        ] == 1
 
 
 def test_a_membership_of_a_missing_partition_is_refused(pg, world) -> None:

@@ -140,6 +140,7 @@ def test_rebuild_queues_the_job_and_answers_202_with_its_state(
     )
     assert r.status_code == 202
     assert (r.json()['status'], r.json()['scope']) == ('queued', 'residual')
+    assert start.await_args is not None
     assert start.await_args.kwargs['scope'] == 'residual'
 
 
@@ -157,6 +158,7 @@ def test_rebuild_cluster_scope_passes_cluster_uid_through(
         'cluster',
         '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
     )
+    assert start.await_args is not None
     assert start.await_args.kwargs['cluster_uid'] == uuid.UUID(
         '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
     )

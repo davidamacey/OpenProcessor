@@ -72,6 +72,7 @@ def test_original_image_tensor_matches_cv2_imdecode_convention(
 
     # What /ocr/*, /analyze, and generic ingest actually send (BGR, unchanged).
     cv2_bgr = cv2.imdecode(np.frombuffer(jpeg_bytes, np.uint8), cv2.IMREAD_COLOR)
+    assert cv2_bgr is not None
     cv2_channel_means = cv2_bgr.reshape(-1, 3).mean(axis=0)  # already BGR order
 
     # Re-decode the same bytes with PIL (as the worker does) and preprocess.

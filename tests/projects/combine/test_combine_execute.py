@@ -287,6 +287,7 @@ async def test_the_result_carries_the_report_and_the_next_step(world: World) -> 
     build(world)
     run, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
     assert run.status == 'completed'
+    assert run.result is not None
     assert run.result['next_steps'][0]['action'] == 'recluster'
     assert run.ctx.stages[0] == 'registry'
     assert 'images' in run.ctx.stages

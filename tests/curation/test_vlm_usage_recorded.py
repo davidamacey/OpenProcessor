@@ -49,7 +49,10 @@ async def world(pg_env: PgDatabase, bound_async_engine: Any) -> AsyncIterator[di
             "VALUES (%s, 1, '{}', 'x', 'test')",
             (doc,),
         )
-        slug = conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()[0]
+        slug = (
+            conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()
+            or (None,)
+        )[0]
     yield {'project': project, 'slug': slug, 'pg': pg_env, 'endpoint': name}
     await dispose_engines()
 

@@ -29,6 +29,7 @@ async def test_incremental_equals_full(pg, project) -> None:
     docs = {IMAGES: image_docs(groups, singles)}
     env, _ = await make_env(pg, project, docs)
     first = await full_build(env)
+    assert first is not None
     before = snapshot(pg, first.run_id, 'dedup')
     assert _members(before) == {frozenset(m) for m in groups.values()}
 
@@ -54,6 +55,7 @@ async def test_incremental_equals_full(pg, project) -> None:
     incremental = {p: snapshot(pg, outcome.summary.run_id, p) for p in ('dedup', 'leak')}
 
     full = await full_build(env)
+    assert full is not None
     rebuilt = {p: snapshot(pg, full.run_id, p) for p in ('dedup', 'leak')}
     for purpose in ('dedup', 'leak'):
         assert {m: rep for m, (rep, _) in incremental[purpose].items()} == {
@@ -68,6 +70,7 @@ async def test_a_group_that_gains_members_keeps_its_lineage(pg, project) -> None
     docs = {IMAGES: image_docs({'g': ['a1', 'a2', 'a3']}, ['s1', 's2'])}
     env, _ = await make_env(pg, project, docs)
     first = await full_build(env)
+    assert first is not None
     lineage = next(iter(snapshot(pg, first.run_id, 'dedup').values()))[1]
     import numpy as np
 
@@ -75,6 +78,7 @@ async def test_a_group_that_gains_members_keeps_its_lineage(pg, project) -> None
     async with env.scope() as session:
         await enqueue_pending(session, project, 'image', ['a4'], 'added')
     outcome = await rescore(env)
+    assert outcome.summary is not None
     ((members, (_, carried)),) = snapshot(pg, outcome.summary.run_id, 'dedup').items()
     assert members == {'a1', 'a2', 'a3', 'a4'}
     assert carried == lineage

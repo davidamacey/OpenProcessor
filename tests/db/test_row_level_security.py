@@ -55,7 +55,9 @@ def _scope(conn, project: uuid.UUID | None, kind: str = 'project') -> None:
 
 def _super_count(pg, table: str) -> int:
     with psycopg.connect(pg.conninfo('super')) as conn:
-        return conn.execute(f'SELECT count(*) FROM {table}').fetchone()[0]  # test table names
+        return (conn.execute(f'SELECT count(*) FROM {table}').fetchone() or (None,))[
+            0
+        ]  # test table names
 
 
 @pytest.mark.parametrize('table', PROTECTED)
