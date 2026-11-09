@@ -157,7 +157,7 @@ repos:
         name: The API keeps no per-process state outside the reasoned baseline
         entry: python3 scripts/codegen/check_process_state.py
         language: system
-        files: ^(src/.*\.py|scripts/codegen/(check_process_state\.py|baselines/process_state\.txt))$
+        files: ^(src/.*\.py|scripts/codegen/check_process_state\.py|scripts/codegen/baselines/process_state\.txt)$
         pass_filenames: false
 
       - id: check-cited-paths
