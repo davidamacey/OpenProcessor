@@ -11,11 +11,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.config.env import env_float
+from src.config.env import env_float, env_int
 
 
 REAPER_INTERVAL_S = 30
 INGEST_DISPATCH_DEFAULT_S = 5.0
+OPEN_VOCAB_SWEEP_DEFAULT_S = 120
 
 
 def _every(task: str, seconds: float) -> dict[str, Any]:
@@ -27,6 +28,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     ingest = env_float('OP_INGEST_DISPATCH_S', INGEST_DISPATCH_DEFAULT_S, minimum=0.0)
     if ingest > 0:
         schedule['ingest_dispatch'] = _every('op.periodic.ingest_dispatch', ingest)
+    sweep = env_int('OP_OPEN_VOCAB_SWEEP_S', OPEN_VOCAB_SWEEP_DEFAULT_S, minimum=0)
+    if sweep > 0:
+        schedule['open_vocab_sweep'] = _every('op.periodic.open_vocab_sweep', sweep)
     return schedule
 
 

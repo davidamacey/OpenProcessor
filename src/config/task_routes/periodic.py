@@ -8,4 +8,5 @@ from src.config.queue import TaskQueues
 ROUTES: dict[str, str] = {
     'op.periodic.reaper': TaskQueues.PERIODIC,
     'op.periodic.ingest_dispatch': TaskQueues.PERIODIC,
+    'op.periodic.open_vocab_sweep': TaskQueues.PERIODIC,
 }
