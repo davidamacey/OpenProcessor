@@ -95,7 +95,7 @@ class MemorySettings:
         return self._envelope()
 
     async def load_refresh_state(self):
-        from src.services.curation.clustering.refresh_state_store import RefreshState
+        from src.services.periodic.cluster_refresh_clock import RefreshState
 
         row = self._row
         if row.refresh_state is None:
@@ -103,8 +103,8 @@ class MemorySettings:
         return RefreshState(**row.refresh_state, revision=row.refresh_revision)
 
     async def save_refresh_state(self, state):
-        from src.services.curation.clustering.refresh_state_store import RefreshState
         from src.services.curation.policy_doc_store import PolicyConflictError
+        from src.services.periodic.cluster_refresh_clock import RefreshState
 
         row = self._row
         if state.revision != row.refresh_revision:
@@ -236,7 +236,7 @@ def install(monkeypatch: pytest.MonkeyPatch) -> MemorySettings:
         'src.services.curation.embedding_viz._save_run_metadata', memory.save_run_metadata
     )
     for module in (
-        'src.services.curation.clustering.refresh_state_store',
+        'src.services.periodic.cluster_refresh_clock',
         'src.services.periodic.cluster_refresh',
     ):
         monkeypatch.setattr(f'{module}.load_refresh_state', memory.load_refresh_state)

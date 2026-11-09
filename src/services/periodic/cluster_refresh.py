@@ -5,7 +5,7 @@ clustering profile (its ``refresh`` rule), observe the pool, the unfinished regi
 ingest, live runs and a live assist loop, let ``refresh_schedule.step`` decide, and start the run
 with ``cluster_run`` (research clustering 5.2). Nothing is queued unless a ``cluster`` consumer
 refreshed its ``worker_capabilities`` row within the last minute, so work is never left for
-a worker that is not there. The project's clock (``refresh_state_store``) carries deferral and
+a worker that is not there. The project's clock (``cluster_refresh_clock``) carries deferral and
 backoff from one tick to the next.
 """
 
@@ -27,9 +27,7 @@ from src.db.session import async_session_factory, deployment_tx, project_tx
 from src.domain.embedding_spaces import Target
 from src.services.clustering.job import load_profile, start_run
 from src.services.clustering.partitions import list_partitions
-from src.services.curation.assist_loop import service as assist_loop
-from src.services.curation.clustering.pool_snapshot import item_pool_query
-from src.services.curation.clustering.refresh_schedule import (
+from src.services.clustering.refresh_schedule import (
     ACTIVE_JOB_STATUSES,
     Action,
     Observation,
@@ -37,16 +35,18 @@ from src.services.curation.clustering.refresh_schedule import (
     ProjectSchedule,
     step,
 )
-from src.services.curation.clustering.refresh_state_store import (
-    RefreshState,
-    load_refresh_state,
-    save_refresh_state,
-)
+from src.services.curation.assist_loop import service as assist_loop
+from src.services.curation.clustering.pool_snapshot import item_pool_query
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.job_binding import opensearch_client
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.embedding_spaces.resolve import embedding_space
 from src.services.jobs import status as job_status
+from src.services.periodic.cluster_refresh_clock import (
+    RefreshState,
+    load_refresh_state,
+    save_refresh_state,
+)
 from src.services.periodic.runner import TickProject, TickReport, for_each_project
 
 

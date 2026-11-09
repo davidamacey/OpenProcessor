@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.curation.clustering.refresh_schedule import (
+from src.services.clustering.refresh_schedule import (
     Action,
     Observation,
     Policy,
