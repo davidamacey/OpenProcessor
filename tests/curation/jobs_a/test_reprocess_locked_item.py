@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from pathlib import Path  # noqa: TC003 - pytest fixture annotation
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -11,6 +11,10 @@ from curation.jobs_a.ctx import FakeCtx
 from curation.reprocess_fixtures import FakeTriton, docs, jpeg_bytes, make_fake, servable_root
 from src.db.session import async_session_factory
 from src.services.curation import reprocess_job
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 pytestmark = pytest.mark.db

@@ -17,7 +17,7 @@ from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, Field
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
 from src.routers.curation._common import OpenSearchDep, items_index, router

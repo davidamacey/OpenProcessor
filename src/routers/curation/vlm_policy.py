@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import router
-from src.routers.curation._vlm_policy_models import VlmPolicyUpdate  # noqa: TC001 - FastAPI
+from src.routers.curation._vlm_policy_models import VlmPolicyUpdate
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.curation.vlm_policy import VlmPolicy, VlmPolicyBody

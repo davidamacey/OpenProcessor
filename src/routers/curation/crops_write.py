@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.db.session import project_tx
 from src.routers._errors import server_error
 from src.routers.curation._common import (

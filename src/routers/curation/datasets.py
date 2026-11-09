@@ -35,7 +35,7 @@ from src.routers.curation._dataset_import_views import job_wire, preview_wire
 from src.routers.curation._dataset_issue_wire import issues_to_wire
 from src.services.classes.registry import ClassRegistryError
 from src.services.curation.dataset_import import control, runner, upload_job
-from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest  # noqa: TC001 - FastAPI body types
+from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest
 from src.services.curation.dataset_import.paths import (
     DatasetPathNotAllowedError,
     dataset_path_guard,

@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
-from src.services.training.job_models import TrainJobSpec  # noqa: TC001 - FastAPI body type
+from src.routers.curation._common import OpenSearchDep
+from src.services.training.job_models import TrainJobSpec
 from src.services.training.preflight_checks import PreflightReport
 from src.services.training.preflight_run import run_preflight
 

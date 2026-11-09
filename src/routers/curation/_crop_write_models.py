@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 -- pydantic resolves the annotation from module globals
+import uuid
 
 from pydantic import BaseModel, Field
 

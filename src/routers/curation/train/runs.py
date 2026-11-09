@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 from pydantic import BaseModel
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.services.training import job_campaigns, jobs as train_jobs, promote_job
 from src.services.training.job_models import TrainJobStatus
 

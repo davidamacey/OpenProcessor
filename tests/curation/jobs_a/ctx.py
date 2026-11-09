@@ -7,7 +7,7 @@ rows; ``checkpoint`` and ``progress`` are recorded.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - used in annotations of a plain class
+import uuid
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 

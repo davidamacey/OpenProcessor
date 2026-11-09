@@ -5,12 +5,16 @@ The relabel and undo behaviours themselves are covered through the routes in
 
 from __future__ import annotations
 
-from pathlib import Path  # noqa: TC003 - pytest fixture annotation
+from typing import TYPE_CHECKING
 
 import pytest
 from fixtures.job_rows import sql
 
 from curation.label_ops_env import build_env, proposal
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 pytest_plugins = ['_records_world', 'curation.jobs_a.autoqueue']

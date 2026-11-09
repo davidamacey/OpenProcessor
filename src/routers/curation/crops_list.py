@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
@@ -16,7 +16,7 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._review_params import UnsetIfEmpty
 from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page

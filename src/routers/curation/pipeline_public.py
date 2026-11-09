@@ -13,7 +13,7 @@ that no longer reachable from any request at all.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import Query
@@ -29,7 +29,7 @@ from src.routers.curation.pipeline_params import (
     VLM_SCOPE_DESC as _VLM_SCOPE_DESC,
 )
 from src.services.curation.auto_label_run import run_auto_label
-from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
+from src.services.curation.vlm_policy import VlmScope
 
 
 # Internal: a thin wrapper around `run_auto_label` -- see that function

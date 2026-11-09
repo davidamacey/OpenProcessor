@@ -11,13 +11,13 @@ project) live in :mod:`src.services.curation.assist`.
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import Query, Response
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation.assist.apply import apply_proposal

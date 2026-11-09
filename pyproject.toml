@@ -307,17 +307,38 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.flake8-type-checking]
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
-runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
-# FastAPI resolves the route request/response annotations at call time, so the router modules import these models at runtime.
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings", "src.services.curation.item_filter.ItemFilter"]
+# FastAPI evaluates route-handler annotations at runtime to build dependencies and parameters, but
+# ruff cannot see through `router.get(...)` (the router is an instance, not `fastapi.APIRouter`), so
+# `runtime-evaluated-decorators` cannot express it. Exempting the modules that define the aliases
+# and parameter models handlers are annotated with is the documented alternative
+# (https://docs.astral.sh/ruff/settings/#lint_flake8-type-checking_exempt-modules).
 exempt-modules = [
     "typing",
-    "src.routers.curation._common_models",
+    "uuid",                                      # path/query parameter types
+    "fastapi",                                   # UploadFile, Request, ... in handler signatures
+    "src.core.db_session",                       # DbSessionDep
+    "src.core.dependencies",                     # dependency aliases
+    "src.routers.curation._item_filter_params",  # ItemFilterQuery
+    "src.routers.curation._common_models",       # route request/response models
     "src.routers.curation._crop_write_models",
     "src.routers.curation._export_models",
     "src.routers.curation._health_models",
     "src.routers.curation._holdout_models",
     "src.routers.curation._ingest_config_models",
     "src.routers.curation._settings_models",
+    "src.routers.curation._review_params",       # Annotated Query aliases used by review routes
+    "src.routers.curation._class_models",
+    "src.routers.curation._vlm_policy_models",
+    "src.routers.curation._item_models",
+    "src.routers.curation._common",              # OpenSearchDep
+    "src.services.curation.vlm_policy",          # VlmScope query parameter
+    "src.services.curation.dataset_import.options",
+    "src.services.training.job_models",
+    "src.config.projects",                       # ProjectRecord dependency return type
+    "src.domain.embedding_state",                # EmbeddingState query parameter
+    "src.services.curation.region_impact",
+    "collections.abc",
 ]
 
 [tool.ruff.lint.isort]

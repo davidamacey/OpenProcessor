@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
+from src.core.db_session import DbSessionDep
 from src.services.near_duplicates.holdout import require_freezable, require_fresh_when_frozen
 
 

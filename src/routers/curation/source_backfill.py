@@ -9,7 +9,7 @@ that has none, which the 0.6.0 upgrade report asks for; progress and the final c
 from __future__ import annotations
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import router
 from src.schemas.curation.source_backfill import SourceBackfillStarted
 from src.services.jobs.service import start_job

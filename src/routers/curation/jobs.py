@@ -8,13 +8,13 @@ Starting, cancelling and pausing stay on the family routes, which call the job s
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import Annotated
 
 from fastapi import Query
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import router
 from src.schemas.jobs import JobPage, JobView
 from src.services.jobs import status

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves route annotations at runtime
+import uuid
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Query, status
 
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
+from src.core.db_session import DbSessionDep
 from src.core.disk_space import DISK_GUARD
 from src.routers.ingest._router import router
 from src.schemas.ingest import (

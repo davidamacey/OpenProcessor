@@ -7,7 +7,7 @@ page, gated by the same ``OP_SEMANTIC_SEARCH_ENABLED`` flag. The query is an upl
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
+import uuid
 from typing import Annotated, Any
 
 from fastapi import File, Form, HTTPException, Query, Request, UploadFile
@@ -16,7 +16,7 @@ from src.config import get_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchImageResponse
 from src.routers.curation._space_refusals import space_refusals
 from src.routers.curation.search import _get_pe_encoder, _semantic_search_enabled

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from src.routers.curation._item_models import ItemDoc  # noqa: TC001 - pydantic field type
+from src.routers.curation._item_models import ItemDoc
 from src.services.curation.reprocess_models import (
     BreakdownRow,
     ReprocessFilter,

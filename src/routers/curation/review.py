@@ -22,9 +22,9 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueuePage
-from src.routers.curation._review_params import (  # noqa: TC001 - FastAPI resolves the aliases
+from src.routers.curation._review_params import (
     BlurQ,
     CombineConflictQ,
     DatasetSplitQ,

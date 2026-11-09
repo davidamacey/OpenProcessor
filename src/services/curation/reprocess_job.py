@@ -11,7 +11,6 @@ ones the request was planned against.
 from __future__ import annotations
 
 import time
-from datetime import datetime  # noqa: TC003 - pydantic reads the annotation
 from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
@@ -28,6 +27,7 @@ from src.services.jobs.service import start_job
 
 if TYPE_CHECKING:
     import uuid
+    from datetime import datetime
 
     from opensearchpy import AsyncOpenSearch
     from sqlalchemy.ext.asyncio import AsyncSession

@@ -15,7 +15,7 @@ from fastapi import Query
 
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
+from src.core.db_session import DbSessionDep
 from src.core.disk_space import DISK_GUARD
 from src.core.exceptions import RequestRejectedError
 from src.routers.curation._api_error import api_error

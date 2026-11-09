@@ -22,7 +22,7 @@ from typing import Any, Literal
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_curation_config
-from src.core.dependencies import AsyncTritonDep  # noqa: TC001  # FastAPI resolves the annotation at runtime
+from src.core.dependencies import AsyncTritonDep
 from src.routers.curation._common import (
     OpenSearchDep,
     get_class_registry,

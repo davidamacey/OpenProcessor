@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path as PathParam, Query
 
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.schemas.train_promote import PromoteJobStatus, PromoteRequest, ReloadPromotedResponse
 from src.services.jobs import status as job_status
 from src.services.training import promote_job

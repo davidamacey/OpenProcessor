@@ -13,11 +13,11 @@ import asyncio
 import time
 from typing import TYPE_CHECKING
 
-from fastapi import Request  # noqa: TC002 - FastAPI resolves route annotations at runtime
+from fastapi import Request
 
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
+from src.core.db_session import DbSessionDep
 from src.core.disk_space import DISK_GUARD
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router

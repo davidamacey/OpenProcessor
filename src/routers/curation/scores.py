@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 
 from src.config.env import env_bool
 from src.config.project_context import current_project_id
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
 
 

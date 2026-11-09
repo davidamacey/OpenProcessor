@@ -26,7 +26,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.item_filter import item_filter_clauses

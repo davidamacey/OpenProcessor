@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from src.routers.curation._common import OpenSearchDep, items_index, router
-from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.services.curation.detections_summary import DetectionsSummary, detections_summary
 
 

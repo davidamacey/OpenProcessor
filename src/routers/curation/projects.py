@@ -18,7 +18,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.config import IndexRole
 from src.config.project_context import bind_project
 from src.config.projects import DEFAULT_SLUG
-from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves route annotations at runtime
+from src.core.db_session import DbSessionDep
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
