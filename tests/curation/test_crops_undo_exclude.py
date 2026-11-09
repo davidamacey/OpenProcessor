@@ -87,10 +87,15 @@ def _proposal_doc(crop_id: str) -> dict[str, Any]:
         proposal_name='thing',
         class_detector='detector',
         class_detector_version='3',
+    )
+    # The exclusion flow still reads the legacy integer cluster of the item (excluded_prior_*);
+    # the readers lane moves it to the serving partition.
+    doc.update(
         cluster_id=10003,
         cluster_distance=0.2,
+        cluster_distance_cluster_id=10003,
+        cluster_subid='10003b',
     )
-    doc['cluster_subid'] = '10003b'
     return doc
 
 

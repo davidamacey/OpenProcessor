@@ -103,10 +103,7 @@ async def embed_targets(
             'bbox_norm',
             F.boxes,
             F.box_embeddings,
-            'class_id',
-            'cluster_id',
-            'crop_rank_in_image',
-            'blur_lap_ratio',
+            'cluster_partition_id',
         ],
     )
     skip: frozenset[str] = frozenset()

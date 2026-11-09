@@ -26,9 +26,8 @@ Pipeline, per image:
    plus a whole-frame PE embedding
    (:meth:`~src.clients.pe_encoder.PEEncoder.embed_whole_frame_image`).
 5. Primary-subject rank + blur quality
-   (:mod:`~src.services.detection.crop_quality`), and residual-pool
-   cluster assignment via the ingest-time IVF cache
-   (:mod:`~src.services.curation.clustering.ivf_ingest`).
+   (:mod:`~src.services.detection.crop_quality`), and the item's place in the serving
+   partition (:func:`~src.services.clustering.assign.place_new`).
 6. Bulk index: the images doc is a ``create`` under an id derived from the
    content (:func:`~src.services.near_duplicates.content_key.content_image_id`), so
    a copy that raced past step 1's lookup (a search does not see an
@@ -70,7 +69,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
-from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
@@ -78,12 +76,7 @@ from src.services.curation.ingest_detect import (
     WholeImageDetector,
 )
 from src.services.curation.ingest_helpers import _decode_image
-from src.services.curation.ingest_index import (
-    PARKED_CLUSTER_ID,
-    ImageContext,
-    IndexOutcome,
-    index_items,
-)
+from src.services.curation.ingest_index import ImageContext, IndexOutcome, index_items
 from src.services.curation.ingest_items import IngestItemsMixin
 from src.services.curation.ingest_models import (
     ERROR_KIND_DECODE_FAILED,
@@ -405,8 +398,6 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
 
 
 __all__ = [
-    'PARKED_CLUSTER_ID',
-    'RESIDUAL_CLUSTER_ID_OFFSET',
     'SECONDARY_IOU_MATCH',
     'BatchIngestResult',
     'CurationIngestService',

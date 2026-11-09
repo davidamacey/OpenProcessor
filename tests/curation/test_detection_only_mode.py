@@ -115,13 +115,13 @@ def test_no_automatic_clustering_places_no_item(
 ) -> None:
     import src.services.curation.ingest_index as ix
 
-    def _boom() -> Any:
-        raise AssertionError('the IVF store must not be consulted')
+    async def _boom(*_a: Any, **_k: Any) -> Any:
+        raise AssertionError('the serving partition must not be consulted')
 
-    monkeypatch.setattr(ix, 'get_ivf_ingest_store', _boom)
+    monkeypatch.setattr(ix, 'place_vectors', _boom)
     policy = IngestPolicy(clustering={'automatic': False})  # type: ignore[arg-type]
     _encoder, crops, _image = _index(policy, tmp_path)
-    assert 'cluster_id' not in crops[0]
+    assert 'cluster_uid' not in crops[0]
 
 
 def test_the_policy_store_round_trips_the_clustering_switch() -> None:

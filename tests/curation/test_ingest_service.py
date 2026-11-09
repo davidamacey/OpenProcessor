@@ -198,26 +198,6 @@ class TestClassProvenance:
         assert 'class_labeler' not in doc
 
 
-class TestQualityGate:
-    def test_ingest_passes_gate_no_active_gate(self) -> None:
-        from src.services.curation.clustering.ivf_ingest import (
-            ingest_passes_gate,
-            reset_ivf_ingest_cache,
-        )
-
-        reset_ivf_ingest_cache()
-        assert ingest_passes_gate(None, None) is True
-
-    def test_ingest_fails_gate_on_rank(self) -> None:
-        from src.services.curation.clustering import ivf_ingest
-
-        ivf_ingest.reset_ivf_ingest_cache()
-        ivf_ingest._ivf_ingest_cache['gate'] = {'max_rank': 3, 'min_blur_ratio': None}
-        assert ivf_ingest.ingest_passes_gate(5, 1.0) is False
-        assert ivf_ingest.ingest_passes_gate(2, 1.0) is True
-        ivf_ingest.reset_ivf_ingest_cache()
-
-
 class TestOccUpsertHumanGuards:
     @pytest.mark.asyncio
     async def test_reingest_preserves_human_class_source(self) -> None:

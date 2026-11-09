@@ -43,14 +43,9 @@ src/services/curation/crop_orders.py	21
 src/services/curation/embedding_viz.py	16
 src/services/curation/embedding_viz_read.py	9
 src/services/curation/exclusion.py	15
-src/services/curation/ingest.py	2
-src/services/curation/ingest_index.py	4
-src/services/curation/item_doc.py	5
 src/services/curation/item_filter.py	6
 src/services/curation/raw_label_clusters.py	7
 src/services/curation/registry_reclassify.py	2
-src/services/curation/reprocess_embed.py	5
-src/services/curation/reprocess_embed_spec.py	1
 src/services/curation/review_terms.py	1
 src/services/curation/semantic_search.py	13
 src/services/curation/semantic_search_image.py	3

@@ -1,15 +1,8 @@
 """Persistent FAISS IVF centroid store for the residual pool.
 
-Holds the k-means centroids that partition the residual (unconfident)
-embedding pool into candidate buckets. Persisted to a shared volume so
-two very different callers can use the same centroids:
-
-* the **auto-label worker** trains them (periodic recluster) and writes
-  them here;
-* the **ingest path** (api) loads them once and assigns every new
-  residual crop to its nearest centroid at ingest time — no batch wait.
-
-Both processes resolve the store directory from the currently bound
+Holds the k-means centroids the IVF method trains over the residual (unconfident)
+embedding pool; the uniqueness item score reads them to rank how isolated an item is.
+The store directory is resolved from the currently bound
 project's ``project_state_dir`` (not the global ``state_dir`` -- that
 one is shared across every project), so each project's store lives at
 its own ``<project_state_dir>/ivf_residuals/``:
@@ -18,9 +11,7 @@ its own ``<project_state_dir>/ivf_residuals/``:
     metadata.json     {trained_at, n_clusters, embedding_dim,
                        sample_size, n_trained_on, kmeans_obj, backend}
 
-Assignment is a nearest-centroid search (IndexFlatL2). The returned
-label is the centroid index ``0..K-1``; callers add
-``RESIDUAL_CLUSTER_ID_OFFSET`` to map it into the candidate id space.
+Assignment is a nearest-centroid search (IndexFlatL2); the label is the centroid index ``0..K-1``.
 
 The store is deliberately dependency-light: it imports faiss lazily so
 modules that only need the *paths* (e.g. for a readiness probe) don't
@@ -63,20 +54,8 @@ class IVFCentroidStore:
         )
         self._centroids_path = self._dir / 'centroids.faiss'
         self._metadata_path = self._dir / 'metadata.json'
-        self._gate_path = self._dir / 'gate.json'
         self._index: Any = None  # lazily-loaded faiss.IndexFlatL2
         self._metadata: dict[str, Any] = {}
-
-    # -- concrete file paths (only meaningful for an instance that has
-    # already resolved its own project's directory) ----------------------
-
-    @property
-    def centroids_path(self) -> Path:
-        return self._centroids_path
-
-    @property
-    def metadata_path(self) -> Path:
-        return self._metadata_path
 
     # -- existence / metadata ---------------------------------------------
 
@@ -215,19 +194,6 @@ class IVFCentroidStore:
             final_obj = float(objective[-1]) if objective is not None and len(objective) else None
         return np.ascontiguousarray(centroids, dtype=np.float32), final_obj
 
-    # -- clustering gate policy -------------------------------------------
-
-    def load_gate(self) -> dict[str, Any]:
-        """Return the persisted gate ``{max_rank, min_blur_ratio}`` or ``{}``."""
-        if not self._gate_path.is_file():
-            return {}
-        try:
-            typed: dict[str, Any] = json.loads(self._gate_path.read_text())
-            return typed
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.warning('curation_ivf_store_gate_read_failed', error=str(exc))
-            return {}
-
     # -- assign -----------------------------------------------------------
 
     def assign_batch_with_distances(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -248,12 +214,6 @@ class IVFCentroidStore:
         labels = assignments.reshape(-1).astype(np.int64)
         cosine_dist = np.clip(sq_l2.reshape(-1).astype(np.float32) / 2.0, 0.0, 2.0)
         return labels, cosine_dist
-
-    def assign_one_with_distance(self, embedding: np.ndarray) -> tuple[int, float]:
-        """Assign one embedding; return ``(centroid_index, cosine_dist)``."""
-        vec = np.ascontiguousarray(embedding, dtype=np.float32).reshape(1, -1)
-        labels, dists = self.assign_batch_with_distances(vec)
-        return int(labels[0]), float(dists[0])
 
 
 __all__ = [

@@ -20,7 +20,6 @@ import pytest
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.curation.clustering.ivf_ingest import get_ivf_ingest_store, reset_ivf_ingest_cache
 from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
 
 
@@ -80,44 +79,3 @@ def test_written_files_never_cross_contaminate(tmp_path: Any) -> None:
     assert (a._dir / 'metadata.json').read_text() == '{"project": "alpha"}'
     assert (b._dir / 'metadata.json').read_text() == '{"project": "beta"}'
     assert a._dir.resolve() != b._dir.resolve()
-
-
-def test_centroids_path_property_matches_instance_dir(tmp_path: Any) -> None:
-    with bind_project(_record('alpha', tmp_path)):
-        store = IVFCentroidStore()
-    assert store.centroids_path == store._dir / 'centroids.faiss'
-    assert store.metadata_path == store._dir / 'metadata.json'
-
-
-def test_ivf_ingest_mtime_check_reads_each_projects_own_file(tmp_path: Any) -> None:
-    """``get_ivf_ingest_store`` must key its cache off the CURRENTLY bound
-    project's own centroids file mtime, never a frozen/shared path."""
-    import numpy as np
-
-    reset_ivf_ingest_cache()
-    alpha, beta = _record('alpha', tmp_path), _record('beta', tmp_path)
-
-    with bind_project(alpha):
-        store = IVFCentroidStore()
-        store.save(np.eye(3, dtype=np.float32), metadata={})
-        assert get_ivf_ingest_store() is not None
-        alpha_path = store.centroids_path
-
-    reset_ivf_ingest_cache()
-
-    with bind_project(beta):
-        # beta has never trained -- must report unavailable, not fall back
-        # to alpha's freshly-trained centroids file.
-        assert get_ivf_ingest_store() is None
-
-        store_b = IVFCentroidStore()
-        store_b.save(np.eye(4, dtype=np.float32), metadata={})
-        beta_store = get_ivf_ingest_store()
-        assert beta_store is not None
-        beta_path = beta_store.centroids_path
-
-    assert alpha_path != beta_path
-    assert alpha_path.exists()
-    assert beta_path.exists()
-
-    reset_ivf_ingest_cache()
