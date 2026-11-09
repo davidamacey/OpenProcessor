@@ -24,15 +24,26 @@ _ms_precision_file() {
     printf '%s' "${MODEL_SETUP_PRECISION_FILE:-${OP_DIR:?OP_DIR not set}/.install/precision.tsv}"
 }
 
+# _ms_recipe MODEL: the export recipe of an engine whose ONNX is not the whole story. An upgrade
+# keeps the old ONNX, so its hash matches and nothing would rebuild: the recipe token in the stamp
+# is what makes an engine built by an older recipe stale. Bump the value when the recipe changes.
+#   fused-v1: export/ultralytics_export.py, one output0 [300, 6] (the `nms` export argument)
+_ms_recipe() {
+    case "$1" in
+        yolov11_small_trt_end2end) printf 'fused-v1' ;;
+    esac
+}
+
 # _ms_build_flags MODEL: the build settings recorded in (and compared with) an engine
-# stamp: the build target and workspace of scripts/lib/trt_settings.sh. A profile
-# switch (standard <-> full) leaves them unchanged, so it does not rebuild; standard
-# <-> small changes them, so it does.
+# stamp: the build target and workspace of scripts/lib/trt_settings.sh, and the export recipe
+# where the model has one. A profile switch (standard <-> full) leaves the first two
+# unchanged, so it does not rebuild; standard <-> small changes them, so it does.
 _ms_build_flags() {
-    local target ws
+    local target ws recipe
     target="$(trt_target)" || return 1
     ws="$(trt_workspace_gb "$1")" || return 1
-    printf 'target=%s workspace=%sG' "$target" "$ws"
+    recipe="$(_ms_recipe "$1")"
+    printf 'target=%s workspace=%sG%s' "$target" "$ws" "${recipe:+ recipe=$recipe}"
 }
 
 # The PE engine's trtexec profile (_ms_pe_trtexec), recorded in its stamp.
@@ -121,7 +132,13 @@ model_setup_stamp_report() {
 # the fields (written before #42) was built with the default target and workspace, so it
 # stays current under those and is never rebuilt just for lacking them.
 _ms_flags_stale() {
-    local model="$1" flags=" $2 " want_target want_ws have
+    local model="$1" flags=" $2 " want_target want_ws want_recipe have
+    want_recipe="$(_ms_recipe "$model")"
+    if [[ -n "$want_recipe" && "$flags" != *" recipe=${want_recipe} "* ]]; then
+        have="$(sed -n -E 's/.* recipe=([^ ]+) .*/\1/p' <<< "$flags")"
+        echo "exported by recipe ${have:-none}, now ${want_recipe}"
+        return 0
+    fi
     want_target="$(trt_target)" || { echo "invalid OP_TRT_BUILD_TARGET"; return 0; }
     want_ws="$(trt_workspace_gb "$model")" || { echo "invalid OP_TRT_WORKSPACE_GB"; return 0; }
     if [[ "$flags" != *" target="* ]]; then
@@ -191,6 +208,8 @@ model_setup_stamp_stale() {
 _ms_adopt_unstamped() {
     local model="$1" onnx_rel="$2" precision="$3" plan dtype cc trt pe pe_trt pe_cc have_onnx
     [[ "$model" == pe_image_encoder ]] && return 1
+    # No stamp proves no recipe: an engine of a model with a recipe is rebuilt, never adopted.
+    [[ -z "$(_ms_recipe "$model")" ]] || return 1
     plan="${OP_DIR:?OP_DIR not set}/models/${model}/1/model.plan"
     [[ -s "$plan" ]] || return 1
     dtype="$(_ms_config_input_dtype "$model")"
