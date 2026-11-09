@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from curation.activation.constants import PREFIX, pack_body
-from curation.test_auto_label_selection import _run_kwargs, job_dir, labeler_spy, packs  # noqa: F401 - fixtures
+from curation.test_auto_label_selection import _run_kwargs
 from curation.test_pipeline import _FakeOpenSearch, install_registry
 from src.services.curation.auto_label_run import run_auto_label
 from src.services.curation.item_filter import ItemFilter
@@ -34,7 +34,7 @@ pytestmark = pytest.mark.usefixtures('vlm_env_active')
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_labeler(
-    labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the import
+    labeler_spy: list[Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A leftover settings-doc key says 'food_v2'; nothing is activated in
@@ -55,7 +55,7 @@ async def test_omitted_stale_settings_doc_pack_is_ignored_and_echo_matches_label
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_omitted_store_active_pack_still_uses_none_none(
-    labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the import
+    labeler_spy: list[Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """When the omitted default DOES come from the config store's own
@@ -134,7 +134,7 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
 @pytest.mark.asyncio
 async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     app_client,
-    labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the import
+    labeler_spy: list[Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Drives the production call site of ``labeler_resolution_args`` inside
@@ -199,7 +199,7 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
 @pytest.mark.usefixtures('packs')
 @pytest.mark.asyncio
 async def test_direct_call_omitted_labeler_matches_active(
-    labeler_spy: list[Any],  # noqa: F811 - pytest fixture param shadows the import
+    labeler_spy: list[Any],
 ) -> None:
     """Same guard for the direct-call branch (never through ``/start``):
     a real ``run_auto_label`` call with ``prompt_pack`` omitted must

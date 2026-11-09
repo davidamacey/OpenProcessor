@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from src.services.clustering.refresh_schedule import (
     Action,
     Observation,

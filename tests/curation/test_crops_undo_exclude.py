@@ -13,10 +13,9 @@ query-evaluating in-memory OpenSearch.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
-from _class_registry_fake import InMemoryRegistry
 
 from curation.query_fakes import QueryFakeOpenSearch
 from curation.queued_label import call_raw, call_route
@@ -24,10 +23,6 @@ from curation.serving_partition import serve_clusters
 from src.config.curation_accessors import base_curation_config
 from src.routers.curation import label_undo
 from src.services.curation.item_doc import DetectedItem, build_item_doc
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 pytestmark = pytest.mark.usefixtures('label_ops_state')
@@ -97,41 +92,6 @@ def _class_state(doc: dict[str, Any]) -> dict[str, Any]:
     state = {f: doc.get(f) for f in CLASS_STATE_FIELDS}
     state['class_validated'] = bool(state['class_validated'])
     return state
-
-
-_NAMES = ('widget', 'gadget', 'gizmo')
-
-
-@pytest.fixture
-def registry_ids(tmp_path: Path) -> tuple[InMemoryRegistry, dict[str, int]]:
-    reg = InMemoryRegistry()
-    return reg, {name: reg.add(name) for name in _NAMES}
-
-
-@pytest.fixture
-def registry(registry_ids: tuple[InMemoryRegistry, dict[str, int]]) -> InMemoryRegistry:
-    return registry_ids[0]
-
-
-@pytest.fixture
-def ids(registry_ids: tuple[InMemoryRegistry, dict[str, int]]) -> dict[str, int]:
-    return registry_ids[1]
-
-
-@pytest.fixture
-def crops(monkeypatch: pytest.MonkeyPatch, registry: InMemoryRegistry):
-    from types import SimpleNamespace
-
-    from src.routers.curation import crops_exclude, crops_write
-
-    monkeypatch.setattr(crops_write, 'get_class_registry', lambda: registry)
-    return SimpleNamespace(
-        label_crop=crops_write.label_crop,
-        batch_label_crops=crops_write.batch_label_crops,
-        move_crops=crops_write.move_crops,
-        batch_exclude_crops=crops_exclude.batch_exclude_crops,
-        batch_unexclude_crops=crops_exclude.batch_unexclude_crops,
-    )
 
 
 async def _label(crops, fake, registry, crop_id: str, class_id: int) -> None:
@@ -450,24 +410,6 @@ async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, id
 # =============================================================================
 # Undo routes: single-crop undo and undo_batch
 # =============================================================================
-
-
-@pytest.fixture
-def client_for():
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient
-
-    from src.routers.curation import _raw_opensearch_dep, router as curation_router
-
-    def _make(fake: QueryFakeOpenSearch) -> TestClient:
-        app = FastAPI()
-        from _curation_app import mount_curation_routers
-
-        mount_curation_routers(app, curation_router)
-        app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
-        return TestClient(app)
-
-    return _make
 
 
 @pytest.mark.asyncio

@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 
 import pytest
+from _image_helpers import make_jpeg
 from PIL import Image
 
 from src.config.region_fields import RegionFields
@@ -23,10 +24,7 @@ from src.services.labeling.region_overlay import (
 
 
 def _jpeg(w: int = 200, h: int = 200) -> bytes:
-    img = Image.new('RGB', (w, h), color=(10, 20, 30))
-    buf = io.BytesIO()
-    img.save(buf, format='JPEG')
-    return buf.getvalue()
+    return make_jpeg(w, h, (10, 20, 30))
 
 
 def test_numbered_overlay_draws_distinct_pixels_per_box() -> None:
