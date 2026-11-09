@@ -59,10 +59,11 @@ async def build_router(default_url: str) -> TritonRouter:
 
 
 async def open_routed_pool(
-    *, pool_size: int, max_concurrent: int, verbose: bool = False
+    *, pool_size: int, max_concurrent: int, verbose: bool = False, url: str | None = None
 ) -> AsyncTritonPool:
-    """An initialized pool whose router follows the active serving profile."""
-    url = get_settings().triton_url
+    """An initialized pool whose router follows the active serving profile; ``url`` is the
+    default server when no profile is active (the deployment's ``TRITON_URL`` unless given)."""
+    url = url or get_settings().triton_url
     pool = AsyncTritonPool(
         url=url,
         pool_size=pool_size,

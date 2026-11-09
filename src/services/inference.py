@@ -11,10 +11,9 @@ from typing import Any
 
 import numpy as np
 
-from src.clients.fast_face_client import get_fast_face_client
-from src.clients.triton_client import get_sync_triton_client
 from src.config import get_settings
 from src.config.settings import TritonModelConfig
+from src.services.sync_triton import YOLO_CLIP, routed_face_client, routed_triton_client
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 from src.utils.face_response import face_landmark_mismatch
 from src.utils.image_processing import decode_image, validate_image
@@ -132,7 +131,7 @@ class InferenceService:
         image_shape = img.shape[:2]  # (height, width)
 
         # Run inference via Triton
-        client = get_sync_triton_client(self.settings.triton_url)
+        client = routed_triton_client(model_name)
         result = client.infer_yolo_end2end(img, model_name)
         detections = client.format_detections(result, model_name=model_name)
 
@@ -181,7 +180,7 @@ class InferenceService:
             UpstreamError: the face models failed or answered with unusable landmarks.
             RetryExhaustedError: Triton is unreachable (the app answers 503/504).
         """
-        face_client = get_fast_face_client(self.settings.triton_url)
+        face_client = routed_face_client()
 
         try:
             result = face_client.recognize(image_bytes, confidence=confidence)
@@ -257,8 +256,8 @@ class InferenceService:
         """
         from concurrent.futures import ThreadPoolExecutor
 
-        client = get_sync_triton_client(self.settings.triton_url)
-        face_client = get_fast_face_client(self.settings.triton_url)
+        client = routed_triton_client(*YOLO_CLIP)
+        face_client = routed_face_client()
 
         try:
             # Run YOLO+CLIP and face detection in parallel
@@ -351,7 +350,7 @@ class InferenceService:
                 return cached_embedding
 
         # Get Triton client and encode
-        client = get_sync_triton_client(self.settings.triton_url)
+        client = routed_triton_client(TritonModelConfig.CLIP_IMAGE_MODEL)
         embedding = client.encode_image(image_bytes)
 
         # Cache the result
@@ -383,7 +382,7 @@ class InferenceService:
             if cached_embedding is not None:
                 return cached_embedding
 
-        client = get_sync_triton_client(self.settings.triton_url)
+        client = routed_triton_client(TritonModelConfig.CLIP_TEXT_MODEL)
         embedding = client.encode_text(clip_text_tokens(text))
 
         # Cache the result

@@ -25,7 +25,6 @@ from scripts.curation.worker.pipeline import COMBINED_CHUNK, VISIBLE_CHUNK, Pipe
 from scripts.curation.worker.stage_a import stage_a_consumer, stage_a_vlm_visible
 from scripts.curation.worker.stage_b import stage_b_combined
 from scripts.curation.worker.stage_sam import stage_a_sam_consumer
-from src.clients.triton_pool_core import AsyncTritonPool
 from src.core.logging import get_logger
 from src.services.curation.worker_liveness import heartbeat_loop
 from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
@@ -45,6 +44,7 @@ if TYPE_CHECKING:
     from aiohttp import web
 
     from scripts.curation.worker.state import _ItemTask
+    from src.clients.triton_pool_core import AsyncTritonPool
 
 
 async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
@@ -143,8 +143,12 @@ async def run(args: argparse.Namespace) -> int:
     """
     stop_event = _install_stop_signal_handlers()
 
-    pool = AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
-    await pool.initialize()
+    from src.app.resources import AppResources
+    from src.services.serving_router import open_routed_pool, sync_router
+
+    pool = await open_routed_pool(pool_size=args.pool_size, max_concurrent=64, url=args.triton)
+    # Sync callers (the OCR service, PE text) route through the same router.
+    AppResources.async_triton_pool = pool
 
     # LG-1: write RegionFields.embedding at flush time so a fresh install
     # doesn't depend solely on scripts/curation/backfill_region_embeddings.py
@@ -174,6 +178,8 @@ async def run(args: argparse.Namespace) -> int:
 
         async def ensure_fresh(self) -> None:
             await registry.ensure_fresh()
+            # Once per producer cycle: follow a serving-profile change and the ready rows.
+            await sync_router(pool)
 
         def active_projects(self) -> list[Any]:
             return only_project(registry.active_projects(), project_filter)

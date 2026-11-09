@@ -20,7 +20,6 @@ src/clients/curation_opensearch/crops.py	1	suppressions recorded when the ratche
 src/clients/opensearch/names.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/clients/pe_encoder.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/clients/task_queue.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/clients/triton_client.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/clients/triton_pool_core.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/config/cluster_index.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/config/curation_accessors.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower

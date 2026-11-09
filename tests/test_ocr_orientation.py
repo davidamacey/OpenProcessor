@@ -41,7 +41,7 @@ def sent(monkeypatch: pytest.MonkeyPatch) -> dict[str, np.ndarray]:
         def infer_ocr(self, image: Any) -> dict[str, Any]:
             return triton_ocr.infer_ocr(infer, image, lambda _n: 'UINT8')
 
-    monkeypatch.setattr(svc_mod, 'get_sync_triton_client', lambda *_a, **_k: _Client())
+    monkeypatch.setattr(svc_mod, 'routed_triton_client', lambda *_a, **_k: _Client())
     return captured
 
 

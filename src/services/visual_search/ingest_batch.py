@@ -161,11 +161,9 @@ class IngestBatchMixin:
         import asyncio
         import time as _time
 
-        from src.clients.fast_face_client import get_fast_face_client
-        from src.clients.triton_client import get_sync_triton_client
-        from src.config import get_settings
         from src.config.faces import faces_enabled
         from src.services.near_duplicates import core_content, core_pending
+        from src.services.sync_triton import YOLO_CLIP, routed_face_client, routed_triton_client
 
         enable_faces = enable_faces and faces_enabled()
 
@@ -173,9 +171,8 @@ class IngestBatchMixin:
             return _summary(total=0, processed=0, duplicates=0)
 
         total = len(images_data)
-        settings = get_settings()
-        client = get_sync_triton_client(settings.triton_url)
-        face_client = get_fast_face_client(settings.triton_url) if enable_faces else None
+        client = routed_triton_client(*YOLO_CLIP)
+        face_client = routed_face_client() if enable_faces else None
 
         ocr_service = None
         if enable_ocr:

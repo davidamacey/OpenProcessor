@@ -42,7 +42,7 @@ def opensearch(monkeypatch: pytest.MonkeyPatch) -> FakeCoreOpenSearch:
         ]
 
     monkeypatch.setattr('src.services.visual_search.ingest_batch.infer_batch', infer)
-    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda _url: object())
+    monkeypatch.setattr('src.services.sync_triton.routed_triton_client', lambda *_a: object())
     return fake
 
 

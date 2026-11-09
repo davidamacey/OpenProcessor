@@ -287,8 +287,8 @@ def embed_boxes(
         img_width, img_height = pil_image.size
         np_img = np.array(pil_image)
 
-        from src.clients.triton_client import get_sync_triton_client
-        from src.config import get_settings
+        from src.config.settings import TritonModelConfig
+        from src.services.sync_triton import routed_triton_client
         from src.utils.cpu_preprocess import center_crop_cpu
 
         # Validate and collect valid boxes + preprocessed crops
@@ -327,8 +327,7 @@ def embed_boxes(
 
         # Single batched Triton inference call for all crops
         batch_tensor = np.stack(preprocessed)  # [N, 3, 256, 256]
-        settings = get_settings()
-        client = get_sync_triton_client(settings.triton_url)
+        client = routed_triton_client(TritonModelConfig.CLIP_IMAGE_MODEL)
         embeddings = client.infer_mobileclip_batch(batch_tensor)  # [N, 512]
 
         results = [

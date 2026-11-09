@@ -137,9 +137,7 @@ def backends(monkeypatch: pytest.MonkeyPatch) -> Backends:  # type: ignore[misc]
     from src.services import analyze_pipeline, ocr_service
 
     b = Backends(FakeTriton(_yolo_result()), FakeFaces(_faces_result()), FakeOcr(OCR_OK))
-    monkeypatch.setattr(
-        'src.clients.triton_client.get_sync_triton_client', lambda *_a, **_k: b.triton
-    )
+    monkeypatch.setattr('src.services.sync_triton.routed_triton_client', lambda *_a, **_k: b.triton)
     monkeypatch.setattr(analyze_pipeline, 'InferenceService', lambda: b.faces)
     monkeypatch.setattr(ocr_service, 'OcrService', lambda: b.ocr)
     monkeypatch.setattr(

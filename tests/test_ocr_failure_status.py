@@ -33,7 +33,7 @@ class _FailingTriton:
 @pytest.fixture
 def triton_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        'src.services.ocr_service.get_sync_triton_client', lambda *_a, **_k: _FailingTriton()
+        'src.services.ocr_service.routed_triton_client', lambda *_a, **_k: _FailingTriton()
     )
 
 
@@ -60,7 +60,7 @@ def test_predict_with_no_text_is_still_a_success(
             return {'num_texts': 0}
 
     monkeypatch.setattr(
-        'src.services.ocr_service.get_sync_triton_client', lambda *_a, **_k: _NoText()
+        'src.services.ocr_service.routed_triton_client', lambda *_a, **_k: _NoText()
     )
     response = client.post('/ocr/predict', files={'image': ('t.jpg', jpeg, 'image/jpeg')})
     assert response.status_code == 200

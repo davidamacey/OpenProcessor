@@ -89,8 +89,8 @@ def _inference_service(monkeypatch: pytest.MonkeyPatch, faces: dict[str, Any]) -
         def format_detections(self, *_a: Any, **_k: Any) -> list:
             return []
 
-    monkeypatch.setattr(inf, 'get_fast_face_client', lambda *_a, **_k: FakeFace())
-    monkeypatch.setattr(inf, 'get_sync_triton_client', lambda *_a, **_k: FakeTriton())
+    monkeypatch.setattr(inf, 'routed_face_client', lambda *_a, **_k: FakeFace())
+    monkeypatch.setattr(inf, 'routed_triton_client', lambda *_a, **_k: FakeTriton())
     svc = inf.InferenceService.__new__(inf.InferenceService)
     svc.settings = SimpleNamespace(triton_url='x')  # type: ignore[assignment]
     return svc

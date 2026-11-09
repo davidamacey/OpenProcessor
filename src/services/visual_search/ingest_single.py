@@ -38,12 +38,9 @@ def _run_pipelines(
     """Run the enabled pipelines in parallel; returns ``(yolo+clip result, face result)``."""
     from concurrent.futures import ThreadPoolExecutor
 
-    from src.clients.fast_face_client import get_fast_face_client
-    from src.clients.triton_client import get_sync_triton_client
-    from src.config import get_settings
+    from src.services.sync_triton import YOLO_CLIP, routed_face_client, routed_triton_client
 
-    settings = get_settings()
-    client = get_sync_triton_client(settings.triton_url)
+    client = routed_triton_client(*YOLO_CLIP)
 
     result: dict = {'num_dets': 0, 'image_embedding': None}
     face_result: dict = {'num_faces': 0}
@@ -56,7 +53,7 @@ def _run_pipelines(
 
         # Face detection + embedding (if enabled)
         if enable_faces:
-            face_client = get_fast_face_client(settings.triton_url)
+            face_client = routed_face_client()
             futures['face'] = executor.submit(face_client.recognize, image_bytes, confidence=0.5)
 
         # Collect results

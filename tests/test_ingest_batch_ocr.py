@@ -54,12 +54,12 @@ def service(monkeypatch: pytest.MonkeyPatch) -> tuple[VisualSearchService, _Fake
     svc.inference = None  # type: ignore[assignment]
 
     monkeypatch.setattr(
-        'src.clients.triton_client.get_sync_triton_client',
-        lambda url: object(),
+        'src.services.sync_triton.routed_triton_client',
+        lambda *_a: object(),
     )
     monkeypatch.setattr(
-        'src.clients.fast_face_client.get_fast_face_client',
-        lambda url: object(),
+        'src.services.sync_triton.routed_face_client',
+        lambda *_a: object(),
     )
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', _FakeOcrService)
     return svc, fake_opensearch
