@@ -1,7 +1,7 @@
 """OpenProcessor v0.4.0 embedding state (docs/design/
 v040-backend-deltas-ui-plan-2026-10-03.md §7.3).
 
-  1. `test_failed_badge_on_a_card` -- `/clusters/[id]` shows the badge for a
+  1. `test_failed_badge_on_a_card` -- `/clusters/[uid]` shows the badge for a
      served `failed` embedding state, none for `embedded`.
   2. `test_dashboard_summary_embed_n_opens_the_served_request` -- the
      detections summary renders served counts; "Embed N" sends the served
@@ -137,7 +137,7 @@ def _crop(i: int, state: str | None) -> dict:
         cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         label_source="model_suggestion",
-        embedding_state=state,
+        embedding_states={"pe_core": state} if state else {},
         thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
     )
 
@@ -163,7 +163,8 @@ def test_failed_badge_on_a_card(stub, page, app_url):
     badges = page.get_by_test_id("embedding-state-badge")
     expect(badges).to_have_count(1)
     expect(badges.first).to_have_text("Embed failed")
-    expect(badges.first).to_have_attribute("title", re.compile("No vector: encoder failed"))
+    expect(badges.first).to_have_attribute("title", re.compile("^pe_core: No vector: encoder failed"))
+    expect(badges.first).to_have_attribute("data-space", "pe_core")
     _shots(page, "failed-badge")
 
 

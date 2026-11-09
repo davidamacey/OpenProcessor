@@ -14,6 +14,7 @@ from harness.constants import ACTION_TIMEOUT_MS
 
 import re
 
+from fixtures.contract import item_cluster
 from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item, review_tabs
 from test_labeling_flow import CLASSES as ITEM_CLASSES
 from test_labeling_flow import register_base
@@ -88,7 +89,7 @@ def register_no_profile(stub) -> None:
                 image_id=f"img-{i}",
                 class_id=1,
                 class_name="ducati",
-                cluster_id=1,
+                cluster=item_cluster("cl-fixture-0001"),
                 label_validated=False,
                 thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
             )

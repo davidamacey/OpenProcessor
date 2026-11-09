@@ -14,7 +14,7 @@ from __future__ import annotations
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 
-from fixtures.wire import REGION_CLASS
+from fixtures.wire import REGION_CLASS, make_box, make_item
 
 CLASSES = [
     {
@@ -49,47 +49,37 @@ STATUSES = {
     ],
 }
 
+REGION_CLUSTER_UID = "aaaa0007"
+
+# One card of `GET /regions/clusters`: boxes grouped by cluster_uid.
 CLUSTER_CARD = {
-    "id": 7,
+    "cluster_uid": REGION_CLUSTER_UID,
     "size": 2,
     "box_count": 2,
-    "n_subclusters": 0,
-    "has_subclusters": False,
-    "cluster_kind": None,
+    "validated_count": 0,
+    "representative_crop_ids": [],
     "representative_thumb_urls": [],
 }
 
-ROW_1 = {
-    "crop_id": "c1",
-    "id": "c1",
-    "image_path": "/img1.jpg",
-    "bbox_norm": [0, 0, 1, 1],
-    "region_bbox_norm": [0.1, 0.1, 0.2, 0.2],
-    "region_score": 0.9,
-    "region_status": "detected",
-    "region_verified": True,
-    "region_validated": False,
-    "region_detector": "tag_detector_v1",
-    "region_detector_version": "1",
-    "region_detector_chain": [],
-    "region_bbox_frame": "source",
-    "region_detected_at": None,
-    "region_verifier": None,
-    "region_verifier_version": None,
-    "region_verified_at": None,
-    "region_rejection_reason": None,
-    "region_visible": True,
-    "region_text": None,
-    "region_text_source": None,
-    "region_text_confidence": None,
-    "class_id": 1,
-    "class_name": REGION_CLASS,
-    "cluster_id": None,
-    "updated_at": "2026-09-26T00:00:00Z",
-    "region_box_id": "b1",
-    "row_key": "c1#b1",
-}
-ROW_2 = {**ROW_1, "crop_id": "c2", "id": "c2", "region_box_id": "b2", "row_key": "c2#b2"}
+
+def row(crop_id: str, box_id: str) -> dict:
+    """A `/regions` row: the item (its boxes in `region_boxes`) plus the one box the row is."""
+    return {
+        **make_item(
+            crop_id=crop_id,
+            image_id=f"img-{crop_id}",
+            class_id=1,
+            class_name=REGION_CLASS,
+            region_status="detected",
+            region_boxes=[make_box(box_id, state="proposed", cluster_uid=REGION_CLUSTER_UID)],
+        ),
+        "region_box_id": box_id,
+        "row_key": f"{crop_id}#{box_id}",
+    }
+
+
+ROW_1 = row("c1", "b1")
+ROW_2 = row("c2", "b2")
 
 
 def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, app_url):
@@ -136,7 +126,7 @@ def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, ap
 
     page.goto(f"{app_url}/p/default/clusters?class={REGION_CLASS}")
 
-    cluster_card = page.locator('button:has-text("#7")')
+    cluster_card = page.locator('button:has-text("aaaa0007")')
     cluster_card.wait_for(timeout=ACTION_TIMEOUT_MS)
     cluster_card.click()
 

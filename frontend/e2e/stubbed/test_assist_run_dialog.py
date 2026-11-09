@@ -1,8 +1,7 @@
-"""Assist runs on /clusters/[id] (stubbed backend): the dialog posts exactly
+"""Assist runs on /clusters/[uid] (stubbed backend): the dialog posts exactly
 the server's request shape, shows the dry run's counts, follows the run to
 its proposal, applies it only on the explicit click, and renders the
-server's `scope_changed` refusal. A sub-cluster tab asks the server for
-`cluster_subid` instead of filtering the loaded page.
+server's `scope_changed` refusal.
 
 Screenshots (1600 and 430 wide) go to artifacts_local/assist-ui/ for a human
 to look at; they are not assertions.
@@ -15,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import expect
 
+from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
@@ -28,29 +28,19 @@ CLASSES = [
      "sample_count": 20, "validated_count": 5, "cluster_size": 22, "deprecated": False},
 ]
 
-CLUSTER_ID = 10000
-CLUSTERS = {
-    "items": [
-        {
-            "cluster_id": CLUSTER_ID,
-            "cluster_kind": "candidate",
-            "size": 412,
-            "validated_count": 0,
-            "dominant_class_id": None,
-            "dominant_class_name": None,
-            "purity": 0.8,
-            "is_unlabeled": True,
-            "representatives": [{"crop_id": "crop-0"}],
-            "n_subclusters": 2,
-            "subcluster_ids": ["10000a", "10000b"],
-            "updated_at": None,
-        }
-    ],
-    "total": 1,
-    "total_class_clusters": 0,
-    "total_candidate_clusters": 1,
-    "cluster_id_offset": 10000,
-}
+CLUSTER_UID = "cl-assist-0001"
+CLUSTERS = cluster_list(
+    cluster_card(
+        CLUSTER_UID,
+        size=412,
+        dominant_class_name=None,
+        dominant_count=0,
+        label_agreement=None,
+        labelled_share=None,
+        labelled_count=0,
+        is_unlabeled=True,
+    )
+)
 
 METHODS = {
     "strategies": [
@@ -65,10 +55,6 @@ RESOLVED = {
     "scope_digest": "sha256:abc",
     "sampled": 41,
     "sample_seed": 0,
-    "strata": [
-        {"key": "10000a", "size": 120, "sampled": 12},
-        {"key": "10000b", "size": 292, "sampled": 29},
-    ],
     "skipped": {"holdout": 3, "excluded": 1, "class_locked": 27},
     "vlm": {"name": "env", "revision": 3, "model": "vlm-model"},
     "prompt_pack": {"name": "widgets", "revision": 7},
@@ -90,14 +76,13 @@ PROPOSAL = {
 }
 
 
-def crop(i: int, subid: str) -> dict:
+def crop(i: int) -> dict:
     return make_item(
         crop_id=f"crop-{i}",
         image_id=f"img-{i}",
         class_id=None,
         class_name=None,
-        cluster_id=CLUSTER_ID,
-        cluster_subid=subid,
+        cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
         class_validated=False,
         label_source="model_suggestion",
@@ -124,7 +109,7 @@ def state(status: str, run_id: str | None, **over) -> dict:
         "created_at": "2026-10-15T10:00:00Z",
         "finished_at": None,
         "error": None,
-        "request": {"target": {"kind": "cluster", "cluster_id": CLUSTER_ID, "cluster_subid": None},
+        "request": {"target": {"kind": "cluster", "cluster_uid": CLUSTER_UID},
                     "actions": ["classify"], "dry_run": status == "dry_run"},
         "resolved": RESOLVED,
         "progress": {"processed": 0, "total": 41},
@@ -151,11 +136,8 @@ def register(stub, *, apply_refusal=None, listed=None):
     stub.on("GET", r"/methods(\?|$)", METHODS)
 
     def crops(request, _m):
-        q = parse_qs(urlsplit(request.url).query)
-        seen["crops_queries"].append(q)
-        subid = q.get("cluster_subid", [None])[0]
-        subs = [subid] if subid else ["10000a", "10000b", "10000a", "10000b"]
-        items = [crop(i, s) for i, s in enumerate(subs)]
+        seen["crops_queries"].append(parse_qs(urlsplit(request.url).query))
+        items = [crop(i) for i in range(4)]
         return {"total": len(items), "page": 1, "page_size": 60, "crops": items}
 
     stub.on("GET", r"/crops(\?|$)", crops)
@@ -199,18 +181,9 @@ def shots(page, name: str) -> None:
 
 def open_cluster(stub, page, app_url, **kw):
     seen = register(stub, **kw)
-    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_ID}")
+    page.goto(f"{app_url}/p/default/clusters/{CLUSTER_UID}")
     page.wait_for_selector("img", timeout=ACTION_TIMEOUT_MS)
     return seen
-
-
-def test_sub_cluster_tab_asks_the_server_for_cluster_subid(stub, page, app_url):
-    seen = open_cluster(stub, page, app_url)
-    page.get_by_role("button", name="#10000b").click()
-    page.wait_for_function("document.querySelectorAll('img').length === 1", timeout=ACTION_TIMEOUT_MS)
-    assert any(q.get("cluster_subid") == ["10000b"] for q in seen["crops_queries"]), seen["crops_queries"]
-    # The other tab stays offered although the page now holds only one sub-cluster.
-    expect(page.get_by_role("button", name="#10000a")).to_be_visible()
 
 
 def test_assist_dialog_dry_run_then_run_then_apply(stub, page, app_url):
@@ -256,8 +229,8 @@ def test_assist_dialog_dry_run_then_run_then_apply(stub, page, app_url):
                               and r.request.post_data_json.get("dry_run") is False, timeout=ACTION_TIMEOUT_MS):
         page.get_by_test_id("assist-start").click()
     start = [c for c in stub.calls if c[1].endswith("/assist/runs") and c[2].get("dry_run") is False][-1][2]
-    assert start["target"] == {"kind": "cluster", "cluster_id": CLUSTER_ID, "cluster_subid": None}
-    assert start["sample"] == {"mode": "representative", "size": 40, "seed": 0, "stratify_by": "auto"}
+    assert start["target"] == {"kind": "cluster", "cluster_uid": CLUSTER_UID}
+    assert start["sample"] == {"mode": "representative", "size": 40, "seed": 0}
     assert start["actions"] == ["classify", "attributes"]
     assert start["prompt_pack"] == "widgets"
 
@@ -283,7 +256,7 @@ def test_assist_dialog_dry_run_then_run_then_apply(stub, page, app_url):
 def test_stale_proposal_shows_the_servers_scope_changed_refusal(stub, page, app_url):
     stale = {**COMPLETED, "scope_now": {"count": 300, "overlap": 186, "jaccard": 0.62, "changed": True}}
     open_cluster(stub, page, app_url, listed=[stale],
-                 apply_refusal="only 62% of the scope is what the run saw (a re-refine moved items)")
+                 apply_refusal="only 62% of the scope is what the run saw (items moved between clusters)")
     page.get_by_test_id("cluster-assist-proposal").locator("summary").click()
     banner = page.get_by_test_id("proposal-stale")
     expect(banner).to_contain_text("186", timeout=ACTION_TIMEOUT_MS)
