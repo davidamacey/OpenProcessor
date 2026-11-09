@@ -343,7 +343,6 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 # Export scripts for TensorRT plugins (third-party TRT NMS patterns)
 "export/**/*.py" = [
-    "N801",    # Class names follow TensorRT plugin conventions (TRT_EfficientNMS)
     "ARG001",  # Unused arguments kept for interface consistency
     "ARG004",  # TensorRT plugin forward() requires all args for ONNX export
     "PT028",   # Default arguments in test-named functions (standalone scripts, not pytest)

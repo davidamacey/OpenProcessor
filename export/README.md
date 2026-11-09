@@ -46,7 +46,7 @@ pytorch_models/
 models/
 ├── yolov11_small_end2end/              # the fused ONNX the engine below is built from
 │   └── 1/model.onnx
-├── yolov11_small_trt_end2end/          # YOLO11 TensorRT, NMS in the engine
+├── yolov11_small_trt_end2end/          # YOLO11 TensorRT, fused [300, 6] output
 │   ├── 1/model.plan
 │   ├── config.pbtxt
 │   └── labels.txt
@@ -322,7 +322,7 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 ### YOLO11 Object Detection
 - Input: `images` `[B, 3, 640, 640]` UINT8 RGB, letterboxed; the engine divides by 255 in the graph
   (`export/uint8_input.py`, added after the FP16 bake)
-- Output (end2end): `num_dets`, `det_boxes`, `det_scores`, `det_classes`
+- Output: `output0` `[B, 300, 6]` (`x1, y1, x2, y2, score, class` in letterboxed input pixels, zero rows as padding)
 - Dynamic batching: 1-64 (configurable)
 
 ### SCRFD-10G Face Detection

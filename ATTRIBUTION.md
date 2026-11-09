@@ -14,20 +14,6 @@ Ultralytics code is vendored or modified here.
 
 ---
 
-## Information
-- **Provider:** NVIDIA Corporation
-- **Documentation:** https://docs.nvidia.com/deeplearning/tensorrt/
-- **Plugin:** EfficientNMS_TRT
-- **Purpose:** GPU-accelerated Non-Maximum Suppression
-- **License:** NVIDIA Deep Learning Software License
-
-### Integration
-- Embedded via levipereira/ultralytics fork (see above)
-- Compiled into TensorRT engine at model build time
-- Executes entirely on GPU, eliminating CPU bottleneck
-
----
-
 ## Apple MobileCLIP
 
 MobileCLIP2-S2 is used for generating image and text embeddings for visual search.
