@@ -1,5 +1,5 @@
 /**
- * DQ-m11 (docs/design/data-quality-pass-2026-09-24.md): `/dashboard`'s
+ * DQ-m11: `/dashboard`'s
  * class-balance strip is `sort(validated_count desc).slice(0, 30)` — with
  * every class at `validated_count: 0` (the live state throughout the
  * audit: 0 `class_validated` dataset-wide), that's a tie across all 85

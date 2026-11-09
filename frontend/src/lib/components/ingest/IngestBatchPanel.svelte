@@ -1,7 +1,7 @@
 <script lang="ts">
   import { apiErrorText } from '$lib/api_errors';
   /**
-   * Piece 11 (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
+   * Piece 11 (Ingest UI plan
    * §A.6) — server-path ingest for images already reachable inside the
    * API container. `POST {API_PREFIX}/ingest/batch` predates OpenProcessor
    * #36; what #36 (BA-2) added is the served `source_roots` list this

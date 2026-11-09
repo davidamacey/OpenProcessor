@@ -1,5 +1,5 @@
-"""Ported from scripts/playwright_tier2_profile.py (deleted; see
-docs/design/test-audit-2026-09-24.md recommendation 5 / P1-1).
+"""Ported from the deleted playwright_tier2_profile script (see
+the test audit, recommendation 5 / P1-1).
 
 Three passes against `/review`, stubbing `**/annotation-profiles.json`
 directly (it is fetched at runtime by the root layout's `load()`, not

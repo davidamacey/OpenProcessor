@@ -2,7 +2,7 @@
  * The project's active VLM endpoint (`GET {scoped}/vlm/endpoints/active`,
  * axis `vlm`) and the writes that move it: activate, rollback and
  * deactivate ("VLM off for this project"). The shared `ConfigActive`
- * (any_domain_plan.md §7.8; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
+ * (any_domain_plan.md §7.8; w9/w10 UI plan
  * §3.2) plus
  *
  * - `acknowledge_external` on activate (via `extra`),

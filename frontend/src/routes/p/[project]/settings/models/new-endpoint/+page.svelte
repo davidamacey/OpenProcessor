@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * `/settings/models/new-endpoint` — register a VLM endpoint
-   * (any_domain_plan.md §7.8.5; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
+   * (any_domain_plan.md §7.8.5; w9/w10 UI plan
    * §3.3). The form is the served schema seeded from each row's default;
    * the name is checked with the draft so a taken or malformed one shows
    * the server's own issue before Create. No key input: a key is a host

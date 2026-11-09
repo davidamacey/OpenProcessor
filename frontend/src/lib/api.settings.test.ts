@@ -267,8 +267,7 @@ describe('getCurationSettings / putCurationDefaults', () => {
 });
 
 /**
- * `/scores/*` wrappers (docs/design/frontend-coverage-audit-2026-09-24.md
- * §G10). Wire shapes confirmed against OpenProcessor `main`'s
+ * `/scores/*` wrappers (frontend coverage audit §G10). Wire shapes confirmed against OpenProcessor `main`'s
  * `crop_scores/job.py::compute_coverage`/`_JobState` — `coverage` is
  * `{scorer_id: {field, n_scored, total, pct}}`, and every job snapshot
  * is `{job_id, status, scorers, processed, total, started_at,

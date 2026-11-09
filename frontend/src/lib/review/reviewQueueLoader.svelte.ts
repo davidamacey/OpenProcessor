@@ -179,7 +179,7 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
 
   // Queue action controller (assign / discard / skip / undo) — extracted
   // to src/lib/review/reviewController.svelte.ts (P1-4,
-  // docs/design/test-audit-2026-09-24.md) so the optimistic-remove +
+  // test audit) so the optimistic-remove +
   // rollback-on-failure logic is unit-testable off the page. `queue`,
   // `cursor` and `handledIds` stay owned here (shared with slot-tab
   // actions and arrow-key nav) and are handed in by

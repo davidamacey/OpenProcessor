@@ -12,7 +12,7 @@ The container event is host-wide: it can fail requests in any other
 browser running on this machine, so only run it when no other e2e or
 Playwright run is active.
 
-usage: e2e/.venv/bin/python scripts/repro_chromium_network_change.py {plain|routed} [N]
+usage: e2e/.venv/bin/python frontend/scripts/repro_chromium_network_change.py {plain|routed} [N]
 needs: docker and the alpine:latest image
 """
 

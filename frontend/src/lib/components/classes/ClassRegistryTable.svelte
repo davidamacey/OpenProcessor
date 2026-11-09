@@ -66,7 +66,7 @@
           >
             Validated
           </th>
-          <!-- DQ-m9 (docs/design/data-quality-pass-2026-09-24.md): this
+          <!-- DQ-m9: this
                "Total" is `cluster_size` from GET /classes — the
                class-cluster bucket size (what /clusters/{id} shows as
                "in cluster"), NOT the same number as /export's "Total"

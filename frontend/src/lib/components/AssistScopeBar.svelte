@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Scope selector for an assisted auto-label run
-   * (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §4).
+   * (VLM-scoped labeling assist plan §4).
    * Rendered by `AutoLabelPanel` on `/dashboard`, and only when
    * `isScopedAssistAvailable` says the backend advertises the feature —
    * that gate lives in the parent, not here, so this component never

@@ -1,6 +1,6 @@
 /**
  * Reader for a slot profile's `extras.datasetExport` escape hatch
- * (P2.13/P2.15, docs/genericization-plan-2026-09-13.md §9.6).
+ * (P2.13/P2.15, genericization plan §9.6).
  *
  * `SlotSpec.extras` is deliberately typed `Record<string, unknown>` — a
  * profile-private bag, not an extension point (`./types.ts:262`). This

@@ -1,6 +1,6 @@
 /**
  * One VLM endpoint's editor (any_domain_plan.md §7.8.5;
- * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3): the VLM binding of
+ * w9/w10 UI plan §3.3): the VLM binding of
  * the shared `ConfigEditor` (draft, served live validation, Save with
  * `expected_revision`, revisions and restore) over the GLOBAL registry
  * routes, plus

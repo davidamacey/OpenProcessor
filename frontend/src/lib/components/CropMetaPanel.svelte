@@ -118,7 +118,7 @@
       {/if}
     </dd>
 
-    <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
+    <!-- DQ-M8: `label_confidence`
        (wire `confidence`) is the classifier-detector score on EVERY row,
        including ones the VLM labeled — never the VLM's own confidence.
        Calling it plain "Confidence" next to a VLM-sourced label reads as

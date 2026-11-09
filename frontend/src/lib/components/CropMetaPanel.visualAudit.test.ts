@@ -1,6 +1,6 @@
 /**
  * Mount-based tests for the CropMetaPanel fixes from
- * docs/design/visual-audit-2026-09-24.md:
+ * the visual audit:
  *
  *  - R6: a class-less crop read "Class (vlm_new_class_pending)" with a blank
  *    name and the raw source id; `vlm_class_empty_reason` rendered raw.

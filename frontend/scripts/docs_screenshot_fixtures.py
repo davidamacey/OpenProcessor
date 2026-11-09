@@ -10,15 +10,15 @@ may only read `default` or `cwlife-` sources and writes a `cwlife-`
 target). `teardown` deletes every `cwlife-` project and waits for the
 asynchronous delete to finish.
 
-    python3 scripts/docs_screenshot_fixtures.py setup    --base-url http://localhost:5184
-    python3 scripts/docs_screenshot_fixtures.py teardown --base-url http://localhost:5184
+    python3 frontend/scripts/docs_screenshot_fixtures.py setup    --base-url http://localhost:5184
+    python3 frontend/scripts/docs_screenshot_fixtures.py teardown --base-url http://localhost:5184
 
 `bulk` sets up the slots of the large-folder ingest guide. It needs a folder of
 PUBLIC images that the API container can read (`--folder`, a container path) and
 the name of the API container (`--container`, to write a manifest under the
 throwaway project's upload root):
 
-    python3 scripts/docs_screenshot_fixtures.py bulk    --base-url http://localhost:5184 \\
+    python3 frontend/scripts/docs_screenshot_fixtures.py bulk    --base-url http://localhost:5184 \\
         --folder /data/source/valid/images --container <api-container>
 """
 from __future__ import annotations

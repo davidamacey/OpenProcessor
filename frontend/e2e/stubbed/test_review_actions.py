@@ -1,4 +1,4 @@
-"""New coverage (docs/design/test-audit-2026-09-24.md recommendation 5):
+"""New coverage (test audit recommendation 5):
 `/review` Enter-assign followed by Z-undo.
 
 Enter -> confirmAndAdvance() -> assign(classId) -> `PUT

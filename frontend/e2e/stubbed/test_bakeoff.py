@@ -1,5 +1,5 @@
 """`/bakeoff` on the v2 comparison wire (OpenProcessor #34 §7;
-docs/design/bakeoff-v2-ui-plan-2026-09-25.md): select datasets and
+the bakeoff v2 UI plan): select datasets and
 models, confirm, the exact POST body, poll queued -> running -> done,
 then the served matrix (every tied winner bold) and the per-class table
 (a class the model does not cover reads "not covered"). A previous run

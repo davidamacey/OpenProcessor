@@ -164,7 +164,7 @@
     return () => window.removeEventListener('keydown', onKeydown);
   });
 
-  // K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+  // K2 (configurable keyboard shortcuts plan
   // §5.1): the served keymap applies live, with no reload — a
   // `config.changed axis=keymap` frame refetches `GET {prefix}/keymap`
   // and swaps `keymapStore`'s document in place; every dispatch resolves

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * A slot's region gallery for /clusters, backed by the slot's browse
-   * endpoint (docs/genericization-plan-2026-09-13.md §3.4/§5a). All
+   * endpoint (genericization plan §3.4/§5a). All
    * state/logic lives in the injected `gallery` controller
    * (`slotGalleryController.svelte.ts`), which carries the slot; this
    * component renders it, naming regions by `gallery.slot.label`.

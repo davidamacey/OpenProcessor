@@ -1,4 +1,4 @@
-"""DQ-M5 (docs/design/data-quality-pass-2026-09-24.md): the review crop
+"""DQ-M5: the review crop
 was upscaled to the full column height (`h-full w-full object-contain`,
 phase-A p9's fit-width fix applied to height too), pushing Reason,
 Proposed and Confirm/Skip/Discard below the fold at 1280×720, 1600×1000

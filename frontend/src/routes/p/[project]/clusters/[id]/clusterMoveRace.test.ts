@@ -253,7 +253,7 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
   });
 });
 
-// P2-2 (docs/design/test-audit-2026-09-24.md T1): every extraction below
+// P2-2 (test audit T1): every extraction below
 // went through `$lib/testing/sourceScan.ts`'s `extractFunction`/
 // `extractBalanced` (brace-balanced) or `normalize` (comment-stripped,
 // whitespace-collapsed) instead of a `\n {2}\}`/`\n {4}\}?\);`-anchored
@@ -297,7 +297,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 // that used to live here (source-scanning +page.svelte for
 // `excludedCropIds.add`/`.delete` call sites across the sidebar-drop
 // handler, moveCropIds, ignoreSelected/undoIgnore, the D hotkey handler,
-// and undoLast) is deleted per docs/design/test-audit-2026-09-24.md P1-4
+// and undoLast) is deleted per the test audit P1-4
 // (second pass): that logic — and the exclusion set itself, now
 // `ExclusionGuard` — moved into `$lib/clusters/clusterController.svelte.ts`
 // (commit history: "refactor(clusters): extract action logic into
@@ -321,7 +321,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 //     the restored crop id back so it can reappear' — and additionally
 //     exercises both branches of the `if (cropPager.items.some(...))`
 //     check that survived as an `if (false)` mutant under the old scan
-//     (docs/design/test-audit-2026-09-24.md §2.2).
+//     (test audit §2.2).
 // The remaining `excludedCropIds`-named text above (a page-local
 // `const excludedCropIds = new Set<string>()` and its `accept:` wiring)
 // no longer exists in +page.svelte at all — the page now owns

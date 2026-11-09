@@ -1,5 +1,5 @@
 /**
- * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
+ * C8 (slot-generic crop mapping plan §7.1):
  * `saveBox` used to re-PUT the box a second time even though
  * `SlotBboxEditor` had already saved it (`PUT /crops/{id}/regions`) — a redundant
  * double-write on every region-gallery bbox save. It is now a pure local

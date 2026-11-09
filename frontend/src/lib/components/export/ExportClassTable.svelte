@@ -161,7 +161,7 @@
             class="cursor-pointer px-3 py-2 font-medium hover:text-zinc-100"
             onclick={() => setSort('class_id')}>ID</th
           >
-          <!-- DQ-m9 (docs/design/data-quality-pass-2026-09-24.md): this
+          <!-- DQ-m9: this
                "Total" is every crop with that class_id
                (GET {API_PREFIX}/stats/classes) — a DIFFERENT number than the
                sidebar's / /classes' "Total" (GET {API_PREFIX}/classes'

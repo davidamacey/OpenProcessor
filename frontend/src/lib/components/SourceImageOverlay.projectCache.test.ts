@@ -2,8 +2,7 @@
  * `SourceImageOverlay`'s module-level crop-context cache must be keyed by
  * (project, crop id), not crop id alone — crop ids are content-derived,
  * so the same image gets the same `crop_id` in every project
- * (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
- * §7). Otherwise switching projects would render another project's
+ * (any-domain rev3 and projects contract review §7). Otherwise switching projects would render another project's
  * cached source-image context for a colliding id.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

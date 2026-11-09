@@ -156,7 +156,7 @@ describe('item-class targets: served kind (#36 item 1)', () => {
   });
 });
 
-// R1 (docs/design/visual-audit-2026-09-24.md): the slot-bound region class
+// R1 (visual audit): the slot-bound region class
 // topped the picker and quick-assign row (most validated), so `/` + Enter
 // labeled an item as a region. Resolved through the served `kind`, never a
 // hardcoded name.

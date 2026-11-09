@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Shared sort/filter strategy control (curation-strategy plan Phase 3/4 —
-   * docs/curation-strategy-plan-2026-09.md §5.1/§5.4/§7). Used on both
+   * curation strategy plan §5.1/§5.4/§7). Used on both
    * `/review` (below the tab strip) and `/clusters/[id]` (alongside the
    * existing "Outliers first" button, which stays as a one-click shortcut
    * for muscle memory — this is the fuller, additive selector).
@@ -67,7 +67,7 @@
     /** Restrict selectable sort/overlay ids beyond the stable/experimental
      *  status filter. `/clusters/[id]`'s crop query forwards its selection
      *  as `{API_PREFIX}/crops?order=`, which only special-cases `'outliers'` and
-     *  (Phase 4) `'diverse'` today (docs/curation-strategy-plan-2026-09.md
+     *  (Phase 4) `'diverse'` today (curation strategy plan
      *  §1/§7) — so that route passes `['default', 'outliers', 'diverse']`
      *  to avoid offering an id the endpoint would silently ignore.
      *  `'diverse'` only actually appears in the rendered options when
@@ -111,7 +111,7 @@
     /** `sort_fallback_reason` from `GET {API_PREFIX}/review/{tab}` (or its
      *  `/locate`) — a human-readable string when the resolved sort (a
      *  tab default or an explicit request) fell back because its field
-     *  has 0% coverage (M11, docs/design/interactive-pass-2026-09-24.md).
+     *  has 0% coverage (M11, interactive pass).
      *  Shown right next to the `sort_applied` chip, not as a separate
      *  banner, so the "what did the backend actually order by, and why"
      *  story lives in one place. `null`/omitted renders nothing. */
@@ -393,7 +393,7 @@
     {#if currentIsBeta}
       <span
         class="rounded border border-amber-500/60 bg-amber-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-200"
-        title="Experimental — not yet fully validated (OpenProcessor docs/design/curation_scores.md)"
+        title="Experimental — not yet fully validated (OpenProcessor docs/research/curation_scores.md)"
       >
         beta
       </span>

@@ -1,5 +1,5 @@
 /**
- * Piece 11 (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.6):
+ * Piece 11 (Ingest UI plan §A.6):
  * the server-path batch panel, gated on served `batch.source_roots`
  * being non-empty (the page only mounts this component in that case —
  * see `src/routes/ingest/+page.svelte` — so this test doesn't re-cover

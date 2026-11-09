@@ -1,6 +1,6 @@
 /**
  * The dataset-import wizard's state (any_domain_plan.md §7.12 item 1;
- * docs/design/w10-import-reprocess-ui-plan-2026-09-27.md §2).
+ * w10 import reprocess UI plan §2).
  *
  * Holds only what the operator chose (source, explicit mapping rows,
  * touched options) and what the server answered (the preview, the start

@@ -104,7 +104,7 @@
 
   // The predicate for "a human has confirmed this box" is the boolean
   // `verified` field, not a status string (see Finding C.3,
-  // docs/genericization-plan-2026-09-13.md §2.7 / §3.8).
+  // genericization plan §2.7 / §3.8).
   const slotVerified = $derived<boolean>(!!slotData?.lifecycle?.verified);
 
   const noSlot = $derived(
@@ -188,7 +188,7 @@
 
   // Scalar-box slot ring color: green when a human has confirmed the box
   // (verified === true), yellow for unverified machine-suggested boxes
-  // (Finding C.3, docs/genericization-plan-2026-09-13.md §2.7: `verified`
+  // (Finding C.3, genericization plan §2.7: `verified`
   // — not any status value — is the confirmed-ring predicate).
   const scalarRingColorClass = $derived(
     slotVerified

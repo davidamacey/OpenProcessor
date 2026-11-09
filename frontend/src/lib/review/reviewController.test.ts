@@ -1,6 +1,6 @@
 /**
  * Behavior tests for the queue-action controller extracted out of
- * review/+page.svelte (docs/design/test-audit-2026-09-24.md P1-4). These
+ * review/+page.svelte (test audit P1-4). These
  * close the three mutations the audit found surviving under the old
  * source-scan-only suite: a failed assign() leaving the item gone, a
  * failed discard() leaving the item gone, and skip() not advancing.

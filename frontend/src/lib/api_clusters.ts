@@ -243,7 +243,7 @@ export async function getCluster(
     /**
      * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
      * special-cased server-side today (crops.py `order` query param —
-     * see docs/curation-strategy-plan-2026-09.md §1); an id the backend
+     * see the curation strategy plan §1); an id the backend
      * doesn't recognize is harmless (qs() still sends it, the server
      * just falls back to its default ordering). Typed as `string` rather
      * than a fixed union so a new `{API_PREFIX}/methods`-reported order id doesn't

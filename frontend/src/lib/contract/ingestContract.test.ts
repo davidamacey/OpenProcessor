@@ -1,6 +1,6 @@
 /**
  * Ingest-specific contract checks against the vendored OpenAPI snapshot
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.3), beyond
+ * (Ingest UI plan §B.3), beyond
  * what the generic `endpointCatalog.test.ts` path/method/query-param
  * sweep already covers: the `_PathLookupRequest.image_paths.maxItems`
  * value, the ingest response property sets, the `IngestItemStatus`

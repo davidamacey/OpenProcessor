@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * `/datasets/imports/[id]` — one import job (any_domain_plan.md §7.12
-   * item 2; docs/design/w10-import-reprocess-ui-plan-2026-09-27.md §3).
+   * item 2; w10 import reprocess UI plan §3).
    * Everything shown is the served job; `ImportJob` follows it.
    */
   import { page } from '$app/state';

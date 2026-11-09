@@ -1,5 +1,5 @@
 """OpenProcessor v0.4.0 region stage panel on /ingest,
-docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §6.6.
+the v0.4.0 backend deltas plan, §6.6.
 
   1. `test_panel_only_with_a_region_profile` — no profile: no panel and no
      `/region_stage` request.

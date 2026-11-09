@@ -151,7 +151,7 @@ export function createClusterDetailController() {
   // newest-first (today's behavior), unchanged from before Phase 3.
   // 'default'/'outliers' are always offered (see the `allowedOrderIds`
   // passed to <StrategyBar> below): `{API_PREFIX}/crops?order=` only special-cases
-  // those server-side per docs/curation-strategy-plan-2026-09.md §1, so
+  // those server-side per the curation strategy plan §1, so
   // any other id would silently do nothing were it offered here — except
   // 'diverse' (Phase 4), which is *conditionally* offered, gated purely on
   // {API_PREFIX}/methods reporting it (mirrors the mistakenness-filter gating

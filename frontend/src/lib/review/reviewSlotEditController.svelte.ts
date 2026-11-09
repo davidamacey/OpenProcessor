@@ -31,7 +31,7 @@ export function createReviewSlotEditController(opts: ReviewSlotEditOptions) {
   const activeSlot = $derived(opts.tabs.activeSlot);
   const current = $derived(opts.loader.current);
 
-  // Multi-box regions (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+  // Multi-box regions (w8 multibox frontend plan):
   // the controller owns the working box set; every item the server returns
   // (a write, or the current item inside a revision conflict) patches the
   // queue's own copy so the panel never reads a stale one.

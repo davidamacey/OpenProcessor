@@ -1,5 +1,5 @@
 /**
- * Mount-based behavior test for SlotCard (docs/design/test-audit-2026-09-24.md
+ * Mount-based behavior test for SlotCard (test audit
  * P1-4): a region browse row is the full item plus `region_box_id`; the card
  * describes that row's own box (score, reading, detector, state, thumbnail),
  * asserted on the rendered DOM, not a source scan.

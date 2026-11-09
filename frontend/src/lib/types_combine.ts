@@ -1,7 +1,7 @@
 /**
  * Wire types for combine-projects (OpenProcessor P4,
  * `POST {globalApi()}/projects/combine*`; projects_plan.md §6;
- * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §4).
+ * w9/w10 UI plan §4).
  *
  * Pinned key-for-key to the vendored OpenAPI by
  * `src/lib/contract/combineContract.test.ts`. The contract types the

@@ -1,7 +1,7 @@
 /**
  * Tier-2 deployment slot-config parser/validator
- * (docs/annotation-slots-contract-draft.md §4/§5, this repo's
- * docs/design/tier2-annotation-profile-config-plan-2026-09-20.md §4.2).
+ * (the annotation slots contract draft §4/§5, and the tier-2
+ * annotation profile config plan §4.2).
  *
  * `static/annotation-profiles.json` is operator-supplied, untrusted
  * input at a real system boundary — NOT developer-reviewed-PR-supplied

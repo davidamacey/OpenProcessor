@@ -3,7 +3,7 @@
  * the query-parameter form every list/stats route accepts, and the
  * `ItemFilter` / `ItemSelection` body schemas `selection` and
  * `export/yolo item_filter` take. Owned by track C after the v0.4.0
- * Step 0 prelude (docs/design/v040-backend-deltas-ui-plan-2026-10-03.md).
+ * Step 0 prelude (v0.4.0 backend deltas plan).
  *
  * Pinned to the vendored OpenAPI by
  * `src/lib/contract/itemFilterContract.test.ts`. The backend serves no

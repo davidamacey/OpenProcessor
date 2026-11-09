@@ -1,6 +1,6 @@
 /**
  * The "new endpoint" page's state (any_domain_plan.md §7.8.5;
- * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3). The shared
+ * w9/w10 UI plan §3.3). The shared
  * `ConfigEditor` edits an existing doc, so create is its own small
  * controller: a name, a description and a body seeded from each served
  * schema row's `default`; live validation (400 ms after an edit) posts

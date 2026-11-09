@@ -1,5 +1,5 @@
 """OpenProcessor v0.4.0 ingest policy page (`/settings/ingest-policy`,
-docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §7.2).
+v0.4.0 backend deltas §7.2).
 
   1. `test_load_edit_preview_and_save_behind_a_confirm` -- the served policy
      loads, an edit triggers the cost preview (stored detections only),

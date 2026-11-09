@@ -5,7 +5,7 @@
  * identical to the TypeScript original, with NO schema change. If it
  * cannot, the published §4 schema is wrong and this fixture is the bug
  * report — the fix belongs in the schema/parser and a new caveat in
- * docs/annotation-slots-contract-draft.md §5, never in loosening this
+ * the annotation slots contract draft §5, never in loosening this
  * test's assertions.
  */
 

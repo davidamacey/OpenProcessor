@@ -58,7 +58,7 @@ export function getModelClassMapping(
 
 /**
  * Unload a Triton model and remove its repo directory (follow-up gap 2,
- * docs/design/audit-remediation-plan-2026-09.md Appendix D item 3,
+ * audit remediation plan, Appendix D item 3,
  * 2026-09-11). The backend enforces the real guard (region-protected
  * models never, active/core models need `force`) — `force` here only
  * matters for the latter; passing it for a region-protected model still

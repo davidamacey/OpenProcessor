@@ -1,4 +1,4 @@
-"""New coverage (docs/design/test-audit-2026-09-24.md recommendation 5):
+"""New coverage (test audit recommendation 5):
 `/dashboard`'s stats come over SSE (`GET {API_PREFIX}/pipeline/events`,
 `subscribePipelineEvents`, src/lib/sse.ts). A `snapshot` frame carrying
 `{stats: {error: "..."}}` (the live-backend G1 failure mode) must render

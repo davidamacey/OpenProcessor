@@ -1,5 +1,5 @@
 /**
- * M3 (docs/design/interactive-pass-2026-09-24.md): before this fix, the
+ * M3 (interactive pass): before this fix, the
  * slot gallery on /clusters only ever rendered region-cluster cards —
  * when the only bucket that existed was the permanent false-positive
  * one, every other region was unreachable, and the counter strip leaked

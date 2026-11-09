@@ -108,7 +108,7 @@ class Stub:
         )
         self.on("GET", r"/health$", {"status": "ok", "region_profile": REGION_PROFILE})
         self.on("GET", r"(thumbnail|region_thumbnail|/source)(/|$|\?)", self._image)
-        # K6 (docs/design/k6-frontend-overlay-plan-2026-09-24.md):
+        # K6:
         # `/review`'s source panel (SourceImageOverlay.svelte) fetches
         # `/crops/{id}/context` and then the now-unannotated
         # `/crops/{id}/image` on every visit — same "every test needs
@@ -304,7 +304,7 @@ class Stub:
         # "router not mounted" shape; Track B specs override it.
         self.on("GET", r"/projects/combine/[^/?]+(\?|$)", (404, {"detail": "Not Found"}))
         # OpenProcessor v0.4.0 reads
-        # (docs/design/v040-backend-deltas-ui-plan-2026-10-03.md §3 item 8).
+        # (v0.4.0 backend deltas, item 8).
         # Default 404s so existing tests keep their zero-unhandled guarantee
         # once the tracks add these reads: `/open_vocab` is the open-vocab
         # editor's gate (404 = absent); the region stage, detections summary
@@ -446,8 +446,7 @@ class Stub:
         assert self.unhandled == [], f"unhandled request(s) hit the stub: {self.unhandled}"
         assert self.handled, (
             "no stubbed request was ever hit — an API-prefix change or route "
-            "mismatch would otherwise pass silently (see R2 in "
-            "docs/design/test-audit-2026-09-24.md)"
+            "mismatch would otherwise pass silently (see R2 in the test audit)"
         )
 
 

@@ -174,9 +174,9 @@ export interface Crop {
   proposal_name?: string | null;
   // -- Curation scores (Phase 3 review-queue strategies, 2026-09) --------
   // Provenance quad mirroring the region_detector/region_detector_version
-  // pattern (docs/curation-strategy-plan-2026-09.md §4). `mistakenness`
+  // pattern (curation strategy plan §4). `mistakenness`
   // is the only curation score that cleared the full validation gate as
-  // of OpenProcessor docs/design/curation_scores.md — representativeness/
+  // of OpenProcessor docs/research/curation_scores.md — representativeness/
   // atypicality/uncertainty_entropy are pre-existing fields (cluster
   // distance, probe entropy) exposed as named sorts, not new score
   // fields, so they don't need their own Crop fields. Everything else
@@ -341,7 +341,7 @@ export interface Cluster {
   centroid_sha?: string;
   updated_at: string | null;
   /** Set only on the client-built region inventory entry pinned
-   *  atop `/clusters` (M4, docs/design/interactive-pass-2026-09-24.md) —
+   *  atop `/clusters` (M4, interactive pass) —
    *  it is not a real cluster (no purity, no cluster_kind), so the grid
    *  must not draw a pure/mixed/noisy badge for it or key it against a
    *  real cluster id. Absent (not false) on every server-served Cluster. */
@@ -561,7 +561,7 @@ export interface UndoEntry {
   at: number;
   /**
    * Which backend undo route this entry reverses (M6,
-   * docs/design/interactive-pass-2026-09-24.md). Defaults to `'label'`
+   * interactive pass). Defaults to `'label'`
    * when absent (every entry pushed before this field existed). Kept as
    * ONE ring buffer with a kind tag, not a separate region/vlm_dismiss
    * stack, so Z on `/clusters/[id]` — where a label write and a

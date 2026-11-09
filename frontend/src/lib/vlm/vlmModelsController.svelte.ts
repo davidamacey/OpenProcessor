@@ -1,6 +1,6 @@
 /**
  * The `/settings/models` page's state (any_domain_plan.md §7.8;
- * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.3): the VLM binding of
+ * w9/w10 UI plan §3.3): the VLM binding of
  * the shared `ConfigList` (the served registry, this project's active
  * endpoint with Rollback and Turn off, Clone and Delete) plus
  *

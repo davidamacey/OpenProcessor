@@ -1,6 +1,6 @@
 /**
  * Shared raw-item fixture builder for `{API_PREFIX}/crops` payloads
- * (docs/design/test-audit-2026-09-24.md, recommendation 4 / P0-3).
+ * (test audit, recommendation 4 / P0-3).
  *
  * Every field carries a distinct, non-default value (distinct strings/
  * numbers, `true` where the mapped default is `false`, non-null where the

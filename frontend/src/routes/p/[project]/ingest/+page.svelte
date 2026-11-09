@@ -2,7 +2,7 @@
   import { apiErrorText } from '$lib/api_errors';
   /**
    * `/ingest` — bring images into the pool
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A). The
+   * (Ingest UI plan §A). The
    * page shell composes the sections below and owns no upload logic of
    * its own — that lives in `ingestRunController.svelte.ts`, driven
    * through `IngestRunPanel`.

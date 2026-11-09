@@ -1,7 +1,7 @@
 // Two fixtures backing the mock-backed verification for the whole scoped-
-// assist feature (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md
+// assist feature (VLM-scoped labeling assist plan
 // §6). Kept in sync by eye with the JSON stubbed in
-// scripts/playwright_assist_scope.py.
+// the deleted playwright_assist_scope script.
 
 /** Today's real `/methods` shape — no assist axes at all. */
 export const METHODS_TODAY = {

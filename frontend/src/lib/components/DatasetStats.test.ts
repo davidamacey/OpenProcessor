@@ -1,5 +1,5 @@
 /**
- * Mount-based behavior test for DatasetStats (docs/design/test-audit-2026-09-24.md
+ * Mount-based behavior test for DatasetStats (test audit
  * P1-4). Covers the exact regression the audit's mutation check found
  * surviving: dropping `l.by_vlm` from the labeled total (§2.2) — this is
  * that "an {error} payload shows Stats unavailable and keeps the last good

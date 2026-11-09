@@ -415,7 +415,7 @@ describe('getClusters purity_n/purity_basis/label_agreement/labelled_share (DQ-M
 });
 
 /**
- * D-4 (docs/design/curation_query_performance_audit.md): `/clusters`
+ * D-4 (curation query performance audit): `/clusters`
  * representatives are paged by offset/limit independent of the card list
  * itself. `getClusters` forwards `representatives_offset`/
  * `representatives_limit` as `offset`/`limit` query params and echoes the

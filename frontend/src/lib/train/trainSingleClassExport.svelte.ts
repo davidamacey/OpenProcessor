@@ -18,7 +18,7 @@ export function createTrainSingleClassExport(dataset: TrainDatasetController) {
   // through OpenProcessor's generic `POST /export/single_class`. Backend
   // is synchronous, so we just await it and surface the resulting dir +
   // counts. Only the four typed option controls below stay hand-written —
-  // see docs/design/bakeoff-train-genericization-plan-2026-09-21.md
+  // see the bakeoff-train genericization plan
   // §3.3/§3.4 for why generalizing them would produce a form builder with
   // exactly one form to build.
   let singleClassExporting = $state<boolean>(false);

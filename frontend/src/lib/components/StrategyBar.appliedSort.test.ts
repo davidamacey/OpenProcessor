@@ -1,6 +1,6 @@
 /**
  * Mount-based behavior test for StrategyBar's applied-sort summary
- * (docs/design/test-audit-2026-09-24.md P1-4): the collapsed chip shows
+ * (test audit P1-4): the collapsed chip shows
  * "→ <applied>" only when the backend's `sort_applied` differs from what
  * the operator picked, and shows nothing when it matches or is absent.
  * `formatAppliedSort` already has its own pure-function test
@@ -94,7 +94,7 @@ describe('StrategyBar — applied-sort summary', () => {
     expect(el.textContent).not.toContain('→');
   });
 
-  // R4 (docs/design/visual-audit-2026-09-24.md): the chip showed raw ids
+  // R4 (visual audit): the chip showed raw ids
   // ("→ classifier_blind_spots_default") though /methods serves a label for each.
   it('shows the served /methods label for the applied sort, not its raw id', () => {
     strategiesStore.methods = {
@@ -126,7 +126,7 @@ describe('StrategyBar — applied-sort summary', () => {
 });
 
 /**
- * M11 (docs/design/interactive-pass-2026-09-24.md): `sort_fallback_reason`
+ * M11 (interactive pass): `sort_fallback_reason`
  * renders inside the collapsed summary chip, next to `sort_applied` —
  * not as a page-level banner the caller has to render separately.
  */

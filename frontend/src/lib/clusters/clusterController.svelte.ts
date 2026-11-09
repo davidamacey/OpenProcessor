@@ -1,7 +1,7 @@
 /**
  * `/clusters/[id]` action controller — assign / drop-on-class / VLM accept-
  * reject / discard / undo / ignore / move, extracted out of
- * `clusters/[id]/+page.svelte` (docs/design/test-audit-2026-09-24.md P1-4,
+ * `clusters/[id]/+page.svelte` (test audit P1-4,
  * second pass) so this hot path's optimistic-mutation-then-
  * rollback-or-confirm logic is unit-testable without mounting the page —
  * same motivation, and the same factory-function convention (state via

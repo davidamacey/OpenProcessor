@@ -1,6 +1,6 @@
 /**
  * Mount test for `AutoLabelPanel`'s additive `gate` prop
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.5): with
+ * (Ingest UI plan §A.5): with
  * no gate, the start button is enabled; with a blocked gate, it's
  * disabled and the reason renders.
  */

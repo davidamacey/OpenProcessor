@@ -3,7 +3,7 @@
   /**
    * Deployment defaults — admin page for the shared curation-strategy
    * defaults (`GET,PUT {API_PREFIX}/settings`). See
-   * docs/design/curation-settings-ui-plan-2026-09-21.md §5.
+   * curation settings UI plan §5.
    *
    * A dedicated route, not a StrategyBar/AssistScopeBar chip (plan §2):
    * this write is deployment-wide, the categorical opposite of those

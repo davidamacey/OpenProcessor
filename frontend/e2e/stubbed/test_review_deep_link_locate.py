@@ -1,4 +1,4 @@
-"""DQ-M7 (docs/design/data-quality-pass-2026-09-24.md): `/review?crop_id=`
+"""DQ-M7: `/review?crop_id=`
 deep link at a deep page used to page 1..loc.page sequentially via
 `queue.loadMore()` — 103 requests / 5.7s to reach rank 3000 (page 101) —
 and for that whole window rendered page 1's item #1 with its keybindings

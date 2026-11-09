@@ -1,6 +1,6 @@
 /**
  * Wire types for the projects surface
- * (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+ * (any-domain rev3 and projects contract review
  * §7; OpenProcessor `cutover/projects-foundation` P1 +
  * `cutover/projects-lifecycle` P3). `GET {globalApi()}/projects` is the
  * switcher vocabulary and the only global read the app needs before
