@@ -364,9 +364,7 @@ def test_export_image_copies_every_scripts_file_it_imports_or_sources() -> None:
     (scripts/lib/model_setup.sh)."""
     dirs, files = _copied_scripts('Dockerfile', 'export')
     assert 'scripts' not in dirs
-    needed = _scripts_modules_imported(
-        ['export', 'models', 'config_templates', 'src/ultralytics_patches']
-    )
+    needed = _scripts_modules_imported(['export', 'models', 'config_templates'])
     needed |= _scripts_modules_imported(['scripts/datasets'])
     needed |= _COCO_SAMPLE | _SHELL_LIBS
     missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))

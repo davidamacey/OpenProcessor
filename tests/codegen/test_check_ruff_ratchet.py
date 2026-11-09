@@ -116,13 +116,6 @@ def test_same_named_methods_get_separate_keys(
     assert sorted(found) == ['src/_probe.py::f', 'src/_probe.py::f#2']
 
 
-def test_third_party_patches_are_excluded(
-    scratch_repo: ScratchRepo, empty: tuple[Path, Path]
-) -> None:
-    scratch_repo.write('src/ultralytics_patches/p.py', branches('f', 30) + broad(5))
-    assert run(scratch_repo, *empty) == 0
-
-
 def test_a_ruff_failure_fails_closed(scratch_repo: ScratchRepo, empty: tuple[Path, Path]) -> None:
     scratch_repo.write('src/_probe.py', 'def broken(:\n')
     assert run(scratch_repo, *empty) == 1

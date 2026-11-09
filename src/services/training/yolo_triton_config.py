@@ -16,7 +16,7 @@ Critical YOLO26 specifics:
   passed (https://docs.ultralytics.com/modes/export/), so the trainer exports with
   ``src.domain.model_families.export_kwargs``. Promote refuses any ONNX whose output is
   not ``[300, 6]`` (``onnx_head.py``).
-* No ``EfficientNMS_TRT`` plugin (unlike the existing YOLO11 path).
+* No NMS plugin: the NMS is part of the model's forward pass.
 * ``class_id`` is float-encoded; clients must cast to int. We avoid
   ``half=True`` on export so FP16 doesn't lose integer precision above
   2048 (Ultralytics issue #24428).

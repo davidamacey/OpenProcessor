@@ -84,7 +84,7 @@ def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:
             'num_classes': len(names),
             'class_names': list(names.values()) if isinstance(names, dict) else [],
             # The NMS-free head (YOLO26, YOLOv10) exports through the native toolchain; the
-            # other heads go through the EfficientNMS toolchain. The export worker routes on it.
+            # other heads embed NMS in the graph. The export worker routes on it.
             'head_kind': head_kind_of(model.model[-1]),
             'ultralytics_version': ckpt.get('version'),
         }

@@ -4,63 +4,17 @@ This document provides attribution for third-party code and reference architectu
 
 ---
 
-## Ultralytics YOLO - End2End ONNX Export
+## Ultralytics YOLO
 
-This project uses modified code from the **levipereira/ultralytics** fork to enable GPU-accelerated end-to-end YOLO inference with TensorRT EfficientNMS plugin integration.
-
-### Repository Information
-- **Fork Repository:** https://github.com/levipereira/ultralytics
-- **Original Repository:** https://github.com/ultralytics/ultralytics (official)
-- **Fork Version:** 8.3.18 (October 20, 2024)
-- **License:** AGPL-3.0 (same as official ultralytics)
-- **Fork Author:** Levi Pereira (@levipereira)
-
-### Code Used
-
-**Approximately 600 lines of custom code** from the fork, specifically:
-
-1. **`export_onnx_trt()` method** (~365 lines)
-   - Location: `ultralytics/engine/exporter.py` (lines 460-592 in fork)
-   - Purpose: Adds TensorRT EfficientNMS plugin integration to ONNX export graph
-   - Enables GPU-accelerated Non-Maximum Suppression (NMS) embedded in model
-
-2. **TensorRT Custom Operators** (~280 lines)
-   - `TRT_EfficientNMS` class (torch.autograd.Function)
-   - `TRT_EfficientNMS_85` variant (80 classes + 5 additional outputs)
-   - `TRT_EfficientNMSX` variant (extended functionality)
-   - Location: Lines 1355-1647 in fork
-   - Purpose: PyTorch operators that map to TensorRT's EfficientNMS plugin
-
-3. **`End2End_TRT` wrapper class**
-   - Wraps YOLO model with NMS layer for end-to-end inference
-   - Enables single-pass GPU inference without CPU post-processing
-
-### What This Enables
-
-**TensorRT + GPU NMS:**
-- Embeds Non-Maximum Suppression directly into TensorRT engine
-- Eliminates CPU post-processing bottleneck
-- Achieves **2-5x speedup** by avoiding CPU↔GPU memory transfers for NMS
-
-### Fork Status
-
-As of November 2025:
-- Fork is **210 versions behind** official ultralytics (8.3.18 vs 8.3.228)
-- Fork provides critical functionality not available in official repository
-- Custom operators stable and production-tested by fork maintainer
-
-### Usage in This Project
-
-The fork's end2end export functionality is used to generate:
-- `models/yolov11_small_trt_end2end/` - YOLO11 object detection with GPU NMS
+Detection models are loaded and exported with the official **ultralytics** package
+(https://github.com/ultralytics/ultralytics, AGPL-3.0, pinned to one exact release in
+`requirements.txt`). Its documented `nms` export argument puts non-maximum suppression into the
+ONNX graph (the standard `NonMaxSuppression` operator, which TensorRT builds natively), so no
+Ultralytics code is vendored or modified here.
 
 ---
 
-## NVIDIA TensorRT EfficientNMS Plugin
-
-The end2end models use NVIDIA's **TensorRT EfficientNMS plugin** for GPU-accelerated post-processing.
-
-### Information
+## Information
 - **Provider:** NVIDIA Corporation
 - **Documentation:** https://docs.nvidia.com/deeplearning/tensorrt/
 - **Plugin:** EfficientNMS_TRT
@@ -355,7 +309,7 @@ The following repositories were used as **reference only** (no code directly cop
 
 Special thanks to:
 
-- **Levi Pereira (@levipereira)** - For the ultralytics fork with end2end TensorRT export and the triton-server-yolo reference architecture
+- **Levi Pereira (@levipereira)** - For the triton-server-yolo reference architecture (and the ultralytics fork the first end2end export was based on)
 - **Ultralytics Team** - For the YOLO models and official ultralytics library
 - **NVIDIA Corporation** - For Triton Inference Server and TensorRT
 - **Omar Abid (@omarabid59)** - For the yolov8-triton reference implementation
@@ -374,18 +328,15 @@ Special thanks to:
 
 ### This Project
 This project's original code is licensed under **AGPL-3.0-or-later**
-(see [LICENSE](LICENSE)). It was previously MIT-badged; the project was
-re-badged AGPL-3.0-or-later because it incorporates the AGPL-3.0
-Ultralytics fork below as a vendored dependency
-(`src/ultralytics_patches/`), and AGPL-3.0 is a copyleft license that
-propagates to the combined work.
+(see [LICENSE](LICENSE)). It was previously MIT-badged and was re-badged
+AGPL-3.0-or-later while it vendored an AGPL-3.0 Ultralytics fork; the fork is gone,
+and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics` package.
 
 ### Third-Party Components
 
 | Component | License | Attribution Required |
 |-----------|---------|---------------------|
-| levipereira/ultralytics | AGPL-3.0 | ✓ Yes (this file) |
-| Ultralytics YOLO | AGPL-3.0 | ✓ Yes (inherited) |
+| Ultralytics YOLO | AGPL-3.0 | ✓ Yes (this file) |
 | NVIDIA Triton | BSD 3-Clause | ✓ Yes |
 | NVIDIA TensorRT | NVIDIA DSLA | ✓ Yes |
 | Apple MobileCLIP (code) | Apple Sample Code | ✓ Yes (this file) |

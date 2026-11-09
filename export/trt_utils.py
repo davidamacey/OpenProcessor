@@ -192,8 +192,7 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     TensorRT 11 removed the FP16 builder flag; reduced precision must live
     in the ONNX graph itself. Converts weights/activations to FP16 via
     onnxconverter-common's graph rewrite (no ONNX Runtime execution — it
-    also works on graphs containing TRT plugin ops like EfficientNMS_TRT,
-    which ORT-based tools cannot type-infer). ``keep_io_types=True`` keeps
+    also works on graphs containing TRT plugin ops, which ORT-based tools cannot type-infer). ``keep_io_types=True`` keeps
     graph inputs/outputs FP32, so Triton config dtypes (TYPE_FP32) remain
     valid and clients are unaffected.
 
@@ -221,7 +220,6 @@ def bake_fp16_onnx(onnx_path: str | Path, output_path: str | Path | None = None)
     # angle precision.
     fp32_ops = {
         *float16.DEFAULT_OP_BLOCK_LIST,
-        'EfficientNMS_TRT',
         'Einsum',
         'NonMaxSuppression',
         'Range',
