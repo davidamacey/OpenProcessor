@@ -18,6 +18,11 @@ describe('generic served-enum filter bar (no tab/param-specific code)', () => {
     expect(barSrc).toMatch(/<ServedFilterField[\s\S]*?onchange=\{setEnumFilter\}/);
   });
 
+  it('draws no capture-date markup of its own: the date inputs come from the served specs', () => {
+    expect(barSrc).not.toMatch(/taken_(from|to)|type="date"/);
+    expect(src).not.toMatch(/taken_(from|to)/);
+  });
+
   it("activeFilterSpecs is the active tab's served specs minus the params the page draws itself", () => {
     expect(src).toMatch(
       /const servedSpecs = \$derived\(\s*reviewTabsVocabularyStore\.filterSpecsFor\(activeTabEndpointId\),?\s*\);/,

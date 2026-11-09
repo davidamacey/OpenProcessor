@@ -71,6 +71,8 @@ const ITEM_FILTER_CONTROLS: ReviewFilterSpec[] = [
     label: 'Review status',
     options: opts(REVIEW_STATUSES),
   },
+  { ...base, param: 'taken_from', kind: 'date', label: 'Taken from' },
+  { ...base, param: 'taken_to', kind: 'date', label: 'to' },
 ];
 
 const OPEN_VOCAB_CONTROLS: ReviewFilterSpec[] = [

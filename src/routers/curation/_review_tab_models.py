@@ -14,7 +14,9 @@ from pydantic import BaseModel, Field
 from src.services.curation.reprocess_models import ReprocessRequest
 
 
-ReviewFilterKind = Literal['enum', 'multi_enum', 'class_names', 'bool', 'number', 'integer', 'text']
+ReviewFilterKind = Literal[
+    'enum', 'multi_enum', 'class_names', 'bool', 'number', 'integer', 'text', 'date'
+]
 
 
 class ReviewFilterOption(BaseModel):

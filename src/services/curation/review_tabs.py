@@ -90,6 +90,8 @@ COMMON_FILTERS: tuple[str, ...] = (
     'review_status',
     'combine_conflict',
     'on_negative_frame',
+    'taken_from',
+    'taken_to',
 )
 # Tab-only filters, on top of COMMON_FILTERS.
 TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {

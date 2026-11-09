@@ -10,7 +10,9 @@ filter with no spec.
 Kinds: ``enum`` (pick one of ``options``), ``multi_enum`` (repeatable
 parameter, any of ``options``), ``class_names`` (repeatable class NAME; no
 fixed options: see its ``description`` for where the names come from),
-``bool``, ``number`` / ``integer`` (``min``/``max``) and ``text``.
+``bool``, ``number`` / ``integer`` (``min``/``max``), ``text`` and ``date`` (an ISO
+8601 day, ``YYYY-MM-DD``; the capture-date range is the two specs ``taken_from`` /
+``taken_to``, both optional and inclusive).
 """
 
 from __future__ import annotations
@@ -90,6 +92,11 @@ _CLASS_NAMES_HELP = (
 )
 
 
+_TAKEN_HELP = (
+    'Capture day (YYYY-MM-DD), inclusive; items with no capture time never match. '
+    'taken_from must not be after taken_to.'
+)
+
 # Spec params whose filter-model field is named differently.
 _MODEL_FIELD = {'class_name': 'class_names', 'exclude_class_name': 'exclude_class_names'}
 
@@ -166,6 +173,8 @@ FILTER_SPECS: dict[str, dict[str, Any]] = {
             'Negative frames',
             options=ON_NEGATIVE_FRAME_FILTER_OPTIONS,
         ),
+        _spec('taken_from', 'date', 'Taken from', description=_TAKEN_HELP),
+        _spec('taken_to', 'date', 'to', description=_TAKEN_HELP),
         _spec('text', 'text', 'Box text contains'),
         _spec('region_status', 'enum', 'Status', options=REGION_STATUS_FILTER_OPTIONS),
         _spec('import_id', 'text', 'Dataset import'),
