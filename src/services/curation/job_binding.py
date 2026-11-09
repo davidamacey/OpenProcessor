@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import bind_project
 from src.services.labeling.vlm_usage import usage_sessions
-from src.services.projects.guard import make_script_opensearch
+from src.services.projects import guard
 from src.services.projects.registry import ProjectRegistry
 
 
@@ -49,7 +49,7 @@ async def opensearch_client(timeout: float | None = None) -> Any:
     from src.config.settings import get_settings
 
     settings = get_settings()
-    return make_script_opensearch(
+    return guard.make_script_opensearch(
         [settings.opensearch_url],
         timeout=settings.opensearch_timeout if timeout is None else timeout,
     )

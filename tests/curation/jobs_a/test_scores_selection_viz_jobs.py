@@ -34,7 +34,7 @@ async def start_selection(project):
             query={'match_all': {}},
             k=3,
             seed_crop_id=None,
-            scope={'cluster_id': 4},
+            scope={'cluster_uid': 'c-4'},
             max_n=100,
             embedding_field='pe_embedding',
         )
@@ -73,7 +73,7 @@ async def test_a_viz_start_with_a_bad_scope_is_refused_before_a_row_exists(
 ) -> None:
     project = make_project(pg)
     async with async_session_factory()() as session:
-        with pytest.raises(ValueError, match='cluster_id is required'):
+        with pytest.raises(ValueError, match='cluster_uid is required'):
             await embedding_viz.start(session, project, scope='cluster')
     assert sql(pg, 'SELECT count(*) FROM jobs WHERE project_id = %s', project) == [(0,)]
 
@@ -173,7 +173,7 @@ async def test_the_viz_run_fits_and_writes_through_the_existing_helpers(
     async def space(target):
         return SimpleNamespace(vector_field='pe_embedding')
 
-    async def fetch(_os, *, scope, cluster_id, max_n, embedding_field):
+    async def fetch(_os, *, scope, cluster_uid, max_n, embedding_field):
         calls.append(f'fetch:{scope}:{max_n}:{embedding_field}')
         return ['a', 'b'], np.ones((2, 3), dtype=np.float32)
 

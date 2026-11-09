@@ -22,11 +22,12 @@ async def test_the_job_entry_point_never_writes_a_locked_item_either(
 ) -> None:
     from types import SimpleNamespace
 
-    from fixtures.job_rows import make_project
+    from fixtures.job_rows import make_project, seed_default_spaces
 
     from curation.reprocess_fixtures import make_service as make
 
     project = make_project(pg, 'default')  # the ingest below publishes events to it
+    seed_default_spaces(pg, project)
     root = servable_root(tmp_path, monkeypatch)
     path = root / 'a.jpg'
     path.write_bytes(jpeg_bytes())

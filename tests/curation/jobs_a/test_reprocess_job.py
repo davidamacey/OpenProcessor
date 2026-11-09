@@ -204,7 +204,7 @@ async def test_the_registered_task_runs_the_coroutine_once_through_the_wrapper(
 ):
     from contextlib import asynccontextmanager
 
-    from src.services.curation import job_binding
+    from src.services.projects import guard
     from src.tasks import jobs_a_support
 
     project = make_project(pg, 'rp-task')
@@ -227,7 +227,7 @@ async def test_the_registered_task_runs_the_coroutine_once_through_the_wrapper(
         return Ingest()
 
     monkeypatch.setattr(jobs_a_support, 'bound_project', no_bind)
-    monkeypatch.setattr(job_binding, 'make_script_opensearch', fake_client)
+    monkeypatch.setattr(guard, 'make_script_opensearch', fake_client)
     monkeypatch.setattr(jobs_a_support, 'worker_ingest', fake_ingest)
 
     outcome = await asyncio.to_thread(
