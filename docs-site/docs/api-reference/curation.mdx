@@ -480,6 +480,6 @@ hyperparameters from `GET /train/profiles` into the request's own
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/images/serve` | Serve a source image by path (confined to configured roots) |
-| GET | `/images/root/{alias}` | Serve from a named extra root (`OP_SOURCE_PATH_ALIASES`) |
+| GET | `/images/serve` | Serve a source image by path (confined to configured roots, and only an image this project ingested) |
+| GET | `/images/root/{alias}` | Serve from a named extra root (`OP_SOURCE_PATH_ALIASES`), only an image this project ingested |
 | GET | `/images/cache/stats` | Thumbnail cache stats |
