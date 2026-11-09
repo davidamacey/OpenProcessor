@@ -7,7 +7,7 @@ InMemoryRegistry) and assert the router glues them together correctly.
 Covered:
 - ``/curation/test_holdout/freeze`` refuses re-run unless ``?force=true`` (409).
 - ``/curation/classes`` POST appends a new class.
-- ``/curation/classes/merge`` deprecates source and bulk-relabels.
+- ``/curation/classes/merge`` refuses a source with frozen holdout crops (the job is in families_b).
 - ``/curation/health`` returns a structured status when deps are degraded/down.
 - ``/curation/crops`` server-side filters out test_holdout by default.
 
@@ -80,6 +80,7 @@ def app_client(fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock):
 
     from src.core.dependencies import get_async_triton, get_opensearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_freezable
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -93,6 +94,9 @@ def app_client(fake_opensearch: AsyncMock, fake_triton_pool: AsyncMock):
     # AsyncMock fixture is what every endpoint sees.
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
     app.dependency_overrides[get_async_triton] = lambda: fake_triton_pool
+    # The near-duplicate freshness gate is covered in tests/records; these tests are about the
+    # freeze route's own refusals.
+    app.dependency_overrides[require_near_dup_freezable] = lambda: None
 
     with TestClient(app) as client:
         yield client
@@ -165,36 +169,6 @@ def test_classes_post_appends(app_client: Any, tmp_path: Path) -> None:
     assert body['class_id'] == 0
 
 
-def test_classes_merge_deprecates_source(
-    app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
-) -> None:
-    """POST /curation/classes/merge marks source deprecated."""
-    from _class_registry_fake import InMemoryRegistry
-
-    tmp_path / 'class_registry.json'
-    reg = InMemoryRegistry()
-    src_id = reg.add('mustang_gen5', group='muscle')
-    tgt_id = reg.add('mustang_gen6', group='muscle')
-
-    fake_opensearch.update_by_query = AsyncMock(return_value={'updated': 5})
-
-    with patch('src.routers.curation.get_class_registry', return_value=reg):
-        r = app_client.post(
-            '/curation/projects/default/classes/merge',
-            json={'source_id': src_id, 'target_id': tgt_id},
-        )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body['source_id'] == src_id
-    assert body['target_id'] == tgt_id
-    assert body['deprecated'] is True
-
-    src_entry = reg.get(src_id)
-    assert src_entry is not None
-    assert src_entry.deprecated is True
-    assert src_entry.merged_into == tgt_id
-
-
 def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
     app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
 ) -> None:
@@ -221,94 +195,6 @@ def test_classes_merge_refuses_when_source_has_frozen_holdout_crops(
     src_entry = reg.get(src_id)
     assert src_entry is not None
     assert src_entry.deprecated is False
-
-
-def test_classes_merge_resets_stale_human_provenance_on_crops_only(
-    app_client: Any, tmp_path: Path, fake_opensearch: AsyncMock
-) -> None:
-    """A merge must reset label_source on the items index (else a merged
-    crop keeps reading as though its old class_source/label writer still
-    applies), but must NOT touch the confirmed-labels index, which has no
-    class_validated field and whose label_source means something else
-    (original label provenance).
-
-    class_validated
-    is carried over, not cleared -- a human-validated crop of the source
-    class stays validated under the target. See
-    test_merge_class_carries_over_validation_to_the_target in
-    test_history.py for the class_validated=False case.
-
-    The items-index leg is a per-doc OCC bulk pass (via
-    occ_skip_on_conflict_bulk) so class_id_history gets appended through
-    record_class_history instead of being reimplemented in painless. The
-    confirmed-labels index has no class_id_history field, so it stays a
-    plain update_by_query. This test verifies both legs against their
-    actual mechanisms rather than asserting two update_by_query calls.
-    """
-    from _class_registry_fake import InMemoryRegistry
-
-    tmp_path / 'class_registry.json'
-    reg = InMemoryRegistry()
-    src_id = reg.add('miata_na', group='sport_compact')
-    tgt_id = reg.add('miata_nb', group='sport_compact')
-
-    fake_opensearch.update_by_query = AsyncMock(return_value={'updated': 1})
-    fake_opensearch.search = AsyncMock(
-        return_value={'_scroll_id': 'scroll-1', 'hits': {'hits': [{'_id': 'crop-1'}]}}
-    )
-    fake_opensearch.scroll = AsyncMock(
-        return_value={'_scroll_id': 'scroll-1', 'hits': {'hits': []}}
-    )
-    fake_opensearch.clear_scroll = AsyncMock(return_value={})
-
-    from curation.occ_fakes import make_bulk_response, make_bulk_update_item, make_mget_response
-
-    merge_source = {
-        'class_id': src_id,
-        'class_name': 'miata_na',
-        'class_source': 'human',
-        'label_source': 'human',
-        'class_validated': True,
-        'test_holdout': False,
-    }
-
-    async def _fake_mget(*, body: dict[str, Any]) -> dict[str, Any]:
-        found = {d['_id']: merge_source for d in body['docs']}
-        return make_mget_response(found)
-
-    bulk_calls: list[list[dict[str, Any]]] = []
-
-    async def _fake_bulk(*, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
-        bulk_calls.append(body)
-        items = [
-            make_bulk_update_item(action['update']['_id'], status=200) for action in body[0::2]
-        ]
-        return make_bulk_response(items)
-
-    fake_opensearch.mget = AsyncMock(side_effect=_fake_mget)
-    fake_opensearch.bulk = AsyncMock(side_effect=_fake_bulk)
-
-    with patch('src.routers.curation.get_class_registry', return_value=reg):
-        r = app_client.post(
-            '/curation/projects/default/classes/merge',
-            json={'source_id': src_id, 'target_id': tgt_id},
-        )
-    assert r.status_code == 200, r.text
-
-    # There is no confirmed-labels index to relabel any more.
-    assert fake_opensearch.update_by_query.call_args_list == []
-
-    # Items index: per-doc OCC bulk update (batched mget+bulk) resets the
-    # stale human provenance on the merged crop.
-    assert len(bulk_calls) == 1
-    bulk_body = bulk_calls[0]
-    assert bulk_body[0]['update']['_index'] == 'op_prj_default__items'
-    crop_doc = bulk_body[1]['doc']
-    # merge_source above is class_validated=True -- that
-    # carries over to the target, it is not cleared.
-    assert crop_doc['class_validated'] is True
-    assert crop_doc['label_source'] == 'class_merge'
-    assert crop_doc['class_id'] == tgt_id
 
 
 def test_unlabel_crop_clears_stale_human_provenance(
