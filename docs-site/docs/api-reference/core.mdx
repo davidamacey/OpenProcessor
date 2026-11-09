@@ -99,7 +99,7 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/models` | Models in the Triton repository |
-| POST | `/models/upload` | Upload a checkpoint (`file`; form `triton_name`, `max_batch`, `formats`, `normalize_boxes`, `auto_load`) |
+| POST | `/models/upload` | Upload a checkpoint (`file`; form `triton_name`, `max_batch`, `formats`, `auto_load`) |
 | POST | `/models/{model_name}/export` | Export to TensorRT in the background |
 | GET | `/models/export/{task_id}`, `/models/exports` | Export task status |
 | GET | `/models/{model_name}/status` | Load status |

@@ -22,7 +22,7 @@ container; pull or build its image first):
 docker compose up -d triton-server api
 
 # Re-export every model
-docker compose run --rm model-export python /app/export/export_models.py --formats onnx_end2end trt_end2end
+docker compose run --rm model-export python /app/export/ultralytics_export.py --formats trt
 docker compose run --rm model-export python /app/export/export_scrfd.py
 docker compose run --rm model-export python /app/export/export_face_recognition.py
 docker compose run --rm model-export python /app/export/export_mobileclip_image_encoder.py

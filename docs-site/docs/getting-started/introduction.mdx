@@ -19,7 +19,7 @@ It is licensed **AGPL-3.0-or-later** (see [Licenses](../reference/licenses.mdx))
 
 | Area | Routes | Backed by |
 |---|---|---|
-| Object detection | `/detect`, `/detect/batch` | YOLO11 (EfficientNMS end2end engine, GPU NMS) and YOLO26 (NMS-free engine), side by side |
+| Object detection | `/detect`, `/detect/batch` | YOLO11 and YOLO26, each one fused `[300, 6]` engine, side by side |
 | Faces | `/faces/detect`, `/faces/recognize`, `/faces/verify`, `/faces/search`, `/faces/identify` | SCRFD-10G (boxes + 5-point landmarks) and ArcFace (512-dim) |
 | Embeddings | `/embed/image`, `/embed/text`, `/embed/batch`, `/embed/boxes` | MobileCLIP2-S2 image and text encoders (512-dim) |
 | Visual search | `/search/image`, `/search/text`, `/search/face`, `/search/ocr`, `/search/object` | OpenSearch k-NN |

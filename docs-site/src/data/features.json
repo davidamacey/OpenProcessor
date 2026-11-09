@@ -2,7 +2,7 @@
   {
     "title": "Object detection",
     "icon": "box",
-    "desc": "YOLO11 (EfficientNMS end2end, GPU NMS) and YOLO26 (natively NMS-free) served side by side from one Triton instance. POST /detect, /detect/batch; pick a model per request."
+    "desc": "YOLO11 and YOLO26, each a fused `[300, 6]` engine, served side by side from one Triton instance. POST /detect, /detect/batch; pick a model per request."
   },
   {
     "title": "Faces",

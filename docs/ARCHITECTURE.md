@@ -126,8 +126,8 @@ in front of PostgreSQL.
 
 ## Inference path
 
-- **Triton models** (`models/`): `yolov11_small_trt_end2end` (GPU NMS),
-  `yolo26_small_trt` (NMS-free), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
+- **Triton models** (`models/`): `yolov11_small_trt_end2end` (fused `[300, 6]`),
+  `yolo26_small_trt` (fused `[300, 6]`), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
   `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder`,
   `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline;
   see [OCR.md](OCR.md)), `gpu_image_prep` (decode-once ingest, loaded on first use) and
