@@ -8,7 +8,7 @@ instead of making a real network call, and asserts the same response
 shape + internal-consistency invariants against synthetic aggregation
 buckets.
 
-Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
+Schema produced by ``stats_dataset.rollup_class_sources`` + ``stats_dataset``:
 
 - ``labeled.{by_human, by_vlm, by_classifier, other}``
   — *class-label* provenance. ``by_human`` counts crops whose
@@ -348,7 +348,7 @@ def test_stats_dataset_surfaces_region_stall_reason(
     from src.services.triton_control import TritonControlService
 
     monkeypatch.setattr(
-        'src.routers.curation.stats.region_profile_or_neutral',
+        'src.services.curation.stats_dataset.region_profile_or_neutral',
         lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),
     )
 
