@@ -12,12 +12,14 @@ the captured failure text against the pre-fix code.
 
 from __future__ import annotations
 
+import json
+import socket
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
-from scripts.curation.worker.fairness import read_liveness, write_liveness
+from scripts.curation.worker.fairness import _liveness_path, write_liveness
 from scripts.curation.worker.state import _ItemTask
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import current_project, set_bound_project
@@ -25,6 +27,11 @@ from src.config.projects import ProjectRecord, resources_for_new
 
 
 pytestmark = pytest.mark.unbound
+
+
+def read_liveness(record: ProjectRecord, *, host: str | None = None) -> dict | None:
+    path = _liveness_path(record, host or socket.gethostname())
+    return json.loads(path.read_text()) if path.exists() else None
 
 
 def _record(tmp_path: Any, slug: str) -> ProjectRecord:

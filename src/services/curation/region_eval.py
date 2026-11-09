@@ -13,10 +13,7 @@ Coordinate frames. Boxes come from the item's
 element ``bbox_norm`` is ALWAYS stored in source-frame coordinates --
 every writer (the cascade, the human PUT-box routes) projects into source
 frame before a box is appended to the list, so there is no longer a
-per-box (or per-item) stored frame marker to read. ``to_source_frame`` /
-:class:`RegionFrameError` / ``CROP_FRAMES`` stay as pure, tested geometry
-helpers (a future crop-relative ingestion path would need them again) but
-:func:`region_records` no longer calls them -- an item with no boxes at
+per-box (or per-item) stored frame marker to read. An item with no boxes at
 all (pending, or a terminal box-less status) falls back to the item-level
 ``RegionFields.status`` field, which the worker still writes as a
 same-request denormalization of the box list.

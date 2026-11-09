@@ -1,14 +1,11 @@
 """Box geometry for the region evaluator: IoU, YOLO label parsing, matching.
 
-Pure functions over normalized ``(x1, y1, x2, y2)`` boxes, plus the
-stored-frame -> source-frame mapping (``to_source_frame``).
+Pure functions over normalized ``(x1, y1, x2, y2)`` boxes.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-
-from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
 if TYPE_CHECKING:
@@ -16,13 +13,6 @@ if TYPE_CHECKING:
 
 
 Box = tuple[float, float, float, float]
-
-SOURCE_FRAMES: frozenset[str] = frozenset({'source'})
-CROP_FRAMES: frozenset[str] = frozenset({'crop', 'item'})
-
-
-class RegionFrameError(ValueError):
-    """A region box is stored in a coordinate frame this evaluator cannot map."""
 
 
 def as_box(value: Any) -> Box | None:
@@ -112,20 +102,3 @@ def greedy_match(
         used_p.add(pi)
         out.append((gi, pi, v))
     return out
-
-
-def to_source_frame(box: Box, frame: str | None, item_box: Box | None) -> Box:
-    """Map a stored region box to source-frame coordinates, or refuse."""
-    if frame is None or frame in SOURCE_FRAMES:
-        return box
-    if frame in CROP_FRAMES:
-        if item_box is None:
-            raise RegionFrameError(
-                f'region box is in frame {frame!r} but its item has no bbox_norm to map it through'
-            )
-        return crop_norm_to_source_norm(box, item_box)
-    raise RegionFrameError(
-        f'unknown region bbox frame {frame!r} (known: '
-        f'{sorted(SOURCE_FRAMES | CROP_FRAMES)}); refusing to score boxes in an unknown '
-        'coordinate system'
-    )
