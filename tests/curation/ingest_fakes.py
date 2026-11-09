@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import CurationConfig, DetectionProfile
@@ -67,6 +68,13 @@ class FakeTritonPool:
         self.calls: list[str] = []
         self.batch_sizes: list[int] = []
         self.fail_on_batch_gt = fail_on_batch_gt
+
+    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
+        return False
+
+    async def load_model(self, model_name: str) -> None:
+        # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
+        raise InferenceServerException(f'{model_name}: not in the repository')
 
     async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
         return 'UINT8'

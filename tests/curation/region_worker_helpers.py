@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock
 
 from _fake_project_registry import install_static_project_registry
+from tritonclient.utils import InferenceServerException
 
 import scripts.curation.worker.state as worker_state
 from curation.region_cascade_helpers import (
@@ -115,7 +116,9 @@ async def _drive_text_hint_rescue(
     handlers = _capture_signal_handler(monkeypatch)
     monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
-    pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
+    pool = MagicMock(
+        initialize=AsyncMock(), close=AsyncMock(), is_model_ready=AsyncMock(return_value=False)
+    )
     monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     install_static_project_registry(monkeypatch)
@@ -126,6 +129,9 @@ async def _drive_text_hint_rescue(
     monkeypatch.setattr(runner_mod, 'RegionDetector', MagicMock(return_value=primary_det))
 
     ocr = MagicMock()
+    # Item/region OCR is not scripted here: a read that raises means "no text read", as before.
+    ocr.read_lines = AsyncMock(side_effect=InferenceServerException('ocr not scripted'))
+    ocr.read_region_lines = AsyncMock(side_effect=InferenceServerException('ocr not scripted'))
     ocr.detect_regions = AsyncMock(return_value=[ocr_pick])
     ocr.pick_best_text_region = MagicMock(return_value=ocr_pick)
     monkeypatch.setattr(runner_mod, 'PaddleOcrTextRecognizer', MagicMock(return_value=ocr))

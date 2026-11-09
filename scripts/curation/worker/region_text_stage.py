@@ -26,6 +26,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any
 
+from PIL import Image
+
 from scripts.curation.worker.cascade import _crop_region_jpeg, _expand_bbox
 from scripts.curation.worker.verify import (
     candidate_actor,
@@ -59,6 +61,7 @@ from src.services.detection.region_text import (
     resolve_region_text,
 )
 from src.services.detection.region_text_rules import RegionTextRules, region_text_rules
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 if TYPE_CHECKING:
@@ -89,6 +92,15 @@ def candidate_detector(t: _ItemTask, profile: DetectionProfile) -> tuple[str, st
     }.get(t.candidate_source, (t.candidate_source or 'unknown', '1'))
 
 
+# The region crop is cut with Pillow before the OCR call.
+_REGION_OCR_ERRORS: tuple[type[Exception], ...] = (
+    *TRITON_CALL_ERRORS,
+    SyntaxError,
+    ValueError,
+    Image.DecompressionBombError,
+)
+
+
 async def read_item_lines(
     ocr: PaddleOcrTextRecognizer, crop_jpeg: bytes, crop_id: str
 ) -> list[OcrLine] | None:
@@ -96,7 +108,7 @@ async def read_item_lines(
     caller then writes no item text, so the next pass retries)."""
     try:
         return await ocr.read_lines(crop_jpeg)
-    except Exception as exc:
+    except TRITON_CALL_ERRORS as exc:
         logger.warning('item_text_ocr_failed', crop_id=crop_id, error=str(exc))
         return None
 
@@ -125,7 +137,7 @@ async def read_region_text(
     try:
         region_jpeg = _crop_region_jpeg(crop_jpeg, box)
         lines = await ocr.read_region_lines(region_jpeg, min_height=profile.text_crop_min_height)
-    except Exception as exc:
+    except _REGION_OCR_ERRORS as exc:
         logger.warning('region_text_ocr_failed', crop_id=crop_id, error=str(exc))
         return None
     return read_dominant_text(lines, DominantTextConfig.from_profile(profile))

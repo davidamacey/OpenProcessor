@@ -40,13 +40,11 @@ scripts/curation/seed_live_harness.py	1	harness boundary: a failed wipe step is 
 scripts/curation/vlm_worker.py	2	worker-loop boundary: one project fetch or consumer error must not stop the loop
 scripts/curation/worker/bulk_writer.py	3	writer boundary: stamp/embedding-write failures are logged and never block a region write
 scripts/curation/worker/flow.py	2	worker-loop boundary: a failed fetch, embed stage or bulk write is logged and the loop goes on
-scripts/curation/worker/region_embed_stage.py	1	per-photo/batch boundary: a failed embed is logged and skipped
-scripts/curation/worker/region_text_stage.py	2	per-crop boundary: an OCR failure yields no text, logged
-scripts/curation/worker/runner.py	2	worker-loop boundary: probe and per-project sync failures are logged, retried next cycle
+scripts/curation/worker/runner.py	1	per-project boundary: a failed runtime-document sync is logged and retried next cycle
 scripts/curation/worker/runtime.py	1	per-project boundary: a class-seed failure is logged, retried next cycle
 scripts/curation/worker/stage_a.py	2	per-task boundary: metrics recorded then re-raised, or the task fails and is logged
 scripts/curation/worker/stage_b.py	1	per-task boundary: failure is recorded in metrics and logged, the task is released
-scripts/curation/worker/stage_sam.py	2	per-task boundary: segmenter/OCR failure is metered, logged, task continues
+scripts/curation/worker/stage_sam.py	1	per-task boundary: a failed segmenter task is logged and released for re-fetch
 scripts/download_ocr_test_images.py	1	CLI boundary: a failed download is printed, others continue
 scripts/resize_images.py	1	CLI boundary: a failed image is printed, others continue
 src/clients/curation_opensearch/ensure_overlay_fields.py	7	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -56,7 +54,6 @@ src/clients/triton_pool_core.py	2	triage every return-empty handler in PR 3; rat
 src/app/factory.py	1	middleware boundary: an unparsable body is returned unchanged
 src/app/lifespan.py	2	lifespan boundary: startup/shutdown steps are best-effort and logged
 src/routers/analyze.py	1	route boundary: mapped to a 500 or a per-file failure entry
-src/services/analyze_pipeline.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/_models_vlm.py	2	status boundary: a VLM probe failure is reported as unavailable
 src/routers/curation/crop_context.py	1	route boundary: pixel-size read failure yields None, logged
 src/routers/curation/datasets.py	1	route boundary: a class-creation failure is mapped to 422
@@ -90,9 +87,7 @@ src/services/curation/export_support.py	1	per-image export boundary: the failure
 src/services/curation/index_bootstrap.py	2	bootstrap boundary: any migration or create failure is logged and reported as not bootstrapped
 src/services/curation/ingest.py	3	per-image boundary: decode and detector failures become a failed IngestResult; the post-ingest refresh failure is logged, the writes already succeeded
 src/services/curation/ingest_batch.py	1	batch detector failure falls back to the per-image path, logged
-src/services/curation/ingest_gpu_decode.py	2	Triton calls raise client, transport and timeout types; failure means the CPU path, logged
-src/services/curation/ingest_index.py	4	per-image boundary: embed, blur and index failures mark the item failed or release the claim, logged
-src/services/curation/ingest_items.py	2	secondary detector failure is recorded on the summary and the primary result is kept
+src/services/curation/ingest_index.py	2	per-image boundary: a bulk-index failure marks the item failed and releases the claim, logged; a failed full-frame blur is logged and the item is written without it
 src/services/curation/ingest_writer.py	1	drain-loop boundary: a crash fails every pending caller with the same exception
 src/services/curation/item_delete.py	1	delete boundary: the failure is recorded per crop id in errors
 src/services/curation/open_vocab_ingest.py	1	stays broad: ingest scheduling is best-effort: any failure (config, OpenSearch, drain start) must not fail the ingest, logged and returns False

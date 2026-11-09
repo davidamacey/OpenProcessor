@@ -23,6 +23,7 @@ from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
 from src.utils.affine import format_detections_from_triton
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 if TYPE_CHECKING:
@@ -212,7 +213,7 @@ def _attach_crop_embeddings(
         if crop_embeddings is not None:
             for i, det in enumerate(detections):
                 det.embedding = crop_embeddings[i].tolist()
-    except Exception:
+    except TRITON_CALL_ERRORS:
         logger.warning('Failed to generate batched crop embeddings')
 
 
@@ -323,7 +324,7 @@ def _embed_detection_crops(
         crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
         for det_i, det in enumerate(detections):
             det.embedding = crop_embeddings[det_i].tolist()
-    except Exception:
+    except TRITON_CALL_ERRORS:
         logger.warning(f'Failed to generate crop embeddings for {filename}')
 
 

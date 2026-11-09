@@ -220,6 +220,7 @@ def _patch_worker_io(
     pool = MagicMock()
     pool.initialize = AsyncMock()
     pool.close = AsyncMock()
+    pool.is_model_ready = AsyncMock(return_value=False)
     os_client = MagicMock()
     if seed_default_project:
         install_static_project_registry(monkeypatch)

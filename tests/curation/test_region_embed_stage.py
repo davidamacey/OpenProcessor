@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 import scripts.curation.worker.region_embed_stage as stage
 from scripts.curation.worker.state import _ItemTask
@@ -71,8 +72,7 @@ class _FakePE:
 
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
         if self._fail:
-            msg = 'triton down'
-            raise RuntimeError(msg)
+            raise InferenceServerException('triton down')
         self.calls.append(len(crops))
         return np.tile(np.array([1.0, 0.0, 0.0], dtype=np.float32), (len(crops), 1))
 

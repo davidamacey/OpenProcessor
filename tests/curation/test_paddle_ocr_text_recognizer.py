@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from _region_profile_fixture import NEUTRAL_REGION_PROFILE
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 
 # =============================================================================
@@ -265,7 +266,18 @@ class TestPaddleOcrTextRecognizer:
 
         pool = MagicMock()
         pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
-        pool.infer = AsyncMock(side_effect=RuntimeError('triton down'))
+        pool.infer = AsyncMock(side_effect=InferenceServerException('triton down'))
         rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
         regions = await rec.detect_regions(_jpeg_bytes())
         assert regions == []
+
+    @pytest.mark.asyncio
+    async def test_a_bug_in_the_infer_path_is_not_an_empty_read(self) -> None:
+        from src.services.detection.cascade_detect.ocr_recognizer import PaddleOcrTextRecognizer
+
+        pool = MagicMock()
+        pool.get_model_input_datatype = AsyncMock(return_value='UINT8')
+        pool.infer = AsyncMock(side_effect=KeyError('bug'))
+        rec = PaddleOcrTextRecognizer(pool, NEUTRAL_REGION_PROFILE)
+        with pytest.raises(KeyError):
+            await rec.detect_regions(_jpeg_bytes())

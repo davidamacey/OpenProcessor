@@ -33,6 +33,7 @@ class TestSignalHandling:
         pool = MagicMock()
         pool.initialize = AsyncMock()
         pool.close = AsyncMock()
+        pool.is_model_ready = AsyncMock(return_value=False)
         monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
 
         # B1: the producer loop now iterates the real ProjectRegistry's

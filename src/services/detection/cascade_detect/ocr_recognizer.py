@@ -14,6 +14,7 @@ from tritonclient.grpc import InferInput, InferRequestedOutput
 from src.clients.triton_ocr import OCR_IMAGE_INPUTS, require_uint8_ocr_inputs
 from src.services.detection.cascade_detect.preprocess import _decode_jpeg
 from src.services.detection.region_text import OcrLine
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 if TYPE_CHECKING:
@@ -355,7 +356,7 @@ class PaddleOcrTextRecognizer:
         """
         try:
             lines = await self.read_lines(crop_jpeg)
-        except Exception:
+        except TRITON_CALL_ERRORS:
             logger.exception('ocr_pipeline_infer_failed')
             return []
         return self.regions_from_lines(lines)

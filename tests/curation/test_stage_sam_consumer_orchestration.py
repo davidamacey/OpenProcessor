@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import structlog
+from tritonclient.utils import InferenceServerException
 
 from scripts.curation.worker import stage_sam, verify_choice
 from scripts.curation.worker.client import SegmenterUnavailable
@@ -374,7 +375,7 @@ async def test_text_hint_prefers_stored_ocr_lines(h: Harness) -> None:
 @pytest.mark.asyncio
 async def test_text_hint_ocr_failure_counts_as_no_regions(h: Harness) -> None:
     h.rt.text_hint_on = True
-    h.ocr.detect_regions = AsyncMock(side_effect=RuntimeError('ocr down'))
+    h.ocr.detect_regions = AsyncMock(side_effect=InferenceServerException('ocr down'))
     t = _task()
     await h.run(t)
     assert t.detection_trace == ['rec-x:text_hint:miss']

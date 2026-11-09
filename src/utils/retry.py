@@ -46,6 +46,17 @@ class TritonDeadlineError(RetryExhaustedError):
     """
 
 
+#: What a Triton call raises: a server or gRPC failure (``InferenceServerException``), an
+#: exhausted retry or missed deadline (``RetryExhaustedError``, ``TritonDeadlineError``), a
+#: socket error and an asyncio/stdlib timeout. Anything else is a bug in the caller.
+TRITON_CALL_ERRORS: tuple[type[Exception], ...] = (
+    InferenceServerException,
+    RetryExhaustedError,
+    OSError,
+    TimeoutError,
+)
+
+
 def is_retryable_error(error: BaseException) -> bool:
     """Whether a Triton client error is transient: its ``status()`` is in ``RETRYABLE_STATUSES``."""
     return isinstance(error, InferenceServerException) and error.status() in RETRYABLE_STATUSES

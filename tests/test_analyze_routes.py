@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 from src.utils.retry import RetryExhaustedError
 
@@ -232,7 +233,7 @@ def test_single_embeddings_use_one_crop_batch_with_zero_rows_for_empty_boxes(
 def test_single_a_failed_crop_batch_leaves_detections_without_embeddings(
     client: TestClient, jpeg: bytes, backends: Backends
 ) -> None:
-    backends.triton.clip_error = RuntimeError('clip down')
+    backends.triton.clip_error = InferenceServerException('clip down')
     response = _post(client, jpeg, include_embedding='true')
     assert response.status_code == 200
     body = response.json()
@@ -394,7 +395,7 @@ def test_batch_full_results_without_embedding_flags_make_no_clip_call(
 def test_batch_a_failed_crop_batch_does_not_fail_the_image(
     client: TestClient, jpeg: bytes, backends: Backends
 ) -> None:
-    backends.triton.clip_error = RuntimeError('clip down')
+    backends.triton.clip_error = InferenceServerException('clip down')
     body = _batch(client, jpeg, include_full_results='true', include_embedding='true').json()
     assert body['processed_images'] == 1
     assert [d['embedding'] for d in body['results'][0]['detections']] == [None, None]
