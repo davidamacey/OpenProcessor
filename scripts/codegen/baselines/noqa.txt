@@ -200,7 +200,7 @@ tests/curation/test_dataset_thresholds.py	1	suppressions recorded when the ratch
 tests/curation/test_detection_profile_second_profile.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_embed_missing_stage.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_dataset_golden.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/curation/test_export_per_image.py	4	suppressions recorded when the ratchet landed; fix or justify, then lower
+tests/curation/test_export_per_image.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_readiness.py	7	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_split_preflight.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_support_scroll.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
