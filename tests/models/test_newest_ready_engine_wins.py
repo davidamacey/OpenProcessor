@@ -38,7 +38,7 @@ def facts(arch: str, dtype: str) -> engine_builds.EngineFacts:
         precision='fp16',
         trt_version='11.1',
         gpu_arch=arch,
-        engine_storage_key='k',
+        engine_storage_key='models/k',
     )
 
 
@@ -63,7 +63,7 @@ def test_the_newest_ready_row_wins_and_a_seeded_row_without_a_time_loses(pg, job
             name='car',
             labels=['a'],
             family='yolo',
-            artifact_storage_key='k',
+            artifact_storage_key='models/k',
             created_by='t',
         )
         old = ready_row(session, model.id, None, 'sm_80', 'fp32')
@@ -88,7 +88,7 @@ def test_a_failed_or_building_row_is_never_read(pg, job_env) -> None:
             name='car',
             labels=['a'],
             family='yolo',
-            artifact_storage_key='k',
+            artifact_storage_key='models/k',
             created_by='t',
         )
         ready = ready_row(session, model.id, None, 'sm_80', 'fp32', other)

@@ -32,6 +32,8 @@ NOT_STORAGE_KEYS = frozenset(
         'index_prefix',
         # a Triton model-name prefix (``alpha__``), never a path
         'model_prefix',
+        # the compared datasets' ids joined by commas, never a path
+        'eval_dataset_key',
     }
 )
 

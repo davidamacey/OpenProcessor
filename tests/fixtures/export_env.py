@@ -80,7 +80,7 @@ class ExportEnv:
                 name=name,
                 labels=['car', 'bus'],
                 family='yolo',
-                artifact_storage_key=f'pytorch_models/{name}.pt',
+                artifact_storage_key=f'models/pytorch_models/{name}.pt',
                 created_by='test',
             )
             return repo.insert_queued(

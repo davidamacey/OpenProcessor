@@ -18,6 +18,7 @@ from src.config.queue import TaskQueues
 from src.db.repos import engine_builds, jobs as jobs_repo
 from src.db.repos.jobs_listing import JobFilter, get_one, list_page
 from src.db.session import async_session_factory, deployment_tx
+from src.domain.storage_keys import make_key
 from src.schemas.models import ExportStatus, ExportTaskStatus
 from src.services.jobs.service import StartResult, rejection, start_job
 from src.services.models.model_export import ExportWorkerUnavailableError, StagedUpload
@@ -128,7 +129,7 @@ async def start_export(
                     name=triton_name,
                     labels=model_info.get('class_names') or [],
                     family=_FAMILY,
-                    artifact_storage_key=f'pytorch_models/{pt_file.name}',
+                    artifact_storage_key=make_key('models', 'pytorch_models', pt_file.name),
                     created_by=requested_by,
                 )
 

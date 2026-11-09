@@ -17,6 +17,7 @@ from src.db.models.jobs import Job
 from src.db.models.training import TrainingRun
 from src.db.repos import job_events, jobs as jobs_repo
 from src.domain import job_states as js
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -89,7 +90,7 @@ def _to_row(mapping: Any) -> RunRow:
         class_names=list(mapping['class_names']),
         family=mapping['family'],
         base_model=mapping['base_model'],
-        artifact_prefix=mapping['artifact_prefix'],
+        artifact_prefix=make_key(*mapping['artifact_prefix'].split('/')),
         manifest=None if mapping['manifest'] is None else dict(mapping['manifest']),
         mlflow_run_id=mapping['mlflow_run_id'],
         gpu_uuids=list(mapping['gpu_uuids']),
@@ -125,7 +126,7 @@ def insert_run(
             class_names=list(class_names),
             family=family,
             base_model=base_model,
-            artifact_prefix=artifact_prefix,
+            artifact_prefix=make_key(*artifact_prefix.split('/')),
             gpu_uuids=list(gpu_uuids),
         )
     )
