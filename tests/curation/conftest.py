@@ -251,7 +251,4 @@ def _no_live_loop_hold_offline(
     async def _no_loop(_session: Any) -> None:
         return None
 
-    from src.routers.curation import pipeline_public
-
     monkeypatch.setattr(service, 'require_no_live_loop', _no_loop)
-    monkeypatch.setattr(pipeline_public, 'require_no_live_loop', _no_loop)

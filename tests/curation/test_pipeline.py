@@ -154,23 +154,12 @@ class TestPipelineClassIdScoping:
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
-            session=object(),
             opensearch=fake_os,
-            train_clusters=False,
-            promote_min_purity=0.85,
-            promote_min_members=4,
             vlm_batch_size=32,
             vlm_concurrency=8,
             max_vlm_crops=0,
             classifier_confidence_skip_vlm=0.80,
-            clustering_method=None,
             run_vlm=True,
-            recluster_unvalidated=False,
-            reassign_only=False,
-            run_auto_promote=False,
-            gate_max_rank=None,
-            gate_min_blur_ratio=None,
-            n_clusters=None,
             class_id=None,
         )
 
@@ -193,23 +182,12 @@ class TestPipelineClassIdScoping:
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
-            session=object(),
             opensearch=fake_os,
-            train_clusters=False,
-            promote_min_purity=0.85,
-            promote_min_members=4,
             vlm_batch_size=32,
             vlm_concurrency=8,
             max_vlm_crops=0,
             classifier_confidence_skip_vlm=0.80,
-            clustering_method=None,
             run_vlm=True,
-            recluster_unvalidated=False,
-            reassign_only=False,
-            run_auto_promote=False,
-            gate_max_rank=None,
-            gate_min_blur_ratio=None,
-            n_clusters=None,
             class_id=3,
         )
 
@@ -230,23 +208,12 @@ class TestVlmStageExplainsEmptySelection:
         from src.routers.curation.pipeline_public import pipeline_auto_label
 
         return await pipeline_auto_label(
-            session=object(),
             opensearch=fake_os,
-            train_clusters=False,
-            promote_min_purity=0.85,
-            promote_min_members=4,
             vlm_batch_size=32,
             vlm_concurrency=8,
             max_vlm_crops=0,
             classifier_confidence_skip_vlm=0.80,
-            clustering_method=None,
             run_vlm=run_vlm,
-            recluster_unvalidated=False,
-            reassign_only=False,
-            run_auto_promote=False,
-            gate_max_rank=None,
-            gate_min_blur_ratio=None,
-            n_clusters=None,
             class_id=None,
         )
 

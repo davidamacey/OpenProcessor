@@ -37,9 +37,9 @@ def bound(pg, job_env):
 
 async def test_a_start_queues_one_job_and_sends_one_message(pg, bound, producer, wakes) -> None:
     async with async_session_factory()() as session:
-        state = await service.start(session, {'train_clusters': False})
+        state = await service.start(session, {'run_vlm': False})
     assert state['status'] == 'queued'
-    assert state['args'] == {'train_clusters': False}
+    assert state['args'] == {'run_vlm': False}
     rows = sql(pg, 'SELECT status, kind FROM jobs WHERE project_id = %s', bound)
     assert rows == [('queued', 'autolabel')]
     assert producer.sent() == [state['job_id']]

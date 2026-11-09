@@ -66,12 +66,6 @@ def _review_all() -> dict[str, Any]:
     return _bool(must, must_not)
 
 
-def _cluster_members() -> dict[str, Any]:
-    from src.services.curation.clustering.cluster_geometry import _clustered_query
-
-    return _clustered_query()
-
-
 def _select_diverse() -> dict[str, Any]:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
@@ -80,7 +74,7 @@ def _select_diverse() -> dict[str, Any]:
 
 @pytest.mark.parametrize(
     'build',
-    [_vlm_worker, _vlm_sweep, _vlm_cluster_scope, _review_all, _cluster_members, _select_diverse],
+    [_vlm_worker, _vlm_sweep, _vlm_cluster_scope, _review_all, _select_diverse],
     ids=lambda f: f.__name__,
 )
 def test_consumer_takes_the_embedded_twin_and_not_the_vectorless_item(build: Any) -> None:

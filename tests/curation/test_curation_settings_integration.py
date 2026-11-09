@@ -85,32 +85,5 @@ async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_defa
     assert applied == 'uncertainty_entropy'
 
 
-@pytest.mark.asyncio
-async def test_put_new_cluster_default_changes_real_cluster_residuals_call(
-    app_client: TestClient,
-) -> None:
-    """Same proof as above, for the 'cluster' axis's real call site
-    (``clustering.orchestrator.cluster_residuals``) rather than 'sort'."""
-    from unittest.mock import patch
-
-    from src.services.curation.clustering import orchestrator
-    from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
-
-    non_default = next(m for m in available_methods() if m != DEFAULT_METHOD)
-    app_client.put(
-        '/curation/projects/default/settings', json={'defaults': {'cluster': non_default}}
-    )
-
-    with patch(
-        'src.services.curation.clustering.residual_fetch.fetch_residual_embeddings_parallel',
-        new=AsyncMock(return_value=([], [])),
-    ):
-        result = await orchestrator.cluster_residuals(
-            app_client.fake_os, clustering_method=None, expected_pool=0
-        )
-
-    assert result['method'] == non_default
-
-
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

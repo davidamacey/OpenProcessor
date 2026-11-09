@@ -22,8 +22,6 @@ import inspect
 
 import pytest
 
-from src.services.curation.clustering.auto_promote import _scroll_cluster_buckets
-
 
 pytestmark = pytest.mark.integration
 
@@ -37,17 +35,3 @@ def test_items_index_maps_class_name_as_keyword() -> None:
     src = inspect.getsource(bodies_core)
     # Every occurrence of a class_name mapping declares it keyword.
     assert "'class_name': {'type': 'keyword'}" in src
-
-
-def test_auto_promote_purity_aggregation_targets_class_name_directly() -> None:
-    """The purity aggregation must target bare ``class_name`` (matching
-    the keyword mapping above), not a ``.keyword`` subfield that doesn't
-    exist on this schema — pointing at a nonexistent subfield would 400,
-    not silently degrade.
-
-    The aggregation body lives in ``_scroll_cluster_buckets``
-    (composite-agg paging), not ``auto_promote_clusters`` itself —
-    inspect that helper instead."""
-    src = inspect.getsource(_scroll_cluster_buckets)
-    assert "'field': 'class_name'" in src
-    assert "'field': 'class_name.keyword'" not in src

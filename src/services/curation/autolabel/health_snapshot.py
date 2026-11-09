@@ -2,7 +2,7 @@
 
 * :func:`pipeline_health_snapshot` — one OpenSearch round-trip that
   rolls up the counts the labeler dashboard cares about (validated,
-  unvalidated, has_class, cluster_id_mismatched).
+  unvalidated, has_class, unembedded).
 
 Used by the auto-label run to render the ``baseline`` and
 ``after`` blocks on the run's final result so the labeler can show a
@@ -50,28 +50,6 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
                     # Not yet in the working set: no vector, so the VLM, clustering
                     # and search skip them.
                     'unembedded': {'filter': not_embedded_clause()},
-                    'mismatched_cluster': {
-                        'filter': {
-                            'bool': {
-                                'filter': [{'exists': {'field': 'class_id'}}],
-                                'must_not': [
-                                    {
-                                        'script': {
-                                            'script': {
-                                                'source': (
-                                                    "doc['cluster_id'].size() > 0 && "
-                                                    "doc['class_id'].size() > 0 && "
-                                                    "doc['cluster_id'].value == "
-                                                    "doc['class_id'].value"
-                                                ),
-                                                'lang': 'painless',
-                                            }
-                                        }
-                                    }
-                                ],
-                            }
-                        }
-                    },
                 },
             },
         )
@@ -86,5 +64,4 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
         'unvalidated': int((aggs.get('unvalidated') or {}).get('doc_count', 0)),
         'has_class': int((aggs.get('has_class') or {}).get('doc_count', 0)),
         'unembedded': int((aggs.get('unembedded') or {}).get('doc_count', 0)),
-        'cluster_id_mismatched': int((aggs.get('mismatched_cluster') or {}).get('doc_count', 0)),
     }

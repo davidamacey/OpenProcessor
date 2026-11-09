@@ -181,7 +181,6 @@ async def test_start_then_active_switch_real_job_serves_pinned_or_new(
     assert switch.status_code == 200, switch.text
 
     args = {k: v for k, v in captured.items() if k != 'opensearch'}
-    args['train_clusters'] = False
     args['run_vlm'] = True
     install_registry((3, 'wooden_pallet'))
     # `ensure_fresh` (prompt_pack_resolved=True) is a no-op here -- the
@@ -231,9 +230,7 @@ async def test_direct_call_branch_computes_omitted_signal(
         return real(resolved_name)
 
     monkeypatch.setattr(auto_label_run, 'omitted_pack_is_store_active', _spy)
-    await run_auto_label(
-        opensearch=_FakeOpenSearch({}), **_run_kwargs(train_clusters=False, run_vlm=False)
-    )
+    await run_auto_label(opensearch=_FakeOpenSearch({}), **_run_kwargs(run_vlm=False))
     assert calls == ['pallet_v1']
 
 

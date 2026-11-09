@@ -196,33 +196,11 @@ async def _remaining_unvalidated(run: Run) -> int:
         return -1
 
 
-async def _post_vlm_normalize(run: Run, unvalidated_ids: list[str]) -> dict[str, Any] | None:
-    """The VLM may have changed ``class_id`` without rewriting ``cluster_id``, which fragments
-    the labeler view: one last pass makes ``cluster_id`` equal ``class_id`` wherever a class
-    is set -- only on the selected items when the job is scoped."""
-    from src.services.curation.autolabel.progress import with_elapsed_tick
-    from src.services.curation.clustering.id_normalize import force_cluster_id_equals_class_id
-
-    start_stage(run, 'finalize')
-    try:
-        scoped = run.cluster_id is not None or run.class_id is not None
-        return await with_elapsed_tick(
-            run.progress,
-            force_cluster_id_equals_class_id(
-                run.opensearch, crop_ids=unvalidated_ids if scoped else None
-            ),
-        )
-    except Exception as exc:
-        logger.warning('pipeline_post_normalize_failed', error=str(exc))
-        return None
-
-
 @dataclass(frozen=True)
 class VlmStageResult:
     """What the VLM stage reports back to the run."""
 
     stage: dict[str, Any]
-    post_normalize: dict[str, Any] | None
     remaining: int
 
 
@@ -258,7 +236,7 @@ async def run_vlm_stage(
         await run.opensearch.indices.refresh(index=items_index())
     except OpenSearchException as exc:
         logger.warning('pipeline_refresh_failed', error=str(exc))
-    post_normalize = await _post_vlm_normalize(run, unvalidated_ids)
+    start_stage(run, 'finalize')
     remaining = await _remaining_unvalidated(run)
     # How often the synonym/fuzzy force-fit was skipped: low-confidence replies fall through
     # to ``vlm_unmatched`` with the raw label kept for downstream clustering.
@@ -276,4 +254,4 @@ async def run_vlm_stage(
         'new_class_proposals_total': len(labeled.proposals),
         'force_fit_bypass': dict(ctx.force_fit_bypass),
     }
-    return VlmStageResult(stage, post_normalize, remaining)
+    return VlmStageResult(stage, remaining)

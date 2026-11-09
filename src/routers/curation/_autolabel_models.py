@@ -32,17 +32,12 @@ class AutoLabelJobState(BaseModel):
     error_detail: str | None
     result: dict[str, Any] = Field(
         description=(
-            'Per-stage outcomes under `stages` (cluster_residuals, auto_promote, vlm, embed, ...); '
+            'Per-stage outcomes under `stages` (embed_missing, vlm, ...); '
             'each stage reports its own counters.'
         )
     )
     args: dict[str, Any] = Field(description='The arguments the run was started with.')
     pipeline: str
-    backend: str | None = Field(
-        description="Clustering backend, 'gpu' or 'cpu'; null before it ran."
-    )
-    backend_detail: str | None
-    free_vram_mb: int | None
     peak_vram_mb: int | None
     stage_durations: dict[str, float] = Field(description='Wall seconds per finished stage.')
     eta_seconds: float | None

@@ -357,7 +357,7 @@ async def test_pipeline_vlm_stage_empty_answer_keeps_class(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
 
-    await pipeline_auto_label(session=object(), opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(opensearch=fake, run_vlm=True)
 
     docs = fake.docs(ITEMS)
     for cid, reason in (('e', 'unparseable'), ('x', 'no_answer')):

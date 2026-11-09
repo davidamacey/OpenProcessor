@@ -80,10 +80,10 @@ async def test_the_run_is_called_once_with_the_params_the_client_and_a_progress(
 @pytest.mark.asyncio
 async def test_a_failed_stage_fails_the_job(monkeypatch) -> None:
     async def run(**_: Any) -> dict[str, Any]:
-        return {'stages': {'cluster_residuals': {'status': 'error'}}}
+        return {'stages': {'vlm': {'status': 'error'}}}
 
     monkeypatch.setattr(trigger, 'run_auto_label', run)
-    with pytest.raises(RuntimeError, match='cluster_residuals'):
+    with pytest.raises(RuntimeError, match='vlm'):
         await trigger.autolabel(_Ctx())  # type: ignore[arg-type]
 
 

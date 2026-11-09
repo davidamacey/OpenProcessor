@@ -180,12 +180,15 @@ async def _build_pools(
     """Fetch each needed pool exactly once. ``needed`` is the set of
     ``pool`` values actually declared by the requested scorers — a pool
     nothing asked for is never fetched."""
+    from src.domain.embedding_spaces import Target
     from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings_parallel
+    from src.services.embedding_spaces.resolve import embedding_space
 
     pools: dict[str, tuple[list[str], np.ndarray]] = {}
     if 'residual' in needed:
         pools['residual'] = await fetch_residual_embeddings_parallel(
             opensearch,
+            field=(await embedding_space(Target.ITEM)).vector_field,
             # Belt-and-suspenders test_holdout exclusion — see module
             # docstring for why this is already implied.
             extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],

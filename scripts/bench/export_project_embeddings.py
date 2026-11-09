@@ -1,7 +1,7 @@
 """Read-only export of one project's stored crop embeddings to the ``vecdb`` npz format.
 
 The npz holds ``vectors`` (float32, L2-normalised) and ``class_name`` (unicode), the two
-arrays ``cluster_bench.py --source vecdb`` and ``cluster_ladder.py`` read. The rows are
+arrays the cluster benchmarks (``ivf_fit_scaling.py``) read. The rows are
 shuffled with a fixed seed so that every nested prefix is a random subsample of the project
 rather than its first ingest folders. The project is only searched (point in time plus
 ``search_after``); nothing is written to it.

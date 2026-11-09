@@ -13,11 +13,9 @@ from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
-    AUTO_PROMOTE_DESC as _AUTO_PROMOTE_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
     CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
-    REASSIGN_ONLY_DESC as _REASSIGN_ONLY_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
     VLM_ATTRIBUTES_DESC,
     VLM_DESC,
@@ -35,7 +33,6 @@ from src.services.curation.autolabel.run_vlm import (
     require_run_vlm,
     resolve_run_vlm,
 )
-from src.services.curation.cluster_purity import PROMOTE_MIN_MEMBERS, PROMOTE_MIN_PURITY
 from src.services.curation.vlm_policy import VlmScope  # noqa: TC001 - FastAPI
 from src.services.labeling.run_labeler import resolve_pack
 from src.services.rejections import rejection
@@ -43,7 +40,7 @@ from src.services.rejections import rejection
 
 _EMBED_MISSING_DESC = (
     'Embed the in-scope items that were stored without a vector (not_selected, deferred or '
-    'failed) before the other stages, so they are clustered and labeled too. Scoped by class_id, '
+    'failed) before the other stages, so they are labeled too. Scoped by class_id, '
     'cluster_id and the item filter.'
 )
 
@@ -58,22 +55,11 @@ async def pipeline_auto_label_start(
     session: DbSessionDep,
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
-    train_clusters: Annotated[bool, Query()] = True,
-    promote_min_purity: Annotated[float, Query(ge=0.5, le=1.0)] = PROMOTE_MIN_PURITY,
-    promote_min_members: Annotated[int, Query(ge=2, le=1000)] = PROMOTE_MIN_MEMBERS,
     vlm_batch_size: Annotated[int, Query(ge=4, le=64)] = 32,
     vlm_concurrency: Annotated[int, Query(ge=1, le=128)] = 16,
     max_vlm_crops: Annotated[int, Query(ge=0, le=100000)] = 0,
     classifier_confidence_skip_vlm: Annotated[float, Query(ge=0.0, le=1.0)] = 0.80,
-    clustering_method: Annotated[str | None, Query()] = None,
     run_vlm: Annotated[bool, Query(description=_RUN_VLM_DESC)] = False,
-    recluster_unvalidated: Annotated[bool, Query(description='Merge candidate clusters.')] = False,
-    run_auto_promote: Annotated[bool, Query(description=_AUTO_PROMOTE_DESC)] = False,
-    reassign_only: Annotated[bool, Query(description=_REASSIGN_ONLY_DESC)] = False,
-    # Cluster scope (primary-subject gate).
-    gate_max_rank: Annotated[int | None, Query(ge=1)] = None,
-    gate_min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
-    n_clusters: Annotated[int | None, Query(ge=2, le=4096)] = None,
     class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
     cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
@@ -91,11 +77,8 @@ async def pipeline_auto_label_start(
     Only one job per project is queued, running or paused at a time; a second start
     request returns 409 ``job_busy``.
     """
-    from src.services.curation.assist_loop.service import require_no_live_loop
     from src.services.curation.autolabel import service
 
-    if train_clusters:
-        await require_no_live_loop(session)
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
     # captured BEFORE
@@ -136,21 +119,11 @@ async def pipeline_auto_label_start(
         if run_vlm:
             require_run_vlm(vlm_run)
     params = {
-        'train_clusters': train_clusters,
-        'promote_min_purity': promote_min_purity,
-        'promote_min_members': promote_min_members,
         'vlm_batch_size': vlm_batch_size,
         'vlm_concurrency': vlm_concurrency,
         'max_vlm_crops': max_vlm_crops,
         'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
-        'clustering_method': clustering_method,
         'run_vlm': run_vlm,
-        'recluster_unvalidated': recluster_unvalidated,
-        'run_auto_promote': run_auto_promote,
-        'reassign_only': reassign_only,
-        'gate_max_rank': gate_max_rank,
-        'gate_min_blur_ratio': gate_min_blur_ratio,
-        'n_clusters': n_clusters,
         'class_id': class_id,
         'cluster_id': cluster_id,
         'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),

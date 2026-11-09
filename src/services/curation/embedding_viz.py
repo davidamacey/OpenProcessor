@@ -221,6 +221,7 @@ async def _fetch_pool(
 
     ids, embeddings = await fetch_residual_embeddings_parallel(
         opensearch,
+        field=embedding_field,
         extra_must=[{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}],
     )
     ids, embeddings = _subsample(ids, embeddings, max_n)

@@ -65,9 +65,7 @@ async def _run(
     monkeypatch.setattr(image_serving, 'resolve_crop_root', lambda _p: '/data')
     monkeypatch.setattr(image_serving, 'resolve_safe_path', lambda p, _r: p)
     monkeypatch.setattr(image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=thumb))
-    return await pipeline_auto_label(
-        session=object(), opensearch=fake, train_clusters=False, run_vlm=True
-    )
+    return await pipeline_auto_label(opensearch=fake, run_vlm=True)
 
 
 def _failed(cid: str) -> VlmClassPrediction:

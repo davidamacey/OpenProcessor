@@ -19,7 +19,6 @@ from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
-from src.services.curation.clustering.id_normalize import class_cluster_placement
 from src.services.labeling.vlm_client import VlmIdentity
 from src.services.labeling.vlm_models import VlmClassPrediction
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
@@ -47,7 +46,7 @@ def _item(crop_id: str, **extra: Any) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_label_batch_moves_labelled_items_into_their_class_cluster(
+async def test_label_batch_sets_the_class_and_leaves_clustering_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import src.services.curation.vlm_batch as vlm_mod
@@ -95,24 +94,12 @@ async def test_label_batch_moves_labelled_items_into_their_class_cluster(
     docs = fake.docs(ITEMS)
     for cid in ('cand', 'other_class'):
         assert docs[cid]['class_id'] == widget_id
-        assert docs[cid]['cluster_id'] == widget_id
-    assert docs['cand'].get('cluster_subid') is None
-    # No registry class: the item stays where clustering put it.
+    # A class write does not move the item: the serving partition places it, not the label.
+    assert docs['cand']['cluster_id'] == 10004
+    assert docs['cand']['cluster_subid'] == '10004a'
+    assert docs['other_class']['cluster_id'] == 0
     assert docs['unmatched']['class_source'] == 'vlm_unmatched'
     assert docs['unmatched']['cluster_id'] == 10004
-
-
-def test_placement_rules() -> None:
-    update = {'class_id': 3, 'class_source': 'vlm'}
-    assert class_cluster_placement(update, {'cluster_id': 10001}) == {
-        'cluster_id': 3,
-        'cluster_subid': None,
-    }
-    assert class_cluster_placement(update, {'cluster_id': 3}) == {}
-    # Excluded items keep their exclusion bucket.
-    assert class_cluster_placement(update, {'cluster_id': -2, 'class_excluded': True}) == {}
-    # Only writes that set a class move anything.
-    assert class_cluster_placement({'class_source': 'vlm_unmatched'}, {'cluster_id': 1}) == {}
 
 
 @pytest.mark.asyncio

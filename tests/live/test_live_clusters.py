@@ -1,4 +1,4 @@
-"""Live cohort-(a) scenarios: AHC refine, auto-promote, region clustering,
+"""Live cohort-(a) scenarios: cluster cards, region clustering,
 false-positive centroids, and the three flag-gated overlay jobs.
 
 These are the endpoints the audit expected to need a GPU and that in fact
@@ -17,10 +17,7 @@ from .conftest import (
     FP_REGION_CLUSTER_ID,
     INDEXES,
     MIXED_CLUSTER_ID,
-    MIXED_PROMOTE_CLUSTER_ID,
-    PROMOTE_CLUSTER_ID,
     PURE_CLUSTER_ID,
-    get_doc,
     refresh,
     search,
     wait_for_state,
@@ -28,19 +25,6 @@ from .conftest import (
 
 
 pytestmark = pytest.mark.live
-
-NONEXISTENT_CLUSTER_ID = 99999
-
-
-def _subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
-    """Distinct sub-cluster ids in an item cluster, via a terms aggregation."""
-    body = {
-        'size': 0,
-        'query': {'term': {'cluster_id': cluster_id}},
-        'aggs': {'subids': {'terms': {'field': 'cluster_subid', 'size': 50}}},
-    }
-    buckets = search(opensearch, INDEXES['items'], body)['aggregations']['subids']['buckets']
-    return {b['key']: b['doc_count'] for b in buckets}
 
 
 def _region_box_buckets(
@@ -83,65 +67,6 @@ def _region_subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
     return {b['key']: b['doc_count'] for b in resp['in_cluster']['subids']['buckets']}
 
 
-def _classifier_crop_ids(opensearch: Any, cluster_id: int, limit: int = 5) -> list[str]:
-    body = {
-        'size': limit,
-        '_source': False,
-        'sort': [{'crop_id': {'order': 'asc'}}],
-        'query': {
-            'bool': {
-                'must': [
-                    {'term': {'cluster_id': cluster_id}},
-                    {'term': {'class_source': 'secondary_model'}},
-                ],
-                'must_not': [{'term': {'class_validated': True}}],
-            }
-        },
-    }
-    return [h['_id'] for h in search(opensearch, INDEXES['items'], body)['hits']['hits']]
-
-
-# ---------------------------------------------------------------------------
-# AHC refine
-# ---------------------------------------------------------------------------
-
-
-def test_refine_splits_a_candidate_cluster_into_subclusters(
-    api_client: Any, opensearch: Any
-) -> None:
-    resp = api_client.post(f'/clusters/refine/{CANDIDATE_CLUSTER_ID}')
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body['action'] == 'refined', body
-    assert body['n_items'] >= 4
-    assert body['n_subclusters'] >= 2, body
-    assert body['n_items_updated'] == body['n_items']
-
-    refresh(opensearch, INDEXES['items'])
-    subids = _subid_terms(opensearch, CANDIDATE_CLUSTER_ID)
-    assert len(subids) >= 2, subids
-    assert sum(subids.values()) == body['n_items']
-    # Sub-ids are cluster-local and formatted "<cluster_id><letter>".
-    assert all(key.startswith(str(CANDIDATE_CLUSTER_ID)) for key in subids), subids
-
-
-def test_refine_is_idempotent(api_client: Any, opensearch: Any) -> None:
-    before = _subid_terms(opensearch, CANDIDATE_CLUSTER_ID)
-    resp = api_client.post(f'/clusters/refine/{CANDIDATE_CLUSTER_ID}')
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['action'] == 'refined'
-    refresh(opensearch, INDEXES['items'])
-    assert _subid_terms(opensearch, CANDIDATE_CLUSTER_ID) == before
-
-
-def test_refine_honours_the_member_floor(api_client: Any) -> None:
-    resp = api_client.post(f'/clusters/refine/{NONEXISTENT_CLUSTER_ID}')
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body['action'] == 'skipped_too_small', body
-    assert body['n_subclusters'] == 0
-
-
 def test_cluster_cards_report_kind_purity_and_subclusters(api_client: Any) -> None:
     resp = api_client.get('/clusters', params={'per_cluster': 2, 'max_clusters': 100})
     assert resp.status_code == 200, resp.text
@@ -164,54 +89,6 @@ def test_cluster_cards_report_kind_purity_and_subclusters(api_client: Any) -> No
     assert candidate['n_subclusters'] >= 2
 
     assert by_id[-1]['cluster_kind'] == 'unassigned'
-
-
-# ---------------------------------------------------------------------------
-# Auto-promote
-# ---------------------------------------------------------------------------
-
-
-def test_auto_promote_dry_run_writes_nothing(api_client: Any, opensearch: Any) -> None:
-    sample_ids = _classifier_crop_ids(opensearch, PROMOTE_CLUSTER_ID)
-    assert sample_ids, 'precondition: the pure cluster must hold unvalidated classifier rows'
-    before = {
-        crop_id: get_doc(opensearch, INDEXES['items'], crop_id)['_seq_no'] for crop_id in sample_ids
-    }
-
-    resp = api_client.post('/clusters/auto_promote', params={'dry_run': True})
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    promotable = {c['cluster_id']: c for c in body['clusters']}
-    assert promotable[PROMOTE_CLUSTER_ID]['promote'] is True
-    assert promotable[MIXED_PROMOTE_CLUSTER_ID]['promote'] is False
-
-    for crop_id, seq_no in before.items():
-        assert get_doc(opensearch, INDEXES['items'], crop_id)['_seq_no'] == seq_no
-
-
-def test_auto_promote_apply_validates_only_the_high_purity_cluster(
-    api_client: Any, opensearch: Any
-) -> None:
-    promotable = _classifier_crop_ids(opensearch, PROMOTE_CLUSTER_ID, limit=10)
-    untouched = _classifier_crop_ids(opensearch, MIXED_PROMOTE_CLUSTER_ID, limit=5)
-    assert promotable, 'precondition: the pure cluster must hold promotable rows'
-    assert untouched, 'precondition: the mixed cluster must hold unvalidated rows'
-
-    # This checks which clusters qualify by purity; the accuracy-audit gate has its own tests.
-    resp = api_client.post('/clusters/auto_promote', params={'force': True})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['promoted'] >= len(promotable)
-
-    refresh(opensearch, INDEXES['items'])
-    for crop_id in promotable:
-        src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']
-        assert src['class_validated'] is True, crop_id
-        assert src['class_source'] == 'cluster_majority_agreement'
-        assert src['class_id_history'][-1]['writer'] == 'auto_promote'
-    for crop_id in untouched:
-        src = get_doc(opensearch, INDEXES['items'], crop_id)['_source']
-        assert src['class_validated'] is False, crop_id
-        assert src['class_source'] == 'secondary_model'
 
 
 # ---------------------------------------------------------------------------

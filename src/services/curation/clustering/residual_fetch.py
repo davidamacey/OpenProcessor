@@ -1,15 +1,10 @@
-"""Residual-pool embedding fetch for clustering and the UMAP visualization.
+"""Residual-pool embedding fetch for the item scorers and the UMAP views.
 
-Pulls classifier/PE embeddings for residual crops (no confident class
-assigned) from the items index, L2-normalized. Two variants share one
-residual-pool gate: a sequential scroll
-(:func:`fetch_residual_embeddings`) and a PIT + sliced parallel read
-(:func:`fetch_residual_embeddings_parallel`) that
-:func:`~src.services.curation.clustering.orchestrator.cluster_residuals`
-calls for its embedding fetch.
-
-Override the embedding field via ``OP_RESIDUAL_EMBEDDING_FIELD`` if
-experimenting.
+Pulls embeddings for residual crops (no confident class assigned) from the items index,
+L2-normalized, from the vector field the caller names (the project's primary item space,
+``embedding_space(Target.ITEM).vector_field``). Two variants share one residual-pool gate: a
+sequential scroll (:func:`fetch_residual_embeddings`) and a PIT + sliced parallel read
+(:func:`fetch_residual_embeddings_parallel`).
 """
 
 from __future__ import annotations
@@ -21,7 +16,6 @@ import numpy as np
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config.curation_accessors import items_index
-from src.config.env import env_str
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
@@ -36,19 +30,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-# Embedding field to reduce. ``pe_embedding`` is PE-Core-L14-336's
-# foundation visual encoder (1024-d), trained on broad web imagery —
-# better at grouping out-of-distribution items by semantic similarity
-# than a detector-backbone vector, which clusters by framing/lighting. A
-# visual audit picked pe_embedding as the residual default.
-RESIDUAL_EMBEDDING_FIELD = env_str('OP_RESIDUAL_EMBEDDING_FIELD', 'pe_embedding')
-
 # Crops with these class_source values are *confidently* labeled and
-# must NEVER be pulled into the residual pool — clustering would
-# overwrite their cluster_id=class_id mapping with a candidate id and
-# destroy the class-cluster grouping (regression 2026-05-23: an IVF
-# run on the unfiltered query overwrote ~129k labeled crops' cluster
-# ids before being cancelled).
+# must NEVER be pulled into the residual pool.
 #
 # Specifically (src.domain.ingest_class_sources, derived from
 # the configured ingest profiles -- resolved once at import like other
@@ -79,22 +62,12 @@ def _sorted_by_id(ids: list[str], matrix: np.ndarray) -> tuple[list[str], np.nda
     return [ids[i] for i in order], matrix[order]
 
 
-def residual_pool_query(
-    *,
-    include_candidate_clusters: bool,
-    candidate_cluster_id_min: int | None,
-    extra_must: list[dict[str, Any]] | None,
-) -> dict[str, Any]:
+def residual_pool_query(*, field: str, extra_must: list[dict[str, Any]] | None) -> dict[str, Any]:
     """The residual-pool gate shared by both fetch variants.
 
-    Excludes confidently-labeled crops so clustering only touches the truly
-    residual cohort; see ``CONFIDENT_CLASS_SOURCES`` for the rule. The previous
-    filter (``class_validated != true``) only caught the 102 human-validated
-    rows because item_model and vlm writers don't set ``class_validated``; the
-    2026-05-23 IVF run pulled all 347k crops including 219k labeled ones and
-    started overwriting their ``cluster_id=class_id`` mappings before cancel.
-    """
-    filt: list[dict[str, Any]] = [embedded_clause(RESIDUAL_EMBEDDING_FIELD)]
+    Embedded crops that are not validated, not confidently labeled (see
+    ``CONFIDENT_CLASS_SOURCES``) and not excluded; ``extra_must`` narrows it further."""
+    filt: list[dict[str, Any]] = [embedded_clause(field), *(extra_must or ())]
     must_not: list[dict[str, Any]] = [
         {'term': {'class_validated': True}},
         {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
@@ -102,25 +75,6 @@ def residual_pool_query(
         # residual pool so they're never re-clustered.
         {'term': {'class_excluded': True}},
     ]
-    if not include_candidate_clusters and candidate_cluster_id_min is not None:
-        # Include items with no cluster_id OR cluster_id below the
-        # candidate threshold. Items already in a candidate cluster
-        # (>= threshold) are excluded so they aren't re-pooled.
-        filt.append(
-            {
-                'bool': {
-                    'should': [
-                        {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
-                        {'range': {'cluster_id': {'lt': candidate_cluster_id_min}}},
-                    ],
-                    'minimum_should_match': 1,
-                },
-            },
-        )
-    if extra_must:
-        # Primary-subject clustering gate (rank / blur). Narrows the pool
-        # to the crops that should train centroids + be assigned.
-        filt.extend(extra_must)
     return {'bool': {'filter': filt, 'must_not': must_not}}
 
 
@@ -144,46 +98,23 @@ async def _precount(client: AsyncOpenSearch, query: dict[str, Any], progress: An
 async def fetch_residual_embeddings(
     client: AsyncOpenSearch,
     *,
-    include_candidate_clusters: bool = False,
-    candidate_cluster_id_min: int | None = None,
+    field: str,
     extra_must: list[dict[str, Any]] | None = None,
     progress: Any | None = None,
 ) -> tuple[list[str], np.ndarray]:
-    """Pull unvalidated crops with embeddings for the AHC residual pool.
-
-    Two pools, selected by ``include_candidate_clusters``:
-
-    * **Default (False)** — crops with ``RESIDUAL_EMBEDDING_FIELD`` set,
-      ``class_validated`` not true, AND either no ``cluster_id`` yet
-      OR a ``cluster_id`` below ``candidate_cluster_id_min``. The intent
-      is "everything unvalidated that isn't already in a candidate
-      cluster" — fresh items (no cluster_id) plus items still sitting
-      in classifier class buckets (cluster_id < candidate_cluster_id_min).
-      Existing candidate clusters are left alone so they aren't churned
-      every run.
-    * **Broad (True)** — same, but candidate-bucketed crops are also
-      included. Use this when the operator wants to re-pool candidate
-      clusters so smaller ones can merge into bigger ones.
-
-    Despite the name's historical prefix (kept for back-compat with the
-    pipeline stages), the actual field read is governed by
-    :py:data:`RESIDUAL_EMBEDDING_FIELD` — defaults to PE embeddings.
+    """Pull unvalidated crops that have a vector in ``field`` (the residual pool).
 
     When ``progress`` is supplied, the scroll loop updates
     ``processed`` after each page and checks the cancel sentinel so an
     operator-initiated cancel takes effect within a single scroll
     batch (~50 ms) instead of waiting for the full fetch to finish.
     """
-    query = residual_pool_query(
-        include_candidate_clusters=include_candidate_clusters,
-        candidate_cluster_id_min=candidate_cluster_id_min,
-        extra_must=extra_must,
-    )
+    query = residual_pool_query(field=field, extra_must=extra_must)
     total_estimate = await _precount(client, query, progress)
 
     body: dict[str, Any] = {
         'size': 1000,
-        '_source': [RESIDUAL_EMBEDDING_FIELD],
+        '_source': [field],
         'query': query,
     }
     ids: list[str] = []
@@ -195,7 +126,7 @@ async def fetch_residual_embeddings(
             hits = resp['hits']['hits']
             if not hits:
                 break
-            page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
+            page_ids, page = hits_to_rows(hits, field)
             if page is not None:
                 ids.extend(page_ids)
                 pages.append(page)
@@ -226,7 +157,7 @@ async def fetch_residual_embeddings(
 # loop above. ~8x faster on 347k docs (10 min -> ~1.5 min) by letting
 # OpenSearch coordinate N async slices over a frozen Point-In-Time view.
 #
-# Use this for cluster_residuals; keep the scroll variant for callers
+# Use this for the big pools; keep the scroll variant for callers
 # that don't have a sortable index or want simpler semantics.
 # ============================================================================
 
@@ -271,6 +202,7 @@ async def _fetch_one_slice(
     client: AsyncOpenSearch,
     slice_id: int,
     *,
+    field: str,
     query: dict[str, Any],
     pit_id: str,
     n_slices: int,
@@ -283,7 +215,7 @@ async def _fetch_one_slice(
     while True:
         body: dict[str, Any] = {
             'size': page_size,
-            '_source': [RESIDUAL_EMBEDDING_FIELD],
+            '_source': [field],
             'query': query,
             'pit': {'id': pit_id, 'keep_alive': PARALLEL_FETCH_PIT_KEEPALIVE},
             # _shard_doc is a synthetic sort key OpenSearch exposes
@@ -301,7 +233,7 @@ async def _fetch_one_slice(
         hits = resp.get('hits', {}).get('hits') or []
         if not hits:
             break
-        page_ids, page = hits_to_rows(hits, RESIDUAL_EMBEDDING_FIELD)
+        page_ids, page = hits_to_rows(hits, field)
         if page is not None:
             ids_local.extend(page_ids)
             embs_local.append(page)
@@ -318,8 +250,7 @@ async def _fetch_one_slice(
 async def fetch_residual_embeddings_parallel(
     client: AsyncOpenSearch,
     *,
-    include_candidate_clusters: bool = False,
-    candidate_cluster_id_min: int | None = None,
+    field: str,
     extra_must: list[dict[str, Any]] | None = None,
     n_slices: int = PARALLEL_FETCH_DEFAULT_SLICES,
     page_size: int = PARALLEL_FETCH_PAGE_SIZE,
@@ -337,11 +268,7 @@ async def fetch_residual_embeddings_parallel(
     (older OpenSearch, missing _shard_doc sort support, etc.) so the
     pipeline never breaks on a fetch-layer issue.
     """
-    query = residual_pool_query(
-        include_candidate_clusters=include_candidate_clusters,
-        candidate_cluster_id_min=candidate_cluster_id_min,
-        extra_must=extra_must,
-    )
+    query = residual_pool_query(field=field, extra_must=extra_must)
     total_estimate = await _precount(client, query, progress)
 
     # Create a Point-In-Time. Without PIT we'd need scroll cursors per
@@ -351,11 +278,7 @@ async def fetch_residual_embeddings_parallel(
     except Exception as exc:
         logger.warning('curation_embedding_pit_unavailable_fallback_scroll', error=str(exc))
         return await fetch_residual_embeddings(
-            client,
-            include_candidate_clusters=include_candidate_clusters,
-            candidate_cluster_id_min=candidate_cluster_id_min,
-            extra_must=extra_must,
-            progress=progress,
+            client, field=field, extra_must=extra_must, progress=progress
         )
 
     emit_progress = _SliceProgress(progress, total_estimate)
@@ -365,6 +288,7 @@ async def fetch_residual_embeddings_parallel(
                 _fetch_one_slice(
                     client,
                     slice_id,
+                    field=field,
                     query=query,
                     pit_id=pit_id,
                     n_slices=n_slices,

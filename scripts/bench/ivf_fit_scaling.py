@@ -27,13 +27,20 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
-from scripts.bench.cluster_plumbing_bench import load_vectors
 from src.services.curation.clustering.methods.ivf import (
     IVF_DEFAULT_N_CLUSTERS,
     IVF_DEFAULT_NITER,
     IVF_DEFAULT_NREDO,
 )
 from src.services.curation.clustering.methods.ivf_store import IVFCentroidStore
+
+
+def load_vectors(path: Path, limit: int) -> np.ndarray:
+    """The first ``limit`` unit float32 rows of a ``vecdb`` npz; the sizes are nested prefixes."""
+    vectors = np.asarray(np.load(path)['vectors'][:limit], dtype=np.float32)
+    norms = np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+    unit: np.ndarray = (vectors / norms).astype(np.float32)
+    return unit
 
 
 def main() -> int:
@@ -44,7 +51,7 @@ def main() -> int:
     ap.add_argument('--out', type=Path, required=True)
     args = ap.parse_args()
     sizes = [int(s) for s in args.sizes.split(',')]
-    pool, _ = load_vectors('vecdb', args.data, max(sizes))
+    pool = load_vectors(args.data, max(sizes))
     rows = []
     scratch = tempfile.mkdtemp(prefix='ivf_fit_scaling_')
     for n in sizes:

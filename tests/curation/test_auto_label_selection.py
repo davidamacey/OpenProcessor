@@ -175,21 +175,11 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
 
 def _run_kwargs(**overrides: Any) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
-        'train_clusters': False,
-        'promote_min_purity': 0.85,
-        'promote_min_members': 4,
         'vlm_batch_size': 32,
         'vlm_concurrency': 8,
         'max_vlm_crops': 0,
         'classifier_confidence_skip_vlm': 0.80,
-        'clustering_method': None,
         'run_vlm': True,
-        'recluster_unvalidated': False,
-        'reassign_only': False,
-        'run_auto_promote': False,
-        'gate_max_rank': None,
-        'gate_min_blur_ratio': None,
-        'n_clusters': None,
         'class_id': None,
     }
     kwargs.update(overrides)
@@ -220,7 +210,6 @@ async def test_job_uses_the_overridden_pack(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     summary = await pipeline_auto_label(
-        session=object(),
         opensearch=_FakeOpenSearch({3: ['pallet-1']}),
         **_run_kwargs(prompt_pack='food_v2'),
     )
@@ -234,7 +223,7 @@ async def test_job_omitted_pack_uses_default(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     summary = await pipeline_auto_label(
-        session=object(), opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
+        opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
     )
     assert summary['prompt_pack'] == 'pallet_v1'
     assert 'detection_profile' not in summary
@@ -248,9 +237,7 @@ async def test_job_rejects_unknown_pack(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     with pytest.raises(RequestRejectedError) as info:
-        await pipeline_auto_label(
-            session=object(), opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope')
-        )
+        await pipeline_auto_label(opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope'))
     assert info.value.status_code == 422
     assert labeler_spy == []
 
@@ -263,7 +250,6 @@ async def test_job_rejects_detection_profile(labeler_spy: list[Any]) -> None:
 
     with pytest.raises(RequestRejectedError) as info:
         await pipeline_auto_label(
-            session=object(),
             opensearch=_FakeOpenSearch({}),
             **_run_kwargs(detection_profile='license_plate'),
         )

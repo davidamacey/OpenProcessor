@@ -83,13 +83,16 @@ async def _async_main(args: argparse.Namespace) -> int:
     try:
         from src.config.curation_accessors import get_curation_config
         from src.config.curation_roles import IndexRole, index_name
+        from src.domain.embedding_spaces import Target
         from src.services.curation.clustering import residual_fetch
         from src.services.curation.item_scores import get_scorer
         from src.services.curation.item_scores.job import bulk_write_result
+        from src.services.embedding_spaces.resolve import embedding_space
 
         extra_must = [{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}]
+        field = (await embedding_space(Target.ITEM)).vector_field
         ids, embeddings = await residual_fetch.fetch_residual_embeddings_parallel(
-            client, extra_must=extra_must
+            client, field=field, extra_must=extra_must
         )
         if args.limit is not None:
             ids, embeddings = ids[: args.limit], embeddings[: args.limit]

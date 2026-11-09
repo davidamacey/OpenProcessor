@@ -161,27 +161,6 @@ class IVFCentroidStore:
             'curation_ivf_store_saved', n_clusters=k, dim=dim, path=str(self._centroids_path)
         )
 
-    def update_metadata(self, **fields: Any) -> None:
-        """Merge ``fields`` into the persisted metadata without touching centroids.
-
-        Used to record post-hoc facts about the last training run (e.g.
-        ``trained_mode``) that ``save()`` itself doesn't know — callers
-        outside the k-means fit decide those. No-op if no metadata exists
-        yet (nothing trained).
-        """
-        if not self._metadata_path.is_file():
-            return
-        meta = dict(self.metadata)
-        meta.update(fields)
-        self._dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            'w', dir=self._dir, suffix='.json.tmp', delete=False
-        ) as tf:
-            json.dump(meta, tf, indent=2, default=str)
-            tmp_meta = tf.name
-        Path(tmp_meta).replace(self._metadata_path)
-        self._metadata = meta
-
     # -- train ------------------------------------------------------------
 
     def train(
@@ -237,30 +216,6 @@ class IVFCentroidStore:
         return np.ascontiguousarray(centroids, dtype=np.float32), final_obj
 
     # -- clustering gate policy -------------------------------------------
-
-    def save_gate(self, *, max_rank: int | None, min_blur_ratio: float | None) -> None:
-        """Persist the primary-subject clustering gate (or clear it).
-
-        Both ``None`` clears the gate (full-pool clustering). Ingest +
-        ``assign_only_residuals`` read this so they apply the exact policy
-        the last full recluster trained under.
-        """
-        self._dir.mkdir(parents=True, exist_ok=True)
-        if max_rank is None and min_blur_ratio is None:
-            with contextlib.suppress(FileNotFoundError):
-                self._gate_path.unlink()
-            return
-        payload = {
-            'max_rank': max_rank,
-            'min_blur_ratio': min_blur_ratio,
-            'saved_at': datetime.now(UTC).isoformat(),
-        }
-        with tempfile.NamedTemporaryFile(
-            'w', dir=self._dir, suffix='.json.tmp', delete=False
-        ) as tf:
-            json.dump(payload, tf, indent=2, default=str)
-            tmp = tf.name
-        Path(tmp).replace(self._gate_path)
 
     def load_gate(self) -> dict[str, Any]:
         """Return the persisted gate ``{max_rank, min_blur_ratio}`` or ``{}``."""

@@ -1,4 +1,4 @@
-"""Curation router sub-module — cluster cards, representatives, refine, auto-promote."""
+"""Curation router sub-module — cluster cards, facets, representatives."""
 
 from __future__ import annotations
 
@@ -8,11 +8,9 @@ from typing import Any
 from fastapi import HTTPException, Query
 
 from src.routers._errors import server_error
-from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.schemas.curation.clusters import ClusterFacets, ClusterListResponse
-from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.cluster_cards import (
     ClusterListParams,
     ClusterSortId,
@@ -21,12 +19,6 @@ from src.services.curation.cluster_cards import (
     list_cluster_cards,
 )
 from src.services.curation.cluster_facets import cluster_facets
-from src.services.curation.cluster_purity import (
-    PROMOTE_MIN_MEMBERS,
-    PROMOTE_MIN_PRECISION,
-    PROMOTE_MIN_PURITY,
-)
-from src.services.curation.clustering.refine import MAX_REFINE_MEMBERS
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
 
@@ -194,85 +186,3 @@ async def cluster_representatives(
         'offset': offset,
         'max_clusters': max_clusters,
     }
-
-
-@router.post('/clusters/refine/{cluster_id}')
-async def refine_cluster_endpoint(
-    cluster_id: int,
-    opensearch: OpenSearchDep,
-    distance_threshold: float = Query(0.25, ge=0.05, le=1.0),
-    max_members: int = Query(
-        MAX_REFINE_MEMBERS,
-        ge=50,
-        le=50000,
-        description=(
-            'Skip clusters larger than this. AHC builds a full ~8*n^2-byte '
-            'pairwise matrix, so larger values cost RAM (8000~512MB, 12000~1.15GB). '
-            f'Default {MAX_REFINE_MEMBERS} (env OP_MAX_REFINE_MEMBERS).'
-        ),
-    ),
-) -> dict[str, Any]:
-    """Run AHC refinement on a curation item cluster.
-
-    Writes ``cluster_subid`` (keyword, e.g. ``"47a"``) to every member.
-    Skips clusters below the small-cluster floor or above ``max_members``
-    (the pairwise matrix grows ~8*n^2 bytes). Re-running on the same
-    cluster overwrites prior subids, so refinement is idempotent.
-    """
-    from src.services.curation.clustering.refine import refine_cluster
-
-    return await refine_cluster(
-        opensearch,
-        cluster_id,
-        distance_threshold=distance_threshold,
-        max_members=max_members,
-    )
-
-
-@router.post('/clusters/auto_promote', responses={409: {'model': ApiErrorResponse}})
-async def auto_promote_clusters_endpoint(
-    opensearch: OpenSearchDep,
-    min_purity: float = Query(
-        PROMOTE_MIN_PURITY, ge=0.5, le=1.0, description='Min dominant-class share'
-    ),
-    min_members: int = Query(
-        PROMOTE_MIN_MEMBERS, ge=2, le=1000, description='Skip clusters smaller than this'
-    ),
-    dry_run: bool = Query(False, description='Compute summary without writing'),
-    promote_min_precision: float = Query(
-        PROMOTE_MIN_PRECISION,
-        ge=0.0,
-        le=1.0,
-        description='Audited detector precision a class needs to be promoted',
-    ),
-    force: bool = Query(False, description='Promote without the accuracy-audit gate (logged)'),
-) -> dict[str, Any]:
-    """Promote classifier-labelled crops that agree with their high-purity cluster.
-
-    Validates each such crop (``class_source='cluster_majority_agreement'``).
-    Gated on the accuracy audit (``POST /audit/start``): every class the run would
-    promote needs enough audited crops and an audited detector precision of at
-    least ``promote_min_precision``, else ``409 audit_required`` or
-    ``409 audit_precision_low`` listing the classes and nothing is written.
-    ``force=true`` bypasses the gate; a dry run is never gated.
-    """
-    from src.services.curation.clustering.auto_promote import AuditGateError, gated_auto_promote
-
-    try:
-        return await gated_auto_promote(
-            opensearch,
-            min_purity=min_purity,
-            min_members=min_members,
-            dry_run=dry_run,
-            promote_min_precision=promote_min_precision,
-            force=force,
-        )
-    except AuditGateError as exc:
-        raise api_error(
-            409,
-            exc.code,
-            f'accuracy audit does not clear {len(exc.classes)} class(es) for promotion; '
-            'audit them or pass force=true',
-            classes=exc.classes,
-            promote_min_precision=exc.threshold,
-        ) from exc

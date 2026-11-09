@@ -9,6 +9,7 @@ sorted by document id, which makes every fit that follows a function of the docu
 
 from __future__ import annotations
 
+from functools import partial
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest import mock
@@ -20,9 +21,8 @@ from scripts.bench.parity_metrics import adjusted_rand_index
 from src.services.curation.clustering.methods import ivf_store
 from src.services.curation.clustering.methods.ivf import IVFMethod
 from src.services.curation.clustering.residual_fetch import (
-    RESIDUAL_EMBEDDING_FIELD,
-    fetch_residual_embeddings,
-    fetch_residual_embeddings_parallel,
+    fetch_residual_embeddings as _fetch_scroll,
+    fetch_residual_embeddings_parallel as _fetch_parallel,
 )
 
 
@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 
 N_DOCS = 400
 DIM = 16
+FIELD = 'item_vec'
+fetch_residual_embeddings = partial(_fetch_scroll, field=FIELD)
+fetch_residual_embeddings_parallel = partial(_fetch_parallel, field=FIELD)
 
 
 def _corpus() -> list[tuple[str, list[float]]]:
@@ -49,7 +52,7 @@ class _Client:
 
     def _hit(self, i: int) -> dict[str, Any]:
         doc_id, vec = self.docs[i]
-        return {'_id': doc_id, '_source': {RESIDUAL_EMBEDDING_FIELD: vec}, 'sort': [i]}
+        return {'_id': doc_id, '_source': {FIELD: vec}, 'sort': [i]}
 
     async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
         return {'count': len(self.docs)}

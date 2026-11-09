@@ -200,7 +200,6 @@ _.POOLS  # src/domain/assist_loop_budget.py
 _.UNITS  # src/domain/assist_loop_budget.py
 
 # Lane 4D left these without a production caller.
-_.should_retrain_centroids  # src/services/curation/clustering/retrain_policy.py, the IVF policy; it goes with the IVF method (lane 4F), the auto-label worker that called it is deleted
 _.__qualname__  # src/tasks/runtime/register.py, Celery names the task by it
 
 _.registry_sha  # src/services/training/jobs.py, stored in training_runs.spec and read by the trainer

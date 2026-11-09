@@ -94,9 +94,7 @@ async def test_direct_call_with_omitted_args_uses_plain_defaults(pipeline_env: _
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
-    summary = await pipeline_auto_label(
-        session=object(), opensearch=fake, train_clusters=False, run_vlm=True
-    )
+    summary = await pipeline_auto_label(opensearch=fake, run_vlm=True)
     assert summary['class_id'] is None
     assert summary['cluster_id'] is None
     assert summary['prompt_pack'] is None
@@ -111,9 +109,7 @@ async def test_cluster_scope_selects_every_unvalidated_member(pipeline_env: _Lab
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = QueryFakeOpenSearch({ITEMS: _docs()})
-    summary = await pipeline_auto_label(
-        session=object(), opensearch=fake, train_clusters=False, run_vlm=True, cluster_id=CLUSTER
-    )
+    summary = await pipeline_auto_label(opensearch=fake, run_vlm=True, cluster_id=CLUSTER)
     assert summary['cluster_id'] == CLUSTER
     # a, b (vlm_unmatched) and c (classifier-confident); never v/h/x/other.
     assert summary['stages']['unvalidated_after_promote'] == 3

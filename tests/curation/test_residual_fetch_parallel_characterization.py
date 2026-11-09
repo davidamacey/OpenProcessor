@@ -9,6 +9,7 @@ delete, an empty pool and a cancel raised from progress.
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -17,9 +18,12 @@ import pytest
 from src.services.curation.clustering import residual_fetch
 from src.services.curation.clustering.residual_fetch import (
     CONFIDENT_CLASS_SOURCES,
-    RESIDUAL_EMBEDDING_FIELD,
-    fetch_residual_embeddings_parallel,
+    fetch_residual_embeddings_parallel as _fetch_parallel,
 )
+
+
+FIELD = 'item_vec'
+fetch_residual_embeddings_parallel = partial(_fetch_parallel, field=FIELD)
 
 
 class _CancelledError(Exception):
@@ -69,7 +73,7 @@ class _Client:
     def _hit(self, i: int) -> dict[str, Any]:
         h: dict[str, Any] = {
             '_id': self.docs[i][0],
-            '_source': {RESIDUAL_EMBEDDING_FIELD: self.docs[i][1]},
+            '_source': {FIELD: self.docs[i][1]},
         }
         if not self.no_sort_key:
             h['sort'] = [i]
@@ -141,7 +145,7 @@ async def test_slices_page_with_search_after_and_return_normalized_rows_in_id_or
     body = client.bodies[0]
     assert body['pit'] == {'id': 'pit-1', 'keep_alive': '5m'}
     assert body['sort'] == [{'_shard_doc': 'asc'}]
-    assert body['_source'] == [RESIDUAL_EMBEDDING_FIELD]
+    assert body['_source'] == [FIELD]
     assert body['slice'] == {'id': 0, 'max': 3}
     assert client.pit_requests == [{'index': client.pit_requests[0]['index'], 'keep_alive': '5m'}]
     assert client.deleted == [{'pit_id': ['pit-1']}]
@@ -167,11 +171,7 @@ async def test_a_hit_without_a_sort_key_ends_that_slice() -> None:
 async def test_the_pool_gate_is_in_the_query() -> None:
     client = _Client(2)
     await fetch_residual_embeddings_parallel(
-        client,
-        include_candidate_clusters=False,
-        candidate_cluster_id_min=100,
-        extra_must=[{'range': {'rank': {'gte': 1}}}],
-        n_slices=1,
+        client, extra_must=[{'range': {'rank': {'gte': 1}}}], n_slices=1
     )
     query = client.bodies[0]['query']['bool']
     assert query['must_not'] == [
@@ -179,26 +179,9 @@ async def test_the_pool_gate_is_in_the_query() -> None:
         {'terms': {'class_source': list(CONFIDENT_CLASS_SOURCES)}},
         {'term': {'class_excluded': True}},
     ]
-    assert query['filter'][0] == residual_fetch.embedded_clause(RESIDUAL_EMBEDDING_FIELD)
-    assert query['filter'][1] == {
-        'bool': {
-            'should': [
-                {'bool': {'must_not': [{'exists': {'field': 'cluster_id'}}]}},
-                {'range': {'cluster_id': {'lt': 100}}},
-            ],
-            'minimum_should_match': 1,
-        }
-    }
-    assert query['filter'][2] == {'range': {'rank': {'gte': 1}}}
-    assert len(query['filter']) == 3
-
-
-@pytest.mark.asyncio
-async def test_candidate_clusters_included_or_no_threshold_adds_no_cluster_clause() -> None:
-    for kwargs in ({'include_candidate_clusters': True, 'candidate_cluster_id_min': 100}, {}):
-        client = _Client(2)
-        await fetch_residual_embeddings_parallel(client, n_slices=1, **kwargs)
-        assert len(client.bodies[0]['query']['bool']['filter']) == 1
+    assert query['filter'][0] == residual_fetch.embedded_clause(FIELD)
+    assert query['filter'][1] == {'range': {'rank': {'gte': 1}}}
+    assert len(query['filter']) == 2
 
 
 @pytest.mark.asyncio
@@ -278,20 +261,16 @@ async def test_an_empty_pool_returns_empty_ids_and_a_zero_matrix() -> None:
 
 @pytest.mark.asyncio
 async def test_the_scroll_fetch_uses_the_same_pool_gate_and_precount() -> None:
-    kwargs: dict[str, Any] = {
-        'include_candidate_clusters': False,
-        'candidate_cluster_id_min': 100,
-        'extra_must': [{'range': {'rank': {'gte': 1}}}],
-    }
+    kwargs: dict[str, Any] = {'extra_must': [{'range': {'rank': {'gte': 1}}}]}
     pit_client = _Client(4)
     await fetch_residual_embeddings_parallel(pit_client, n_slices=1, **kwargs)
     scroll_client = _Client(4)
     progress = _Progress()
     ids, matrix = await residual_fetch.fetch_residual_embeddings(
-        scroll_client, progress=progress, **kwargs
+        scroll_client, field=FIELD, progress=progress, **kwargs
     )
     assert scroll_client.scroll_searches[0]['body']['query'] == pit_client.bodies[0]['query']
-    assert scroll_client.scroll_searches[0]['body']['_source'] == [RESIDUAL_EMBEDDING_FIELD]
+    assert scroll_client.scroll_searches[0]['body']['_source'] == [FIELD]
     assert scroll_client.counts == [
         {
             'index': scroll_client.counts[0]['index'],
