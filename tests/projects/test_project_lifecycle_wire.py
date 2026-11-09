@@ -381,7 +381,7 @@ def test_last_active_project_excludes_archived_in_dry_run_and_enforcement(
 
 
 def test_dry_run_and_delete_agree_when_another_project_is_active(
-    http: TestClient, client: _CountingOpenSearch
+    http: TestClient, client: _CountingOpenSearch, producer: Any
 ) -> None:
     _create('alpha', client)
     _create('beta', client)
@@ -389,6 +389,7 @@ def test_dry_run_and_delete_agree_when_another_project_is_active(
     assert dry.json()['blocking'] == []
     real = http.delete('/curation/projects/beta', params={'confirm': 'beta'})
     assert real.status_code == 202, real.text
+    assert producer.sent() == [real.json()['job_id']]
 
 
 # --- 9. malformed or unknown slug -> 404 project_not_found ------------------

@@ -271,15 +271,17 @@ def test_get_project_exact_key_set(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_lifecycle_envelope_shape() -> None:
     """P3's create/patch/archive/unarchive/clone_settings all answer
     ``{project: ProjectSummary, warnings: [{code, message}],
-    keymap_clone_conflicts: [...]}`` -- the last one is only ever
+    keymap_clone_conflicts: [...], job_id}`` -- ``keymap_clone_conflicts`` is only ever
     non-empty on a ``clone_settings`` response whose ``keymap`` axis
-    dropped a conflicting action."""
+    dropped a conflicting action, and ``job_id`` is set only by a delete, which finishes in
+    its ``project_delete`` job."""
     from src.schemas.curation.projects import ProjectLifecycleResponse, ProjectWarning
 
     assert set(ProjectLifecycleResponse.model_fields) == {
         'project',
         'warnings',
         'keymap_clone_conflicts',
+        'job_id',
     }
     assert set(ProjectWarning.model_fields) == {'code', 'message', 'detail'}
 
