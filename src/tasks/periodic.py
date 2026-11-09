@@ -13,6 +13,7 @@ from src.services.periodic import (
     job_stats,
     near_dup_ticks,
     open_vocab_sweep,
+    serving_inventory,
     upload_sweep,
 )
 from src.services.periodic.runner import run_periodic
@@ -62,3 +63,9 @@ def near_dup_full_build_tick() -> None:
 def cache_prune_tick() -> None:
     """Evict the oldest crops once the tmpfs crop cache is over its cap."""
     run_periodic('cache_prune', cache_prune.tick())
+
+
+@app.task(name='op.periodic.serving_inventory', **_TICK)
+def serving_inventory_tick() -> None:
+    """Record what each Triton server of the active serving profile reports."""
+    run_periodic('serving_inventory', serving_inventory.tick())

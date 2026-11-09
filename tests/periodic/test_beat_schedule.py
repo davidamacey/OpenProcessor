@@ -21,6 +21,7 @@ EXPECTED = {
     'vlm_batch_staging_sweep',
     'upload_sweep',
     'cache_prune',
+    'serving_inventory',
     'near_dup_rescore',
     'near_dup_full_build',
 }
