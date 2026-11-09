@@ -37,6 +37,7 @@ def registry(tmp_path: Any) -> InMemoryRegistry:
 
 
 def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(
@@ -52,6 +53,7 @@ def _client(fake: Any, registry: InMemoryRegistry, monkeypatch: pytest.MonkeyPat
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    app.dependency_overrides[get_db] = lambda: None  # no job is queued below 500 ids
     return TestClient(app)
 
 
