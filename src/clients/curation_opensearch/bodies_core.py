@@ -14,6 +14,10 @@ from src.clients.curation_opensearch.base import (
     default_knn_spec,
     knn_field_body,
 )
+from src.clients.curation_opensearch.capture_fields import (
+    CAPTURE_IMAGE_MAPPING,
+    CAPTURE_ITEM_MAPPING,
+)
 from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
@@ -115,6 +119,7 @@ def _images_body() -> dict[str, Any]:
                 'pe_embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
                 **_IMAGES_IMPORT_MAPPING,
                 **OPEN_VOCAB_IMAGE_MAPPING,
+                **CAPTURE_IMAGE_MAPPING,
             }
         },
     }
@@ -405,6 +410,7 @@ def _items_body() -> dict[str, Any]:
                 'mistakenness_version': {'type': 'keyword'},
                 'mistakenness_scored_at': {'type': 'date'},
                 **NEAR_DUP_MAPPING,
+                **CAPTURE_ITEM_MAPPING,
                 'created_at': {'type': 'date'},
                 'updated_at': {'type': 'date'},
                 # Secondary image-encoder embedding for semantic search

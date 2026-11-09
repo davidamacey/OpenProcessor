@@ -16,7 +16,6 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.models.config import (
-    LOCATION_POLICIES,
     PROJECT_STATE_KEYS,
     ProjectionState,
     ProjectKeymap,
@@ -24,6 +23,7 @@ from src.db.models.config import (
     ProjectState,
 )
 from src.db.repos.config import DEFAULT_ACTOR, RevisionConflictError, bump_epoch
+from src.domain.location_policy import LOCATION_POLICIES
 
 
 if TYPE_CHECKING:

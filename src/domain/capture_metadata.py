@@ -107,6 +107,9 @@ class CaptureMetadata:
     focal_length_35mm: float | None = None
     orientation: int | None = None
     location: CaptureLocation | None = None
+    has_location: bool = False
+    """A valid GPS fix was in the file; unchanged by the location policy, which only decides
+    whether ``location`` is kept."""
 
 
 def unknown_capture() -> CaptureMetadata:
@@ -285,6 +288,7 @@ def parse_capture(tags: dict[str, Any]) -> CaptureMetadata:
     if not wanted:
         return CaptureMetadata(exif_status='malformed' if unreadable else 'absent')
     when = _parse_time(wanted)
+    location = _parse_location(wanted)
     return CaptureMetadata(
         exif_status='malformed' if when.malformed or unreadable else 'ok',
         taken_local=when.local,
@@ -299,7 +303,8 @@ def parse_capture(tags: dict[str, Any]) -> CaptureMetadata:
         focal_length_mm=_positive(wanted.get('EXIF:FocalLength')),
         focal_length_35mm=_positive(wanted.get('EXIF:FocalLengthIn35mmFormat')),
         orientation=_orientation(wanted.get('EXIF:Orientation')),
-        location=_parse_location(wanted),
+        location=location,
+        has_location=location is not None,
     )
 
 

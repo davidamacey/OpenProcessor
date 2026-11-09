@@ -41,6 +41,7 @@ def test_a_clean_header_parses() -> None:
     assert (cap.time_source, cap.time_precision) == ('exif_original', 'subsecond')
     assert (cap.camera_make, cap.camera_model, cap.orientation) == ('Acme', 'Cam1', 6)
     assert (cap.focal_length_mm, cap.focal_length_35mm) == (35.0, 52.0)
+    assert cap.has_location
     assert cap.location is not None
     assert (cap.location.latitude, cap.location.longitude) == (-47.5, 8.25)
     assert (cap.location.altitude_m, cap.location.accuracy_m) == (410.0, 4.0)
@@ -133,6 +134,7 @@ def test_a_malformed_date_is_malformed_status_never_an_error(bad: Any) -> None:
 def test_zero_zero_and_out_of_range_coordinates_are_no_location(lat: Any, lon: Any) -> None:
     cap = parse_capture({'Composite:GPSLatitude': lat, 'Composite:GPSLongitude': lon})
     assert cap.location is None
+    assert not cap.has_location
 
 
 def test_a_void_gps_fix_is_no_location() -> None:

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base
 from src.db.types import EMPTY_OBJECT, NOW, UUIDV7, check, in_list
+from src.domain.location_policy import LOCATION_POLICIES
 
 
 CONFIG_KINDS = (
@@ -48,7 +49,6 @@ ACTIVATION_AXES: tuple[tuple[str, str], ...] = (
     ('near_dup', 'near_dup_profile'),
 )
 ACTIVATION_REASONS = ('activate', 'rollback', 'clone', 'upgrade')
-LOCATION_POLICIES = ('drop', 'store_coarse', 'store')
 PROJECT_STATE_KEYS = (
     'cluster_refresh',
     'region_drain',
