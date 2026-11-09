@@ -19,7 +19,7 @@ pytestmark = pytest.mark.db
 
 
 @pytest.fixture
-def world(pg, pg_env, monkeypatch):
+def world(pg, bound_async_engine, monkeypatch):
     slug = f'p{uuid.uuid4().hex[:8]}'
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         pid = make_project(conn, slug)
