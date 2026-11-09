@@ -6,7 +6,7 @@ title: Assist (VLM)
 # Assist (VLM)
 
 **Assist…** asks the VLM about a part of your data and shows you what it
-suggests. It is on a cluster page (the whole cluster or the open sub-cluster,
+suggests. It is on a cluster page (the whole cluster, a sample of it,
 or the crops you selected), on one crop's details panel, on one box in
 [Review](./review.md), and on [Matching items](./item-filter.md) (everything
 a filter matches). The concept, the sample sizes and the API are in
@@ -24,10 +24,10 @@ and the refusals included, is what the backend answered.
 1. **What the VLM sees.**
    - **Selected**: the crops (or boxes) you picked. Shown only when you
      selected some.
-   - **All members**: every member of the cluster, sub-cluster or filter the
+   - **All members**: every member of the cluster or filter the
      VLM may see.
    - **Random representative sample**: a seeded sample that grows with the
-     size of the scope and is spread over the sub-clusters. Leave the size
+     size of the scope. Leave the size
      empty for the server's default, or type one; the seed makes it
      repeatable.
 2. **What to do.** **Classify**, **Attributes**, **Verify boxes** and
@@ -42,8 +42,7 @@ and the refusals included, is what the backend answered.
    [VLM models](./vlm-models.md#choosing-a-vlm-per-run).
 
 Every change asks the server for a **dry run**, shown at the bottom: how many
-of the scope's members go to the VLM, the estimated number of VLM calls, the
-sub-cluster spread, what is left out (holdout, ignored, locked) and the
+of the scope's members go to the VLM, the estimated number of VLM calls, what is left out (holdout, ignored, locked) and the
 endpoint and pack the run will pin. If the server refuses (no VLM is
 configured, another run is live, the scope is too large, the pack declares no
 attributes), its reason replaces the figures and **Start run** stays disabled.
@@ -56,9 +55,9 @@ on locked items, failed; boxes judged; segmenter items done and pending). You
 can close the dialog while it runs; **Cancel run** stops it after the current
 chunk and what it wrote stays. Only one run is live per project.
 
-## The proposal for a cluster or sub-cluster
+## The proposal for a cluster
 
-A **Classify** run over a cluster or sub-cluster reads the sampled answers as
+A **Classify** run over a cluster reads the sampled answers as
 a label. On the cluster page a folded line, "VLM proposal for cluster #…:
 class, 83% of 41 answers", opens the proposal card:
 
@@ -74,8 +73,8 @@ class, 83% of 41 answers", opens the proposal card:
   as you would by hand (validated, trainable).
 
 The card marks a proposal **stale** when the scope has changed since the run,
-for example after **Refine (AHC)** (it shows how many of the members now were
-in the run). Apply then refuses with the backend's `scope_changed` message;
+for example after a new cluster partition is activated or members were moved
+(it shows how many of the members now were in the run). Apply then refuses with the backend's `scope_changed` message;
 run again on the current members. **Count the current members anyway** is
 offered only after that refusal, and still counts first.
 
@@ -95,11 +94,3 @@ project's VLM about each box the segmenter proposes) or **Accept without a
 VLM** (boxes are accepted as they are, even with a VLM active). It is saved
 with the scope and applies to the whole project; a **Segment** run can choose
 otherwise for its own items.
-
-## Sub-cluster tabs
-
-After **Refine (AHC)** the cluster page lists the sub-clusters as tabs. A tab
-asks the server for that sub-cluster's members (`cluster_subid`), so a
-sub-cluster larger than a page is listed whole and **Assist…** on it targets
-exactly it. The tab list is built from the sub-clusters seen while the whole
-cluster is shown; scroll the **all** view to load the rest.
