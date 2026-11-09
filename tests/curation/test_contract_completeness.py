@@ -132,10 +132,13 @@ def test_a_state_outside_the_vocabulary_counts_as_unknown_instead_of_vanishing()
 
 
 @pytest.mark.db
-@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
-async def test_the_stats_model_names_every_key_the_route_emits() -> None:
+async def test_the_stats_model_names_every_key_the_route_emits(world: Any, pg_env: Any) -> None:
     """A key the model lacks would be a field clients cannot see in the contract."""
+    from fixtures.job_rows import seed_default_spaces
+
+    # The route resolves the primary item space; a bare ``world`` row has none.
+    seed_default_spaces(pg_env, world)
     os_client = AsyncMock()
     os_client.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})
     payload = await stats_dataset(os_client)
