@@ -112,3 +112,30 @@ def test_source_body_folder_or_manifest() -> None:
         sr.source_body('/d', '/m.txt')
     with pytest.raises(ValueError, match='exactly one'):
         sr.source_body(None, None)
+
+
+def _stats(merge_total: int, merge_ms: int, flush_total: int) -> dict[str, object]:
+    node = {
+        'indices': {
+            'merges': {'total': merge_total, 'total_time_in_millis': merge_ms},
+            'refresh': {'total': 7},
+            'flush': {'total': flush_total, 'total_time_in_millis': 5},
+        }
+    }
+    return {'nodes': {'n1': node, 'n2': node}}
+
+
+def test_merge_counters_sum_nodes_and_default_missing_to_zero() -> None:
+    got = sr.merge_counters(_stats(3, 100, 2))
+    assert got['merge_total'] == 6
+    assert got['merge_time_ms'] == 200
+    assert got['flush_total'] == 4
+    assert got['merge_bytes'] == 0
+    assert sr.merge_counters({})['merge_total'] == 0
+
+
+def test_counter_delta_is_per_leg_difference() -> None:
+    before = sr.merge_counters(_stats(3, 100, 2))
+    after = sr.merge_counters(_stats(10, 450, 5))
+    d = sr.counter_delta(before, after)
+    assert (d['merge_total'], d['merge_time_ms'], d['flush_total']) == (14, 700, 6)
