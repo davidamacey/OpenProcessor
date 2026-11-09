@@ -231,7 +231,7 @@ def test_context_items_carry_their_outline_while_lists_do_not() -> None:
         excludes[label] = kwargs['body']['_source']['excludes']
         return await real_search(**kwargs)
 
-    fake.search = _record  # type: ignore[method-assign]
+    fake.search = _record
     client = _client(fake)
     client.get('/curation/projects/default/crops/a1/context')
     client.get('/curation/projects/default/crops')

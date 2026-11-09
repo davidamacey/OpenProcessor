@@ -138,7 +138,7 @@ def start(
             pg_of(),
             "SELECT id FROM jobs WHERE kind = 'source_poll' ORDER BY created_at DESC LIMIT 1",
         )[0]
-        return job  # type: ignore[no-any-return]
+        return job
     return result  # type: ignore[return-value]
 
 

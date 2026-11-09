@@ -153,7 +153,7 @@ async def test_the_vlm_chunks_run_under_a_bound_and_all_of_them_run(monkeypatch)
         ids,
         batch_size=4,
         concurrency=3,
-        meta=None,  # type: ignore[arg-type]
+        meta=None,
     )
     assert peak == 3
     assert sum(len(c) for c in seen) == 200

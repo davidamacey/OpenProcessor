@@ -107,15 +107,22 @@ def seed_project(pg: Any, slug: str) -> uuid.UUID:
     return project
 
 
+def _scalar(row: tuple[Any, ...] | None) -> int:
+    assert row is not None
+    return int(row[0])
+
+
 def count_events(pg: Any, project: uuid.UUID | None = None) -> int:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         if project is None:
-            return conn.execute('SELECT count(*) FROM events').fetchone()[0]
-        return conn.execute(
-            'SELECT count(*) FROM events WHERE project_id = %s', (project,)
-        ).fetchone()[0]
+            return _scalar(conn.execute('SELECT count(*) FROM events').fetchone())
+        return _scalar(
+            conn.execute('SELECT count(*) FROM events WHERE project_id = %s', (project,)).fetchone()
+        )
 
 
 def count_global_events(pg: Any) -> int:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute('SELECT count(*) FROM events WHERE project_id IS NULL').fetchone()[0]
+        return _scalar(
+            conn.execute('SELECT count(*) FROM events WHERE project_id IS NULL').fetchone()
+        )

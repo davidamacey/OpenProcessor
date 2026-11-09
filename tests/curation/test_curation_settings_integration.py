@@ -42,7 +42,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = revision_aware(TestClient(app))
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client.fake_os = fake_os
     return client
 
 

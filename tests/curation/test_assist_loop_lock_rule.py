@@ -165,15 +165,15 @@ def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None
             world.os._bump(ITEMS, racer)
         return await real_bulk(body=body, **kw)
 
-    world.os.bulk = bulk_with_race  # type: ignore[method-assign]
+    world.os.bulk = bulk_with_race
     label = ItemLabel.propagated(
         class_id=world.class_id('car'), class_name='car', run_id='alp1', writer='assist_loop:alp1'
     )
 
     result = asyncio.run(
         propagate_node(
-            world.os,  # type: ignore[arg-type]
-            WorldRoots(world),  # type: ignore[arg-type]
+            world.os,
+            WorldRoots(world),
             root_key=root_path(ROOT),
             eligible=ids,
             answers={},
@@ -200,8 +200,8 @@ def test_propagation_writes_the_machine_kind_with_the_run_in_its_provenance(
 
     result = asyncio.run(
         propagate_node(
-            world.os,  # type: ignore[arg-type]
-            WorldRoots(world),  # type: ignore[arg-type]
+            world.os,
+            WorldRoots(world),
             root_key=root_path(ROOT),
             eligible=ids,
             answers={},

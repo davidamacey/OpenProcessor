@@ -119,7 +119,7 @@ def test_no_automatic_clustering_places_no_item(
         raise AssertionError('the serving partition must not be consulted')
 
     monkeypatch.setattr(ix, 'place_vectors', _boom)
-    policy = IngestPolicy(clustering={'automatic': False})  # type: ignore[arg-type]
+    policy = IngestPolicy(clustering={'automatic': False})
     _encoder, crops, _image = _index(policy, tmp_path)
     assert 'cluster_uid' not in crops[0]
 
@@ -130,7 +130,7 @@ def test_the_policy_store_round_trips_the_clustering_switch() -> None:
     async def go() -> bool:
         await put_ingest_policy(
             IngestPolicyBody(clustering={'automatic': False}),
-            expected_revision=0,  # type: ignore[arg-type]
+            expected_revision=0,
         )
         return (await get_ingest_policy()).clustering.automatic
 

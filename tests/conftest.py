@@ -52,7 +52,7 @@ os.environ.setdefault('OPENSEARCH_URL', 'http://127.0.0.1:9')
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 class _EnvDefaultProjectRecord:
@@ -259,7 +259,7 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     from src.services.projects import registry as registry_mod
 
-    real_request = TestClient.request
+    real_request: Callable[..., object] = TestClient.request
 
     def _unbound_request(self: TestClient, *args: object, **kwargs: object) -> object:
         return contextvars.Context().run(real_request, self, *args, **kwargs)

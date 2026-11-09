@@ -82,12 +82,12 @@ class KillSwitch:
             self._check()
             return await real_update(**kw)
 
-        os_fake.bulk = bulk  # type: ignore[method-assign]
-        os_fake.update = update  # type: ignore[method-assign]
+        os_fake.bulk = bulk
+        os_fake.update = update
         self._restore = (os_fake, real_bulk, real_update)
 
     def disarm(self) -> None:
         """The process restarts: the item store accepts writes again."""
         os_fake, real_bulk, real_update = self._restore
-        os_fake.bulk = real_bulk  # type: ignore[method-assign]
-        os_fake.update = real_update  # type: ignore[method-assign]
+        os_fake.bulk = real_bulk
+        os_fake.update = real_update

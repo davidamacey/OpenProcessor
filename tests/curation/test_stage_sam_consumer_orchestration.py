@@ -37,7 +37,7 @@ def _task(crop_id: str = 'c1', *, jpeg: bytes | None = b'jpeg') -> _ItemTask:
         class_name='',
         request_id=f'req-{crop_id}',
         crop_jpeg=jpeg,
-        project=SimpleNamespace(slug='alpha'),  # type: ignore[arg-type]
+        project=SimpleNamespace(slug='alpha'),
     )
 
 
@@ -98,7 +98,7 @@ class Harness:
             in_flight_owner={},
             in_flight_lock=asyncio.Lock(),
             released_at={},
-            metrics=Counter(),  # type: ignore[arg-type]
+            metrics=Counter(),
             no_verdict_cap=3,
             visible_no_verdict=NoVerdictCounter(3),
             combined_no_verdict=NoVerdictCounter(3),

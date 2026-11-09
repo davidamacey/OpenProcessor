@@ -19,10 +19,10 @@ pytestmark = [pytest.mark.db, pytest.mark.asyncio]
 async def _rebuild_after_freeze(pg, project, held: str):
     env = await _built(pg, project)
     _make_freeze(pg, project)
-    docs = env.client.docs  # type: ignore[attr-defined]
+    docs = env.client.docs
     docs[ITEMS][held]['test_holdout'] = True
     client = _SeqNoOpenSearch(docs)
-    summary = await full_build(dataclasses.replace(env, client=client))  # type: ignore[arg-type]
+    summary = await full_build(dataclasses.replace(env, client=client))
     return env, client, summary
 
 
@@ -68,6 +68,6 @@ async def test_a_run_with_no_mixed_group_moves_nothing(pg, project) -> None:
 
 async def test_a_project_without_a_freeze_absorbs_nothing(pg, project) -> None:
     env = await _built(pg, project)
-    env.client.docs[ITEMS]['i1']['test_holdout'] = True  # type: ignore[attr-defined]
+    env.client.docs[ITEMS]['i1']['test_holdout'] = True
     summary = await full_build(dataclasses.replace(env, client=_SeqNoOpenSearch(env.client.docs)))  # type: ignore[arg-type, attr-defined]
     assert summary.holdout_absorbed == 0

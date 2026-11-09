@@ -214,9 +214,9 @@ def calculate_comparison_metrics(
         mean_conf_diff = np.mean(conf_diffs)
         mean_box_diff = np.mean(box_diffs)
     else:
-        mean_iou = 0.0
-        mean_conf_diff = 0.0
-        mean_box_diff = 0.0
+        mean_iou = np.float64(0.0)
+        mean_conf_diff = np.float64(0.0)
+        mean_box_diff = np.float64(0.0)
 
     return ComparisonMetrics(
         num_matches=num_matches,

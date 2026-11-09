@@ -154,7 +154,7 @@ async def test_the_pool_loads_before_it_infers(monkeypatch: pytest.MonkeyPatch) 
             return 'result'
 
     client = Client()
-    pool._clients = [client]  # type: ignore[list-item]
+    pool._clients = [client]
     pool._semaphore = asyncio.Semaphore(2)
     pool._lock = asyncio.Lock()
     pool._stats.requests_per_channel[0] = 0
@@ -184,10 +184,10 @@ def test_the_core_client_loads_a_model_before_it_infers(monkeypatch: pytest.Monk
 
     monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
     tc = object.__new__(TritonClient)
-    tc.client = _InferringClient()  # type: ignore[assignment]
+    tc.client = _InferringClient()
     tc.max_retries, tc.retry_base_delay, tc.retry_max_delay = 0, 0.0, 0.0
     assert tc._infer_with_retry('mobileclip2_s2_image_encoder', [], []) == 'result'
-    assert tc.client.calls == [  # type: ignore[attr-defined]
+    assert tc.client.calls == [
         'load mobileclip2_s2_image_encoder',
         'infer mobileclip2_s2_image_encoder',
     ]
@@ -200,19 +200,19 @@ def test_the_face_client_loads_both_face_models(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setenv('OP_LOAD_PROFILE', 'ingest')
     ff = object.__new__(FastFaceClient)
-    ff.client = _InferringClient()  # type: ignore[assignment]
+    ff.client = _InferringClient()
     ff.scrfd_model, ff.arcface_model = 'scrfd_10g_bnkps', 'arcface_w600k_r50'
 
     class _Out:
         def as_numpy(self, _name: str) -> np.ndarray:
             return np.ones((1, 4), np.float32)
 
-    ff.client.infer = lambda model_name, *_a, **_k: (  # type: ignore[method-assign]
-        ff.client.calls.append(f'infer {model_name}'),  # type: ignore[attr-defined]
+    ff.client.infer = lambda model_name, *_a, **_k: (
+        ff.client.calls.append(f'infer {model_name}'),
         _Out(),
     )[1]
     ff._call_arcface(np.zeros((1, 3, 112, 112), np.float32))
-    assert ff.client.calls[:2] == ['load arcface_w600k_r50', 'infer arcface_w600k_r50']  # type: ignore[attr-defined]
+    assert ff.client.calls[:2] == ['load arcface_w600k_r50', 'infer arcface_w600k_r50']
 
 
 def test_a_pipeline_model_loads_the_models_it_calls_first(monkeypatch: pytest.MonkeyPatch) -> None:

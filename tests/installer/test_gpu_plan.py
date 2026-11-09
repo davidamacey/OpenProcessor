@@ -366,7 +366,7 @@ def _decode_mib() -> int:
     text = (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text()
     return int(
         re.search(r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"', text).group(1)
-    )  # type: ignore[union-attr]
+    )
 
 
 def _profile_json(name: str) -> dict:

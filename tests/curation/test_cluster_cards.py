@@ -115,16 +115,16 @@ def _ids(cards: list[ClusterCard]) -> list[int]:
 )
 def test_each_sort_orders_the_fixture(sort: str, expected: list[int]) -> None:
     cards = _fixture()
-    assert _ids(cc.sort_cards(cards, sort)) == expected  # type: ignore[arg-type]
+    assert _ids(cc.sort_cards(cards, sort)) == expected
     # Input order never changes the result: ties break on cluster_uid.
-    assert _ids(cc.sort_cards(list(reversed(cards)), sort)) == expected  # type: ignore[arg-type]
+    assert _ids(cc.sort_cards(list(reversed(cards)), sort)) == expected
 
 
 def test_every_served_sort_option_is_implemented() -> None:
     ids = [o[0] for o in cc.SORT_OPTIONS]
     assert len(set(ids)) == len(ids)
     for sort_id in ids:
-        assert sorted(_ids(cc.sort_cards(_fixture(), sort_id))) == [1, 2, 3, 4]  # type: ignore[arg-type]
+        assert sorted(_ids(cc.sort_cards(_fixture(), sort_id))) == [1, 2, 3, 4]
 
 
 @pytest.mark.parametrize(

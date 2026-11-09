@@ -117,7 +117,7 @@ def _pool(datatype: str, monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncTritonPo
     monkeypatch.setattr('src.clients.triton_pool_core.ensure_loaded', _loaded)
     pool = AsyncTritonPool(pool_size=1)
     meta = _MetaClient(datatype)
-    pool._clients = [meta]  # type: ignore[list-item]
+    pool._clients = [meta]
     pool._lock = asyncio.Lock()
     pool._initialized = True
     return pool, meta
@@ -184,7 +184,7 @@ def _detector(pool: _IngestPool) -> WholeImageDetector:
     )
     return WholeImageDetector(
         triton_pool=pool, registry=None, profile=profile, secondary_profile=profile
-    )  # type: ignore[arg-type]
+    )
 
 
 _IMGS = [Image.new('RGB', (80, 40), (10 * i + 10, 50, 200)) for i in range(3)]

@@ -97,7 +97,7 @@ async def test_class_identity_holds_through_a_combine(
     )
     with bind_project(world.records['combined']):
         registry = get_class_registry()
-    export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)  # type: ignore[arg-type]
+    export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)
     assert_exported_labels_match_fixture_geometry(export_dir, expected)
 
     dense_names = [''] * len(dense_mapping)
@@ -105,7 +105,7 @@ async def test_class_identity_holds_through_a_combine(
         dense_names[dense_id] = names_by_id[registry_id]
     manifest = step_stub_train_manifest(dense_mapping, dense_names)
     snapshot = await registry.snapshot()
-    class_id_to_name, promote = step_promote_labels(  # type: ignore[arg-type]
+    class_id_to_name, promote = step_promote_labels(
         manifest, SimpleNamespace(load=lambda: snapshot)
     )
     remap = promote['remap']

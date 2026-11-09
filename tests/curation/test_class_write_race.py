@@ -96,7 +96,7 @@ def _hook_mget(fake: QueryFakeOpenSearch, mutate: Callable[[], None]) -> None:
             mutate()
         return await orig(**kw)
 
-    fake.mget = _mget  # type: ignore[method-assign]
+    fake.mget = _mget
 
 
 # ---------------------------------------------------------------- the guard
@@ -287,7 +287,7 @@ async def test_worker_fetch_requests_guard_fields_and_records_token() -> None:
         bodies.append(kw['body'])
         return await orig(**kw)
 
-    fake.search = _search  # type: ignore[method-assign]
+    fake.search = _search
     [task] = await _fetch_pending(fake, batch_size=5)
     assert set(CLASS_GUARD_SOURCE_FIELDS) <= set(bodies[0]['_source'])
     assert task.class_token == class_state_token(doc)

@@ -56,7 +56,7 @@ def test_project_b_starts_within_one_slice_of_project_a(
         original(task_name, job_id=job_id)
         fifo.append(job_id)  # the broker delivers it to the one consumer, behind the others
 
-    queue_hooks.enqueue = enqueue  # type: ignore[method-assign]
+    queue_hooks.enqueue = enqueue
     started = time.monotonic()
     while fifo:
         run_job(kinds['t_slice'], handler, {}, fifo.popleft())

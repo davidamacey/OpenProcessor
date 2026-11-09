@@ -37,7 +37,7 @@ def _bump_before_each_bulk(fake: QueryFakeOpenSearch, victim: str, times: int) -
             fake._bump(_index(), victim)
         return await real(body=body, **kw)
 
-    fake.bulk = bumping  # type: ignore[method-assign]
+    fake.bulk = bumping
 
 
 @pytest.mark.asyncio

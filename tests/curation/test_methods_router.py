@@ -491,7 +491,7 @@ def test_methods_coverage_is_null_not_zero_on_opensearch_failure(
     test."""
     app_client.fake_os.search = AsyncMock(
         side_effect=OpenSearchConnectionError('N/A', 'opensearch unreachable', OSError('refused'))
-    )  # type: ignore[attr-defined]
+    )
 
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200

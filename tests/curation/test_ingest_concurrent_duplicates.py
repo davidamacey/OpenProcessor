@@ -52,7 +52,7 @@ def _hold_writes_until_lookups(
         return await real_bulk(**kw)
 
     monkeypatch.setattr(content_key, 'resolve_many_bound', resolve_many_bound)
-    os_fake.bulk = bulk  # type: ignore[method-assign]
+    os_fake.bulk = bulk
 
 
 def _cache_in(svc: CurationIngestService, tmp_path: Path) -> Path:
@@ -112,7 +112,7 @@ async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(
         triton.detections = [next(boxes)]
         return await real_infer(model_name, inputs, outputs)
 
-    triton.infer = infer  # type: ignore[method-assign]
+    triton.infer = infer
     _hold_writes_until_lookups(os_fake, 2, monkeypatch)
     data = _jpeg_bytes(seed=7)
 

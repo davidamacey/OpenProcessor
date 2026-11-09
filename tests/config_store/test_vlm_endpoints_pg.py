@@ -178,7 +178,7 @@ async def test_activating_the_env_builtin_stores_a_system_revision_and_keeps_the
         assert (
             stored.id
             == (await repo.get_config(session, project_id=None, kind='vlm_endpoint', name='env')).id
-        )  # type: ignore[union-attr]
+        )
         assert len(await repo.list_revisions(session, stored.id)) == 1
 
 

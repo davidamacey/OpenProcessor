@@ -37,7 +37,7 @@ def _task(crop_id: str, *, project: str = 'alpha', jpeg: bytes | None = b'jpeg')
         request_id=f'req-{crop_id}',
         crop_jpeg=jpeg,
         candidates=[_candidate()],
-        project=SimpleNamespace(slug=project),  # type: ignore[arg-type]
+        project=SimpleNamespace(slug=project),
     )
 
 
@@ -85,7 +85,7 @@ class Harness:
             in_flight_owner={},
             in_flight_lock=asyncio.Lock(),
             released_at={},
-            metrics=Counter(),  # type: ignore[arg-type]
+            metrics=Counter(),
             no_verdict_cap=cap,
             visible_no_verdict=NoVerdictCounter(cap),
             combined_no_verdict=NoVerdictCounter(cap),

@@ -35,7 +35,7 @@ VLM_HISTORY = [
 def _request(scope: str, flt: ReprocessFilter, *, dry_run: bool) -> ReprocessRequest:
     return ReprocessRequest(
         targets=ReprocessTargets(filter=flt, limit=2, sample='random', seed=1),
-        scopes=[scope],  # type: ignore[list-item]
+        scopes=[scope],
         dry_run=dry_run,
     )
 

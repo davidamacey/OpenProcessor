@@ -133,7 +133,7 @@ def _pool(monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncTritonPool, _MetaClient
     monkeypatch.setattr('src.clients.triton_pool_core.ensure_loaded', _loaded)
     pool = AsyncTritonPool(pool_size=1)
     meta = _MetaClient()
-    pool._clients = [meta]  # type: ignore[list-item]
+    pool._clients = [meta]
     pool._lock = asyncio.Lock()
     pool._initialized = True
     return pool, meta

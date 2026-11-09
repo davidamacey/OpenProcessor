@@ -316,7 +316,7 @@ def test_resolve_skips_item_whose_state_changed_before_write(
             fake.docs(ITEMS)['p2']['class_validated'] = True
         return await real_get(index=index, id=id, **kw)
 
-    fake.get = _get_and_flip  # type: ignore[method-assign]
+    fake.get = _get_and_flip
     client = _client(fake, registry, monkeypatch)
 
     r = client.post(

@@ -102,7 +102,7 @@ def test_yolov5_objectness_uses_model_metadata_not_registry_id_space(
     # Regression guard: this must come from the model's own metadata, not
     # a registry dict keyed by (possibly gapped) class_id -- there is no
     # registry involved in this predictor at all.
-    assert predict.class_names == ('sedan', 'truck', 'motorcycle')  # type: ignore[attr-defined]
+    assert predict.class_names == ('sedan', 'truck', 'motorcycle')
 
 
 def test_yolov5_objectness_raises_loudly_without_model_metadata(

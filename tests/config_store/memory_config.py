@@ -252,7 +252,7 @@ class MemoryConfig:
             )
         )  # fmt: skip
         self._bump(project_id)
-        return await self.get_activation(_session, project_id, axis)  # type: ignore[return-value]
+        return await self.get_activation(_session, project_id, axis)
 
     async def list_activation_events(self, _session, project_id, axis, *, limit=50):
         mine = [e for p, e in self.events if p == project_id and e.axis == axis]

@@ -196,9 +196,9 @@ def leak_env(
     accesses: list[tuple[str | None, str, str, str]] = []
     fake = _FakeTransport(store)
     raw = AsyncOpenSearch(hosts=['http://127.0.0.1:9'])
-    raw.transport = fake  # type: ignore[assignment]
+    raw.transport = fake
     guard.install_project_guard(raw, registry)
-    raw.transport = _RecordingTransport(raw.transport, accesses)  # type: ignore[assignment]
+    raw.transport = _RecordingTransport(raw.transport, accesses)
 
     from src.clients.opensearch.client import OpenSearchClient
 

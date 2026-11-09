@@ -56,7 +56,7 @@ def _build_client(
     transport = httpx.MockTransport(handler)
     httpx_client = httpx.AsyncClient(transport=transport, timeout=5.0)
     sam = SegmenterClient(base_url=base_urls, client=httpx_client, source_name='sam3')
-    sam._now = now_func  # type: ignore[assignment]
+    sam._now = now_func
     return sam
 
 
@@ -191,7 +191,7 @@ async def test_bounded_retry_on_read_timeout() -> None:
     try:
         cand = await sam.segment(_CROP_BYTES)
     finally:
-        _asyncio.sleep = real_sleep  # type: ignore[assignment]
+        _asyncio.sleep = real_sleep
 
     assert cand is not None
     assert seq['n'] == 2, 'expected 1 timeout + 1 retry-success = 2 calls'

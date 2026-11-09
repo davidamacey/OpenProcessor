@@ -178,7 +178,7 @@ def pg_server(request: pytest.FixtureRequest) -> PgServer:
     return server
 
 
-def _run_as_super(server: PgServer, statement: sql.Composable) -> None:
+def _run_as_super(server: PgServer, statement: sql.SQL | sql.Composed) -> None:
     with psycopg.connect(server.conninfo(), autocommit=True) as conn:
         conn.execute(statement)
 

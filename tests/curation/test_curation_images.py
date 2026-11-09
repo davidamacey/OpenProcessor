@@ -263,7 +263,7 @@ def test_thumbnail_cache_rejects_bad_bbox_length(
     sample_image: Path, fresh_cache: svc.ThumbnailCache
 ) -> None:
     with pytest.raises(ValueError, match='4 elements'):
-        fresh_cache.get_or_compute(sample_image, (0.0, 0.0, 1.0))  # type: ignore[arg-type]
+        fresh_cache.get_or_compute(sample_image, (0.0, 0.0, 1.0))
 
 
 def test_thumbnail_cache_rejects_zero_area_bbox(

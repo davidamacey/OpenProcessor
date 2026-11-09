@@ -36,7 +36,7 @@ class _CountingFake(QueryFakeOpenSearch):
         self.scanned = 0  # docs returned by search (scroll or page)
         self.search_calls = 0
 
-    async def search(self, *, index: str, body: dict[str, Any], scroll: str | None = None, **kw):  # type: ignore[no-untyped-def]
+    async def search(self, *, index: str, body: dict[str, Any], scroll: str | None = None, **kw):
         self.search_calls += 1
         sort = body.get('sort')
         if scroll is not None or not sort:

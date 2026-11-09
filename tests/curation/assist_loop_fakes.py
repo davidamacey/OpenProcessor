@@ -282,7 +282,7 @@ class World:
         yet on a first slice, which pins the serving one)."""
         self.serve(env)
         return PartitionReader.for_run(
-            self.os,  # type: ignore[arg-type]
+            self.os,
             record.sessions,
             project=env.project,
             pinned=record.run.pinned,
@@ -468,11 +468,11 @@ async def build_deps(
         prompt_pack_revision=None,
     )
     deps = LoopDeps(
-        opensearch=world.os,  # type: ignore[arg-type]
+        opensearch=world.os,
         reader=reader,
         embedding_field='pe_embedding',
         asker=VlmAsker(
-            world.os,  # type: ignore[arg-type]
+            world.os,
             ctx,
             meta,
             images_per_call=lp.images_per_call,
@@ -484,7 +484,7 @@ async def build_deps(
             record,
             budget,
             AuditJudge(
-                world.os,  # type: ignore[arg-type]
+                world.os,
                 await class_context(judge, ClassWriteGuard('assist_loop_audit'), revision=None),
                 images_per_call=lp.images_per_call,
                 semaphore=asyncio.Semaphore(vlm_concurrency),

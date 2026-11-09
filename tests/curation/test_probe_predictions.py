@@ -258,7 +258,7 @@ async def test_probe_skips_test_holdout_crops(
 
     processed = await pp.run_probe_inference(
         tmp_path / 'fake.onnx', fake_os, architecture='yolov5_objectness'
-    )  # type: ignore[arg-type]
+    )
 
     assert processed == 1
     updated_ids = {u['id'] for u in fake_os.updates}

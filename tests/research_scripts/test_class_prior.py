@@ -115,7 +115,7 @@ def test_views_split_person_from_the_rest_and_report_each_stratum() -> None:
 
 
 def _views(**blocks: dict[str, float]) -> dict[str, dict[str, float | int | None]]:
-    return {name.replace('__', ':'): dict(b) for name, b in blocks.items()}  # type: ignore[misc]
+    return {name.replace('__', ':'): dict(b) for name, b in blocks.items()}
 
 
 def test_product_bars_pass_and_fail_each_threshold_on_its_own() -> None:

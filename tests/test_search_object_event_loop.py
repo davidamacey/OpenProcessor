@@ -68,7 +68,7 @@ def _app(service: _Service, monkeypatch: pytest.MonkeyPatch, class_id: int) -> F
     app.dependency_overrides[get_visual_search_service] = lambda: service
 
     @app.exception_handler(RequestRejectedError)
-    async def _rejected(_request, exc: RequestRejectedError):  # type: ignore[no-untyped-def]
+    async def _rejected(_request, exc: RequestRejectedError):
         from fastapi.responses import JSONResponse
 
         return JSONResponse(status_code=exc.status_code, content={'detail': exc.detail})

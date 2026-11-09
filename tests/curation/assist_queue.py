@@ -79,7 +79,7 @@ def assist_queue(
         ).fetchone()[0]
 
     async def registered(_name: str) -> uuid.UUID:
-        return endpoint_id  # type: ignore[no-any-return]
+        return endpoint_id
 
     monkeypatch.setattr('src.services.config_store.vlm_endpoints.endpoint_config_id', registered)
     setattr(stack, 'usage_endpoint_id', endpoint_id)  # noqa: B010 - read by the usage test

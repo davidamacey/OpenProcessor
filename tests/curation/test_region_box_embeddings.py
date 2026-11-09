@@ -145,7 +145,7 @@ async def test_write_retries_after_a_version_conflict() -> None:
             client._seq['c1'] += 1  # a concurrent writer got in first
         return await real_bulk(body=body, refresh=refresh)
 
-    client.bulk = _racing_bulk  # type: ignore[method-assign]
+    client.bulk = _racing_bulk
 
     counts = await write_box_embeddings(client, index=INDEX, by_crop={'c1': [entry_for(b1, [1.0])]})
 

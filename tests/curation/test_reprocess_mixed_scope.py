@@ -14,7 +14,7 @@ from src.services.curation.reprocess_targets import ReprocessTargetsError
 def _request(scopes: list[str], images: int) -> ReprocessRequest:
     return ReprocessRequest(
         targets=ReprocessTargets(image_ids=[f'img-{i}' for i in range(images)]),
-        scopes=scopes,  # type: ignore[arg-type]
+        scopes=scopes,
         dry_run=True,
     )
 

@@ -111,7 +111,7 @@ def test_official_yolov5_exports_predict_a_named_class(
 
     name, conf, _, _ = predict(street_image)
 
-    assert name in predict.class_names  # type: ignore[attr-defined]
+    assert name in predict.class_names
     assert conf > 0
 
 
