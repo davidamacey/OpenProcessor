@@ -9,13 +9,16 @@ from typing import TYPE_CHECKING
 import pytest
 from _class_registry_fake import InMemoryRegistry
 
-from curation.test_region_profiles_router import PREFIX, _body, _reset_caches, app_client  # noqa: F401
+from curation.test_region_profiles_router import PREFIX, _body
 
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from fastapi.testclient import TestClient
+
+
+pytestmark = pytest.mark.usefixtures('region_profile_caches')
 
 
 @pytest.fixture
@@ -32,7 +35,7 @@ def _classes(reg: InMemoryRegistry) -> list[tuple[str, str]]:
 
 
 def test_activation_registers_the_region_class_once_and_deactivation_keeps_it(
-    app_client: TestClient,  # noqa: F811
+    app_client: TestClient,
     registry: InMemoryRegistry,
 ) -> None:
     app_client.post(PREFIX, json={'name': 'wheels', 'body': _body(region_class_name='wheel')})

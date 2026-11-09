@@ -89,7 +89,6 @@ tests/curation/assist_queue.py	1	suppressions recorded when the ratchet landed; 
 tests/curation/conftest.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/cross_project_leak/_transport.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/dataset_import/test_op_export.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/curation/test_activation_registers_region_class.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_backfill_region_embeddings.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_export_readiness.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_pipeline.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
