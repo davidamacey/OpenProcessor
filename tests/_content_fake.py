@@ -54,6 +54,11 @@ class ContentRows:
         self.files[image_id] = data
         return None
 
+    async def record_copy_bound(
+        self, imohash: str, image_id: str, _image_path: str, _size: int
+    ) -> None:
+        self.rows.setdefault(imohash, image_id)
+
     async def release_bound(self, image_ids: object) -> int:
         gone = set(image_ids)  # type: ignore[call-overload]
         before = len(self.rows)

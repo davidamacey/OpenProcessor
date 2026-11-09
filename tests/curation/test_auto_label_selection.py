@@ -220,7 +220,9 @@ async def test_job_uses_the_overridden_pack(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     summary = await pipeline_auto_label(
-        opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs(prompt_pack='food_v2')
+        session=object(),
+        opensearch=_FakeOpenSearch({3: ['pallet-1']}),
+        **_run_kwargs(prompt_pack='food_v2'),
     )
     assert summary['prompt_pack'] == 'food_v2'
     assert [inst._pack.name for inst in labeler_spy] == ['food_v2']
@@ -232,7 +234,7 @@ async def test_job_omitted_pack_uses_default(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     summary = await pipeline_auto_label(
-        opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
+        session=object(), opensearch=_FakeOpenSearch({3: ['pallet-1']}), **_run_kwargs()
     )
     assert summary['prompt_pack'] == 'pallet_v1'
     assert 'detection_profile' not in summary
@@ -246,7 +248,9 @@ async def test_job_rejects_unknown_pack(labeler_spy: list[Any]) -> None:
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     with pytest.raises(RequestRejectedError) as info:
-        await pipeline_auto_label(opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope'))
+        await pipeline_auto_label(
+            session=object(), opensearch=_FakeOpenSearch({}), **_run_kwargs(prompt_pack='nope')
+        )
     assert info.value.status_code == 422
     assert labeler_spy == []
 
@@ -259,7 +263,9 @@ async def test_job_rejects_detection_profile(labeler_spy: list[Any]) -> None:
 
     with pytest.raises(RequestRejectedError) as info:
         await pipeline_auto_label(
-            opensearch=_FakeOpenSearch({}), **_run_kwargs(detection_profile='license_plate')
+            session=object(),
+            opensearch=_FakeOpenSearch({}),
+            **_run_kwargs(detection_profile='license_plate'),
         )
     assert info.value.status_code == 422
     assert labeler_spy == []

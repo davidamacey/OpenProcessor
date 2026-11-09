@@ -242,3 +242,20 @@ async def test_another_project_does_not_see_the_content(pg_registry, bound, tmp_
     bound['project'] = other
     assert (await _resolve(content_imohash(a), a)).holder is None
     assert await _claim(a, path) is None
+
+
+@pytest.mark.asyncio
+async def test_a_copied_image_is_recorded_and_a_reupload_of_its_file_is_a_duplicate(
+    pg_registry, bound, tmp_path: Path
+) -> None:
+    bound['project'] = project = await make_project()
+    a, _ = _pair()
+    key = content_imohash(a)
+    copied = 'c' * 32  # a combine id names the path, not the content
+    path = _file(tmp_path, 'copied', a)
+    await content_key.record_copy_bound(key, copied, path, len(a))
+    await content_key.record_copy_bound(key, copied, path, len(a))  # a resumed chunk
+
+    (row,) = await _rows(project, key)
+    assert (row.image_id, row.content_sha256, row.size_bytes) == (copied, None, len(a))
+    assert await _claim(a, _file(tmp_path, 'again', a)) == copied

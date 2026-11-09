@@ -177,7 +177,7 @@ def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 
     fake = ContentRows()
     if request.node.get_closest_marker('db') is None:
-        for name in ('resolve_many_bound', 'claim_bound', 'release_bound'):
+        for name in ('resolve_many_bound', 'claim_bound', 'record_copy_bound', 'release_bound'):
             monkeypatch.setattr(content_key, name, getattr(fake, name))
     return fake
 

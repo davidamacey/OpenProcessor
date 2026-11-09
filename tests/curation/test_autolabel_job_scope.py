@@ -121,7 +121,7 @@ async def test_cluster_scoped_vlm_job_normalizes_only_its_members(
 
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
     summary = await pipeline_auto_label(
-        opensearch=fake, train_clusters=False, run_vlm=True, cluster_id=CLUSTER
+        session=object(), opensearch=fake, train_clusters=False, run_vlm=True, cluster_id=CLUSTER
     )
     docs = fake.docs(ITEMS)
     assert docs['out']['cluster_id'] == 10009
@@ -136,7 +136,7 @@ async def test_unscoped_vlm_job_still_normalizes_everything(
     from src.routers.curation.pipeline_public import pipeline_auto_label
 
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
-    await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(session=object(), opensearch=fake, train_clusters=False, run_vlm=True)
     assert fake.docs(ITEMS)['out']['cluster_id'] == 3
 
 
@@ -160,6 +160,7 @@ async def test_cluster_scoped_job_skips_dataset_wide_stages(
     )
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
     summary = await pipeline_auto_label(
+        session=object(),
         opensearch=fake,
         train_clusters=True,
         run_auto_promote=True,
@@ -196,7 +197,7 @@ async def test_partial_cluster_pass_stops_the_pipeline(
     )
     fake = _NormalizingOpenSearch({ITEMS: _scope_docs()})
     summary = await pipeline_auto_label(
-        opensearch=fake, train_clusters=True, run_auto_promote=True, run_vlm=True
+        session=object(), opensearch=fake, train_clusters=True, run_auto_promote=True, run_vlm=True
     )
     assert summary['stages']['cluster_residuals']['status'] == 'partial'
     geometry.assert_not_awaited()

@@ -212,7 +212,7 @@ async def test_pipeline_vlm_stage_skips_item_restored_during_vlm_call(
         image_serving, 'THUMBNAIL_CACHE', SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg')
     )
 
-    await pipeline_auto_label(opensearch=fake, train_clusters=False, run_vlm=True)
+    await pipeline_auto_label(session=object(), opensearch=fake, train_clusters=False, run_vlm=True)
 
     docs = fake.docs(ITEMS)
     assert (docs['undone']['class_id'], docs['undone']['class_source']) == (12, 'det_model')

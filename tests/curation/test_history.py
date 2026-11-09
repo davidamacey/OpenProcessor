@@ -473,42 +473,28 @@ class _FakeMergeOS:
 
 
 async def _run_class_merge_case_with_os(
-    monkeypatch: pytest.MonkeyPatch, *, source_validated: bool = False
+    *, source_validated: bool = False
 ) -> tuple[dict[str, Any], _FakeMergeOS]:
-    from types import SimpleNamespace
-
-    import src.routers.curation.classes_merge as classes_mod
-    from src.routers.curation._class_models import ClassMergeRequest
-
-    async def _merge_class(source_id, target_id):
-        return {
-            'source_id': source_id,
-            'target_id': target_id,
-            'deprecated': True,
-            'source_name': 'sedan',
-            'target_name': 'coupe',
-        }
-
-    fake_reg = SimpleNamespace(merge_class=_merge_class)
-    monkeypatch.setattr(classes_mod, 'get_class_registry', lambda: fake_reg)
+    """The merge job's relabel pass (the registry half is a job step, tested in tests/classes)."""
+    from src.services.classes.projection_sync import relabel_merged_items
 
     fake_os = _FakeMergeOS(source_validated=source_validated)
-    result = await classes_mod.merge_class(ClassMergeRequest(source_id=3, target_id=6), fake_os)
-    assert result['deprecated'] is True
+    items, errors = await relabel_merged_items(
+        fake_os, 'items', 3, 6, 'coupe', cancelled=lambda: False
+    )
+    assert (items, errors) == (1, 0)
     assert len(fake_os.update_calls) == 1
-    return result, fake_os
+    return {'relabelled': items}, fake_os
 
 
-async def _run_class_merge_case(
-    monkeypatch: pytest.MonkeyPatch, *, source_validated: bool = False
-) -> list[dict[str, Any]]:
-    _, fake_os = await _run_class_merge_case_with_os(monkeypatch, source_validated=source_validated)
+async def _run_class_merge_case(*, source_validated: bool = False) -> list[dict[str, Any]]:
+    _, fake_os = await _run_class_merge_case_with_os(source_validated=source_validated)
     return fake_os.update_calls[0].get('class_id_history') or []
 
 
 @pytest.mark.asyncio
-async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> None:
-    history = await _run_class_merge_case(monkeypatch)
+async def test_merge_class_appends_history() -> None:
+    history = await _run_class_merge_case()
     assert history, 'class_merge: no class_id_history entry was written'
     assert history[-1]['writer'] == 'class_merge'
     assert history[-1]['class_id'] == 3
@@ -516,36 +502,30 @@ async def test_merge_class_appends_history(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_merge_class_history_records_pre_merge_validation_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_merge_class_history_records_pre_merge_validation_state() -> None:
     """A human-validated crop merged into another class must have
     its pre-merge validated=true state on record — not just the class it
     came from — so an audit can tell it apart from a merely-suggested
     label."""
-    history = await _run_class_merge_case(monkeypatch, source_validated=True)
+    history = await _run_class_merge_case(source_validated=True)
     assert history[-1]['class_validated'] is True
 
-    history_unvalidated = await _run_class_merge_case(monkeypatch, source_validated=False)
+    history_unvalidated = await _run_class_merge_case(source_validated=False)
     assert history_unvalidated[-1]['class_validated'] is False
 
 
 @pytest.mark.asyncio
-async def test_merge_class_carries_over_validation_to_the_target(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_merge_class_carries_over_validation_to_the_target() -> None:
     """A merge must KEEP a
     human validation, not clear it — a human-validated crop of the source
     class stays validated=true under the target. class_id_history (see
     test above) separately remembers that the *prior* class was validated;
     this test is about the doc's own live class_validated field after the
     merge write, which used to be hardcoded to False regardless."""
-    _, fake_os = await _run_class_merge_case_with_os(monkeypatch, source_validated=True)
+    _, fake_os = await _run_class_merge_case_with_os(source_validated=True)
     assert fake_os.update_calls[0]['class_validated'] is True
 
-    _, fake_os_unvalidated = await _run_class_merge_case_with_os(
-        monkeypatch, source_validated=False
-    )
+    _, fake_os_unvalidated = await _run_class_merge_case_with_os(source_validated=False)
     assert fake_os_unvalidated.update_calls[0]['class_validated'] is False
 
 

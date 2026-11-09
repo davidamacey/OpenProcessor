@@ -235,3 +235,22 @@ def _no_active_bakeoff(monkeypatch: pytest.MonkeyPatch) -> None:
         return False
 
     monkeypatch.setattr(gpu_arbiter, '_bakeoff_holds_gpus', _none)
+
+
+@pytest.fixture(autouse=True)
+def _no_live_loop_hold_offline(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The auto-label refresh hold reads the job tables; the offline tier has none (a ``db``
+    test, such as the assist-loop isolation one, runs the real check)."""
+    if request.node.get_closest_marker('db') is not None:
+        return
+    from src.services.curation.assist_loop import service
+
+    async def _no_loop(_session: Any) -> None:
+        return None
+
+    from src.routers.curation import pipeline_public
+
+    monkeypatch.setattr(service, 'require_no_live_loop', _no_loop)
+    monkeypatch.setattr(pipeline_public, 'require_no_live_loop', _no_loop)

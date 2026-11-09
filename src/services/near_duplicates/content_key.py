@@ -190,6 +190,25 @@ async def claim_bound(imohash_hex: str, image_id: str, image_path: str, data: by
         return holder
 
 
+async def record_copy_bound(imohash_hex: str, image_id: str, image_path: str, size: int) -> None:
+    """Record the content of an image a combine copied under its own id (it names the path,
+    not the content), so a later ingest of the same file finds it. No bytes are read: the
+    SHA-256 stays empty until an ``imohash`` match needs it. A resumed chunk records it again
+    as a no-op; the insert takes the same ``imohash`` lock as every claim."""
+    project_id = await bound_project_id()
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        await repo.lock_imohash(session, project_id, imohash_hex)
+        await repo.insert_content(
+            session,
+            project_id,
+            imohash=imohash_hex,
+            sha256=None,
+            image_id=image_id,
+            image_path=image_path,
+            size_bytes=size,
+        )
+
+
 async def release_bound(image_ids: Iterable[str]) -> int:
     """Forget the contents of deleted (or never written) images of the bound project."""
     ids = list(image_ids)

@@ -21,6 +21,7 @@ from src.config.curation_roles import IndexRole
 from src.config.project_context import bind_project
 from src.services.curation.dataset_import.mapping import norm_class_name
 from src.services.curation.dataset_import.project_source import item_class_name
+from src.services.near_duplicates import content_key
 from src.services.projects.combine.copy_docs import (
     link_or_copy,
     target_image_path,
@@ -239,6 +240,10 @@ async def _copy_image(
     if link_src is not None:
         linked = await asyncio.to_thread(link_or_copy, link_src, Path(tpath))
         ctx.counts[f'files_{linked}'] += 1
+    with bind_project(ctx.target):
+        await content_key.record_copy_bound(
+            image.imohash, tid, tpath, (await asyncio.to_thread(Path(tpath).stat)).st_size
+        )
     negative_for = (
         map_negative_for(list(image.doc.get('negative_for') or []), ctx, project)
         if image.is_negative
