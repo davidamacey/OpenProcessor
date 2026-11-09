@@ -29,19 +29,15 @@ def setup_trt_builder() -> tuple[
     Returns:
         Tuple of (builder, config, network, logger)
     """
-    # This script runs
-    # under /opt/venv-y11's deliberately CPU-only torch (see
-    # requirements-export-y11.txt), so the ONNX-export step above always
-    # passes device='cpu' to Ultralytics. Ultralytics' own
-    # select_device('cpu') sets os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
-    # as a side effect, in-process -- CUDA_VISIBLE_DEVICES is read by the
-    # driver, not by torch, so it blinds the TensorRT builder below too
-    # (createInferBuilder fails with a CUDA initialization error), even
-    # though a bare tensorrt.Builder() in an unpoisoned process works
-    # fine. The engine build never uses torch's CUDA (see that same
-    # requirements file's own comment), so clearing the poisoned value
-    # here is safe and restores what this process would see without
-    # Ultralytics having touched it.
+    # The ONNX-export step always passes device='cpu' to Ultralytics
+    # (yolo_export_settings.DEVICE). Ultralytics' own select_device('cpu')
+    # sets os.environ['CUDA_VISIBLE_DEVICES'] = '-1' as a side effect,
+    # in-process -- CUDA_VISIBLE_DEVICES is read by the driver, not by torch,
+    # so it blinds the TensorRT builder below too (createInferBuilder fails
+    # with a CUDA initialization error), even though a bare tensorrt.Builder()
+    # in an unpoisoned process works fine. The engine build never uses torch's
+    # CUDA, so clearing the poisoned value here is safe and restores what this
+    # process would see without Ultralytics having touched it.
     if os.environ.get('CUDA_VISIBLE_DEVICES') == '-1':
         logger.warning(
             "Clearing CUDA_VISIBLE_DEVICES=-1 (set by Ultralytics' CPU-mode "
@@ -145,6 +141,9 @@ def build_and_save_engine(
         logger.info(f'Engine saved: {output_path} ({file_size_mb:.2f} MB)')
         return True
 
-    except Exception as e:
+    except (
+        RuntimeError,
+        OSError,
+    ) as e:  # the builder's error, or the plan file could not be written
         logger.error(f'Engine build failed: {e}')
         return False

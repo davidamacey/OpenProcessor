@@ -13,7 +13,7 @@ import torch
 from trt_build_settings import workspace_gb
 from ultralytics.cfg import get_cfg
 from ultralytics.engine.exporter import Exporter
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, IMG_SIZE, IOU_THRESHOLD
 from yolo_trt_build import (
     add_optimization_profile,
     build_and_save_engine,
@@ -34,7 +34,7 @@ def check_gpu_memory(required_gb: float = 4.0) -> bool:
     """Check if sufficient GPU memory is available."""
     try:
         if torch.cuda.is_available():
-            free_memory, total_memory = torch.cuda.mem_get_info(DEVICE)
+            free_memory, total_memory = torch.cuda.mem_get_info(0)
             free_memory_gb = free_memory / (1024**3)
             logger.info(
                 f'GPU memory: {free_memory_gb:.1f}GB free of {total_memory / (1024**3):.1f}GB'
@@ -46,7 +46,7 @@ def check_gpu_memory(required_gb: float = 4.0) -> bool:
             return True
         logger.warning('CUDA not available to PyTorch, but continuing (TensorRT may still work)')
         return True  # TensorRT export doesn't require torch.cuda.is_available()
-    except Exception as e:
+    except RuntimeError as e:  # the CUDA runtime refused the query; the check is advisory
         logger.warning(f'Could not check GPU memory: {e}')
         return True  # Continue anyway
 
@@ -87,7 +87,6 @@ def export_onnx_standard(model: YOLO, config: dict[str, Any]) -> dict[str, Any]:
             device=DEVICE,
             dynamic=True,
             simplify=True,
-            half=HALF,
             verbose=False,
         )
 
@@ -143,7 +142,7 @@ def export_trt_standard(model: YOLO, config: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f'Using standard ONNX: {onnx_path}')
         logger.info(f'Dynamic batch: min=1, opt={max_batch // 2}, max={max_batch}')
-        logger.info(f'Workspace: {workspace_gb("yolo")}GB, Precision: {"FP16" if HALF else "FP32"}')
+        logger.info(f'Workspace: {workspace_gb("yolo")}GB')
 
         # Check GPU memory
         check_gpu_memory(workspace_gb('yolo'))
@@ -220,7 +219,6 @@ def export_onnx_end2end(
                 'imgsz': IMG_SIZE,
                 'dynamic': True,
                 'simplify': True,
-                'half': HALF,
                 'device': DEVICE,
                 'opset': 17,
             }
@@ -269,17 +267,14 @@ def export_onnx_end2end(
         logger.info('Contains: TRT::EfficientNMS_TRT operators')
         logger.info('Output: num_dets, det_boxes, det_scores, det_classes')
 
-        # Verify NMS plugin is present
-        try:
-            onnx_model = onnx.load(str(onnx_dest))
-            ops = [node.op_type for node in onnx_model.graph.node]
-            has_nms = any('NMS' in op or 'TRT' in op for op in ops)
-            if has_nms:
-                logger.info('Verified: NMS plugin in ONNX graph')
-            else:
-                logger.warning('No NMS operators found in ONNX graph!')
-        except Exception as e:
-            logger.debug(f'Could not verify ONNX operators: {e}')
+        # Verify NMS plugin is present (an unreadable ONNX fails the export below)
+        onnx_model = onnx.load(str(onnx_dest))
+        ops = [node.op_type for node in onnx_model.graph.node]
+        has_nms = any('NMS' in op or 'TRT' in op for op in ops)
+        if has_nms:
+            logger.info('Verified: NMS plugin in ONNX graph')
+        else:
+            logger.warning('No NMS operators found in ONNX graph!')
 
         box_format = '[0,1] normalized' if normalize_boxes else 'pixel coords (640x640)'
         return {
@@ -323,7 +318,7 @@ def export_trt_end2end(config: dict[str, Any]) -> dict[str, Any]:
 
         logger.info(f'Using end2end ONNX: {onnx_end2end_path}')
         logger.info(f'Dynamic batch: min=1, opt={max_batch // 2}, max={max_batch}')
-        logger.info(f'Workspace: {workspace_gb("yolo")}GB, Precision: {"FP16" if HALF else "FP32"}')
+        logger.info(f'Workspace: {workspace_gb("yolo")}GB')
 
         # Check GPU memory
         check_gpu_memory(workspace_gb('yolo'))

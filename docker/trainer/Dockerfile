@@ -51,11 +51,12 @@ RUN apt-get update && apt-get upgrade -y \
 # (--build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu130).
 ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu132
 
-# Ultralytics is pinned to a commit rather than a release tag: the training
-# recipe (and the MuSGD optimizer path) moves between releases, and a run's
-# manifest records this SHA so the image can be rebuilt at the same point in
-# time. Override with --build-arg ULTRALYTICS_SHA=<sha>.
-ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
+# Ultralytics is installed from the commit of the release tag, the same release as every other
+# image (requirements.txt; tests/test_requirements_contract.py reads the line below): a run's
+# manifest records this SHA so the image can be rebuilt at the same point in time.
+# ULTRALYTICS_VERSION=8.4.208
+# SHA of tag v8.4.208 (`gh api repos/ultralytics/ultralytics/commits/v8.4.208 --jq .sha`).
+ARG ULTRALYTICS_SHA=675c5569220bc7b6695ef552610882e6dca5e9a9
 
 COPY docker/trainer/requirements.txt requirements.txt
 
@@ -153,7 +154,7 @@ ARG OP_BUILD_SHA=""
 ENV OP_BUILD_SHA=${OP_BUILD_SHA}
 LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 
-ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
+ARG ULTRALYTICS_SHA=675c5569220bc7b6695ef552610882e6dca5e9a9
 # Promoted from ARG to ENV so it is readable at *runtime*
 # (`os.environ['ULTRALYTICS_SHA']`) and lands in each run's manifest under
 # code_versions.ultralytics_sha. An ARG alone only exists at build time.

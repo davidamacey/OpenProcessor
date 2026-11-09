@@ -86,21 +86,36 @@ def _ultralytics_specs() -> dict[str, str]:
     return specs
 
 
+def _trainer_ultralytics() -> tuple[str, list[str]]:
+    """The release the trainer image documents and the commit SHAs it builds from.
+
+    The trainer installs Ultralytics from the commit of the release tag (so a run's manifest
+    records the SHA); ``# ULTRALYTICS_VERSION=<X>`` next to the ARG names that release.
+    """
+    text = (ROOT / 'docker' / 'trainer' / 'Dockerfile').read_text(encoding='utf-8')
+    (version,) = re.findall(r'^# ULTRALYTICS_VERSION=(\S+)$', text, re.M)
+    return version, re.findall(r'^ARG ULTRALYTICS_SHA=(\S+)$', text, re.M)
+
+
 def test_ultralytics_is_one_exact_version_everywhere() -> None:
     """A range lets each image build resolve a different release, and the export head
-    changed inside 8.4.x without notice (#447). The isolated YOLO11 export venv
-    (requirements-export-y11.txt) has its own exact pin until the single-version move."""
+    changed inside 8.4.x without notice (#447). The API, test and export manifests carry the
+    same ``==``; the trainer image documents the same release next to the commit it builds."""
     specs = _ultralytics_specs()
     assert set(specs) == {'requirements.txt', 'requirements-test.txt', 'pyproject.toml'}
     assert all(re.fullmatch(r'ultralytics==\d+\.\d+\.\d+', s) for s in specs.values()), specs
     assert len(set(specs.values())) == 1, specs
+    trainer_version, trainer_shas = _trainer_ultralytics()
+    assert f'ultralytics=={trainer_version}' in specs.values(), (trainer_version, specs)
+    assert len(trainer_shas) == 2, trainer_shas
+    assert len(set(trainer_shas)) == 1, trainer_shas
+    assert re.fullmatch(r'[0-9a-f]{40}', trainer_shas[0]), trainer_shas
 
 
 def test_tensorrt_pin_matches_the_triton_image_everywhere() -> None:
     triton = (ROOT / 'Dockerfile.triton').read_text(encoding='utf-8')
     (version,) = re.findall(r'^ARG TRT_VERSION=(\S+)', triton, re.M)
     assert _pinned_trt('requirements-export.txt') == version
-    assert _pinned_trt('requirements-export-y11.txt') == version
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ from typing import Any
 
 EXPORT_DIR = Path(__file__).resolve().parent
 APP_DIR = EXPORT_DIR.parent
-# Classic YOLO11-family toolchain (EfficientNMS; re-execs into /opt/venv-y11)
+# Classic YOLO11-family toolchain (EfficientNMS)
 EXPORT_SCRIPT = EXPORT_DIR / 'export_models.py'
 # Native NMS-free toolchain for one-to-one heads (YOLO26, YOLOv10)
 EXPORT_SCRIPT_Y26 = EXPORT_DIR / 'export_yolo26.py'

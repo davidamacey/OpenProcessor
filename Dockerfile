@@ -5,7 +5,7 @@
 #
 #   api        FastAPI service and the curation workers (the LAST stage, so an untargeted
 #              `docker build .` still produces the API)
-#   export     the engine-build toolchain: TensorRT, ModelOpt, the isolated YOLO11 venv, the
+#   export     the engine-build toolchain: TensorRT, ModelOpt and the
 #              model-repo seed. `openprocessor models install` and `export` run in it.
 #   evaluator  the on-demand bake-off runner
 #
@@ -128,13 +128,13 @@ RUN pip freeze --user | grep -v '^perception' | LC_ALL=C sort > /tmp/runtime.fre
 COPY docker/buildlib/ /usr/local/share/op-build/
 
 # -----------------------------------------------------------------------------
-# builder-export: TensorRT + ModelOpt on top of the runtime set, plus the YOLO11 venv
+# builder-export: TensorRT + ModelOpt on top of the runtime set
 # -----------------------------------------------------------------------------
 FROM builder AS builder-export
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-COPY requirements-export.txt requirements-export-y11.txt ./
+COPY requirements-export.txt ./
 
 # Under the runtime freeze nothing in the runtime set can move; the superset check and the
 # delta script fail the build if it did anyway.
@@ -150,25 +150,6 @@ RUN bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.
         /root/.local/lib/python3.13/site-packages/pip-*.dist-info \
         /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.13 \
     && bash /usr/local/share/op-build/site_delta.sh delta /root/.local /tmp/pre.sha /delta/export
-
-# Isolated YOLO11 EfficientNMS export toolchain (ultralytics pinned to the 8.3 release validated
-# with the vendored end2end patch; CPU torch -- see requirements-export-y11.txt). export/export_models.py
-# re-execs into this venv automatically. Entries byte-identical to the runtime site are
-# replaced with symlinks into the runtime path (they dangle here by design; the export image
-# has /home/appuser/.local). Not --system-site-packages: the user site would shadow the
-# venv's pinned ultralytics 8.3.
-RUN python -m venv /opt/venv-y11 \
-    && /opt/venv-y11/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/venv-y11/bin/pip install --no-cache-dir \
-        --extra-index-url https://pypi.nvidia.com \
-        -r requirements-export-y11.txt \
-    && rm -rf /opt/venv-y11/lib/python3.13/site-packages/pip \
-        /opt/venv-y11/lib/python3.13/site-packages/pip-*.dist-info \
-        /opt/venv-y11/bin/pip /opt/venv-y11/bin/pip3 /opt/venv-y11/bin/pip3.13 \
-    && bash /usr/local/share/op-build/dedupe_site_packages.sh \
-        /opt/venv-y11/lib/python3.13/site-packages \
-        /root/.local/lib/python3.13/site-packages \
-        /home/appuser/.local/lib/python3.13/site-packages
 
 # -----------------------------------------------------------------------------
 # builder-eval: the bake-off harness extras on top of the runtime set
@@ -204,7 +185,6 @@ COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 FROM runtime-base AS export
 
 COPY --from=builder-export --chown=appuser:appuser /delta/export/ /home/appuser/.local/
-COPY --from=builder-export --chown=appuser:appuser /opt/venv-y11 /opt/venv-y11
 
 COPY --chown=appuser:appuser src/ ./src/
 # What `openprocessor models install` and `sample coco` run in this image: the export scripts,

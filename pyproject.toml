@@ -30,7 +30,7 @@ dependencies = [
     "orjson==3.13.0",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.2",
-    "ultralytics==8.4.197",
+    "ultralytics==8.4.208",
     "tritonclient[all]==2.74.0",
     "onnx==1.21.0",
     "onnxruntime-gpu==1.30.0",

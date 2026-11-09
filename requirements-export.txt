@@ -5,7 +5,7 @@
 # Dockerfile, with the runtime freeze as pip constraints so nothing in the runtime set moves.
 # Never install this file into the host .venv, and never into the API image.
 # Mirrors the [project.optional-dependencies] `export` extra in pyproject.toml.
-tensorrt-cu13==11.1.0.106  # MUST match the Triton image TensorRT (11.1.0.106 -- asserted at image build) for engine compatibility -- bump only together with the Dockerfile.triton TRT_VERSION assertion and requirements-export-y11.txt
+tensorrt-cu13==11.1.0.106  # MUST match the Triton image TensorRT (11.1.0.106 -- asserted at image build) for engine compatibility -- bump only together with the Dockerfile.triton TRT_VERSION assertion
 nvidia-modelopt[onnx]==0.48.0  # TRT 11 is strongly-typed: FP16 is baked into ONNX via ModelOpt AutoCast at export time
 onnx-graphsurgeon==0.6.1  # Required for End2End TensorRT NMS graph manipulation
 onnxsim==0.8.1

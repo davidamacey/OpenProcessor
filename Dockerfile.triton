@@ -62,8 +62,8 @@ RUN apt-get update \
 SHELL ["/bin/sh", "-c"]
 
 # Lockstep assertion: serialized engines are TRT-version-locked, so the
-# server's TRT and the client-side tensorrt-cu13 pip pin (requirements-export.txt,
-# requirements-export-y11.txt) MUST move together. When apt brings a newer
+# server's TRT and the client-side tensorrt-cu13 pip pin (requirements-export.txt)
+# MUST move together. When apt brings a newer
 # TRT, this fails the build until the pip pins and this check are bumped in
 # the same commit — drift can never ship silently.
 RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \

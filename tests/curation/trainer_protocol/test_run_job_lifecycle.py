@@ -6,6 +6,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import job_spec
@@ -39,6 +40,8 @@ class _StubYOLO:
         self.weights = weights
         self.callbacks: dict[str, list[Any]] = {}
         self.trainer: _StubTrainer | None = None
+        # A YOLO26 detection head: the one-to-one branch is what the export reads.
+        self.model = SimpleNamespace(model=[SimpleNamespace(one2one_cv2=[])])
 
     def add_callback(self, event: str, fn: Any) -> None:
         self.callbacks.setdefault(event, []).append(fn)
@@ -101,15 +104,16 @@ def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
     data_yaml_path = export_dir / 'data.yaml'
 
     class _Head:
-        """A genuine dual-head build: one2one only exists once end2end
-        training actually created it -- same as Ultralytics' real head."""
+        """A genuine dual-head build: the one-to-one branch (``one2one_cv2``) only exists
+        once end2end training actually created it -- same as Ultralytics' real head."""
 
         def __init__(self) -> None:
             self.end2end = False
+            self.one2one_cv2: list[Any] = []
 
         @property
         def one2one(self) -> dict[str, Any]:
-            return {'box_head': None, 'cls_head': None}
+            return {'box_head': self.one2one_cv2, 'cls_head': None}
 
     class _InnerModel:
         def __init__(self) -> None:
@@ -168,7 +172,7 @@ def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
     data_yaml_path = export_dir / 'data.yaml'
 
     class _NonEndToEndHead:
-        end2end = False  # no one2one property at all -- a plain single head
+        end2end = False  # no one-to-one branch at all -- a plain single head
 
     class _InnerModel:
         def __init__(self) -> None:
@@ -234,6 +238,7 @@ def test_a_whole_export_run_reaches_finished(
         'map50_95': 0.44,
         'split': 'val',
         'val_last': {'map50': 0.77, 'map50_95': 0.44},
+        'head': 'end2end',  # the stub is a YOLO26 head: the served one-to-one branch was selected
     }
     assert state.class_remap_copy_failed is False
     # ONNX sibling is what promote actually copies into the Triton repo.

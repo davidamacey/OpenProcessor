@@ -1,17 +1,14 @@
-"""docker/buildlib/*.sh: the build-time helpers the multi-stage Dockerfile uses to ship an extra
-dependency set as a file-level delta and to share the identical packages of the export venv."""
+"""docker/buildlib/site_delta.sh: the build-time helper the multi-stage Dockerfile uses to ship an
+extra dependency set as a file-level delta."""
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
-import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DELTA = REPO_ROOT / 'docker' / 'buildlib' / 'site_delta.sh'
-DEDUPE = REPO_ROOT / 'docker' / 'buildlib' / 'dedupe_site_packages.sh'
 
 
 def _run(script: Path, *args: object) -> subprocess.CompletedProcess[str]:
@@ -88,64 +85,7 @@ def test_delta_rejects_unknown_subcommand(tmp_path: Path) -> None:
     assert _run(DELTA, 'frobnicate', tmp_path).returncode != 0
 
 
-def _tree(root: Path, rel: str, files: dict[str, str]) -> None:
-    for name, text in files.items():
-        _write(root, f'{rel}/{name}', text)
-
-
-def test_dedupe_symlinks_identical_entries_and_keeps_differing_ones(tmp_path: Path) -> None:
-    canon_build = tmp_path / 'canon-build'
-    dup = tmp_path / 'venv-site'
-    runtime = '/home/appuser/.local/lib/python3.13/site-packages'
-    for site in (canon_build, dup):
-        _tree(site, 'onnx', {'__init__.py': 'same', 'sub/mod.py': 'same'})
-        _write(site, 'six.py', 'six')
-    _tree(canon_build, 'torch', {'__init__.py': 'cuda'})
-    _tree(dup, 'torch', {'__init__.py': 'cpu'})
-    _write(dup, 'only_in_venv.py', 'x')
-    _write(dup, 'pkg-1.0.dist-info/METADATA', 'meta')
-    _write(canon_build, 'pkg-1.0.dist-info/METADATA', 'meta')
-
-    result = _run(DEDUPE, dup, canon_build, runtime)
-    assert result.returncode == 0, result.stderr
-
-    assert (dup / 'onnx').is_symlink()
-    assert (dup / 'onnx').readlink() == Path(runtime) / 'onnx'
-    assert (dup / 'six.py').is_symlink()
-    assert (dup / 'six.py').readlink() == Path(runtime) / 'six.py'
-    # a differing package, an entry only the venv has, and dist-info stay real
-    assert not (dup / 'torch').is_symlink()
-    assert (dup / 'torch' / '__init__.py').read_text() == 'cpu'
-    assert not (dup / 'only_in_venv.py').is_symlink()
-    assert not (dup / 'pkg-1.0.dist-info').is_symlink()
-
-
-def test_dedupe_leaves_an_entry_that_differs_deep_inside(tmp_path: Path) -> None:
-    canon_build = tmp_path / 'canon-build'
-    dup = tmp_path / 'venv-site'
-    _tree(canon_build, 'pkg', {'a.py': 'a', 'deep/b.py': 'b1'})
-    _tree(dup, 'pkg', {'a.py': 'a', 'deep/b.py': 'b2'})
-
-    assert _run(DEDUPE, dup, canon_build, '/rt').returncode == 0
-    assert not (dup / 'pkg').is_symlink()
-
-
-def test_dedupe_is_idempotent_and_skips_pycache(tmp_path: Path) -> None:
-    canon_build = tmp_path / 'canon-build'
-    dup = tmp_path / 'venv-site'
-    _tree(canon_build, 'pkg', {'a.py': 'a'})
-    _tree(dup, 'pkg', {'a.py': 'a'})
-    _write(dup, '__pycache__/x.pyc', 'x')
-    _write(canon_build, '__pycache__/x.pyc', 'x')
-
-    assert _run(DEDUPE, dup, canon_build, '/rt').returncode == 0
-    assert _run(DEDUPE, dup, canon_build, '/rt').returncode == 0
-    assert (dup / 'pkg').is_symlink()
-    assert not (dup / '__pycache__').is_symlink()
-
-
-@pytest.mark.parametrize('script', [DELTA, DEDUPE])
-def test_helpers_are_strict_bash(script: Path) -> None:
-    text = script.read_text()
+def test_the_helper_is_strict_bash() -> None:
+    text = DELTA.read_text()
     assert text.startswith('#!/bin/bash')
     assert 'set -euo pipefail' in text

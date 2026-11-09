@@ -28,81 +28,47 @@ docker compose run --rm model-export python /app/export/export_models.py --model
 docker compose run --rm model-export python /app/export/export_models.py --formats all
 """
 
-import os
+import argparse
+import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 
 sys.path.insert(0, '/app/src')
 
-# ----------------------------------------------------------------------------
-# Toolchain guard — this exporter REQUIRES ultralytics < 8.4
-# ----------------------------------------------------------------------------
-# The EfficientNMS end2end patch (src/ultralytics_patches) targets the 8.3.x
-# exporter API; ultralytics 8.4 (YOLO26) changed the end2end property and
-# breaks it. The image ships a dedicated venv at /opt/venv-y11 with the pinned
-# toolchain; when this script is launched under a newer ultralytics it
-# transparently re-execs into that venv. YOLO26 exports (natively NMS-free,
-# no patch needed) live in export/export_yolo26.py.
-_Y11_VENV_PYTHON = os.environ.get('YOLO11_EXPORT_PYTHON', '/opt/venv-y11/bin/python')
-
-
-def _ultralytics_is_pre_84() -> bool:
-    try:
-        from importlib.metadata import version
-
-        major, minor, *_rest = version('ultralytics').split('.')
-        return (int(major), int(minor)) < (8, 4)
-    except Exception:
-        return False
-
-
-if not _ultralytics_is_pre_84():
-    if Path(_Y11_VENV_PYTHON).exists() and os.environ.get('_Y11_REEXEC') != '1':
-        os.environ['_Y11_REEXEC'] = '1'
-        os.execv(_Y11_VENV_PYTHON, [_Y11_VENV_PYTHON, *sys.argv])  # nosec B606  re-exec of the pinned interpreter path constant with our own argv
-    raise SystemExit(
-        'export_models.py requires ultralytics<8.4 (EfficientNMS end2end patch) '
-        f'and no pinned toolchain was found at {_Y11_VENV_PYTHON}. '
-        'For YOLO26 models use export/export_yolo26.py instead.'
-    )
-
-import argparse  # noqa: E402  # imports follow the interpreter re-exec guard above
-import logging  # noqa: E402  # imports follow the interpreter re-exec guard above
-from typing import Any  # noqa: E402  # imports follow the interpreter re-exec guard above
-
 # Apply end2end patch for onnx_trt format
-from ultralytics_patches import apply_end2end_patch  # noqa: E402  # imports follow the interpreter re-exec guard above
+from ultralytics_patches import apply_end2end_patch
 
 
 apply_end2end_patch()
 
 # Import after patch (REQUIRED - patch must be applied before importing ultralytics)
-from trt_build_settings import max_batch, workspace_gb  # noqa: E402  # imports follow the interpreter re-exec guard above
-from trt_utils import engine_output_dtypes  # noqa: E402  # imports follow the interpreter re-exec guard above
-from ultralytics import YOLO  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_export_cli import build_parser  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_export_report import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from trt_build_settings import max_batch, workspace_gb  # noqa: E402  # the end2end patch is applied before ultralytics is imported
+from trt_utils import engine_output_dtypes  # noqa: E402  # the end2end patch is applied before ultralytics is imported
+from ultralytics import YOLO  # noqa: E402  # the end2end patch is applied before ultralytics is imported
+from yolo_export_cli import build_parser  # noqa: E402  # the end2end patch is applied before ultralytics is imported
+from yolo_export_report import (  # noqa: E402  # the end2end patch is applied before ultralytics is imported
     _any_export_failed,
     log_model_repository,
     print_summary,
     save_results_file,
 )
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_formats import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # the end2end patch is applied before ultralytics is imported
+from yolo_formats import (  # noqa: E402  # the end2end patch is applied before ultralytics is imported
     check_gpu_memory,
     export_onnx_end2end,
     export_onnx_standard,
     export_trt_end2end,
     export_trt_standard,
 )
-from yolo_model_config import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_model_config import (  # noqa: E402  # the end2end patch is applied before ultralytics is imported
     extract_class_names,
     load_config_file,
     parse_custom_model,
     save_labels_file,
 )
-from yolo_triton_config import save_triton_config  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_triton_config import save_triton_config  # noqa: E402  # the end2end patch is applied before ultralytics is imported
 
 
 # ============================================================================
@@ -427,7 +393,7 @@ def _log_run_banner(args: argparse.Namespace, models_to_export: dict[str, dict[s
     logger.info(f'Formats: {", ".join(args.formats)}')
     logger.info(f'Image size: {IMG_SIZE}x{IMG_SIZE}')
     logger.info(f'Device: {f"cuda:{DEVICE}" if DEVICE != "cpu" else "cpu"}')
-    logger.info(f'Precision: {"FP16" if HALF else "FP32"}')
+    logger.info('ONNX trace: FP32 on the CPU')
     logger.info(f'Workspace: {workspace_gb("yolo")}GB')
     if 'onnx_end2end' in args.formats or 'trt_end2end' in args.formats or 'all' in args.formats:
         logger.info(f'NMS IoU threshold: {IOU_THRESHOLD}')

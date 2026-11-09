@@ -29,6 +29,8 @@ from trainer_eval import populate_eval_block
 from trainer_fit import _build_model, _export_onnx, _train_with_oom_backoff
 from trainer_kwargs import _resolve_multi_gpu_autobatch, build_train_kwargs, resolve_base_weights
 
+from src.domain.model_families import head_kind_of
+
 
 if TYPE_CHECKING:
     from job_spec import JobSpec
@@ -37,8 +39,41 @@ if TYPE_CHECKING:
 
 logger = get_logger('trainer')
 
+# What a failed Ultralytics validation pass raises; the run keeps its top-level metrics.
+_EVAL_FAILURES = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    AssertionError,
+    OSError,
+)
+
 
 # ---------------------------------------------------------------------------
+
+
+def _select_served_head(eval_model: Any, model_family: str) -> str | None:
+    """Make the test-split validation score the head that is served; ``None`` if it has none.
+
+    YOLO26 exports and serves the NMS-free one-to-one head (``nms=False`` at export).
+    ``.val()`` has no ``end2end=`` kwarg: the only real toggle is the loaded model's own
+    ``.end2end`` property (``ultralytics.nn.tasks.DetectionModel.end2end``, a setter that
+    delegates to ``set_head_attr``). Forcing it scores the SAME head that is served, rather than
+    whatever head the reloaded checkpoint happens to default to. A head without the one-to-one
+    branch (:func:`src.domain.model_families.head_kind_of`) keeps its own: there is no branch
+    to switch to and forcing ``end2end`` would break inference.
+    """
+    if model_family != 'yolo26':
+        return None
+    inner_model = getattr(eval_model, 'model', None)
+    head_layers = getattr(inner_model, 'model', None) if inner_model is not None else None
+    head_module = head_layers[-1] if head_layers else None
+    if inner_model is None or head_module is None or head_kind_of(head_module) != 'one2one':
+        return None
+    inner_model.end2end = True
+    return 'end2end'
 
 
 def _finalize_run(spec: JobSpec, state: StatusState, model: Any, data_yaml_path: Path) -> None:
@@ -65,36 +100,11 @@ def _finalize_run(spec: JobSpec, state: StatusState, model: Any, data_yaml_path:
     if best_pt.is_file():
         try:
             eval_model = type(model)(str(best_pt))
-            # YOLO26 exports/serves the NMS-free one-to-one head (nms=False
-            # at export -- Ultralytics forces nms=False for any end2end
-            # model). `.val()` has no `end2end=` kwarg: the only real
-            # toggle is the loaded model's own `.end2end` property
-            # (ultralytics.nn.tasks.DetectionModel.end2end, a setter that
-            # delegates to set_head_attr). Force it here so this
-            # test-split re-validation scores the SAME head that's
-            # actually served, rather than silently depending on whatever
-            # head the reloaded checkpoint happens to default to.
-            # `hasattr(..., 'one2one')` (only present on a genuine
-            # dual-head build) guards against forcing end2end on a
-            # non-end2end architecture, which has no one2one branch to
-            # switch to and would break inference.
-            if spec.model_family == 'yolo26':
-                inner_model = getattr(eval_model, 'model', None)
-                head_layers = (
-                    getattr(inner_model, 'model', None) if inner_model is not None else None
-                )
-                head_module = head_layers[-1] if head_layers else None
-                if (
-                    inner_model is not None
-                    and head_module is not None
-                    and hasattr(head_module, 'one2one')
-                ):
-                    inner_model.end2end = True
-                    eval_head = 'end2end'
+            eval_head = _select_served_head(eval_model, spec.model_family)
             val_results = eval_model.val(
                 data=str(data_yaml_path), split='test', plots=False, verbose=False
             )
-        except Exception as exc:  # metrics are not worth failing a run over
+        except _EVAL_FAILURES as exc:  # metrics are not worth failing a run over
             logger.warning('val pass for per-class metrics failed', error=str(exc))
             eval_head = None
 
