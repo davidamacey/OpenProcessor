@@ -267,16 +267,32 @@ async def _verify(
 async def _clear(ctx: JobContext, params: EmbeddingReindexParams, index: ReindexIndex) -> Any:
     assert ctx.project_id is not None
     row = await _space(ctx, params)
-    if row.status is not Status.RETIRING:
+    if row.status not in (Status.RETIRING, Status.FAILED):
         raise EmbeddingSpaceError(
-            'embedding_space_state', f'{row.space_key} is {row.status.value}; retire it first'
+            'embedding_space_state',
+            f'{row.space_key} is {row.status.value}; retire or abandon it first',
         )
     await index.clear(row)
-    async with async_session_factory()() as session:
-        await spaces.finish_retire(session, ctx.project_id, target=params.target, key=row.space_key)
+    if row.status is Status.RETIRING:
+        async with async_session_factory()() as session:
+            await spaces.finish_retire(
+                session, ctx.project_id, target=params.target, key=row.space_key
+            )
     async with ctx.session() as session:
         await reindex_runs.finish_run(session, ctx.job_id)
     return {'mode': 'clear', 'space_key': row.space_key}
+
+
+async def _clear_if_abandoned(
+    ctx: JobContext, params: EmbeddingReindexParams, index: ReindexIndex
+) -> None:
+    """A cancel with ``abandon`` marked the space ``failed`` first: empty its partial field now.
+
+    The clear cannot be its own job while this one still holds the space's exclusive scope.
+    """
+    row = await _space(ctx, params)
+    if row.status is Status.FAILED:
+        await index.clear(row)
 
 
 async def run_reindex(ctx: JobContext, index: ReindexIndex, encoder: Encoder) -> Any:
@@ -296,6 +312,7 @@ async def run_reindex(ctx: JobContext, index: ReindexIndex, encoder: Encoder) ->
         cursor.total = await index.count(space, params.mode, scope)
     while True:
         if ctx.cancelled():
+            await _clear_if_abandoned(ctx, params, index)
             return None
         if ctx.paused():
             return Paused()

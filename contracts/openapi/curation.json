@@ -10776,6 +10776,45 @@
         "title": "EmbeddingReindexRunResponse",
         "type": "object"
       },
+      "EmbeddingRunCancelResponse": {
+        "properties": {
+          "abandoned": {
+            "title": "Abandoned",
+            "type": "boolean"
+          },
+          "clear_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clear Job Id"
+          },
+          "job_status": {
+            "title": "Job Status",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "space_status": {
+            "title": "Space Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "job_status",
+          "abandoned",
+          "space_status"
+        ],
+        "title": "EmbeddingRunCancelResponse",
+        "type": "object"
+      },
       "EmbeddingSpaceListResponse": {
         "properties": {
           "spaces": {
@@ -46671,6 +46710,72 @@
           }
         },
         "summary": "Get Embedding Reindex Run",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/reindex-runs/{run_id}/cancel": {
+      "post": {
+        "description": "Cancel a run. Without `abandon` the space stays `building` (re-startable as a backfill).",
+        "operationId": "cancel_embedding_reindex_run_curation_projects__project__embedding_reindex_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Mark the building space failed and clear its partial vectors.",
+            "in": "query",
+            "name": "abandon",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Mark the building space failed and clear its partial vectors.",
+              "title": "Abandon",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingRunCancelResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Embedding Reindex Run",
         "tags": [
           "Curation",
           "Embedding"

@@ -2,7 +2,7 @@
 
 ``GET /curation/embedding/models`` is deployment-wide; the rest live under
 ``/curation/projects/{project}/embedding``. Register, build and retire answer 202 with the job that
-works on the space; cancel and pause use the generic job routes. Every refusal is the registry's
+works on the space; pause uses the generic job route; cancel (with `abandon`) is the run route. Every refusal is the registry's
 stable ``{"error": code, "message": ...}`` body.
 """
 
@@ -28,6 +28,7 @@ from src.routers.curation._embedding_space_models import (
     EmbeddingPromoteRequest,
     EmbeddingPromoteResponse,
     EmbeddingReindexRunResponse,
+    EmbeddingRunCancelResponse,
     EmbeddingSpaceListResponse,
     EmbeddingSpaceRegisterRequest,
     EmbeddingSpaceStartResponse,
@@ -36,7 +37,9 @@ from src.routers.curation._embedding_space_models import (
 from src.routers.curation.projects import global_router
 from src.services.embedding_spaces import flip, spaces, start, views
 from src.services.embedding_spaces.capacity import OpenSearchCapacity, SpaceCapacity
-from src.services.embedding_spaces.reindex import ReindexMode
+from src.services.embedding_spaces.dependents import queue_dependents
+from src.services.embedding_spaces.reindex import ReindexIndex, ReindexMode
+from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIndex
 from src.services.jobs.service import rejection
 
 
@@ -69,7 +72,14 @@ async def _capacity() -> SpaceCapacity:
 CapacityDep = Annotated[SpaceCapacity, Depends(_capacity)]
 
 
-def _view(found: views.SpaceWithModel) -> EmbeddingSpaceView:
+async def _index() -> ReindexIndex:
+    return OpenSearchReindexIndex(await get_curation_opensearch())
+
+
+IndexDep = Annotated[ReindexIndex, Depends(_index)]
+
+
+def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpaceView:
     row, model = found.space, found.model
     return EmbeddingSpaceView(
         space_key=row.space_key,
@@ -80,7 +90,7 @@ def _view(found: views.SpaceWithModel) -> EmbeddingSpaceView:
         role=row.role.value,
         status=row.status.value,
         ready_at=row.ready_at,
-        docs_with_vector=None,
+        docs_with_vector=docs,
     )
 
 
@@ -108,13 +118,15 @@ async def list_embedding_models(session: DbSessionDep) -> EmbeddingModelListResp
 
 @router.get('/embedding/spaces', response_model=EmbeddingSpaceListResponse, tags=['Embedding'])
 async def list_embedding_spaces(
-    session: DbSessionDep, target: Annotated[Target | None, Query()] = None
+    session: DbSessionDep, index: IndexDep, target: Annotated[Target | None, Query()] = None
 ) -> EmbeddingSpaceListResponse:
     """The project's spaces (live and retired), by target."""
     project = current_project_id()
     rows = await spaces.list_project_spaces(session, project, target)
     found = await views.with_models(session, project, rows)
-    return EmbeddingSpaceListResponse(spaces=[_view(f) for f in found])
+    return EmbeddingSpaceListResponse(
+        spaces=[_view(f, await views.docs_with_vector(index, f.space)) for f in found]
+    )
 
 
 def _started(result: start.Started) -> EmbeddingSpaceStartResponse:
@@ -201,6 +213,7 @@ async def promote_embedding_space(
         result = await flip.promote(
             session, project, target=target, key=space_key, force=body.force
         )
+    await queue_dependents(session, project, result.primary, requested_by=REQUESTER)
     rows = [result.primary] + ([result.previous] if result.previous else [])
     shown = [_view(f) for f in await views.with_models(session, project, rows)]
     return EmbeddingPromoteResponse(
@@ -241,3 +254,29 @@ async def get_embedding_reindex_run(
     if found is None:
         raise rejection(404, 'job_not_found', f'no re-index run {run_id}')
     return EmbeddingReindexRunResponse(**found)
+
+
+@router.post(
+    '/embedding/reindex-runs/{run_id}/cancel',
+    response_model=EmbeddingRunCancelResponse,
+    tags=['Embedding'],
+)
+async def cancel_embedding_reindex_run(
+    run_id: uuid.UUID,
+    session: DbSessionDep,
+    abandon: Annotated[
+        bool, Query(description='Mark the building space failed and clear its partial vectors.')
+    ] = False,
+) -> EmbeddingRunCancelResponse:
+    """Cancel a run. Without `abandon` the space stays `building` (re-startable as a backfill)."""
+    async with _refusals():
+        done = await start.cancel_run(
+            session, current_project_id(), run_id, abandon=abandon, requested_by=REQUESTER
+        )
+    return EmbeddingRunCancelResponse(
+        run_id=str(done.run_id),
+        job_status=done.job_status,
+        abandoned=done.abandoned,
+        space_status=done.space_status,
+        clear_job_id=None if done.clear_job_id is None else str(done.clear_job_id),
+    )

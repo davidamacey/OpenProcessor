@@ -57,6 +57,13 @@ def record_for(project: uuid.UUID, slug: str) -> ProjectRecord:
     return dataclasses.replace(record, id=project)
 
 
+class FakeCountIndex:
+    """Answers the exists count of every space with 42."""
+
+    async def count_with_vector(self, _space) -> int:
+        return 42
+
+
 @pytest.fixture
 def capacity() -> FakeCapacity:
     return FakeCapacity()
@@ -66,7 +73,7 @@ def capacity() -> FakeCapacity:
 def app(pg, pg_env, catalog, capacity, producer, wakes, monkeypatch):
     from src.routers import curation as curation_package
     from src.routers.curation._project_deps import bind_path_project
-    from src.routers.curation.embedding_spaces import _capacity
+    from src.routers.curation.embedding_spaces import _capacity, _index
 
     monkeypatch.setattr(repo, 'ready_engine_contracts', lambda _session: shipped_engines())
     records: dict[str, ProjectRecord] = {}
@@ -77,6 +84,7 @@ def app(pg, pg_env, catalog, capacity, producer, wakes, monkeypatch):
 
     application.dependency_overrides[bind_path_project] = bind
     application.dependency_overrides[_capacity] = lambda: capacity
+    application.dependency_overrides[_index] = FakeCountIndex
     application.include_router(
         curation_package.router,
         prefix='/curation/projects/{project}',
@@ -197,3 +205,88 @@ async def test_another_projects_spaces_and_runs_are_not_reachable(app, pg, clien
     promote = await client.post(url(beta, '/spaces/mobileclip2_s2_v1/promote?target=item'), json={})
     assert promote.status_code == 404
     assert promote.json()['detail']['error'] == 'embedding_space_not_found'
+
+
+def _run_of(pg, slug: str) -> str:
+    return str(
+        sql(
+            pg,
+            'SELECT r.id FROM embedding_reindex_runs r JOIN projects p ON p.id = r.project_id '
+            'WHERE p.slug = %s',
+            slug,
+        )[0][0]
+    )
+
+
+def _set_space_status(pg, slug: str, status: str) -> None:
+    sql(
+        pg,
+        'UPDATE embedding_spaces SET status = %s WHERE project_id = (SELECT id FROM projects WHERE slug = %s)',
+        status,
+        slug,
+    )
+
+
+async def test_cancel_without_abandon_leaves_the_space_building(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    _set_space_status(pg, alpha, 'building')
+    r = await client.post(url(alpha, f'/reindex-runs/{_run_of(pg, alpha)}/cancel'))
+    assert r.status_code == 200, r.text
+    assert (r.json()['job_status'], r.json()['abandoned'], r.json()['clear_job_id']) == (
+        'cancelled',
+        False,
+        None,
+    )
+    assert space_statuses(pg, alpha) == ['building']
+
+
+async def test_cancel_with_abandon_fails_the_space_and_queues_a_clear_run(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    _set_space_status(pg, alpha, 'building')
+    r = await client.post(url(alpha, f'/reindex-runs/{_run_of(pg, alpha)}/cancel?abandon=true'))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert (body['job_status'], body['space_status'], body['abandoned']) == (
+        'cancelled',
+        'failed',
+        True,
+    )
+    assert body['clear_job_id'] is not None
+    assert space_statuses(pg, alpha) == ['failed']
+    assert jobs_of(pg, alpha) == 2
+
+
+async def test_abandon_of_a_space_that_is_not_building_is_409_and_cancels_nothing(
+    app, pg, client
+) -> None:
+    alpha = project(app, pg, 'alpha')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)  # still pending
+    r = await client.post(url(alpha, f'/reindex-runs/{_run_of(pg, alpha)}/cancel?abandon=true'))
+    assert r.status_code == 409
+    assert r.json()['detail']['error'] == 'embedding_space_state'
+    assert (await client.get(url(alpha, f'/reindex-runs/{_run_of(pg, alpha)}'))).json()[
+        'job_status'
+    ] == 'queued'
+
+
+async def test_cancel_of_another_projects_run_is_404(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    beta = project(app, pg, 'beta')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    r = await client.post(url(beta, f'/reindex-runs/{_run_of(pg, alpha)}/cancel'))
+    assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'embedding_run_not_found'
+
+
+async def test_docs_with_vector_comes_from_the_index_for_spaces_that_have_a_field(
+    app, pg, client
+) -> None:
+    alpha = project(app, pg, 'alpha')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    pending = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    assert (pending['status'], pending['docs_with_vector']) == ('pending', None)
+    _set_space_status(pg, alpha, 'building')
+    building = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    assert (building['status'], building['docs_with_vector']) == ('building', 42)

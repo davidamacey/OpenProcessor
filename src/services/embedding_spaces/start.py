@@ -12,10 +12,11 @@ from typing import TYPE_CHECKING
 from src.db.repos import embedding_spaces as repo
 from src.db.session import project_tx
 from src.domain.embedding_spaces import EmbeddingSpaceError, Status, Target, space_key
+from src.domain.job_states import TERMINAL
 from src.services.embedding_spaces import reindex_runs, spaces
 from src.services.embedding_spaces.capacity import SpaceCapacity, require_room
 from src.services.embedding_spaces.reindex import EmbeddingReindexParams, ReindexMode
-from src.services.jobs.service import start_job
+from src.services.jobs.service import cancel_job, start_job
 
 
 if TYPE_CHECKING:
@@ -232,3 +233,59 @@ async def retire_and_clear(
         idempotency_key=None,
         requested_by=requested_by,
     )
+
+
+@dataclass(frozen=True)
+class Cancelled:
+    run_id: uuid.UUID
+    job_status: str
+    abandoned: bool
+    space_status: str
+    clear_job_id: uuid.UUID | None
+
+
+async def cancel_run(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    *,
+    abandon: bool,
+    requested_by: str,
+) -> Cancelled:
+    """Cancel a run's job; with ``abandon`` the building space is marked ``failed`` and cleared.
+
+    A queued job is cancelled at once, so its clear is queued here. A running job stops at its
+    next batch boundary and clears the field itself (it still holds the space's exclusive scope).
+    """
+    async with project_tx(session, project_id):
+        ref = await reindex_runs.get_run_ref(session, run_id)
+        if ref is None:
+            raise EmbeddingSpaceError(
+                'embedding_run_not_found', f'no re-index run {run_id}', status=404
+            )
+        space = await repo.get_space(session, project_id, Target(ref.target), ref.space_key)
+    assert space is not None
+    if abandon and (ref.mode != ReindexMode.BUILD.value or space.status is not Status.BUILDING):
+        raise EmbeddingSpaceError(
+            'embedding_space_state',
+            f'{ref.space_key} is {space.status.value}; only a building space can be abandoned',
+        )
+    moved = await cancel_job(session, ref.job_id, project_id, requested_by=requested_by)
+    if not abandon:
+        return Cancelled(run_id, moved.job.status, False, space.status.value, None)
+    failed = await spaces.mark_failed(session, project_id, target=space.target, key=ref.space_key)
+    clear_job = None
+    if moved.job.status in TERMINAL:
+        clear_job = (
+            await _start(
+                session,
+                project_id,
+                failed,
+                ReindexMode.CLEAR,
+                batch_size=1,
+                estimate=None,
+                idempotency_key=None,
+                requested_by=requested_by,
+            )
+        ).job_id
+    return Cancelled(run_id, moved.job.status, True, failed.status.value, clear_job)
