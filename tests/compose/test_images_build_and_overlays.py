@@ -91,7 +91,6 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'curation-vlm-worker': 'OP_API_IMAGE',
     'curation-auto-label-worker': 'OP_API_IMAGE',
     'curation-assist-loop-worker': 'OP_API_IMAGE',
-    'curation-cluster-refresh': 'OP_API_IMAGE',
     'model-export': 'OP_EXPORT_IMAGE',
     'model-export-worker': 'OP_EXPORT_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',

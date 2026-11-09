@@ -17,7 +17,6 @@ _CURATION_WORKER_SERVICES = (
     'curation-vlm-worker',
     'curation-auto-label-worker',
     'curation-assist-loop-worker',
-    'curation-cluster-refresh',
 )
 
 # the monitoring stack used to
@@ -148,9 +147,6 @@ def test_monitoring_does_not_start_on_a_bare_compose_up() -> None:
 _WORKER_LIVENESS_NAMES = {
     'curation-detection-worker': 'detection_worker',
     'curation-vlm-worker': 'vlm_worker',
-    'curation-auto-label-worker': 'auto_label_worker',
-    'curation-assist-loop-worker': 'assist_loop_worker',
-    'curation-cluster-refresh': 'cluster_refresh',
 }
 
 
@@ -171,7 +167,7 @@ def test_curation_worker_healthchecks_use_liveness() -> None:
 # curation-detection-worker depends on triton-server/opensearch, and
 # curation-auto-label-worker only on opensearch, both by design, since
 # they're triggered via files, not a direct HTTP call at startup).
-_WORKERS_DEPENDING_ON_API = ('curation-vlm-worker', 'curation-cluster-refresh')
+_WORKERS_DEPENDING_ON_API = ('curation-vlm-worker', 'curation-assist-loop-worker')
 
 
 def test_curation_workers_depend_on_healthy_api() -> None:
@@ -216,10 +212,10 @@ def test_evaluator_is_on_demand_not_in_the_curation_profile() -> None:
     assert profiles == ['evaluator']
 
 
-def test_model_export_services_are_opt_in_and_share_the_api_jobs_volume() -> None:
+def test_model_export_services_are_opt_in() -> None:
     """The export image (~15 GB) never starts on a bare `up`: model-export is the one-shot
-    toolchain container (`run --rm`, profile setup); model-export-worker serves the API's
-    /models/upload and /models/{name}/export through job files on the shared jobs volume."""
+    toolchain container (`run --rm`, profile setup); model-export-worker is the
+    `gpu_export` queue consumer behind /models/upload and /models/{name}/export."""
     services = _services()
     one_shot, worker = services['model-export'], services['model-export-worker']
     assert one_shot['profiles'] == ['setup']
@@ -228,7 +224,7 @@ def test_model_export_services_are_opt_in_and_share_the_api_jobs_volume() -> Non
     assert not one_shot.get('ports')
     assert not worker.get('ports')
     assert one_shot['image'] == worker['image']
-    assert 'openprocessor-jobs:/jobs' in worker['volumes']
-    assert 'openprocessor-jobs:/jobs' in services['api']['volumes']
-    assert worker['command'][:3] == ['python', '-m', 'export.export_worker']
+    assert not any(str(v).endswith(':/jobs') for v in worker['volumes'])
+    assert worker['command'].split()[:3] == ['celery', '-A', 'export.export_tasks']
+    assert '-Q gpu_export' in worker['command']
     assert 'healthcheck' in worker

@@ -11,7 +11,7 @@
 _DB_APP_SERVICES=(
     api jobs-worker periodic-worker open-vocab-worker jobs-beat flower cluster-worker
     curation-detection-worker curation-vlm-worker curation-auto-label-worker
-    curation-assist-loop-worker curation-cluster-refresh
+    curation-assist-loop-worker
 )
 
 _db_backup_dir() {

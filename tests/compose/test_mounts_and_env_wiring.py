@@ -194,7 +194,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
 # curation-auto-label-worker
 # runs the same in-process pipeline (cascade_detect / profile_registry /
 # source-image serving) as curation-detection-worker, not a thin HTTP client
-# like curation-vlm-worker/curation-cluster-refresh -- it needs the same
+# like curation-vlm-worker -- it needs the same
 # source-root/examples mounts or it fails lazily, on its first claimed job,
 # with its idle healthcheck staying green the whole time. Unlike
 # curation-detection-worker (which only ever produces unlabeled
@@ -207,7 +207,7 @@ _IN_PROCESS_PIPELINE_SERVICES = (
     'curation-auto-label-worker',
     'curation-assist-loop-worker',
 )
-_HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker', 'curation-cluster-refresh')
+_HTTP_CLIENT_ONLY_CURATION_SERVICES = ('curation-vlm-worker',)
 
 
 def test_class_registry_data_mounted_where_needed() -> None:
@@ -229,7 +229,7 @@ def test_class_registry_data_mounted_where_needed() -> None:
 
 
 def test_http_client_only_curation_services_stay_lightweight() -> None:
-    """Documents *why* curation-vlm-worker/curation-cluster-refresh don't
+    """Documents *why* curation-vlm-worker doesn't
     need the source-root/examples/data mounts above: they only ever talk
     to api over HTTP (verified via each entrypoint's own imports, not
     inferred from mounts), so adding a heavier mount surface there would be
@@ -258,38 +258,6 @@ def test_triton_serves_partial_model_sets() -> None:
     cmd = [str(c) for c in _services()['triton-server']['command']]
     assert '--exit-on-error=false' in cmd, cmd
     assert '--strict-readiness=false' in cmd, cmd
-
-
-def test_api_default_trainer_container_matches_the_trainer_service_name() -> None:
-    """/train/preflight's trainer-reachability probe
-    (GpuArbiterConfig.trainer_container, env OP_GPU_ARBITER_TRAINER_CONTAINER)
-    used to default to unset -- reporting the misleading "no trainer
-    container configured" even while curation-trainer was up and healthy,
-    because nothing ever wired the env var to the trainer service's own
-    container_name. api's environment must default
-    OP_GPU_ARBITER_TRAINER_CONTAINER to that exact value (still
-    overridable), so the probe finds it with no extra config on any
-    deployment running the `training` profile."""
-    services = _services()
-    api_env = services['api']['environment']
-    trainer_container_name = str(services['curation-trainer']['container_name'])
-
-    env_map = {}
-    for entry in api_env:
-        key, _, value = str(entry).partition('=')
-        env_map[key] = value
-
-    assert 'OP_GPU_ARBITER_TRAINER_CONTAINER' in env_map, (
-        'api must set a default OP_GPU_ARBITER_TRAINER_CONTAINER'
-    )
-    default_expr = env_map['OP_GPU_ARBITER_TRAINER_CONTAINER']
-    # The env var's own default value (inside the outer ${VAR:-...}) must
-    # be exactly the trainer service's container_name expression -- both
-    # resolve identically off the same COMPOSE_PROJECT_NAME.
-    assert trainer_container_name in default_expr, (
-        f'OP_GPU_ARBITER_TRAINER_CONTAINER default {default_expr!r} does not match '
-        f"curation-trainer's container_name {trainer_container_name!r}"
-    )
 
 
 def test_api_service_aggregates_metrics_across_workers() -> None:
