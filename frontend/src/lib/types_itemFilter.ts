@@ -50,6 +50,11 @@ export interface ItemFilterQuery {
   review_status?: ReviewStatus[];
   open_vocab_set?: string;
   source_prompt?: string;
+  /** Capture day (ISO 8601), inclusive; UTC capture time, else wall-clock time. */
+  taken_from?: string | null;
+  taken_to?: string | null;
+  /** Only items on these images (at most 200). */
+  image_id?: string[];
 }
 
 /** `ItemFilter` (request body schema). */
@@ -67,6 +72,7 @@ export interface ItemFilter {
   detector_conf_min?: number | null;
   embedding_state?: EmbeddingState[];
   exclude_class_names?: string[];
+  image_ids?: string[];
   import_id?: string | null;
   item_text?: string | null;
   label_source?: string | null;
@@ -86,6 +92,8 @@ export interface ItemFilter {
   review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;
+  taken_from?: string | null;
+  taken_to?: string | null;
 }
 
 /** `ItemSelection` (request body schema). */

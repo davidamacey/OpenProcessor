@@ -127,6 +127,9 @@ export async function getClusters(
       origin: filter.origin,
       embedding_state: filter.embedding_state,
       review_status: filter.review_status,
+      taken_from: filter.taken_from ?? undefined,
+      taken_to: filter.taken_to ?? undefined,
+      image_id: filter.image_id,
       cluster_uid: filter.cluster_uid ?? undefined,
       // Enough buckets to return every cluster in one call; `truncated` says when not.
       max_clusters: 2000,

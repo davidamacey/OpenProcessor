@@ -100,6 +100,7 @@ describe('item-filter body schemas', () => {
       detector_conf_min: true,
       embedding_state: true,
       exclude_class_names: true,
+      image_ids: true,
       import_id: true,
       item_text: true,
       label_source: true,
@@ -119,6 +120,8 @@ describe('item-filter body schemas', () => {
       review_tab: true,
       source: true,
       source_prompt: true,
+      taken_from: true,
+      taken_to: true,
     } satisfies Record<keyof T.ItemFilter, true>);
     expect(local).toEqual(Object.keys(schema('ItemFilter').properties ?? {}).sort());
   });
@@ -152,6 +155,9 @@ describe('ItemFilterQuery', () => {
       review_status: true,
       open_vocab_set: true,
       source_prompt: true,
+      taken_from: true,
+      taken_to: true,
+      image_id: true,
     } satisfies Record<keyof T.ItemFilterQuery, true>);
     const path = Object.keys(S.paths).find((p) =>
       /\/projects\/\{project\}\/crops$/.test(p),
@@ -183,6 +189,9 @@ describe('CropFilter (getCrops spreads every key into the query)', () => {
       review_status: true,
       open_vocab_set: true,
       source_prompt: true,
+      taken_from: true,
+      taken_to: true,
+      image_id: true,
       cluster_uid: true,
       label_source: true,
       class_source: true,

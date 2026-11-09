@@ -444,6 +444,7 @@ export interface ReprocessFilter {
   detector_conf_min?: number | null;
   embedding_state?: EmbeddingState[];
   exclude_class_names?: string[];
+  image_ids?: string[];
   import_id?: string | null;
   include_detected?: boolean;
   item_text?: string | null;
@@ -471,6 +472,8 @@ export interface ReprocessFilter {
   review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;
+  taken_from?: string | null;
+  taken_to?: string | null;
 }
 
 export interface ReprocessTargets {

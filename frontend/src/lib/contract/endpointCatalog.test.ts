@@ -65,6 +65,7 @@ const SCANNED_FILES = [
   'lib/api_detector.ts',
   'lib/api_labelConfirmation.ts',
   'lib/api_labelOps.ts',
+  'lib/api_map.ts',
   'lib/api_bulkIngest.ts',
   'lib/api_ingestSources.ts',
   'lib/api_embeddingSpaces.ts',
@@ -483,6 +484,8 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_stats.ts GET /stats/dataset',
   'lib/api_autoLabel.ts POST /pipeline/auto_label/start',
   'lib/api_detector.ts GET /detections/summary',
+  'lib/api_map.ts GET /map/cells',
+  'lib/api_map.ts GET /map/images',
 ]);
 const unresolvedSeen = new Set<string>();
 
