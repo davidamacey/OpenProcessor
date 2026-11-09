@@ -19257,6 +19257,19 @@
             "title": "Action",
             "type": "string"
           },
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON request body to send with the step, when it needs one.",
+            "title": "Body"
+          },
           "method": {
             "title": "Method",
             "type": "string"

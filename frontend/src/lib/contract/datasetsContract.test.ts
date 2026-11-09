@@ -276,10 +276,13 @@ const CASES: [string, string[]][] = [
   ],
   [
     'NextStep',
-    keys({ action: true, method: true, path: true, reason: true } satisfies Record<
-      keyof T.NextStep,
-      true
-    >),
+    keys({
+      action: true,
+      method: true,
+      path: true,
+      reason: true,
+      body: true,
+    } satisfies Record<keyof T.NextStep, true>),
   ],
   [
     'DatasetUndoReportWire',

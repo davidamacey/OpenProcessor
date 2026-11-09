@@ -1,14 +1,10 @@
 /**
- * The request of a served `next_steps` entry (`{action, method, path, reason}`).
- * The step names a route and a method but serves no body, while `POST
- * /clusters/runs` needs `{"target": ...}`: the `cluster_regions` step says in
- * its `reason` that the body is `{"target": "region_box"}`. Every other step is
- * sent without a body. A step that serves its own `body` would replace this.
+ * The request of a served `next_steps` entry (`{action, method, path, reason,
+ * body}`). The backend serves the JSON `body` a step needs (null when none);
+ * the client sends it as served and builds nothing itself.
  */
-export function nextStepInit(step: { action: string; method: string }): RequestInit {
+export function nextStepInit(step: { method: string; body?: unknown }): RequestInit {
   const init: RequestInit = { method: step.method.toUpperCase() };
-  if (step.action === 'cluster_regions') {
-    init.body = JSON.stringify({ target: 'region_box' });
-  }
+  if (step.body != null) init.body = JSON.stringify(step.body);
   return init;
 }

@@ -131,6 +131,7 @@ export interface CombineNextStep {
   method: string;
   path: string;
   reason?: string;
+  body?: Record<string, unknown> | null;
 }
 
 export interface CombineJobResponse {

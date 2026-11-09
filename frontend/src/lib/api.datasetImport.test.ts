@@ -182,8 +182,9 @@ describe('W10 wrappers hit the scoped routes', () => {
       method: 'post',
       path: '/clusters/runs',
       reason: 'r',
+      body: { target: 'region_box' },
     });
-    // POST /clusters/runs needs its target; the step's reason names it.
+    // The body is the one the step served.
     expect(sent()).toMatchObject({
       url: `${P}/clusters/runs`,
       method: 'POST',
@@ -198,8 +199,21 @@ describe('W10 wrappers hit the scoped routes', () => {
       method: 'post',
       path: '/cluster/umap/rebuild',
       reason: 'r',
+      body: null,
     });
     expect(sent()).toMatchObject({ url: `${P}/cluster/umap/rebuild`, method: 'POST' });
+    expect(sent().body).toBeUndefined();
+  });
+
+  it('never builds a body the step did not serve', async () => {
+    const sent = capture();
+    await runServedNextStep({
+      action: 'cluster_regions',
+      method: 'post',
+      path: '/clusters/runs',
+      reason: 'r',
+      body: null,
+    });
     expect(sent().body).toBeUndefined();
   });
 

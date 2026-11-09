@@ -45,3 +45,11 @@ def test_no_producer_hand_writes_a_step() -> None:
         and "'reason':" in p.read_text()
     ]
     assert offenders == []
+
+
+def test_cluster_regions_serves_its_request_body() -> None:
+    assert next_steps.cluster_regions()['body'] == {'target': 'region_box'}
+
+
+def test_bodyless_step_serves_no_body() -> None:
+    assert next_steps.recluster_items()['body'] is None

@@ -149,6 +149,9 @@ class NextStep(BaseModel):
     method: str
     path: str
     reason: str
+    body: dict[str, Any] | None = Field(
+        default=None, description='JSON request body to send with the step, when it needs one.'
+    )
 
 
 class DatasetImportSource(BaseModel):
