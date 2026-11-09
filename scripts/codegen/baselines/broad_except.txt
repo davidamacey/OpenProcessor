@@ -68,7 +68,6 @@ src/services/curation/clustering/embedding_reduce.py	1	tries alternate array con
 src/services/curation/clustering/umap_state.py	1	unpickling a stored reducer can raise anything; a failed load means refit, logged
 src/services/curation/dataset_import/runner.py	1	chunk boundary: a failed chunk is recorded as a chunk_failed issue and the import continues
 src/services/curation/empty_vlm_answer_repair.py	1	per-item boundary: any write failure is counted in errors and the sweep continues
-src/services/curation/export_readiness.py	1	best-effort index generation read: any failure is logged and the generation is reported unknown
 src/services/curation/index_bootstrap.py	2	bootstrap boundary: any migration or index-create failure is logged and the project is reported as not bootstrapped (retried on the next request)
 src/services/curation/ingest.py	1	per-image boundary: a primary detector failure becomes a failed IngestResult (error_kind detector_infer), logged
 src/services/curation/ingest_batch.py	1	batch detector failure falls back to the per-image path, which runs the detector again, logged

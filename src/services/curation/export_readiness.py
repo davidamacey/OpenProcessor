@@ -112,7 +112,7 @@ async def items_index_generation(opensearch: Any, index: str) -> dict[str, Any] 
     ``None`` when it can't be read (logged; callers treat it as unknown)."""
     try:
         resp = await opensearch.indices.get_settings(index=index)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('items_index_generation_unavailable', index=index, error=str(exc))
         return None
     if not isinstance(resp, dict) or len(resp) != 1:
