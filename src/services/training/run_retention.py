@@ -10,7 +10,7 @@ touches:
 * a run promoted to Triton (the caller passes the ``run_job_id`` of the project's live
   promotions, read from the registry in PostgreSQL);
 * a run referenced by a queued/running bake-off job (``job_id`` appears as
-  a ``models[].run_id`` in any ``<bakeoff_jobs_dir>/*.job.json``).
+  a ``models[].run_id`` (or the ``quantize.run_id``) in the params of an active ``bakeoff`` job).
 
 Job ids are ISO-timestamp-prefixed (see ``src.services.training.jobs``'s
 ``JOB_ID_RE``), so lexicographic sort on the id string is chronological --
@@ -25,6 +25,7 @@ import shutil
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.services.training.bakeoff_pins import active_bakeoff_specs
 
 
 if TYPE_CHECKING:
@@ -40,11 +41,11 @@ logger = get_logger(__name__)
 TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'lost'})
 
 
-def bakeoff_out_dir(bakeoff_jobs_dir: Path) -> Path:
-    """A project's bake-off result dir: ``<bakeoff_jobs_dir>/out``. The one
+def bakeoff_out_dir(bakeoff_results_dir: Path) -> Path:
+    """A project's bake-off result dir: ``<bakeoff_results_dir>/out``. The one
     definition the router (serves results) and the pruner (deletes them)
     share, so each only ever touches its own project's results."""
-    return bakeoff_jobs_dir / 'out'
+    return bakeoff_results_dir / 'out'
 
 
 _JOB_FILE_SUFFIXES = (
@@ -82,16 +83,21 @@ def list_runs(jobs_dir: Path) -> dict[str, dict[str, Any]]:
     return runs
 
 
-def collect_active_bakeoff_run_ids(bakeoff_jobs_dir: Path) -> set[str]:
-    """Every training ``run_id`` a queued/running bake-off job still scores."""
-    if not bakeoff_jobs_dir.is_dir():
-        return set()
+def collect_active_bakeoff_run_ids() -> set[str]:
+    """Every training ``run_id`` a queued/running bake-off job still scores.
+
+    Read from the job params in PostgreSQL; a database error propagates so a prune never
+    proceeds without knowing which runs are pinned.
+    """
     ids: set[str] = set()
-    for job_file in bakeoff_jobs_dir.glob('*.job.json'):
-        for model in _read_json(job_file).get('models') or []:
+    for spec in active_bakeoff_specs():
+        for model in spec.get('models') or []:
             run_id = model.get('run_id') if isinstance(model, dict) else None
             if run_id:
                 ids.add(str(run_id))
+        quantize = spec.get('quantize')
+        if isinstance(quantize, dict) and quantize.get('run_id'):
+            ids.add(str(quantize['run_id']))
     return ids
 
 
@@ -99,7 +105,7 @@ def plan_run_prune(
     *,
     jobs_dir: Path,
     promoted_job_ids: set[str],
-    bakeoff_jobs_dir: Path,
+    bakeoff_run_ids: set[str],
     keep_last: int,
 ) -> list[str]:
     """job_ids to remove: terminal runs older than the newest ``keep_last``
@@ -118,14 +124,13 @@ def plan_run_prune(
     beyond_keep_last = ordered[keep_last:]
 
     promoted = promoted_job_ids
-    bakeoff_active = collect_active_bakeoff_run_ids(bakeoff_jobs_dir)
 
     plan: list[str] = []
     for job_id in beyond_keep_last:
         state = runs[job_id].get('state')
         if state not in TERMINAL_STATES:
             continue
-        if job_id in promoted or job_id in bakeoff_active:
+        if job_id in promoted or job_id in bakeoff_run_ids:
             continue
         plan.append(job_id)
     return plan

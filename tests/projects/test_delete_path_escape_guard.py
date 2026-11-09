@@ -104,7 +104,7 @@ _PREVIOUSLY_UNGUARDED_FIELDS = (
     'bakeoff_eval_root',
     'project_state_dir',
     'upload_root',
-    'bakeoff_jobs_dir',
+    'bakeoff_results_dir',
 )
 
 

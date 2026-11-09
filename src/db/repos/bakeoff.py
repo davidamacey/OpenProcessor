@@ -29,6 +29,7 @@ class ActiveBakeoff:
     job_id: uuid.UUID
     project_id: uuid.UUID
     status: str
+    params: dict[str, Any]
 
 
 def insert_run(
@@ -65,9 +66,12 @@ def active_bakeoffs(session: Session) -> list[ActiveBakeoff]:
     Needs a deployment-scoped transaction: the arbiter is global.
     """
     rows = session.execute(
-        select(BakeoffRun.job_id, BakeoffRun.project_id, Job.status)
+        select(BakeoffRun.job_id, BakeoffRun.project_id, Job.status, Job.params)
         .join(Job, Job.id == BakeoffRun.job_id)
         .where(Job.status.in_(sorted(js.ACTIVE)))
         .order_by(Job.created_at)
     ).all()
-    return [ActiveBakeoff(job_id, project_id, status) for job_id, project_id, status in rows]
+    return [
+        ActiveBakeoff(job_id, project_id, status, dict(params or {}))
+        for job_id, project_id, status, params in rows
+    ]

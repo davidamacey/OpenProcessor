@@ -16,9 +16,9 @@ from src.services.projects.busy import JobRef, _detection_worker_inflight
 
 
 def _record(slug: str, tmp_path=None) -> ProjectRecord:
-    """A project record whose ``train_jobs_dir``/``bakeoff_jobs_dir``
+    """A project record whose ``train_jobs_dir``/``bakeoff_results_dir``
     are rebased under ``tmp_path`` when given -- ``resources_for_new``
-    resolves ``bakeoff_jobs_dir`` from the (process-cached)
+    resolves ``bakeoff_results_dir`` from the (process-cached)
     ``base_curation_config().state_dir``, which a per-test
     ``monkeypatch.setenv`` can't retroactively change, so tests that
     need a real writable dir override it explicitly instead."""
@@ -28,7 +28,7 @@ def _record(slug: str, tmp_path=None) -> ProjectRecord:
         resources = dataclasses.replace(
             resources,
             train_jobs_dir=tmp_path / 'jobs' / 'projects' / slug,
-            bakeoff_jobs_dir=tmp_path / 'state' / 'projects' / slug / 'bakeoff_jobs',
+            bakeoff_results_dir=tmp_path / 'state' / 'projects' / slug / 'bakeoff_jobs',
             autolabel_dir=tmp_path / 'jobs' / 'auto_label' / 'projects' / slug,
             project_state_dir=tmp_path / 'state' / 'projects' / slug,
         )
