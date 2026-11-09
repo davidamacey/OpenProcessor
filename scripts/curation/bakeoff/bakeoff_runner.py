@@ -67,7 +67,7 @@ from typing import TYPE_CHECKING, Any
 from . import quant_stage
 from .compare import build_comparison, build_matrix, to_markdown
 from .freeze import test_sha
-from .profile import resolve_profile
+from .profile import BakeoffProfile, resolve_profile
 from .quant_stage import COREML_UNAVAILABLE
 
 
@@ -277,6 +277,75 @@ def _score_grid(
                 _write_json(out_dir / 'status.json', status)
 
 
+def _add_quantized_variants(
+    quant: dict[str, Any],
+    datasets: list[dict[str, Any]],
+    out_dir: Path,
+    raw_models: list[dict[str, Any]],
+    failed: list[dict[str, Any]],
+) -> None:
+    """Append the job's quantized variants to ``raw_models`` and record stage failures."""
+    # Optional: export the trained model to portable ONNX first, then score those
+    # quantized variants in this same job (seamless export -> benchmark -> matrix).
+    if quant:
+        try:
+            variants = quant_stage._quantize_and_variant_models(quant, datasets, out_dir)
+        except Exception as exc:  # recorded below; scoring of the other models goes on
+            print(f'[bakeoff] quantize step failed: {exc}', flush=True)
+            failed.append(_failure(f'{type(exc).__name__}: {exc}', stage='quantize'))
+        else:
+            overlap = next(
+                (
+                    m.get('train_test_overlap_by_dataset')
+                    for m in raw_models
+                    if m['model'] == quant.get('model_key_prefix')
+                ),
+                None,
+            )
+            for v in variants:
+                v['train_test_overlap_by_dataset'] = dict(overlap or {})
+            raw_models += variants
+    if quant.get('coreml'):
+        failed.append(_failure(COREML_UNAVAILABLE, stage='coreml'))
+
+
+def _aggregate_comparisons(
+    valid: list[dict[str, Any]],
+    out_dir: Path,
+    profile: BakeoffProfile,
+    job_id: str,
+    model_failures: dict[str, list[dict[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    """Aggregate each dataset's per-model reports into its comparison."""
+    thresholds = {
+        'conf_floor': profile.conf_floor,
+        'nms_iou': profile.nms_iou,
+        'op_conf': profile.op_conf,
+        'op_iou': profile.op_iou,
+    }
+    per_dataset: dict[str, dict[str, Any]] = {}
+    for ds in valid:
+        ds_out = out_dir / ds['dir_name']
+        ds_out.mkdir(parents=True, exist_ok=True)
+        comp = build_comparison(
+            ds_out,
+            rank_by=profile.rank_metric,
+            dataset_meta={
+                'id': ds['id'],
+                'frozen_test_sha': ds.get('frozen_test_sha'),
+                'test_label_sha': ds.get('test_label_sha'),
+            },
+            job_id=job_id,
+            profile=profile.name,
+            thresholds=thresholds,
+            failed=model_failures[ds['id']],
+        )
+        _write_json(ds_out / 'comparison.json', comp)
+        (ds_out / 'comparison.md').write_text(to_markdown(comp), encoding='utf-8')
+        per_dataset[ds['id']] = comp
+    return per_dataset
+
+
 def run_job(spec: dict[str, Any], cancelled: Callable[[], bool] = lambda: False) -> dict[str, Any]:
     """Execute one job spec v2; return (and write) its final status.
 
@@ -303,28 +372,7 @@ def run_job(spec: dict[str, Any], cancelled: Callable[[], bool] = lambda: False)
     raw_models: list[dict[str, Any]] = list(spec.get('models') or [])
     quant = spec.get('quantize') or {}
     failed: list[dict[str, Any]] = []
-    # Optional: export the trained model to portable ONNX first, then score those
-    # quantized variants in this same job (seamless export -> benchmark -> matrix).
-    if quant:
-        try:
-            variants = quant_stage._quantize_and_variant_models(quant, datasets, out_dir)
-        except Exception as exc:  # recorded below; scoring of the other models goes on
-            print(f'[bakeoff] quantize step failed: {exc}', flush=True)
-            failed.append(_failure(f'{type(exc).__name__}: {exc}', stage='quantize'))
-        else:
-            overlap = next(
-                (
-                    m.get('train_test_overlap_by_dataset')
-                    for m in raw_models
-                    if m['model'] == quant.get('model_key_prefix')
-                ),
-                None,
-            )
-            for v in variants:
-                v['train_test_overlap_by_dataset'] = dict(overlap or {})
-            raw_models += variants
-    if quant.get('coreml'):
-        failed.append(_failure(COREML_UNAVAILABLE, stage='coreml'))
+    _add_quantized_variants(quant, datasets, out_dir, raw_models, failed)
     if job_profile:
         raw_models = [{**m, 'profile': job_profile} for m in raw_models]
     models = _expand_modes(raw_models)
@@ -372,33 +420,7 @@ def run_job(spec: dict[str, Any], cancelled: Callable[[], bool] = lambda: False)
     if stopped:
         return finish('cancelled')
 
-    # Aggregate each dataset's per-model reports into its comparison.
-    thresholds = {
-        'conf_floor': profile.conf_floor,
-        'nms_iou': profile.nms_iou,
-        'op_conf': profile.op_conf,
-        'op_iou': profile.op_iou,
-    }
-    per_dataset: dict[str, dict[str, Any]] = {}
-    for ds in valid:
-        ds_out = out_dir / ds['dir_name']
-        ds_out.mkdir(parents=True, exist_ok=True)
-        comp = build_comparison(
-            ds_out,
-            rank_by=profile.rank_metric,
-            dataset_meta={
-                'id': ds['id'],
-                'frozen_test_sha': ds.get('frozen_test_sha'),
-                'test_label_sha': ds.get('test_label_sha'),
-            },
-            job_id=job_id,
-            profile=profile.name,
-            thresholds=thresholds,
-            failed=model_failures[ds['id']],
-        )
-        _write_json(ds_out / 'comparison.json', comp)
-        (ds_out / 'comparison.md').write_text(to_markdown(comp), encoding='utf-8')
-        per_dataset[ds['id']] = comp
+    per_dataset = _aggregate_comparisons(valid, out_dir, profile, job_id, model_failures)
 
     matrix = build_matrix(datasets, per_dataset, job_id=job_id, rank_by=profile.rank_metric)
     _write_json(out_dir / 'matrix.json', matrix)
