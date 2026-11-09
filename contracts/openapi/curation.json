@@ -32555,6 +32555,34 @@
         "title": "SkippedCounts",
         "type": "object"
       },
+      "SourceBackfillRequest": {
+        "description": "Which steps to run; omitted, all of them.",
+        "properties": {
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "content",
+                    "capture",
+                    "location_purge"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`content`: the exact-content key; `capture`: EXIF time, camera and GPS under the project's location policy; `location_purge`: bring stored coordinates within the policy. Omitted: all three, in that order.",
+            "title": "Steps"
+          }
+        },
+        "title": "SourceBackfillRequest",
+        "type": "object"
+      },
       "SourceBackfillStarted": {
         "properties": {
           "job_id": {
@@ -59895,7 +59923,7 @@
     },
     "/curation/projects/{project}/source_backfill/runs": {
       "post": {
-        "description": "Start the pass that reads each stored image once and records its content key.",
+        "description": "Start the pass over the stored images: content key, capture metadata, location policy.",
         "operationId": "start_source_backfill_curation_projects__project__source_backfill_runs_post",
         "parameters": [
           {
@@ -59908,6 +59936,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SourceBackfillRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {

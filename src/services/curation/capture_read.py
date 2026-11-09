@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from src.clients.exiftool_client import ExifToolError, get_exiftool_client
 from src.config.project_context import run_in_executor_bound
@@ -27,9 +28,22 @@ def _read(data: bytes) -> CaptureMetadata:
         return unknown_capture()
 
 
+def _read_path(path: str) -> CaptureMetadata | None:
+    if not Path(path).is_file():
+        return None
+    return parse_capture(get_exiftool_client().read(path))
+
+
 async def read_capture(data: bytes) -> CaptureMetadata:
     """The capture metadata of the file whose bytes are ``data``."""
     return await run_in_executor_bound(asyncio.get_running_loop(), _POOL, _read, data)
 
 
-__all__ = ['read_capture']
+async def read_capture_file(path: str) -> CaptureMetadata | None:
+    """The capture metadata of the stored file at ``path``; ``None`` when the file is gone.
+    Raises :class:`~src.clients.exiftool_client.ExifToolError` on an ExifTool outage: a backfill
+    must stop on one, not stamp every image unknown."""
+    return await run_in_executor_bound(asyncio.get_running_loop(), _POOL, _read_path, path)
+
+
+__all__ = ['read_capture', 'read_capture_file']
