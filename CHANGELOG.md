@@ -11,6 +11,12 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Security
+
+- Limit what the labelers record in logs (#468): parse-failure logs carry reply lengths and error types, not reply text.
+- Project isolation and purge for the core text index (#472): `python -m scripts.purge_ocr_data` counts (`--dry-run`) or empties (`--yes`) the core text index and appends a counts-only audit record.
+- `SECURITY.md` states what external endpoints and the research judge may receive, the stored-text and location rules, and the socket mount of the monitoring profile.
+
 ### Upgrade notes / behaviour changes
 
 - **Breaking: the control plane needs PostgreSQL and Valkey, and new secrets.** The stack adds `postgres` (PostgreSQL 18), `valkey` (Valkey 9), `db-migrate` (one-shot schema and index migration), `jobs-worker`, `jobs-beat`, `periodic-worker`, `open-vocab-worker`, `cluster-worker` and `flower` (port 4613, bound to `OP_BIND_ADDRESS`). The API and the workers refuse to start until PostgreSQL, Valkey and OpenSearch answer at the schema revision the image carries. The installer creates `secrets/postgres/`, `secrets/valkey/` and `secrets/flower/`. Back up `secrets/` and the PostgreSQL volume together; `./openprocessor db backup` and `./openprocessor db restore` cover the database.
