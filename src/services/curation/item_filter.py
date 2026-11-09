@@ -41,6 +41,7 @@ HUMAN_CLASS_SOURCES: tuple[str, ...] = ('human', 'human_move')
 # Every item a full-image SAM 3 pass writes carries the prompt set it came from
 # (and keeps it after a human relabels it), so that field is what ``sam3`` means.
 SAM3_ORIGIN_FIELD = 'open_vocab_set'
+IMAGE_IDS_MAX = 200
 
 
 class ItemFilter(BaseModel):
@@ -95,6 +96,8 @@ class ItemFilter(BaseModel):
     # known and with the wall-clock time (as if UTC) when it is not.
     taken_from: dt.date | None = None
     taken_to: dt.date | None = None
+    # Only items on these images (the map opens the list on the images of one cell).
+    image_ids: list[str] = Field(default_factory=list, max_length=IMAGE_IDS_MAX)
 
     def is_empty(self) -> bool:
         return self == type(self)()
@@ -225,6 +228,8 @@ def _state_clauses(f: ItemFilter, embedding: WriteFields) -> list[dict[str, Any]
 
 def _term_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    if f.image_ids:
+        out.append({'terms': {'image_id': f.image_ids}})
     for field, value in (
         ('source', f.source),
         ('class_id', f.class_id),

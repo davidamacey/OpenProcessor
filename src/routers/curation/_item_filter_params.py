@@ -16,7 +16,7 @@ from typing import Annotated
 from fastapi import Depends, Query
 
 from src.domain.embedding_state import EmbeddingState  # noqa: TC001 - FastAPI resolves it
-from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
+from src.services.curation.item_filter import IMAGE_IDS_MAX, ItemFilter, Origin, ReviewStatus
 
 
 TakenDate = Annotated[
@@ -114,6 +114,14 @@ def item_filter_query(
     ] = None,
     taken_from: TakenDate = None,
     taken_to: TakenDate = None,
+    image_id: Annotated[
+        list[str] | None,
+        Query(
+            max_length=IMAGE_IDS_MAX,
+            description='Only items on these images, repeatable (at most 200); the map opens '
+            'the list on the images of one cell this way.',
+        ),
+    ] = None,
 ) -> ItemFilter:
     return ItemFilter(
         class_names=class_name or [],
@@ -132,6 +140,7 @@ def item_filter_query(
         review_status=review_status or [],
         taken_from=taken_from,
         taken_to=taken_to,
+        image_ids=image_id or [],
     )
 
 

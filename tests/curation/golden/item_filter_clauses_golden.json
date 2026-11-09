@@ -817,6 +817,16 @@
    }
   }
  ],
+ "image_ids": [
+  {
+   "terms": {
+    "image_id": [
+     "a1",
+     "b2"
+    ]
+   }
+  }
+ ],
  "everything": [
   {
    "bool": {

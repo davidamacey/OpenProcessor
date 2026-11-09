@@ -54,6 +54,15 @@ _FROM_DEFAULT_PROJECT = '<from the default project>'
 _FROM_DEFAULT_PROJECT_PATH = Path('<from the default project>')
 
 
+def _tile_url(url: str) -> str:
+    """``url`` when it is a tile template (``{z}``, ``{x}`` and ``{y}``); a deployment with a
+    malformed one must not start and silently show a grey map."""
+    if not all(token in url for token in ('{z}', '{x}', '{y}')):
+        msg = f'OP_MAP_TILE_URL must contain {{z}}, {{x}} and {{y}}: {url!r}'
+        raise ValueError(msg)
+    return url
+
+
 @dataclass(frozen=True)
 class CurationConfig:
     """Index names, filesystem roots and API-surface config for curation.
@@ -125,6 +134,12 @@ class CurationConfig:
 
     api_prefix: str = '/curation'
     api_tag: str = 'Curation'
+
+    # The map page's raster tiles. The BROWSER fetches them from this URL, so each tile request
+    # tells the tile server which area is on screen: point it at a self-hosted tile server to keep
+    # locations on the LAN. Placeholders {z}/{x}/{y} are required.
+    map_tile_url: str = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+    map_tile_attribution: str = '© OpenStreetMap contributors'
 
     embedding_dim: int = 512
     encoder_embedding_dim: int = 1024
@@ -326,6 +341,8 @@ class CurationConfig:
             ),
             api_prefix=_str('API_PREFIX', defaults.api_prefix),
             api_tag=_str('API_TAG', defaults.api_tag),
+            map_tile_url=_tile_url(_str('MAP_TILE_URL', defaults.map_tile_url)),
+            map_tile_attribution=_str('MAP_TILE_ATTRIBUTION', defaults.map_tile_attribution),
             mlflow_public_url=_optional_str('MLFLOW_PUBLIC_URL', defaults.mlflow_public_url),
             grafana_url=_optional_str('GRAFANA_URL', defaults.grafana_url),
             prometheus_url=_optional_str('PROMETHEUS_URL', defaults.prometheus_url),

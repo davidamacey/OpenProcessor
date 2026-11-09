@@ -71,6 +71,7 @@ CASES: dict[str, dict[str, Any]] = {
     'taken_range': {'taken_from': '2024-03-05', 'taken_to': '2024-03-06'},
     'taken_from': {'taken_from': '2024-03-05'},
     'taken_to': {'taken_to': '2024-03-05'},
+    'image_ids': {'image_ids': ['a1', 'b2']},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],
