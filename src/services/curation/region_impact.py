@@ -75,10 +75,7 @@ def _active_revision(profile: DetectionProfile) -> int | None:
     the same stamp the detection worker writes on every region write."""
     from src.services.config_store import get_config_store
 
-    try:
-        ref = get_config_store().current.active_profile
-    except Exception:
-        return None
+    ref = get_config_store().current.active_profile
     return ref[1] if isinstance(ref, tuple) and ref[0] == profile.name else None
 
 
