@@ -133,6 +133,9 @@ def test_container_names_of_this_stack_are_denied_except_the_vlm(
         assert denial is not None, name
         assert denial.code == 'vlm_url_denied_internal_service'
     assert url_denial('http://acme-vlm:8000/v1') is None
+    assert url_denial('http://acme-vlm-1:8000/v1') is None
+    assert url_denial('http://acme-vlm-extra-1:8000/v1') is not None
+    assert url_denial('http://acme-api-1:8000/v1') is not None
     assert url_denial('http://other-api:8000/v1') is None
 
 

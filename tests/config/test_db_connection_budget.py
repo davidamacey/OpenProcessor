@@ -36,9 +36,6 @@ STREAM_WORKER_CONNECTIONS = 2
 STREAM_WORKERS = (
     'curation-detection-worker',
     'curation-vlm-worker',
-    'curation-auto-label-worker',
-    'curation-assist-loop-worker',
-    'curation-cluster-refresh',
 )
 BEAT_CONNECTIONS = 2  # one direct (single-beat lock) + a sync pool of 1
 MIGRATE_CONNECTIONS = 2  # one direct, one for the OpenSearch step bookkeeping
@@ -113,7 +110,16 @@ def connection_budget(env: dict[str, str] | None = None) -> dict[str, int]:
 
 
 def test_every_database_service_is_in_the_table() -> None:
-    known = {'api', 'db-migrate', 'jobs-beat', *STREAM_WORKERS}
+    # The trainer and evaluator images start their Celery worker from ENTRYPOINT: PLANNED_CELERY_CHILDREN
+    # counts them.
+    known = {
+        'api',
+        'db-migrate',
+        'jobs-beat',
+        'curation-trainer',
+        'curation-evaluator',
+        *STREAM_WORKERS,
+    }
     unaccounted = []
     for name, service in _services().items():
         if name not in _db_services(_services()):

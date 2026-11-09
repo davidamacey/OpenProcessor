@@ -65,7 +65,6 @@ x-gateway-wrap: &gateway_wrap |
 services:
   triton-server:
     image: ${OP_TRITON_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-triton:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-triton
     logging: *default-logging
     restart: always
     ports:
@@ -140,7 +139,6 @@ services:
 
   api:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-api
     logging: *default-logging
     restart: always
     # CFG-5: previously the ONLY var reaching this container from .env was
@@ -158,16 +156,6 @@ services:
       - ./pytorch_models:/app/pytorch_models
       - ./data:/app/data
       - openprocessor-state:/var/lib/openprocessor
-      # Shared with the curation-auto-label-worker service (profile
-      # `curation`): the API writes /jobs/auto_label/trigger.json and
-      # polls state.json/heartbeat; the worker claims and runs it. Also
-      # backs OP_TRAIN_JOBS_DIR / OP_SCORES_STATE_DIR / OP_SELECT_JOBS_DIR
-      # / OP_VIZ_JOBS_DIR / OP_PROBE_JOBS_DIR
-      # (all default under /jobs — see env.template). This same shared
-      # mount is what makes state.json/heartbeat/cancel.flag visible to
-      # every api --workers process, not just whichever one handled
-      # a given request.
-      - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface  # HuggingFace tokenizers (appuser)
       # ST-1: shared tmpfs item-crop cache with curation-detection-worker.
       # curation-vlm-worker doesn't need it -- it reads crops through the
@@ -236,17 +224,6 @@ services:
       # G-06: in-container path the API resolves source-relative item
       # paths against. Must match the bind target above.
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
-      # F-72: the trainer service's container_name below is always
-      # ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer -- wire the same
-      # deterministic name here by default so /train/preflight's
-      # trainer-reachability probe (GpuArbiterConfig.trainer_container)
-      # finds it automatically on any deployment that starts the
-      # `training` profile, instead of reporting "no trainer container
-      # configured" (which reads as "not running") until an operator
-      # separately sets OP_GPU_ARBITER_TRAINER_CONTAINER by hand to a
-      # value that has to exactly match this name anyway. Still
-      # overridable via .env for a deployment that renames/moves it.
-      - OP_GPU_ARBITER_TRAINER_CONTAINER=${OP_GPU_ARBITER_TRAINER_CONTAINER:-${COMPOSE_PROJECT_NAME:-openprocessor}-trainer}
       # W9: the endpoint name that reaches the in-compose vLLM (the
       # installer writes `env`); empty = this deployment has no in-compose
       # VLM to switch. The card size lets the API compute which catalog
@@ -501,6 +478,9 @@ services:
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
       - TRITON_URL=triton-server:8001
+      # bulk_ingest_run posts its batches to the API.
+      - OP_API_LOOPBACK_URL=http://api:8000
+      - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
     tmpfs:
       - /run/op-prom-worker:mode=1777
     volumes:
@@ -518,6 +498,7 @@ services:
       start_period: 60s
       retries: 3
     deploy:
+      replicas: ${OP_JOBS_REPLICAS:-1}
       resources:
         limits:
           memory: ${OP_JOBS_MEM_LIMIT:-24g}
@@ -567,15 +548,22 @@ services:
       - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
+      # reload_promoted reads the model repository and asks Triton to load; serving_inventory
+      # reaches Triton's HTTP (8000) and metrics (8002) ports over triton_net.
+      - OP_TRITON_MODEL_REPO=/models
+      - OP_TRITON_HTTP_URL=http://triton-server:8000
+      - OP_CROP_CACHE_DIR=/var/cache/openprocessor/crops
     tmpfs:
       - /run/op-prom-worker:mode=1777
     volumes:
       - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
       - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - openprocessor-state:/var/lib/openprocessor
+      # cache_prune prunes the same crop cache that ingest fills.
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
+      - ./models:/models:ro
     healthcheck:
       test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "periodic"]
       interval: 30s
@@ -819,7 +807,6 @@ services:
   # ===================================================================
   model-export:
     image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export
     logging: *default-logging
     profiles:
       - setup
@@ -852,38 +839,50 @@ services:
       - triton_net
 
   # ===================================================================
-  # model-export-worker: runs the engine builds the API queues for POST /models/upload and
-  # POST /models/{model_name}/export (job files on the shared jobs volume; the API answers 503
-  # naming this service while it is down). Opt in with `--profile export`.
+  # model-export-worker: the consumer of queue `gpu_export`: runs the engine builds the API
+  # queues for POST /models/upload and POST /models/{model_name}/export. Opt in with
+  # `--profile export`; the routes answer 503 naming this service while it is down.
   # ===================================================================
   model-export-worker:
     image: ${OP_EXPORT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-export:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-model-export-worker
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - export
     restart: unless-stopped
-    command: ["python", "-m", "export.export_worker", "--watch", "/jobs/model_export"]
+    command: celery -A export.export_tasks worker -Q gpu_export -c 1 --max-tasks-per-child=1 --hostname gpu_export@%h -E
+    # REMAP_SIGTERM=SIGQUIT: Docker's SIGTERM becomes Celery's soft shutdown (30 s).
+    stop_grace_period: ${OP_STOP_GRACE_EXPORT:-90}s
     env_file:
       - path: ./.env
         required: false
     environment:
+      - REMAP_SIGTERM=SIGQUIT
       - HF_HOME=/home/appuser/.cache/huggingface
       - HF_HUB_CACHE=/home/appuser/.cache/huggingface/hub
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
     volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       - ./models:/app/models
       - ./pytorch_models:/app/pytorch_models
-      - openprocessor-jobs:/jobs
       - ./cache/huggingface:/home/appuser/.cache/huggingface
     shm_size: 8g
     ulimits:
       memlock: -1
       stack: 67108864
     healthcheck:
-      test: ["CMD-SHELL", "test -n \"$$(find /jobs/model_export/worker.heartbeat -mmin -1 2>/dev/null)\""]
-      interval: 30s
-      timeout: 10s
-      start_period: 30s
+      test: ["CMD-SHELL", "celery -A export.export_tasks inspect ping --timeout 10 -d \"celery@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 60s
+      timeout: 15s
+      start_period: 60s
       retries: 3
     deploy:
       resources:
@@ -894,6 +893,13 @@ services:
               device_ids: [ '${API_GPU_ID:-0}' ]
               capabilities:
                 - gpu
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -908,7 +914,6 @@ services:
     profiles: ['cropwright']
     # OP_CROPWRIGHT_IMAGE (a full reference, e.g. a digest pin) wins over the OP_IMAGE_TAG default.
     image: ${OP_CROPWRIGHT_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/cropwright:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cropwright
     # Soft scheduling floor for the static-file nginx, not a cap.
     mem_reservation: 64m
     restart: unless-stopped
@@ -982,7 +987,6 @@ services:
 
   curation-detection-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-detection-worker
     logging: *default-logging
     mem_reservation: 1g
     profiles:
@@ -1067,7 +1071,6 @@ services:
 
   curation-vlm-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm-worker
     logging: *default-logging
     mem_reservation: 512m
     profiles:
@@ -1125,53 +1128,24 @@ services:
 
   curation-auto-label-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-auto-label-worker
     logging: *default-logging
-    # deploy form, not mem_reservation: Compose rejects the two together, and
-    # docker-compose.gpu-clustering.yml adds deploy.resources.reservations.
-    deploy:
-      resources:
-        reservations:
-          memory: 2g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
     profiles:
       - curation
-    restart: unless-stopped
+    command: celery -A src.tasks.app worker -Q autolabel -c 1 --max-tasks-per-child=20 --hostname autolabel@%h -E
+    # REMAP_SIGTERM=SIGQUIT turns Docker's SIGTERM into Celery's soft shutdown (30 s); the grace
+    # period outlasts it.
+    stop_grace_period: ${OP_STOP_GRACE_AUTOLABEL:-210}s
     env_file:
       - path: ./.env
         required: false
-    volumes:
-      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
-      # Shared with api: this is the trigger/state/heartbeat file
-      # protocol POST /curation/pipeline/auto_label writes into (see
-      # OP_AUTO_LABEL_STATE_DIR, default /jobs/auto_label).
-      - openprocessor-jobs:/jobs
-      # F-33/F-34: this worker runs the full VLM auto-label pipeline
-      # in-process (pipeline -> _common -> cascade_detect ->
-      # profile_registry / class registry / source-image serving), not a
-      # thin HTTP client like vlm-worker/cluster-refresh -- it needs the
-      # same three mounts as curation-detection-worker and api, at
-      # the same container paths, or it 404s/FileNotFoundErrors on its
-      # first claimed job while its idle healthcheck stays green.
-      # Source images (OP_SOURCE_ROOT): without this every thumbnail
-      # fetch 404s and the VLM stage silently predicts 0 (job still
-      # reports "completed").
-      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-      # Class registries (OP_PROJECTS_DATA_ROOT, default ./data/projects):
-      # without this the registry loads empty and the stage raises
-      # "class_names or class_catalog must be supplied".
-      - ./data:/app/data
-      # W9.9: VLM API keys by reference (see api's mount): this worker
-      # builds the VLM labeler in-process for the auto-label VLM stage.
-      - ./secrets/vlm:/run/secrets/op_vlm:ro
-      # Region profiles (OP_REGION_PROFILE_PATH): without this the worker
-      # dies with FileNotFoundError the moment it claims a job that needs
-      # a region profile (e.g. license_plate.json). Ships baked into the
-      # image (see Dockerfile); docker-compose.dev.yml overrides with a
-      # writable-checkout mount.
     environment:
-      # Control plane (Postgres + Valkey): host and names default to the in-network services;
-      # the passwords are files, never values (secrets/ is created by the installer).
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
       - OP_DB_HOST=${OP_DB_HOST:-postgres}
       - OP_DB_PORT=${OP_DB_PORT:-5432}
       - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
@@ -1180,24 +1154,32 @@ services:
       - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
+      - TRITON_URL=triton-server:8001
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
       - OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
       - OPENBLAS_NUM_THREADS=${OPENBLAS_NUM_THREADS:-4}
       - MKL_NUM_THREADS=${MKL_NUM_THREADS:-4}
-    command:
-      - python
-      - -m
-      - scripts.curation.auto_label_worker
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      # The worker resolves item paths against the same source root and class registries as api.
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+      # VLM API keys by reference (see api's mount).
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python /app/src/services/curation/worker_liveness.py check auto_label_worker --max-age 120",
-        ]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "autolabel"]
       interval: 30s
-      timeout: 5s
+      timeout: 15s
       start_period: 60s
       retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
     depends_on:
       db-migrate:
         condition: service_completed_successfully
@@ -1214,32 +1196,27 @@ services:
 
   curation-assist-loop-worker:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-assist-loop-worker
     logging: *default-logging
-    # Splitting a large cluster holds hundreds of MB; the loop itself is I/O bound on the VLM.
-    mem_reservation: 2g
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    # Lets OP_VLM_URL point at http://host.docker.internal:PORT/v1 for a VLM on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     profiles:
       - curation
-    restart: unless-stopped
+    command: celery -A src.tasks.app worker -Q assist_loop -c 1 --max-tasks-per-child=20 --hostname assist_loop@%h -E
+    # REMAP_SIGTERM=SIGQUIT turns Docker's SIGTERM into Celery's soft shutdown (30 s); the grace
+    # period outlasts it.
+    stop_grace_period: ${OP_STOP_GRACE_ASSIST_LOOP:-210}s
     env_file:
       - path: ./.env
         required: false
-    volumes:
-      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
-      # Shared with api: the trigger/state/heartbeat/event-log files POST .../assist/loops
-      # writes into (OP_ASSIST_LOOP_JOBS_DIR, default /jobs/assist_loop).
-      - openprocessor-jobs:/jobs
-      # The loop reads crops through the same source mount as api and the other in-process
-      # workers, and the project class registry from ./data; without them every crop is
-      # unreadable or the registry loads empty.
-      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
-      - ./data:/app/data
-      # VLM API keys by reference (see api's mount): the loop builds its VLM labelers here.
-      - ./secrets/vlm:/run/secrets/op_vlm:ro
     environment:
-      # Control plane (Postgres + Valkey): host and names default to the in-network services;
-      # the passwords are files, never values (secrets/ is created by the installer).
+      - REMAP_SIGTERM=SIGQUIT
+      - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-worker
       - OP_DB_HOST=${OP_DB_HOST:-postgres}
       - OP_DB_PORT=${OP_DB_PORT:-5432}
       - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
@@ -1249,23 +1226,27 @@ services:
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OPENSEARCH_URL=http://opensearch:9200
       - OP_SOURCE_ROOT=${OP_SOURCE_ROOT:-/data/source}
-    # Lets OP_VLM_URL point at http://host.docker.internal:PORT/v1 for a VLM on the host.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command:
-      - python
-      - -m
-      - scripts.curation.assist_loop_worker
+    tmpfs:
+      - /run/op-prom-worker:mode=1777
+    volumes:
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - openprocessor-state:/var/lib/openprocessor
+      # The worker resolves item paths against the same source root and class registries as api.
+      - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
+      - ./data:/app/data
+      # VLM API keys by reference (see api's mount).
+      - ./secrets/vlm:/run/secrets/op_vlm:ro
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python /app/src/services/curation/worker_liveness.py check assist_loop_worker --max-age 120",
-        ]
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "assist_loop"]
       interval: 30s
-      timeout: 5s
+      timeout: 15s
       start_period: 60s
       retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
     depends_on:
       api:
         condition: service_healthy
@@ -1282,23 +1263,23 @@ services:
     networks:
       - triton_net
 
-  curation-cluster-refresh:
-    image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-cluster-refresh
+  # The consumer of queue `gpu_eval`, in its own profile so `--profile curation up -d` does not
+  # reserve a GPU for it: `docker compose --profile evaluator up -d curation-evaluator`.
+  curation-evaluator:
+    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
-    mem_reservation: 1g
+    security_opt:
+      - no-new-privileges:true
     profiles:
-      - curation
+      - evaluator
     restart: unless-stopped
+    # The image's ENTRYPOINT is the Celery worker (queue gpu_eval).
+    stop_grace_period: ${OP_STOP_GRACE_EVAL:-90}s
     env_file:
       - path: ./.env
         required: false
-    volumes:
-      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
     environment:
-      # Control plane (Postgres + Valkey): host and names default to the in-network services;
-      # the passwords are files, never values (secrets/ is created by the installer).
+      - REMAP_SIGTERM=SIGQUIT
       - OP_DB_HOST=${OP_DB_HOST:-postgres}
       - OP_DB_PORT=${OP_DB_PORT:-5432}
       - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
@@ -1306,62 +1287,22 @@ services:
       - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
       - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
       - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
-    command:
-      - python
-      - scripts/curation/cluster_refresh_daemon.py
-      - --api=http://api:8000
-      - --opensearch=http://opensearch:9200
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python /app/src/services/curation/worker_liveness.py check cluster_refresh --max-age 120",
-        ]
-      interval: 30s
-      timeout: 5s
-      start_period: 60s
-      retries: 3
-    depends_on:
-      api:
-        condition: service_healthy
-      db-migrate:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      opensearch:
-        condition: service_healthy
-      triton-server:
-        condition: service_healthy
-    networks:
-      - triton_net
-
-  # On-demand only (no `restart:`, see the `evaluator` target of the root Dockerfile): its own
-  # profile, so `--profile curation up -d` does not reserve a GPU for it.
-  # `docker compose run --rm curation-evaluator`.
-  curation-evaluator:
-    image: ${OP_EVALUATOR_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-evaluator:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-evaluator
-    logging: *default-logging
-    profiles:
-      - evaluator
-    env_file:
-      - path: ./.env
-        required: false
-    environment:
-      # F-46 (fresh-start E2E findings 2026-09-25): the trainer gets
-      # MLFLOW_TRACKING_URI (see curation-trainer above) but the evaluator
-      # didn't, so it always logged `mlflow logging skipped:
-      # HTTPConnectionPool(host='localhost', port=5000)` -- same MLflow
-      # instance, so the same URL.
+      # The trainer gets MLFLOW_TRACKING_URI too; same MLflow instance, so the same URL.
       - MLFLOW_TRACKING_URI=http://curation-mlflow:5000
       - MLFLOW_EXPERIMENT_NAME=${MLFLOW_EXPERIMENT_NAME:-openprocessor}
     volumes:
-      # Exports are eval datasets: same /app/data path as api, where
-      # the API resolved them (per project, under ./data/projects/<project>/exports).
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      # Exports are eval datasets: same /app/data path as api, where the API resolved them
+      # (per project, under ./data/projects/<project>/exports).
       - ./data:/app/data:ro
       - openprocessor-state:/var/lib/openprocessor
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A scripts.curation.bakeoff.bakeoff_tasks inspect ping --timeout 10 -d \"celery@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 60s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
     deploy:
       resources:
         reservations:
@@ -1371,6 +1312,13 @@ services:
               device_ids: [ '${EVALUATOR_GPU_ID:-0}' ]
               capabilities:
                 - gpu
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -1384,7 +1332,6 @@ services:
   #     docker compose --profile curation --profile segmenter up -d
   segmenter:
     image: ${OP_SEGMENTER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-segmenter:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-segmenter
     logging: *default-logging
     profiles:
       - segmenter
@@ -1440,32 +1387,31 @@ services:
       - triton_net
 
   # ===================================================================
-  # Training pipeline — opt-in via `--profile training` (G3).
+  # Training pipeline: the consumer of queue `gpu_train`, opt-in via `--profile training` (G3).
   #
-  # `POST {api_prefix}/train/start` writes /jobs/<id>.job.json; the
-  # trainer below claims it, trains, and writes status/manifest files
-  # back into the same volume. The API never RPCs the trainer — the
-  # whole contract is those files (src/services/training/jobs.py <->
-  # docker/trainer/trainer.py).
-  #
-  # Kept out of the `curation` profile deliberately: a training run
-  # takes a GPU for hours, so starting one must be an explicit act.
+  # `POST {api_prefix}/train/start` queues a `train` job; this worker claims it, trains and
+  # writes the run's rows and artifacts. Kept out of the `curation` profile deliberately: a
+  # training run takes a GPU for hours, so starting one must be an explicit act.
   #   docker compose --profile training up -d
   # ===================================================================
 
   curation-trainer:
     image: ${OP_TRAINER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-trainer:${OP_IMAGE_TAG:-0.6.0}}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-trainer
     logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - training
     restart: unless-stopped
+    # The image's ENTRYPOINT is the Celery worker (queue gpu_train, one run per child).
+    # REMAP_SIGTERM=SIGQUIT: Docker's SIGTERM becomes Celery's soft shutdown (30 s).
+    stop_grace_period: ${OP_STOP_GRACE_TRAIN:-90}s
     env_file:
       - path: ./.env
         required: false
     volumes:
-      # Shared job-file protocol with api (OP_TRAIN_JOBS_DIR).
-      - openprocessor-jobs:/jobs
+      - ./secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./secrets/valkey/password:/run/secrets/op_valkey/password:ro
       # Run outputs (OP_TRAIN_RUNS_ROOT) + bake-off job drop. This MUST be
       # mounted at the same absolute path here and in api: the trainer
       # records `checkpoint_path` verbatim and promote resolves that exact
@@ -1478,7 +1424,14 @@ services:
       # read a served model's labels.txt (OP_TRITON_MODEL_REPO).
       - ./models:/models:ro
     environment:
-      - OP_TRAIN_JOBS_DIR=/jobs
+      - REMAP_SIGTERM=SIGQUIT
+      - OP_DB_HOST=${OP_DB_HOST:-postgres}
+      - OP_DB_PORT=${OP_DB_PORT:-5432}
+      - OP_DB_NAME=${OP_DB_NAME:-openprocessor}
+      - OP_DB_APP_USER=${OP_DB_APP_USER:-op_app}
+      - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
+      - OP_QUEUE_URL=${OP_QUEUE_URL:-redis://valkey:6379/0}
+      - OP_QUEUE_PASSWORD_FILE=/run/secrets/op_valkey/password
       - OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
       # G-14: MUST match `device_ids` below, in the same order: the job spec
       # names HOST gpu ids, which appear inside the container as positional
@@ -1507,7 +1460,14 @@ services:
               capabilities:
                 - gpu
     depends_on:
-      - api
+      db-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     networks:
       - triton_net
 
@@ -1516,7 +1476,6 @@ services:
   # unreachable, so a deployment that doesn't want it can leave it stopped.
   curation-mlflow:
     image: ${MLFLOW_IMAGE:-ghcr.io/mlflow/mlflow:v3.17.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-mlflow
     logging: *default-logging
     mem_reservation: 512m
     profiles:
@@ -1581,7 +1540,6 @@ services:
     # (the gemma4 chat template + reasoning parser below ship in it). An
     # untested vLLM bump can silently change chat-template / parser behavior.
     image: ${VLM_IMAGE:-vllm/vllm-openai:gemma4-cu130@sha256:0d152595cd940ea1e0890fa190a37b7a86e3f7f0f5048ac3e2e4c14529fea833}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-vlm
     logging: *default-logging
     profiles:
       - vlm
@@ -1652,7 +1610,6 @@ services:
 
   triton-sdk:
     image: nvcr.io/nvidia/tritonserver:26.06-py3-sdk
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-sdk
     logging: *default-logging
     mem_reservation: 256m
     profiles:
@@ -1665,7 +1622,6 @@ services:
 
   node-exporter:
     image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.10.2}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-node-exporter
     logging: *default-logging
     mem_reservation: 64m
     restart: always
@@ -1683,7 +1639,6 @@ services:
   # host GPUs (not just Triton's). Read-only; does not reserve compute.
   dcgm-exporter:
     image: ${DCGM_EXPORTER_IMAGE:-nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-dcgm
     logging: *default-logging
     restart: always
     profiles:
@@ -1707,7 +1662,6 @@ services:
 
   prometheus:
     image: ${PROMETHEUS_IMAGE:-prom/prometheus:v3.12.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-prometheus
     logging: *default-logging
     mem_reservation: 512m
     restart: always
@@ -1736,7 +1690,6 @@ services:
 
   grafana:
     image: ${GRAFANA_IMAGE:-grafana/grafana:13.1.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-grafana
     logging: *default-logging
     mem_reservation: 256m
     restart: always
@@ -1771,7 +1724,6 @@ services:
     # root-owned loki_data volumes need a one-time chown — see
     # docs/MIGRATION_TRITON_26.md.
     image: ${LOKI_IMAGE:-grafana/loki:3.6.12}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-loki
     logging: *default-logging
     mem_reservation: 512m
     restart: always
@@ -1789,7 +1741,6 @@ services:
 # Log shipper: Grafana Alloy (Promtail reached EOL 2026-03-02).
   alloy:
     image: ${ALLOY_IMAGE:-grafana/alloy:v1.17.1}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-alloy
     logging: *default-logging
     mem_reservation: 256m
     restart: always
@@ -1817,7 +1768,6 @@ services:
   # ===================================================================
   opensearch:
     image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.6.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-opensearch
     logging: *default-logging
     mem_reservation: ${OPENSEARCH_HEAP:-2g}
     restart: always
@@ -1848,7 +1798,6 @@ services:
 
   opensearch-dashboards:
     image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.6.0}
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-osd
     logging: *default-logging
     mem_reservation: 512m
     restart: always
@@ -1893,7 +1842,6 @@ volumes:
   opensearch_data:
   opensearch_dashboards_data:
   openprocessor-state:
-  openprocessor-jobs:
   openprocessor-pg:
   openprocessor-queue:
   mlflow_data:

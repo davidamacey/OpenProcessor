@@ -28,7 +28,6 @@ services:
   minio:
     profiles: ['s3test']
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    container_name: ${COMPOSE_PROJECT_NAME:-openprocessor}-minio
     command: server /data
     env_file:
       - artifacts_local/minio-live.env

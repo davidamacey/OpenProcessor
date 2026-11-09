@@ -30,14 +30,15 @@ ordinary `pytest tests/` never touches any of this.
 
 ## What it starts
 
-| Container | Host port | Role |
+| Service | Host port | Role |
 |---|---|---|
-| `op-verify-opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
-| `op-verify-api` | 14701 | this repo's API image, `--workers=1` |
-| `op-verify-fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
+| `opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
+| `api` | 14701 | this repo's API image, `--workers=1` |
+| `fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
 | `fake-triton` | — | answers Triton's gRPC liveness and readiness only (the API refuses to start without a live Triton); every inference call is unimplemented (`docker/test/fake_triton.py`) |
-| `op-verify-assist-loop-worker` | — | the auto-label loop worker (same image, mounts and environment as the API) |
-| `op-verify-trainer` | — | shell loop implementing the trainer half of the job-file protocol |
+| `jobs-worker`, `periodic-worker`, `jobs-beat` | — | the Celery consumers and the one beat (same image, mounts and environment as the API); scale with `--scale jobs-worker=2` |
+| `assist-loop-worker` | — | the `assist_loop` queue consumer |
+| `trainer` | — | the fake `gpu_train` consumer (`fake_trainer.py`) |
 
 Design choices that are not arbitrary:
 
@@ -128,7 +129,7 @@ before starting a stack that must begin empty.
 
 ## Running a second harness beside the first
 
-Container names and image tags take the `VERIFY_CONTAINER_PREFIX` prefix
+Image tags take the `VERIFY_CONTAINER_PREFIX` prefix (no service has a fixed container name)
 (default `op-verify`) and the test process takes `VERIFY_COMPOSE_PROJECT`
 (default `op-live-verify`), so a second copy can run next to an existing one:
 

@@ -169,6 +169,8 @@ docker-compose.*.yml
 !docker-compose.gpu-arbiter.yml
 # Opt-in GPU clustering overlay shipped with the repo (make cluster-gpu).
 !docker-compose.gpu-clustering.yml
+# Opt-in PgBouncer overlay shipped with the repo (D-50).
+!docker-compose.pgbouncer.yml
 # Opt-in ingest load profile overlay shipped with the repo (OP_LOAD_PROFILE=ingest).
 !docker-compose.ingest-focus.yml
 # Opt-in faces-off overlay shipped with the repo (OP_FACES_ENABLED=false).

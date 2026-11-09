@@ -249,9 +249,11 @@ def _is_denied_service_name(host: str) -> bool:
     if host in DENIED_INTERNAL_SERVICES:
         return True
     project = _compose_project()
-    # `${COMPOSE_PROJECT_NAME}-<anything>` is a container of this stack;
-    # only the VLM container is a legitimate target.
-    return host.startswith(f'{project}-') and host != f'{project}-vlm'
+    # Compose names a container `${COMPOSE_PROJECT_NAME}-<service>-<n>`: any `<project>-...` host
+    # is a container of this stack, and only the VLM service's containers are legitimate targets.
+    if not host.startswith(f'{project}-'):
+        return False
+    return re.fullmatch(rf'{re.escape(project)}-vlm(-\d+)?', host) is None
 
 
 _DENIED_IP_CACHE: tuple[float, frozenset[str]] | None = None

@@ -91,7 +91,6 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'curation-vlm-worker': 'OP_API_IMAGE',
     'curation-auto-label-worker': 'OP_API_IMAGE',
     'curation-assist-loop-worker': 'OP_API_IMAGE',
-    'curation-cluster-refresh': 'OP_API_IMAGE',
     'model-export': 'OP_EXPORT_IMAGE',
     'model-export-worker': 'OP_EXPORT_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',
@@ -181,13 +180,14 @@ def test_no_latest_in_any_custom_image_fallback() -> None:
 
 
 def test_gpu_arbiter_overlay_exists_and_mounts_docker_socket() -> None:
-    """G-15: the docker socket must be opt-in (a separate overlay file),
-    never a default mount on api."""
+    """G-15: the docker socket must be opt-in (a separate overlay file), mounted into the
+    arbiter worker alone, never a default mount on api."""
     overlay_path = REPO_ROOT / 'docker-compose.gpu-arbiter.yml'
     assert overlay_path.is_file(), 'expected docker-compose.gpu-arbiter.yml overlay'
     with overlay_path.open() as fh:
         overlay = yaml.safe_load(fh)
-    mounts = [str(v) for v in (overlay['services']['api'].get('volumes') or [])]
+    assert list(overlay['services']) == ['gpu-arbiter-worker']
+    mounts = [str(v) for v in (overlay['services']['gpu-arbiter-worker'].get('volumes') or [])]
     assert any('/var/run/docker.sock' in m for m in mounts), mounts
     # And the base compose must NOT already mount it (defeats the point of
     # an opt-in overlay).

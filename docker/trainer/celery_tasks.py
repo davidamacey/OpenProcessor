@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from campaign import maybe_handle_campaign, write_quant_bakeoff_job
+from celery.signals import worker_init
 from dataset_prep import read_class_remap
 from job_manifest import build_manifest
 from job_spec import JobSpec, parse_and_validate_spec
@@ -53,6 +54,20 @@ logger = get_logger('trainer.celery_tasks')
 POLL_INTERVAL_S = 2.0
 
 app = make_app(include=['celery_tasks'])
+
+
+@worker_init.connect(weak=False)
+def _on_worker_init(**_: Any) -> None:
+    """Refuse to serve on a retired setting, an unreachable database or another schema revision.
+
+    Celery logs an ``Exception`` raised by a signal receiver and carries on, so the refusal is
+    a ``SystemExit`` (https://docs.celeryq.dev/en/stable/userguide/signals.html).
+    """
+    from src.config.retired_env import reject_retired_env
+    from src.db import schema_check
+
+    reject_retired_env()
+    schema_check.require_current_schema()
 
 
 async def _load_run(ctx: JobContext) -> runs_repo.RunRow:

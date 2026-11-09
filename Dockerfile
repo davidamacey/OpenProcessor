@@ -61,13 +61,11 @@ RUN groupadd -r appuser && \
     mkdir -p /home/appuser/.cache/huggingface \
              /home/appuser/.cache/torch && \
     chown -R appuser:appuser /home/appuser/.cache && \
-    # CurationConfig.state_dir default and the shared /jobs dir (auto-label,
-    # training, scores, select, viz job files) -- created + owned by appuser
-    # here so a fresh named Docker volume mounted over either path on first
-    # `up` inherits appuser ownership (Docker copies an empty named volume's
-    # ownership from the image directory it's mounted over).
-    mkdir -p /var/lib/openprocessor /jobs && \
-    chown -R appuser:appuser /var/lib/openprocessor /jobs
+    # CurationConfig.state_dir default, created + owned by appuser here so a fresh
+    # named Docker volume mounted over it on first `up` inherits appuser ownership
+    # (Docker copies an empty named volume's ownership from the image directory).
+    mkdir -p /var/lib/openprocessor && \
+    chown -R appuser:appuser /var/lib/openprocessor
 
 WORKDIR /app
 
@@ -234,14 +232,8 @@ LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 # -----------------------------------------------------------------------------
 # evaluator: on-demand detector comparison (scripts/curation/bakeoff/bakeoff_runner.py)
 # -----------------------------------------------------------------------------
-# src/routers/curation/bakeoff.py drops job specs; this container scores each candidate
-# detector against a frozen test split and writes matrix.json/comparison.json for the review UI.
-#
-# Run on demand (watch mode; scans every projects/*/bakeoff_jobs under the state dir):
-#   docker compose run --rm curation-evaluator
-# One-shot job:
-#   docker compose run --rm curation-evaluator \
-#     python -m scripts.curation.bakeoff.bakeoff_runner --job /eval_jobs/x.job.json
+# The consumer of queue gpu_eval: it scores each candidate detector of a bake-off job against a
+# frozen test split and writes matrix.json/comparison.json for the review UI.
 FROM runtime-base AS evaluator
 
 COPY --from=builder-eval --chown=appuser:appuser /delta/eval/ /home/appuser/.local/
@@ -255,15 +247,11 @@ COPY --chown=appuser:appuser examples/ ./examples/
 
 USER appuser
 
-# Watch root; the runner also scans the sibling projects/*/bakeoff_jobs dirs the API enqueues
-# into.
-ENV PYTHONPATH=/app \
-    OP_BAKEOFF_JOBS_DIR=/var/lib/openprocessor/bakeoff_jobs
-HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 \
-    CMD ["sh", "-c", "test -d \"$OP_BAKEOFF_JOBS_DIR\" || exit 1"]
+ENV PYTHONPATH=/app
+HEALTHCHECK --interval=60s --timeout=15s --start-period=60s --retries=3 \
+    CMD ["sh", "-c", "celery -A scripts.curation.bakeoff.bakeoff_tasks inspect ping --timeout 10 -d \"celery@$(hostname)\" > /dev/null || exit 1"]
 
-ENTRYPOINT ["python", "-m", "scripts.curation.bakeoff.bakeoff_runner"]
-CMD ["--watch", "/var/lib/openprocessor/bakeoff_jobs"]
+ENTRYPOINT ["celery", "-A", "scripts.curation.bakeoff.bakeoff_tasks", "worker", "-Q", "gpu_eval", "--pool=prefork", "--concurrency=1", "--max-tasks-per-child=5"]
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Evaluator" \
       org.opencontainers.image.description="On-demand detector bake-off harness runner" \

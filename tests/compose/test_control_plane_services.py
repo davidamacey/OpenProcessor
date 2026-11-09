@@ -39,7 +39,6 @@ PYTHON_SERVICES = (
     'curation-vlm-worker',
     'curation-auto-label-worker',
     'curation-assist-loop-worker',
-    'curation-cluster-refresh',
 )
 # Celery's worker_soft_shutdown_timeout (02b section 7.1); the grace period must outlast it.
 SOFT_SHUTDOWN_S = 30

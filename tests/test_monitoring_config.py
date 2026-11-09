@@ -118,7 +118,7 @@ def test_worker_and_segmenter_logs_are_kept_for_this_project_only(project: str) 
     for service in _WORKER_SERVICES:
         assert _kept(block, _container(project, service), env), service
         assert not _kept(block, _container('opfinal', service), env), service
-    for service in ('api', 'triton-server', 'opensearch', 'curation-cluster-refresh'):
+    for service in ('api', 'triton-server', 'opensearch'):
         assert not _kept(block, _container(project, service), env), service
     # fullmatch: a look-alike service name must not slip through
     assert not _kept(block, _container(project, 'segmenter-extra'), env)
