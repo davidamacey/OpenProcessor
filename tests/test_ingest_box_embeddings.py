@@ -33,6 +33,7 @@ class _FakeAdapter:
                 'boxes': np.array([[0.2, 0.2, 0.6, 0.6]], dtype=np.float32),
                 'scores': np.array([0.93], dtype=np.float32),
                 'classes': np.array([2], dtype=np.int64),
+                'box_frame': 'normalized',
             }
         ]
 
@@ -137,6 +138,7 @@ class _MultiSmallBoxAdapter:
                 'boxes': self._BOXES,
                 'scores': np.full(n, 0.9, dtype=np.float32),
                 'classes': np.zeros(n, dtype=np.int64),
+                'box_frame': 'normalized',
             }
         ]
 

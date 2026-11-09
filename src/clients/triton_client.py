@@ -300,6 +300,7 @@ class TritonClient:
                 (orig_h, orig_w),
                 scale,
                 padding,
+                detections['box_frame'],
                 yolo_size,
             ).astype(np.float32)
             from src.utils.cpu_preprocess import embed_boxes_from_full_res

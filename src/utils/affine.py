@@ -7,9 +7,15 @@ Performance optimizations:
 """
 
 from io import BytesIO
+from typing import Literal
 
 import numpy as np
 from PIL import Image
+
+
+BoxFrame = Literal['normalized', 'pixels']
+"""Frame of detector boxes relative to the letterboxed model input: [0,1] of
+the input side (``normalized``) or input pixels (``pixels``)."""
 
 
 def get_jpeg_dimensions_fast(image_bytes: bytes) -> tuple[int, int]:
@@ -62,6 +68,7 @@ def inverse_letterbox_coords(
     orig_shape: tuple[int, int],
     scale: float,
     padding: tuple[float, float],
+    frame: BoxFrame,
     input_size: int = 640,
 ) -> np.ndarray:
     """
@@ -75,10 +82,12 @@ def inverse_letterbox_coords(
     original-image-normalized output.
 
     Args:
-        boxes: np.ndarray [N, 4] in XYXY format, normalized to letterbox [0,1]
+        boxes: np.ndarray [N, 4] in XYXY format in the letterbox frame
         orig_shape: Tuple (height, width) of original image
         scale: Letterbox scale factor
         padding: Tuple (pad_x, pad_y) letterbox padding
+        frame: ``normalized`` ([0,1] of the letterbox) or ``pixels`` (letterbox
+            pixels), declared by the adapter that produced ``boxes``
         input_size: Letterbox target size (default 640)
 
     Returns:
@@ -93,13 +102,11 @@ def inverse_letterbox_coords(
     # Work on copy to avoid modifying input
     boxes_out = boxes.copy().astype(np.float64)
 
-    # Auto-detect if boxes are normalized [0,1] or pixel coordinates
-    # If max value > 1.0, boxes are already in pixel coords (640x640 space)
-    is_pixel_coords = float(boxes_out.max()) > 1.0
-
-    # 1. Scale letterbox-normalized [0,1] to letterbox pixels (skip if already pixels)
-    if not is_pixel_coords:
-        boxes_out *= input_size
+    if frame == 'normalized':
+        # An overshoot such as 641/640 is still a valid normalized box.
+        boxes_out = np.clip(boxes_out, 0.0, 1.0) * input_size
+    elif frame != 'pixels':
+        raise ValueError(f"box frame must be 'normalized' or 'pixels', got {frame!r}")
 
     # 2. Remove padding and scale to get original pixels
     boxes_out[:, 0] = (boxes_out[:, 0] - pad_x) / scale  # x1
@@ -244,7 +251,9 @@ def format_detections_from_triton(
     padding = result.get('padding')
 
     if orig_shape is not None and scale is not None and padding is not None:
-        boxes = inverse_letterbox_coords(boxes, orig_shape, scale, padding, input_size)
+        boxes = inverse_letterbox_coords(
+            boxes, orig_shape, scale, padding, result['box_frame'], input_size
+        )
 
     if model_name is not None:
         from src.utils.class_names import get_class_names
