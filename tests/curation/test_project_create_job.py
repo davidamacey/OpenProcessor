@@ -11,6 +11,7 @@ Celery's ``Task.apply`` runs the task with the real wrapper
 from __future__ import annotations
 
 import asyncio
+import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -151,3 +152,17 @@ def test_a_failing_build_leaves_the_project_failed_and_the_job_failed(
     [(status,)] = sql(pg, 'SELECT status FROM jobs WHERE id = %s', body.job_id)
     assert status in ('failed', 'queued')  # a failed attempt may be queued for the next one
     assert sql(pg, "SELECT 1 FROM events WHERE type = 'project.created'") == []
+
+
+def test_the_deployment_job_route_shows_the_create_job(
+    pg, job_env, producer, wakes, kinds, fake_os
+) -> None:
+    body, _ = asyncio.run(_post('cars'))
+
+    async def read():
+        async with async_session_factory()() as session:
+            return await projects_router.get_deployment_job(session, uuid.UUID(body.job_id))
+
+    view = asyncio.run(read())
+    assert (view.kind, view.status) == ('project_create', 'queued')
+    assert view.params['slug'] == 'cars'

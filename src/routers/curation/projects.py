@@ -10,6 +10,7 @@ module.
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves route annotations at runtime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, Query, Response
@@ -43,6 +44,7 @@ from src.schemas.curation.projects import (
     ProjectsResponse,
     ProjectStatsResponse,
 )
+from src.schemas.jobs import JobView
 from src.services.projects import lifecycle
 from src.services.projects.guard import make_curation_opensearch
 from src.services.projects.records import record_from_row
@@ -236,6 +238,16 @@ async def create_project(
         warnings=warnings,
         job_id=str(started.job.id),
     )
+
+
+@global_router.get('/jobs/{job_id}', response_model=JobView)
+async def get_deployment_job(session: DbSessionDep, job_id: uuid.UUID) -> JobView:
+    """One deployment-level job (``project_create``, ``project_delete``), with its parameters: the
+    jobs that belong to no project, which the project-scoped ``/jobs/{job_id}`` cannot show.
+    404 ``job_not_found`` for a project's job."""
+    from src.services.jobs.status import get_job
+
+    return await get_job(session, job_id, project=None)
 
 
 @global_router.patch('/projects/{project}', response_model=ProjectLifecycleResponse)
