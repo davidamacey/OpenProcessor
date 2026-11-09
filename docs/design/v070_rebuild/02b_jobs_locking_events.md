@@ -655,7 +655,7 @@ notes first ([migration_21](https://docs.sqlalchemy.org/en/21/changelog/migratio
 | Celery child (job wrapper) | sync, `pool_size=2` (wrapper + heartbeat thread), `max_overflow=0`; plus a per-task async engine with `NullPool` for handler queries (at most 2 at once) | 4 | 4 + 2 + 1 + 1 + 1 children in core and curation; + 3 GPU children | 48 |
 | Celery parent, Flower | none | 0 | - | 0 |
 | beat | 1 direct connection (single-beat lock) + sync `pool_size=1` | 2 | 1 | 2 |
-| detection and VLM stream workers | sync, `pool_size=2` | 2 | 2 | 4 |
+| detection and VLM stream workers | async, `pool_size=2`, bound for the process by `run_with_engine` (`src/db/engine.py`; one-shot scripts such as `db-migrate` and `db verify` use `NullPool`) | 2 | 2 | 4 |
 | `db-migrate`, backup | 1 direct, exits | 1 | - | 2 |
 | reserve (maintenance, `psql`) | | | | 10 |
 | `superuser_reserved_connections` | | | | 3 |
