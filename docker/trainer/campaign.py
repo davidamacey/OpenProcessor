@@ -108,7 +108,7 @@ def _post_promote(project: str | None, job_id: str, triton_name: str) -> bool:
     try:
         resp = requests.post(url, json=payload, timeout=120)
         resp.raise_for_status()
-    except Exception as exc:  # any transport failure is non-fatal
+    except requests.RequestException as exc:  # connection, timeout and HTTP-status errors
         logger.warning('campaign: auto-promote POST failed', url=url, error=str(exc))
         return False
     return True
@@ -240,7 +240,7 @@ def write_quant_bakeoff_job(spec: JobSpec, state: StatusState) -> None:
     try:
         resp = requests.post(url, json=payload, timeout=120)
         resp.raise_for_status()
-    except Exception as exc:  # any transport/HTTP failure is non-fatal
+    except requests.RequestException as exc:  # connection, timeout and HTTP-status errors
         logger.warning(
             'auto-quantize bake-off POST failed', job_id=spec.job_id, url=url, error=str(exc)
         )

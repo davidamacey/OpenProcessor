@@ -128,13 +128,10 @@ async def list_projects(
     ]
 
     capacity = None
-    try:
-        from src.services.projects.capacity import capacity_status
+    from src.services.projects.capacity import capacity_status
 
-        if client is not None:
-            capacity = capacity_wire(await capacity_status(client))
-    except Exception:
-        capacity = None
+    if client is not None:
+        capacity = capacity_wire(await capacity_status(client))
 
     retired = sorted(registry.retired_slugs())
     return ProjectsResponse(

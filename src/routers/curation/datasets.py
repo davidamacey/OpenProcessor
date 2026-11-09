@@ -12,6 +12,7 @@ import asyncio
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import File, Query, Response, UploadFile
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.core.disk_space import DISK_GUARD
@@ -114,7 +115,7 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
             found.update(
                 h['_source'].get('image_path') for h in (resp.get('hits') or {}).get('hits') or []
             )
-    except Exception:
+    except OpenSearchException:
         return 0
     return len(found & set(paths))
 

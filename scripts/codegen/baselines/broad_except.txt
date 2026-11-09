@@ -1,81 +1,77 @@
-docker/segmenter/sam3_backend.py	1	ratchet: may only go down
-docker/trainer/augment.py	2	ratchet: may only go down
-docker/trainer/campaign.py	2	ratchet: may only go down
-docker/trainer/incumbent_compare.py	2	ratchet: may only go down
-docker/trainer/job_manifest.py	2	ratchet: may only go down
-docker/trainer/job_status.py	3	ratchet: may only go down
-docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
-docker/trainer/trainer.py	1	ratchet: may only go down
-docker/trainer/trainer_callbacks.py	3	ratchet: may only go down
-docker/trainer/trainer_eval.py	1	ratchet: may only go down
-docker/trainer/trainer_fit.py	2	ratchet: may only go down
-docker/trainer/trainer_kwargs.py	1	ratchet: may only go down
-export/download_face_models.py	2	ratchet: may only go down
-export/download_paddleocr.py	2	ratchet: may only go down
-export/download_pytorch_models.py	1	ratchet: may only go down
-export/export_face_recognition.py	1	ratchet: may only go down
-export/export_mobileclip_image_encoder.py	2	ratchet: may only go down
+docker/segmenter/sam3_backend.py	1	boot boundary: a VRAM probe or shared-weights failure falls back to independent pool, logged
+docker/trainer/augment.py	2	per-item boundary: a bad augment override or image is skipped and logged, the run continues
+docker/trainer/incumbent_compare.py	1	per-image boundary: one failed incumbent inference is logged, the sweep continues
+docker/trainer/job_manifest.py	1	terminal-write boundary: manifest build must never block the job status write
+docker/trainer/job_status.py	3	optional telemetry boundary: NVML and MLflow errors are logged, never fail the job
+docker/trainer/mlflow_callbacks.py	9	training-loop boundary: tracking callbacks must never break training, errors logged with traceback
+docker/trainer/trainer.py	1	optional metrics boundary: per-class val failure is logged, the run result stands
+docker/trainer/trainer_callbacks.py	3	training-loop boundary: metric capture and optional mlflow wiring never kill an epoch
+docker/trainer/trainer_eval.py	1	optional comparison boundary: a missing Triton must not fail the run
+docker/trainer/trainer_fit.py	2	training boundary: optional tracking, OOM retry (re-raises non-OOM), retryable ONNX export
+docker/trainer/trainer_kwargs.py	1	probe boundary: auto-batch probe failure falls back to a fixed batch, logged
+export/download_face_models.py	2	CLI boundary: any download/validation error is printed and returns False
+export/download_paddleocr.py	2	CLI boundary: any download/validation error is printed and returns False
+export/download_pytorch_models.py	1	CLI boundary: a failed download is logged and returns False
+export/export_face_recognition.py	1	CLI boundary: TensorRT build errors are printed and return False
+export/export_mobileclip_image_encoder.py	2	CLI boundary: TensorRT build errors are printed, fp16 falls back to fp32
 export/export_models.py	1	ratchet: may only go down
-export/export_paddleocr_det.py	2	ratchet: may only go down
+export/export_paddleocr_det.py	2	CLI boundary: ONNX/TensorRT errors are printed and return failure
 export/export_paddleocr_rec.py	5	ratchet: may only go down
-export/pe_text_validate.py	2	ratchet: may only go down
-export/scrfd_onnx.py	1	ratchet: may only go down
-export/scrfd_triton.py	1	ratchet: may only go down
+export/pe_text_validate.py	2	validation boundary: ONNX Runtime raises its own error types; recorded in the report
+export/scrfd_onnx.py	1	CLI boundary: inference-test error is logged and returns False
+export/scrfd_triton.py	1	CLI boundary: TensorRT build errors are logged and return False
 export/trt_utils.py	2	ratchet: may only go down
 export/yolo_formats.py	2	ratchet: may only go down
 export/yolo_model_config.py	1	ratchet: may only go down
 export/yolo_trt_build.py	1	ratchet: may only go down
 models/gpu_image_prep/1/model.py	2	ratchet: may only go down
 models/ocr_pipeline/1/model.py	1	ratchet: may only go down
-scripts/bench/gpu_decode_bench.py	2	ratchet: may only go down
-scripts/bench/gpu_decode_parity.py	1	ratchet: may only go down
-scripts/bench/ingest_write_path.py	1	ratchet: may only go down
-scripts/bench/vectordb/orchestrate.py	1	ratchet: may only go down
-scripts/curation/_vlm_activity.py	1	ratchet: may only go down
-scripts/curation/backfill_region_embeddings.py	2	ratchet: may only go down
-scripts/curation/bakeoff/bakeoff_runner.py	2	ratchet: may only go down
-scripts/curation/bakeoff/report.py	2	ratchet: may only go down
-scripts/curation/cluster_raw_labels.py	1	ratchet: may only go down
-scripts/curation/ingest_upload.py	1	ratchet: may only go down
-scripts/curation/seed_live_harness.py	1	ratchet: may only go down
-scripts/curation/vlm_worker.py	2	ratchet: may only go down
-scripts/curation/worker/bulk_writer.py	3	ratchet: may only go down
-scripts/curation/worker/flow.py	2	ratchet: may only go down
-scripts/curation/worker/region_embed_stage.py	1	ratchet: may only go down
-scripts/curation/worker/region_text_stage.py	2	ratchet: may only go down
-scripts/curation/worker/runner.py	2	ratchet: may only go down
-scripts/curation/worker/runtime.py	1	ratchet: may only go down
-scripts/curation/worker/stage_a.py	2	ratchet: may only go down
-scripts/curation/worker/stage_b.py	1	ratchet: may only go down
-scripts/curation/worker/stage_sam.py	2	ratchet: may only go down
-scripts/download_ocr_test_images.py	1	ratchet: may only go down
-scripts/resize_images.py	1	ratchet: may only go down
+scripts/bench/gpu_decode_bench.py	2	bench boundary: a decoder failure is recorded in the row, the sweep continues
+scripts/bench/gpu_decode_parity.py	1	bench boundary: a GPU decode failure is recorded and falls back to CPU
+scripts/bench/ingest_write_path.py	1	bench boundary: a failed request is counted as a failure
+scripts/bench/vectordb/orchestrate.py	1	readiness poll: any connect error means not ready yet, retried then raises
+scripts/curation/_vlm_activity.py	1	per-project boundary: an unreadable VLM state skips that project, logged
+scripts/curation/backfill_region_embeddings.py	2	script boundary: advisory scroll clear / index refresh failures are logged
+scripts/curation/bakeoff/bakeoff_runner.py	2	job boundary: a failed quantize/throughput step is recorded, scoring continues
+scripts/curation/bakeoff/report.py	2	optional boundary: MLflow logging failure must not fail the report
+scripts/curation/cluster_raw_labels.py	1	backend probe: any embedder load failure tries the next backend, logged
+scripts/curation/ingest_upload.py	1	task boundary: a crashed batch is counted and logged so the bounded queue cannot deadlock
+scripts/curation/seed_live_harness.py	1	harness boundary: a failed wipe step is printed, seeding continues
+scripts/curation/vlm_worker.py	2	worker-loop boundary: one project fetch or consumer error must not stop the loop
+scripts/curation/worker/bulk_writer.py	3	writer boundary: stamp/embedding-write failures are logged and never block a region write
+scripts/curation/worker/flow.py	2	worker-loop boundary: a failed fetch, embed stage or bulk write is logged and the loop goes on
+scripts/curation/worker/region_embed_stage.py	1	per-photo/batch boundary: a failed embed is logged and skipped
+scripts/curation/worker/region_text_stage.py	2	per-crop boundary: an OCR failure yields no text, logged
+scripts/curation/worker/runner.py	2	worker-loop boundary: probe and per-project sync failures are logged, retried next cycle
+scripts/curation/worker/runtime.py	1	per-project boundary: a class-seed failure is logged, retried next cycle
+scripts/curation/worker/stage_a.py	2	per-task boundary: metrics recorded then re-raised, or the task fails and is logged
+scripts/curation/worker/stage_b.py	1	per-task boundary: failure is recorded in metrics and logged, the task is released
+scripts/curation/worker/stage_sam.py	2	per-task boundary: segmenter/OCR failure is metered, logged, task continues
+scripts/download_ocr_test_images.py	1	CLI boundary: a failed download is printed, others continue
+scripts/resize_images.py	1	CLI boundary: a failed image is printed, others continue
 src/clients/curation_opensearch/ensure_overlay_fields.py	7	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/opensearch/ingest.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/triton_client_manager.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/clients/triton_pool_core.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/app/factory.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/app/lifespan.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/analyze.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/app/factory.py	1	middleware boundary: an unparsable body is returned unchanged
+src/app/lifespan.py	2	lifespan boundary: startup/shutdown steps are best-effort and logged
+src/routers/analyze.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/services/analyze_pipeline.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/_models_vlm.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/config_vocabulary.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/crop_context.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/datasets.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/edit_undo.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/global_status.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/health.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/methods.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/pipeline_events.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/projects.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/review_resolve.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/select.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/vlm_activation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/curation/vlm_endpoints.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/detect.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/embed.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/health.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/routers/ocr.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/routers/curation/_models_vlm.py	2	status boundary: a VLM probe failure is reported as unavailable
+src/routers/curation/crop_context.py	1	route boundary: pixel-size read failure yields None, logged
+src/routers/curation/datasets.py	1	route boundary: a class-creation failure is mapped to 422
+src/routers/curation/edit_undo.py	1	route boundary: a failed undo is reported as a conflict, logged
+src/routers/curation/global_status.py	1	health boundary: the probe error text is returned as detail
+src/routers/curation/health.py	3	health boundary: the probe error text is returned as detail
+src/routers/curation/methods.py	1	registry boundary: falls back to the unscoped registry, logged
+src/routers/curation/pipeline_events.py	1	stats boundary: the error is cached and returned as the payload
+src/routers/curation/projects.py	2	listing boundary: unavailable counts are logged, the list still serves
+src/routers/curation/review_resolve.py	1	per-crop boundary: a failed update is reported as a conflict, logged
+src/routers/curation/vlm_endpoints.py	1	listing boundary: unavailable activations are logged, the list still serves
+src/routers/detect.py	2	route boundary: mapped to a 500 or a per-file failure entry
+src/routers/embed.py	1	route boundary: mapped to a 500 or a per-file failure entry
+src/routers/health.py	1	readiness boundary: a probe that cannot run reports not ready
+src/routers/ocr.py	1	route boundary: mapped to a 500 or a per-file failure entry
 src/services/visual_search/clustering_persist.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/open_vocab_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/profile_dependency_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -134,6 +130,5 @@ src/services/training/lineage.py	1	triage every return-empty handler in PR 3; ra
 src/services/training/promote_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/ingest_single.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
-src/utils/cpu_pool.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/utils/image_processing.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/utils/pytorch_utils.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
+src/utils/image_processing.py	1	decoder fallback: OpenCV failure tries PIL, both failing raises ValueError
+src/utils/pytorch_utils.py	1	loader boundary: a model that fails to load is logged, others load
