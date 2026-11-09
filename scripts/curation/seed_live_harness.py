@@ -15,8 +15,8 @@ What it creates
    PostgreSQL — before any item doc, since the label endpoints reject an
    unknown class id.
 3. ~490 item documents with ``_id == crop_id`` (every OCC path addresses by
-   doc id), spread across all three cluster-id bands: negative (noise /
-   excluded), the class band, and the residual/candidate band.
+   doc id): one serving-partition cluster per cohort, plus unassigned noise
+   and excluded items.
 4. Non-degenerate embeddings: each intended sub-cluster gets a random unit
    centroid, and its members are ``centroid + N(0, sigma)`` re-normalized to
    unit length. ``sigma`` is scaled as ``0.15 / sqrt(dim)`` so the *noise
@@ -28,6 +28,10 @@ What it creates
 5. A small solid-colour JPEG per source image, so the thumbnail/region-crop
    routes (and the VLM label path, which crops real pixels) have something
    real to read.
+6. A serving item partition: one cluster per placed cohort, recorded, activated
+   and projected onto the items by the product's own clustering services (the
+   path ``tests/curation/serving_partition.py`` uses), so ``cluster_uid`` is
+   written by the projection and never by this script.
 
 Determinism: one fixed RNG seed, one fixed id scheme. Re-running with
 ``--wipe`` reproduces byte-identical cohorts.
@@ -81,10 +85,9 @@ SEED_SOURCE = 'verify_src'
 
 @dataclass(frozen=True)
 class Cohort:
-    """One seeded group of item docs sharing a cluster id and label shape."""
+    """One seeded group of item docs sharing a partition cluster and label shape."""
 
     prefix: str
-    cluster_id: int | None
     size: int
     subgroups: int
     # ``class_plan`` maps a member index onto (class_id, class_source,
@@ -92,26 +95,26 @@ class Cohort:
     class_id: int | None = None
     class_source: str | None = None
     class_validated: bool = False
-    # Secondary class mixed in to drive purity below the auto-promote gate.
+    # Secondary class mixed in to drive label agreement below a pure cluster's.
     minority_class_id: int | None = None
     minority_count: int = 0
     excluded: bool = False
     # '' for no region, else a RegionStatus member (see region_state.py).
     region: str = ''
+    # True: the cohort is one cluster of the serving partition; False: its items are
+    # unassigned members (an excluded cohort is no member at all).
+    placed: bool = True
 
 
 # The cohort table IS the test fixture contract — every scenario in
 # tests/live/ addresses one of these prefixes. Keep the comments accurate.
 COHORTS: tuple[Cohort, ...] = (
-    # Class cluster 0: pure, half human-validated and half unvalidated
-    # secondary-model rows -> the auto-promote positive case.
-    Cohort('cls0', 0, 40, 3, class_id=0, class_source='secondary_model', class_validated=False),
-    # Class cluster 1: 60/40 class mix -> purity 0.6, below the 0.85 gate,
-    # so auto-promote must leave it alone. Also the labels-scenario cohort
+    # Pure cluster: half human-validated and half unvalidated secondary-model rows.
+    Cohort('cls0', 40, 3, class_id=0, class_source='secondary_model', class_validated=False),
+    # 60/40 class mix -> label agreement 0.6. Also the labels-scenario cohort
     # (secondary-sourced rows are never part of the human holdout cohort).
     Cohort(
         'cls1',
-        1,
         40,
         2,
         class_id=1,
@@ -121,39 +124,25 @@ COHORTS: tuple[Cohort, ...] = (
         minority_count=16,
     ),
     # Human-validated class clusters -> the holdout-freeze cohort.
-    Cohort('cls2', 2, 40, 2, class_id=2, class_source='human', class_validated=True),
-    Cohort('cls3', 3, 40, 2, class_id=3, class_source='human', class_validated=True),
-    Cohort('cls4', 4, 40, 2, class_id=4, class_source='human', class_validated=True),
-    Cohort('cls5', 5, 40, 2, class_id=5, class_source='human', class_validated=True),
-    Cohort('cls6', 6, 20, 1, class_id=6, class_source='human', class_validated=True),
+    Cohort('cls2', 40, 2, class_id=2, class_source='human', class_validated=True),
+    Cohort('cls3', 40, 2, class_id=3, class_source='human', class_validated=True),
+    Cohort('cls4', 40, 2, class_id=4, class_source='human', class_validated=True),
+    Cohort('cls5', 40, 2, class_id=5, class_source='human', class_validated=True),
+    Cohort('cls6', 20, 1, class_id=6, class_source='human', class_validated=True),
     # Merge-target cohort: never human-validated, so it never acquires a
     # frozen holdout row and stays mergeable.
-    Cohort('cls7', 7, 20, 1, class_id=7, class_source='secondary_model', class_validated=False),
-    # Auto-promote targets: candidate clusters (promotion never touches a
-    # class cluster) whose members carry classifier labels. One is pure ->
-    # promoted; the other is a 60/40 mix, below the purity gate -> left alone.
-    Cohort('prm', 10004, 30, 2, class_id=0, class_source='secondary_model'),
-    Cohort(
-        'mxd',
-        10005,
-        30,
-        2,
-        class_id=1,
-        class_source='secondary_model',
-        minority_class_id=2,
-        minority_count=12,
-    ),
-    # Residual / candidate band.
-    Cohort('cnd10000', 10000, 30, 3),
-    Cohort('cnd10001', 10001, 20, 2),
-    Cohort('cnd10002', 10002, 15, 1),
-    # Region-of-interest cohorts (own candidate bucket so they never skew a
-    # class cluster's purity).
-    Cohort('rgn', 10003, 40, 2, region=RegionStatus.DETECTED),
-    Cohort('rgnfp', 10003, 12, 1, region=RegionStatus.FALSE_POSITIVE),
-    # Negative band.
-    Cohort('noise', -1, 80, 8),
-    Cohort('excl', -2, 15, 1, excluded=True),
+    Cohort('cls7', 20, 1, class_id=7, class_source='secondary_model', class_validated=False),
+    # Unlabeled clusters.
+    Cohort('cnd10000', 30, 3),
+    Cohort('cnd10001', 20, 2),
+    Cohort('cnd10002', 15, 1),
+    # Region-of-interest cohorts (own cluster so they never skew a labeled
+    # cluster's agreement).
+    Cohort('rgn', 40, 2, region=RegionStatus.DETECTED),
+    Cohort('rgnfp', 12, 1, region=RegionStatus.FALSE_POSITIVE, placed=False),
+    # Unassigned noise and excluded items.
+    Cohort('noise', 80, 8, placed=False),
+    Cohort('excl', 15, 1, excluded=True, placed=False),
 )
 
 
@@ -324,8 +313,7 @@ def _build_items(
                 )
                 class_id = cohort.minority_class_id if is_minority else cohort.class_id
                 class_name = CLASS_NAMES[class_id] if class_id is not None else None
-                # Half of the pure class cluster is a settled human label;
-                # the rest stays secondary-sourced so auto-promote has candidates.
+                # Half of the pure class cluster is a settled human label.
                 validated = cohort.class_validated
                 class_source = cohort.class_source
                 if cohort.prefix == 'cls0' and member_index % 5 < 2:
@@ -345,9 +333,6 @@ def _build_items(
                     'class_validated': bool(validated),
                     'label_source': 'human' if class_source == 'human' else class_source,
                     'confidence': round(0.45 + (global_index % 50) / 100.0, 3),
-                    'cluster_id': cohort.cluster_id,
-                    'cluster_distance': round(0.02 + (local_idx % 10) / 100.0, 4),
-                    'cluster_subid': None,
                     'crop_area_norm': round(0.04 + (global_index % 17) / 100.0, 4),
                     'crop_rank_in_image': 1 + (global_index % 3),
                     'blur_lap_var': round(20.0 + (global_index % 40), 3),
@@ -367,14 +352,6 @@ def _build_items(
                     'created_at': (now - timedelta(minutes=global_index)).isoformat(),
                     'updated_at': (now - timedelta(minutes=global_index)).isoformat(),
                 }
-                if cohort.cluster_id is not None and cohort.cluster_id >= 0:
-                    # What the cluster-geometry pass would have measured: a
-                    # member whose class differs from its cluster's sits
-                    # nearest the other class's centroid.
-                    doc['cluster_distance_cluster_id'] = cohort.cluster_id
-                    doc['cluster_nearest_id'] = (
-                        class_id if is_minority and class_id is not None else cohort.cluster_id
-                    )
                 if cohort.excluded:
                     doc['excluded_at'] = now.isoformat()
                     doc['excluded_by'] = 'seed'
@@ -414,6 +391,79 @@ async def _bulk(client: Any, index: str, docs: list[dict[str, Any]], id_key: str
             )
             _fail(f'bulk index into {index} reported errors, first: {json.dumps(first)[:600]}')
     await client.indices.refresh(index=index)
+
+
+async def _serve_partition(client: Any, docs: list[dict[str, Any]]) -> int:
+    """Record, activate and project the item partition; returns the placed item count."""
+    from src.config.curation_accessors import items_index
+    from src.config.project_context import current_project_id
+    from src.db.session import async_session_factory, project_tx
+    from src.domain.embedding_spaces import Target
+    from src.services.clustering.activation import activate, get_activation
+    from src.services.clustering.partitions import (
+        PartitionMember,
+        PartitionSpace,
+        mint_uids,
+        record_partition,
+    )
+    from src.services.clustering.projection import project_partition
+    from src.services.embedding_spaces.resolve import embedding_space
+
+    by_prefix = {c.prefix: c for c in COHORTS}
+    placed_prefixes = [c.prefix for c in COHORTS if c.placed]
+    project = current_project_id()
+    space = await embedding_space(Target.ITEM)
+    async with async_session_factory()() as session, project_tx(session, project):
+        uids = dict(
+            zip(placed_prefixes, await mint_uids(session, len(placed_prefixes)), strict=True)
+        )
+        members = []
+        for doc in docs:
+            cohort = by_prefix[str(doc['crop_id']).rsplit('_', 1)[0]]
+            if cohort.excluded:
+                continue
+            uid = uids.get(cohort.prefix)
+            members.append(
+                PartitionMember(doc['crop_id'], uid, 'assigned' if uid else 'unassigned')
+            )
+        partition = await record_partition(
+            session,
+            project=project,
+            target='item',
+            level='class',
+            space=PartitionSpace.of(space),
+            method='ivf',
+            params={},
+            members=members,
+        )
+        # A re-seed (--wipe clears OpenSearch, not PostgreSQL) replaces the serving partition.
+        current = await get_activation(
+            session,
+            project=project,
+            target='item',
+            level='class',
+            embedding_field=space.vector_field,
+        )
+        await activate(
+            session,
+            project=project,
+            partition_id=partition,
+            expected_serving=current.serving_partition_id if current else None,
+            expected_revision=current.revision if current else None,
+            by='seed_live_harness',
+        )
+        result = await project_partition(
+            session,
+            client,
+            project=project,
+            partition_id=partition,
+            index=items_index(),
+            target='item',
+            old_partition_id=current.serving_partition_id if current else None,
+        )
+    if result.status != 'flipped' or result.failed:
+        _fail(f'the seed partition did not project: {result}')
+    return sum(1 for m in members if m.cluster_uid is not None)
 
 
 async def _seed(args: argparse.Namespace) -> int:
@@ -466,6 +516,11 @@ async def _seed(args: argparse.Namespace) -> int:
         item_docs = _build_items(cfg, fields, image_docs)
         await _bulk(client, cfg.items_index, item_docs, 'crop_id')
         print(f'items: {len(item_docs)} docs -> {cfg.items_index}')
+
+        # 5. Serving partition, projected onto the items.
+        placed = await _serve_partition(client, item_docs)
+        await client.indices.refresh(index=cfg.items_index)
+        print(f'partition: {placed} items placed in {sum(c.placed for c in COHORTS)} clusters')
 
         count = await client.count(index=cfg.items_index)
         print(f'done. {cfg.items_index} now holds {count.get("count")} documents')

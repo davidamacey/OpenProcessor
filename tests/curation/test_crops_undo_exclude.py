@@ -255,7 +255,9 @@ async def test_undo_without_history_clears_class(crops) -> None:
     assert after['class_id'] is None
     assert after['class_validated'] is False
     assert after['class_source'] is None
-    assert after['cluster_uid'] is None
+    # Placement belongs to clustering, not to labels: a label undo with no history leaves it.
+    assert after['cluster_uid'] == '00000000-0000-0000-0000-000000000004'
+    assert after['cluster_state'] == 'assigned'
 
 
 # =============================================================================
