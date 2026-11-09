@@ -4,8 +4,12 @@ The cursor emits only rows whose transaction is older than every running one
 (``pg_snapshot_xmin``), and that horizon is cluster-wide: an open transaction in *any* database of
 the server delays visibility in all of them. Under xdist the shared test server runs other
 workers' transactions, so cursor tests there are timing-dependent. They get a separate server
-(not a separate database) per xdist worker: a testcontainers PostgreSQL, or the server named by
-``OP_TEST_EVENTS_DATABASE_URL``.
+(not a separate database) per xdist worker: a testcontainers PostgreSQL, or the one server named by
+``OP_TEST_EVENTS_DATABASE_URL``, which therefore serves a single process. Every test that uses
+``pg_events`` carries the ``events_server`` marker: run them with ``-m events_server -p no:xdist``
+and the rest of the tier with ``-m "db and not events_server"``. (``xdist_group`` with
+``--dist loadgroup`` cannot do it: with pytest 9.2 and pytest-xdist 3.8.0 the worker's
+``item._nodeid`` suffix is ignored, so the group is split across workers.)
 
 Production behaves the same way by design (02b section 6.3): delivery waits for the oldest open
 transaction in the cluster, which the role statement and idle-in-transaction timeouts bound (D-72).
@@ -47,10 +51,25 @@ EVENTS_URL_ENV = 'OP_TEST_EVENTS_DATABASE_URL'
 _counter = itertools.count()
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every test that uses ``pg_events`` so a run can select or exclude them as a tier."""
+    for item in items:
+        if 'pg_events' in getattr(item, 'fixturenames', ()):
+            item.add_marker(pytest.mark.events_server)
+
+
 @pytest.fixture(scope='session')
 def pg_events_server() -> Iterator[PgServer]:
     """This worker's own server, never the one the rest of the db tier shares."""
     if url := os.environ.get(EVENTS_URL_ENV):
+        if os.environ.get('PYTEST_XDIST_WORKER'):
+            raise RuntimeError(
+                f'{EVENTS_URL_ENV} names one server and every xdist worker would rebuild the same '
+                'template database on it (AdminShutdown, "database does not exist"). Run the '
+                'event tests alone: -m events_server -p no:xdist; exclude them from the xdist '
+                'run: -m "db and not events_server".'
+            )
         yield _server_from_url(url)
         return
     holder = _ContainerHolder()

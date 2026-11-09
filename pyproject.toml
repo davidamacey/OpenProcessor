@@ -467,6 +467,7 @@ markers = [
     "live: write-path tests that require the docker/test/ verification harness to be running",
     "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",
+    "events_server: db tests of the event cursor, set on every test that uses `pg_events`; with OP_TEST_EVENTS_DATABASE_URL they run alone: -m events_server -p no:xdist (the xdist tier uses -m 'db and not events_server')",
     "db: tests that need a PostgreSQL database (testcontainers or OP_TEST_DATABASE_URL); run with -m db",
 ]
 

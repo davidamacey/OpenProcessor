@@ -94,10 +94,11 @@ _CODE_ENV_FILES = (
     'Makefile',
     'Dockerfile',
 )
-# Test harness files that read a documented variable (CONTRIBUTING.md names OP_TEST_DATABASE_URL, which
-# the database fixture reads and no code under the scanned roots does). The whole of tests/ is not
-# scanned: a variable only a test reads should still be named here on purpose.
-_TEST_ENV_FILES = ('tests/fixtures/postgres.py',)
+# Test harness files that read a documented variable (CONTRIBUTING.md names OP_TEST_DATABASE_URL
+# and OP_TEST_EVENTS_DATABASE_URL, which the database fixtures read and no code under the scanned
+# roots does). The whole of tests/ is not scanned: a variable only a test reads should still be
+# named here on purpose.
+_TEST_ENV_FILES = ('tests/fixtures/postgres.py', 'tests/fixtures/postgres_events.py')
 
 _STATE: dict[str, list[Path] | None] = {'only': None}
 
