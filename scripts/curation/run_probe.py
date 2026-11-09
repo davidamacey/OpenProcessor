@@ -50,7 +50,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from src.config import get_curation_config
 from src.db.engine import run_with_engine
-from src.services.curation.probe_models import PROBE_ARCHITECTURES
+from src.domain.model_families import PROBE_ARCHITECTURES
 from src.services.curation.probe_predictions import count_probe_candidates, run_probe_inference
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project

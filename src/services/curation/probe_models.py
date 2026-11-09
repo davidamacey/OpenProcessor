@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.core.logging import get_logger
+from src.domain.model_families import probe_decoder
 
 
 if TYPE_CHECKING:
@@ -394,9 +395,6 @@ def _build_yolov5_objectness_predictor(model_path: Path) -> tuple[_PredictFn, st
     return predict, model_path.name
 
 
-PROBE_ARCHITECTURES = ('yolo11', 'yolo26', 'yolov5_objectness')
-
-
 def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, str]:
     """Dispatch to the architecture-specific predictor builder.
 
@@ -409,10 +407,6 @@ def _build_predictor(model_path: Path, architecture: str) -> tuple[_PredictFn, s
     on anything this code passes in. YOLO26 is the only trained family
     (G-22), so the router/job default names it explicitly.
     """
-    if architecture in ('yolo11', 'yolo26'):
+    if probe_decoder(architecture) == 'fused':
         return _build_yolo11_predictor(model_path)
-    if architecture == 'yolov5_objectness':
-        return _build_yolov5_objectness_predictor(model_path)
-    raise ValueError(
-        f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
-    )
+    return _build_yolov5_objectness_predictor(model_path)

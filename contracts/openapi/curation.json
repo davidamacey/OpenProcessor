@@ -53014,7 +53014,7 @@
     },
     "/curation/projects/{project}/probe/run": {
       "post": {
-        "description": "Queue a probe pass from a finished training run's export (202 with the job).\n\n``409`` when the referenced training job isn't finished or has no exported checkpoint, and\n``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside\n:data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. A requested ``gpu`` is\nclaimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails\nthe job (see ``src.services.curation.probe_job``).",
+        "description": "Queue a probe pass from a finished training run's export (202 with the job).\n\n``409`` when the referenced training job isn't finished or has no exported checkpoint, and\n``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside\n:data:`~src.domain.model_families.PROBE_ARCHITECTURES`. A requested ``gpu`` is\nclaimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails\nthe job (see ``src.services.curation.probe_job``).",
         "operationId": "probe_run_curation_projects__project__probe_run_post",
         "parameters": [
           {

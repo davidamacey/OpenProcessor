@@ -19,6 +19,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.domain.model_families import ONE2ONE
 from src.schemas.models import EngineInputContract, EngineOutputContract
 
 
@@ -81,7 +82,7 @@ def declared_input(size: int = IMG_SIZE) -> EngineInputContract:
 
 def declared_output_kind(engine_name: str, head_kind: str) -> str:
     """``end2end_boxes`` when NMS is in the graph (the NMS-free head, or ``*_trt_end2end``)."""
-    if head_kind == 'one2one' or engine_name.endswith('_trt_end2end'):
+    if head_kind == ONE2ONE or engine_name.endswith('_trt_end2end'):
         return 'end2end_boxes'
     return 'anchors_raw'
 
