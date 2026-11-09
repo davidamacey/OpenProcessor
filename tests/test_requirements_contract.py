@@ -119,8 +119,6 @@ _REQ_RE = re.compile(
 # package cannot stay on the list.
 _UNPINNED_UNTIL_PART_B = frozenset(
     {
-        'torch',
-        'torchvision',
         'onnx',
         'onnxruntime',
         'onnxruntime-gpu',

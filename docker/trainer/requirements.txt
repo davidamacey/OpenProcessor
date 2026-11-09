@@ -9,8 +9,8 @@
 # --extra-index-url at build time (TORCH_CUDA_INDEX); those wheels bundle the
 # CUDA runtime, which is why the image can stay on a python:*-slim base.
 
-torch>=2.6,<3
-torchvision>=0.21,<1
+torch==2.15.0
+torchvision==0.29.1
 
 # Ultralytics runtime deps we want resolved up front rather than auto-installed
 # mid-run (see the ONNX note below).

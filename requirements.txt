@@ -16,8 +16,8 @@ onnx>=1.12.0,<1.22  # scripts/curation/seed_class_registry.py; upper bound track
 onnxruntime-gpu>=1.24.2,<1.25  # nvidia-modelopt (export image) requires ~=1.24.2; the runtime and export images must resolve one version
 
 # PyTorch
-torch
-torchvision
+torch==2.15.0
+torchvision==0.29.1
 
 # Image Processing
 opencv-python==5.0.0.93

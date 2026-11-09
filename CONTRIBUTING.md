@@ -10,7 +10,7 @@ conventions this repo uses.
 git clone https://github.com/davidamacey/OpenProcessor.git
 cd OpenProcessor
 python3 -m venv .venv
-.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
 .venv/bin/pip install -r requirements-test.txt pre-commit
 .venv/bin/pre-commit install
 ```

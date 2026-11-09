@@ -13,7 +13,7 @@
 # cannot mix inline with the default PyPI index. Install this file in two
 # passes:
 #
-#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
 #   pip install -r requirements-test.txt
 #
 # (or use `pip install -r requirements-test.txt --extra-index-url
@@ -35,8 +35,8 @@ pydantic-settings==2.16.2
 einops==0.8.2
 
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
-torch
-torchvision
+torch==2.15.0
+torchvision==0.29.1
 ultralytics==8.4.197
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
