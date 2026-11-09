@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Run end2end detector engines over a pinned image set and save their raw detections.
 
+``--arm detect`` / ``detect_scaleup`` use ``/detect``'s Ultralytics letterbox instead (output
+files get the arm as a suffix), for the GPU-6 recall question.
+
 Input for ``detector_quality.py``. The preprocessing is the product's own
 (``letterbox_to_square``, fill 114, 640 px), so the boxes are what ingest sees
 before the confidence floor. Each model is ``NAME:uint8`` (engine scales in the
@@ -20,7 +23,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from PIL import Image
@@ -33,8 +36,37 @@ if str(_REPO_ROOT) not in sys.path:
 from src.services.detection.geometry import letterbox_to_square, undo_letterbox  # noqa: E402  # import follows the sys.path setup above
 
 
+ARMS = ('ingest', 'detect', 'detect_scaleup')
 OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 NET = 640
+
+
+def detect_letterbox(
+    img: Image.Image, size: int, *, scaleup: bool
+) -> tuple[np.ndarray, float, tuple[float, float]]:
+    """``POST /detect``'s preprocessing (``triton_client.infer_yolo_end2end_batch``): the
+    Ultralytics ``LetterBox`` (cv2 resize, fill 114) with ``scaleup`` as given, and the scale
+    and pad that method reports. ``scaleup=False`` is the product; ``True`` is the ingest-like
+    arm that D-35 weighs; nothing else differs."""
+    from ultralytics.data.augment import LetterBox
+
+    rgb = np.asarray(img.convert('RGB'))
+    h, w = rgb.shape[:2]
+    out = cast(
+        'np.ndarray', LetterBox(new_shape=(size, size), auto=False, scaleup=scaleup)(image=rgb)
+    )
+    scale = min(size / h, size / w)
+    if not scaleup:
+        scale = min(scale, 1.0)
+    pad = ((size - round(w * scale)) / 2.0, (size - round(h * scale)) / 2.0)
+    chw = np.ascontiguousarray(np.transpose(out, (2, 0, 1)))[None]
+    return chw, float(scale), pad
+
+
+def preprocess(img: Image.Image, arm: str) -> tuple[np.ndarray, float, tuple[float, float]]:
+    if arm == 'ingest':
+        return letterbox_to_square(img, NET)
+    return detect_letterbox(img, NET, scaleup=arm == 'detect_scaleup')
 
 
 def decode_row(
@@ -96,6 +128,10 @@ def run(args: argparse.Namespace) -> int:
         name, _, dtype = m.partition(':')
         if dtype not in ('uint8', 'fp32', 'gpu_decode'):
             raise SystemExit(f'--model {m!r}: dtype must be uint8, fp32 or gpu_decode')
+        if dtype == 'gpu_decode' and args.arm != 'ingest':
+            raise SystemExit(
+                '--arm detect* applies to uint8/fp32 only; gpu_decode is the ingest path'
+            )
         specs.append((name, dtype))
     results: dict[str, dict[str, Any]] = {n: {} for n, _ in specs}
     step = args.batch
@@ -104,7 +140,7 @@ def run(args: argparse.Namespace) -> int:
         lets = []
         for r in chunk:
             img = Image.open(Path(args.images) / r['file_name']).convert('RGB')
-            lets.append(letterbox_to_square(img, NET))
+            lets.append(preprocess(img, args.arm))
         batch = np.concatenate([chw for chw, _s, _p in lets], axis=0)
         for name, dtype in specs:
             if dtype == 'gpu_decode':
@@ -133,7 +169,8 @@ def run(args: argparse.Namespace) -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     for name, _ in specs:
-        (out_dir / f'{name}.json').write_text(json.dumps(results[name]), encoding='utf-8')
+        suffix = '' if args.arm == 'ingest' else f'.{args.arm}'
+        (out_dir / f'{name}{suffix}.json').write_text(json.dumps(results[name]), encoding='utf-8')
     return 0
 
 
@@ -144,6 +181,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument('--images', required=True)
     p.add_argument('--model', action='append', required=True, metavar='NAME:uint8|fp32|gpu_decode')
     p.add_argument('--out-dir', required=True)
+    p.add_argument(
+        '--arm',
+        choices=ARMS,
+        default='ingest',
+        help='preprocessing: ingest letterbox, /detect letterbox (scaleup off) or the same with scaleup on',
+    )
     p.add_argument('--batch', type=int, default=16)
     return run(p.parse_args(argv))
 
