@@ -707,6 +707,116 @@
    }
   }
  ],
+ "taken_range": [
+  {
+   "bool": {
+    "should": [
+     {
+      "range": {
+       "capture_taken_utc": {
+        "gte": "2024-03-05T00:00:00",
+        "lt": "2024-03-07T00:00:00"
+       }
+      }
+     },
+     {
+      "bool": {
+       "must": [
+        {
+         "range": {
+          "capture_taken_local": {
+           "gte": "2024-03-05T00:00:00",
+           "lt": "2024-03-07T00:00:00"
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "capture_taken_utc"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "taken_from": [
+  {
+   "bool": {
+    "should": [
+     {
+      "range": {
+       "capture_taken_utc": {
+        "gte": "2024-03-05T00:00:00"
+       }
+      }
+     },
+     {
+      "bool": {
+       "must": [
+        {
+         "range": {
+          "capture_taken_local": {
+           "gte": "2024-03-05T00:00:00"
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "capture_taken_utc"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
+ "taken_to": [
+  {
+   "bool": {
+    "should": [
+     {
+      "range": {
+       "capture_taken_utc": {
+        "lt": "2024-03-06T00:00:00"
+       }
+      }
+     },
+     {
+      "bool": {
+       "must": [
+        {
+         "range": {
+          "capture_taken_local": {
+           "lt": "2024-03-06T00:00:00"
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "capture_taken_utc"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
  "everything": [
   {
    "bool": {

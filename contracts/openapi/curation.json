@@ -13878,6 +13878,167 @@
         "title": "ItemBatchRegionsRequest",
         "type": "object"
       },
+      "ItemCapture": {
+        "description": "When and with what the photo was taken; never a coordinate. A list row carries the two\ntimes only (the rest null); `GET /crops/{id}` carries all of it. `taken_local` is wall-clock\ntime without a zone; `taken_utc` is set only when the offset is known.",
+        "properties": {
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Make"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Model"
+          },
+          "exif_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exif Status"
+          },
+          "focal_length_35mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focal Length 35Mm"
+          },
+          "focal_length_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focal Length Mm"
+          },
+          "has_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Location"
+          },
+          "lens_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lens Model"
+          },
+          "offset_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Minutes"
+          },
+          "offset_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Source"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orientation"
+          },
+          "taken_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken Local"
+          },
+          "taken_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken Utc"
+          },
+          "time_precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Precision"
+          },
+          "time_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Source"
+          }
+        },
+        "title": "ItemCapture",
+        "type": "object"
+      },
       "ItemDoc": {
         "description": "The wire item every item-returning endpoint emits.\n\nDocumentation/OpenAPI model only: handlers return\n``src.services.curation.wire.serialize_item`` output directly (a test\npins this model's fields to that serializer's keys), so a stored value\nof an unexpected type never 500s a browse page. Region attributes use\nthe fixed ``region_<attr>`` wire names regardless of any\n``OP_REGION_FIELD_*`` storage override.",
         "properties": {
@@ -13991,6 +14152,16 @@
               }
             ],
             "title": "Blur Lap Ratio"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "class_confidence": {
             "anyOf": [
@@ -15380,6 +15551,30 @@
               }
             ],
             "title": "Source Prompt"
+          },
+          "taken_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken From"
+          },
+          "taken_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken To"
           }
         },
         "title": "ItemFilter",
@@ -16913,6 +17108,67 @@
           "p99"
         ],
         "title": "LatencyStats",
+        "type": "object"
+      },
+      "LocationPolicyResponse": {
+        "properties": {
+          "location_policy": {
+            "enum": [
+              "drop",
+              "store_coarse",
+              "store"
+            ],
+            "title": "Location Policy",
+            "type": "string"
+          },
+          "purge_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `source_backfill` job (step `location_purge`) the change started, when the new policy is stricter than (or equal to) the old one and keeps less than `store`; `GET .../jobs/{job_id}` reports its counts.",
+            "title": "Purge Job Id"
+          },
+          "revision": {
+            "description": "The project settings revision; send it back as `expected_revision`.",
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "location_policy",
+          "revision"
+        ],
+        "title": "LocationPolicyResponse",
+        "type": "object"
+      },
+      "LocationPolicyUpdate": {
+        "description": "`drop` stores and serves no coordinate and clears the stored ones; `store_coarse` keeps\nlatitude/longitude rounded to 0.01 degree (about 1 km); `store` keeps the fix as read.\nExports of a `drop` project strip the GPS from the copied files; otherwise they keep it.",
+        "properties": {
+          "expected_revision": {
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "location_policy": {
+            "enum": [
+              "drop",
+              "store_coarse",
+              "store"
+            ],
+            "title": "Location Policy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_policy",
+          "expected_revision"
+        ],
+        "title": "LocationPolicyUpdate",
         "type": "object"
       },
       "LogTailResponse": {
@@ -25346,6 +25602,16 @@
             ],
             "title": "Blur Lap Ratio"
           },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -27998,6 +28264,30 @@
               }
             ],
             "title": "Source Prompt"
+          },
+          "taken_from": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken From"
+          },
+          "taken_to": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken To"
           }
         },
         "title": "ReprocessFilter",
@@ -29248,6 +29538,16 @@
               }
             ],
             "title": "Blur Lap Ratio"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "class_confidence": {
             "anyOf": [
@@ -30856,6 +31156,16 @@
               }
             ],
             "title": "Blur Lap Ratio"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "class_confidence": {
             "anyOf": [
@@ -41910,6 +42220,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -43102,6 +43450,44 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
             }
           }
         ],
@@ -45881,6 +46267,44 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
             }
           }
         ],
@@ -49927,6 +50351,102 @@
         ]
       }
     },
+    "/curation/projects/{project}/location_policy": {
+      "get": {
+        "description": "The project's location policy and the settings revision to send back on a change.",
+        "operationId": "get_location_policy_route_curation_projects__project__location_policy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationPolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Location Policy Route",
+        "tags": [
+          "Curation",
+          "Location policy"
+        ]
+      },
+      "put": {
+        "description": "Change the policy (409 `revision_conflict` on a stale `expected_revision`).",
+        "operationId": "put_location_policy_route_curation_projects__project__location_policy_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationPolicyUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationPolicyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Location Policy Route",
+        "tags": [
+          "Curation",
+          "Location policy"
+        ]
+      }
+    },
     "/curation/projects/{project}/methods": {
       "get": {
         "description": "Every strategy across every axis (score / sort / overlay),\nplus the feature flags that gated each entry's status and a real\n``field_coverage`` (exists-count) / ``field_coverage_total`` (pool\nsize) per entry that declares a ``requires_field``. Frontend renders\nonly ``stable``/``experimental`` entries; ``shadow``/``disabled`` are\ncomputed+logged (or not computed at all) but never offered as a\n``?sort=`` value. Frontend also hides an entry whose ``field_coverage``\nis exactly ``0`` (genuinely inert — no data has ever been backfilled)\nwhile still showing one whose coverage is ``None`` (unknown, e.g. a\ntransient OpenSearch failure) — see ``StrategyBar.svelte``'s\n``hasFieldCoverage``.",
@@ -52845,6 +53365,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -55457,6 +56015,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -57134,6 +57730,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -57710,6 +58344,44 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
             }
           }
         ],
@@ -58443,6 +59115,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "requestBody": {
@@ -59078,6 +59788,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -59654,6 +60402,44 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
             }
           }
         ],
@@ -60358,6 +61144,44 @@
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
             }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
           }
         ],
         "responses": {
@@ -60703,6 +61527,44 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
             }
           }
         ],

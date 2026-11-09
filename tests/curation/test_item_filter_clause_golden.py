@@ -68,6 +68,9 @@ CASES: dict[str, dict[str, Any]] = {
     'detector_conf_max': {'detector_conf_max': 0.8},
     'detector_conf_band': {'detector_conf_min': 0.3, 'detector_conf_max': 0.8},
     'review_tab': {'review_tab': 'uncertainty'},
+    'taken_range': {'taken_from': '2024-03-05', 'taken_to': '2024-03-06'},
+    'taken_from': {'taken_from': '2024-03-05'},
+    'taken_to': {'taken_to': '2024-03-05'},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],

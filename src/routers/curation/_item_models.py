@@ -73,6 +73,27 @@ class ItemAssistWire(BaseModel):
     boxes: list[AssistBoxWire] = Field(default_factory=list)
 
 
+class ItemCapture(BaseModel):
+    """When and with what the photo was taken; never a coordinate. A list row carries the two
+    times only (the rest null); `GET /crops/{id}` carries all of it. `taken_local` is wall-clock
+    time without a zone; `taken_utc` is set only when the offset is known."""
+
+    taken_local: str | None = None
+    taken_utc: str | None = None
+    offset_minutes: int | None = None
+    time_source: str | None = None
+    offset_source: str | None = None
+    time_precision: str | None = None
+    camera_make: str | None = None
+    camera_model: str | None = None
+    lens_model: str | None = None
+    focal_length_mm: float | None = None
+    focal_length_35mm: float | None = None
+    orientation: int | None = None
+    has_location: bool | None = None
+    exif_status: str | None = None
+
+
 class ItemDoc(BaseModel):
     """The wire item every item-returning endpoint emits.
 
@@ -269,6 +290,8 @@ class ItemDoc(BaseModel):
     item_text_lines: list[ItemTextLine] = Field(default_factory=list)
     # The VLM's assist-run suggestions; null when no run answered this item.
     assist: ItemAssistWire | None = None
+    # Capture time (list rows) and camera details (item detail); null when none was read.
+    capture: ItemCapture | None = None
 
 
 class CropsPageResponse(BaseModel):

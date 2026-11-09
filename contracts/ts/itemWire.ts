@@ -37,6 +37,23 @@ export interface ItemAssistWire {
   boxes: AssistBoxWire[];
 }
 
+export interface ItemCapture {
+  taken_local: string | null;
+  taken_utc: string | null;
+  offset_minutes: number | null;
+  time_source: string | null;
+  offset_source: string | null;
+  time_precision: string | null;
+  camera_make: string | null;
+  camera_model: string | null;
+  lens_model: string | null;
+  focal_length_mm: number | null;
+  focal_length_35mm: number | null;
+  orientation: number | null;
+  has_location: boolean | null;
+  exif_status: string | null;
+}
+
 export interface ItemTextLine {
   text: string | null;
   box_norm: number[] | null;
@@ -166,6 +183,7 @@ export interface ItemWire {
   combine_merged_origins: string[];
   item_text_lines: ItemTextLine[];
   assist: ItemAssistWire | null;
+  capture: ItemCapture | null;
 }
 
 export type ItemWireKey = keyof ItemWire;
@@ -288,6 +306,7 @@ export const ITEM_WIRE_KEYS = [
   'combine_merged_origins',
   'item_text_lines',
   'assist',
+  'capture',
 ] as const satisfies readonly ItemWireKey[];
 
 /** Region-of-interest attributes (fixed wire names, whatever the storage names). */
