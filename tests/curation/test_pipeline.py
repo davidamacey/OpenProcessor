@@ -154,6 +154,7 @@ class TestPipelineClassIdScoping:
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
+            session=object(),
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -192,6 +193,7 @@ class TestPipelineClassIdScoping:
         fake_os = _FakeOpenSearch({3: ['pallet-1', 'pallet-2'], 7: ['forklift-1']})
 
         summary = await pipeline_auto_label(
+            session=object(),
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,
@@ -228,6 +230,7 @@ class TestVlmStageExplainsEmptySelection:
         from src.routers.curation.pipeline_public import pipeline_auto_label
 
         return await pipeline_auto_label(
+            session=object(),
             opensearch=fake_os,
             train_clusters=False,
             promote_min_purity=0.85,

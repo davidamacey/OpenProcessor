@@ -86,7 +86,11 @@ async def _run(monkeypatch: pytest.MonkeyPatch, *, vlm_attributes: bool) -> Any:
         SimpleNamespace(get_or_compute=lambda *_a, **_k: b'jpeg'),
     )
     result = await pipeline_auto_label(
-        opensearch=fake, train_clusters=False, run_vlm=True, vlm_attributes=vlm_attributes
+        session=object(),
+        opensearch=fake,
+        train_clusters=False,
+        run_vlm=True,
+        vlm_attributes=vlm_attributes,
     )
     return result, fake, labeler
 

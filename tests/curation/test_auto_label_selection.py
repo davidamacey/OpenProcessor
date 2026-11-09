@@ -51,9 +51,7 @@ def packs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CurationConfig:
 @pytest.fixture
 def job_dir(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     """The start route's job service replaced by a recorder (these tests check what the route
-    resolves and passes, not the database; the live-loop hold is a database read, so it is a
-    no-op here); the recorded list is the params of each start."""
-    from src.services.curation.assist_loop import service as assist_service
+    resolves and passes, not the database); the recorded list is the params of each start."""
     from src.services.curation.autolabel import service
 
     started: list[dict[str, Any]] = []
@@ -62,11 +60,7 @@ def job_dir(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         started.append(dict(params))
         return {'job_id': 'job-1', 'status': 'queued', 'args': dict(params)}
 
-    async def no_live_loop(_session: Any) -> None:
-        return None
-
     monkeypatch.setattr(service, 'start', start)
-    monkeypatch.setattr(assist_service, 'require_no_live_loop', no_live_loop)
     return started
 
 
