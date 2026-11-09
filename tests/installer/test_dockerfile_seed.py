@@ -90,14 +90,14 @@ def test_dockerfile_triton_drops_unused_dev_packages_before_the_upgrade_rewrites
     for package in (
         'libnvinfer-win-builder-resource11',
         'tensorrt-dev',
-        'libcublas-dev-13-3',
+        'libcublas-dev-13-4',
         'libnccl-dev',
         'libnvshmem3-dev-cuda-13',
     ):
         assert package in removed
     # trtexec (libnvinfer-bin) and the runtime libraries stay
     assert 'libnvinfer-bin' not in removed
-    assert 'libcublas-13-3' not in removed
+    assert 'libcublas-13-4' not in removed
 
 
 def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None:
