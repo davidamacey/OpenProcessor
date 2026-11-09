@@ -33,6 +33,18 @@ RETIRED_ENV: dict[str, str] = {
     'OP_IVF_RETRAIN_CHECK_S': (
         f'{_REMOVED} the IVF retrain is a cluster_run started by the periodic cluster refresh'
     ),
+    'OP_IVF_RETRAIN_GROWTH': (
+        f'{_REMOVED} the retrain rule is the cluster profile refresh.growth_threshold'
+    ),
+    'OP_IVF_RETRAIN_MIN_INTERVAL_S': (
+        f'{_REMOVED} the retrain interval is the cluster profile refresh.retry_backoff_s'
+    ),
+    'OP_MAX_REFINE_MEMBERS': (
+        f'{_REMOVED} the per-cluster AHC refine is gone; the assist loop splits a node itself'
+    ),
+    'OP_RESIDUAL_EMBEDDING_FIELD': (
+        f'{_REMOVED} the vector field is the primary space of the project embedding registry'
+    ),
     'OP_CLUSTER_REFRESH_GROWTH_THRESHOLD': (
         f'{_REMOVED} the growth rule is the cluster profile refresh.growth_threshold'
     ),
