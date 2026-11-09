@@ -114,7 +114,6 @@ _.crop_key  # src/domain/storage_keys.py, the crop-cache key; its first caller i
 # Landed ahead of their consumers (B2 stage 1, lane 1B): the advisory-lock classes are first used
 # by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by
 # the consumer-from-compose test. Delete each entry in the change that adds its production caller.
-_.INGEST_DISPATCH  # src/config/advisory_locks.py, periodic ingest dispatcher body (stage 4)
 _.OPEN_VOCAB_SWEEP  # src/config/advisory_locks.py, periodic open-vocabulary sweep (stage 4)
 _.CACHE_PRUNE  # src/config/advisory_locks.py, periodic cache prune (stage 6)
 _.GPU_ARBITER  # src/config/advisory_locks.py, periodic arbiter tick (stage 6)

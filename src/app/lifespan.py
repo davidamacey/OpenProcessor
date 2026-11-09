@@ -301,14 +301,6 @@ async def _stop_arbiter() -> None:
         logger.info('gpu_arbiter_loop_stopped')
 
 
-async def _stop_curation_jobs() -> None:
-    from src.services.curation.background_jobs import stop_background_jobs
-
-    jobs = AppResources.curation_background_jobs
-    AppResources.curation_background_jobs = []
-    await stop_background_jobs(jobs)
-
-
 async def _stop_project_registry() -> None:
     from src.services.projects.bootstrap import shutdown_project_registry
 
@@ -350,7 +342,6 @@ async def _run_shutdown() -> None:
     steps: list[tuple[str, Callable[[], Awaitable[None] | None]]] = [
         ('ops_metrics', _stop_ops_metrics),
         ('gpu_arbiter', _stop_arbiter),
-        ('curation_jobs', _stop_curation_jobs),
         ('project_registry', _stop_project_registry),
         ('config_store_poll', _stop_config_store_poll),
         ('event_bus', _stop_event_bus),
@@ -408,10 +399,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _reload_promoted_models()
     _warm_pe_encoder(app)
     await _warm_routes(app)
-
-    from src.services.curation.background_jobs import start_background_jobs
-
-    AppResources.curation_background_jobs = start_background_jobs()
 
     logger.info(
         'service_ready',

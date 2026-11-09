@@ -16,6 +16,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.tasks.beat_schedule',
     'src.tasks.runtime',  # the job wrapper claims a job by id before it knows the project
     'src.services.events',  # event publish and the global event stream read across projects
+    'src.services.periodic',  # the beat tick bodies read the projects they act on
     'src.services.jobs',  # job start and status across scopes, reaper rules
     'src.services.projects',  # the project registry, create, patch, delete and its job
     'src.services.embedding_spaces',  # the model catalog sync and the project lookup of the space resolver

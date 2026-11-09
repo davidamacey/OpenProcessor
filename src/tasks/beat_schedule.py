@@ -2,26 +2,34 @@
 
 Each entry carries ``expires`` equal to its interval, so a backlog behind a stalled consumer is
 dropped instead of replayed (Celery periodic tasks guide). ``src/tasks/app.py`` applies the
-schedule when the app's configuration loads, never at import. The reaper is the only entry of
-lane 3A; the periodic lane adds the rest to ``BEAT_SCHEDULE``.
+schedule when the app's configuration loads, never at import. An interval that an operator can set
+(``OP_INGEST_DISPATCH_S`` and the like) is read when the schedule is built; ``0`` leaves the entry
+out.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from src.config.env import env_float
+
 
 REAPER_INTERVAL_S = 30
+INGEST_DISPATCH_DEFAULT_S = 5.0
 
-BEAT_SCHEDULE: dict[str, dict[str, Any]] = {
-    'reaper': {
-        'task': 'op.periodic.reaper',
-        'schedule': float(REAPER_INTERVAL_S),
-        'options': {'expires': REAPER_INTERVAL_S},
-    },
-}
+
+def _every(task: str, seconds: float) -> dict[str, Any]:
+    return {'task': task, 'schedule': float(seconds), 'options': {'expires': seconds}}
+
+
+def build_schedule() -> dict[str, dict[str, Any]]:
+    schedule = {'reaper': _every('op.periodic.reaper', REAPER_INTERVAL_S)}
+    ingest = env_float('OP_INGEST_DISPATCH_S', INGEST_DISPATCH_DEFAULT_S, minimum=0.0)
+    if ingest > 0:
+        schedule['ingest_dispatch'] = _every('op.periodic.ingest_dispatch', ingest)
+    return schedule
 
 
 def apply_schedule(source: Any, **_: Any) -> None:
     """``on_after_configure`` receiver: put the schedule into the loading configuration."""
-    source['beat_schedule'] = BEAT_SCHEDULE
+    source['beat_schedule'] = build_schedule()

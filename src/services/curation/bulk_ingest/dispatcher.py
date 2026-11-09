@@ -15,28 +15,21 @@ the allow-list) records its error and backs off, doubling to ten minutes. Everyt
 dispatcher needs is in the database, so a process that dies loses nothing, and a start that
 meets a live job of the same group is skipped: one run per project, one poll per source.
 
-Until the scheduler lane turns the loop into a beat task, :func:`run_tick` calls
-:func:`dispatch_once` for every active project on an asyncio interval.
+``op.periodic.ingest_dispatch`` (``src/services/periodic/ingest_dispatch.py``) calls
+:func:`dispatch_once` for every active project from the beat schedule.
 """
 
 from __future__ import annotations
 
-import asyncio
-import random
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy.exc import SQLAlchemyError
-
-from src.config.env import env_float
-from src.config.project_context import current_project_id
-from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.db.repos import ingest_sources as repo
-from src.db.session import async_session_factory, project_tx
+from src.db.session import project_tx
 from src.services.curation.bulk_ingest.schedule import (
     Cron,
     InvalidCronError,
@@ -58,7 +51,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-DEFAULT_TICK_S = 5
 MAX_BACKOFF_S = 600.0
 FAILED_RUN_HOLD_S = 300.0
 ActionKind = Literal['run_scan', 'poll', 'drain']
@@ -68,10 +60,6 @@ ActionKind = Literal['run_scan', 'poll', 'drain']
 class Action:
     kind: ActionKind
     source_id: str
-
-
-def tick_interval_s() -> float:
-    return env_float('OP_INGEST_DISPATCH_S', float(DEFAULT_TICK_S), minimum=0.0)
 
 
 def _held(last_run: dict[str, Any] | None, now: float) -> bool:
@@ -158,9 +146,7 @@ async def _start(
 async def dispatch_once(
     session: AsyncSession, project: uuid.UUID, *, now: float | None = None
 ) -> list[Action]:
-    """One decision pass over the project's registered sources; returns the actions it started.
-
-    The one function the tick loop calls today and the periodic task calls later."""
+    """One decision pass over the project's registered sources; returns the actions it started."""
     moment = now if now is not None else time.time()
     async with project_tx(session, project):
         rows = await session.run_sync(lambda sync: repo.list_for_project(sync, project))
@@ -189,30 +175,3 @@ async def dispatch_once(
         if action is not None and await _start(session, project, source, action, moment):
             taken.append(action)
     return taken
-
-
-async def run_tick() -> None:
-    from src.services.projects.bootstrap import for_each_project
-
-    for slug in for_each_project():
-        try:
-            async with async_session_factory()() as session:
-                await dispatch_once(session, current_project_id())
-        except (SQLAlchemyError, RequestRejectedError, OSError) as exc:
-            # one project's failure must not stop the others' ticks
-            logger.warning('ingest_dispatch_failed', project=slug, error=str(exc))
-
-
-async def _loop(interval_s: float) -> None:
-    while True:
-        await asyncio.sleep(interval_s * random.uniform(0.8, 1.2))
-        await run_tick()
-
-
-def start_ingest_dispatcher() -> asyncio.Task[None] | None:
-    """The periodic dispatch as a task the caller cancels at shutdown; ``None`` when
-    ``OP_INGEST_DISPATCH_S`` is 0."""
-    interval = tick_interval_s()
-    if interval <= 0:
-        return None
-    return asyncio.create_task(_loop(interval))
