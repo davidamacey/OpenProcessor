@@ -32,7 +32,7 @@ TABLES = {
     'combine_sources', 'ingest_sources', 'ingest_source_files', 'label_operations',
     'label_operation_members', 'holdout_freezes',
     'dataset_exports', 'training_runs', 'models', 'model_engines', 'promotions', 'model_shares',
-    'bakeoff_runs', 'upgrade_runs',
+    'bakeoff_runs', 'upgrade_runs', 'privacy_purges',
 }  # fmt: skip
 
 UNIQUE_CONSTRAINTS = {
@@ -102,7 +102,7 @@ POLICIES |= {(t, f'p_{t}_project') for t in _SCOPED}
 # Tables with no row-level security: deployment data read by every process.
 UNPROTECTED = {
     'project_slugs', 'projects', 'deployment_counters', 'deployment_settings',
-    'worker_capabilities', 'gpu_devices', 'upgrade_runs',
+    'worker_capabilities', 'gpu_devices', 'upgrade_runs', 'privacy_purges',
 }  # fmt: skip
 
 # (table, column, referenced table, ON DELETE) as PostgreSQL stores it: c cascade, n set null,

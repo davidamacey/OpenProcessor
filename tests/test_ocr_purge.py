@@ -56,7 +56,14 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.chdir(tmp_path)
     fake = FakeOpenSearch()
     monkeypatch.setattr(purge_ocr_data, 'make_client', lambda: fake)
-    return {'fake': fake, 'root': tmp_path}
+    audit: list[tuple[str, dict[str, Any]]] = []
+
+    async def record(kind: str, counts: dict[str, Any]) -> None:
+        audit.append((kind, counts))
+
+    monkeypatch.setattr(purge_ocr_data, 'record_purge', record)
+    monkeypatch.setattr(purge_ocr_data, 'run_with_engine', lambda awaitable, *_a, **_k: awaitable)
+    return {'fake': fake, 'root': tmp_path, 'audit': audit}
 
 
 def _last_json(out: str) -> Any:
@@ -80,16 +87,15 @@ def test_yes_removes_every_line_and_audits_counts_only(env: dict[str, Any]) -> N
     assert purge_ocr_data.main(['--yes']) == 0
     assert env['fake'].docs[OCR] == []
     assert [m[0] for m in env['fake'].mutations] == ['delete_by_query', 'forcemerge']
-    audit = (env['root'] / 'data' / 'audit' / 'ocr_purge.jsonl').read_text().splitlines()
-    assert len(audit) == 1
-    assert SECRET not in audit[0]
-    assert json.loads(audit[0])['lines'] == 4
+    assert env['audit'] == [('ocr', {'lines': 4})]
+    assert SECRET not in json.dumps(env['audit'])
+    assert not (env['root'] / 'data').exists()
 
 
 def test_second_purge_is_a_clean_no_op(env: dict[str, Any]) -> None:
     assert purge_ocr_data.main(['--yes']) == 0
     assert purge_ocr_data.main(['--yes']) == 0
-    assert len((env['root'] / 'data' / 'audit' / 'ocr_purge.jsonl').read_text().splitlines()) == 2
+    assert env['audit'] == [('ocr', {'lines': 4}), ('ocr', {'lines': 0})]
 
 
 def test_lines_left_behind_fail_the_purge(
@@ -97,3 +103,16 @@ def test_lines_left_behind_fail_the_purge(
 ) -> None:
     monkeypatch.setattr(purge_ocr_data, 'make_client', lambda: FakeOpenSearch(leave_behind=True))
     assert purge_ocr_data.main(['--yes']) == 1
+
+
+def test_a_failed_audit_write_fails_the_purge_loudly(
+    env: dict[str, Any], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from sqlalchemy.exc import OperationalError
+
+    async def boom(_kind: str, _counts: dict[str, Any]) -> None:
+        raise OperationalError('x', {}, Exception('db down'))
+
+    monkeypatch.setattr(purge_ocr_data, 'record_purge', boom)
+    assert purge_ocr_data.main(['--yes']) == 1
+    assert 'audit record failed' in capsys.readouterr().err

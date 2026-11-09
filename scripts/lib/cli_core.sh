@@ -171,6 +171,29 @@ cmd_faces() {
     dc run --rm --no-deps -T -w /app api python -m scripts.purge_face_data "${flags[@]}"
 }
 
+# ocr purge [--dry-run] [--yes]: forwards exactly the flags given to the purge script, which
+# empties the core text index (visual_search_ocr). Curation projects keep their text in their own
+# indexes; project delete removes it.
+cmd_ocr() {
+    local sub="${1:-}" flag
+    if [[ "$sub" != purge ]]; then
+        log_error "usage: openprocessor ocr purge [--dry-run] [--yes]"
+        return 2
+    fi
+    shift
+    local -a flags=()
+    for flag in "$@"; do
+        case "$flag" in
+            --dry-run|--yes) flags+=("$flag") ;;
+            *)
+                log_error "unknown option '${flag}'; usage: openprocessor ocr purge [--dry-run] [--yes]"
+                return 2
+                ;;
+        esac
+    done
+    dc run --rm --no-deps -T -w /app api python -m scripts.purge_ocr_data "${flags[@]}"
+}
+
 cmd_export() {
     local model="${1:-all}"
 
@@ -352,6 +375,11 @@ Face data (OP_FACES_ENABLED):
   faces purge [--dry-run] [--yes]
                       Report (default, or --dry-run) or delete (--yes) every stored face
                       record, person id and name; --yes needs OP_FACES_ENABLED=false first
+
+Recognized text:
+  ocr purge [--dry-run] [--yes]
+                      Report (default, or --dry-run) or delete (--yes) every line in the core
+                      text index (/ocr and /ingest results, outside project isolation)
 
 Database (Postgres):
   db backup [--out DIR]

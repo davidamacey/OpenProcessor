@@ -122,7 +122,7 @@ The management CLI works in a checkout (`./openprocessor`, or the shim
 `start`, `stop`, `restart [service]`, `logs [service] [-f]`, `status`,
 `health`, `models [status|install [--only GROUP]|repair]`, `export`,
 `download`, `profile`, `test`, `curation [up|down|logs|status]`, `faces purge [--dry-run|--yes]`,
-`clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
+`ocr purge [--dry-run|--yes]`, `clean`, `update`, `sample coco [--full]`, `config show`, `cropwright password`, `gpu plan`,
 `vlm list|status|use <id>|apply|probe|key set <slug>`, `train-mode on|off`,
 `upgrade`, `repair`, `uninstall`, `setup`, `version`. `profile`, `test`
 and `setup` need a checkout. Benchmarks run through the `make bench-*`

@@ -31,6 +31,7 @@ from src.services.upgrade.from_060.export import export_bundle
 from src.services.upgrade.from_060.load import Parsed, run_load
 from src.services.upgrade.from_060.snapshot import read_snapshot
 from src.services.upgrade.from_060.verify import VerifyReport, verify_load
+from src.services.upgrade.privacy_audit_import import import_audit_files
 
 
 if TYPE_CHECKING:
@@ -94,6 +95,7 @@ class UpgradeRunner:
         await self._load(result)
         await self._verify(result)
         await self._analysis(result)
+        await self._privacy_audit()
         await self._delete(result)
         return result
 
@@ -238,6 +240,13 @@ class UpgradeRunner:
         plan = await analysis_settings.dry_run(self.analysis_client, present, say=lines.append)
         if plan.changed:
             await analysis_settings.apply(self.analysis_client, present, say=lines.append)
+
+    # ---------------------------------------------------------------- 3b purge audit records
+
+    async def _privacy_audit(self) -> None:
+        """Import the old ``data/audit/*.jsonl`` purge records; idempotent, files left in place."""
+        async with self.sessions() as session, deployment_tx(session, '0.6.0 upgrade: audit'):
+            await import_audit_files(session, self.install_dir / 'data' / 'audit')
 
     # ---------------------------------------------------------------- 4 delete_sources
 

@@ -23,7 +23,6 @@ NO_ASYNC_SESSION = {
     'scripts/curation/prune_training_runs.py': 'works on the run files only',
     'scripts/db/rollback_to_060.py': 'restores a bundle with its own connections',
     'scripts/db/upgrade_from_060.py': 'builds its own owner-role engine and passes sessions in',
-    'scripts/purge_face_data.py': 'OpenSearch and the face index files only',
 }
 
 
@@ -31,6 +30,7 @@ def _loop_starts() -> list[tuple[str, int, ast.Call]]:
     files = [
         *(p for folder in FOLDERS for p in (ROOT / folder).rglob('*.py')),
         ROOT / 'scripts/purge_face_data.py',
+        ROOT / 'scripts/purge_ocr_data.py',
     ]
     return [
         (str(path.relative_to(ROOT)), node.lineno, node)
