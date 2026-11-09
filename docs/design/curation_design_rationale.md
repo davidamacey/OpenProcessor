@@ -37,8 +37,8 @@ restarting.
 ### 2.1 `CurationConfig` (`src/config/curation.py`)
 
 Holds index names, filesystem roots, and API-surface constants: which
-OpenSearch indexes back images/items/labels/classes/clusters, where the
-exported datasets live on disk (the class registry is an OpenSearch document per project;
+OpenSearch indexes back images and items, where the
+exported datasets live on disk (the class registry is a PostgreSQL table per project;
 `class_registry.json` is an export snapshot), the crop-cache directory, the API mount prefix, and embedding-dimension/HNSW tuning.
 
 Before genericization, these were a hardcoded, company-prefixed index
@@ -192,10 +192,10 @@ discovered-in-production surprises.
   registry and your detector models.
 - **The asynchronous half is opt-in and needs your models.** `docker compose
   --profile curation up -d` starts the detection, VLM, auto-label, auto-label-loop and
-  cluster-refresh workers. The trainer (`docker/trainer/`, profile `training`)
-  and the segmenter (`docker/segmenter/`, profile `segmenter`) ship as
-  reference containers speaking the file and wire protocols the API already
-  uses. Both need a GPU; you bring weights and a dataset.
+  cluster workers (the job workers and the beat run with the core stack). The trainer
+  (`docker/trainer/`, profile `training`, a consumer of the `gpu_train` queue)
+  and the segmenter (`docker/segmenter/`, profile `segmenter`, a wire protocol) ship as
+  reference containers. Both need a GPU; you bring weights and a dataset.
 - **One detection worker serves every project and each project runs one
   active region profile and one active VLM endpoint at a time.** Switching is
   a runtime activation, not a restart, but two profiles are never active in
@@ -212,7 +212,7 @@ discovered-in-production surprises.
 
 None of this blocks the core loop of ingest or import, browse, cluster,
 review, label and export. It limits how turnkey the subsystem is for an
-arbitrary deployment, which is why it is labelled experimental for v0.6.0;
+arbitrary deployment, which is why it is labelled experimental;
 see `docs/CURATION.md`.
 
 ## 7. Labeling-assist selection: `PromptPack`, `DetectionProfile`, and the frontend's annotation-slot model
