@@ -67,42 +67,42 @@ if not _ultralytics_is_pre_84():
         'For YOLO26 models use export/export_yolo26.py instead.'
     )
 
-import argparse  # noqa: E402  # imports follow the interpreter re-exec guard above
-import logging  # noqa: E402  # imports follow the interpreter re-exec guard above
-from typing import Any  # noqa: E402  # imports follow the interpreter re-exec guard above
+import argparse
+import logging
+from typing import Any
 
 # Apply end2end patch for onnx_trt format
-from ultralytics_patches import apply_end2end_patch  # noqa: E402  # imports follow the interpreter re-exec guard above
+from ultralytics_patches import apply_end2end_patch
 
 
 apply_end2end_patch()
 
 # Import after patch (REQUIRED - patch must be applied before importing ultralytics)
-from trt_build_settings import max_batch, workspace_gb  # noqa: E402  # imports follow the interpreter re-exec guard above
-from trt_utils import engine_output_dtypes  # noqa: E402  # imports follow the interpreter re-exec guard above
-from ultralytics import YOLO  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_export_cli import build_parser  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_export_report import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from trt_build_settings import max_batch, workspace_gb
+from trt_utils import engine_output_dtypes
+from ultralytics import YOLO
+from yolo_export_cli import build_parser
+from yolo_export_report import (
     _any_export_failed,
     log_model_repository,
     print_summary,
     save_results_file,
 )
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # imports follow the interpreter re-exec guard above
-from yolo_formats import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD
+from yolo_formats import (
     check_gpu_memory,
     export_onnx_end2end,
     export_onnx_standard,
     export_trt_end2end,
     export_trt_standard,
 )
-from yolo_model_config import (  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_model_config import (
     extract_class_names,
     load_config_file,
     parse_custom_model,
     save_labels_file,
 )
-from yolo_triton_config import save_triton_config  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_triton_config import save_triton_config
 
 
 # ============================================================================
