@@ -123,6 +123,13 @@ def is_human_owned_item(
     )
 
 
+def lock_includes() -> list[str]:
+    """The ``_source`` fields :func:`is_locked_item` reads, for a query that
+    fetches items only to test the lock."""
+    F = get_region_fields()
+    return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
+
+
 __all__ = [
     '_is_locked_marker',
     'is_human_marker',
@@ -130,4 +137,5 @@ __all__ = [
     'is_locked_box',
     'is_locked_class',
     'is_locked_item',
+    'lock_includes',
 ]

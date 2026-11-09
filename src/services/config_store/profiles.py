@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.services.config_store import documents, get_config_store
+from src.services.config_store import documents, get_config_store, templates
 from src.services.config_store.documents import (
     TEMPLATE_DESCRIPTION,
     ActiveConflictError,
@@ -64,20 +64,11 @@ def _content_etag(name: str, body: dict[str, Any]) -> str:
 
 
 def _template_names() -> dict[str, Path]:
-    if not _TEMPLATES_DIR.is_dir():
-        return {}
-    return {p.stem: p for p in sorted(_TEMPLATES_DIR.glob('*.json'))}
+    return templates.template_names(_TEMPLATES_DIR)
 
 
 def load_template(name: str) -> dict[str, Any] | None:
-    path = _template_names().get(name)
-    if path is None:
-        return None
-    try:
-        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
-        return typed
-    except (OSError, ValueError):
-        return None
+    return templates.load_template(_TEMPLATES_DIR, name)
 
 
 def _profile_to_wire(profile: DetectionProfile) -> dict[str, Any]:
@@ -114,11 +105,7 @@ def all_known_names() -> frozenset[str]:
 
 
 def _active_ref() -> tuple[str | None, int | None]:
-    store = get_config_store()
-    ref = store.current.active_profile
-    if ref is None or ref == 'off':
-        return None, None
-    return ref
+    return templates.active_ref(get_config_store().current.active_profile)
 
 
 def build_record(name: str, *, revision: int | None = None) -> ProfileRecord | None:

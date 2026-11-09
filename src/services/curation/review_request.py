@@ -16,6 +16,7 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Any
 
+from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
 from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
@@ -54,19 +55,6 @@ class ReviewRequest:
     sort_fallback_reason: str | None = None
 
 
-def _null_safe_floor(field: str, floor: float) -> dict[str, Any]:
-    """``field >= floor``, but an item without the field is kept."""
-    return {
-        'bool': {
-            'should': [
-                {'range': {field: {'gte': floor}}},
-                {'bool': {'must_not': {'exists': {'field': field}}}},
-            ],
-            'minimum_should_match': 1,
-        }
-    }
-
-
 async def build_review_request(
     tab: str, filters: ReviewFilters, sort_id: str | None, opensearch: Any
 ) -> ReviewRequest:
@@ -82,23 +70,11 @@ async def build_review_request(
         vector_field=embedding.vector_field,
     )
     if filters.min_blur_ratio is not None:
-        must.append(_null_safe_floor('blur_lap_ratio', filters.min_blur_ratio))
+        must.append(null_safe_floor('blur_lap_ratio', filters.min_blur_ratio))
     if filters.min_mistakenness is not None:
-        must.append(_null_safe_floor('mistakenness_score', filters.min_mistakenness))
+        must.append(null_safe_floor('mistakenness_score', filters.min_mistakenness))
     if filters.hide_near_duplicates:
-        # Hides only items a scoring pass marked as a non-representative
-        # duplicate; never-scored items stay.
-        must.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'near_dup_is_representative': True}},
-                        {'bool': {'must_not': {'exists': {'field': 'near_dup_is_representative'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
+        must.append(near_dup_visible_clause())
     if filters.source:
         must.append({'term': {'source': filters.source}})
     if filters.combine_conflict:

@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
 from src.config import CurationConfig, get_curation_config
 from src.config.project_context import run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
@@ -120,33 +121,11 @@ def _build_filter(
             date_range['lte'] = date_to
         filters.append({'range': {'created_at': date_range}})
 
-    # Null-safe clarity slider — same "missing field never hides the item"
-    # pattern review.review_queue uses for min_blur_ratio.
     if min_blur_ratio is not None:
-        filters.append(
-            {
-                'bool': {
-                    'should': [
-                        {'range': {'blur_lap_ratio': {'gte': min_blur_ratio}}},
-                        {'bool': {'must_not': {'exists': {'field': 'blur_lap_ratio'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
+        filters.append(null_safe_floor('blur_lap_ratio', min_blur_ratio))
 
     if hide_near_duplicates:
-        filters.append(
-            {
-                'bool': {
-                    'should': [
-                        {'term': {'near_dup_is_representative': True}},
-                        {'bool': {'must_not': {'exists': {'field': 'near_dup_is_representative'}}}},
-                    ],
-                    'minimum_should_match': 1,
-                }
-            }
-        )
+        filters.append(near_dup_visible_clause())
 
     if must_not:
         filters.append({'bool': {'must_not': must_not}})

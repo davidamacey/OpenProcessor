@@ -17,7 +17,7 @@ from src.domain.region_boxes import (
     read_boxes,
 )
 from src.services.curation.reprocess_locks import region_set_locked
-from src.services.detection.geometry import crop_id as make_crop_id, iou
+from src.services.detection.geometry import box_area, crop_id as make_crop_id, iou
 
 
 if TYPE_CHECKING:
@@ -27,14 +27,10 @@ DETECTOR = 'combine'
 Box = tuple[float, float, float, float]
 
 
-def _area(b: Box) -> float:
-    return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
-
-
 def _contained(inner: Box, outer: Box) -> float:
     ix = max(0.0, min(inner[2], outer[2]) - max(inner[0], outer[0]))
     iy = max(0.0, min(inner[3], outer[3]) - max(inner[1], outer[1]))
-    area = _area(inner)
+    area = box_area(inner)
     return (ix * iy) / area if area > 0 else 0.0
 
 
@@ -48,7 +44,7 @@ def parent_of(box: Box, parents: list[dict[str, Any]], containment: float) -> di
     fits = [p for p in parents if _contained(box, frame(p)) >= containment]
     if not fits:
         return None
-    return min(fits, key=lambda p: (_area(frame(p)), p['crop_id']))
+    return min(fits, key=lambda p: (box_area(frame(p)), p['crop_id']))
 
 
 def _state_fields(

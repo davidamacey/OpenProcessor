@@ -35,6 +35,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.clients.occ_locks import lock_includes
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
 from src.services.curation import reprocess_job
@@ -260,19 +261,12 @@ async def _plan_images(
             'image_id',
             image_ids,
             index=items_index,
-            includes=_lock_includes(),
+            includes=lock_includes(),
         )
         result.locked_skipped = sum(1 for _, src in docs if item_locked(src))
     if scope == 'embed' and embed is not None and image_ids:
         result.detail = {**await plan_embed_counts(opensearch, image_ids, embed)}
     return result
-
-
-def _lock_includes() -> list[str]:
-    from src.config.region_fields import get_region_fields
-
-    F = get_region_fields()
-    return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
 
 
 async def _item_targets(
