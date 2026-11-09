@@ -55,7 +55,7 @@ jobs:
       - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
         run: |
           python -m pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
 
       - name: Docs vs code (routes, OP_* variables, links)
@@ -96,7 +96,7 @@ jobs:
       - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
         run: |
           python -m pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
 
       - name: Import sanity
@@ -155,7 +155,7 @@ jobs:
       - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
         run: |
           python -m pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
 
       - name: Run the db tier
@@ -216,7 +216,7 @@ jobs:
       - name: Install CPU torch/torchvision, then the rest of requirements-test.txt
         run: |
           python -m pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
           # export simplify=True needs it; the export image installs it from requirements-export.txt
           pip install "onnxslim>=0.1.71"
@@ -238,7 +238,7 @@ jobs:
           git clone --filter=blob:none https://github.com/ultralytics/yolov5 "$work/src"
           git -C "$work/src" checkout "$YOLOV5_COMMIT"
           python -m venv "$work/venv"
-          "$work/venv/bin/pip" install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          "$work/venv/bin/pip" install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           "$work/venv/bin/pip" install -r "$work/src/requirements.txt" onnx onnxslim
           cache="$HOME/.cache/op-test-weights"
           cp "$cache/yolov5n.pt" "$work/yolov5n.pt"
@@ -296,7 +296,7 @@ jobs:
       - name: Install app dependencies (for the OpenAPI contract hook)
         run: |
           python -m pip install --upgrade pip
-          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
 
       - name: Install pre-commit

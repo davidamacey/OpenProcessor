@@ -102,20 +102,26 @@ def test_dockerfile_triton_drops_unused_dev_packages_before_the_upgrade_rewrites
 
 def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None:
     """The NGC image's python env lags its security fixes; the release gate fails on a fixable
-    CRITICAL, so certifi (GHSA-6q48-6c7w-9gw2) is raised with starlette and anyio."""
-    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
-    upgrade = text[text.index("pip install --no-cache-dir --upgrade 'starlette") :].splitlines()[0]
-    for requirement in ("'starlette>=1.3.1'", "'anyio>=4.14.2'", "'certifi>=2026.10.18'"):
-        assert requirement in upgrade
-
-
-def test_dockerfile_triton_upgrades_the_packages_torch_leaves_stale() -> None:
-    """filelock and virtualenv in the NGC image carry fixable HIGHs the CI image scan fails on; the
-    upgrade runs after the torch install, which would otherwise keep the stale filelock."""
-    text = (REPO_ROOT / 'Dockerfile.triton').read_text()
-    line = "pip install --no-cache-dir --upgrade 'filelock>=4.2.1' 'virtualenv>=21.7.13'"
-    assert line in text
-    assert text.index('torch==') < text.index(line)
+    CRITICAL, so certifi (GHSA-6q48-6c7w-9gw2) is raised with starlette and anyio. filelock and
+    virtualenv carry fixable HIGHs the CI image scan fails on; the exact pins are installed with
+    --upgrade before the torch set, which keeps what it finds when the pin satisfies it."""
+    dockerfile = (REPO_ROOT / 'Dockerfile.triton').read_text()
+    assert '--upgrade -r /tmp/triton-requirements/requirements-security.txt' in dockerfile
+    assert dockerfile.index('requirements-security.txt') < dockerfile.index(
+        'requirements-torch.txt'
+    )
+    pins = (REPO_ROOT / 'docker' / 'triton' / 'requirements-security.txt').read_text()
+    floors = {
+        'starlette': (1, 3, 1),
+        'anyio': (4, 14, 2),
+        'certifi': (2026, 10, 18),
+        'filelock': (4, 2, 1),
+        'virtualenv': (21, 7, 13),
+    }
+    for package, floor in floors.items():
+        match = re.search(rf'^{package}==([0-9.]+)\s*$', pins, re.M)
+        assert match, package
+        assert tuple(int(p) for p in match.group(1).split('.')) >= floor, package
 
 
 def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags() -> None:
@@ -125,14 +131,22 @@ def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags()
     text = (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text()
     runtime_start = text.rindex('FROM pytorch/pytorch')
     builder, runtime = text[:runtime_start], text[runtime_start:]
-    for requirement in (
-        "'fastapi==0.162.0'",
-        "'pillow>=13.0.0'",
-        "'certifi>=2026.10.18'",
-        "'filelock>=4.2.1'",
-        "'dnspython>=2.9.0'",
-    ):
-        assert requirement in builder
+    assert (
+        'pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt'
+        in builder
+    )
+    pins = (REPO_ROOT / 'docker' / 'segmenter' / 'requirements.txt').read_text()
+    floors = {
+        'fastapi': (0, 162, 0),
+        'pillow': (13, 0, 0),
+        'certifi': (2026, 10, 18),
+        'filelock': (4, 2, 1),
+        'dnspython': (2, 9, 0),
+    }
+    for package, floor in floors.items():
+        match = re.search(rf'^{package}==([0-9.]+)\s*$', pins, re.M)
+        assert match, package
+        assert tuple(int(p) for p in match.group(1).split('.')) >= floor, package
     assert 'pip install' not in runtime
     for stale in (
         '"$site"/PIL ',

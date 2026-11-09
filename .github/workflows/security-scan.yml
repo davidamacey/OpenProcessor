@@ -108,12 +108,14 @@ jobs:
               - 'docker/trainer/requirements.txt'
             segmenter:
               - 'docker/segmenter/Dockerfile'
+              - 'docker/segmenter/requirements.txt'
             cropwright:
               - 'frontend/Dockerfile'
               - 'frontend/package.json'
               - 'frontend/package-lock.json'
             triton:
               - 'Dockerfile.triton'
+              - 'docker/triton/**'
 
       - name: Decide whether this image needs a scan
         id: gate

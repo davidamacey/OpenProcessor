@@ -48,8 +48,8 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 # PyTorch CUDA wheel index. Override for a different CUDA minor
-# (--build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu124).
-ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+# (--build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu130).
+ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu132
 
 # Ultralytics is pinned to a commit rather than a release tag: the training
 # recipe (and the MuSGD optimizer path) moves between releases, and a run's

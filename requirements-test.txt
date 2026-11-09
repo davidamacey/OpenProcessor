@@ -13,7 +13,7 @@
 # cannot mix inline with the default PyPI index. Install this file in two
 # passes:
 #
-#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
 #   pip install -r requirements-test.txt
 #
 # (or use `pip install -r requirements-test.txt --extra-index-url
@@ -35,24 +35,26 @@ pydantic-settings==2.16.2
 einops==0.8.2
 
 # torch import site: src/routers/health.py; ultralytics: src/clients/triton_client.py
-torch
-torchvision
+torch==2.15.0
+torchvision==0.29.1
 ultralytics==8.4.197
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
-transformers>=4.30.0
+transformers==5.22.2
 
 # cv2 import sites: src/clients/triton_client.py, fast_face_client.py,
 # src/utils/face_align.py, image_processing.py, src/utils/cpu_preprocess.py,
 # src/services/detection/{pe_preprocess,crop_quality}.py
-opencv-python
+opencv-python==5.0.0.93
 # models/ocr_pipeline/1/ocr_postprocess.py (DB unclip), imported by the BLS tests
 pyclipper==1.4.0
 # src/services/curation/image_decode.py
-simplejpeg
+simplejpeg==1.9.0
+# src/utils/image_processing.py, src/services/curation/image_serving.py
+pillow==13.0.0
 
-numpy
-scipy
+numpy==2.5.4
+scipy==1.18.1
 pyyaml==6.0.3
 requests==2.34.2
 
@@ -83,7 +85,7 @@ botocore==1.43.125
 
 # tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
 # marked live) -- this is the one non-lazy scikit-learn use in the base suite
-scikit-learn
+scikit-learn==1.9.1
 
 # Test runner
 pytest==9.2.0
@@ -106,17 +108,17 @@ types-tabulate==0.10.0.20261006
 types-tqdm==4.70.0.20261102
 
 # tests/curation/test_seed_class_registry.py (reads ONNX metadata)
-onnx
+onnx==1.21.0
 # tests/test_trt_utils.py runs the real FP16 graph rewrite (skipped without it)
 onnxconverter-common==1.16.0
 
 # Lazy-imported by src/, but exercised by tests that are not marked live.
-faiss-cpu
-umap-learn
-hdbscan
+faiss-cpu==1.15.1
+umap-learn==0.5.12
+hdbscan==0.8.44
 joblib==1.6.0
 imohash==1.1.0
-onnxruntime
+onnxruntime==1.30.0
 pycocotools==2.0.11
 docker==7.2.0
 

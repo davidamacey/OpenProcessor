@@ -1,0 +1,6 @@
+# PyTorch and TorchVision for the Python backend models (ROI align, per-box embeddings, OCR
+# pipeline). Installed from the CUDA wheel index (--index-url https://download.pytorch.org/whl/cu132)
+# by Dockerfile.triton; the pair is the one in requirements.txt (torchvision 0.29.1 is the last
+# release on that index).
+torch==2.15.0
+torchvision==0.29.1

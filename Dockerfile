@@ -182,7 +182,7 @@ COPY scripts/curation/bakeoff/requirements.txt bakeoff-requirements.txt
 RUN bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.sha \
     && pip install --user --no-cache-dir --no-warn-script-location \
         -c /tmp/runtime.freeze \
-        -r bakeoff-requirements.txt mlflow \
+        -r bakeoff-requirements.txt \
     && pip freeze --user | grep -v '^perception' | LC_ALL=C sort > /tmp/eval.freeze \
     && missing="$(LC_ALL=C comm -23 /tmp/runtime.freeze /tmp/eval.freeze)" \
     && { [ -z "$missing" ] || { echo "runtime packages changed:" "$missing" >&2; exit 1; }; } \

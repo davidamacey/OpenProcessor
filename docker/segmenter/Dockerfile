@@ -44,22 +44,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=sam3-src /src/sam3 /opt/sam3
+COPY requirements.txt /tmp/requirements.txt
 
-RUN pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
-    && pip install --user --no-cache-dir --no-warn-script-location \
-        'fastapi==0.162.0' \
-        'uvicorn[standard]==0.32.0' \
-        'pydantic>=2.7,<3' \
-        'numpy>=1.26,<2.0' \
-        'pillow>=13.0.0' \
-        'certifi>=2026.10.18' \
-        'filelock>=4.2.1' \
-        'dnspython>=2.9.0' \
-        'opencv-python-headless>=4.10' \
-        'scikit-image>=0.24' \
-        'huggingface-hub>=0.24' \
-        'einops>=0.8' \
-        'pycocotools>=2.0.7' \
+# The exact set first, so SAM 3's own looser requirements find them already satisfied.
+RUN pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt \
+    && pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
     && rm -rf /root/.local/lib/python3.12/site-packages/pip \
         /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
         /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12

@@ -113,41 +113,6 @@ _REQ_RE = re.compile(
     r'^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[(?P<extras>[^\]]*)\])?\s*(?P<spec>.*)$'
 )
 
-# Packages the pin series has not reached yet (part B of the series). SHRINK-ONLY: part B
-# deletes each name in the commit that pins it, and its last commit leaves this empty. A
-# name here that no manifest declares loosely any more is rejected below, so a pinned
-# package cannot stay on the list.
-_UNPINNED_UNTIL_PART_B = frozenset(
-    {
-        'numpy',
-        'scipy',
-        'scikit-learn',
-        'umap-learn',
-        'hdbscan',
-        'pandas',
-        'matplotlib',
-        'seaborn',
-        'opencv-python',
-        'simplejpeg',
-        'transformers',
-        'timm',
-        'huggingface-hub',
-        'open-clip-torch',
-        'torch',
-        'torchvision',
-        'onnx',
-        'onnxruntime',
-        'onnxruntime-gpu',
-        'cupy-cuda12x',
-        'faiss-cpu',
-        'faiss-gpu-cu12',
-        # Pillow is imported directly but declared nowhere yet; part B adds `Pillow==...`
-        # together with simplejpeg (it decodes images).
-        'pillow',
-    }
-)
-_NOT_YET_DECLARED = frozenset({'pillow'})
-
 # One distribution family, one version: the extra or build differs, the release must not.
 _VERSION_FAMILIES = {
     'onnxruntime-gpu': 'onnxruntime',
@@ -221,23 +186,40 @@ def test_ruff_pin_equals_the_pre_commit_rev() -> None:
 def _loose_runtime_lines() -> set[str]:
     """Names with a floor, a range or no version in any pinned manifest."""
     loose = set()
-    groups = [*_runtime_manifests().values(), _pyproject_specs('dev')]
+    groups = [
+        *_runtime_manifests().values(),
+        _pyproject_specs('dev'),
+        _pyproject_specs('export'),
+        _file_specs('requirements-export.txt'),
+        _file_specs('docker/trainer/requirements.txt'),
+    ]
     for specs in groups:
         loose |= {n for n, s in specs.items() if not re.fullmatch(r'==[^,<>=!~]+', s)}
     return loose
 
 
-def test_no_floor_and_no_unpinned_runtime_line_outside_part_b() -> None:
-    unexpected = sorted(_loose_runtime_lines() - _UNPINNED_UNTIL_PART_B)
-    assert not unexpected, f'pin these with == (owner rule, 01_package_pins.md): {unexpected}'
-
-
-def test_the_part_b_allowlist_only_shrinks() -> None:
-    stale = sorted(_UNPINNED_UNTIL_PART_B - _loose_runtime_lines() - _NOT_YET_DECLARED)
-    assert not stale, f'already pinned everywhere, delete from the allowlist: {stale}'
+def test_no_floor_and_no_unpinned_runtime_line() -> None:
+    loose = sorted(_loose_runtime_lines())
+    assert not loose, f'pin these with == (owner rule, 01_package_pins.md): {loose}'
 
 
 def test_pydantic_is_declared_explicitly_in_every_runtime_manifest() -> None:
     """fastapi only constrains pydantic loosely; the OpenAPI contract depends on the exact one."""
     for manifest, specs in _runtime_manifests().items():
         assert specs.get('pydantic', '').startswith('=='), manifest
+
+
+def test_the_image_only_pin_files_carry_the_manifest_releases() -> None:
+    """Triton's torch pair and OpenCV are the same releases as requirements.txt."""
+    runtime = _file_specs('requirements.txt')
+    for path in ('docker/triton/requirements-torch.txt', 'docker/triton/requirements.txt'):
+        for name, spec in _file_specs(path).items():
+            if _family(name) in {'torch', 'torchvision', 'opencv-python'}:
+                assert runtime[_family(name)] == spec, (path, name)
+
+
+def test_mlflow_client_pins_equal_the_server_image_release() -> None:
+    compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
+    (tag,) = re.findall(r'MLFLOW_IMAGE:-ghcr\.io/mlflow/mlflow:v(\S+?)\}', compose)
+    for path in ('docker/trainer/requirements.txt', 'scripts/curation/bakeoff/requirements.txt'):
+        assert _file_specs(path)['mlflow'] == f'=={tag}', path

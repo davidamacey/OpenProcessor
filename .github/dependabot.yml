@@ -13,9 +13,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # Most requirements here are ranges (>=X) that already resolve to the latest release at
-    # build time, so raising the floor on every release only adds install risk. Widen a range
-    # only when the latest release no longer satisfies it; exact pins (==) still get PRs.
+    # Every runtime requirement is an exact pin (tests/test_requirements_contract.py rejects a
+    # floor or a bare name), so each bump is a PR; widen a range only where a manifest keeps one.
     versioning-strategy: increase-if-necessary
     labels:
       - "dependencies"
@@ -36,20 +35,16 @@ updates:
       # tensorrt-cu13 must equal the TensorRT inside the Triton image (engine compatibility,
       # asserted at image build in Dockerfile.triton). Bump both together by hand.
       - dependency-name: "tensorrt-cu13"
-      # nvidia-modelopt[onnx] requires onnx~=1.21, so requirements.txt and the export
-      # toolchain cap onnx below 1.22. Lift the cap and this rule together when modelopt does.
+      # nvidia-modelopt[onnx] 0.48 requires onnx~=1.21.0 on Linux, so every manifest
+      # keeps onnx below 1.22. Lift the cap and this rule together when modelopt does.
       - dependency-name: "onnx"
         versions: [">=1.22.0"]
-      # nvidia-modelopt requires onnxruntime-gpu~=1.24.2, so the cap stays below 1.25. Lift the
-      # cap and this rule together when modelopt does.
+      # nvidia-modelopt 0.48 requires onnxruntime-gpu>=1.29,<1.31, so the cap stays below 1.31.
+      # Lift the cap and this rule together when modelopt does.
       - dependency-name: "onnxruntime-gpu"
-        versions: [">=1.25"]
-      # tokenizers (a transformers dependency) requires huggingface-hub<2, so hub 2.x does not
-      # resolve with the current stack (pip check fails). Lift once tokenizers allows 2.x.
-      - dependency-name: "huggingface-hub"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "huggingface_hub"
-        update-types: ["version-update:semver-major"]
+        versions: [">=1.31"]
+      - dependency-name: "onnxruntime"
+        versions: [">=1.31"]
 
   # Cropwright frontend: one PR.
   - package-ecosystem: "npm"
