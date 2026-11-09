@@ -18,6 +18,7 @@ from src.routers.curation._common import (
     router,
 )
 from src.routers.curation._item_models import ItemDoc
+from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.wire import (
     item_context_source_excludes,
     item_source_excludes,
@@ -27,6 +28,8 @@ from src.services.embedding_spaces.readers import item_state_fields, vector_sour
 
 
 _MAX_SIBLINGS = 500
+# An unservable path or anything Pillow raises on a file it cannot read.
+_UNREADABLE_IMAGE: tuple[type[Exception], ...] = (RequestRejectedError, *IMAGE_DECODE_ERRORS)
 
 
 class CropContextImage(BaseModel):
@@ -73,7 +76,7 @@ def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
         safe_path = resolve_safe_path(image_path, root)
         with Image.open(safe_path) as img:
             return img.size
-    except (RequestRejectedError, OSError, ValueError, Image.DecompressionBombError) as exc:
+    except _UNREADABLE_IMAGE as exc:
         logger.debug('crop_context_pixel_size_failed', image_path=image_path, error=str(exc))
         return None
 
