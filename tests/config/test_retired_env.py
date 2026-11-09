@@ -162,7 +162,11 @@ def test_every_variable_the_060_upgrade_reads_is_retired_and_stripped_by_the_ins
     script = (Path(__file__).parents[2] / 'scripts/lib/upgrade_060.sh').read_text()
     block = re.search(r'UPGRADE_060_LEGACY_ENV=\((.*?)\)', script, re.S)
     assert block is not None
-    assert set(block.group(1).split()) == read
+    stripped = set(block.group(1).split())
+    # The training directory is not an env read: layout.py takes it from the project's recorded
+    # resources, but 0.7.0 retires the variable, so it must still come out of .env.
+    assert stripped == read | {'OP_TRAIN_JOBS_DIR'}
+    assert stripped <= set(RETIRED_ENV)
 
 
 def test_the_auto_label_state_dir_is_retired(monkeypatch: pytest.MonkeyPatch) -> None:

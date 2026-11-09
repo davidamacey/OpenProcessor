@@ -43727,7 +43727,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/discard": {
       "post": {
-        "description": "Discard an item, as a recorded human write.\n\n``clear_class`` (default ``true``): the item doesn't belong in its\nclass/cluster — class, provenance and validation are cleared and it\ndrops to the residual pool (``cluster_id: null``).\n``dismiss_from_review`` (default ``false``): hide it from every\n``/review`` tab (``review_dismissed_at``). The pre-write state is\nsnapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it\nexactly. Returns the post-write item. ``422`` when neither is set.",
+        "description": "Discard an item, as a recorded human write.\n\n``clear_class`` (default ``true``): the item doesn't belong in its\nclass/cluster — class, provenance and validation are cleared and it\ndrops to the residual pool (no ``cluster_uid``).\n``dismiss_from_review`` (default ``false``): hide it from every\n``/review`` tab (``review_dismissed_at``). The pre-write state is\nsnapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it\nexactly. Returns the post-write item. ``422`` when neither is set.",
         "operationId": "discard_crop_curation_projects__project__crops__crop_id__discard_post",
         "parameters": [
           {

@@ -216,8 +216,11 @@ async def test_successive_undos_step_back_through_human_labels(crops, registry, 
 
     await label_undo.unlabel_crop('c3', fake)
     restored = _class_state(fake.docs(ITEMS)['c3'])
-    # Back to the first human label: still validated.
+    # Back to the first human label: still validated, in its class (cluster placement is part of
+    # CLASS_STATE_FIELDS, so the equality covers it).
     assert restored == first_label
+    assert restored['class_id'] == ids['widget']
+    assert restored['class_validated'] is True
 
     await label_undo.unlabel_crop('c3', fake)
     assert _class_state(fake.docs(ITEMS)['c3']) == original
@@ -244,6 +247,7 @@ async def test_undo_without_history_clears_class(crops) -> None:
         class_source='human',
         label_source='human',
         class_validated=True,
+        cluster_uid='00000000-0000-0000-0000-000000000004',
     )
     fake = QueryFakeOpenSearch({ITEMS: {'legacy': doc}})
     await label_undo.unlabel_crop('legacy', fake)
@@ -251,6 +255,7 @@ async def test_undo_without_history_clears_class(crops) -> None:
     assert after['class_id'] is None
     assert after['class_validated'] is False
     assert after['class_source'] is None
+    assert after['cluster_uid'] is None
 
 
 # =============================================================================
