@@ -12,7 +12,7 @@ from src.db.base import Base
 
 pytestmark = pytest.mark.db
 
-HEAD = '0004_privacy_purges'
+HEAD = '0005_region_text'
 
 
 def test_there_is_exactly_one_head() -> None:

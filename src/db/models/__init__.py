@@ -84,6 +84,11 @@ from src.db.models.projects import (
     ProjectIndex,
     ProjectSlug,
 )
+from src.db.models.region_text import (
+    RegionTextConsensusGroup,
+    RegionTextConsensusMember,
+    RegionTextRun,
+)
 from src.db.models.serving import ServingReport
 from src.db.models.training import (
     BakeoffRun,
@@ -164,6 +169,9 @@ __all__ = [
     'ProjectState',
     'ProjectionState',
     'Promotion',
+    'RegionTextConsensusGroup',
+    'RegionTextConsensusMember',
+    'RegionTextRun',
     'SearchProjectionTask',
     'ServingReport',
     'StreamWorkerClaim',

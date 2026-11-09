@@ -113,6 +113,20 @@ def _populate_research_pairs(conn, project: uuid.UUID) -> None:
         "'cluster_sampled', 1, '{}', 'test')",
         (project, run_job, *preset),
     )
+    near_dup_profile = make_profile(conn, project, 'near_dup_profile')
+    conn.execute(
+        'INSERT INTO near_dup_runs (project_id, level, mode, status, params, space, '
+        "algorithm_version, profile_config_id, profile_revision, finished_at) VALUES (%s, 'image', "
+        "'full', 'current', '{}', 'pe@abc:pe_embedding', 'nd-1', %s, %s, now())",
+        (project, *near_dup_profile),
+    )
+    text_profile = make_profile(conn, project, 'region_profile')
+    conn.execute(
+        'INSERT INTO region_text_runs (project_id, trigger, reader, reader_version, '
+        "profile_config_id, profile_revision, created_by) VALUES (%s, 'region_pass', 'rec', 'v1', "
+        "%s, %s, 'test')",
+        (project, *text_profile),
+    )
 
 
 def _build_project(conn, slug: str) -> uuid.UUID:
