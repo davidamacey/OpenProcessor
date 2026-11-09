@@ -25,6 +25,11 @@ class ClusterRef(BaseModel):
     score: float | None = None
     margin: float | None = None
     assigned_by: Literal['run', 'incremental', 'edit'] | None = None
+    display_no: int | None = Field(
+        default=None,
+        description='The number the serving partition gave the cluster; null until a list route '
+        'looks it up or when no serving partition numbers it.',
+    )
 
 
 class ItemTextLine(BaseModel):

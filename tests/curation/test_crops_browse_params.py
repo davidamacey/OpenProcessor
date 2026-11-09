@@ -3,6 +3,7 @@ for ``order=diverse``, ``k``."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -181,3 +182,39 @@ def test_page_too_deep_is_422(client: TestClient) -> None:
 def test_page_within_window_is_fine(client: TestClient) -> None:
     r = client.get(f'{P}/crops', params={'page': 300, 'page_size': 30})
     assert r.status_code == 200, r.text
+
+
+def test_crops_serve_the_clusters_display_no(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient, fake_os: _RecordingOS
+) -> None:
+    uid = '00000000-0000-0000-0000-000000000007'
+    fake_os.docs = {
+        'c0': {'crop_id': 'c0', 'cluster_uid': uid, 'cluster_partition_id': 'p'},
+        'c1': {'crop_id': 'c1'},
+    }
+    lookups: list[list[str]] = []
+
+    async def numbers(_session: Any, uids: list[str]) -> dict[str, int]:
+        lookups.append(list(uids))
+        return {uid: 7}
+
+    @contextlib.asynccontextmanager
+    async def no_tx(_session: Any, _project: Any) -> Any:
+        yield
+
+    @contextlib.asynccontextmanager
+    async def no_session() -> Any:
+        yield None
+
+    monkeypatch.setattr(
+        'src.services.curation.cluster_cards.async_session_factory', lambda: no_session
+    )
+    monkeypatch.setattr('src.services.curation.cluster_cards.display_numbers', numbers)
+    monkeypatch.setattr('src.services.curation.cluster_cards.project_tx', no_tx)
+    monkeypatch.setattr('src.services.curation.cluster_cards.current_project_id', lambda: None)
+    r = client.get(f'{P}/crops')
+    assert r.status_code == 200, r.text
+    by_id = {c['id']: c for c in r.json()['crops']}
+    assert by_id['c0']['cluster']['display_no'] == 7
+    assert by_id['c1']['cluster'] is None
+    assert lookups == [[uid]]

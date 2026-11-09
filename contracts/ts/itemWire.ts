@@ -21,6 +21,7 @@ export interface ClusterRef {
   score: number | null;
   margin: number | null;
   assigned_by: string | null;
+  display_no: number | null;
 }
 
 export interface ItemAssistWire {
