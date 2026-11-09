@@ -170,6 +170,17 @@ def test_a_project_scope_sees_only_its_rows_in_every_table(pg, conn, world) -> N
             "cosine_to_rep) VALUES (%s, 'dedup', 'x', %s, true, 1)",
             (run, group),
         )
+    for owner in (world['a'], world['b']):  # no row may come from another test of the module
+        conn.execute(
+            'INSERT INTO image_contents (project_id, imohash, image_id, image_path, size_bytes) '
+            "VALUES (%s, %s, 'scope-img', '/p', 1) ON CONFLICT DO NOTHING",
+            (owner, 'c' * 32),
+        )
+        conn.execute(
+            'INSERT INTO near_dup_pending (project_id, level, member_id, reason) '
+            "VALUES (%s, 'image', 'scope-m', 'added') ON CONFLICT DO NOTHING",
+            (owner,),
+        )
     conn.execute(
         'INSERT INTO near_dup_decisions (project_id, level, a_id, b_id, decision, decided_by) '
         "VALUES (%s, 'item', 'a', 'b', 'same', 'u')",
