@@ -28,13 +28,14 @@ FLAG_VOCAB = [
     {"id": "label_disagreement", "label": "Label disagreement", "description": "The labelled members name different classes."},
 ]
 
-# The card title is the first 8 characters of the uid, so the uids differ there.
+# The card shows the served display_no, so each card gets its own.
 UIDS = {1: "aaaa0001", 2: "bbbb0002", 3: "cccc0003"}
 
 
 def card(cid: int, size: int, review: int, flags: list[str]) -> dict:
     return cluster_card(
         UIDS[cid],
+        display_no=cid,
         size=size,
         labelled_count=0,
         dominant_class_name=None,
@@ -108,7 +109,7 @@ def test_cards_render_in_the_served_order_with_served_quality_fields(stub, page,
     serve(stub, requests)
     page.goto(f"{app_url}/p/default/clusters")
     expect(page.locator("ul > li button").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert card_ids(page) == ["aaaa0001", "bbbb0002", "cccc0003"]
+    assert card_ids(page) == ["#1", "#2", "#3"]
     assert "sort" not in requests[0]
     # One list request carries the first screen's thumbnails.
     assert len(requests) == 1
@@ -129,8 +130,8 @@ def test_a_chosen_sort_is_sent_and_the_served_order_is_shown(stub, page, app_url
     page.goto(f"{app_url}/p/default/clusters")
     expect(page.locator("ul > li button").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id("cluster-sort").select_option("needs_review_desc")
-    expect(page.locator("ul > li button [data-testid=cluster-uid]").first).to_have_text("bbbb0002", timeout=ACTION_TIMEOUT_MS)
-    assert card_ids(page) == ["bbbb0002", "cccc0003", "aaaa0001"]
+    expect(page.locator("ul > li button [data-testid=cluster-uid]").first).to_have_text("#2", timeout=ACTION_TIMEOUT_MS)
+    assert card_ids(page) == ["#2", "#3", "#1"]
     assert requests[-1]["sort"] == ["needs_review_desc"]
     assert "sort=needs_review_desc" in page.url
 
@@ -189,5 +190,5 @@ def test_unrelated_item_filters_keep_the_cluster_filter_in_the_url(stub, page, a
     serve(stub, requests)
     page.goto(f"{app_url}/p/default/clusters?flag=unvalidated&sort=size_asc")
     expect(page.locator("ul > li button").first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert card_ids(page) == ["bbbb0002", "aaaa0001"]
+    assert card_ids(page) == ["#2", "#1"]
     assert requests[0]["flag"] == ["unvalidated"] and requests[0]["sort"] == ["size_asc"]
