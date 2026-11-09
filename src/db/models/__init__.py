@@ -76,7 +76,7 @@ from src.db.models.near_dup import (
     NearDupPending,
     NearDupRun,
 )
-from src.db.models.ops import UpgradeRun
+from src.db.models.ops import PrivacyPurge, UpgradeRun
 from src.db.models.projects import (
     DeploymentCounter,
     DeploymentSetting,
@@ -154,6 +154,7 @@ __all__ = [
     'NearDupPending',
     'NearDupRun',
     'PartitionCluster',
+    'PrivacyPurge',
     'Project',
     'ProjectClass',
     'ProjectIndex',

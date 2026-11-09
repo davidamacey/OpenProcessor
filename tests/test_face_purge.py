@@ -121,7 +121,14 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.chdir(tmp_path)
     fake = FakeOpenSearch()
     monkeypatch.setattr(purge_face_data, 'make_client', lambda: fake)
-    return {'fake': fake, 'dir': index_dir, 'root': tmp_path}
+    audit: list[tuple[str, dict[str, Any]]] = []
+
+    async def record(kind: str, counts: dict[str, Any]) -> None:
+        audit.append((kind, counts))
+
+    monkeypatch.setattr(purge_face_data, 'record_purge', record)
+    monkeypatch.setattr(purge_face_data, 'run_with_engine', lambda awaitable, *_a, **_k: awaitable)
+    return {'fake': fake, 'dir': index_dir, 'root': tmp_path, 'audit': audit}
 
 
 @pytest.mark.asyncio
@@ -166,11 +173,13 @@ def test_yes_deletes_everything_and_audits_counts_only(
     report = _last_json(capsys.readouterr().out)
     assert report['after']['face_docs'] == 0
     assert report['after']['faiss_files'] == []
-    audit = (env['root'] / 'data' / 'audit' / 'faces_purge.jsonl').read_text().splitlines()
-    assert len(audit) == 1
+    assert [kind for kind, _ in env['audit']] == ['faces']
+    assert env['audit'][0][1]['face_docs'] == 5
+    written = json.dumps(env['audit'])
     for secret in (*SECRETS, str(env['dir']), 'f0'):
-        assert secret not in audit[0]
-    assert json.loads(audit[0])['face_docs'] == 5
+        assert secret not in written
+    assert all(isinstance(v, int | bool) for v in env['audit'][0][1].values())
+    assert not (env['root'] / 'data').exists()
 
 
 def test_a_second_purge_is_a_clean_no_op_with_its_own_audit_line(
@@ -183,9 +192,8 @@ def test_a_second_purge_is_a_clean_no_op_with_its_own_audit_line(
     fake.mutations.clear()
     assert purge_face_data.main(args) == 0
     assert fake.mutations == []
-    audit = (env['root'] / 'data' / 'audit' / 'faces_purge.jsonl').read_text().splitlines()
-    assert len(audit) == 2
-    assert json.loads(audit[1])['face_docs'] == 0
+    assert len(env['audit']) == 2
+    assert env['audit'][1][1]['face_docs'] == 0
 
 
 def test_an_index_that_survives_the_delete_is_a_failure(

@@ -19,7 +19,6 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,15 +29,18 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.clients.opensearch.names import IndexName
 from src.config import get_settings
 from src.core.logging import get_logger
+from src.db.engine import run_with_engine
+from src.services.privacy_audit import record_purge
 from src.services.projects.guard import make_script_opensearch
 
 
 logger = get_logger(__name__)
 
-AUDIT_FILE = Path('data/audit/ocr_purge.jsonl')
 _ALL: dict[str, Any] = {'query': {'match_all': {}}}
 
 
@@ -54,13 +56,10 @@ async def _lines(client: Any) -> int:
     return int((await client.count(index=index, body=_ALL))['count'])
 
 
-def _audit(lines: int) -> None:
-    """One counts-only record, to the log and to ``data/audit/ocr_purge.jsonl``."""
+async def _audit(lines: int) -> None:
+    """One counts-only record, to the log and to ``privacy_purges``."""
     logger.warning('ocr_index_purged', lines=lines)
-    AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    record = {'lines': lines, 'at': datetime.now(UTC).isoformat()}
-    with AUDIT_FILE.open('a', encoding='utf-8') as fh:
-        fh.write(json.dumps(record) + '\n')
+    await record_purge('ocr', {'lines': lines})
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -80,7 +79,15 @@ async def _run(args: argparse.Namespace) -> int:
             )
             await client.indices.forcemerge(index=index, only_expunge_deletes=True)
         after = await _lines(client)
-        _audit(before)
+        try:
+            await _audit(before)
+        except SQLAlchemyError as exc:
+            print(json.dumps({'before': before, 'after': after}))
+            print(
+                f'the data is deleted but the audit record failed: {type(exc).__name__}',
+                file=sys.stderr,
+            )
+            return 1
         print(json.dumps({'before': before, 'after': after}))
         return 0 if after == 0 else 1
     finally:
@@ -92,7 +99,9 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--dry-run', action='store_true', help='print the count; change nothing')
     mode.add_argument('--yes', action='store_true', help='delete every line')
-    return asyncio.run(_run(parser.parse_args(argv)))
+    return asyncio.run(
+        run_with_engine(_run(parser.parse_args(argv)), 'op-purge-ocr', one_shot=True)
+    )
 
 
 if __name__ == '__main__':

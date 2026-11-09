@@ -20,7 +20,6 @@ import asyncio
 import json
 import sys
 from dataclasses import asdict
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,23 +31,24 @@ if str(_REPO_ROOT) not in sys.path:
 # ruff: noqa: E402
 
 from opensearchpy import OpenSearchException
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.config import get_settings
 from src.config.cluster_index import FAISS_INDEX_DIR
 from src.config.faces import faces_enabled
 from src.core.logging import get_logger
+from src.db.engine import run_with_engine
 from src.services.face_privacy import (
     FaceDataCounts,
     FacePurgeIncompleteError,
     face_data_counts,
     purge_face_data,
 )
+from src.services.privacy_audit import record_purge
 from src.services.projects.guard import make_script_opensearch
 
 
 logger = get_logger(__name__)
-
-AUDIT_FILE = Path('data/audit/faces_purge.jsonl')
 
 
 def make_client() -> Any:
@@ -57,9 +57,9 @@ def make_client() -> Any:
     return make_script_opensearch([get_settings().opensearch_url])
 
 
-def _audit(before: FaceDataCounts, index_deleted: bool) -> None:
-    """One counts-only record, to the log and to ``data/audit/faces_purge.jsonl``. Never an id,
-    a name, a path or a vector."""
+async def _audit(before: FaceDataCounts, index_deleted: bool) -> None:
+    """One counts-only record, to the log and to ``privacy_purges``. Never an id, a name, a path
+    or a vector."""
     counts = {
         'face_docs': before.face_docs,
         'persons': before.persons,
@@ -70,10 +70,7 @@ def _audit(before: FaceDataCounts, index_deleted: bool) -> None:
         'index_deleted': index_deleted,
     }
     logger.warning('faces_purged', **counts)
-    AUDIT_FILE.parent.mkdir(parents=True, exist_ok=True)
-    record = {**counts, 'at': datetime.now(UTC).isoformat(), 'version': get_settings().api_version}
-    with AUDIT_FILE.open('a', encoding='utf-8') as fh:
-        fh.write(json.dumps(record) + '\n')
+    await record_purge('faces', counts)
 
 
 async def _run(args: argparse.Namespace) -> int:
@@ -103,7 +100,15 @@ async def _run(args: argparse.Namespace) -> int:
         except OpenSearchException as exc:
             print(f'purge failed: {type(exc).__name__}', file=sys.stderr)
             return 1
-        _audit(before, index_deleted=before.face_index_exists)
+        try:
+            await _audit(before, index_deleted=before.face_index_exists)
+        except SQLAlchemyError as exc:
+            print(json.dumps({'before': asdict(before), 'after': asdict(after)}))
+            print(
+                f'the data is deleted but the audit record failed: {type(exc).__name__}',
+                file=sys.stderr,
+            )
+            return 1
         print(json.dumps({'before': asdict(before), 'after': asdict(after)}))
         return 0
     finally:
@@ -116,7 +121,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument('--dry-run', action='store_true', help='print the counts; change nothing')
     mode.add_argument('--yes', action='store_true', help='delete (requires OP_FACES_ENABLED=false)')
     parser.add_argument('--index-dir', type=Path, default=FAISS_INDEX_DIR)
-    return asyncio.run(_run(parser.parse_args(argv)))
+    return asyncio.run(
+        run_with_engine(_run(parser.parse_args(argv)), 'op-purge-faces', one_shot=True)
+    )
 
 
 if __name__ == '__main__':

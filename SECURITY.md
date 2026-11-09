@@ -174,8 +174,8 @@ index (person ids and names are fields on its documents), a face link on
   `services.faces` reports the counts (never ids, names or vectors). `/ready` stays ready.
 - **Delete it.** `./openprocessor faces purge --dry-run` prints the counts;
   `./openprocessor faces purge --yes` deletes the face index (embeddings, person ids and
-  names), the face FAISS files and the face link on people documents, and appends a counts-only
-  record to `data/audit/faces_purge.jsonl`. The purge refuses to run while faces are on, so
+  names), the face FAISS files and the face link on people documents, and writes a counts-only
+  row to the `privacy_purges` table. The purge refuses to run while faces are on, so
   nothing writes new face data meanwhile. It is a command line action only: the API has no
   authentication, so it has no purge route. The `visual_search_people` documents themselves
   (whole-body crops) are not deleted.
@@ -200,8 +200,8 @@ searchable label data. Any caller that can reach the API can read and search
 it. Curation projects keep it in their own indexes and project delete removes
 it. The core `/search/ocr` index is deployment-wide and outside project
 isolation; empty it with `python -m scripts.purge_ocr_data --dry-run` (counts)
-and `--yes` (delete), run inside the `api` container. It appends a counts-only
-record to `data/audit/ocr_purge.jsonl`. There is no purge route, because the
+and `--yes` (delete), run inside the `api` container. It writes a counts-only
+row to the `privacy_purges` table. There is no purge route, because the
 API has no authentication. Parse-failure logs of the labelers record reply
 lengths, never reply text.
 
