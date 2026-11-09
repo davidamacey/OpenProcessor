@@ -19,7 +19,7 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
-from src.routers.curation._common_models import (
+from src.routers.curation._crop_write_models import (
     CropBatchLabelRequest,
     CropFlagNewClassRequest,
     CropLabelRequest,

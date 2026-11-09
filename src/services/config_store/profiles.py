@@ -63,8 +63,8 @@ def _content_etag(name: str, body: dict[str, Any]) -> str:
     return f'region_profile:{name}:{digest}'
 
 
-def _template_names() -> dict[str, Path]:
-    return templates.template_names(_TEMPLATES_DIR)
+def template_names() -> list[str]:
+    return list(templates.template_names(_TEMPLATES_DIR))
 
 
 def load_template(name: str) -> dict[str, Any] | None:
@@ -101,7 +101,7 @@ def _registered_bodies() -> dict[str, DetectionProfile]:
 
 def all_known_names() -> frozenset[str]:
     store = get_config_store()
-    return frozenset({*_registered_bodies(), *store.current.profiles, *_template_names()})
+    return frozenset({*_registered_bodies(), *store.current.profiles, *template_names()})
 
 
 def _active_ref() -> tuple[str | None, int | None]:
@@ -258,4 +258,5 @@ __all__ = [
     'load_template',
     'rollback_profile',
     'save_profile',
+    'template_names',
 ]

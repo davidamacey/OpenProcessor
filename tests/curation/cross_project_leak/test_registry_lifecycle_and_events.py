@@ -131,7 +131,7 @@ def test_a_misrouted_mget_is_refused_before_it_reaches_opensearch(
         kwargs['index'] = alpha_items
         return await real_mget_crops(client, crop_ids, **kwargs)
 
-    monkeypatch.setattr('src.routers.curation.config_test.mget_crops', _misrouted)
+    monkeypatch.setattr('src.services.curation.config_test_crops.mget_crops', _misrouted)
     before = len(leak_env.transport.received)
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     response = client.post(

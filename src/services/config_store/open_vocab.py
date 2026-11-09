@@ -49,20 +49,16 @@ class OpenVocabRecord:
     active_revision: int | None = None
 
 
-def _template_names() -> dict[str, Path]:
-    return templates.template_names(_TEMPLATES_DIR)
-
-
 def load_template(name: str) -> dict[str, Any] | None:
     return templates.load_template(_TEMPLATES_DIR, name)
 
 
 def template_names() -> list[str]:
-    return list(_template_names())
+    return list(templates.template_names(_TEMPLATES_DIR))
 
 
 def all_known_names() -> frozenset[str]:
-    return frozenset({*get_config_store().current.open_vocab_sets, *_template_names()})
+    return frozenset({*get_config_store().current.open_vocab_sets, *template_names()})
 
 
 def _active_ref() -> tuple[str | None, int | None]:

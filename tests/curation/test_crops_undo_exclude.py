@@ -135,7 +135,7 @@ def crops(monkeypatch: pytest.MonkeyPatch, registry: InMemoryRegistry):
 
 
 async def _label(crops, fake, registry, crop_id: str, class_id: int) -> None:
-    from src.routers.curation._common_models import CropLabelRequest
+    from src.routers.curation._crop_write_models import CropLabelRequest
 
     await crops.label_crop(crop_id, CropLabelRequest(class_id=class_id), fake, registry)
 
@@ -190,7 +190,7 @@ async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
 async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
-    from src.routers.curation._common_models import CropBatchLabelRequest, CropMoveRequest
+    from src.routers.curation._crop_write_models import CropBatchLabelRequest, CropMoveRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {'b': _proposal_doc('b'), 'm': _proposal_doc('m')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}
@@ -268,13 +268,13 @@ async def test_undo_without_history_clears_class(crops) -> None:
 
 
 async def _exclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
-    from src.routers.curation._common_models import CropExcludeRequest
+    from src.routers.curation._crop_write_models import CropExcludeRequest
 
     return await crops.batch_exclude_crops(CropExcludeRequest(crop_ids=crop_ids), fake)
 
 
 async def _unexclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
-    from src.routers.curation._common_models import CropUnexcludeRequest
+    from src.routers.curation._crop_write_models import CropUnexcludeRequest
 
     return await crops.batch_unexclude_crops(CropUnexcludeRequest(crop_ids=crop_ids), fake)
 
@@ -317,7 +317,7 @@ async def test_exclusion_restores_validation_and_never_moves_the_item(crops, reg
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
 async def test_move_sets_the_partition_placement_not_the_class(crops, registry, ids) -> None:
-    from src.routers.curation._common_models import CropMoveRequest
+    from src.routers.curation._crop_write_models import CropMoveRequest
 
     partition, (uid, _other) = await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {'m': _proposal_doc('m'), 'peer': _proposal_doc('peer')}})
@@ -344,7 +344,7 @@ async def test_move_sets_the_partition_placement_not_the_class(crops, registry, 
 async def test_move_clears_a_human_class(crops, registry, ids) -> None:
     """A human-validated crop moved into a cluster is no longer that class; keeping it
     validated would leak the old class into export."""
-    from src.routers.curation._common_models import CropMoveRequest
+    from src.routers.curation._crop_write_models import CropMoveRequest
 
     _, (uid, _other) = await serve_clusters()
     fake = QueryFakeOpenSearch({ITEMS: {'h': _proposal_doc('h'), 'peer': _proposal_doc('peer')}})
@@ -369,7 +369,7 @@ async def test_move_rejects_a_cluster_the_serving_partition_does_not_hold(
 
     from fastapi import HTTPException
 
-    from src.routers.curation._common_models import CropMoveRequest
+    from src.routers.curation._crop_write_models import CropMoveRequest
 
     if serving:
         await serve_clusters()
@@ -507,7 +507,7 @@ def test_undo_route_unknown_crop_is_404(client_for) -> None:
 @pytest.mark.db
 @pytest.mark.usefixtures('world', 'fake_queue')
 async def test_undo_batch_reverses_a_batch_label(crops, ids, client_for) -> None:
-    from src.routers.curation._common_models import CropBatchLabelRequest
+    from src.routers.curation._crop_write_models import CropBatchLabelRequest
 
     fake = QueryFakeOpenSearch({ITEMS: {k: _proposal_doc(k) for k in ('b1', 'b2', 'untouched')}})
     before = {k: _class_state(v) for k, v in fake.docs(ITEMS).items()}

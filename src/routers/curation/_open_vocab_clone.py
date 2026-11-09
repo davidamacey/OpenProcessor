@@ -5,6 +5,7 @@ the 700-LOC ratchet, like ``_region_profile_clone.py``."""
 from __future__ import annotations
 
 from src.routers.curation._api_error import api_error
+from src.routers.curation._clone_common import resolve_clone_source
 from src.routers.curation._common import router
 from src.routers.curation._open_vocab_models import OpenVocabCloneRequest, OpenVocabDoc
 from src.services.config_store import RevisionConflictError
@@ -27,16 +28,14 @@ from src.services.config_store.open_vocab_validation import validate_open_vocab
 async def _resolve_clone_source(
     *, name: str, revision: int | None, source: str | None
 ) -> OpenVocabRecord:
-    if revision is not None and source in (None, 'stored'):
-        record = await get_revision_record(name, revision)
-        if record is not None:
-            return record
-        if source == 'stored':
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-    record = build_record(name, revision=revision)
-    if record is None or (source is not None and record.source != source):
-        raise api_error(404, 'not_found', f'{name!r} is not a known open-vocabulary set')
-    return record
+    return await resolve_clone_source(
+        name=name,
+        revision=revision,
+        source=source,
+        what='open-vocabulary set',
+        get_revision=get_revision_record,
+        build=build_record,
+    )
 
 
 @router.post('/open_vocab/{name}/clone', response_model=OpenVocabDoc, status_code=201)

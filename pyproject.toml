@@ -286,7 +286,16 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 # FastAPI resolves the route request/response annotations at call time, so the router modules import these models at runtime.
-exempt-modules = ["typing", "src.routers.curation._common_models"]
+exempt-modules = [
+    "typing",
+    "src.routers.curation._common_models",
+    "src.routers.curation._crop_write_models",
+    "src.routers.curation._export_models",
+    "src.routers.curation._health_models",
+    "src.routers.curation._holdout_models",
+    "src.routers.curation._ingest_config_models",
+    "src.routers.curation._settings_models",
+]
 
 [tool.ruff.lint.isort]
 # Import sorting configuration (follows black/blue style)

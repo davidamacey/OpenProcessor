@@ -16,10 +16,9 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 
-from src.clients.curation_opensearch.crops import mget_crops
 from src.config import get_curation_config
 from src.routers.curation._api_error import api_error
-from src.routers.curation._common import OpenSearchDep, get_class_registry, items_index, router
+from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._config_test_models import (
     PackTestCropResult,
     PackTestPackRef,
@@ -42,6 +41,7 @@ from src.services.config_store import (
 from src.services.config_store.pack_validation import validate_pack
 from src.services.config_store.profile_validation import validate_profile
 from src.services.curation.autolabel.run_vlm import labeler_unavailable, resolve_test_vlm
+from src.services.curation.config_test_crops import fetch_test_crop_docs
 from src.services.curation.config_test_limits import (
     MAX_TEST_CROP_IDS,
     ConfigTestBusyError,
@@ -60,11 +60,9 @@ from src.services.curation.pack_test_run import (
 from src.services.curation.region_class import item_classes
 from src.services.curation.region_scope import out_of_scope_reason
 from src.services.curation.region_test_run import Leg, VerifyContext, run_region_test
-from src.services.curation.wire import item_source_excludes
 from src.services.detection.profile_registry import resolve_region_profile
 from src.services.detection.segmenter_health import configured_segmenter_health
 from src.services.detection.segmenter_http import first_segmenter_url
-from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_factory import assert_may_connect, labeler_for
 from src.services.labeling.vlm_labeler_assist import PackAttributesError
@@ -165,12 +163,7 @@ async def _load_crops(opensearch: Any, crop_ids: list[str]) -> list[CropInput]:
     naming every missing id; a crop whose stored image path is not servable
     is 404 ``image_not_found``."""
     ids = list(dict.fromkeys(crop_ids))
-    docs = await mget_crops(
-        opensearch,
-        ids,
-        index=items_index(),
-        source_excludes=item_source_excludes(await vector_source_excludes()),
-    )
+    docs = await fetch_test_crop_docs(opensearch, ids)
     missing = [i for i in ids if i not in docs]
     if missing:
         raise api_error(

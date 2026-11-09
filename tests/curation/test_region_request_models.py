@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from src.routers.curation._common_models import CropBatchStatusRequest, ItemRegionMetaRequest
+from src.routers.curation._crop_write_models import CropBatchStatusRequest, ItemRegionMetaRequest
 
 
 def test_region_meta_takes_region_label_source() -> None:

@@ -4,6 +4,7 @@ or a profile of another project) under a new name."""
 from __future__ import annotations
 
 from src.routers.curation._api_error import api_error
+from src.routers.curation._clone_common import resolve_clone_source
 from src.routers.curation._common import router
 from src.routers.curation._ingest_profile_models import IngestProfileCloneRequest, IngestProfileDoc
 from src.services.config_store import RevisionConflictError
@@ -26,16 +27,14 @@ from src.services.config_store.ingest_profiles import (
 async def _resolve_clone_source(
     *, name: str, revision: int | None, source: str | None
 ) -> IngestProfileRecord:
-    if revision is not None and source in (None, 'stored'):
-        record = await get_revision_record(name, revision)
-        if record is not None:
-            return record
-        if source == 'stored':
-            raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
-    record = build_record(name, revision=revision)
-    if record is None or (source is not None and record.source != source):
-        raise api_error(404, 'not_found', f'{name!r} is not a known ingest profile')
-    return record
+    return await resolve_clone_source(
+        name=name,
+        revision=revision,
+        source=source,
+        what='ingest profile',
+        get_revision=get_revision_record,
+        build=build_record,
+    )
 
 
 @router.post('/ingest_profiles/{name}/clone', response_model=IngestProfileDoc, status_code=201)
