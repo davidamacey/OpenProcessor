@@ -24,7 +24,6 @@ def record_from_row(row: ProjectRow) -> ProjectRecord:
         resources=resources_from_stored(
             row.slug,
             base_curation_config(),
-            index_prefix=row.index_prefix,
             model_prefix=row.model_prefix,
             mlflow_experiment=row.mlflow_experiment,
             indexes=row.indexes,

@@ -81,15 +81,6 @@ def _knn_settings() -> dict[str, Any]:
     }
 
 
-def _plain_settings() -> dict[str, Any]:
-    return {
-        'index': {
-            'number_of_shards': 1,
-            'number_of_replicas': 0,
-        },
-    }
-
-
 def _is_recoverable_mapping_conflict(msg: str) -> bool:
     """Classify a ``put_mapping`` failure as permanent-and-harmless vs. real.
 

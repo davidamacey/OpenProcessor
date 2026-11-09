@@ -81,7 +81,6 @@ class CurationConfig:
     # no second naming path.
     images_index: str = _FROM_DEFAULT_PROJECT
     items_index: str = _FROM_DEFAULT_PROJECT
-    leases_index: str = _FROM_DEFAULT_PROJECT
 
     class_registry_path: Path = _FROM_DEFAULT_PROJECT_PATH
     # Optional deployment-supplied VLM PromptPack (see

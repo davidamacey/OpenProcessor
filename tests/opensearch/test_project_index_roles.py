@@ -16,7 +16,15 @@ from src.config.projects import new_project_names, resources_for_new
 from tests.opensearch.fake_cluster import FakeCluster
 
 
-RETIRED = {'labels_confirmed', 'classes', 'settings', 'umap_state', 'umap_viz_state', 'configs'}
+RETIRED = {
+    'labels_confirmed',
+    'classes',
+    'settings',
+    'umap_state',
+    'umap_viz_state',
+    'configs',
+    'leases',
+}
 
 
 def test_the_stored_roles_of_a_new_project_are_images_and_items() -> None:
@@ -26,17 +34,16 @@ def test_the_stored_roles_of_a_new_project_are_images_and_items() -> None:
 def test_no_retired_control_role_exists() -> None:
     assert RETIRED.isdisjoint({role.value for role in IndexRole})
     assert RETIRED.isdisjoint(INDEX_ROLE_ATTR.values())
-    assert {role.value for role in INDEX_BODIES} == {'images', 'items', 'leases'}
+    assert {role.value for role in INDEX_BODIES} == {'images', 'items'}
 
 
-def test_a_new_project_resolves_exactly_its_stored_roles_and_the_lease_index() -> None:
+def test_a_new_project_resolves_exactly_its_stored_roles() -> None:
     resources = resources_for_new('alpha', base_curation_config())
 
-    assert {role.value for role in resources.indexes} == {'images', 'items', 'leases'}
+    assert {role.value for role in resources.indexes} == {'images', 'items'}
     assert set(resources.indexes.values()) == {
         'op_prj_alpha__images',
         'op_prj_alpha__items',
-        'op_prj_alpha__leases',
     }
 
 
@@ -48,4 +55,4 @@ async def test_creating_a_project_creates_no_control_index() -> None:
 
     created = set(cluster.indexes)
     assert not [n for n in created if n.rsplit('__', 1)[-1] in RETIRED]
-    assert {n.rsplit('__', 1)[-1] for n in created} == {'images', 'items', 'leases'}
+    assert {n.rsplit('__', 1)[-1] for n in created} == {'images', 'items'}

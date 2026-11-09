@@ -102,7 +102,7 @@ def test_one_missing_index_after_ensure_indexes_ends_failed_not_active() -> None
     async def _ensure_indexes_missing_one(opensearch) -> None:
         cfg = get_curation_config()
         for role in IndexRole:
-            if role == IndexRole.LEASES:
+            if role == IndexRole.ITEMS:
                 continue  # simulate this one silently failing to create
             await opensearch.indices.create(index=index_name(cfg, role))
 
@@ -137,7 +137,7 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
 
     async def _create_but_fail_one(*, index: str, body=None):
         cfg = get_curation_config()
-        if index == index_name(cfg, IndexRole.LEASES):
+        if index == index_name(cfg, IndexRole.ITEMS):
             raise RuntimeError('simulated OpenSearch indices.create failure')
         return await real_create(index=index, body=body)
 

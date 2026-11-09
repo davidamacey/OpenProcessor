@@ -48,7 +48,7 @@ PROJECT_PREFIX = f'{API_PREFIX}/projects/{os.environ.get("VERIFY_PROJECT", "defa
 _GLOBAL_PATHS = ('/projects', '/health', '/events')
 # `default`'s OpenSearch indexes: OP_PROJECT_INDEX_PREFIX=verify_prj_ in the compose file. The
 # classes, configs and settings live in PostgreSQL; the tests read them through the API.
-INDEXES = {role: f'verify_prj_default__{role}' for role in ('images', 'items', 'leases')}
+INDEXES = {role: f'verify_prj_default__{role}' for role in ('images', 'items')}
 
 # Ports a real deployment on this host is known to use. Hitting any of
 # them means the harness is mis-wired and must not be written to.

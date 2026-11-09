@@ -245,17 +245,15 @@ def _region_fields(
     region: str,
     *,
     global_index: int,
-    local_idx: int,
     vector: Any,
     now: datetime,
 ) -> dict[str, Any]:
     """The region side of a seeded item: a list of one to three boxes, each
-    with its own embedding (a false-positive cohort item holds one FP
-    box in the permanent FP cluster)."""
+    with its own embedding (a false-positive cohort item holds one
+    false_positive box)."""
     import numpy as np
 
     from src.domain.region_boxes import RegionBox, boxes_write_fields
-    from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
     from src.services.curation.region_box_embeddings import entry_for
 
     is_fp = region == RegionStatus.FALSE_POSITIVE
@@ -274,8 +272,6 @@ def _region_fields(
                 detector='fake_detector',
                 detector_version='1',
                 source='detector',
-                cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID if is_fp else 1,
-                cluster_distance=0.0 if is_fp else round(0.05 + (local_idx % 10) / 100.0, 4),
                 detected_at=now.isoformat(),
             )
         )
@@ -389,7 +385,6 @@ def _build_items(
                             fields,
                             cohort.region,
                             global_index=global_index,
-                            local_idx=local_idx,
                             vector=region_vectors[local_idx],
                             now=now,
                         )

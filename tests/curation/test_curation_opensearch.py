@@ -27,7 +27,7 @@ config = get_curation_config()
 
 
 def test_index_bodies_has_exactly_the_remaining_roles() -> None:
-    assert set(INDEX_BODIES.keys()) == {IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LEASES}
+    assert set(INDEX_BODIES.keys()) == {IndexRole.IMAGES, IndexRole.ITEMS}
 
 
 def test_images_has_knn_embedding() -> None:
@@ -154,12 +154,12 @@ async def test_create_curation_indexes_creates_all_when_missing() -> None:
         'op_prj_default__leases': True,
     }
     create_calls = client.indices.create.await_args_list
-    assert len(create_calls) == 3
+    assert len(create_calls) == 2
     by_name = {call.kwargs['index']: call.kwargs['body'] for call in create_calls}
     from src.config import index_name
 
     # Each index was created once, with its own body.
-    for role in (IndexRole.IMAGES, IndexRole.ITEMS, IndexRole.LEASES):
+    for role in (IndexRole.IMAGES, IndexRole.ITEMS):
         assert by_name[index_name(config, role)] == INDEX_BODIES[role]
     # No deletes (we did not force-recreate).
     assert client.indices.delete.await_count == 0
@@ -191,8 +191,8 @@ async def test_create_curation_indexes_force_recreate_deletes_first() -> None:
     client = _make_mock_client(exists_returns=True)
     results = await create_curation_indexes(client, force_recreate=True)
     assert all(results.values())
-    assert client.indices.delete.await_count == 3
-    assert client.indices.create.await_count == 3
+    assert client.indices.delete.await_count == 2
+    assert client.indices.create.await_count == 2
 
 
 @pytest.mark.asyncio

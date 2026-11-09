@@ -5,7 +5,7 @@ live counterpart to ``scripts/curation/backfill_region_embeddings.py``,
 which catches boxes that arrived without one (human-drawn boxes, items
 accepted before this stage existed). Region clustering and
 ``GET /regions/suspected_false_positives``
-(:mod:`src.services.curation.clustering.region_box_clustering`) key off
+(:mod:`src.services.clustering.region_fp`) key off
 these vectors.
 
 The crop of a box is its stored pixels cut from the decoded source image, the cut the

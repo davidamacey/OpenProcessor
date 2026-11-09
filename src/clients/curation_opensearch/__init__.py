@@ -6,8 +6,8 @@ module that holds it.
 
 Modules:
 
-- ``base``: config singletons, logger, k-NN and plain index settings.
-- ``bodies_core`` / ``bodies_other`` / ``items_extra``: per-role index bodies
+- ``base``: config singletons, logger, k-NN index settings.
+- ``bodies_core`` / ``items_extra``: per-role index bodies
   and the mapping fragments they share.
 - ``lifecycle``: ``INDEX_BODIES`` and idempotent index creation.
 - ``ensure_fields`` / ``ensure_overlay_fields`` / ``items_extra``: additive
@@ -23,8 +23,8 @@ index *names* are deployment data, not hardcoded here):
 - ``items`` (``op_prj_<project>__items``): one document per detected item
   crop (with embedding, class label, region-of-interest sub-bbox,
   holdout flag).
-- ``leases`` (``op_prj_<project>__leases``): the job lease documents, transitional until lane 6A
-  deletes the B1 leases. Every other control record is in PostgreSQL.
+
+Every other control record is in PostgreSQL.
 
 Every OpenSearch field reference for the per-item "region of interest"
 sub-annotation (e.g. a defect region on an item crop) is routed

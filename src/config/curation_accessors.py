@@ -25,7 +25,6 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
     {
         'images_index',
         'items_index',
-        'leases_index',
         'class_registry_path',
         'export_root',
         'upload_root',

@@ -227,7 +227,7 @@ class RowCollector:
                 'bbox_norm',
                 'class_id',
                 'test_holdout',
-                'cluster_id',
+                'cluster_uid',
                 *IMPORT_SOURCE_FIELDS,
             ],
         )
@@ -246,8 +246,8 @@ class RowCollector:
             )
             row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
             _apply_import_fields_from(row, src)
-            if src.get('cluster_id') is not None:
-                cluster_by_frame[frame_key].append(str(src['cluster_id']))
+            if src.get('cluster_uid') is not None:
+                cluster_by_frame[frame_key].append(str(src['cluster_uid']))
 
             class_id = src.get('class_id')
             dense = dense_by_registry_id.get(int(class_id)) if class_id is not None else None
@@ -284,7 +284,7 @@ class RowCollector:
             'bbox_norm',
             'class_id',
             'test_holdout',
-            'cluster_id',
+            'cluster_uid',
             *IMPORT_SOURCE_FIELDS,
             f.boxes,
             f.status,
@@ -383,7 +383,7 @@ class RowCollector:
                     f'neg:{self._region_cluster_key(src, RegionStatus.FALSE_POSITIVE.value)}'
                 )
             else:
-                cluster_keys[frame_key].append(f'bg:{src.get("cluster_id")}')
+                cluster_keys[frame_key].append(f'bg:{src.get("cluster_uid")}')
 
         for key, row in per_frame.items():
             row.stratum = (
@@ -438,22 +438,20 @@ class RowCollector:
                     f'neg:{self._region_cluster_key(src, RegionStatus.FALSE_POSITIVE.value)}'
                 )
             else:
-                row.stratum = f'bg:{src.get("cluster_id")}'
+                row.stratum = f'bg:{src.get("cluster_uid")}'
             row.stratum = row.import_stratum or row.stratum
             rows.append(row)
         return rows
 
     def _region_cluster_key(self, src: dict[str, Any], state: str) -> str:
-        """Finest-grained region cluster of the item's first ``state`` box
+        """Serving region cluster of the item's first ``state`` box
         (accepted for a positive, false_positive for a hard negative), for
-        stratification: its sub-cluster, else its cluster id. The box order
+        stratification: its ``cluster_uid`` in the serving partition. The box order
         is stable, so the key is deterministic."""
         box = next((b for b in read_boxes(src, self.fields) if b.state == state), None)
-        if box is None:
+        if box is None or box.cluster_uid is None:
             return 'none'
-        if box.cluster_subid:
-            return str(box.cluster_subid)
-        return str(box.cluster_id) if box.cluster_id is not None else 'none'
+        return box.cluster_uid
 
     @staticmethod
     def _fallback_stratum(row: _FrameRow, cluster_ids: list[str]) -> str:

@@ -29,7 +29,6 @@ from src.config.region_rejection import (
 )
 from src.config.region_state import BOX_STATE_ROUTES, RegionStatus
 from src.domain.region_boxes import RegionBox, RegionBoxWriteError, next_box_id, read_boxes
-from src.services.curation.cluster_ids import FALSE_POSITIVE_REGION_CLUSTER_ID
 from src.services.detection.region_text import TEXT_CHOICE_HUMAN
 
 
@@ -104,9 +103,7 @@ def with_state(box: RegionBox, state: str, *, rejection_reason: str | None = Non
       reject is a human decision now.
     - every other state clears the reason, so a box never carries a stale
       verdict from an earlier state.
-    - ``false_positive``: parked in the permanent FP cluster; leaving it
-      releases the box for re-clustering. Re-asserting the box's current
-      non-rejected state changes nothing (cluster placement stays).
+    - Re-asserting the box's current non-rejected state changes nothing.
     """
     if state == box.state and state != 'rejected':
         return box
@@ -116,12 +113,6 @@ def with_state(box: RegionBox, state: str, *, rejection_reason: str | None = Non
         if state == 'rejected'
         else None,
     }
-    if state == _FALSE_POSITIVE:
-        changes.update(
-            cluster_id=FALSE_POSITIVE_REGION_CLUSTER_ID, cluster_subid=None, cluster_distance=0.0
-        )
-    elif box.state == _FALSE_POSITIVE:
-        changes.update(cluster_id=None, cluster_subid=None, cluster_distance=None)
     return dataclasses.replace(box, **changes)
 
 

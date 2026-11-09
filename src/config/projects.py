@@ -126,16 +126,10 @@ def trainer_jobs_root() -> Path:
     return env_path('OP_TRAIN_JOBS_DIR', '/jobs')
 
 
-# The transitional lease index is not stored in ``project_indexes`` (which records ``images`` and
-# ``items``); its name follows the creation rule. Lane 6A deletes it with the B1 leases.
-_DERIVED_INDEX_ROLES = ('leases',)
-
-
 def resources_from_stored(
     slug: str,
     base: CurationConfig,
     *,
-    index_prefix: str,
     model_prefix: str,
     mlflow_experiment: str,
     indexes: Mapping[str, str],
@@ -145,8 +139,6 @@ def resources_from_stored(
     from src.config.curation_roles import IndexRole
 
     by_role: dict[IndexRole, str] = {IndexRole(role): name for role, name in indexes.items()}
-    for role in _DERIVED_INDEX_ROLES:
-        by_role[IndexRole(role)] = f'{index_prefix}{slug}__{role}'
     data_root = projects_data_root() / slug
     return ProjectResources(
         indexes=by_role,
@@ -196,7 +188,6 @@ def resources_for_new(slug: str, base: CurationConfig) -> ProjectResources:
     return resources_from_stored(
         slug,
         base,
-        index_prefix=names.index_prefix,
         model_prefix=names.model_prefix,
         mlflow_experiment=names.mlflow_experiment,
         indexes=names.indexes,

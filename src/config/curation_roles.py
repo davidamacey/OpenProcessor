@@ -26,15 +26,11 @@ class IndexRole(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format
 
     IMAGES = 'images'
     ITEMS = 'items'
-    # Transitional: the job lease documents (``src/clients/job_lease.py``) have no other
-    # home until lane 6A deletes the B1 leases; they are the only documents it holds.
-    LEASES = 'leases'
 
 
 INDEX_ROLE_ATTR: dict[IndexRole, str] = {
     IndexRole.IMAGES: 'images_index',
     IndexRole.ITEMS: 'items_index',
-    IndexRole.LEASES: 'leases_index',
 }
 
 

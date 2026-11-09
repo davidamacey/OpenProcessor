@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.base import config, logger
 from src.clients.curation_opensearch.bodies_core import _images_body, _items_body
-from src.clients.curation_opensearch.bodies_other import _leases_body
 from src.config import CurationConfig, IndexRole, index_name
 
 
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
 INDEX_BODIES: dict[IndexRole, dict[str, Any]] = {
     IndexRole.IMAGES: _images_body(),
     IndexRole.ITEMS: _items_body(),
-    IndexRole.LEASES: _leases_body(),
 }
 
 

@@ -1,7 +1,5 @@
 """Targeted tests for ``cluster_residuals`` and the item-cluster refine
-(``refine_cluster``) in ``src/services/curation/clustering/orchestrator.py``.
-Region-box refine is covered in ``test_region_box_clustering.py``.
-"""
+(``refine_cluster``) in ``src/services/curation/clustering/orchestrator.py``."""
 
 from __future__ import annotations
 

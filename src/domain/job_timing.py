@@ -2,8 +2,7 @@
 
 A running job holds a lease on its ``jobs`` row. The heartbeat thread renews it every
 ``HEARTBEAT_TICK_S``; a holder whose last good renew is older than ``LEASE_TTL_S - FENCE_MARGIN_S``
-stops writing, so it is silent before a reaper can take the job over at ``LEASE_TTL_S``. These
-replace the constants of ``src/domain/job_lease.py`` (the OpenSearch lease, deleted with it).
+stops writing, so it is silent before a reaper can take the job over at ``LEASE_TTL_S``.
 """
 
 from __future__ import annotations
