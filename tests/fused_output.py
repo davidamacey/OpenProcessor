@@ -9,6 +9,7 @@ the input size) and this helper scales them to pixels.
 from __future__ import annotations
 
 import numpy as np
+from tritonclient.utils import InferenceServerException
 
 from src.domain.model_families import MAX_DET
 
@@ -23,3 +24,14 @@ def fused_tensor(detections: list[Detection], *, net: int, batch: int = 1) -> np
     for k, (x1, y1, x2, y2, score, cls) in enumerate(detections):
         rows[:, k] = (x1 * net, y1 * net, x2 * net, y2 * net, score, cls)
     return rows
+
+
+class GpuDecodeAbsent:
+    """A Triton pool whose repository has no ``gpu_image_prep`` model, as a server that does not
+    load it: ingest reads the failed load as "GPU decode unavailable" and decodes on the CPU."""
+
+    async def is_model_ready(self, _model_name: str) -> bool:
+        return False
+
+    async def load_model(self, _model_name: str) -> None:
+        raise InferenceServerException('unknown model: not in the repository')

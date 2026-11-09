@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from fused_output import fused_tensor
+from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
 
 from curation.occ_fakes import FakeIngestOpenSearch
@@ -48,7 +48,7 @@ class FakeInferResult:
         return self._outputs[name]
 
 
-class FakeTritonPool:
+class FakeTritonPool(GpuDecodeAbsent):
     """Returns the pre-scripted fused ``output0`` tensor for the primary detector.
 
     ``detections`` is a list of ``(x1, y1, x2, y2, score, class_id)`` with

@@ -8,7 +8,7 @@ import io
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from fused_output import fused_tensor
+from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
@@ -147,7 +147,7 @@ class FakeInferResult:
         return self._outputs[name]
 
 
-class FakeTriton:
+class FakeTriton(GpuDecodeAbsent):
     """Fused-tensor detections (x1, y1, x2, y2, score, class_id), box coordinates as fractions
     of the network input; ``detections`` can be swapped between calls."""
 

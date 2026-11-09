@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fastapi.testclient import TestClient
-from fused_output import fused_tensor
+from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
 
 
@@ -48,7 +48,7 @@ class FakeInferResult:
         return self._outputs[name]
 
 
-class FakeTritonPool:
+class FakeTritonPool(GpuDecodeAbsent):
     """One detection per image, box (0.1, 0.1, 0.5, 0.5) of the network input, class 0.
 
     Replies with one row per *requested* image so the batched ingest path
