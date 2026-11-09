@@ -101,6 +101,7 @@ def _bulk_result(failing: frozenset[str] = frozenset()) -> Any:
 def app_client(fake_opensearch: AsyncMock, world):
     from src.core.dependencies import get_opensearch
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
+    from src.routers.curation.near_dup_gate import require_near_dup_fresh
 
     app = FastAPI()
     from _curation_app import mount_curation_routers
@@ -108,6 +109,8 @@ def app_client(fake_opensearch: AsyncMock, world):
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[get_opensearch] = lambda: fake_opensearch
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_opensearch
+    # a fresh near-duplicate state (the refusal itself is covered in tests/near_duplicates)
+    app.dependency_overrides[require_near_dup_fresh] = lambda: None
 
     with TestClient(app) as client:
         client.fake_os = fake_opensearch  # type: ignore[attr-defined]

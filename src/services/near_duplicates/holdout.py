@@ -15,6 +15,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.core.exceptions import RequestRejectedError
 from src.db.repos import near_dup as repo
 from src.db.repos.near_dup_holdout import Move, record_moves, stamp_freeze
+from src.services.near_duplicates import status as near_dup_status
 from src.utils.timeutil import now_iso
 
 
@@ -98,3 +99,23 @@ async def record_closure(
         item_run_id=closure.item_run_id,
         moved=len(closure.moves),
     )
+
+
+async def require_fresh(session: AsyncSession, project_id: uuid.UUID) -> None:
+    """Refuse (409 ``near_dup_stale``) while a level has no current run, needs a rebuild or has
+    pending rows: a freeze or a training export on stale groups would split near-duplicates across
+    the holdout. The body names each stale level so the status route can say which job to start."""
+    current = await near_dup_status.status(session, project_id)
+    stale = [
+        {
+            'level': lv.level,
+            'stale_reasons': list(lv.stale_reasons),
+            'pending_count': lv.pending_count,
+        }
+        for lv in current.levels
+        if lv.stale_reasons
+    ]
+    if stale:
+        raise RequestRejectedError(
+            status_code=409, detail={'code': 'near_dup_stale', 'levels': stale}
+        )

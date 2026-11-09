@@ -15,8 +15,10 @@ from _route_helpers import api_routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.core.exceptions import RequestRejectedError
 from src.routers.curation._common_models import ExportYoloRequest
 from src.routers.curation.export import export_yolo as export_yolo_handler
+from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export_models import ExportResult, SplitCounts
 
 
@@ -167,7 +169,21 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
+    # a fresh near-duplicate state (the refusal itself is covered in tests/near_duplicates)
+    app.dependency_overrides[require_near_dup_fresh] = lambda: None
     return TestClient(app)
+
+
+def test_export_yolo_refuses_while_the_near_duplicate_groups_are_stale(
+    app_client: TestClient,
+) -> None:
+    async def stale() -> None:
+        raise RequestRejectedError(409, {'code': 'near_dup_stale', 'levels': []})
+
+    app_client.app.dependency_overrides[require_near_dup_fresh] = stale  # type: ignore[attr-defined]
+    response = app_client.post('/curation/projects/default/export/yolo', json={})
+    assert response.status_code == 409, response.text
+    assert response.json()['detail']['code'] == 'near_dup_stale'
 
 
 def test_export_yolo_rejects_unknown_keys(app_client: TestClient) -> None:

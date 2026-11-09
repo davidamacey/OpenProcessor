@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the annotation
@@ -14,6 +14,7 @@ from src.db.session import project_tx
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
 from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
+from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (
     MIN_TEST_PER_CLASS,
@@ -27,7 +28,11 @@ from src.services.curation.holdout import (
 from src.services.near_duplicates.holdout import flag_held_out, leak_closure, record_closure
 
 
-@router.post('/test_holdout/freeze', response_model=TestHoldoutFreezeResponse)
+@router.post(
+    '/test_holdout/freeze',
+    response_model=TestHoldoutFreezeResponse,
+    dependencies=[Depends(require_near_dup_fresh)],
+)
 async def freeze_test_holdout(
     payload: TestHoldoutFreezeRequest,
     opensearch: OpenSearchDep,
