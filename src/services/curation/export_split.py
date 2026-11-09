@@ -102,6 +102,42 @@ def pins_from_rows(rows: Iterable[Any], split_mode: SplitMode) -> dict[str, str]
     return {r.item_id: r.dataset_split for r in rows if getattr(r, 'dataset_split', None) in SPLITS}
 
 
+def _group_rows(
+    rows: Sequence[SplittableRow], group_key: str | None
+) -> dict[str, list[SplittableRow]]:
+    """Rows keyed by group id; a row with no group value is its own singleton group."""
+
+    def _group_of(row: SplittableRow) -> str:
+        if group_key is None:
+            return f'item:{row.item_id}'
+        value = getattr(row, group_key, None)
+        if value in (None, ''):
+            return f'item:{row.item_id}'
+        return f'{group_key}:{value}'
+
+    groups: dict[str, list[SplittableRow]] = {}
+    for row in rows:
+        groups.setdefault(_group_of(row), []).append(row)
+    return groups
+
+
+def _split_stratum(
+    gids: list[str], stratum: int, seed: int, weights: dict[str, float]
+) -> dict[str, str]:
+    """Cut one class stratum's groups into splits by seeded hash order and exact counts."""
+    ordered = sorted(
+        gids, key=lambda gid: hashlib.sha256(f'{seed}:{stratum}:{gid}'.encode()).hexdigest()
+    )
+    allocation = _allocate_group_counts(len(ordered), weights)
+    out: dict[str, str] = {}
+    cursor = 0
+    for split in _SPLIT_PRIORITY:
+        for gid in ordered[cursor : cursor + allocation[split]]:
+            out[gid] = split
+        cursor += allocation[split]
+    return out
+
+
 def stratified_split_with_stats(
     rows: Sequence[SplittableRow],
     *,
@@ -162,17 +198,7 @@ def stratified_split_with_stats(
     same assignment. Returns ``({item_id: split}, stats)``.
     """
 
-    def _group_of(row: SplittableRow) -> str:
-        if group_key is None:
-            return f'item:{row.item_id}'
-        value = getattr(row, group_key, None)
-        if value in (None, ''):
-            return f'item:{row.item_id}'
-        return f'{group_key}:{value}'
-
-    groups: dict[str, list[SplittableRow]] = {}
-    for row in rows:
-        groups.setdefault(_group_of(row), []).append(row)
+    groups = _group_rows(rows, group_key)
 
     holdout_classes = {row.class_id for row in rows if row.has_test_crop}
     forced_groups: set[str] = set()
@@ -205,20 +231,12 @@ def stratified_split_with_stats(
     test_ratio = max(0.0, 1.0 - train_ratio - val_ratio)
     group_split: dict[str, str] = {**pinned_split, **dict.fromkeys(forced_groups, 'test')}
     for stratum, gids in class_to_groups.items():
-        ordered = sorted(
-            gids, key=lambda gid: hashlib.sha256(f'{seed}:{stratum}:{gid}'.encode()).hexdigest()
-        )
         weights = {
             'train': train_ratio,
             'val': val_ratio,
             'test': 0.0 if stratum in holdout_classes else test_ratio,
         }
-        allocation = _allocate_group_counts(len(ordered), weights)
-        cursor = 0
-        for split in _SPLIT_PRIORITY:
-            for gid in ordered[cursor : cursor + allocation[split]]:
-                group_split[gid] = split
-            cursor += allocation[split]
+        group_split.update(_split_stratum(gids, stratum, seed, weights))
 
     item_split: dict[str, str] = {}
     for gid, members in groups.items():
