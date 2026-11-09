@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from fixtures.job_rows import make_project, sql
@@ -149,7 +149,9 @@ async def test_the_worker_refuses_a_run_whose_pack_changed_since_it_was_planned(
 
     monkeypatch.setattr('src.services.curation.assist.prepare._resolve_inputs', inputs)
     with pytest.raises(RuntimeError, match='changed since the run was planned'):
-        await prepare_queued(object(), REQUEST, RESOLVED, sampled_ids=['c1'], box_ids=None)
+        await prepare_queued(
+            cast('Any', object()), REQUEST, RESOLVED, sampled_ids=['c1'], box_ids=None
+        )
 
 
 @pytest.mark.asyncio
@@ -162,6 +164,8 @@ async def test_the_worker_accepts_a_run_whose_inputs_are_the_planned_ones(
         return None, None, pack, vlm
 
     monkeypatch.setattr('src.services.curation.assist.prepare._resolve_inputs', inputs)
-    run = await prepare_queued(object(), REQUEST, RESOLVED, sampled_ids=['c1'], box_ids=None)
+    run = await prepare_queued(
+        cast('Any', object()), REQUEST, RESOLVED, sampled_ids=['c1'], box_ids=None
+    )
     assert run.scope.sampled_ids == ['c1']
     assert (run.scope.digest, run.scope.seed) == ('sha256:x', 7)

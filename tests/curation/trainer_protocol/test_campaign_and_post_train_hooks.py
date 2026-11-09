@@ -7,7 +7,7 @@ import datetime as dt
 import uuid
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import campaign
 import job_status
@@ -111,7 +111,7 @@ def test_a_met_stop_when_skips_the_queued_siblings_with_the_skip_reason(
     state = job_status.StatusState(job_id=spec.job_id, campaign_id='camp-1', state='finished')
     state.eval = {'map50': 0.8}
 
-    asyncio.run(campaign.maybe_handle_campaign(_Ctx(), spec, state))
+    asyncio.run(campaign.maybe_handle_campaign(cast('Any', _Ctx()), spec, state))
 
     assert siblings.skipped == [('auto_skip_threshold_met', _Ctx.job_id)]
 
@@ -126,7 +126,7 @@ def test_an_unmet_stop_when_skips_nothing(export_dir: Path, siblings: Any) -> No
     state = job_status.StatusState(job_id=spec.job_id, campaign_id='camp-1', state='finished')
     state.eval = {'map50': 0.8}
 
-    asyncio.run(campaign.maybe_handle_campaign(_Ctx(), spec, state))
+    asyncio.run(campaign.maybe_handle_campaign(cast('Any', _Ctx()), spec, state))
 
     assert siblings.skipped == []
 
@@ -149,7 +149,7 @@ def test_the_last_run_promotes_the_best_finished_sibling(
     state = job_status.StatusState(job_id=spec.job_id, campaign_id='camp-1', state='finished')
     state.eval = {'map50': 0.7}  # this run is not the best
 
-    asyncio.run(campaign.maybe_handle_campaign(_Ctx(), spec, state))
+    asyncio.run(campaign.maybe_handle_campaign(cast('Any', _Ctx()), spec, state))
 
     assert promoted == [(str(best.job_id), 'camp-1_best')]
 
@@ -159,7 +159,9 @@ def test_campaign_hook_is_a_no_op_for_a_standalone_run(export_dir: Path, sibling
     state = job_status.StatusState(job_id=spec.job_id, state='finished')
     state.eval = {'map50': 0.9}
 
-    asyncio.run(campaign.maybe_handle_campaign(_Ctx(), spec, state))  # must not raise or write
+    asyncio.run(
+        campaign.maybe_handle_campaign(cast('Any', _Ctx()), spec, state)
+    )  # must not raise or write
 
     assert siblings.skipped == []
 

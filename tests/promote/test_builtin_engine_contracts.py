@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from fixtures.job_rows import deployment_session, sql
@@ -135,4 +136,4 @@ def test_the_catalogued_encoders_are_available_with_the_seeded_engines(pg) -> No
     for entry in load_catalog():
         wanted = EncoderInputSpec.model_validate(entry.input_spec).image
         assert wanted == EngineInputContract.model_validate(ready[entry.triton_image_model])
-        assert availability(entry, ready).available is True, entry.model_key
+        assert availability(cast('Any', entry), ready).available is True, entry.model_key

@@ -8,7 +8,7 @@ a box write never has to touch the vectors.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from opensearchpy.exceptions import ConnectionError as OsConnectionError
@@ -198,4 +198,4 @@ async def test_prune_failure_is_logged_not_raised() -> None:
         async def mget(self, **_kw: Any) -> dict[str, Any]:
             raise OsConnectionError('N/A', 'down', Exception('x'))
 
-    await prune_box_embeddings(_Boom(), index=INDEX, crop_ids=['c1'])
+    await prune_box_embeddings(cast('Any', _Boom()), index=INDEX, crop_ids=['c1'])

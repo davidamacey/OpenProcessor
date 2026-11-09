@@ -4,6 +4,7 @@ image level's leak groups)."""
 from __future__ import annotations
 
 import uuid
+from typing import Any, cast
 
 import psycopg
 import pytest
@@ -55,7 +56,7 @@ async def _build_item_run(env) -> None:
             algorithm_version='nd-1',
         )
         run = await repo.get_run(session, run_id)
-        await repo.flip_current(session, run, {})
+        await repo.flip_current(session, cast('Any', run), {})
 
 
 async def test_a_full_image_build_starts_a_full_item_build(

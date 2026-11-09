@@ -7,6 +7,7 @@ the real wrapper (https://docs.celeryq.dev/en/stable/userguide/testing.html).
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -121,9 +122,9 @@ def test_the_finish_is_idempotent_a_rerun_after_completion_changes_nothing(
         async def progress(self, *_a, **_k):
             return None
 
-    first = asyncio.run(jobs_c.project_delete(Ctx()))
+    first = asyncio.run(jobs_c.project_delete(cast('Any', Ctx())))
     removed = list(client.deleted_indexes)
-    second = asyncio.run(jobs_c.project_delete(Ctx()))
+    second = asyncio.run(jobs_c.project_delete(cast('Any', Ctx())))
     assert first['project'] == second['project'] == 'alpha'
     assert client.deleted_indexes == removed
     assert sql(pg, "SELECT 1 FROM projects WHERE slug = 'alpha'") == []

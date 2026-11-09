@@ -4,6 +4,8 @@ from the retired control roles (2F-1).
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from src.clients.curation_opensearch.lifecycle import INDEX_BODIES, create_curation_indexes
@@ -48,7 +50,7 @@ def test_a_new_project_resolves_exactly_its_stored_roles() -> None:
 async def test_creating_a_project_creates_no_control_index() -> None:
     cluster = FakeCluster()
 
-    await create_curation_indexes(cluster)
+    await create_curation_indexes(cast('Any', cluster))
 
     created = set(cluster.indexes)
     assert not [n for n in created if n.rsplit('__', 1)[-1] in RETIRED]

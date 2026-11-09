@@ -5,6 +5,7 @@ and the incumbent comparison.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import incumbent_compare
 import job_status
@@ -37,7 +38,7 @@ def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_re
     a distinct, single coherent best_checkpoint_metric row."""
     state = job_status.StatusState(job_id='x', state='running')
     _, _, on_fit_epoch_end = trainer_callbacks._make_ultralytics_callbacks(
-        _SpecStub(), state, total_epochs=2
+        cast('Any', _SpecStub()), state, total_epochs=2
     )
 
     # Epoch 1 (Ultralytics reports epoch=0).

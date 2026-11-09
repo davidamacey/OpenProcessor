@@ -6,6 +6,7 @@ carries ``revision`` so a client can PATCH/clone_settings with
 from __future__ import annotations
 
 import asyncio
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -348,7 +349,7 @@ def test_delete_finish_publishes_project_deleted(events, producer) -> None:
         assert accepted.job_id == producer.sent()[0]
         assert not [e for e in events if e['type'] == 'project.deleted']
         client = await projects_router.make_curation_opensearch()
-        await jobs_c.project_delete(_StubContext('cars', client))
+        await jobs_c.project_delete(cast('Any', _StubContext('cars', client)))
 
     asyncio.run(_delete_flow())
 

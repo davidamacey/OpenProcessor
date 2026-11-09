@@ -19,7 +19,7 @@ from __future__ import annotations
 import io
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -445,7 +445,7 @@ async def test_mapping_migration_adds_the_fields() -> None:
     from src.clients.curation_opensearch.ensure_fields import ensure_items_vlm_raw_label_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
-    await ensure_items_vlm_raw_label_fields(client)
+    await ensure_items_vlm_raw_label_fields(cast('Any', client))
     body = client.indices.put_mapping.await_args.kwargs['body']
     assert {ATTEMPTED, REASON} <= body['properties'].keys()
 

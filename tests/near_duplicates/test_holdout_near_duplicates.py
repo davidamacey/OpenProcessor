@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import psycopg
 import pytest
@@ -135,7 +135,7 @@ async def test_a_project_without_an_item_run_moves_nothing(project, pg_registry)
 
 async def test_the_flag_goes_through_the_occ_writer(pg, project) -> None:
     client = _SeqNoOpenSearch({ITEMS: _docs()})
-    await holdout.flag_held_out(client, ITEMS, ['i1', 'i2'])
+    await holdout.flag_held_out(cast('Any', client), ITEMS, ['i1', 'i2'])
     assert client.docs[ITEMS]['i1']['test_holdout'] is True
     assert client.docs[ITEMS]['i2']['test_holdout'] is True
     assert 'test_holdout' not in client.docs[ITEMS]['i3']
@@ -145,7 +145,7 @@ async def test_a_conflicting_write_refuses_the_freeze() -> None:
     client = _SeqNoOpenSearch({ITEMS: _docs()})
     client.conflict = {'i2'}
     with pytest.raises(RequestRejectedError) as raised:
-        await holdout.flag_held_out(client, ITEMS, ['i1', 'i2'])
+        await holdout.flag_held_out(cast('Any', client), ITEMS, ['i1', 'i2'])
     assert raised.value.status_code == 502
 
 

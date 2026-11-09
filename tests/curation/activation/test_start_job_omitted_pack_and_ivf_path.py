@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -125,7 +125,7 @@ async def test_start_omitted_stale_settings_doc_pack_is_ignored_not_flagged_omit
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(
-        session=object(), opensearch=object(), item_filter=ItemFilter()
+        session=cast('Any', object()), opensearch=object(), item_filter=ItemFilter()
     )
     assert captured['prompt_pack'] == 'pallet_v1'
     assert captured['prompt_pack_omitted'] is False

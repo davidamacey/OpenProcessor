@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, cast
 
 import pytest
 from fixtures.job_rows import sql
@@ -63,5 +64,8 @@ async def test_an_active_job_is_not_an_error(pg, pg_env, catalog, job_env, produ
     async with async_session_factory()() as session:
         async with project_tx(session, project):
             primary = await repo.get_primary_space(session, project, Target.ITEM)
-        assert await queue_dependents(session, project, primary, requested_by='test') == []
+        assert (
+            await queue_dependents(session, project, cast('Any', primary), requested_by='test')
+            == []
+        )
     assert kinds_of(pg, project) == ['cluster_run', 'near_dup_score']

@@ -6,7 +6,7 @@ Count-first cap check: a pool already known (via ``count``) to exceed
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -30,7 +30,11 @@ class _CountOnlyOS:
 async def test_pool_over_cap_is_truncated_without_scrolling() -> None:
     client = _CountOnlyOS(count=5000)
     ids, embeddings, truncated = await fetch_pool_embeddings(
-        client, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding', cap=100
+        cast('Any', client),
+        'op_prj_default__items',
+        {'match_all': {}},
+        embedding_field='pe_embedding',
+        cap=100,
     )
     assert truncated is True
     assert ids == []
@@ -60,7 +64,11 @@ async def test_pool_under_cap_scrolls_normally() -> None:
     docs = {'a': [1.0, 0.0], 'b': [0.0, 1.0]}
     client = _ScrollOS(count=2, docs=docs)
     ids, embeddings, truncated = await fetch_pool_embeddings(
-        client, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding', cap=100
+        cast('Any', client),
+        'op_prj_default__items',
+        {'match_all': {}},
+        embedding_field='pe_embedding',
+        cap=100,
     )
     assert truncated is False
     assert set(ids) == set(docs)

@@ -14,7 +14,7 @@ silent no-op.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -163,7 +163,7 @@ async def test_start_ignores_a_stale_settings_doc_pack_when_omitted(
         AsyncMock(return_value={'defaults': {'prompt_pack': 'food_v2'}}),
     )
     await pipeline_start.pipeline_auto_label_start(
-        session=object(), opensearch=object(), item_filter=ItemFilter()
+        session=cast('Any', object()), opensearch=object(), item_filter=ItemFilter()
     )
     assert captured['prompt_pack'] == 'pallet_v1'
 

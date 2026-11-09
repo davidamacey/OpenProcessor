@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fixtures.job_rows import make_project
@@ -64,8 +65,8 @@ async def test_the_served_view_after_the_step_equals_the_060_assignment(
                 reader=_Reader(docs),
                 report=report,
             )
-            await step.run(ctx)
-            assert await step.verify(ctx) == []
+            await step.run(cast('Any', ctx))
+            assert await step.verify(cast('Any', ctx)) == []
     async with async_session_factory()() as session, deployment_tx(session, 'test'):
         rows = (
             await session.execute(

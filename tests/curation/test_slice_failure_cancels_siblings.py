@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -65,7 +65,7 @@ async def test_residual_fetch_cancels_the_other_slices_when_one_fails() -> None:
     client = _SliceClient()
     with pytest.raises(RuntimeError, match='shard failure'):
         await fetch_residual_embeddings_parallel(
-            client, field='pe_embedding', n_slices=3, page_size=1
+            cast('Any', client), field='pe_embedding', n_slices=3, page_size=1
         )
     await _no_orphans_and_no_more_searches(client)
     assert client.deleted == [{'body': {'pit_id': ['pit1']}}]

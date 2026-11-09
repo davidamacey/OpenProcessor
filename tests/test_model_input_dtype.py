@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pytest
@@ -183,7 +183,10 @@ def _detector(pool: _IngestPool) -> WholeImageDetector:
         assigns_class=False,
     )
     return WholeImageDetector(
-        triton_pool=pool, registry=None, profile=profile, secondary_profile=profile
+        triton_pool=pool,
+        registry=cast('Any', None),
+        profile=cast('Any', profile),
+        secondary_profile=profile,
     )
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -549,7 +550,7 @@ async def test_similar_applies_the_text_search_filters():
     }
     fake = _fake_os_similar()
     await semantic_search.semantic_similar_search(
-        opensearch=fake, crop_id='c1', page=1, page_size=10, **kwargs
+        opensearch=fake, crop_id='c1', page=1, page_size=10, **cast('Any', kwargs)
     )
     text_fake = _fake_os_paged([])
     await semantic_search.semantic_text_search(
@@ -559,7 +560,7 @@ async def test_similar_applies_the_text_search_filters():
         query='x',
         page=1,
         page_size=10,
-        **kwargs,
+        **cast('Any', kwargs),
     )
     text = text_fake.search.call_args.kwargs['body']['query']['knn']['pe_embedding']['filter'][
         'bool'

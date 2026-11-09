@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import io
 from types import SimpleNamespace
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -118,7 +119,7 @@ def test_detector_request_build_is_timed() -> None:
 
     detector = WholeImageDetector(
         triton_pool=_Pool(),
-        registry=SimpleNamespace(get=lambda _i: None),
+        registry=cast('Any', SimpleNamespace(get=lambda _i: None)),
         profile=DetectionProfile(name='item', detector_model='det', input_size=64),
     )
     built = _count('triton_request')
