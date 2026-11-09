@@ -6,12 +6,7 @@ Every function maps unit vectors (or a similarity matrix) to one integer cluster
 
 from __future__ import annotations
 
-import asyncio
-import tempfile
-from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
-from unittest import mock
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster
@@ -38,23 +33,10 @@ REGION_BUCKET_SIZE = 800  # region_box_clustering.REGION_TARGET_BUCKET_SIZE
 
 
 def ivf_current(vectors: Floats) -> Ints:
-    """The production residual-pool clusterer (``IVFMethod``, K = min(512, n // 6)) on the CPU.
+    """The production item-pool fit (``cluster_run`` method ``ivf``: K = min(512, n // 6), seed 42)."""
+    from src.services.clustering.run import DEFAULT_SEED, fit_pool, unit_rows
 
-    Centroids go to a temporary state directory so no project directory is touched.
-    """
-    from src.services.curation.clustering.methods import ivf_store
-    from src.services.curation.clustering.methods.ivf import IVFMethod
-
-    with tempfile.TemporaryDirectory() as state:
-        cfg = SimpleNamespace(project_state_dir=Path(state))
-        with mock.patch.object(ivf_store, 'get_curation_config', return_value=cfg):
-            result = asyncio.run(
-                IVFMethod().fit_predict(
-                    np.ascontiguousarray(vectors, dtype=np.float32),
-                    backend_info=SimpleNamespace(name='cpu'),  # type: ignore[arg-type]
-                )
-            )
-    return np.asarray(result.labels, dtype=np.int64)
+    return np.asarray(fit_pool('ivf', unit_rows(vectors), {}, DEFAULT_SEED).labels, dtype=np.int64)
 
 
 def region_kmeans(vectors: Floats) -> Ints:

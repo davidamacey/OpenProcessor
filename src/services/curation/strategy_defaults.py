@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 def _hardcoded_default_for_axis(axis: str) -> str | None:
     """The pre-settings-feature hardcoded default id for ``axis`` --
     :func:`resolve_effective_default`'s fallback when no shared-settings
-    override applies. Only the four axes the shared-defaults feature
+    override applies. Only the axes the shared-defaults feature
     covers have an entry; every other
     axis (``score``/``overlay``/``export``) has no single-id "default"
     concept and returns ``None`` here, same as before this feature
@@ -45,10 +45,6 @@ def _hardcoded_default_for_axis(axis: str) -> str | None:
     (see :mod:`src.services.curation.review_sorts`'s ``build_sort``),
     not a replacement for them.
     """
-    if axis == 'cluster':
-        from src.services.curation.clustering.methods import DEFAULT_METHOD
-
-        return DEFAULT_METHOD
     if axis == 'detection_profile':
         from src.services.detection import cascade_detect  # noqa: F401 - registers the profile
         from src.services.detection.profile_registry import get_active_region_profile
@@ -73,10 +69,6 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
     the ``'shadow'``/``'disabled'`` entries (and the ``'default'``
     sentinel) -- an override that names a not-yet-selectable sort would
     otherwise silently break every tab's queue instead of falling back."""
-    if axis == 'cluster':
-        from src.services.curation.clustering.methods import available_methods
-
-        return frozenset(available_methods())
     if axis == 'sort':
         from src.services.curation.review_sorts import get_review_sorts
 
@@ -123,7 +115,7 @@ def _advertised_ids_for_axis(axis: str) -> frozenset[str]:
 CONFIG_STORE_AXES: frozenset[str] = frozenset({'prompt_pack', 'detection_profile', 'vlm'})
 
 SETTABLE_DEFAULT_AXES: frozenset[str] = frozenset(
-    {'cluster', 'sort', 'prompt_pack', 'detection_profile', 'vlm'}
+    {'sort', 'prompt_pack', 'detection_profile', 'vlm'}
 )
 
 

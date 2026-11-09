@@ -2,7 +2,7 @@
 defaults.
 
 There is no user-account system (single shared instance), so a per-axis
-UI default (cluster method, sort order, detection profile, prompt pack —
+UI default (sort order, detection profile, prompt pack —
 Cropwright's StrategyBar/AssistScopeBar) is stored once, server-side,
 instead of resetting to a hardcoded client default on every reload.
 

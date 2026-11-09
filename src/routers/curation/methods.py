@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 @router.get('/methods', response_model=MethodsResponse)
 async def get_methods(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Every strategy across every axis (cluster / score / sort / overlay),
+    """Every strategy across every axis (score / sort / overlay),
     plus the feature flags that gated each entry's status and a real
     ``field_coverage`` (exists-count) / ``field_coverage_total`` (pool
     size) per entry that declares a ``requires_field``. Frontend renders

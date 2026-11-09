@@ -50,26 +50,36 @@ def test_get_with_no_doc_yet_returns_empty_defaults(app_client: TestClient) -> N
 
 
 def test_put_creates_the_document(app_client: TestClient) -> None:
-    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'cluster': 'ahc'}})
+    r = app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'atypicality'}}
+    )
     assert r.status_code == 200
     body = r.json()
-    assert body['defaults'] == {'cluster': 'ahc'}
+    assert body['defaults'] == {'sort': 'atypicality'}
     assert body['updated_at'] is not None
     assert body['updated_by'] == 'system'
     assert body['revision'] == 1
 
     r2 = app_client.get('/curation/projects/default/settings')
-    assert r2.json()['defaults'] == {'cluster': 'ahc'}
+    assert r2.json()['defaults'] == {'sort': 'atypicality'}
 
 
-def test_put_again_partially_updates_without_clobbering_other_axes(app_client: TestClient) -> None:
+def test_put_again_replaces_the_axis_value(app_client: TestClient) -> None:
     app_client.put(
-        '/curation/projects/default/settings',
-        json={'defaults': {'cluster': 'ahc', 'sort': 'atypicality'}},
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'atypicality'}}
     )
-    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'cluster': 'ivf'}})
+    r = app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'uncertainty_entropy'}}
+    )
     assert r.status_code == 200
-    assert r.json()['defaults'] == {'cluster': 'ivf', 'sort': 'atypicality'}
+    assert r.json()['defaults'] == {'sort': 'uncertainty_entropy'}
+
+
+def test_put_rejects_the_retired_cluster_axis(app_client: TestClient) -> None:
+    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'cluster': 'ivf'}})
+    assert r.status_code == 422
+    assert 'cluster' in r.json()['detail']
+    assert 'sort' in r.json()['detail']  # the valid axes are listed
 
 
 def test_put_with_invalid_axis_returns_422_listing_valid_axes(app_client: TestClient) -> None:
@@ -79,19 +89,19 @@ def test_put_with_invalid_axis_returns_422_listing_valid_axes(app_client: TestCl
     assert r.status_code == 422
     detail = r.json()['detail']
     assert 'not_a_real_axis' in detail
-    assert 'cluster' in detail  # one of the valid axes is named in the message
+    assert 'sort' in detail  # one of the valid axes is named in the message
 
 
 def test_put_with_invalid_id_for_a_valid_axis_returns_422_listing_valid_ids(
     app_client: TestClient,
 ) -> None:
     r = app_client.put(
-        '/curation/projects/default/settings', json={'defaults': {'cluster': 'not_a_real_method'}}
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'not_a_real_sort'}}
     )
     assert r.status_code == 422
     detail = r.json()['detail']
-    assert 'not_a_real_method' in detail
-    assert 'ivf' in detail  # a real, currently-advertised cluster id
+    assert 'not_a_real_sort' in detail
+    assert 'atypicality' in detail  # a real, currently-advertised sort id
 
 
 def test_put_rejects_an_axis_methods_advertises_but_has_no_settable_default(
@@ -114,23 +124,22 @@ def test_put_null_clears_a_previously_pinned_axis(app_client: TestClient) -> Non
     without touching other axes, and the cleared axis must then be absent
     from GET (not merely a no-op that keeps the stale value around)."""
     app_client.put(
-        '/curation/projects/default/settings',
-        json={'defaults': {'cluster': 'ahc', 'sort': 'atypicality'}},
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'atypicality'}}
     )
 
     r = app_client.put('/curation/projects/default/settings', json={'defaults': {'sort': None}})
     assert r.status_code == 200, r.text
-    assert r.json()['defaults'] == {'cluster': 'ahc'}
+    assert r.json()['defaults'] == {}
 
     r2 = app_client.get('/curation/projects/default/settings')
-    assert r2.json()['defaults'] == {'cluster': 'ahc'}
+    assert r2.json()['defaults'] == {}
     assert 'sort' not in r2.json()['defaults']
 
 
 def test_put_null_for_an_axis_with_no_prior_override_is_a_harmless_no_op(
     app_client: TestClient,
 ) -> None:
-    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'cluster': None}})
+    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'sort': None}})
     assert r.status_code == 200, r.text
     assert r.json()['defaults'] == {}
 
@@ -233,7 +242,7 @@ def test_methods_marks_settable_axes_and_reports_active_region_profile(
         by_axis.setdefault(e['axis'], set()).add(e['settable'])
     assert by_axis['detection_profile'] == {True}
     assert by_axis['prompt_pack'] == {True}
-    assert by_axis['cluster'] == {True}
+    assert 'cluster' not in by_axis
     assert by_axis['score'] == {False}
     region = [e for e in entries if e['axis'] == 'detection_profile']
     assert ('license_plate', True) in [(e['id'], e['default']) for e in region]

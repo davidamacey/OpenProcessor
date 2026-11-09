@@ -18,7 +18,6 @@ import numpy as np
 
 from src.clients.curation_opensearch.crops import mget_crops
 from src.domain.loop_tree import seed_int
-from src.services.curation.clustering.methods.ahc import AHC_LINKAGE, AHC_METRIC
 
 
 if TYPE_CHECKING:
@@ -27,6 +26,8 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
 KMEANS_N_INIT = 4
+AHC_LINKAGE = 'complete'
+AHC_METRIC = 'cosine'
 MAX_AHC_MEMBERS = 8000
 """Above this a node is split by k-means: the AHC pairwise matrix would be over 500 MB."""
 MIN_SPLIT_MEMBERS = 4

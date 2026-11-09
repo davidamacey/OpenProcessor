@@ -1,12 +1,7 @@
 """Single source of truth for ``GET /curation/methods``.
 
-Phase 0 reports only what exists in production today: the real
-``cluster_methods`` registry entries (``ivf`` / ``ahc`` / ``hdbscan``), all
-``status='stable'`` except ``ivf`` which also carries ``default=True``
-(mirrors :data:`src.services.curation.clustering.methods.DEFAULT_METHOD` — that
-constant does NOT move).
-
-Phase 1 adds placeholder entries for the new ``crop_scores/`` scorers
+Clustering is not an axis here: ``POST /curation/projects/{project}/clusters/runs`` takes its
+method in the request. Phase 1 adds placeholder entries for the new ``crop_scores/`` scorers
 (``uniqueness`` / ``mistakenness`` / ``near_dup``). Their ``status`` tracks
 the ``OP_SCORES_ENABLED`` feature flag: ``'disabled'`` until an operator
 opts in, ``'shadow'`` (computed + logged, not selectable — ``OP_SCORES_SHADOW``)
@@ -39,7 +34,7 @@ opt-in).
 
 This module is deliberately dependency-light (no OpenSearch, no faiss) so
 ``GET /curation/methods`` never fails or blocks — it just reflects config + the
-static cluster-method registry.
+static review-sort and scorer registries.
 """
 
 from __future__ import annotations
@@ -50,7 +45,6 @@ from src.core.logging import get_logger
 from src.services.curation.axis_copy import axis_copy, detection_profile_strategies
 from src.services.curation.field_coverage import _COVERAGE_TOTAL_KEY, _compute_field_coverage
 from src.services.curation.strategy_builders import (
-    _cluster_strategies,
     _export_strategies,
     _overlay_strategies,
     _prompt_pack_strategies,
@@ -81,7 +75,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     ``field_coverage_total`` (pool size) computed via
     :func:`_compute_field_coverage` -- Phase 6's fix for the frontend
     conflating "coverage unknown" with "coverage zero". Entries with no
-    ``requires_field`` (cluster methods, the ``'default'``/``'recent'``
+    ``requires_field`` (the ``'default'``/``'recent'``
     sorts) always carry ``field_coverage: None`` -- coverage doesn't apply
     to a field every crop always has.
     """
@@ -99,7 +93,6 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
             logger.warning('curation_methods_settings_lookup_failed', error=str(exc))
             settings_doc = None
 
-    cluster_default = await resolve_effective_default('cluster', settings_doc=settings_doc)
     sort_default = await resolve_effective_default('sort', settings_doc=settings_doc)
     detection_profile_default = await resolve_effective_default(
         'detection_profile', settings_doc=settings_doc
@@ -107,7 +100,6 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     prompt_pack_default = await resolve_effective_default('prompt_pack', settings_doc=settings_doc)
 
     strategies = [
-        *_cluster_strategies(cluster_default),
         *_sort_strategies(sort_default),
         *_score_strategies(),
         *_overlay_strategies(),

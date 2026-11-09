@@ -4,12 +4,10 @@ Mounts the real curation router with OpenSearch stubbed (the endpoint does
 no OpenSearch I/O, but the shared app fixture follows the project's
 established pattern — see test_review_disagreements.py). Verifies:
 
-* Every real cluster method (ivf/ahc/hdbscan) is reported stable, ivf is
-  the sole default (mirrors DEFAULT_METHOD).
+* There is no ``cluster`` axis: clustering takes its method per run.
 * Score-axis entries reflect OP_SCORES_ENABLED / OP_SCORES_SHADOW.
 * Disabled entries are never marked default; every advertised id resolves
-  via the real registries (cluster_methods.get_method /
-  crop_scores.get_scorer).
+  via the real registries (crop_scores.get_scorer).
 """
 
 from __future__ import annotations
@@ -51,19 +49,12 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return client
 
 
-def test_cluster_methods_are_stable_and_ivf_is_default(app_client: TestClient) -> None:
-    from src.services.curation.clustering.methods import DEFAULT_METHOD, available_methods
-
+def test_there_is_no_cluster_axis(app_client: TestClient) -> None:
     r = app_client.get('/curation/projects/default/methods')
     assert r.status_code == 200
     body = r.json()
-    cluster_entries = {s['id']: s for s in body['strategies'] if s['axis'] == 'cluster'}
-    assert set(cluster_entries) == set(available_methods())
-    for entry in cluster_entries.values():
-        assert entry['status'] == 'stable'
-    assert cluster_entries[DEFAULT_METHOD]['default'] is True
-    non_default = [e for name, e in cluster_entries.items() if name != DEFAULT_METHOD]
-    assert all(e['default'] is False for e in non_default)
+    assert not [s for s in body['strategies'] if s['axis'] == 'cluster']
+    assert 'cluster' not in {a['axis'] for a in body['axes']}
 
 
 def test_score_entries_disabled_by_default(app_client: TestClient) -> None:
@@ -127,15 +118,12 @@ def test_score_entries_experimental_when_enabled_not_shadow(
 
 
 def test_every_advertised_id_resolves(app_client: TestClient) -> None:
-    from src.services.curation.clustering.methods import get_method
     from src.services.curation.item_scores import get_scorer
 
     r = app_client.get('/curation/projects/default/methods')
     body = r.json()
     for entry in body['strategies']:
-        if entry['axis'] == 'cluster':
-            get_method(entry['id'])  # raises ValueError if unknown
-        elif entry['axis'] == 'score':
+        if entry['axis'] == 'score':
             get_scorer(entry['id'])  # raises ValueError if unknown
 
 

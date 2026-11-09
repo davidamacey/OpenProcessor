@@ -144,9 +144,11 @@ def test_put_detection_profile_off_and_on(
 
 
 def test_other_axes_still_use_the_generic_settings_doc(app_client: TestClient) -> None:
-    r = app_client.put('/curation/projects/default/settings', json={'defaults': {'cluster': 'ahc'}})
+    r = app_client.put(
+        '/curation/projects/default/settings', json={'defaults': {'sort': 'atypicality'}}
+    )
     assert r.status_code == 200
-    assert r.json()['defaults']['cluster'] == 'ahc'
+    assert r.json()['defaults']['sort'] == 'atypicality'
 
 
 def test_active_conflict_is_structured_409(app_client: TestClient) -> None:
