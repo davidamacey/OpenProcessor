@@ -40,7 +40,7 @@ torchvision
 ultralytics==8.4.197
 
 # transformers import site: src/utils/cache.py (CLIP tokenizer)
-transformers>=4.30.0
+transformers==5.22.2
 
 # cv2 import sites: src/clients/triton_client.py, fast_face_client.py,
 # src/utils/face_align.py, image_processing.py, src/utils/cpu_preprocess.py,

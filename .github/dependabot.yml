@@ -44,12 +44,6 @@ updates:
       # cap and this rule together when modelopt does.
       - dependency-name: "onnxruntime-gpu"
         versions: [">=1.25"]
-      # tokenizers (a transformers dependency) requires huggingface-hub<2, so hub 2.x does not
-      # resolve with the current stack (pip check fails). Lift once tokenizers allows 2.x.
-      - dependency-name: "huggingface-hub"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "huggingface_hub"
-        update-types: ["version-update:semver-major"]
 
   # Cropwright frontend: one PR.
   - package-ecosystem: "npm"

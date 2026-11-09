@@ -119,10 +119,6 @@ _REQ_RE = re.compile(
 # package cannot stay on the list.
 _UNPINNED_UNTIL_PART_B = frozenset(
     {
-        'transformers',
-        'timm',
-        'huggingface-hub',
-        'open-clip-torch',
         'torch',
         'torchvision',
         'onnx',

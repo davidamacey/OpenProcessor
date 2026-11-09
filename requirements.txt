@@ -61,18 +61,18 @@ prometheus-client==0.26.0  # /metrics exposition + HTTP latency histogram
 
 # OpenSearch for Visual Search
 opensearch-py==3.2.0  # Async OpenSearch client with k-NN support
-transformers>=4.30.0  # CLIP tokenizer for text-to-image search
+transformers==5.22.2  # CLIP tokenizer for text-to-image search
 
 # MobileCLIP dependencies
-timm  # pytorch-image-models - required for MobileCLIP architecture
-huggingface_hub  # For downloading MobileCLIP checkpoints
+timm==1.0.31  # pytorch-image-models - required for MobileCLIP architecture
+huggingface_hub==2.4.0  # For downloading MobileCLIP checkpoints
 ftfy==6.3.1  # Text cleaning for CLIP tokenizer (required by open_clip)
 # F-13(b) (fresh-start E2E findings 2026-09-25): >=2.24.0 resolved to
 # 2.32.0 in the built image, which has no MobileCLIP2 configs at all
 # ("Model config for MobileCLIP2-S2 not found") -- native MobileCLIP2-S2
 # support landed in 3.2.0. Floor bumped so a fresh build can't regress to
 # a pre-3.2 release; requires an image rebuild to take effect.
-open-clip-torch>=3.2.0  # OpenCLIP with native MobileCLIP2-S2 support
+open-clip-torch==4.2.1  # OpenCLIP; MobileCLIP2-S2 configs need >=3.2
 
 # GPU clustering backend (src/services/curation/clustering/backend.py); it used to arrive only
 # through nvidia-modelopt, which the runtime image no longer installs.
