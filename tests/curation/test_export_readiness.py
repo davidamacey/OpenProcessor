@@ -110,8 +110,12 @@ async def test_export_with_only_unregistered_classes_refuses(tmp_path: Path) -> 
     assert not (tmp_path / 'exports' / 'current').exists()
 
 
+@pytest.mark.db
 @pytest.mark.asyncio
-async def test_export_manifest_records_the_items_index_generation(tmp_path: Path) -> None:
+async def test_export_manifest_records_the_items_index_generation(
+    tmp_path: Path,
+    pg_registry: Any,  # the export's retention prune reads PostgreSQL
+) -> None:
     service = _service(tmp_path, [_doc('a', 0)])
     result = await service.export_dataset(copy_images=False)
     manifest = json.loads(Path(result.manifest_path).open().read())  # noqa: SIM115

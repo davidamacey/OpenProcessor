@@ -51,8 +51,12 @@ class _FakeOpenSearch:
         return None
 
 
+@pytest.mark.db
 @pytest.mark.asyncio
-async def test_include_classes_filter_actually_applies_to_a_real_export(tmp_path):
+async def test_include_classes_filter_actually_applies_to_a_real_export(
+    tmp_path,
+    pg_registry,  # the export's retention prune reads PostgreSQL
+):
     reg = InMemoryRegistry()
     car_id = reg.add('car')
     truck_id = reg.add('truck')

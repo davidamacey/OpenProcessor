@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectStatus
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 class _CountingOpenSearch(FakeLifecycleOpenSearch):
@@ -44,22 +44,6 @@ class _CountingOpenSearch(FakeLifecycleOpenSearch):
             return {'count': len(docs)}
         ((field, value),) = term.items()
         return {'count': sum(1 for d in docs if d.get(field) == value)}
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
 
 
 @pytest.fixture(autouse=True)
