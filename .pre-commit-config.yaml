@@ -185,6 +185,14 @@ repos:
         entry: bash -c 'cd frontend && exec node_modules/.bin/eslint --no-warn-ignored "${@#frontend/}"' --
         language: system
         files: ^frontend/.*\.(js|ts|svelte)$
+      # knip is whole-project (a file is unused only relative to every entry point), so
+      # it takes no filenames and runs whenever frontend source, config or deps change.
+      - id: frontend-knip
+        name: frontend knip (unused files, exports, dependencies)
+        entry: bash -c 'cd frontend && exec node_modules/.bin/knip'
+        language: system
+        pass_filenames: false
+        files: ^frontend/(src|scripts|static)/|^frontend/(knip\.json|package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$
 
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)
