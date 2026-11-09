@@ -210,6 +210,8 @@ async def create_project(
         activate=activate,
         stages=stages,
     )
+    if activate:
+        record = record_from_row(await get_row(record.slug))
     return record, warnings
 
 
