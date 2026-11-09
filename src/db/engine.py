@@ -34,7 +34,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.config.api_pools import db_pool_size
-from src.config.database import DatabaseSettings
+from src.config.database import CONNECT_TIMEOUT_S, DatabaseSettings
 from src.db.pool_metrics import time_checkouts
 
 
@@ -83,7 +83,7 @@ def database_url(
 
 
 def _connect_args(settings: DatabaseSettings, *, job_limits: bool) -> dict[str, Any]:
-    args: dict[str, Any] = {}
+    args: dict[str, Any] = {'connect_timeout': CONNECT_TIMEOUT_S}
     if settings.pooler == 'pgbouncer':
         # Server-side prepared statements do not survive a transaction pooler.
         args['prepare_threshold'] = None
@@ -238,6 +238,7 @@ def one_off_connection(
         database_url(
             settings, role, direct=direct, application_name=application_name or f'op-{os.getpid()}'
         ),
+        connect_args={'connect_timeout': CONNECT_TIMEOUT_S},
         poolclass=pool.NullPool,
     )
     try:

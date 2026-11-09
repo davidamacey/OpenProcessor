@@ -460,6 +460,9 @@ addopts = [
 ]
 # Seconds per test: three times the slowest offline test (124 s measured under 6 parallel workers).
 timeout = 400
+# The signal timeout above reports only the main thread; a test still running at 300 s also dumps
+# every thread's stack (once, nothing is killed), so a hang names the frame it waits in.
+faulthandler_timeout = 300
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
     "live: write-path tests that require the docker/test/ verification harness to be running",

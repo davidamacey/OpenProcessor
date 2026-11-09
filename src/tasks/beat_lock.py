@@ -21,6 +21,7 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from src.config.advisory_locks import BEAT
+from src.config.database import CONNECT_TIMEOUT_S
 
 
 if TYPE_CHECKING:
@@ -58,6 +59,7 @@ def conninfo(settings: DatabaseSettings) -> str:
         password=settings.password('app'),
         sslmode=settings.sslmode,
         application_name=f'op-beat-{os.getpid()}',
+        connect_timeout=CONNECT_TIMEOUT_S,
         **_KEEPALIVES,
     )
 

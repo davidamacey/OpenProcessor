@@ -36,13 +36,23 @@ class FakeCtx:
         self.job_id = job_id
         self.progress_calls: list[tuple[int, int | None, str | None]] = []
         self.cancel = threading.Event()
+        self._recorded = threading.Condition()
+
+    def wait_for_progress(self, epoch: int, timeout: float = 30) -> bool:
+        """Block (the fit thread) until the handler has published ``epoch`` or later."""
+        with self._recorded:
+            return self._recorded.wait_for(
+                lambda: any(done >= epoch for done, _t, _s in self.progress_calls), timeout
+            )
 
     def cancelled(self) -> bool:
         return self.cancel.is_set()
 
     async def progress(self, done, total=None, stage=None, counters=None, *, force=False) -> None:
         del counters, force
-        self.progress_calls.append((done, total, stage))
+        with self._recorded:
+            self.progress_calls.append((done, total, stage))
+            self._recorded.notify_all()
 
     @asynccontextmanager
     async def session(self):
@@ -132,9 +142,16 @@ async def _no_campaign(*_args: Any) -> None:
     return None
 
 
-def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05, hold_at: Any = None):
+def _fake_fit(
+    *,
+    fail_at: int | None = None,
+    epoch_s: float = 0.05,
+    hold_at: Any = None,
+    publish_to: FakeCtx | None = None,
+):
     """``hold_at = (epoch, on_hold)``: after that epoch, ``on_hold()`` runs and the fit waits until
-    the handler has relayed the cancel into ``state`` (a fixed sleep would race a loaded host)."""
+    the handler has relayed the cancel into ``state``. ``publish_to``: each epoch waits until the
+    handler has published it. Neither depends on how fast a loaded host polls."""
 
     def fit(spec, state) -> None:
         print('[fit] start')
@@ -150,6 +167,8 @@ def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05, hold_at: Any
             with state.lock:
                 state.current_epoch = epoch
                 state.last_epoch_metric = {'epoch': epoch, 'map50': 0.1 * epoch}
+            if publish_to is not None:
+                assert publish_to.wait_for_progress(epoch), f'epoch {epoch} was never published'
             if hold_at is not None and hold_at[0] == epoch:
                 hold_at[1]()
                 assert state.cancel_requested.wait(timeout=30), 'the cancel was never relayed'
@@ -166,7 +185,7 @@ def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05, hold_at: Any
 
 def test_a_fake_fit_completes_with_progress_per_epoch(world, monkeypatch) -> None:
     ctx, store, run, stored = world
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit())
+    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(publish_to=ctx))
 
     result = asyncio.run(celery_tasks.train(ctx))
 

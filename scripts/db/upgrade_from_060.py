@@ -23,7 +23,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.clients.storage.roots import build_rooted_store
-from src.config.database import DatabaseSettings
+from src.config.database import CONNECT_TIMEOUT_S, DatabaseSettings
 from src.config.env import env_path
 from src.config.storage import storage_root_paths
 from src.db.engine import database_url, one_off_connection
@@ -73,6 +73,7 @@ async def run(install_dir: Path) -> int:
         database_url(
             DatabaseSettings.from_env(), 'owner', direct=True, application_name='op-upgrade-0.6.0'
         ),
+        connect_args={'connect_timeout': CONNECT_TIMEOUT_S},
         poolclass=pool.NullPool,
     )
     client = build_client()

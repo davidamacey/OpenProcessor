@@ -70,9 +70,10 @@ async def database_unavailable_response(request: Request, exc: OperationalError)
     """The connection itself failed (refused, reset, host down).
 
     A server-side error such as a cancelled statement is a subclass of the driver's
-    ``OperationalError`` and stays a 500: only the bare class means no usable connection.
+    ``OperationalError`` and stays a 500: only the bare class and the connect timeout (a stalled
+    connect, bounded by ``CONNECT_TIMEOUT_S``) mean no usable connection.
     """
-    if type(exc.orig) is not psycopg.OperationalError:
+    if type(exc.orig) not in (psycopg.OperationalError, psycopg.errors.ConnectionTimeout):
         raise exc
     logger.error('database_unavailable', path=request.url.path, error=str(exc.orig))
     return _unavailable(
