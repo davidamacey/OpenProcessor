@@ -15,13 +15,22 @@ if TYPE_CHECKING:
     from src.config.storage import StorageRootPaths
 
 READ_ONLY_ROOTS = frozenset({'source'})
+# A project's bake-off results stay where 0.6.0 put them: ``<slug>/bakeoff_jobs/out/<job_id>``.
+BAKEOFF_RESULTS_LAYOUT = ('bakeoff_jobs', 'out')
+# Uploaded weights live on their own mount, not under the Triton model repository.
+PYTORCH_MODELS_PART = 'pytorch_models'
 
 
 class RootedStore:
     """Keys carry their root (``projects/<slug>/...``); each root is its own ``LocalFsStore``."""
 
     def __init__(self, roots: dict[str, Path]) -> None:
-        self._stores: dict[str, BlobStore] = {name: LocalFsStore(p) for name, p in roots.items()}
+        self._stores: dict[str, BlobStore] = {
+            name: LocalFsStore(p) for name, p in roots.items() if name != PYTORCH_MODELS_PART
+        }
+        self._pytorch_models: BlobStore | None = (
+            LocalFsStore(roots[PYTORCH_MODELS_PART]) if PYTORCH_MODELS_PART in roots else None
+        )
 
     def _route(self, key: str, *, write: bool = False) -> tuple[BlobStore, str]:
         parsed = parse_key(key)
@@ -29,7 +38,17 @@ class RootedStore:
             raise ReadOnlyRootError(f'storage root {parsed.root!r} is read only')
         if not parsed.parts:
             raise ValueError(f'storage key names a root, not an object: {key!r}')
-        return self._stores[parsed.root], '/'.join(parsed.parts)
+        parts = parsed.parts
+        if parsed.root == 'bakeoff_results' and len(parts) > 1:
+            parts = (parts[0], *BAKEOFF_RESULTS_LAYOUT, *parts[1:])
+        if (
+            parsed.root == 'models'
+            and self._pytorch_models is not None
+            and parts[:1] == (PYTORCH_MODELS_PART,)
+            and len(parts) > 1
+        ):
+            return self._pytorch_models, '/'.join(parts[1:])
+        return self._stores[parsed.root], '/'.join(parts)
 
     def open_read(self, key: str) -> BinaryIO:
         store, rel = self._route(key)
@@ -72,5 +91,7 @@ def build_rooted_store(paths: StorageRootPaths) -> RootedStore:
             'models': paths.models,
             'cache': paths.cache,
             'upgrade': paths.upgrade,
+            'bakeoff_results': paths.bakeoff_results,
+            PYTORCH_MODELS_PART: paths.pytorch_models,
         }
     )

@@ -23,6 +23,8 @@ def _store(tmp_path: Path):
             models=tmp_path / 'm',
             cache=tmp_path / 'c',
             upgrade=tmp_path / 'u',
+            bakeoff_results=tmp_path / 'b',
+            pytorch_models=tmp_path / 'pt',
         )
     )
 

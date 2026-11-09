@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.config.storage import PYTORCH_MODELS_DIR
 from src.services.models.checkpoint_inspect import (
     YOLOV5_ORIGINAL_MESSAGE,
     head_kind,
@@ -23,8 +24,6 @@ from src.services.models.checkpoint_inspect import (
 
 
 logger = logging.getLogger(__name__)
-
-PYTORCH_MODELS_DIR = Path('/app/pytorch_models')
 
 
 def validate_pytorch_model(file_path: Path) -> tuple[bool, str, dict[str, Any]]:

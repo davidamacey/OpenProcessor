@@ -49,7 +49,7 @@ def evaluate(spec: dict[str, Any], cancelled: Callable[[], bool]) -> dict[str, A
 async def bakeoff(ctx: JobContext) -> JobResult:
     """Run one bake-off; the results are the files under the spec's ``out_dir``.
 
-    ``bakeoff_runs.results_storage_key`` records that directory. With an arbiter configured the run
+    ``bakeoff_runs.results_storage_key`` records it as ``bakeoff_results/<slug>/<job>``. With an arbiter configured the run
     holds the evaluator's cards for its whole length. A run that ends in the
     ``error`` state fails the job; a run that scored some pairs and failed others is
     ``completed_with_errors``.
@@ -66,7 +66,11 @@ async def bakeoff(ctx: JobContext) -> JobResult:
         await release_cards(ctx)
     out_dir = str(spec['out_dir'])
     async with ctx.session() as session:
-        await session.run_sync(lambda sync: bakeoff_repo.set_results_key(sync, ctx.job_id, out_dir))
+        await session.run_sync(
+            lambda sync: bakeoff_repo.set_results_key(
+                sync, ctx.job_id, str(ctx.project_slug), str(spec['job_id'])
+            )
+        )
     if status.get('state') == 'cancelled':
         return JobResult({'out_dir': out_dir, 'cancelled': True})
     if status.get('state') != 'done':

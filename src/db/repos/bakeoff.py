@@ -15,6 +15,7 @@ from sqlalchemy import select, update
 from src.db.models.jobs import Job
 from src.db.models.training import BakeoffRun
 from src.domain import job_states as js
+from src.domain.storage_keys import make_key
 
 
 if TYPE_CHECKING:
@@ -52,10 +53,13 @@ def insert_run(
     session.flush()
 
 
-def set_results_key(session: Session, job_id: uuid.UUID, key: str) -> bool:
-    """Record where the results are; false when the job has no row."""
+def set_results_key(session: Session, job_id: uuid.UUID, slug: str, run_name: str) -> bool:
+    """Record where the results are (``bakeoff_results/<slug>/<run_name>``, ``run_name`` being
+    the spec's directory name); false when the job has no row."""
     result = session.execute(
-        update(BakeoffRun).where(BakeoffRun.job_id == job_id).values(results_storage_key=key)
+        update(BakeoffRun)
+        .where(BakeoffRun.job_id == job_id)
+        .values(results_storage_key=make_key('bakeoff_results', slug, run_name))
     )
     return bool(result.rowcount)  # type: ignore[attr-defined]
 
