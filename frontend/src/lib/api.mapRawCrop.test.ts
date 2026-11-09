@@ -1,6 +1,5 @@
 /**
- * Full `mapRawCrop` field-mapping test (docs/design/test-audit-2026-09-24.md
- * §2.2/P0-3). Every field `RawCrop` declares (`makeItem`, `src/lib/test/
+ * Full `mapRawCrop` field-mapping test (test audit §2.2/P0-3). Every field `RawCrop` declares (`makeItem`, `src/lib/test/
  * makeItem.ts`) is asserted through to its mapped `Crop` field with the
  * fixture's exact, distinct value — a dropped field, a field mapped to a
  * hardcoded default, or a field mis-mapped to the wrong wire key all fail

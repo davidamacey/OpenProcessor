@@ -5,7 +5,7 @@ import { apiFetch, isPlainObject, scoped } from '$lib/api';
 
 // -- curation scores (`/settings` "Curation scores" card, G10) -----------
 //
-// docs/design/frontend-coverage-audit-2026-09-24.md §G10: review queues
+// frontend coverage audit §G10: review queues
 // (Uncertainty, Model Disagreements, and the `uniqueness`/`mistakenness`
 // StrategyBar sorts) are empty not because nothing's wrong but because
 // no scorer has ever run — `/scores/*` had no frontend caller at all.

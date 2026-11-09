@@ -169,7 +169,7 @@ describe('moveCropIds', () => {
     expect(moveCropsToCluster).not.toHaveBeenCalled();
   });
 
-  // M5 (docs/design/interactive-pass-2026-09-24.md): a move is a
+  // M5 (interactive pass): a move is a
   // label-history write like bulkLabel — Z must undo it through the same
   // undoStore/label-undo route. Before this fix moveCropIds never called
   // recordWrites at all, so Z was a silent no-op after a move.

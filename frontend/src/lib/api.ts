@@ -43,7 +43,7 @@ export const apiBase: string = RAW_BASE.replace(/\/+$/, '');
  * must equal it: the backend also builds some URLs itself (thumbnail
  * URLs in `/regions` rows) from its own prefix, and nginx only proxies
  * this one. Flipped from a transitional prefix at T-E2
- * (`docs/design/backend-integration-phase-b-plan-2026-09-20.md`).
+ * (backend integration phase B plan).
  */
 const RAW_API_PREFIX = (import.meta.env?.PUBLIC_API_PREFIX as string | undefined) ?? '';
 

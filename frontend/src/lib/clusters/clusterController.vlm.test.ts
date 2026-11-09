@@ -185,7 +185,7 @@ describe('rejectVlmForCrop', () => {
     expect(errorSpy).toHaveBeenCalledWith('Reject VLM suggestion failed: down');
   });
 
-  // M6/V1 (docs/design/interactive-pass-2026-09-24.md): Z must reverse a
+  // M6/V1 (interactive pass): Z must reverse a
   // Reject-VLM the same way it reverses a label write.
   it('records a vlm_dismiss undo entry on success, so Z can reverse it', async () => {
     const updated = crop('a', { vlm_suggested_class_id: null });

@@ -92,7 +92,7 @@ export type RawCrop = {
    *  item (item 11, 2026-09-24), not just review-queue rows. */
   proposed_class_id?: number | null;
   proposed_class_name?: string | null;
-  // Curation scores (Phase 3, docs/curation-strategy-plan-2026-09.md §4).
+  // Curation scores (Phase 3, curation strategy plan §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
   mistakenness_method?: string | null;

@@ -15,7 +15,7 @@ import type {
 
 // ===========================================================================
 // Ingest ({API_PREFIX}/ingest/*) — bring images into the pool.
-// docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.2.
+// Ingest UI plan §B.2.
 
 export function getIngestStatus(signal?: AbortSignal): Promise<IngestStatus> {
   return apiFetch<IngestStatus>(`${scoped()}/ingest/status`, {}, signal);

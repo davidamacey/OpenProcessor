@@ -2,7 +2,7 @@
  * State/logic for the dashboard's `<AssistScopeBar>` control — which
  * class (and, optionally, which prompt pack) an
  * assisted auto-label run is scoped to
- * (docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §3).
+ * (VLM-scoped labeling assist plan §3).
  *
  * Same "logic extracted from the component so it's unit-testable"
  * pattern as `strategyBar.svelte.ts` / `pager.svelte.ts` /

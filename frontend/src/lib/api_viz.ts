@@ -6,7 +6,7 @@ import { ApiError, structuredDetail } from '$lib/api_errors';
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
 //
-// docs/curation-strategy-plan-2026-09.md §2.7/§5.6/§7 — `embedding_viz.py`
+// curation strategy plan §2.7/§5.6/§7 — `embedding_viz.py`
 // + `viz.py` (OpenProcessor). UMAP-as-a-visualization-only overlay is the
 // one method in the whole curation-strategy plan that was NOT validated
 // in Phase 2 before implementation started; its own §6 acceptance bar

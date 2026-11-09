@@ -24,7 +24,7 @@ export async function getMethods(signal?: AbortSignal): Promise<MethodsResponse>
 //
 // Deployment-wide strategy defaults, verified against wt-oss-hardening's
 // `src/routers/curation/settings.py` on 2026-09-21. See
-// docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.
+// curation settings UI plan §1.3.
 
 /**
  * Read the deployment's shared curation defaults. A `defaults: {}`
@@ -60,7 +60,7 @@ export async function getCurationSettings(
  * backend drops it from the stored record entirely, so the next GET's
  * `defaults` map omits that key and callers fall back to the axis's own
  * built-in default. This is the fix for the gap once tracked as H-1 in
- * docs/design/curation-settings-ui-plan-2026-09-21.md (a pinned default
+ * curation settings UI plan (a pinned default
  * used to be permanent, since PUT only merged and every value had to be
  * a currently-advertised id).
  *
