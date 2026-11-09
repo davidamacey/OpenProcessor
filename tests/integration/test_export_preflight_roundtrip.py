@@ -19,11 +19,10 @@ unresolvable / the scan's filter is a no-op) and pass after the fix.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
-from curation.occ_fakes import FakeIndicesApi
+from curation.export_fakes import FakeOpenSearch
 
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
@@ -36,22 +35,6 @@ pytestmark = pytest.mark.integration
 
 
 pytest_plugins = ['_records_world']
-
-
-class _FakeOpenSearch:
-    def __init__(self, docs: list[dict[str, Any]]) -> None:
-        self._docs = docs
-        self.indices = FakeIndicesApi()
-
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
-        hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
-        return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
-
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:
-        return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
-
-    async def clear_scroll(self, scroll_id: str) -> None:
-        return None
 
 
 # the export's retention prune and item space are read from PostgreSQL
@@ -82,7 +65,7 @@ async def test_include_classes_filter_actually_applies_to_a_real_export(
     ]
 
     cfg = CurationConfig(export_root=tmp_path / 'exports')
-    service = GenericYoloExportService(_FakeOpenSearch(docs), config=cfg, registry=reg)
+    service = GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=reg)
     result = await service.export_dataset(seed=42)
     export_dir = Path(result.export_dir)
 

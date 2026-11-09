@@ -95,12 +95,15 @@ async def test_a_stale_revision_is_refused_and_unsharing_resets_the_revision(pg,
 
 
 async def test_two_concurrent_writers_on_one_revision_one_wins_one_is_refused(pg, job_env) -> None:
-    owner, consumer = make_project(pg), make_project(pg)
+    owner, consumer, other = make_project(pg), make_project(pg), make_project(pg)
     await promote(owner, 'own__race_det', 1)
 
+    # Both write on revision 1 and both share (the revision is the consumer count, so an unshare
+    # would put it back to 1 and let the second writer win too, depending on who locks first).
+    # Whichever takes the row lock first moves the revision to 2 and the other is refused.
     results = await asyncio.gather(
-        share(owner, 'own__race_det', [consumer], shared=True),
-        share(owner, 'own__race_det', [consumer], shared=False),
+        share(owner, 'own__race_det', [consumer]),
+        share(owner, 'own__race_det', [other]),
         return_exceptions=True,
     )
 

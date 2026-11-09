@@ -9,11 +9,10 @@ from unittest.mock import AsyncMock
 import pytest
 from config_store import memory_config
 
-from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an autouse fixture
+from projects.clone_flow_fakes import (
     Fake,
     activate_config,
     clone_into,
-    isolated_state,
     patch_lifecycle,
     record,
     save,
@@ -25,7 +24,7 @@ from src.services.projects.clone import _apply_clone
 from src.services.projects.clone_validate import _validate_clone
 
 
-pytestmark = pytest.mark.unbound
+pytestmark = [pytest.mark.unbound, pytest.mark.usefixtures('isolated_state')]
 
 
 async def _target_state(client, target):

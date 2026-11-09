@@ -19,13 +19,12 @@ Single-box overlay-drawing coverage (numbered tag rendering) lives in
 
 from __future__ import annotations
 
-import io
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
-from PIL import Image
+from _image_helpers import make_jpeg
 
 from src.services.labeling.vlm_labeler import VlmLabeler
 from src.services.labeling.vlm_models import (
@@ -57,9 +56,7 @@ def _make_labeler(http_response_json: dict | list | str | None = None) -> VlmLab
 
 
 def _make_jpeg(size: tuple[int, int] = (200, 100)) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', size, color=(10, 20, 30)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
+    return make_jpeg(*size, (10, 20, 30))
 
 
 class TestLabelCombined:

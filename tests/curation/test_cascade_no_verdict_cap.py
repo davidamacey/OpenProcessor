@@ -17,13 +17,12 @@ transport failure is no reply at all -- retried, never counted (see
 
 from __future__ import annotations
 
-import io
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from PIL import Image
+from _image_helpers import make_jpeg
 
 from curation.region_cascade_helpers import _drive_worker, _FakeOpenSearch, _item
 from src.config import get_region_fields
@@ -50,9 +49,7 @@ def _default_cap(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _jpeg() -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (320, 240), (50, 80, 120)).save(buf, format='JPEG')
-    return buf.getvalue()
+    return make_jpeg()
 
 
 def _no_verdict_reply() -> VlmCombinedReply:

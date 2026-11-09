@@ -7,13 +7,11 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from config_store import memory_config
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import bind_project
 from src.config.projects import ProjectRecord, resources_for_new
-from src.services.config_store.store import reset_config_stores
 
 
 class Fake:
@@ -39,19 +37,6 @@ def record(slug: str) -> ProjectRecord:
         origin=None,
         resources=resources_for_new(slug, base_curation_config()),
     )
-
-
-@pytest.fixture(autouse=True)
-def isolated_state(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    reset_config_stores()
-    yield
-    reset_config_stores()
-    curation_mod._default_curation_config = None
 
 
 async def save(client, rec, kind, name, body, expected=None):

@@ -11,12 +11,11 @@ from typing import TYPE_CHECKING
 import pytest
 from config_store import memory_config
 
-from projects.clone_flow_fakes import (  # noqa: F401 - isolated_state is an autouse fixture
+from projects.clone_flow_fakes import (
     Fake,
     activate_config,
     active_ref,
     clone_into,
-    isolated_state,
     patch_lifecycle,
     save,
 )
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 
-pytestmark = pytest.mark.unbound
+pytestmark = [pytest.mark.unbound, pytest.mark.usefixtures('isolated_state')]
 
 
 def _record(slug: str) -> ProjectRecord:

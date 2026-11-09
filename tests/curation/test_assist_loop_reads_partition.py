@@ -60,7 +60,7 @@ async def _serve(project) -> tuple[uuid.UUID, list[uuid.UUID]]:
     return partition, uids
 
 
-async def test_the_roots_are_the_serving_partitions_clusters(pg_env, project) -> None:
+async def test_the_roots_are_the_serving_partitions_clusters(bound_async_engine, project) -> None:
     partition, uids = await _serve(project)
     async with async_session_factory()() as session, project_tx(session, project):
         roots = await PartitionReader.roots(session, project=project, target='item')
@@ -70,7 +70,9 @@ async def test_the_roots_are_the_serving_partitions_clusters(pg_env, project) ->
     ]
 
 
-async def test_a_project_with_no_serving_partition_has_no_roots(pg_env, project) -> None:
+async def test_a_project_with_no_serving_partition_has_no_roots(
+    bound_async_engine, project
+) -> None:
     async with async_session_factory()() as session, project_tx(session, project):
         assert await PartitionReader.roots(session, project=project, target='item') == []
 

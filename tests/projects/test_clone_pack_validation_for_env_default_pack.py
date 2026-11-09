@@ -21,7 +21,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from curation.activation.conftest import multi_default_registry, ready_state  # noqa: F401 - fixtures
 from curation.activation.constants import live_pair, pack_body, stripped_pack_body
 
 
@@ -29,8 +28,8 @@ pytestmark = pytest.mark.unbound
 
 
 def test_clone_rejects_profile_paired_with_targets_own_stripped_pack(
-    ready_state,  # noqa: F811 - pytest fixture param shadows the import
-    multi_default_registry,  # noqa: F811 - pytest fixture param shadows the import
+    ready_state,
+    multi_default_registry,
 ):
     import src.config.curation_accessors as curation_mod
     from projects.clone_flow_fakes import Fake, activate_config, save

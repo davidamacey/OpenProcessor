@@ -7,13 +7,12 @@ upstream actually received and sent."""
 
 from __future__ import annotations
 
-import io
 import json
 from typing import Any
 
 import httpx
 import pytest
-from PIL import Image
+from _image_helpers import make_jpeg
 
 from src.services.labeling import vlm_client
 from src.services.labeling.vlm_labeler import VlmLabeler
@@ -22,9 +21,7 @@ from src.services.labeling.vlm_probe import ProbeCrop, probe
 
 
 def _jpeg() -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (120, 80), (9, 9, 9)).save(buf, format='JPEG')
-    return buf.getvalue()
+    return make_jpeg(120, 80, (9, 9, 9))
 
 
 class Upstream:
