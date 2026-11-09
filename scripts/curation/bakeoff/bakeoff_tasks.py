@@ -79,8 +79,4 @@ def _on_worker_init(**_: Any) -> None:
     from src.db import schema_check
 
     reject_retired_env()
-    try:
-        schema_check.wait_for_dependencies({'database': schema_check.database_probe})
-        schema_check.check_control_plane()
-    except (schema_check.DependencyUnavailableError, schema_check.SchemaNotCurrentError) as exc:
-        raise SystemExit(str(exc)) from exc
+    schema_check.require_current_schema()
