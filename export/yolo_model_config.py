@@ -28,7 +28,6 @@ def load_config_file(config_path: str) -> dict[str, dict[str, Any]]:
         pt_file: /path/to/model.pt
         triton_name: my_model_name  # optional, auto-generated if not provided
         max_batch: 32  # optional, default 32
-        num_classes: 80  # optional, auto-detected from model
         class_names:  # optional, auto-detected from model
           - person
           - car
@@ -64,8 +63,6 @@ def load_config_file(config_path: str) -> dict[str, dict[str, Any]]:
         }
 
         # Optional class configuration
-        if 'num_classes' in model_config:
-            models[model_id]['num_classes'] = model_config['num_classes']
         if 'class_names' in model_config:
             models[model_id]['class_names'] = model_config['class_names']
 

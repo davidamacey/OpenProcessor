@@ -345,3 +345,13 @@ def test_a_profile_tuned_smaller_config_is_kept(
     assert result['status'] == 'success', result
     assert kept.read_text() == 'name: "tuned"\nmax_batch_size: 4\n'
     assert (repo.models / 'car_trt_end2end' / 'config.pbtxt.generated').is_file()
+
+
+def test_the_example_config_file_loads_to_the_keys_the_export_reads() -> None:
+    from yolo_model_config import load_config_file
+
+    models = load_config_file(str(EXPORT_DIR / 'models_config.example.yaml'))
+
+    assert models
+    for config in models.values():
+        assert set(config) <= {'pt_file', 'triton_name', 'max_batch', 'class_names'}

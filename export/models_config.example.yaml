@@ -30,14 +30,6 @@ models:
     # Default: 32
     max_batch: 64
 
-    # Optional: Maximum detections per image (topk for NMS)
-    # Default: 300
-    topk: 300
-
-    # Optional: Number of classes
-    # Auto-detected from model if not specified
-    # num_classes: 5
-
     # Optional: Class names
     # Auto-extracted from model if not specified
     # class_names:
