@@ -178,3 +178,44 @@ def test_db_verify_runs_the_report_in_the_api_image(shimmed: Shimmed, inst: Path
     done = cli(shimmed, inst, 'db', 'verify')
     assert done.returncode == 0, done.stderr + done.stdout
     assert [ln for ln in _calls(shimmed) if ' run ' in ln and 'scripts.db.verify' in ln]
+
+
+LEGACY_ENV = ('OP_REPROCESS_JOBS_DIR', 'OP_ASSIST_JOBS_DIR', 'OP_SCORES_STATE_DIR')
+
+
+def _env_with_legacy_dirs(shimmed: Shimmed) -> Path:
+    env = shimmed.root / 'inst' / '.env'
+    with env.open('a') as fh:
+        fh.writelines(f'{name}=/custom/{name.lower()}\n' for name in LEGACY_ENV)
+    return env
+
+
+def test_a_finished_upgrade_removes_the_legacy_directory_variables_from_env_and_says_so(
+    shimmed: Shimmed,
+) -> None:
+    assert install(shimmed).returncode == 0
+    _pretend_060(shimmed)
+    env = _env_with_legacy_dirs(shimmed)
+    keep = env.read_text().count('\n') - len(LEGACY_ENV)
+
+    result = install(shimmed)
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    text = env.read_text()
+    assert not [name for name in LEGACY_ENV if f'{name}=' in text]
+    assert text.count('\n') == keep  # nothing else was touched
+    for name in LEGACY_ENV:
+        assert f'removed {name} from .env' in result.stdout + result.stderr
+
+
+def test_a_stopped_upgrade_keeps_the_legacy_variables_so_the_retry_can_read_them(
+    shimmed: Shimmed,
+) -> None:
+    assert install(shimmed).returncode == 0
+    _pretend_060(shimmed)
+    env = _env_with_legacy_dirs(shimmed)
+    shimmed.flag('upgrade_fail')
+
+    assert install(shimmed).returncode == 8
+
+    assert all(f'{name}=/custom/' in env.read_text() for name in LEGACY_ENV)

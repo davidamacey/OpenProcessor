@@ -34,6 +34,41 @@ _upgrade_060_newest_bundle() {
     printf '%s' "$newest"
 }
 
+# The 0.6.0 directory variables the upgrade reads (src/services/upgrade/from_060/sources.py, from
+# .env through the api container's env_file). They are retired in 0.7.0 (src/config/retired_env.py),
+# so once the upgrade has read them they come out of .env, or the stack would refuse to start.
+UPGRADE_060_LEGACY_ENV=(
+    OP_BULK_INGEST_DIR
+    OP_DATASET_IMPORTS_DIR
+    OP_REPROCESS_JOBS_DIR
+    OP_PROBE_JOBS_DIR
+    OP_SCORES_STATE_DIR
+    OP_SELECT_JOBS_DIR
+    OP_VIZ_JOBS_DIR
+    OP_ASSIST_JOBS_DIR
+    OP_ASSIST_LOOP_JOBS_DIR
+    OP_REGION_DRAIN_STATE_DIR
+    OP_COMBINE_JOBS_DIR
+)
+
+# _upgrade_060_strip_legacy_env -- drop each legacy variable from .env (exact key match, atomic),
+# logging each. The backup taken before the upgrade keeps the old .env.
+_upgrade_060_strip_legacy_env() {
+    local key tmp
+    [[ -f "$ENV_FILE" ]] || return 0
+    for key in "${UPGRADE_060_LEGACY_ENV[@]}"; do
+        read_env_var "$ENV_FILE" "$key" >/dev/null || continue
+        tmp="$(mktemp "$(dirname "$ENV_FILE")/.env.XXXXXX")" || return 1
+        chmod 600 "$tmp"
+        if ! awk -v k="$key" '{ i = index($0, "=") } !(i > 1 && substr($0, 1, i - 1) == k)' "$ENV_FILE" > "$tmp" \
+            || ! mv -f "$tmp" "$ENV_FILE"; then
+            rm -f "$tmp"
+            return 1
+        fi
+        log_info "removed ${key} from .env: the 0.6.0 upgrade has read it and 0.7.0 no longer uses it"
+    done
+}
+
 # upgrade_060_step -- the installer's call: the control data moves out of OpenSearch before anything
 # starts. A stop leaves the marker, so a re-run (whose recorded version is already the new one)
 # still comes back to it.
@@ -48,6 +83,7 @@ upgrade_060_step() {
     fi
     : > "${OP_DIR}/.install/upgrade_060.pending"
     upgrade_060_run || return 1
+    _upgrade_060_strip_legacy_env || return 1
     rm -f "${OP_DIR}/.install/upgrade_060.pending"
 }
 

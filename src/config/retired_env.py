@@ -97,6 +97,20 @@ RETIRED_ENV: dict[str, str] = {
     ),
     # A model export is a jobs row on the gpu_export queue, not a task file.
     'EXPORT_TASK_DIR': f'{_REMOVED} model-export tasks are job rows; read them at GET /models/export/{{task_id}}',
+    # Reprocess, assist, assist-loop, probe, select, viz and scores runs are jobs rows. The 0.6.0
+    # upgrade reads these from .env and the installer then removes them.
+    **dict.fromkeys(
+        (
+            'OP_REPROCESS_JOBS_DIR',
+            'OP_ASSIST_JOBS_DIR',
+            'OP_ASSIST_LOOP_JOBS_DIR',
+            'OP_PROBE_JOBS_DIR',
+            'OP_SELECT_JOBS_DIR',
+            'OP_VIZ_JOBS_DIR',
+            'OP_SCORES_STATE_DIR',
+        ),
+        f'{_REMOVED} the run is a jobs row; there is no job directory',
+    ),
     'OP_BAKEOFF_JOBS_DIR': f'{_REMOVED} bake-offs are bakeoff jobs; there is no job directory',
     'OP_CROP_DUP_THRESHOLD': (
         f'{_REMOVED} the bucketed near-duplicate scorer is gone; near duplicates are run-scoped '

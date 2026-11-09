@@ -128,3 +128,38 @@ def test_the_control_index_names_are_retired_for_postgresql(
     monkeypatch.setenv(name, 'op_anything')
     with pytest.raises(RuntimeError, match=f'{name} was removed'):
         reject_retired_env()
+
+
+LEGACY_JOB_DIR_ENV = (
+    'OP_REPROCESS_JOBS_DIR',
+    'OP_ASSIST_JOBS_DIR',
+    'OP_ASSIST_LOOP_JOBS_DIR',
+    'OP_PROBE_JOBS_DIR',
+    'OP_SELECT_JOBS_DIR',
+    'OP_VIZ_JOBS_DIR',
+    'OP_SCORES_STATE_DIR',
+)
+
+
+@pytest.mark.parametrize('name', LEGACY_JOB_DIR_ENV)
+def test_a_legacy_job_directory_variable_is_refused_at_startup(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(name, '/jobs/x')
+    with pytest.raises(RuntimeError, match=f'{name} was removed'):
+        reject_retired_env()
+
+
+def test_every_variable_the_060_upgrade_reads_is_retired_and_stripped_by_the_installer() -> None:
+    """The upgrade reads the old directories from .env; each must be retired and removed after."""
+    import re
+    from pathlib import Path
+
+    from src.services.upgrade.from_060 import sources
+
+    read = {var for _family, var, _default in sources.JOB_FAMILIES} | {sources.COMBINE_ENV[0]}
+    assert read <= set(RETIRED_ENV)
+    script = (Path(__file__).parents[2] / 'scripts/lib/upgrade_060.sh').read_text()
+    block = re.search(r'UPGRADE_060_LEGACY_ENV=\((.*?)\)', script, re.S)
+    assert block is not None
+    assert set(block.group(1).split()) == read
