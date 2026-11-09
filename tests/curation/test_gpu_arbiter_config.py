@@ -8,12 +8,9 @@ not crash.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from src.config import GpuArbiterConfig, get_gpu_arbiter_config
-from src.services.training import gpu_arbiter_docker
 
 
 def test_defaults_are_empty_and_permissive() -> None:
@@ -39,60 +36,6 @@ def test_is_gpu_allowed_restricts_when_configured() -> None:
 
 def test_get_gpu_arbiter_config_singleton() -> None:
     assert get_gpu_arbiter_config() is get_gpu_arbiter_config()
-
-
-def test_stop_gpu_services_is_noop_with_no_configured_containers() -> None:
-    """An install with GpuArbiterConfig(containers=()) must not touch the
-    docker SDK at all -- it degrades to a no-op rather than crashing or
-    warning about a missing socket."""
-    action = asyncio.run(gpu_arbiter_docker.stop_gpu_services(containers=()))
-    assert action.action == 'noop'
-
-
-def test_start_gpu_services_is_noop_with_no_configured_containers() -> None:
-    action = asyncio.run(gpu_arbiter_docker.start_gpu_services(containers=()))
-    assert action.action == 'noop'
-
-
-def test_docker_client_unavailable_warns_once_not_per_call(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """G-15: without docker-compose.gpu-arbiter.yml's socket mount, every
-    claim/release/reconcile probe calls ``_docker_client()`` and gets
-    ``None`` (fail-open). That must log exactly one warning per outage,
-    not one per call -- otherwise a busy reconcile loop drowns the log."""
-
-    class _Boom:
-        def from_env(self) -> None:
-            raise RuntimeError('no such file or directory: /var/run/docker.sock')
-
-    monkeypatch.setattr(gpu_arbiter_docker, '_docker_unavailable_logged', [False])
-    monkeypatch.setattr('docker.from_env', _Boom().from_env)
-
-    warnings: list[tuple[str, dict]] = []
-    monkeypatch.setattr(
-        gpu_arbiter_docker.logger,
-        'warning',
-        lambda event, **kw: warnings.append((event, kw)),
-    )
-
-    for _ in range(3):
-        assert gpu_arbiter_docker._docker_client() is None
-
-    assert len(warnings) == 1
-    assert warnings[0][0] == 'arbiter_docker_unavailable'
-
-    # Recovery clears the dedup flag so a later outage warns again.
-    class _Ok:
-        def ping(self) -> None:
-            return None
-
-    monkeypatch.setattr('docker.from_env', _Ok)
-    assert gpu_arbiter_docker._docker_client() is not None
-
-    monkeypatch.setattr('docker.from_env', _Boom().from_env)
-    assert gpu_arbiter_docker._docker_client() is None
-    assert len(warnings) == 2
 
 
 # =============================================================================

@@ -2,7 +2,8 @@
 
 An AST read of ``src/app/lifespan.py``: none of the removed periodic steps may come back, whatever
 their form (a call, an import, an attribute). The ingest dispatcher loop, the open-vocabulary
-sweeper, the promoted-model reload, the orphaned-job reconcile and the cache prune each run as a
+sweeper, the promoted-model reload, the orphaned-job reconcile, the cache prune and the GPU arbiter
+(``op.periodic.gpu_arbiter``, in gpu-arbiter-worker) each run as a
 tick, so the number of API workers never multiplies them.
 """
 
@@ -26,6 +27,11 @@ REMOVED = (
     'startup_reconcile',
     'reload_promoted_models',
     'prune_crop_cache',
+    'start_gpu_arbiter',
+    'arbiter_reconcile_loop',
+    'stop_arbiter',
+    'reconcile_on_startup',
+    'arbiter_task',
 )
 
 

@@ -11,7 +11,6 @@ class AppResources:
 
     shared_executor: ThreadPoolExecutor | None = None
     async_triton_pool: AsyncTritonPool | None = None
-    arbiter_task: asyncio.Task[None] | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
     ops_metrics_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
