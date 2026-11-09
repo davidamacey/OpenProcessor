@@ -89,3 +89,67 @@ def test_the_module_imports_with_only_the_standard_library(tmp_path: Path) -> No
         timeout=60,
     )
     assert result.stdout.strip() == 'nms []'
+
+
+def test_every_family_has_a_spec_with_a_known_head_kind_and_decoder() -> None:
+    from src.domain.model_families import FAMILIES
+
+    assert [spec.name for spec in FAMILIES] == [
+        'yolov5u',
+        'yolov8',
+        'yolov9',
+        'yolov10',
+        'yolo11',
+        'yolo12',
+        'yolo26',
+        'yolov5_original',
+    ]
+    for spec in FAMILIES:
+        assert spec.head_kind in {'one2one', 'nms', 'onnx_objectness'}
+        assert spec.decoder in {'fused', 'objectness'}
+        assert spec.pt_supported == (spec.name != 'yolov5_original')
+
+
+def test_the_one_to_one_families_are_exactly_yolov10_and_yolo26() -> None:
+    from src.domain.model_families import FAMILIES
+
+    assert {s.name for s in FAMILIES if s.head_kind == 'one2one'} == {'yolov10', 'yolo26'}
+    assert {s.name for s in FAMILIES if s.head_kind == 'onnx_objectness'} == {'yolov5_original'}
+
+
+def test_the_probe_route_accepts_the_architectures_it_always_accepted() -> None:
+    from src.domain.model_families import PROBE_ARCHITECTURES, probe_decoder
+
+    assert PROBE_ARCHITECTURES == ('yolo11', 'yolo26', 'yolov5_objectness')
+    assert probe_decoder('yolo11') == probe_decoder('yolo26') == 'fused'
+    assert probe_decoder('yolov5_objectness') == 'objectness'
+    with pytest.raises(ValueError, match='yolov8'):
+        probe_decoder('yolov8')
+
+
+def test_no_other_module_defines_an_architecture_tuple() -> None:
+    """The registry is the one place that names the families (``rg "('yolo11', 'yolo26'" src``)."""
+    import ast
+
+    offenders: list[str] = []
+    for top in ('src', 'export', 'docker', 'scripts'):
+        for path in sorted((REPO_ROOT / top).rglob('*.py')):
+            if path == REPO_ROOT / 'src' / 'domain' / 'model_families.py':
+                continue
+            tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+                    names = {
+                        e.value
+                        for e in node.elts
+                        if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                    }
+                    if {'yolo11', 'yolo26'} <= names:
+                        offenders.append(f'{path.relative_to(REPO_ROOT)}:{node.lineno}')
+    assert not offenders, offenders
+
+
+def test_the_export_job_reads_its_head_kinds_from_the_registry() -> None:
+    from src.domain.model_families import HEAD_KINDS
+
+    assert HEAD_KINDS == ('one2one', 'nms')

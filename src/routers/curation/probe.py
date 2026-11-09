@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
+from src.domain.model_families import PROBE_ARCHITECTURES
 from src.routers.curation._common import router
-from src.services.curation.probe_models import PROBE_ARCHITECTURES
 
 
 class ProbeRunRequest(BaseModel):
@@ -94,7 +94,7 @@ async def probe_run(payload: ProbeRunRequest, session: DbSessionDep) -> dict[str
 
     ``409`` when the referenced training job isn't finished or has no exported checkpoint, and
     ``409 job_busy`` while a probe job is active. ``422`` when ``architecture`` is outside
-    :data:`~src.services.curation.probe_models.PROBE_ARCHITECTURES`. A requested ``gpu`` is
+    :data:`~src.domain.model_families.PROBE_ARCHITECTURES`. A requested ``gpu`` is
     claimed by the worker through the arbiter ``POST /train/start`` uses; a claim failure fails
     the job (see ``src.services.curation.probe_job``).
     """

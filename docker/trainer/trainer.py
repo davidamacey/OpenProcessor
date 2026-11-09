@@ -29,7 +29,7 @@ from trainer_eval import populate_eval_block
 from trainer_fit import _build_model, _export_onnx, _train_with_oom_backoff
 from trainer_kwargs import _resolve_multi_gpu_autobatch, build_train_kwargs, resolve_base_weights
 
-from src.domain.model_families import head_kind_of
+from src.domain.model_families import ONE2ONE, head_kind_of
 
 
 if TYPE_CHECKING:
@@ -70,7 +70,7 @@ def _select_served_head(eval_model: Any, model_family: str) -> str | None:
     inner_model = getattr(eval_model, 'model', None)
     head_layers = getattr(inner_model, 'model', None) if inner_model is not None else None
     head_module = head_layers[-1] if head_layers else None
-    if inner_model is None or head_module is None or head_kind_of(head_module) != 'one2one':
+    if inner_model is None or head_module is None or head_kind_of(head_module) != ONE2ONE:
         return None
     inner_model.end2end = True
     return 'end2end'

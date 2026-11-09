@@ -118,6 +118,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONPATH=/app \
     TORCH_HOME=/home/appuser/.cache/torch \
     YOLO_CONFIG_DIR=/home/appuser/.config/Ultralytics \
+    YOLO_AUTOINSTALL=False \
     OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
 
 # Flat module layout: /app is on PYTHONPATH, so `celery -A celery_tasks:app` resolves

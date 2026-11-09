@@ -59,7 +59,8 @@ class UltralyticsDetector:
             device=self.device,
             conf=self.conf,
             iou=self.iou,
-            half=self.half,
+            # ``quantize`` replaces the deprecated ``half`` (docs.ultralytics.com/modes/predict/)
+            quantize=16 if self.half else 32,
             verbose=False,
         )
         if not res:

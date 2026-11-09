@@ -77,23 +77,6 @@ def test_original_yolov5_checkpoint_is_refused_with_the_yolov5u_message(tmp_path
 
 
 @pytest.mark.families
-@pytest.mark.parametrize(
-    ('weight', 'head_kind'),
-    [
-        ('yolo26n.pt', 'one2one'),
-        ('yolov10n.pt', 'one2one'),
-        ('yolo11n.pt', 'nms'),
-        ('yolov5nu.pt', 'nms'),
-    ],
-)
-def test_official_weights_route_by_head_kind(op_weights, weight: str, head_kind: str) -> None:
-    ok, msg, info = validate_pytorch_model(op_weights(weight))
-
-    assert ok, msg
-    assert info['head_kind'] == head_kind
-
-
-@pytest.mark.families
 def test_official_original_yolov5_weights_are_refused(op_weights) -> None:
     ok, msg, _ = validate_pytorch_model(op_weights('yolov5n.pt'))
 

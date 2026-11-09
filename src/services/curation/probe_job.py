@@ -49,7 +49,7 @@ async def start(
 ) -> JobRow:
     """Queue the probe pass. ``ValueError`` for an unknown ``architecture`` (422 at the router),
     409 ``job_busy`` while another probe of the project is active."""
-    from src.services.curation.probe_models import PROBE_ARCHITECTURES
+    from src.domain.model_families import PROBE_ARCHITECTURES
 
     if architecture not in PROBE_ARCHITECTURES:
         msg = f'unknown probe architecture {architecture!r} (expected one of {PROBE_ARCHITECTURES})'
