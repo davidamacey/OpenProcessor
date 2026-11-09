@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config import IndexRole
@@ -45,6 +45,7 @@ from src.schemas.curation.projects import (
 )
 from src.services.projects import lifecycle
 from src.services.projects.guard import make_curation_opensearch
+from src.services.projects.records import record_from_row
 from src.services.projects.registry import get_project_registry
 
 
@@ -77,6 +78,13 @@ async def _publish_lifecycle_event(event_type: str, record: Any, **extra: Any) -
         **extra,
     )
 
+
+IdempotencyKey = Annotated[
+    str | None,
+    Header(
+        alias='Idempotency-Key', description='8-200 characters; a repeat answers the first job.'
+    ),
+]
 
 #: What a project shows when OpenSearch could not be asked at all: unknown, never a made-up 0.
 UNKNOWN_COUNTS = ProjectCounts(images=None, items=None)
@@ -184,19 +192,50 @@ async def _summary_response(
     )
 
 
-@global_router.post('/projects', response_model=ProjectLifecycleResponse, status_code=201)
-async def create_project(body: CreateProjectRequest) -> ProjectLifecycleResponse:
+@global_router.post(
+    '/projects',
+    response_model=ProjectLifecycleResponse,
+    status_code=202,
+    responses={
+        200: {'model': ProjectLifecycleResponse, 'description': 'Idempotent repeat of a create'},
+        409: {'model': ApiErrorResponse, 'description': 'Refused (see detail.error)'},
+    },
+)
+async def create_project(
+    body: CreateProjectRequest,
+    response: Response,
+    session: DbSessionDep,
+    idempotency_key: IdempotencyKey = None,
+) -> ProjectLifecycleResponse:
+    """Claim the slug and queue the create: **202** with the ``building`` record and the
+    ``project_create`` job in ``job_id``. The directories, indexes and clone run in the job; the
+    project is ``active`` when it completes (``project.created`` on the global stream, or poll
+    ``GET /projects/{project}``) and ``failed`` with the job's error when it does not. A bad slug,
+    an unknown clone source, a full shard budget and a taken slug are refused here, before any
+    write. A repeat with the same ``Idempotency-Key`` answers 200 with the first job."""
     client = await make_curation_opensearch()
-    record, warnings = await lifecycle.create_project(
+    warnings = await lifecycle.validate_create(
         client,
+        slug=body.slug,
+        clone_settings_from=body.clone_settings_from,
+        clone_axes=body.clone_axes,
+    )
+    started, row = await lifecycle.start_project_create(
+        session,
         slug=body.slug,
         display_name=body.display_name,
         description=body.description,
         clone_settings_from=body.clone_settings_from,
         clone_axes=body.clone_axes,
+        idempotency_key=idempotency_key,
     )
-    await _publish_lifecycle_event('project.created', record)
-    return await _summary_response(record, warnings)
+    response.status_code = 202 if started.created else 200
+    record = record_from_row(row)
+    return ProjectLifecycleResponse(
+        project=summarize(record, UNKNOWN_COUNTS),
+        warnings=warnings,
+        job_id=str(started.job.id),
+    )
 
 
 @global_router.patch('/projects/{project}', response_model=ProjectLifecycleResponse)

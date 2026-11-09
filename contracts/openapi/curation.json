@@ -37462,7 +37462,28 @@
         ]
       },
       "post": {
+        "description": "Claim the slug and queue the create: **202** with the ``building`` record and the\n``project_create`` job in ``job_id``. The directories, indexes and clone run in the job; the\nproject is ``active`` when it completes (``project.created`` on the global stream, or poll\n``GET /projects/{project}``) and ``failed`` with the job's error when it does not. A bad slug,\nan unknown clone source, a full shard budget and a taken slug are refused here, before any\nwrite. A repeat with the same ``Idempotency-Key`` answers 200 with the first job.",
         "operationId": "create_project_curation_projects_post",
+        "parameters": [
+          {
+            "description": "8-200 characters; a repeat answers the first job.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "8-200 characters; a repeat answers the first job.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -37474,7 +37495,17 @@
           "required": true
         },
         "responses": {
-          "201": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectLifecycleResponse"
+                }
+              }
+            },
+            "description": "Idempotent repeat of a create"
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
