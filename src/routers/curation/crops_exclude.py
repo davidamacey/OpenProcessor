@@ -31,8 +31,8 @@ async def batch_exclude_crops(
     """Exclude crops from training + clustering (reversible).
 
     Sets ``class_excluded=true`` plus provenance (``excluded_at``,
-    ``excluded_by``, ``excluded_reason``) and moves the crop out of its
-    candidate bucket (``cluster_id=-2``, the excluded sentinel). The
+    ``excluded_by``, ``excluded_reason``); the crop keeps its place in the
+    serving partition. The
     residual-pool fetch, the trainer export, the cluster listing, and
     the default crop browse all filter ``class_excluded=true`` out, so
     an excluded crop never re-appears in a cluster or training set until

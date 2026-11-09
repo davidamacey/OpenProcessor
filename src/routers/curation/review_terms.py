@@ -92,7 +92,7 @@ async def review_raw_label_clusters(
             include per cluster (default 5 — enough to read at a glance).
 
     Returns:
-        ``{"status": "ok|empty", "clusters": [{cluster_id, cluster_name,
+        ``{"status": "ok|empty", "clusters": [{label_cluster_id, cluster_name,
         n_crops, n_unmatched, sample_terms, parent_class_suggestion}, ...]}``
     """
     body = raw_label_clusters_body(size, samples_per_cluster)

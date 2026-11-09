@@ -3,7 +3,7 @@
 ``GET/PUT /vlm/policy`` read and replace which crops the automated VLM class
 writers (the continuous worker and the ``auto_label`` VLM stage) may label, and
 their daily budget (see :mod:`src.services.curation.vlm_policy`). Explicit
-requests (``/assist/runs``, a ``cluster_id``-scoped auto-label run) are not limited.
+requests (``/assist/runs``, a ``cluster_uid``-scoped auto-label run) are not limited.
 """
 
 from __future__ import annotations

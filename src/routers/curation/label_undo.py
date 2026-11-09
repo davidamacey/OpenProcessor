@@ -202,8 +202,8 @@ async def discard_crop(
     """Discard an item, as a recorded human write.
 
     ``clear_class`` (default ``true``): the item doesn't belong in its
-    class/cluster — class, provenance and validation are cleared and it
-    drops to the residual pool (``cluster_id: null``).
+    class — class, provenance and validation are cleared; its place in the
+    serving partition (``cluster_*``) is not touched.
     ``dismiss_from_review`` (default ``false``): hide it from every
     ``/review`` tab (``review_dismissed_at``). The pre-write state is
     snapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it
@@ -315,8 +315,8 @@ async def crop_history(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any
     Each entry is the item's class state *before* one write
     (``class_id``, ``class_name``, ``class_source``, ``label_source``,
     ``confidence``, ``class_detector*``, ``class_labeler``,
-    ``class_labeled_at``, ``class_validated``, ``cluster_id``,
-    ``cluster_subid``; ``review_dismissed_*`` on discards) plus ``writer``
+    ``class_labeled_at``, ``class_validated``, the item's ``cluster_*``
+    placement; ``review_dismissed_*`` on discards) plus ``writer``
     (who made that write, e.g. ``human:label_crop``, ``vlm_pipeline``) and
     ``at``. Keys a writer didn't record are ``null``.
     """

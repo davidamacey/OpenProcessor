@@ -136,10 +136,10 @@ def _corpus() -> dict[str, dict[str, Any]]:
 
 class TestClusterTerms:
     def test_stable_id_is_positive_int32_and_deterministic(self) -> None:
-        a = rlc.stable_cluster_id('pickup truck')
-        assert a == rlc.stable_cluster_id('pickup truck')
+        a = rlc.stable_label_cluster_id('pickup truck')
+        assert a == rlc.stable_label_cluster_id('pickup truck')
         assert 0 <= a <= 0x7FFFFFFF
-        assert a != rlc.stable_cluster_id('forklift')
+        assert a != rlc.stable_label_cluster_id('forklift')
 
     def test_hash_embed_groups_spelling_variants(self) -> None:
         v = rlc.hash_embed(['pickup truck', 'pick-up truck', 'forklift'])
@@ -151,9 +151,9 @@ class TestClusterTerms:
         counts = [6, 4, 5, 3, 1]
         out = rlc.cluster_terms(terms, counts, rlc.hash_embed, distance_threshold=0.6)
         assert out['pick-up truck'].cluster_name == 'pickup truck'
-        assert out['pick-up truck'].cluster_id == out['pickup truck'].cluster_id
+        assert out['pick-up truck'].label_cluster_id == out['pickup truck'].label_cluster_id
         assert out['fork lift'].cluster_name == 'forklift'
-        assert out['forklift'].cluster_id != out['pickup truck'].cluster_id
+        assert out['forklift'].label_cluster_id != out['pickup truck'].label_cluster_id
         # Below min_count: its own singleton, zero distance.
         assert out['zebra crossing'].cluster_name == 'zebra crossing'
         assert out['zebra crossing'].distance == 0.0

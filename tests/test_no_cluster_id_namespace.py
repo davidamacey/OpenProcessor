@@ -3,18 +3,13 @@
 The overloaded integer ``cluster_id`` (an IVF centroid, a class id and a ``RESIDUAL_CLUSTER_ID_OFFSET``
 residual all in one number), its AHC ``cluster_subid`` and the ``excluded_prior_cluster_*`` pair are
 replaced by the served cluster of the serving partition (``cluster_uid`` and the rest of the
-``cluster_*`` partition fields, one nested ``cluster`` object on the wire). The legacy item pipeline
-(the old orchestrator, the cluster cards, auto-promote, exclusion, the move route, the loop's
-``ClusterFieldPartition`` reader) still spells the names; each file is pinned in
-``tests/cluster_id_namespace_baseline.txt`` to the number of occurrences it has today.
+``cluster_*`` partition fields, one nested ``cluster`` object on the wire). What
+``tests/cluster_id_namespace_baseline.txt`` still pins is reasoned in its header: the 0.6.0 upgrade
+readers, the combine copy that strips what an upgraded index still carries, and the core
+visual-search clusters.
 
 A file may only go DOWN: a new occurrence (or a new file) fails, and a file that got cleaner must
-have its pin lowered (or removed at zero) in the same change, so the list only shrinks and the day
-it is empty this test becomes "no ``cluster_id`` in ``src/``".
-
-The core visual-search clusters (faces, images; ``src/routers/clusters.py``, ``src/clients/opensearch``,
-``src/services/visual_search``) are a different namespace with their own integer ids and are pinned
-the same way until their own rebuild.
+have its pin lowered (or removed at zero) in the same change, so the list only shrinks.
 
 Counted: a name, attribute, parameter, keyword, import alias, function name or whole string literal
 equal to one of the retired names.

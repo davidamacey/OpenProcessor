@@ -319,7 +319,7 @@ async def dataset_stats(
       returned by ``/curation/ingest/region_drain``.
     - ``clusters.{last_run_at, cluster_count, residual_count, noise_count, method}`` —
       sourced from the record each clustering run writes (``clustering.last_run``);
-      ``cluster_count`` falls back to live ``cluster_id`` cardinality.
+      ``cluster_count`` falls back to the live ``cluster_uid`` cardinality.
     """
     fields = get_region_fields()
     body = build_dataset_query_body(fields)
