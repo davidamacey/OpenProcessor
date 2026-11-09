@@ -44,18 +44,6 @@ async def _idle(*_: object, **__: object) -> None:
     await asyncio.sleep(60)
 
 
-async def _start_assist(client: Any) -> str:
-    from src.core.exceptions import RequestRejectedError
-    from src.services.curation.assist import job
-
-    _widen_check(job, 'live_run_ids')
-    try:
-        await job.create_run(client, state={'status': 'queued'}, request={}, members=None)
-    except RequestRejectedError:
-        return 'busy'
-    return 'started'
-
-
 async def _start_dataset_import(client: Any) -> str:
     from src.services.curation.dataset_import import runner
     from src.services.curation.dataset_import.store import ImportStore, imports_root
@@ -142,7 +130,6 @@ async def _start_region_fp_centroids(client: Any) -> str:
 
 
 STARTERS: dict[str, tuple[Callable[[Any], Awaitable[str]], dict[str, str]]] = {
-    'assist_run': (_start_assist, {'OP_ASSIST_JOBS_DIR': 'assist'}),
     'dataset_import': (_start_dataset_import, {'OP_DATASET_IMPORTS_DIR': 'imports'}),
     'promote': (_start_promote, {'OP_TRAIN_JOBS_DIR': 'train'}),
     'autolabel': (_start_autolabel, {'OP_AUTO_LABEL_STATE_DIR': 'autolabel'}),

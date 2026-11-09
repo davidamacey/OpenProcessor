@@ -18,6 +18,9 @@ from src.services.curation.class_label import ItemLabel
 from src.services.curation.class_write_guard import class_state_token
 
 
+pytest_plugins = ['curation.assist_queue']
+pytestmark = pytest.mark.db
+
 RUNS = '/assist/runs'
 CLUSTER = 10000
 # What legitimately differs between two writes of the same label.
@@ -25,8 +28,7 @@ VOLATILE = {'updated_at', 'class_labeled_at'}
 
 
 @pytest.fixture
-def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
     return stack
 
 

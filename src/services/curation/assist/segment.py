@@ -16,17 +16,17 @@ from src.config import RegionStatus, get_curation_config
 from src.config.region_fields import get_region_fields
 from src.services.curation.assist.models import SegmentResult
 from src.services.curation.region_requeue import apply_requeue_ids
-from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
-    from src.services.curation.file_job import FileJob
+    from src.tasks.runtime.context import JobContext
 
 POLL_S = 2.0
-WAIT_MAX_S = 6 * 3600.0
-"""A region worker that never answers must not hold the run forever."""
+WAIT_MAX_S = 2.5 * 3600.0
+"""A region worker that never answers must not hold the run forever; shorter than the kind's
+3 h soft limit, so the run ends with ``pending`` reported and time left for the VLM stage."""
 _PAGE = 500
 
 
@@ -63,7 +63,7 @@ async def _count(opensearch: AsyncOpenSearch, run_id: str, statuses: list[str]) 
 
 
 async def wait_for_region(
-    job: FileJob, opensearch: AsyncOpenSearch, run_id: str, queued: int
+    ctx: JobContext, opensearch: AsyncOpenSearch, run_id: str, queued: int
 ) -> SegmentResult:
     """Wait until none of the run's ``queued`` items is pending, or the run is cancelled
     or the wait limit passes (the remainder is reported as ``pending``)."""
@@ -76,12 +76,8 @@ async def wait_for_region(
         pending = await _count(opensearch, run_id, pending_statuses) if queued else 0
         failed = await _count(opensearch, run_id, [RegionStatus.DETECTION_FAILED.value])
         done = max(0, queued - pending)
-        job.update(
-            progress={'processed': done, 'total': queued},
-            updated_at=now_iso(),
-        )
-        job.touch_heartbeat()
-        if pending == 0 or job.cancel_requested() or waited >= WAIT_MAX_S:
+        await ctx.progress(done, queued, 'waiting_region')
+        if pending == 0 or ctx.cancelled() or waited >= WAIT_MAX_S:
             return SegmentResult(queued=queued, done=done - failed, pending=pending, failed=failed)
         await asyncio.sleep(POLL_S)
         waited += POLL_S

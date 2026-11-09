@@ -146,7 +146,6 @@ ErrorCode = Literal[
     # assist runs
     'invalid_request',
     'assist_too_large',
-    'assist_busy',
     'assist_loop_busy',
     'assist_loop_running',
     'assist_loop_not_resumable',

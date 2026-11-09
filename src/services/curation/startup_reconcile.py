@@ -21,7 +21,6 @@ logger = get_logger(__name__)
 
 JOB_MODULES: tuple[tuple[str, LeaseKind], ...] = (
     ('src.services.curation.autolabel.job', LeaseKind.AUTOLABEL),
-    ('src.services.curation.assist.job', LeaseKind.ASSIST_RUN),
     ('src.services.curation.dataset_import.runner', LeaseKind.DATASET_IMPORT),
     ('src.services.training.promote_job', LeaseKind.PROMOTE),
 )

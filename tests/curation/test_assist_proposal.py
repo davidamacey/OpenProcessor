@@ -12,6 +12,8 @@ from curation.config_test_stack import ITEMS
 from src.services.curation.assist.proposal import ClassAnswer, compute_proposal
 
 
+pytest_plugins = ['curation.assist_queue']
+
 REGISTRY = frozenset({'widget', 'gadget'})
 
 
@@ -88,8 +90,7 @@ CLUSTER = 10000
 
 
 @pytest.fixture
-def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
     return stack
 
 
@@ -130,7 +131,7 @@ def _run_cluster(stack: Any, **body: Any) -> dict[str, Any]:
     }
     with stack.client:
         started = stack.post(RUNS, **payload)
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         return _wait(stack, started.json()['run_id'])
 
 
@@ -138,6 +139,7 @@ def _doc(stack: Any, crop_id: str) -> dict[str, Any]:
     return dict(stack.items.docs(ITEMS)[crop_id])
 
 
+@pytest.mark.db
 def test_the_run_result_carries_the_proposal(world: Any) -> None:
     for i in range(3):
         _seed(world, f'c{i}')
@@ -155,6 +157,7 @@ def test_the_run_result_carries_the_proposal(world: Any) -> None:
     assert state['scope_now'] == {'count': 3, 'overlap': 3, 'jaccard': 1.0, 'changed': False}
 
 
+@pytest.mark.db
 def test_a_re_refine_marks_the_proposal_stale_with_the_overlap(world: Any) -> None:
     for i in range(3):
         _seed(world, f'c{i}')
@@ -172,6 +175,7 @@ def test_a_re_refine_marks_the_proposal_stale_with_the_overlap(world: Any) -> No
     assert now['scope_now']['jaccard'] == pytest.approx(0.5)
 
 
+@pytest.mark.db
 def test_apply_refuses_a_changed_scope_and_applies_when_allowed(world: Any) -> None:
     for i in range(3):
         _seed(world, f'c{i}')
@@ -191,6 +195,7 @@ def test_apply_refuses_a_changed_scope_and_applies_when_allowed(world: Any) -> N
     assert _doc(world, 'c2')['class_source'] == 'vlm', 'it left the scope: untouched'
 
 
+@pytest.mark.db
 def test_apply_dry_run_counts_and_skips_the_locked(world: Any) -> None:
     _seed(world, 'free1')
     _seed(
@@ -226,6 +231,7 @@ def test_apply_dry_run_counts_and_skips_the_locked(world: Any) -> None:
     assert _doc(world, 'valid1')['class_name'] == 'gadget', 'a validated class is not overwritten'
 
 
+@pytest.mark.db
 def test_apply_as_propagated_writes_the_machine_kind_and_leaves_the_locked(world: Any) -> None:
     _seed(world, 'free1')
     _seed(
@@ -253,6 +259,7 @@ def test_apply_as_propagated_writes_the_machine_kind_and_leaves_the_locked(world
     assert _doc(world, 'human1')['class_source'] == 'human'
 
 
+@pytest.mark.db
 def test_apply_resolves_the_class_by_name(world: Any) -> None:
     _seed(world, 'free1')
     world.upstream.vlm_content = _reply('gadget')
@@ -270,6 +277,7 @@ def test_apply_resolves_the_class_by_name(world: Any) -> None:
     assert _doc(world, 'free1')['class_name'] == 'gadget'
 
 
+@pytest.mark.db
 def test_a_run_without_a_cluster_scope_cannot_be_applied(world: Any) -> None:
     _seed(world, 'free1')
     world.upstream.vlm_content = _reply('gadget')
@@ -287,6 +295,7 @@ def test_a_run_without_a_cluster_scope_cannot_be_applied(world: Any) -> None:
     assert (r.status_code, r.json()['detail']['error']) == (409, 'run_has_no_scope')
 
 
+@pytest.mark.db
 def test_a_selection_with_a_context_proposes_for_that_sub_cluster(world: Any) -> None:
     for i in range(3):
         _seed(world, f'a{i}')

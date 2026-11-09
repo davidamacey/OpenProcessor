@@ -11,12 +11,13 @@ import pytest
 from curation.test_assist_run_classify import CLUSTER, RUNS, _cluster_body, _seed, _wait
 
 
-pytestmark = pytest.mark.usefixtures('readable_crops')
+pytest_plugins = ['curation.assist_queue']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
 
 @pytest.fixture(autouse=True)
-def _env(stack: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def _queue(assist_queue: Any) -> None:
+    """Every test starts its runs through the queue, with a stand-in worker."""
 
 
 def test_an_unknown_run_id_is_a_404_on_read_and_cancel(stack: Any) -> None:
@@ -35,7 +36,7 @@ def test_the_list_returns_the_runs_that_name_the_cluster_newest_first(stack: Any
         ids = []
         for _ in range(2):
             started = stack.post(RUNS, **_cluster_body())
-            assert started.status_code == 200, started.text
+            assert started.status_code == 202, started.text
             ids.append(started.json()['run_id'])
             _wait(stack, ids[-1])
             time.sleep(0.01)

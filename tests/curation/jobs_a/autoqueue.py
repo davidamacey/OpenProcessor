@@ -1,4 +1,9 @@
-"""Plugin: the job-test fixtures, with the fake broker and wake-ups active in every test."""
+"""Plugin: the job-test fixtures, with the fake broker and wake-ups active in every db test.
+
+A plugin named in ``pytest_plugins`` is registered for the whole session, so the autouse
+fixture applies the fake only to ``db`` tests (the only ones that start jobs); the others
+need no database.
+"""
 
 from __future__ import annotations
 
@@ -8,5 +13,6 @@ from curation.jobs_a.optin_queue import fake_queue, job_env, kinds, producer, qu
 
 
 @pytest.fixture(autouse=True)
-def _fake_queue(fake_queue) -> None:  # noqa: F811 - set up by fixture name
-    """Every test of a module that loads this plugin starts jobs against the fake."""
+def _fake_queue(request: pytest.FixtureRequest) -> None:
+    if request.node.get_closest_marker('db') is not None:
+        request.getfixturevalue('fake_queue')

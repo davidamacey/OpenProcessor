@@ -6348,7 +6348,6 @@
               "pack_declares_no_attributes",
               "invalid_request",
               "assist_too_large",
-              "assist_busy",
               "assist_loop_busy",
               "assist_loop_running",
               "assist_loop_not_resumable",
@@ -37443,7 +37442,7 @@
     },
     "/curation/projects/{project}/assist/runs": {
       "get": {
-        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are kept.",
+        "description": "The newest runs, newest first, whose target or context names that cluster (and\nsub-cluster); all runs without ``cluster_id``. Each carries ``scope_now``, so a\nclient can mark a proposal stale after a re-refine. The newest 100 runs are scanned.",
         "operationId": "list_assist_runs_curation_projects__project__assist_runs_get",
         "parameters": [
           {
@@ -37528,7 +37527,7 @@
         ]
       },
       "post": {
-        "description": "Plan an assist run, and start it unless ``dry_run`` (the default).\n\nThe response says what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect). Refusals:\n409 ``vlm_not_configured`` (the project's VLM is off and ``vlm`` names none),\n409 ``assist_busy``, 404 ``not_found`` (an empty cluster), 422\n``invalid_request``, ``assist_too_large``, ``pack_declares_no_attributes``,\n``no_class_names``. Class suggestions never overwrite a locked, validated or\nholdout item; attributes are stored apart from the labels.",
+        "description": "Plan an assist run, and queue it unless ``dry_run`` (the default).\n\nA dry run answers 200 with what the target resolved to (members, the sample, what is\nskipped, the endpoint and pack pinned, the VLM calls to expect); a queued run answers\n202 with the same plan and its job id as ``run_id``. Refusals: 409 ``vlm_not_configured``\n(the project's VLM is off and ``vlm`` names none), 409 ``job_busy`` (a run is active),\n404 ``not_found`` (an empty cluster), 422 ``invalid_request``, ``assist_too_large``,\n``pack_declares_no_attributes``, ``no_class_names``. The worker plans the run again and\nfails it if the endpoint or the pack changed in between. Class suggestions never\noverwrite a locked, validated or holdout item; attributes are stored apart from the\nlabels.",
         "operationId": "create_assist_run_curation_projects__project__assist_runs_post",
         "parameters": [
           {
@@ -37553,6 +37552,16 @@
         },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistRunState"
+                }
+              }
+            },
+            "description": "A dry run: nothing was queued."
+          },
+          "202": {
             "content": {
               "application/json": {
                 "schema": {

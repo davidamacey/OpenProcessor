@@ -10,7 +10,8 @@ in-flight requests. Writes are the chunk's own (:mod:`~src.services.curation.ass
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+import inspect
+from typing import TYPE_CHECKING, Any
 
 from src.services.curation.assist.box_attributes import box_attributes_chunk
 from src.services.curation.assist.chunk import ChunkOutcome, process_chunk
@@ -84,13 +85,14 @@ async def ask_sample(
     meta: RunMeta,
     semaphore: asyncio.Semaphore,
     should_stop: Callable[[], bool] = lambda: False,
-    on_chunk: Callable[[int], None] | None = None,
+    on_chunk: Callable[[int], Any] | None = None,
 ) -> ChunkOutcome:
     """Run ``actions`` over ``ids`` and return the summed outcome.
 
     ``should_stop`` is checked as each chunk gets its turn on ``semaphore``; a chunk
     that has not started then is skipped, one in flight finishes. ``on_chunk`` gets the
-    size of each chunk that completed."""
+    size of each chunk that completed (a coroutine function is awaited). A failing chunk
+    cancels the others and its error is the one raised."""
     size = max(1, images_per_call)
     chunks = [ids[i : i + size] for i in range(0, len(ids), size)]
 
@@ -100,11 +102,17 @@ async def ask_sample(
                 return None
             out = await _chunk(opensearch, ctx, chunk, actions=actions, box_ids=box_ids, meta=meta)
             if on_chunk is not None:
-                on_chunk(len(chunk))
+                reported = on_chunk(len(chunk))
+                if inspect.isawaitable(reported):
+                    await reported
             return out
 
-    results = await asyncio.gather(*[gated(c) for c in chunks])
-    return _sum([r for r in results if r is not None])
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(gated(c)) for c in chunks]
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from failed
+    return _sum([r for t in tasks if (r := t.result()) is not None])
 
 
 __all__ = ['ask_sample']

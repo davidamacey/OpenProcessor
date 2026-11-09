@@ -18,6 +18,9 @@ from src.services.labeling.vlm_attributes import AttributeSpec
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 
 
+pytest_plugins = ['curation.assist_queue']
+pytestmark = pytest.mark.db
+
 F = get_region_fields()
 RUNS = '/assist/runs'
 VERIFY_YES = json.dumps({'is_region': True, 'confidence': 'high', 'reason': 'a wheel'})
@@ -25,8 +28,7 @@ VERIFY_NO = json.dumps({'is_region': False, 'confidence': 'high', 'reason': 'not
 
 
 @pytest.fixture
-def world(stack: Any, readable_crops: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
-    monkeypatch.setenv('OP_ASSIST_JOBS_DIR', str(tmp_path / 'assist_jobs'))
+def world(assist_queue: Any, stack: Any, readable_crops: None) -> Any:
     return stack
 
 
@@ -83,7 +85,7 @@ def _boxes_target(*pairs: tuple[str, str]) -> dict[str, Any]:
 def _run(stack: Any, **body: Any) -> dict[str, Any]:
     with stack.client:
         started = stack.post(RUNS, **body)
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
         run_id = started.json()['run_id']
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:

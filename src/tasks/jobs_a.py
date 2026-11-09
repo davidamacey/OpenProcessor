@@ -35,6 +35,14 @@ async def reprocess(ctx: JobContext) -> JobResult:
     return JobResult(result, with_errors=with_errors)
 
 
+async def assist_run(ctx: JobContext) -> JobResult:
+    from src.services.curation.assist.runner import run_assist
+
+    async with support.bound_project(ctx):
+        result, with_errors = await run_assist(ctx, await ctx.client('opensearch'))
+    return JobResult(result, with_errors=with_errors)
+
+
 async def probe(ctx: JobContext) -> JobResult:
     from src.services.curation.probe_job import run_probe
 
@@ -83,6 +91,7 @@ async def label_undo(ctx: JobContext) -> JobResult:
 
 register_job('reprocess', reprocess, client_factories=FACTORIES)
 OPENSEARCH_ONLY = {'opensearch': _opensearch}
+register_job('assist_run', assist_run, client_factories=OPENSEARCH_ONLY)
 register_job('probe', probe, client_factories=OPENSEARCH_ONLY)
 register_job('item_scores', item_scores, client_factories=OPENSEARCH_ONLY)
 register_job('selection', selection, client_factories=OPENSEARCH_ONLY)
