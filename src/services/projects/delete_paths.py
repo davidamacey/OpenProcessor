@@ -67,7 +67,7 @@ def _project_scoped_dirs(record: ProjectRecord) -> list[tuple[Path, Path]]:
         (record.resources.bakeoff_eval_root, data_root),
         (record.resources.project_state_dir, state_projects_root),
         (record.resources.upload_root, state_projects_root),
-        (record.resources.bakeoff_jobs_dir, state_projects_root),
+        (record.resources.bakeoff_results_dir, state_projects_root),
         (record.resources.train_jobs_dir, trainer_jobs_root() / 'projects'),
         (record.resources.autolabel_dir, autolabel_projects_root),
         # The tmpfs crop cache keys its files per project (<crop_cache_dir>/<slug>).

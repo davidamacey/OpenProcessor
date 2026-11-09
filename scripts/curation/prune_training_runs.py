@@ -6,7 +6,7 @@ Two independent prunes, both dry-run by default:
 * training-run job state under ``OP_TRAIN_JOBS_DIR`` -- never a
   non-terminal run, a promoted run, or one a queued/running bake-off job
   still references (see ``src.services.training.run_retention``);
-* bake-off comparison output under each project's ``<bakeoff_jobs_dir>/out`` -- pure
+* bake-off comparison output under each project's ``<bakeoff_results_dir>/out`` -- pure
   keep-last, no pin logic (scored output, not a training artifact).
 
 Neither touches MLflow runs.
@@ -61,7 +61,7 @@ from src.services.training.run_retention import (
 
 def _run_one_project(args: argparse.Namespace) -> int:
     """Prune training runs + bake-off output for whatever project is
-    currently bound. ``train_jobs_dir``/``bakeoff_jobs_dir`` come from
+    currently bound. ``train_jobs_dir``/``bakeoff_results_dir`` come from
     the bound project's own ``CurationConfig`` view (PROJECT_SCOPED_FIELDS),
     not a raw env var, so each project prunes only its own dir."""
     config = get_curation_config()
@@ -71,8 +71,8 @@ def _run_one_project(args: argparse.Namespace) -> int:
         for live in asyncio.run(model_registry.owned_live(config.project_slug))
         if live.run_job_id
     }
-    bakeoff_jobs_dir = config.bakeoff_jobs_dir
-    out_dir = bakeoff_out_dir(Path(bakeoff_jobs_dir))
+    bakeoff_results_dir = config.bakeoff_results_dir
+    out_dir = bakeoff_out_dir(Path(bakeoff_results_dir))
 
     run_plan = plan_run_prune(
         jobs_dir=jobs_dir,

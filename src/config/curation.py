@@ -235,7 +235,7 @@ class CurationConfig:
     project_state_dir: Path = _FOLLOWS_STATE_DIR
     train_jobs_dir: Path = Path('/jobs')
     autolabel_dir: Path = Path('/jobs/auto_label')
-    bakeoff_jobs_dir: Path = _FOLLOWS_STATE_DIR
+    bakeoff_results_dir: Path = _FOLLOWS_STATE_DIR
     mlflow_experiment: str = 'openprocessor'
     model_prefix: str = ''
 
@@ -261,8 +261,8 @@ class CurationConfig:
                 object.__setattr__(self, attr, getattr(resources, attr))
         if self.project_state_dir is _FOLLOWS_STATE_DIR:
             object.__setattr__(self, 'project_state_dir', self.state_dir)
-        if self.bakeoff_jobs_dir is _FOLLOWS_STATE_DIR:
-            object.__setattr__(self, 'bakeoff_jobs_dir', self.state_dir / 'bakeoff_jobs')
+        if self.bakeoff_results_dir is _FOLLOWS_STATE_DIR:
+            object.__setattr__(self, 'bakeoff_results_dir', self.state_dir / 'bakeoff_jobs')
 
     @property
     def pause_sentinel_path(self) -> Path:

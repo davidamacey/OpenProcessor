@@ -79,12 +79,12 @@ logger = get_logger(__name__)
 
 
 # Project-scoped (the project-isolation design §5.3): each project's bake-off results live under
-# its own ``<CurationConfig.bakeoff_jobs_dir>/out`` (a PROJECT_SCOPED_FIELDS entry), so no
+# its own ``<CurationConfig.bakeoff_results_dir>/out`` (a PROJECT_SCOPED_FIELDS entry), so no
 # project's results leak into another's. Resolved at call time (never a module-level constant)
-# so a later bind_project is always picked up. The directory name is what lane 5E renames: it
-# holds results only now; no job file is written there.
+# so a later bind_project is always picked up. The directory holds results only; no job file is
+# written there (its on-disk name is still ``bakeoff_jobs`` so existing results stay in place).
 def _out_dir() -> Path:
-    return bakeoff_out_dir(Path(get_curation_config().bakeoff_jobs_dir))
+    return bakeoff_out_dir(Path(get_curation_config().bakeoff_results_dir))
 
 
 def _raise(exc: bakeoff_resolve.BakeoffRequestError) -> NoReturn:

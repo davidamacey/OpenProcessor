@@ -41,11 +41,11 @@ logger = get_logger(__name__)
 TERMINAL_STATES = frozenset({'finished', 'failed', 'cancelled', 'lost'})
 
 
-def bakeoff_out_dir(bakeoff_jobs_dir: Path) -> Path:
-    """A project's bake-off result dir: ``<bakeoff_jobs_dir>/out``. The one
+def bakeoff_out_dir(bakeoff_results_dir: Path) -> Path:
+    """A project's bake-off result dir: ``<bakeoff_results_dir>/out``. The one
     definition the router (serves results) and the pruner (deletes them)
     share, so each only ever touches its own project's results."""
-    return bakeoff_jobs_dir / 'out'
+    return bakeoff_results_dir / 'out'
 
 
 _JOB_FILE_SUFFIXES = (

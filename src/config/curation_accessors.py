@@ -34,7 +34,7 @@ PROJECT_SCOPED_FIELDS: frozenset[str] = frozenset(
         'project_state_dir',
         'train_jobs_dir',
         'autolabel_dir',
-        'bakeoff_jobs_dir',
+        'bakeoff_results_dir',
         'mlflow_experiment',
         'model_prefix',
     }
@@ -58,7 +58,7 @@ _PROJECT_FIELD_RESOURCE_ATTR: dict[str, str] = {
     'project_state_dir': 'project_state_dir',
     'train_jobs_dir': 'train_jobs_dir',
     'autolabel_dir': 'autolabel_dir',
-    'bakeoff_jobs_dir': 'bakeoff_jobs_dir',
+    'bakeoff_results_dir': 'bakeoff_results_dir',
     'mlflow_experiment': 'mlflow_experiment',
     'model_prefix': 'model_prefix',
 }
