@@ -217,7 +217,7 @@ lengths, never reply text.
 
 ## Capture metadata and location
 
-From v0.7.0 ingest records capture time and GPS coordinates under the
+From 0.7.0 ingest records capture time and GPS coordinates under the
 project's `location_policy`, default `store`. `store_coarse` rounds
 coordinates to about 1 km and `drop` stores none; a switch to `drop` clears the
 project's stored coordinates. Coordinates live only in the images index, never

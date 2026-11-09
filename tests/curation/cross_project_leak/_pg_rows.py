@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import psycopg
 
-from curation.cross_project_leak._pg_world import seed_world
+from curation.cross_project_leak._pg_world import finished_job, seed_world
 
 
 if TYPE_CHECKING:
@@ -36,16 +36,6 @@ def _profile(conn: Any, project: uuid.UUID) -> tuple[uuid.UUID, int]:
         (config_id,),
     )
     return config_id, 1
-
-
-def _job(conn: Any, project: uuid.UUID) -> uuid.UUID:
-    return _one(
-        conn.execute(
-            'INSERT INTO jobs (project_id, kind, queue, status, max_queue_wait, requested_by) '
-            "VALUES (%s, 'noop', 'jobs', 'queued', interval '1 hour', 'test') RETURNING id",
-            (project,),
-        )
-    )
 
 
 _RUN = (
@@ -81,7 +71,7 @@ def seed_pg_rows(pg: Any, records: Mapping[str, Any], root: Path) -> dict[str, d
                     (run, f'{slug}-item-000{n}', group, rep),
                 )
             out[slug] = {
-                'job_id': str(_job(conn, project)),
+                'job_id': str(finished_job(conn, project, 'noop')),
                 'run_id': str(run),
                 'group_id': str(lineage),
                 **seed_world(conn, slug, project, str(root / 'images' / slug)),

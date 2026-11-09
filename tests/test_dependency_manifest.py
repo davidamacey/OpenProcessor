@@ -49,6 +49,7 @@ _IMPORT_TO_DIST = {
     'cupy': 'cupy-cuda12x',
     'onnxruntime': 'onnxruntime-gpu',
     'umap': 'umap-learn',
+    'exiftool': 'pyexiftool',
     # facebookresearch/perception_models installs a top-level `core`
     # package under the `perception_models` pip distribution name --
     # see the verification note in src/clients/pe_encoder.py.

@@ -67,6 +67,14 @@ every worker migrates its own template database on it. To use a server you alrea
 The fixture raises when no database is reachable and never skips, so a green `-m db` run proves
 tests ran.
 
+The event-cursor tests (`tests/events/`, `tests/db/test_events_*.py`) use a PostgreSQL server of
+their own, because the cursor waits for the oldest open transaction of the whole server. Every test
+that uses the `pg_events` fixture carries the `events_server` marker. Under xdist each worker
+starts its own container for them; with a server you already have, set
+`OP_TEST_EVENTS_DATABASE_URL` as above and run them in one process, apart from the rest of the
+tier: `-m events_server -p no:xdist`, and `-m "db and not events_server" -n 2` for the rest. A
+parallel run that includes them against that one server stops with an error saying so.
+
 Migrations keep **one Alembic head**. When two branches each add a revision, the second to merge
 rebases its migration onto the new head (it changes its `down_revision`) instead of adding a
 merge revision; `alembic heads` must print one line. The `db` tier fails on more than one.

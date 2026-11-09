@@ -364,6 +364,16 @@ def curation_app(
         main_module.app.dependency_overrides[_registry_dep] = lambda: reg
 
     monkeypatch.setenv('OP_INGEST_PRIMARY_DETECTOR_MODEL', 'fake_item_detector')
+    # The lifespan sizes its thread and Triton pools as a share of the deployment totals, which
+    # needs the API worker count; 32 is the shipping count the totals are sized for.
+    monkeypatch.setenv('WEB_CONCURRENCY', '32')
+
+    async def no_active_profile() -> None:
+        # The lifespan builds the Triton router from the active serving profile (a settings row);
+        # these tests run with no database, so none is active and the router is the single server.
+        return None
+
+    monkeypatch.setattr('src.services.serving_router.active_serving_profile', no_active_profile)
 
     async def default_policy(**_kw: Any) -> tuple[str, int]:
         # The project's location policy is a settings row; these tests run with no database.

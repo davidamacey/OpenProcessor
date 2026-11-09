@@ -23,10 +23,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-pytest_plugins = ['_records_world', 'curation.jobs_a.autoqueue']
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 pytestmark = [
     pytest.mark.db,
-    pytest.mark.usefixtures('world', 'reference_region_profile'),
+    pytest.mark.usefixtures('world', 'reference_region_profile', 'fake_queue'),
 ]
 
 F = get_region_fields()

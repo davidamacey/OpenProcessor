@@ -92,8 +92,11 @@ def test_clamp_logic_lives_in_exactly_one_place() -> None:
     setup = SETUP.read_text()
     config = CONFIG_LIB.read_text()
     assert 'opensearch_heap_gb' not in setup, 'the inline heap function must be gone'
-    assert 'opensearch_heap_for_host' in setup
+    # The installer sizes the heap and API_WORKERS together through host_sizing_defaults, which
+    # lives in the heap library and calls opensearch_heap_for_host.
+    assert 'host_sizing_defaults' in setup
     assert 'opensearch_heap_for_host' in config
+    assert 'opensearch_heap_for_host' in HEAP_LIB.read_text()
     assert 'scripts/lib/opensearch_heap.sh' in setup
     assert 'opensearch_heap.sh' in config
     for text in (setup, config):
