@@ -274,7 +274,7 @@ def test_every_migration_field_is_in_the_index_bodies() -> None:
     for name in curation_index_names():
         cluster.indexes[name] = {'properties': {}, 'settings': {}, '_meta': {}}
     for _, migrate in index_bootstrap._migrations():
-        asyncio.run(migrate(cluster))
+        asyncio.run(migrate(cluster))  # type: ignore[arg-type]
     cfg = get_curation_config()
     bodies: dict[str, dict[str, Any]] = {}
     for role, body in INDEX_BODIES.items():

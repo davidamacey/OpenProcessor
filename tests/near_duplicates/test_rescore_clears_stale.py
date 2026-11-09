@@ -26,6 +26,7 @@ async def test_an_ungrouped_member_loses_every_field_and_a_new_group_gets_a_new_
     docs = {IMAGES: image_docs({'g': ['a1', 'a2', 'a3'], 'h': ['b1', 'b2']}, ['s1', 's2'])}
     env, _ = await make_env(pg, project, docs)
     first = await full_build(env)
+    assert first is not None
     await apply_run(env, first.run_id, None)
     assert _fields(docs[IMAGES]['a3']) == set(FIELDS)
     old_ids = {d.get('near_dup_group_id') for d in docs[IMAGES].values()} - {None}
@@ -53,11 +54,13 @@ async def test_a_member_that_leaves_every_group_is_cleared(pg, project) -> None:
     docs = {IMAGES: image_docs({'g': ['a1', 'a2']}, ['s1'])}
     env, _ = await make_env(pg, project, docs)
     first = await full_build(env)
+    assert first is not None
     await apply_run(env, first.run_id, None)
     docs[IMAGES]['a2']['pe_embedding'] = np.eye(32, dtype=np.float32)[0].tolist()
     async with env.scope() as session:
         await enqueue_pending(session, project, 'image', ['a2'], 'vector_changed')
     outcome = await rescore(env)
+    assert outcome.summary is not None
     await apply_run(env, outcome.summary.run_id, None)
     assert _fields(docs[IMAGES]['a1']) == set()
     assert _fields(docs[IMAGES]['a2']) == set()
@@ -68,6 +71,8 @@ async def test_an_older_run_cannot_overwrite_a_newer_projection(pg, project) -> 
     env, _ = await make_env(pg, project, docs)
     first = await full_build(env)
     second = await full_build(env)
+    assert first is not None
     skipped = await apply_run(env, first.run_id, None)
     assert skipped.skipped
+    assert second is not None
     assert not (await apply_run(env, second.run_id, None)).skipped

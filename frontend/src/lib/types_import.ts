@@ -290,6 +290,7 @@ export interface NextStep {
   method: string;
   path: string;
   reason: string;
+  body: Record<string, unknown> | null;
 }
 
 export interface DatasetUndoReport {
@@ -332,6 +333,8 @@ export interface ImportActions {
 
 export interface DatasetImportJob {
   project: string;
+  /** The queued job running this import (`GET /jobs/{job_id}`). */
+  job_id: string;
   import_id: string;
   import_key: string;
   name: string;
@@ -387,7 +390,16 @@ export interface DatasetImportEntry {
 
 export type DatasetImportEntryPage = Page<DatasetImportEntry>;
 
-export interface DatasetUploadResponse {
+/** `DatasetUploadAccepted`: the 202 of `POST /datasets/uploads` (the archive is
+ *  stored, its extraction queued). Follow `job_id`. */
+export interface DatasetUploadAccepted {
+  upload_id: string;
+  job_id: string;
+  status: 'queued';
+}
+
+/** What the finished extraction job's `result` carries: the extracted dataset. */
+export interface DatasetUploadResult {
   upload_id: string;
   dataset_path: string;
   bytes: number;
@@ -422,8 +434,7 @@ export interface ReprocessFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_id?: number | null;
-  cluster_subid?: string | null;
+  cluster_uid?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

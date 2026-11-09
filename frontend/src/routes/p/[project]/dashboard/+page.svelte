@@ -30,12 +30,14 @@
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
   import { getCrops, getThumbUrl } from '$lib/api_cropRead';
   import { exportYolo, getTestHoldoutStats } from '$lib/api_export';
+  import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
   import { getStats } from '$lib/api_stats';
   import type { Crop } from '$lib/types';
   import type { ExportResult, TestHoldoutStats } from '$lib/types_export';
@@ -123,7 +125,9 @@
         `Export complete: ${exportResult.export_dir ?? exportResult.status}`,
       );
     } catch (e) {
-      exportError = apiErrorText(e);
+      exportError = nearDupStaleLevels(e)
+        ? 'Near-duplicate groups are stale: update them on the Export page, then export again.'
+        : apiErrorText(e);
       toastStore.error(`Export failed: ${exportError}`);
     } finally {
       exportRunning = false;
@@ -170,6 +174,7 @@
     </button>
   </section>
 
+  <ClusterRunPanel />
   <AutoLabelPanel />
 
   <DatasetStats />

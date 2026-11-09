@@ -170,6 +170,8 @@ describe('actions', () => {
   it.each([
     ['queued', true, false],
     ['running', true, false],
+    ['paused', true, false],
+    ['cancelling', false, false],
     ['interrupted', false, true],
     ['cancelled', false, true],
     ['completed', false, false],
@@ -227,7 +229,7 @@ describe('actions', () => {
     const step = {
       action: 'recluster',
       method: 'POST',
-      path: '/cluster/umap/rebuild',
+      path: '/clusters/runs',
       reason: 'r',
     };
     const { job, runCombineNextStep } = setup([
@@ -242,7 +244,7 @@ describe('actions', () => {
   });
 
   it('a next step for a target missing from the list does not call anything', async () => {
-    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const step = { action: 'recluster', method: 'POST', path: '/clusters/runs' };
     const { job, runCombineNextStep } = setup([
       combineJob({ status: 'completed', target: 'elsewhere' }),
     ]);
@@ -253,7 +255,7 @@ describe('actions', () => {
   });
 
   it('stores the served result of a next step and keeps it per job', async () => {
-    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const step = { action: 'recluster', method: 'POST', path: '/clusters/runs' };
     const body = { status: 'no_residuals', n_residuals: 0, refit: false };
     const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
     runCombineNextStep.mockResolvedValueOnce(body);
@@ -266,7 +268,7 @@ describe('actions', () => {
   });
 
   it('a refused next step stores no result and shows the served detail', async () => {
-    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const step = { action: 'recluster', method: 'POST', path: '/clusters/runs' };
     const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
     runCombineNextStep.mockRejectedValueOnce(
       new ApiError(409, '/x', { detail: 'rebuild already running' }),
@@ -280,7 +282,7 @@ describe('actions', () => {
 
 describe('too_few_items', () => {
   it('shows the served message of the recluster refusal, never the code', async () => {
-    const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+    const step = { action: 'recluster', method: 'POST', path: '/clusters/runs' };
     const { job, runCombineNextStep } = setup([combineJob({ status: 'completed' })]);
     runCombineNextStep.mockRejectedValueOnce(
       new ApiError(422, '/x', {
@@ -298,7 +300,7 @@ describe('too_few_items', () => {
 });
 
 describe('target readiness gate', () => {
-  const step = { action: 'recluster', method: 'POST', path: '/cluster/umap/rebuild' };
+  const step = { action: 'recluster', method: 'POST', path: '/clusters/runs' };
   const done = () => combineJob({ status: 'completed', phase: 'done' });
 
   it('stays disabled while the target is building, enables on active, then stops reading', async () => {

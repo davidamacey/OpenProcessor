@@ -103,7 +103,7 @@ def encoded_nbytes(source: bytes | str) -> int | None:
     try:
         with Image.open(io.BytesIO(source) if isinstance(source, bytes) else source) as img:
             return img.width * img.height * 3
-    except Exception:
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
         return None
 
 

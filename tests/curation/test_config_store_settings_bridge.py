@@ -33,7 +33,9 @@ def _reset_caches() -> Iterator[None]:
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()  # the config routes no longer read OpenSearch
+    # _validate_defaults -> get_registry counts field coverage with one size-0 search
+    fake_os = AsyncMock()
+    fake_os.search = AsyncMock(return_value={'hits': {'total': {'value': 0}}, 'aggregations': {}})
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -106,7 +108,7 @@ def test_put_detection_profile_off_and_on(
     async def _fake_repo_index() -> list[dict]:
         return [{'name': 'wheel_detector', 'state': 'READY', 'version': '1'}]
 
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
         TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()

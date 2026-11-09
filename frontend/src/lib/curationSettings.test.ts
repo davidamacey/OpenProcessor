@@ -1,7 +1,7 @@
 /**
  * Pure-module tests for the shared curation-defaults record: parsing,
  * the axis policy table, and the derived helpers. No fetch, no store —
- * see docs/design/curation-settings-ui-plan-2026-09-21.md §6.2.
+ * see the curation settings UI plan §6.2.
  */
 
 import { describe, expect, it } from 'vitest';

@@ -207,6 +207,17 @@ async def test_another_projects_spaces_and_runs_are_not_reachable(app, pg, clien
     assert promote.json()['detail']['error'] == 'embedding_space_not_found'
 
 
+async def test_build_and_retire_of_another_projects_space_are_404(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    beta = project(app, pg, 'beta')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    build = await client.post(url(beta, '/spaces/mobileclip2_s2_v1/build?target=item'), json={})
+    retire = await client.post(url(beta, '/spaces/mobileclip2_s2_v1/retire?target=item'))
+    assert (build.status_code, retire.status_code) == (404, 404)
+    assert build.json()['detail']['error'] == 'embedding_space_not_found'
+    assert retire.json()['detail']['error'] == 'embedding_space_not_found'
+
+
 def _run_of(pg, slug: str) -> str:
     return str(
         sql(

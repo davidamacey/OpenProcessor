@@ -185,7 +185,7 @@ def test_score_partition_counts_pairs_on_the_labelled_rows() -> None:
     _, precision, recall, unassigned = dg.score_partition(
         np.array([0, 0, 1, 1]), ['a', 'a', 'a', 'b'], np.arange(4)
     )
-    assert (precision, recall, unassigned) == (0.5, pytest.approx(1 / 3), 0.0)
+    assert (precision, recall, unassigned) == (0.5, pytest.approx(1 / 3), 0.0)  # type: ignore[comparison-overlap]
 
 
 def test_score_partition_reads_only_the_labelled_rows_and_counts_unassigned() -> None:
@@ -197,7 +197,7 @@ def test_score_partition_reads_only_the_labelled_rows_and_counts_unassigned() ->
     _, precision, recall, unassigned = dg.score_partition(
         partition, ['a', 'a', 'b', 'b', 'b'], labelled
     )
-    assert (precision, recall, unassigned) == (1.0, 0.5, pytest.approx(0.2))
+    assert (precision, recall, unassigned) == (1.0, 0.5, pytest.approx(0.2))  # type: ignore[comparison-overlap]
 
 
 def test_best_precision_at_takes_the_best_point_that_reaches_the_recall() -> None:
@@ -230,7 +230,7 @@ def test_ahc_curve_reaches_perfect_precision_and_recall_on_separated_classes(met
 def test_mutual_knn_graph_keeps_only_reciprocal_edges() -> None:
     # k = 1: 0-1 and 2-3 are mutual. k = 2 lists 0:[1,3] 1:[0,3] 2:[3,1] 3:[2,1]:
     # mutual pairs are (0,1), (1,3), (2,3); (0,3) and (1,2) are one-sided.
-    assert dg.mutual_knn_graph(SIM4, 1) == ([(0, 1), (2, 3)], pytest.approx([0.9, 0.8]))
+    assert dg.mutual_knn_graph(SIM4, 1) == ([(0, 1), (2, 3)], pytest.approx([0.9, 0.8]))  # type: ignore[comparison-overlap]
     edges, weights = dg.mutual_knn_graph(SIM4, 2)
     assert edges == [(0, 1), (1, 3), (2, 3)]
     assert weights == pytest.approx([0.9, 0.4, 0.8])

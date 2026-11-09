@@ -12,22 +12,29 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.config.curation_accessors import items_index
+from src.config.project_context import current_project_id
 from src.core.exceptions import RequestRejectedError
+from src.db.session import async_session_factory, project_tx
 from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flags, validation_state
+from src.services.clustering.partitions import display_numbers
 from src.services.curation import review_queries
 from src.services.curation.cluster_representatives import partition_representatives_body
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from src.schemas.curation.clusters import (
         ClusterCard,
         ClusterListResponse,
         ClusterRepresentative,
     )
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 CLUSTER_REVIEW_TABS: tuple[str, ...] = (
@@ -71,20 +78,20 @@ class ClusterListParams:
     needs_review: bool | None = None
 
 
-def review_aggs() -> dict[str, Any]:
+def review_aggs(vector_field: str) -> dict[str, Any]:
     """One ``filters`` agg holding a filter per tab in :data:`CLUSTER_REVIEW_TABS`,
     built by the same clause builder ``GET /review/{tab}`` uses (holdout hidden,
     as there)."""
     named: dict[str, Any] = {}
     for tab in CLUSTER_REVIEW_TABS:
         must, must_not, _reason = review_queries.build_tab_query(
-            tab, include_test=False, text=None, max_rank=None
+            tab, include_test=False, text=None, max_rank=None, vector_field=vector_field
         )
         named[tab] = {'bool': {'must': must, 'must_not': must_not}}
     return {'review': {'filters': {'filters': named}}}
 
 
-def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
+def aggregation_body(params: ClusterListParams, embedding: WriteFields) -> dict[str, Any]:
     """The one search body: items grouped by their served ``cluster_uid`` with every card input."""
     base_match: dict[str, Any] = (
         {'term': {'cluster_uid': params.cluster_uid}}
@@ -93,7 +100,7 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
     )
     query = {
         'bool': {
-            'filter': [base_match, *item_filter_clauses(params.item_filter)],
+            'filter': [base_match, *item_filter_clauses(params.item_filter, embedding=embedding)],
             # Human-ignored items left their bucket for good; the frozen test
             # holdout is never part of a cluster the operator works.
             'must_not': [{'term': {'class_excluded': True}}, {'term': {'test_holdout': True}}],
@@ -108,7 +115,7 @@ def aggregation_body(params: ClusterListParams) -> dict[str, Any]:
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
-        **review_aggs(),
+        **review_aggs(embedding.vector_field),
     }
     terms = {
         'terms': {'field': 'cluster_uid', 'size': params.max_clusters, 'order': {'_count': 'desc'}},
@@ -149,6 +156,7 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
     state: ValidationState = validation_state(size, validated_count)
     return {
         'cluster_uid': str(bucket['key']),
+        'display_no': None,
         'size': size,
         'validated_count': validated_count,
         'labelled_count': labelled_total,
@@ -275,9 +283,31 @@ async def fetch_representatives(
     ]
 
 
+async def attach_display_nos(session: AsyncSession, cards: list[ClusterCard]) -> None:
+    """Set each card's ``display_no`` from the serving partition; a card it does not name keeps null."""
+    async with project_tx(session, current_project_id()):
+        numbers = await display_numbers(session, [c['cluster_uid'] for c in cards])
+    for card in cards:
+        card['display_no'] = numbers.get(card['cluster_uid'])
+
+
+async def attach_item_display_nos(items: list[dict[str, Any]]) -> None:
+    """Set ``display_no`` on each served item's nested cluster with one lookup for the page."""
+    refs = [i['cluster'] for i in items if i.get('cluster') and i['cluster'].get('uid')]
+    if not refs:
+        return
+    # Own session, opened only when a page has clustered items: the list routes stay free of
+    # the database otherwise.
+    async with async_session_factory()() as session, project_tx(session, current_project_id()):
+        numbers = await display_numbers(session, sorted({r['uid'] for r in refs}))
+    for ref in refs:
+        ref['display_no'] = numbers.get(ref['uid'])
+
+
 async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> ClusterListResponse:
+    body = aggregation_body(params, await item_write_fields())
     try:
-        resp = await opensearch.search(index=items_index(), body=aggregation_body(params))
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise RequestRejectedError(500, f'clusters query failed: {exc}') from exc
     buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])

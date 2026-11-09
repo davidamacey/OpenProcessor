@@ -132,7 +132,7 @@ class TestOnePassPerItem:
         )
         task.update_doc = {F.status: 'detected', F.reason: 'again'}
         task.detection_trace = ['det:hit']
-        n_written, _ = await _bulk_update(fake_os, [task])  # type: ignore[arg-type]
+        n_written, _ = await _bulk_update(fake_os, [task])
         assert n_written == 0
         assert fake_os.writes == []
 

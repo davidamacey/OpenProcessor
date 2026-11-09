@@ -52,10 +52,7 @@ async def active_response(*, validation: Any = None) -> VlmActiveResponse:
         source = 'env' if ref[0] == 'env' else 'stored'
     detail = await documents.get_activation_detail('vlm') if source != 'env' else None
     previous = detail.previous if detail is not None else None
-    try:
-        reports = await documents.live_runtime_reports(process='detection_worker')
-    except Exception:  # pragma: no cover - applied[] degrades to empty
-        reports = []
+    reports = await documents.live_runtime_reports(process='detection_worker')
     return VlmActiveResponse(
         axis='vlm',
         active=active,

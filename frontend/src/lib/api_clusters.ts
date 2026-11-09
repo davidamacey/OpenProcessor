@@ -1,67 +1,45 @@
 /**
- * Cluster cards, one cluster's crops, refine and moving crops between
- * clusters (`/clusters*`).
+ * Cluster cards, one cluster's crops and moving crops between clusters (`/clusters*`).
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import { apiErrorText } from '$lib/api_errors';
-import type {
-  BulkLabelResult,
-  Cluster,
-  ClusterFilter,
-  Crop,
-  PaginatedResponse,
-} from '$lib/types';
+import type { Cluster, ClusterFilter, Crop, PaginatedResponse } from '$lib/types';
 import type { ReprocessRequest } from '$lib/types_import';
+import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
+  ClusterActivationAccepted,
+  ClusterActivationRequest,
   ClusterFacets,
   ClusterFlag,
+  ClusterPartitionList,
+  ClusterRunAccepted,
+  ClusterTarget,
   ClusterSortOption,
   ValidationState,
 } from '$lib/types_clusterList';
 
-/** Raw cluster card from `{API_PREFIX}/clusters`. The backend is the single
- *  source of truth for every field — the frontend must never recompute
- *  dominant_class, purity, or is_unlabeled. */
+/** Raw cluster card from `{API_PREFIX}/clusters` (`ClusterCard`). The backend is the
+ *  single source of truth for every field; the frontend never recomputes the
+ *  dominant class, the agreement or is_unlabeled. */
 type RawCluster = {
-  cluster_id: number;
-  cluster_kind: 'class' | 'candidate' | 'unassigned';
+  cluster_uid: string;
+  display_no: number | null;
   size: number;
   validated_count: number;
   labelled_count: number;
-  dominant_class_id: number | null;
   dominant_class_name: string | null;
   dominant_count: number;
-  /** DQ-M2 fix (dq-queues cutover, 2026-09-24): the share of the
-   *  `purity_n` members the cluster-geometry pass measured for this
-   *  cluster whose NEAREST CLUSTER CENTROID is this cluster's own —
-   *  independent of the labels that placed them, so a class cluster is
-   *  no longer 1.0 by construction. Null when no member has been
-   *  measured. */
-  purity: number | null;
-  /** How many members `purity` was computed over (the geometry pass's
-   *  coverage for this cluster) — purity is noisy at low n. */
-  purity_n: number | null;
-  /** Always `'nearest_centroid'` today; served so the frontend never
-   *  hardcodes what `purity` means. */
-  purity_basis: string | null;
-  /** Server-banded purity (see `purity_thresholds` below) — 'pure' | 'mixed' | 'noisy'. */
-  purity_tier: 'pure' | 'mixed' | 'noisy' | null;
   /** The top class's share of the LABELLED members. */
   label_agreement: number | null;
   /** Share of this cluster's members that have any label at all. */
   labelled_share: number | null;
-  /** Server's auto-promote eligibility gate for this cluster. */
-  promotable: boolean;
   is_unlabeled: boolean;
-  n_subclusters: number;
-  subcluster_ids: string[];
   updated_at: string | null;
   representatives: Array<{
     crop_id: string;
-    cluster_distance: number | null;
+    cluster_score: number | null;
     class_name: string | null;
-    cluster_subid: string | null;
   }>;
   detector_top_class?: string | null;
   detector_top_share?: number | null;
@@ -75,20 +53,6 @@ type RawCluster = {
 type RawClustersResp = {
   items: RawCluster[];
   total: number;
-  total_class_clusters: number;
-  total_candidate_clusters: number;
-  cluster_id_offset: number;
-  /** Thresholds behind every item's `purity_tier`/`promotable` — informational,
-   *  not re-applied client-side. */
-  purity_thresholds?: {
-    pure_min: number;
-    mixed_min: number;
-    promote_min_members: number;
-    promote_min_labelled_share: number;
-  } | null;
-  /** Similarity floor behind every crop's `cluster_is_core` — copied onto
-   *  each mapped `Cluster` so `/clusters/[id]`'s cut line never hardcodes it. */
-  core_similarity_min?: number | null;
   /** D-4: the representatives window this response actually populated —
    *  echoed back so a caller windowing successive calls can advance past
    *  exactly what it got, not what it asked for. */
@@ -100,39 +64,23 @@ type RawClustersResp = {
   truncated?: boolean;
 };
 
-function _rawClusterToCluster(
-  c: RawCluster,
-  coreSimilarityMin: number | null = null,
-): Cluster {
+function _rawClusterToCluster(c: RawCluster): Cluster {
   const label_agreement = c.label_agreement ?? null;
   return {
-    id: c.cluster_id,
-    cluster_kind: c.cluster_kind,
+    uid: c.cluster_uid,
+    display_no: c.display_no ?? null,
     size: c.size,
     validated_count: c.validated_count,
-    dominant_class_id: c.dominant_class_id,
     dominant_class_name: c.dominant_class_name,
-    // C1 (visual audit 2026-09-24): the subtitle's "dominant share" is
-    // the served label-based share (largest class among labelled
-    // members), never the nearest-centroid geometry `purity` below —
-    // mapping `purity` here rendered "class_b · 3%" for a cluster that
-    // is 616/616 class_b.
+    // The subtitle's "dominant share" is the served label-based share
+    // (largest class among labelled members).
     dominant_pct: label_agreement,
     dominant_count: c.dominant_count ?? null,
     labelled_count: c.labelled_count ?? null,
-    purity: c.purity,
-    purity_n: c.purity_n,
-    purity_basis: c.purity_basis,
-    purity_tier: c.purity_tier ?? null,
     label_agreement,
     labelled_share: c.labelled_share,
-    promotable: !!c.promotable,
-    core_similarity_min: coreSimilarityMin,
     is_unlabeled: c.is_unlabeled,
     representative_crop_ids: (c.representatives ?? []).map((r) => r.crop_id),
-    has_subclusters: c.n_subclusters > 0,
-    n_subclusters: c.n_subclusters,
-    subcluster_ids: c.subcluster_ids,
     updated_at: c.updated_at,
     detector_top_class: c.detector_top_class ?? null,
     detector_top_share: c.detector_top_share ?? null,
@@ -179,9 +127,8 @@ export async function getClusters(
       origin: filter.origin,
       embedding_state: filter.embedding_state,
       review_status: filter.review_status,
-      cluster_id: filter.cluster_id ?? undefined,
-      // Enough buckets that the 512 IVF candidate clusters and the class
-      // clusters all come back in one call; `truncated` says when not.
+      cluster_uid: filter.cluster_uid ?? undefined,
+      // Enough buckets to return every cluster in one call; `truncated` says when not.
       max_clusters: 2000,
       sort: filter.sort,
       dominant_class: filter.dominant_class,
@@ -201,14 +148,12 @@ export async function getClusters(
     {},
     signal,
   );
-  const coreSimilarityMin = raw.core_similarity_min ?? null;
-  const items = (raw.items ?? []).map((c) => _rawClusterToCluster(c, coreSimilarityMin));
+  const items = (raw.items ?? []).map(_rawClusterToCluster);
   return {
     items,
     total: raw.total ?? items.length,
     page: 1,
     page_size: items.length,
-    purity_thresholds: raw.purity_thresholds ?? null,
     sort: raw.sort ?? null,
     sort_options: raw.sort_options ?? [],
     flag_vocabulary: raw.flag_vocabulary ?? [],
@@ -220,16 +165,20 @@ export async function getClusters(
   };
 }
 
-/** One cluster's facet counts (`GET {P}/clusters/{id}/facets`). */
+/** One cluster's facet counts (`GET {P}/clusters/{cluster_uid}/facets`). */
 export function getClusterFacets(
-  id: number,
+  uid: string,
   signal?: AbortSignal,
 ): Promise<ClusterFacets> {
-  return apiFetch<ClusterFacets>(`${scoped()}/clusters/${id}/facets`, {}, signal);
+  return apiFetch<ClusterFacets>(
+    `${scoped()}/clusters/${encodeURIComponent(uid)}/facets`,
+    {},
+    signal,
+  );
 }
 
 export async function getCluster(
-  id: number,
+  uid: string,
   page = 1,
   pageSize = 60,
   signal?: AbortSignal,
@@ -238,12 +187,10 @@ export async function getCluster(
     maxRank?: number | null;
     minBlurRatio?: number | null;
     classifierConfLt?: number | null;
-    /** One sub-cluster of the cluster, filtered by the server (`/crops?cluster_subid=`). */
-    clusterSubid?: string | null;
     /**
      * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
      * special-cased server-side today (crops.py `order` query param —
-     * see docs/curation-strategy-plan-2026-09.md §1); an id the backend
+     * see the curation strategy plan §1); an id the backend
      * doesn't recognize is harmless (qs() still sends it, the server
      * just falls back to its default ordering). Typed as `string` rather
      * than a fixed union so a new `{API_PREFIX}/methods`-reported order id doesn't
@@ -303,7 +250,7 @@ export async function getCluster(
     suggested_reprocess?: ReprocessRequest | null;
   };
   const cropQuery: Record<string, unknown> = {
-    cluster_id: id,
+    cluster_uid: uid,
     page,
     page_size: pageSize,
   };
@@ -311,7 +258,6 @@ export async function getCluster(
   if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
   if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
   if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
-  if (opts.clusterSubid) cropQuery.cluster_subid = opts.clusterSubid;
   if (opts.order) cropQuery.order = opts.order;
   if (opts.k != null) cropQuery.k = opts.k;
   if (opts.detectorClassName?.length)
@@ -325,15 +271,7 @@ export async function getCluster(
   const [cropPage, clustersResp] = await Promise.all([
     apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),
     apiFetch<RawClustersResp>(
-      // cluster_id (not class_id!) is the correct filter for "fetch this
-      // one cluster's card by its own identity" — cluster_id == class_id
-      // is only an invariant for 'class' clusters, so filtering by
-      // class_id silently returned nothing for every 'candidate' cluster
-      // (id >= RESIDUAL_CLUSTER_ID_OFFSET, no matching class exists),
-      // which fell back to the null-identity stub below and showed no
-      // human-readable name in the header even though {API_PREFIX}/clusters'
-      // list view has dominant_class_name for the same cluster.
-      `${scoped()}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_id: id })}`,
+      `${scoped()}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_uid: uid })}`,
       {},
       signal,
     ).catch((e: unknown) => {
@@ -343,27 +281,18 @@ export async function getCluster(
     }),
   ]);
   const items = cropPage.crops.map(mapRawCrop);
-  const found = clustersResp?.items?.find((c) => c.cluster_id === id) ?? null;
+  const found = clustersResp?.items?.find((c) => c.cluster_uid === uid) ?? null;
   const cluster: Cluster = found
-    ? _rawClusterToCluster(found, clustersResp?.core_similarity_min ?? null)
+    ? _rawClusterToCluster(found)
     : {
         // Fallback only if the cluster card lookup failed — leaves
         // identity fields null but lets the crop grid render.
-        id,
-        cluster_kind: 'unassigned',
+        uid,
         size: cropPage.total,
         validated_count: 0,
-        dominant_class_id: null,
         dominant_class_name: null,
         dominant_pct: null,
-        purity: null,
-        purity_tier: null,
-        promotable: false,
-        core_similarity_min: null,
         is_unlabeled: true,
-        has_subclusters: false,
-        n_subclusters: 0,
-        subcluster_ids: [],
         representative_crop_ids: items.slice(0, 4).map((c) => c.id),
         updated_at: null,
       };
@@ -384,47 +313,62 @@ export async function getCluster(
   };
 }
 
-export type RefineClusterResponse = {
-  cluster_id: number;
-  n_members: number;
-  n_subclusters: number;
-  purity: number;
-  subcluster_weighted_purity?: number;
-  n_updated?: number;
-  distance_threshold?: number;
-  linkage?: string;
-  metric?: string;
-  action: 'refined' | 'skipped_too_small' | 'skipped_too_large';
-  reason?: string;
-};
+// -- DnD: move crops between clusters ------------------------------------
 
-export function refineCluster(
-  clusterId: number,
+/** Queue a recorded move into a cluster of the serving partition (202 + job id);
+ *  follow it with `runLabelOp`. 400 when the uid is not one of its clusters. */
+export function moveCropsToCluster(
+  cropIds: string[],
+  targetClusterUid: string,
   signal?: AbortSignal,
-): Promise<RefineClusterResponse> {
-  return apiFetch<RefineClusterResponse>(
-    `${scoped()}/clusters/refine/${clusterId}`,
-    { method: 'POST' },
+): Promise<LabelOpAccepted> {
+  return apiFetch<LabelOpAccepted>(
+    `${scoped()}/crops/move`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ crop_ids: cropIds, cluster_uid: targetClusterUid }),
+    },
     signal,
   );
 }
 
-// -- DnD: move crops between clusters ------------------------------------
+// -- partitions: fit, list, activate ---------------------------------------
 
-export function moveCropsToCluster(
-  cropIds: string[],
-  targetClusterId: number,
+/** `POST /clusters/runs`: queue a clustering run for a target (202; 409 `job_busy`
+ *  while one for that space is active). Follow `job_id` with `followJob`: its
+ *  result says `activated` (the server activates a run that is safe to). */
+export function startClusterRun(
+  target: ClusterTarget,
   signal?: AbortSignal,
-): Promise<BulkLabelResult> {
-  // Backend returns the same {updated, conflicts: [...]} shape as
-  // {API_PREFIX}/crops/batch_label. Reuse the type so both call sites share the
-  // conflict-handling code path.
-  return apiFetch<BulkLabelResult>(
-    `${scoped()}/crops/move`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ crop_ids: cropIds, cluster_id: targetClusterId }),
-    },
+): Promise<ClusterRunAccepted> {
+  return apiFetch<ClusterRunAccepted>(
+    `${scoped()}/clusters/runs`,
+    { method: 'POST', body: JSON.stringify({ target }) },
+    signal,
+  );
+}
+
+/** `GET /clusters/partitions`, newest first. */
+export function getClusterPartitions(
+  params: { target?: ClusterTarget; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<ClusterPartitionList> {
+  return apiFetch<ClusterPartitionList>(
+    `${scoped()}/clusters/partitions${qs({ target: params.target, limit: params.limit })}`,
+    {},
+    signal,
+  );
+}
+
+/** `PUT /clusters/activation`: serve a ready partition (202; 409
+ *  `partition_conflict` when the serving partition or revision moved). */
+export function activateClusterPartition(
+  body: ClusterActivationRequest,
+  signal?: AbortSignal,
+): Promise<ClusterActivationAccepted> {
+  return apiFetch<ClusterActivationAccepted>(
+    `${scoped()}/clusters/activation`,
+    { method: 'PUT', body: JSON.stringify(body) },
     signal,
   );
 }

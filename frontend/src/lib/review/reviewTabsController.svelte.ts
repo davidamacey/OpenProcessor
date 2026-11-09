@@ -76,7 +76,7 @@ export function createReviewTabsController(opts: ReviewTabsOptions) {
   // resolve.
   let awaitingDeepLink = $state<boolean>(deepLink.cropId != null);
   // The slot backing the current tab, if any — the single derived value
-  // P2.8b's mapping table (docs/genericization-plan-2026-09-13.md §9.5)
+  // P2.8b's mapping table (genericization plan §9.5)
   // hangs every slot-tab call site off, instead of a hand-maintained
   // literal per site.
   const activeSlot = $derived(REVIEW_TABS.find((t) => t.id === tab)?.slot ?? null);

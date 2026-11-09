@@ -18,6 +18,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._review_params import UnsetIfEmpty
+from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page
 from src.services.curation.crop_listing import (
     MAX_IDS,
@@ -28,6 +29,11 @@ from src.services.curation.crop_listing import (
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import (
+    item_state_fields,
+    item_write_fields,
+    vector_source_excludes,
+)
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -157,8 +163,10 @@ async def list_crops(
     if limit is not None:
         page_size = limit
     guard_page_depth(page, page_size)
+    embedding = await item_write_fields()
     try:
         listing = build_crop_list_query(
+            embedding=embedding,
             sort=sort,
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
@@ -185,7 +193,12 @@ async def list_crops(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    body = crop_list_body(listing, page=page, page_size=page_size)
+    body = crop_list_body(
+        listing,
+        page=page,
+        page_size=page_size,
+        vector_excludes=await vector_source_excludes(),
+    )
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
@@ -207,10 +220,16 @@ async def list_crops(
         fetch_items=crops_by_ids,
     )
     if ordered is not None:
+        await attach_item_display_nos(ordered['crops'])
         return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
-    crops = [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits]
+    state_fields = await item_state_fields()
+    crops = [
+        serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
+        for h in hits
+    ]
+    await attach_item_display_nos(crops)
     return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
 
 
@@ -227,15 +246,14 @@ async def get_crop(
     OpenSearch ``_source``, whose region keys follow ``RegionFields``
     storage names.
     """
+    excludes = item_source_excludes(await vector_source_excludes())
     try:
         # Still excludes the 1024-d embedding vectors (matching
         # every other item endpoint's behavior) -- but not
         # class_id_history, since a single-item view may legitimately
         # want it, unlike a paginated list.
-        resp = await opensearch.get(
-            index=items_index(), id=crop_id, _source_excludes=item_source_excludes()
-        )
+        resp = await opensearch.get(index=items_index(), id=crop_id, _source_excludes=excludes)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
-    return serialize_item(src, crop_id)
+    return serialize_item(src, crop_id, state_fields=await item_state_fields())

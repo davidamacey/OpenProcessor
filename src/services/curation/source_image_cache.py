@@ -106,7 +106,7 @@ def write_crop_cache(
                 crop.save(tmp, format='JPEG', quality=quality)
         tmp.replace(out)
         add_stage_bytes('jpeg_encode', out.stat().st_size)
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         logger.warning('write_crop_cache failed for crop_id=%s: %s', crop_id, exc)
 
 

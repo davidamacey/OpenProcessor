@@ -63,7 +63,7 @@
        squeezed wherever there happens to be leftover flex space. -->
   {#if view.semanticSearchAvailable}
     <SemanticSearchBox
-      filter={{ cluster_id: view.clusterId }}
+      filter={{ cluster_uid: view.clusterUid }}
       pageSize={200}
       onResults={(res) => {
         view.searchModeActive = true;

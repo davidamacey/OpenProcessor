@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, Field
 
 from src.config.project_context import current_project_id
@@ -123,7 +124,7 @@ async def select_diverse(
     try:
         count_resp = await opensearch.count(index=items_index(), body={'query': query})
         n_estimate = int(count_resp.get('count', 0))
-    except Exception:
+    except OpenSearchException:
         n_estimate = job_max_n() + 1  # force the job path
 
     fetch_cap = max_n()

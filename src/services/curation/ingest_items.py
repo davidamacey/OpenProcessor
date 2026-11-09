@@ -20,6 +20,7 @@ from src.services.curation.ingest_policy import (
 )
 from src.services.curation.ingest_writer import get_ingest_writer
 from src.services.detection.geometry import letterbox_params
+from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
 
 
@@ -140,7 +141,7 @@ class IngestItemsMixin:
             if secondary is None:
                 try:
                     secondary = await self.detector.run_secondary_raw(img)
-                except Exception as exc:
+                except TRITON_CALL_ERRORS as exc:
                     secondary_detector_error = str(exc)
                     logger.warning(
                         'ingest_secondary_detector_failed', path=image_path, error=str(exc)
@@ -149,7 +150,8 @@ class IngestItemsMixin:
                 sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
                 try:
                     self.detector.resolve_with_secondary(items, secondary.raw, sec_scale, sec_pad)
-                except Exception as exc:
+                except (ValueError, IndexError) as exc:
+                    secondary_detector_error = str(exc)
                     logger.warning(
                         'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
                     )

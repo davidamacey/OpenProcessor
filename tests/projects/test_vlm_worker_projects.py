@@ -17,7 +17,8 @@ pytestmark = pytest.mark.unbound
 
 def test_no_items_index_literal_in_source() -> None:
     text = '\n'.join(
-        Path(m.__file__).read_text(encoding='utf-8') for m in (vlm_worker, vlm_pending, vlm_cli)
+        Path(m.__file__).read_text(encoding='utf-8')  # type: ignore[arg-type]
+        for m in (vlm_worker, vlm_pending, vlm_cli)
     )
     assert 'op_items' not in text
     assert '_items' not in text

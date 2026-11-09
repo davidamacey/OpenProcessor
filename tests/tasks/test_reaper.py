@@ -52,7 +52,7 @@ def test_with_the_database_down_the_tick_fails_and_every_rule_was_tried() -> Non
             return False
 
     with pytest.raises(ReaperError):
-        Reaper(session_factory=Down).tick()
+        Reaper(session_factory=Down).tick()  # type: ignore[arg-type]
     # rules a, b, c, d, h, g and f always try; e and i try only when a job kind that syncs one of
     # their projection tasks is registered (each skips its connect otherwise)
     projection_rules = {rule for rule, job in PROJECTION_JOBS.values() if job in KINDS}

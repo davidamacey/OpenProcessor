@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -65,8 +65,8 @@ async def test_residual_fetch_cancels_the_other_slices_when_one_fails() -> None:
     client = _SliceClient()
     with pytest.raises(RuntimeError, match='shard failure'):
         await fetch_residual_embeddings_parallel(
-            client, field='pe_embedding', n_slices=3, page_size=1
-        )  # type: ignore[arg-type]
+            cast('Any', client), field='pe_embedding', n_slices=3, page_size=1
+        )
     await _no_orphans_and_no_more_searches(client)
     assert client.deleted == [{'body': {'pit_id': ['pit1']}}]
 
@@ -81,7 +81,7 @@ async def test_a_clean_scan_yields_every_page_once() -> None:
             return await super().search(body=body, **kw)
 
     client = Finite(fail_slice=None)
-    ids = []
+    ids: list[Any] = []
     async for page in iter_pages(client, index='i', query={}, source=['x'], n_slices=3):  # type: ignore[arg-type]
         ids.extend(h['_id'] for h in page)
     assert sorted(ids) == sorted(f'{s}-{n}' for s in range(3) for n in (1, 2))

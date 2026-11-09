@@ -88,7 +88,7 @@ def test_a_running_job_reports_when_it_started(world) -> None:
     started = dt.datetime(2026, 11, 1, 12, 0, tzinfo=dt.UTC)
     insert_row(world, project, 'running', started_at=started)
     [job] = running_jobs(record)
-    assert dt.datetime.fromisoformat(job.started_at) == started
+    assert dt.datetime.fromisoformat(job.started_at) == started  # type: ignore[arg-type]
 
 
 def test_a_queued_job_has_no_start_time(world) -> None:

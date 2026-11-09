@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.routers.curation import projects as projects_router
 from src.routers.curation._project_deps import install_project_exception_handlers
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
     from src.config.projects import ProjectStatus
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 class _CountingOpenSearch(FakeLifecycleOpenSearch):
@@ -44,22 +45,6 @@ class _CountingOpenSearch(FakeLifecycleOpenSearch):
             return {'count': len(docs)}
         ((field, value),) = term.items()
         return {'count': sum(1 for d in docs if d.get(field) == value)}
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
 
 
 @pytest.fixture(autouse=True)
@@ -326,7 +311,7 @@ def test_counts_validated_is_null_on_every_route_when_uncountable(
     _create('beta', client)
 
     async def _down(*_a: Any, **_kw: Any) -> Any:
-        raise ConnectionError('opensearch down')
+        raise OpenSearchConnectionError('N/A', 'opensearch down', OSError('down'))
 
     monkeypatch.setattr(client, 'count', _down)
     listed = http.get('/curation/projects').json()

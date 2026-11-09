@@ -169,7 +169,37 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
         language: system
         pass_filenames: false
-        files: ^(src|scripts|docker|export)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+        files: ^(src|scripts|docker|export|tests)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+
+      - id: check-mypy-tests
+        name: The list of test modules mypy still skips only shrinks
+        entry: python3 scripts/codegen/check_mypy_tests.py
+        language: system
+        pass_filenames: false
+        files: ^(pyproject\.toml|scripts/codegen/(check_mypy_tests\.py|baselines/mypy_tests\.txt)|tests/.*\.py)$
+
+      # Lean frontend gate: only the staged frontend files, through the app's own
+      # node_modules (npm ci in frontend/). svelte-check and vitest stay in CI and the
+      # lane checks, they are too slow for a commit hook. A missing node_modules fails
+      # the hook instead of passing vacuously.
+      - id: frontend-prettier
+        name: frontend prettier --check (staged files)
+        entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --check --ignore-unknown "${@#frontend/}"' --
+        language: system
+        files: ^frontend/
+      - id: frontend-eslint
+        name: frontend eslint (staged files)
+        entry: bash -c 'cd frontend && exec node_modules/.bin/eslint --no-warn-ignored "${@#frontend/}"' --
+        language: system
+        files: ^frontend/.*\.(js|ts|svelte)$
+      # knip is whole-project (a file is unused only relative to every entry point), so
+      # it takes no filenames and runs whenever frontend source, config or deps change.
+      - id: frontend-knip
+        name: frontend knip (unused files, exports, dependencies)
+        entry: bash -c 'cd frontend && exec node_modules/.bin/knip'
+        language: system
+        pass_filenames: false
+        files: ^frontend/(src|scripts|static)/|^frontend/(knip\.json|package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$
 
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pytest
@@ -27,7 +27,7 @@ _HASH = 'b' * 32
 
 
 def _run(conn, project, level='image', status='current'):
-    profile = (None, None)
+    profile: tuple[Any, Any] = (None, None)
     if project is not None:
         if project not in _PROFILES:
             _PROFILES[project] = make_profile(conn, project, 'near_dup_profile')
@@ -152,7 +152,9 @@ def test_a_pending_member_is_one_row_per_project_level_and_member(conn, world) -
 def _visible(pg, table: str, kind: str, project=None) -> int:
     with psycopg.connect(pg.conninfo('app')) as conn:
         bind_scope(conn, kind, project)
-        return conn.execute(f'SELECT count(*) FROM {table}').fetchone()[0]  # fixed names
+        return (conn.execute(f'SELECT count(*) FROM {table}').fetchone() or (None,))[
+            0
+        ]  # fixed names
 
 
 def test_a_project_scope_sees_only_its_rows_in_every_table(pg, conn, world) -> None:

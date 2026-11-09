@@ -19,6 +19,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.opensearch.scroll import scroll_ids
 from src.clients.opensearch.tasks import run_update_by_query_polled
 from src.domain.history import record_class_history
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -189,6 +190,7 @@ async def relabel_merged_items(
         return 0, 0
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=ids,
         merger=_merge_crop_merger(target_id, target_name),
         index=index,

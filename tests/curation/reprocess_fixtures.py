@@ -5,7 +5,7 @@ image root and an ingest service with fake Triton/PE."""
 from __future__ import annotations
 
 import io
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from PIL import Image
@@ -221,7 +221,7 @@ def make_service(
     return CurationIngestService(
         opensearch=fake,
         triton_pool=triton,
-        registry=FakeRegistry(),
+        registry=cast('Any', FakeRegistry()),
         profile=profile,
         pe_encoder=pe or FakePE(),
         config=get_curation_config(),

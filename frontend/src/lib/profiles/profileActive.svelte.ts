@@ -2,7 +2,7 @@
  * The project's active region profile (`GET /region_profiles/active`, axis
  * `detection_profile`) and the writes that move it: activate (the response
  * carries the served `impact`), rollback and deactivate (any_domain_plan.md
- * §4.4, §7.3, §7.6 item 4; docs/design/w4-profile-editor-ui-plan-2026-09-27.md
+ * §4.4, §7.3, §7.6 item 4; w4 profile editor UI plan
  * §3, §4).
  *
  * After every successful write the scoped `/health` is re-polled, so

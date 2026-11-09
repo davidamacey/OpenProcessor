@@ -5,10 +5,9 @@
   import { getThumbUrl } from '$lib/api_cropRead';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import {
+    displayNoText,
     dominantShareText,
     dominantShareTitle,
-    cohesionText,
-    COHESION_TOOLTIP,
     DETECTOR_TOOLTIP,
     VALIDATION_TEXT,
     detectorText,
@@ -22,30 +21,10 @@
   // inventory card); a click opens the cluster or the slot's inventory.
   let { c, flagVocabulary }: { c: Cluster; flagVocabulary: ClusterFlag[] } = $props();
 
-  // Purity banding is served (`purity_tier`, `{API_PREFIX}/clusters`'
-  // `purity_thresholds`) — no client 0.8/0.6 threshold. `has_subclusters`
-  // is a separate, unrelated signal (AHC sub-clustering ran) and still
-  // wins the border color outright.
   function borderColor(c: Cluster): string {
-    // M4: a distinct, neutral border for the non-cluster inventory card —
-    // the red "noisy" border would otherwise falsely imply a bad cluster.
+    // M4: a distinct, neutral border for the non-cluster inventory card.
     if (c.isSlotCard) return 'border-purple-500/60';
-    if (c.has_subclusters) return 'border-blue-500/60';
-    if (c.purity_tier === 'pure') return 'border-green-500/60';
-    if (c.purity_tier === 'mixed') return 'border-orange-500/60';
-    return 'border-red-500/60';
-  }
-
-  function purityBadge(c: Cluster): { color: string; text: string } | null {
-    // M4: a synthetic slot inventory card is not a cluster —
-    // it has no purity, so it gets no purity badge at all rather than
-    // falling through to an invented "noisy 0%".
-    if (c.isSlotCard) return null;
-    if (c.purity_tier === 'pure')
-      return { color: 'bg-green-500/20 text-green-300', text: 'pure' };
-    if (c.purity_tier === 'mixed')
-      return { color: 'bg-orange-500/20 text-orange-200', text: 'mixed' };
-    return { color: 'bg-red-500/20 text-red-200', text: 'noisy' };
+    return 'border-zinc-700';
   }
 
   function open(c: Cluster): void {
@@ -62,14 +41,18 @@
     // "the first slot-bound class" — the latter silently routed every
     // slot-bound cluster to the first registered slot's class filter,
     // which breaks the instant a second capable slot exists.
-    if (slotForClassName(c.dominant_class_name) != null && c.dominant_class_id != null) {
-      void goto(resolve(projectHref(`/clusters?class=${c.dominant_class_id}`)));
+    if (slotForClassName(c.dominant_class_name) != null && c.dominant_class_name) {
+      void goto(
+        resolve(
+          projectHref(`/clusters?class=${encodeURIComponent(c.dominant_class_name)}`),
+        ),
+      );
       return;
     }
-    void goto(resolve(projectHref(`/clusters/${c.id}`)));
+    void goto(resolve(projectHref(`/clusters/${encodeURIComponent(c.uid)}`)));
   }
 
-  const pb = $derived(purityBadge(c));
+  const numberText = $derived(displayNoText(c));
   const detector = $derived(c.isSlotCard ? null : detectorText(c));
   const flagById = $derived(new Map(flagVocabulary.map((f) => [f.id, f])));
 </script>
@@ -112,41 +95,23 @@
             inventory
           </span>
         {:else}
-          <span class="text-sm font-semibold">#{c.id}</span>
-          {#if pb}
-            <!-- DQ-M2 fix (dq-queues cutover, 2026-09-24): purity is now
-                 nearest-centroid geometry purity, not the tautological
-                 label-based number (always 1.0 for a class cluster) —
-                 shown with its basis and n (it's noisy at low n), plus
-                 label_agreement/labelled_share in the tooltip so an
-                 operator can tell the two apart. -->
+          <span
+            class="font-mono text-sm font-semibold"
+            title={c.uid}
+            data-testid="cluster-uid">{numberText}</span
+          >
+          {#if c.label_agreement != null}
             <span
-              class="rounded px-1.5 py-0.5 text-[10px] font-medium {pb.color}"
-              data-testid="cluster-cohesion"
-              title="{COHESION_TOOLTIP} · label agreement {c.label_agreement != null
-                ? `${(c.label_agreement * 100).toFixed(0)}%`
-                : '—'} · labelled share {c.labelled_share != null
+              class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300"
+              data-testid="cluster-agreement"
+              title="Label agreement: the top class's share of the labelled members · labelled share {c.labelled_share !=
+              null
                 ? `${(c.labelled_share * 100).toFixed(0)}%`
                 : '—'}"
             >
-              {pb.text} · {cohesionText(c) ?? 'cohesion —'}
+              agreement {(c.label_agreement * 100).toFixed(0)}%
             </span>
           {/if}
-        {/if}
-        {#if c.promotable}
-          <span
-            class="rounded border border-emerald-500/40 bg-emerald-500/20 px-1.5 py-0.5 text-[10px] text-emerald-200"
-            title="Meets the server's auto-promote gate (purity + member count + labelled share)"
-          >
-            promotable
-          </span>
-        {/if}
-        {#if c.has_subclusters}
-          <span
-            class="rounded border border-blue-500/40 bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
-          >
-            AHC
-          </span>
         {/if}
         <span class="grow"></span>
         {#if c.isSlotCard}
@@ -162,7 +127,7 @@
       </div>
       <div
         class="truncate text-sm text-zinc-300"
-        title={c.dominant_class_name ?? `Unlabeled cluster #${c.id}`}
+        title={c.dominant_class_name ?? `Unlabeled cluster ${c.uid}`}
       >
         {#if c.isSlotCard}
           <!-- M4: dominant_pct is meaningless for the inventory
@@ -180,7 +145,7 @@
             </span>
           {/if}
         {:else}
-          <span class="text-amber-300">Unlabeled #{c.id}</span>
+          <span class="text-amber-300">Unlabeled {numberText}</span>
           <span class="text-zinc-500">· needs label</span>
         {/if}
       </div>

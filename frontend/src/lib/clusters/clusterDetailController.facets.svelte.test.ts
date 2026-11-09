@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 
 vi.mock('$app/state', () => ({
-  page: { params: { id: '7' }, url: new URL('http://x/p/default/clusters/7') },
+  page: { params: { id: 'uid-7' }, url: new URL('http://x/p/default/clusters/uid-7') },
 }));
 vi.mock('$lib/api_clusters', async () => {
   const actual =
@@ -18,7 +18,7 @@ import { createClusterDetailController } from './clusterDetailController.svelte'
 import type { ClusterFacets } from '$lib/types_clusterList';
 
 const FACETS: ClusterFacets = {
-  cluster_id: 7,
+  cluster_uid: 'uid-7',
   total: 30,
   detector_classes: [
     { value: 'widget_x', count: 20 },
@@ -54,7 +54,7 @@ const lastOpts = () => vi.mocked(getCluster).mock.calls.at(-1)![4]!;
 
 beforeEach(() => {
   vi.mocked(getCluster).mockResolvedValue({
-    cluster: { id: 7 } as never,
+    cluster: { uid: 'uid-7' } as never,
     cardError: null,
     crops: { items: [], total: 0, page: 1, page_size: 60 },
   });
@@ -71,7 +71,7 @@ describe('cluster facets', () => {
   it('reads the served facets for the viewed cluster', async () => {
     const view = wire();
     await settle();
-    expect(getClusterFacets).toHaveBeenCalledWith(7);
+    expect(getClusterFacets).toHaveBeenCalledWith('uid-7');
     expect(view.facets).toEqual(FACETS);
   });
 

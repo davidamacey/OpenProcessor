@@ -12,7 +12,7 @@ import dataclasses
 import hashlib
 import io
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from _class_registry_fake import registry_of
 from curation.query_fakes import QueryFakeOpenSearch
@@ -34,6 +34,9 @@ from src.services.projects.registry import ProjectRegistry
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from src.services.projects.registry import ProjectSource
+    from src.tasks.runtime.context import JobContext
 
 
 NOW = '2026-10-01T00:00:00+00:00'
@@ -74,7 +77,7 @@ class StubRegistry(ProjectRegistry):
     """The project registry over a fixed set of records (no OpenSearch)."""
 
     def __init__(self, records: dict[str, ProjectRecord]) -> None:
-        super().__init__(lambda: None)
+        super().__init__(cast('ProjectSource', lambda: None))
         self.records = records
 
     async def ensure_fresh(self) -> None:
@@ -86,7 +89,7 @@ class StubRegistry(ProjectRegistry):
     async def lookup(self, slug: str) -> ProjectRecord | None:
         return self.records.get(slug)
 
-    def snapshot(self) -> dict[str, ProjectRecord]:  # type: ignore[override]
+    def snapshot(self) -> dict[str, ProjectRecord]:
         return dict(self.records)
 
 
@@ -412,7 +415,7 @@ async def run_job(
     run = Run(ctx, params, document, None)
     try:
         run.result = await run_combine(
-            ctx,
+            cast('JobContext', ctx),
             world.fake,
             plan=load_plan(params, document),
             sources=sources,

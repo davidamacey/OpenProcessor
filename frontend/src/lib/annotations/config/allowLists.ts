@@ -1,7 +1,7 @@
 /**
  * Closed vocabularies the tier-2 deployment-profile parser validates
- * against (docs/annotation-slots-contract-draft.md §5, and this repo's
- * docs/design/tier2-annotation-profile-config-plan-2026-09-20.md §2.2).
+ * against (the annotation slots contract draft, §5, and the tier-2
+ * annotation profile config plan §2.2).
  *
  * `static/annotation-profiles.json` is supplied by a deployment
  * OPERATOR, not by a reviewed pull request. It is untrusted input at a

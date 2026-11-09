@@ -4,9 +4,10 @@ like its own label, written like a classifier's label; nothing else changes."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from curation.occ_fakes import FakeIngestOpenSearch
@@ -57,7 +58,9 @@ def _item(name: str | None, **kw: Any) -> DetectedItem:
 
 
 def test_a_proposal_gets_the_class_named_like_it_and_keeps_its_label() -> None:
-    reg = registry_name_index(_Registry(_Entry(4, 'traffic_light'), _Entry(5, 'person')))
+    reg = registry_name_index(
+        cast('Any', _Registry(_Entry(4, 'traffic_light'), _Entry(5, 'person')))
+    )
     items = [_item('traffic light'), _item('Person'), _item('dog'), _item(None)]
     assert assign_classes_by_name(items, reg, 'item') == 2
     assert [(i.class_id, i.class_name) for i in items] == [
@@ -73,14 +76,16 @@ def test_a_proposal_gets_the_class_named_like_it_and_keeps_its_label() -> None:
 
 def test_a_deprecated_or_region_class_never_resolves() -> None:
     reg = registry_name_index(
-        _Registry(_Entry(1, 'car', deprecated=True), _Entry(2, 'wheel', group='region'))
+        cast(
+            'Any', _Registry(_Entry(1, 'car', deprecated=True), _Entry(2, 'wheel', group='region'))
+        )
     )
     items = [_item('car'), _item('wheel')]
     assert assign_classes_by_name(items, reg, 'item') == 0
 
 
 def test_an_already_classed_or_labeled_item_is_left_alone() -> None:
-    reg = registry_name_index(_Registry(_Entry(1, 'car')))
+    reg = registry_name_index(cast('Any', _Registry(_Entry(1, 'car'))))
     classed = _item('car', class_id=9, class_name='other')
     assert assign_classes_by_name([classed], reg, 'item') == 0
     assert classed.class_id == 9
@@ -88,7 +93,12 @@ def test_an_already_classed_or_labeled_item_is_left_alone() -> None:
 
 def test_the_resolved_source_is_recognised_as_a_classifier_label_the_vlm_skips() -> None:
     assert is_classifier_class_source('item_model')
-    query = vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
+    query = vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+    )
     skipped = [
         c
         for c in query['bool']['must_not']
@@ -113,7 +123,7 @@ def _service(policy: IngestPolicy, tmp_path: Any) -> tuple[CurationIngestService
     svc = CurationIngestService(
         opensearch=os_fake,
         triton_pool=FakeTritonPool([(0.05, 0.05, 0.6, 0.6, 0.9, 1), (0.1, 0.6, 0.4, 0.9, 0.8, 0)]),
-        registry=_Registry(_Entry(7, 'widget')),
+        registry=cast('Any', _Registry(_Entry(7, 'widget'))),
         profile=profile,
         pe_encoder=FakePEEncoder(),
         config=CurationConfig(),

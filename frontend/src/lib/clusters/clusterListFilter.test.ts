@@ -45,10 +45,13 @@ describe('clusterFilterToQuery', () => {
 describe('URL round trip', () => {
   it('writes and reads the same filter and sort', () => {
     const p = new URLSearchParams('class=7&class_name=x');
-    clusterFilterToUrl(p, 'purity_desc', FULL);
+    clusterFilterToUrl(p, 'label_agreement_asc', FULL);
     expect(p.get('class')).toBe('7');
     expect(p.getAll('flag')).toEqual(['mixed_detector_classes', 'unvalidated']);
-    expect(clusterFilterFromUrl(p)).toEqual({ sort: 'purity_desc', filter: FULL });
+    expect(clusterFilterFromUrl(p)).toEqual({
+      sort: 'label_agreement_asc',
+      filter: FULL,
+    });
   });
 
   it('removes keys that are now empty and leaves foreign keys alone', () => {

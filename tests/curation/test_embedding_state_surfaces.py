@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
+from _msearch_fake import install_msearch
 
 from src.config.region_fields import get_region_fields
 from src.services.curation import semantic_search
@@ -33,7 +35,7 @@ def test_stats_summary_splits_reasons_and_counts_unknown_legacy() -> None:
             'unknown': 3,
         },
     }
-    assert set(embedding_aggregations()) == {
+    assert set(embedding_aggregations(embedding=DEFAULT_WRITE_FIELDS)) == {
         'embedding_states',
         'embedded_items',
         'legacy_embedded_items',
@@ -52,8 +54,12 @@ def _terms_fields(node: Any) -> list[str]:
 
 def test_stats_never_terms_aggregates_embedding_state() -> None:
     # A text-mapped legacy field 400s on a terms aggregation.
-    assert 'embedding_state' not in _terms_fields(embedding_aggregations())
-    filters = embedding_aggregations()['embedding_states']['filters']['filters']
+    assert 'embedding_state' not in _terms_fields(
+        embedding_aggregations(embedding=DEFAULT_WRITE_FIELDS)
+    )
+    filters = embedding_aggregations(embedding=DEFAULT_WRITE_FIELDS)['embedding_states']['filters'][
+        'filters'
+    ]
     assert set(filters) == {'embedded', 'not_selected', 'deferred', 'failed'}
     assert filters['failed'] == {'match_phrase': {'embedding_state': 'failed'}}
 
@@ -62,16 +68,19 @@ def test_item_filter_state_uses_the_shared_state_clause() -> None:
     from src.domain.embedding_state import state_clause
     from src.services.curation.item_filter import item_filter_clauses
 
-    out = item_filter_clauses(ItemFilter(embedding_state=['failed']))
-    assert out == [state_clause('failed')]
+    out = item_filter_clauses(
+        ItemFilter(embedding_state=['failed']), embedding=DEFAULT_WRITE_FIELDS
+    )
+    assert out == [state_clause('failed', 'embedding_state')]
 
 
 @pytest.mark.asyncio
 async def test_semantic_search_reports_items_it_could_not_search() -> None:
-    os_fake = AsyncMock()
+    os_fake = install_msearch(AsyncMock())
     os_fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     os_fake.count = AsyncMock(return_value={'count': 4})
     encoder = AsyncMock()
+    encoder.text_model = 'pe_text_encoder'
     encoder.encode_text = lambda texts: np.zeros((len(texts), 3), dtype=np.float32)
 
     out = await semantic_search.semantic_text_search(
@@ -225,7 +234,9 @@ def test_by_state_end_to_end_over_mixed_legacy_and_stated_items() -> None:
         {'embedding_state': 'some_future_state'},
         {},
     ]
-    summary = embedding_summary(_aggregate(docs, embedding_aggregations()), len(docs))
+    summary = embedding_summary(
+        _aggregate(docs, embedding_aggregations(embedding=DEFAULT_WRITE_FIELDS)), len(docs)
+    )
     assert summary['by_state'] == {
         'embedded': 2,
         'not_selected': 0,

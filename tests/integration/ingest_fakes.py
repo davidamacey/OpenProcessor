@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from fastapi.testclient import TestClient
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 
 if TYPE_CHECKING:
@@ -53,6 +54,13 @@ class FakeTritonPool:
 
     def __init__(self) -> None:
         self.batch_sizes: list[int] = []
+
+    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
+        return False
+
+    async def load_model(self, model_name: str) -> None:
+        # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
+        raise InferenceServerException(f'{model_name}: not in the repository')
 
     async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
         return 'UINT8'

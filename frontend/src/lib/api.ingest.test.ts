@@ -1,6 +1,6 @@
 /**
  * Tests for the `/ingest` API wrappers
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.2/§B.3):
+ * (Ingest UI plan B.2/B.3):
  * URLs, methods, the multipart request shape, and error surfacing.
  */
 

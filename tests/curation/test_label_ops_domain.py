@@ -142,7 +142,7 @@ def test_undo_outcome_decision_table(name: str, mutate: Any, expected: UndoOutco
     doc = mutate(written)
     registry = _registry_name
     if doc is not None and doc.pop('_rename', False):
-        registry = lambda cid: 'renamed' if cid == 2 else _registry_name(cid)  # noqa: E731
+        registry = lambda cid: 'renamed' if cid == 2 else _registry_name(cid)  # type: ignore[assignment]  # noqa: E731
     assert undo_outcome(doc, _fp(), prior=prior, registry_name=registry) is expected
 
 
@@ -223,15 +223,14 @@ def test_op_write_undone_follows_the_stack() -> None:
 
 
 def test_class_undo_update_matches_per_item_undo(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.routers.curation import label_undo
-    from src.services.curation import class_undo
+    from src.services.curation import class_undo, label_undo
 
     monkeypatch.setattr(class_undo, 'now_iso', lambda: AFTER)
     monkeypatch.setattr('src.domain.history.now_iso', lambda: AFTER)
     for excluded in (False, True):
         doc = {**_written(), 'class_excluded': excluded}
         shared = class_undo.class_undo_update(copy.deepcopy(doc))
-        per_item = label_undo._undo_merger(require_history=True)(copy.deepcopy(doc))
+        per_item = label_undo.undo_merger(require_history=True)(copy.deepcopy(doc))
         assert shared == per_item
         assert shared['class_id_history'][-1]['op_id'] == OP
         assert shared['class_id_history'][-1]['writer'] == HUMAN_UNLABEL_WRITER

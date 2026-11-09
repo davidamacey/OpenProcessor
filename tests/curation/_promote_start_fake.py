@@ -10,7 +10,7 @@ import contextlib
 import datetime as dt
 import uuid
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from src.schemas.jobs import JobView
 
@@ -84,4 +84,6 @@ def run_job(captured: dict[str, Any]) -> Any:
 
     from src.services.training.promote_run import execute_promote
 
-    return asyncio.run(execute_promote(captured['plan'], captured['payload'], object()))
+    return asyncio.run(
+        execute_promote(captured['plan'], captured['payload'], cast('Any', object()))
+    )

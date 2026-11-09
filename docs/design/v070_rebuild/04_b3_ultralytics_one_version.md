@@ -36,7 +36,7 @@ then speed (no throughput loss; B5 then measures on this engine once).
 | # | Check | How |
 |---|---|---|
 | P1 | B2 PR2 merged into main (owner-approved reorder of 2026-11-05, D-84: the GPU-relevant B2 work, training, model export and the evaluator on Celery, is in PR2; PR3 holds the embedding readers, Cropwright, private hardening and docs, none of them a B3 file) | `git log --oneline main`; the B2 PR2 merge commit is present. Every track is cut from `main` after it. The B3 PR may merge before or after PR3: whichever merges second first merges `main` into its integration branch (a merge commit; the overlap is the shared docs: `docs/ARCHITECTURE.md`, `INSTALLATION.md`, `docs/PERFORMANCE.md`, `CHANGELOG.md`) and re-runs `check_docs_vs_code.py` and `make contracts-check`. GPU window 1 never overlaps PR3's live run 2 |
-| P2 | B1-1E merged: `nms=False` in `export_yolo26.export_fused_onnx`, `inspect_fused_output` refuses non-`[300,6]`, `head_kind` recorded by `validate_pytorch_model`, the export worker routes on `head_kind`, class by name on the secondary, YOLOv5 probe input read from the ONNX, CI job `families` exists | `rg -n "nms=False" export/export_yolo26.py`; `rg -n "head_kind" src/services/model_export.py export/export_worker.py`; `rg -n "families" .github/workflows/` |
+| P2 | B1-1E merged: `nms=False` in `export_yolo26.export_fused_onnx`, `inspect_fused_output` refuses non-`[300,6]`, `head_kind` recorded by `validate_pytorch_model`, the export worker routes on `head_kind`, class by name on the secondary, YOLOv5 probe input read from the ONNX, CI job `families` exists | `rg -n "nms=False" export/export_yolo26.py`; `rg -n "head_kind" src/services/models/model_export.py export/export_worker.py`; `rg -n "families" .github/workflows/` |
 | P3 | B0 exact pin: every requirements file carries the same exact `ultralytics==<pin>`, equal to the current pin in `requirements.txt` (`8.4.197` when the plan was written); `tests/test_requirements_contract.py::test_ultralytics_is_one_exact_version_everywhere` exists | `rg -n "ultralytics" requirements*.txt pyproject.toml`; `rg -n "exact_version" tests/test_requirements_contract.py` |
 | P4 | D-27 and D-28 answered by the owner; freeze date written into the B3 PR description | owner message |
 | P5 | GPU window booked: GPU 0 for about one GPU day, announced to peer sessions; nothing else heavy from this repo at the same time | `risks_cleanup_host.md` |
@@ -198,7 +198,7 @@ in the same commit as any wire change; lane checks only (section 9).
   `PROBE_ARCHITECTURES` derived from the specs.
 - Readers (replace the duplicates): `src/services/curation/probe_models.py`
   (`PROBE_ARCHITECTURES` tuple), `src/routers/curation/probe.py` (imports it),
-  `src/services/model_export.py::validate_pytorch_model` (the B1-1E `head_kind` logic moves here
+  `src/services/models/model_export.py::validate_pytorch_model` (the B1-1E `head_kind` logic moves here
   unchanged in behaviour), `docker/trainer/` (B3-A3), `export/ultralytics_export.py` (B3-E1).
 - Red: `tests/domain/test_model_families.py`: `head_kind_of` on stub heads, `export_kwargs` per
   kind, and an AST test that no other module defines an architecture tuple

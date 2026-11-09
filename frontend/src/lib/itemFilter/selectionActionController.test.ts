@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('$lib/api_jobs', () => ({ getJob: vi.fn() }));
+vi.mock('$lib/api_clusters', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_clusters')>('$lib/api_clusters');
+  return { ...actual, getClusters: vi.fn().mockResolvedValue({ items: [] }) };
+});
 vi.mock('$lib/api_select', async () => {
   const actual =
     await vi.importActual<typeof import('$lib/api_select')>('$lib/api_select');
@@ -12,7 +18,9 @@ vi.mock('$lib/api_select', async () => {
   };
 });
 
+import { getJob } from '$lib/api_jobs';
 import { ApiError } from '$lib/api_errors';
+import { doneJob } from '$lib/clusters/clusterControllerTestKit';
 import {
   batchExcludeSelection,
   batchUnexcludeSelection,
@@ -104,15 +112,11 @@ describe('selectionActionController', () => {
     });
   });
 
-  it('label records the served updated_ids as one label undo entry', async () => {
+  it('label follows the queued job and records the operation as one label-op undo entry', async () => {
     vi.mocked(bulkLabelSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 3 })
-      .mockResolvedValueOnce({
-        updated: 3,
-        updated_ids: ['a', 'b', 'c'],
-        conflicts: [],
-        op_id: null,
-      });
+      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1', status: 'queued' });
+    vi.mocked(getJob).mockResolvedValue(doneJob({ updated: 3 }));
     const c = make();
     c.classId = 5;
     await c.open('label');
@@ -124,32 +128,32 @@ describe('selectionActionController', () => {
     );
     await c.confirm();
     expect(undoStore.stack).toHaveLength(1);
+    expect(getJob).toHaveBeenCalledWith('job1', expect.anything());
+    // A selection names no ids: Z undoes it by operation id.
     expect(undoStore.stack[0]).toMatchObject({
-      crop_ids: ['a', 'b', 'c'],
-      kind: 'label',
+      crop_ids: [],
+      kind: 'label_op',
+      op_id: 'op1',
     });
+    expect(c.result?.summary).toBe('Labeled 3');
   });
 
-  it('move and unexclude record their served ids too', async () => {
+  it('move records its operation and unexclude records its served ids', async () => {
     vi.mocked(moveSelectionToCluster)
       .mockResolvedValueOnce({ dry_run: true, selected: 1 })
-      .mockResolvedValueOnce({
-        updated: 1,
-        updated_ids: ['m'],
-        conflicts: [],
-        op_id: null,
-      });
+      .mockResolvedValueOnce({ op_id: 'op2', job_id: 'job2', status: 'queued' });
+    vi.mocked(getJob).mockResolvedValue(doneJob({ updated: 1 }, 'job2'));
     const mv = make();
-    mv.clusterId = 9;
+    mv.clusterUid = 'uid-9';
     await mv.open('move');
     await mv.confirm();
     expect(moveSelectionToCluster).toHaveBeenLastCalledWith(
       { filter: FILTER },
-      9,
+      'uid-9',
       false,
       expect.anything(),
     );
-    expect(undoStore.stack.at(-1)).toMatchObject({ crop_ids: ['m'], kind: 'label' });
+    expect(undoStore.stack.at(-1)).toMatchObject({ kind: 'label_op', op_id: 'op2' });
 
     vi.mocked(batchUnexcludeSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 1 })

@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.routers.curation._ingest_sources_models import S3Location
+from src.routers.curation._ingest_sources_models import S3Location, require_exactly_one_source
 
 
 class BulkPreviewRequest(BaseModel):
@@ -23,9 +23,7 @@ class BulkPreviewRequest(BaseModel):
 
     @model_validator(mode='after')
     def _exactly_one_source(self) -> Self:
-        chosen = [self.folder, self.manifest, self.s3, self.source_id]
-        if sum(x is not None for x in chosen) != 1:
-            raise ValueError('send exactly one of folder, manifest, s3 and source_id')
+        require_exactly_one_source(self.folder, self.manifest, self.s3, self.source_id)
         return self
 
 

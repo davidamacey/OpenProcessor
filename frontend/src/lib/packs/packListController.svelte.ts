@@ -1,6 +1,6 @@
 /**
  * The prompt-pack list page's state (any_domain_plan.md §7.6 items 1 and
- * 4; docs/design/w3-pack-editor-ui-plan-2026-09-27.md §2): the pack
+ * 4; w3 pack editor UI plan §2): the pack
  * binding of the shared `ConfigList` (the served list, the active pack
  * with Rollback, Clone and Delete; `config.changed axis=prompt_pack` is a
  * wake-up to re-read).

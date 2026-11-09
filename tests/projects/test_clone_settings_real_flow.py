@@ -40,7 +40,7 @@ async def _target_state(client, target):
         active_body = None
         if read is not None and read.name:
             cur = memory_config.current().stored('prompt_pack', read.name, target.slug)
-            pinned = await get_revision(kind='prompt_pack', name=read.name, revision=read.revision)
+            pinned = await get_revision(kind='prompt_pack', name=read.name, revision=read.revision)  # type: ignore[arg-type]
             active_body = pinned.body if pinned else None
     return act, cur, active_body, target_docs(None, target)
 

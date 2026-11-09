@@ -16,13 +16,14 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.db.repos import job_items
 from src.services.curation.class_label import ItemLabel, class_label_update
 from src.services.curation.new_class_terms import is_open_proposal
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.jobs.service import start_job
 
 
@@ -95,7 +96,7 @@ async def resolve_pending_proposals(
         on_written=on_written,
         on_failed=on_failed,
         max_retries=RESOLVE_MAX_RETRIES,
-        source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        source_excludes=await vector_source_excludes(),
     )
     return out
 

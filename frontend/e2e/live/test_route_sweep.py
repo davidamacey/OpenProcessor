@@ -38,13 +38,16 @@ tests that check the UI's numbers actually match the API's.
 from __future__ import annotations
 
 import re
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-
 from conftest import is_allowlisted_bad_response, page_path
 from fixtures.wire import REGION_TAB_URL_ID
+
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
 
 # Viewport widths every route is screenshotted at; height is fixed so a
 # route's screenshot is comparable across runs regardless of content
@@ -80,36 +83,37 @@ _NO_LOADING_PLACEHOLDER = r"""
 
 def _route_slug(path: str) -> str:
     """`/review?tab=model_disagreements` -> `review-tab-model_disagreements`."""
-    slug = re.sub(r"[^a-zA-Z0-9_]+", "-", path).strip("-").lower()
-    return slug or "root"
+    slug = re.sub(r'[^a-zA-Z0-9_]+', '-', path).strip('-').lower()
+    return slug or 'root'
+
 
 # (path, a selector proving the route actually mounted its real content,
 # not just an empty shell / loading spinner). `{region_class}` is filled
 # from the deployment's served region profile; routes that need one skip
 # on a deployment without it.
 ROUTES: list[tuple[str, str]] = [
-    ("/dashboard", 'h1:has-text("Dashboard")'),
-    ("/ingest", 'h1:has-text("Ingest")'),
-    ("/clusters", 'h1:has-text("Clusters")'),
-    ("/clusters?class={region_class}", 'h1:has-text("Clusters")'),
-    ("/review?tab=all", '[data-testid="queue-counter"]'),
-    ("/review?tab=uncertainty", '[data-testid="queue-counter"]'),
-    ("/review?tab=model_disagreements", '[data-testid="queue-counter"]'),
-    ("/review?tab=classifier_blind_spots", '[data-testid="queue-counter"]'),
-    ("/review?tab=new_class_proposals", '[data-testid="queue-counter"]'),
-    (f"/review?tab={REGION_TAB_URL_ID}", '[data-testid="queue-counter"]'),
-    ("/classes", 'h1:has-text("Class management")'),
-    ("/export", 'h1:has-text("Export dataset")'),
-    ("/train", 'h1:has-text("Train model")'),
-    ("/models", '[data-testid="models-status"] span:has-text("Updated")'),
-    ("/bakeoff", '[data-testid="dataset-picker"]'),
-    ("/settings", 'h1:has-text("Deployment defaults")'),
+    ('/dashboard', 'h1:has-text("Dashboard")'),
+    ('/ingest', 'h1:has-text("Ingest")'),
+    ('/clusters', 'h1:has-text("Clusters")'),
+    ('/clusters?class={region_class}', 'h1:has-text("Clusters")'),
+    ('/review?tab=all', '[data-testid="queue-counter"]'),
+    ('/review?tab=uncertainty', '[data-testid="queue-counter"]'),
+    ('/review?tab=model_disagreements', '[data-testid="queue-counter"]'),
+    ('/review?tab=classifier_blind_spots', '[data-testid="queue-counter"]'),
+    ('/review?tab=new_class_proposals', '[data-testid="queue-counter"]'),
+    (f'/review?tab={REGION_TAB_URL_ID}', '[data-testid="queue-counter"]'),
+    ('/classes', 'h1:has-text("Class management")'),
+    ('/export', 'h1:has-text("Export dataset")'),
+    ('/train', 'h1:has-text("Train model")'),
+    ('/models', '[data-testid="models-status"] span:has-text("Updated")'),
+    ('/bakeoff', '[data-testid="dataset-picker"]'),
+    ('/settings', 'h1:has-text("Deployment defaults")'),
 ]
 
 # The one global (non-project-scoped) page this tier also sweeps —
 # `/projects`, never `/p/<slug>/...`.
 GLOBAL_ROUTES: list[tuple[str, str]] = [
-    ("/projects", 'h1:has-text("Projects")'),
+    ('/projects', 'h1:has-text("Projects")'),
 ]
 
 
@@ -124,23 +128,23 @@ def _wire_response_recorder(gp: Any) -> None:
 
     def _record_response(response: Any) -> None:
         url = response.url
-        if "/curation/" not in url:
+        if '/curation/' not in url:
             return
         status = response.status
         if status < 400:
             return
         method = response.request.method
         # Strip origin + query for the allow-list match.
-        bare_path = url.split("://", 1)[-1].split("/", 1)[-1]
-        bare_path = "/" + bare_path.split("?")[0]
+        bare_path = url.split('://', 1)[-1].split('/', 1)[-1]
+        bare_path = '/' + bare_path.split('?')[0]
         if is_allowlisted_bad_response(method, bare_path, status):
             return
         gp.bad_responses.append((method, bare_path, status))
 
-    page.on("response", _record_response)
+    page.on('response', _record_response)
 
 
-@pytest.mark.parametrize("path,ready_selector", ROUTES, ids=[r[0] for r in ROUTES])
+@pytest.mark.parametrize(('path', 'ready_selector'), ROUTES, ids=[r[0] for r in ROUTES])
 def test_route_mounts_cleanly(
     guarded_page: Any,
     live_url: str,
@@ -150,17 +154,17 @@ def test_route_mounts_cleanly(
     ready_selector: str,
     screenshot_run_dir: Path,
 ) -> None:
-    needs_region = "{region_class}" in path or path == f"/review?tab={REGION_TAB_URL_ID}"
+    needs_region = '{region_class}' in path or path == f'/review?tab={REGION_TAB_URL_ID}'
     if needs_region and live_region_profile is None:
-        pytest.skip("this deployment serves no region profile")
+        pytest.skip('this deployment serves no region profile')
     if live_region_profile is not None:
-        path = path.replace("{region_class}", live_region_profile["region_class_name"])
+        path = path.replace('{region_class}', live_region_profile['region_class_name'])
     gp = guarded_page
     page = gp.page
 
     _wire_response_recorder(gp)
 
-    page.goto(f"{live_url}{page_path(live_project, path)}", wait_until="domcontentloaded")
+    page.goto(f'{live_url}{page_path(live_project, path)}', wait_until='domcontentloaded')
     page.wait_for_selector(ready_selector, timeout=15_000)
 
     _assert_route_clean(gp, path, screenshot_run_dir)
@@ -187,26 +191,26 @@ def _assert_route_clean(gp: Any, path: str, screenshot_run_dir: Path) -> None:
     slug = _route_slug(path)
     narrow_overflow: bool | None = None
     for width, height in SCREENSHOT_VIEWPORTS:
-        page.set_viewport_size({"width": width, "height": height})
+        page.set_viewport_size({'width': width, 'height': height})
         page.wait_for_timeout(150)
         # Lazy thumbnails (the region gallery) otherwise land in the review
         # screenshot as blank tiles, which reads as a broken page.
         page.wait_for_function(_IN_VIEWPORT_IMAGES_SETTLED, timeout=15_000)
         page.screenshot(
-            path=str(screenshot_run_dir / f"{slug}-{width}.png"),
+            path=str(screenshot_run_dir / f'{slug}-{width}.png'),
             full_page=True,
         )
         if width == 800:
             narrow_overflow = page.evaluate(
-                "document.documentElement.scrollWidth <= window.innerWidth + 1"
+                'document.documentElement.scrollWidth <= window.innerWidth + 1'
             )
     if default_viewport is not None:
         page.set_viewport_size(default_viewport)
 
     assert narrow_overflow, (
-        f"{path}: horizontal page overflow at 800px "
-        f"(document.documentElement.scrollWidth > window.innerWidth + 1) — "
-        f"see {screenshot_run_dir / f'{slug}-800.png'}"
+        f'{path}: horizontal page overflow at 800px '
+        f'(document.documentElement.scrollWidth > window.innerWidth + 1) — '
+        f'see {screenshot_run_dir / f"{slug}-800.png"}'
     )
 
     # Give in-flight `{API_PREFIX}` fetches issued on mount a chance to
@@ -232,19 +236,21 @@ def _assert_route_clean(gp: Any, path: str, screenshot_run_dir: Path) -> None:
         }
         """
     )
-    assert broken == [], f"{path}: in-viewport image(s) failed to load: {broken}"
+    assert broken == [], f'{path}: in-viewport image(s) failed to load: {broken}'
 
-    body_text = page.locator("body").inner_text()
-    assert "NaN" not in body_text, f"{path}: literal 'NaN' rendered in body text"
-    assert "undefined" not in body_text, f"{path}: literal 'undefined' rendered in body text"
+    body_text = page.locator('body').inner_text()
+    assert 'NaN' not in body_text, f"{path}: literal 'NaN' rendered in body text"
+    assert 'undefined' not in body_text, f"{path}: literal 'undefined' rendered in body text"
 
     assert gp.bad_responses == [], (
-        f"{path}: unexpected >=400 {{API_PREFIX}} response(s) (not on the "
-        f"allow-list): {gp.bad_responses}"
+        f'{path}: unexpected >=400 {{API_PREFIX}} response(s) (not on the '
+        f'allow-list): {gp.bad_responses}'
     )
 
 
-@pytest.mark.parametrize("path,ready_selector", GLOBAL_ROUTES, ids=[r[0] for r in GLOBAL_ROUTES])
+@pytest.mark.parametrize(
+    ('path', 'ready_selector'), GLOBAL_ROUTES, ids=[r[0] for r in GLOBAL_ROUTES]
+)
 def test_global_route_mounts_cleanly(
     guarded_page: Any,
     live_url: str,
@@ -259,7 +265,7 @@ def test_global_route_mounts_cleanly(
 
     _wire_response_recorder(gp)
 
-    page.goto(f"{live_url}{path}", wait_until="domcontentloaded")
+    page.goto(f'{live_url}{path}', wait_until='domcontentloaded')
     page.wait_for_selector(ready_selector, timeout=15_000)
 
     _assert_route_clean(gp, path, screenshot_run_dir)

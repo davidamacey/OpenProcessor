@@ -89,6 +89,11 @@ def crop_id(image_id: str, bbox_norm_values: list[float] | tuple[float, ...]) ->
     return sha256(payload.encode('utf-8')).hexdigest()[:32]
 
 
+def box_area(box: tuple[float, float, float, float]) -> float:
+    """Area of an ``(x1, y1, x2, y2)`` box; an inverted side counts as zero."""
+    return max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
+
+
 def iou(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
     """Standard axis-aligned IoU on ``(x1, y1, x2, y2)`` boxes (any shared scale)."""
     ax1, ay1, ax2, ay2 = a
@@ -100,8 +105,8 @@ def iou(a: tuple[float, float, float, float], b: tuple[float, float, float, floa
     iw = max(0.0, ix2 - ix1)
     ih = max(0.0, iy2 - iy1)
     inter = iw * ih
-    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
-    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    area_a = box_area(a)
+    area_b = box_area(b)
     union = area_a + area_b - inter
     if union <= 0.0:
         return 0.0

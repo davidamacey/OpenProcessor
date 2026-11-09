@@ -1,7 +1,7 @@
 /**
  * The region slot, synthesized from the backend's served region profile
  * (`GET {API_PREFIX}/health` `region_profile`, OpenProcessor naming-w2;
- * docs/design/domain-neutral-audit-2026-09-24.md §5.3).
+ * domain-neutral audit §5.3).
  *
  * The backend supports exactly one region profile, and every region wire
  * name (`region_*` item keys, `/regions`, `/crops/{id}/region*`) is the
@@ -25,7 +25,7 @@ const encode = encodeURIComponent;
 /**
  * Wire field names for the region sub-box, identical for every profile.
  *
- * Multi-box list only (docs/design/w8-multibox-frontend-plan-2026-09-26.md):
+ * Multi-box list only (w8 multibox frontend plan):
  * the backend serves every region box as an element of `region_boxes`
  * and no per-box scalar item key exists. `readSlot` never runs the
  * scalar-box path for a capability that declares `listField`.

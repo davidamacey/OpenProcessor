@@ -34,6 +34,7 @@ from src.core.logging import get_logger
 from src.services.curation.crop_bytes import decode_source_rgb
 from src.services.curation.reprocess_embed import crop_arrays
 from src.utils.cpu_pool import inflight_mb, run_cpu
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 if TYPE_CHECKING:
@@ -128,7 +129,7 @@ async def embed_written_regions(tasks: list[_ItemTask], pe: PEEncoder | Any) -> 
         batch = pairs[start : start + ENCODE_BATCH]
         try:
             embeddings = await pe.embed_crops([arr for _, _, arr in batch])
-        except Exception as exc:
+        except TRITON_CALL_ERRORS as exc:
             logger.warning('region_embed_batch_failed', error=str(exc), batch_size=len(batch))
             continue
         if len(embeddings) != len(batch):

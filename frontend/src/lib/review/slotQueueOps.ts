@@ -1,7 +1,7 @@
 /**
  * Pure queue-mutation helpers extracted from `review/+page.svelte`'s
  * slot-tab undo/back-navigation logic (P0.1,
- * docs/genericization-plan-2026-09-13.md §5.1/§5a).
+ * genericization plan §5.1/§5a).
  *
  * These were inline closures over the page's undo stack/`queue.items` state;
  * extracted as pure functions so they're independently testable and so

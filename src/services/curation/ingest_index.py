@@ -17,12 +17,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import cv2
 import numpy as np
 
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
-from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
+from src.services.curation.ingest_models import ERROR_KIND_BLUR, ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
 from src.services.curation.item_doc import (
     DetectedItem,
@@ -37,10 +38,16 @@ from src.services.detection.geometry import (
     crop_id as _crop_id,
     crop_rect,
 )
+from src.services.embedding_spaces.readers import frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
+from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
 from src.utils.task_group import run_all
+
+
+# What the Laplacian-variance maths raises: OpenCV, a missing host frame, a degenerate frame.
+BLUR_ERRORS = (cv2.error, ValueError, ArithmeticError)
 
 
 if TYPE_CHECKING:
@@ -203,7 +210,7 @@ async def embed_items(
             )
             for i, emb in zip(wanted, embeddings, strict=False):
                 items[i].pe_embedding = emb
-    except Exception as exc:
+    except TRITON_CALL_ERRORS as exc:
         logger.warning('ingest_embed_crops_failed', path=image_path, error=str(exc))
     for i in wanted:
         items[i].embedding_state = EMBEDDED if items[i].pe_embedding is not None else FAILED
@@ -241,7 +248,7 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
             return ctx.gpu_frame.whole_embedding
         assert ctx.pil is not None
         return await service.pe_encoder.embed_whole_frame_image(ctx.pil)
-    except Exception as exc:
+    except TRITON_CALL_ERRORS as exc:
         logger.warning('ingest_embed_whole_frame_failed', path=ctx.image_path, error=str(exc))
         return None
 
@@ -337,6 +344,7 @@ async def index_items(
         whole_frame_embedding = await _whole_frame_vector(service, ctx)
         with stage_timer('doc_build'):
             image_doc = build_image_doc(
+                vector_field=await frame_vector_field(),
                 image_id=ctx.image_id,
                 image_path=image_path,
                 source=ctx.source,
@@ -360,8 +368,18 @@ async def index_items(
             rgb_frame, full_var = await run_cpu(
                 _full_frame_blur, img, ctx.rgb, nbytes=full_w * full_h * 3
             )
-    except Exception as exc:
-        logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
+    except BLUR_ERRORS as exc:
+        logger.error('ingest_blur_failed', path=image_path, error=str(exc))
+        return IndexOutcome(
+            result=IngestResult(
+                status='failed',
+                image_path=image_path,
+                source_identifier=ctx.source_identifier,
+                imohash=ctx.imohash,
+                error=str(exc),
+                error_kind=ERROR_KIND_BLUR,
+            )
+        )
 
     bnorms = [_bbox_norm_fn(it.bbox_pixel, full_w, full_h) for it in items]
     areas = [max(0.0, bn[2] - bn[0]) * max(0.0, bn[3] - bn[1]) for bn in bnorms]
@@ -386,6 +404,7 @@ async def index_items(
     else:
         box_vars = [None] * len(items)
     crop_docs: list[dict[str, Any]] = []
+    write_fields = await item_write_fields()
     for idx, item in enumerate(items):
         bn = bnorms[idx]
         cid = cids[idx]
@@ -394,6 +413,8 @@ async def index_items(
 
         with stage_timer('doc_build'):
             doc = build_item_doc(
+                vector_field=write_fields.vector_field,
+                state_field=write_fields.state_field,
                 crop_id=cid,
                 image_id=ctx.image_id,
                 image_path=image_path,

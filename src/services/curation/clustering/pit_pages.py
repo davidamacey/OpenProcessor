@@ -73,7 +73,7 @@ async def iter_pages(
         pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
         if not pit_id:
             raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
-    except Exception as exc:
+    except (OpenSearchException, RuntimeError) as exc:
         logger.debug('curation_pit_pages_unavailable_scroll', error=str(exc))
         async for page in _scroll_pages(client, index, query, source, page_size):
             yield page

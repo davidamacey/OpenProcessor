@@ -398,3 +398,19 @@ async def get_partition(session: AsyncSession, partition_id: uuid.UUID) -> Parti
         await session.execute(text(_SELECT_PARTITION + 'WHERE p.id = :id'), {'id': partition_id})
     ).first()
     return None if row is None else PartitionRow(*row)
+
+
+async def display_numbers(session: AsyncSession, cluster_uids: Sequence[str]) -> dict[str, int]:
+    """The display number each serving partition gives these clusters (the session's scope limits
+    it to one project); a uid no serving partition holds is absent."""
+    if not cluster_uids:
+        return {}
+    rows = await session.execute(
+        text(
+            'SELECT pc.cluster_uid::text, pc.display_no FROM partition_clusters pc '
+            'JOIN cluster_activations a ON a.serving_partition_id = pc.partition_id '
+            'WHERE pc.cluster_uid = ANY(CAST(:uids AS uuid[]))'
+        ),
+        {'uids': list(cluster_uids)},
+    )
+    return {uid: int(no) for uid, no in rows.all()}

@@ -11,15 +11,18 @@ from __future__ import annotations
 from typing import Any
 
 
-def _step(action: str, path: str, reason: str) -> dict[str, Any]:
-    return {'action': action, 'method': 'POST', 'path': path, 'reason': reason}
+def _step(
+    action: str, path: str, reason: str, body: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    return {'action': action, 'method': 'POST', 'path': path, 'reason': reason, 'body': body}
 
 
 def recluster_items() -> dict[str, Any]:
     return _step(
         'recluster',
-        '/cluster/umap/rebuild',
+        '/clusters/runs',
         'Source clusters were not copied; recluster the combined items.',
+        {'target': 'item'},
     )
 
 
@@ -27,8 +30,8 @@ def cluster_regions() -> dict[str, Any]:
     return _step(
         'cluster_regions',
         '/clusters/runs',
-        'Group the imported region boxes with their visual neighbours '
-        '(body {"target": "region_box"}).',
+        'Group the imported region boxes with their visual neighbours region_box targets.',
+        {'target': 'region_box'},
     )
 
 

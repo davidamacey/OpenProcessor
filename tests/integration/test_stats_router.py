@@ -8,7 +8,7 @@ instead of making a real network call, and asserts the same response
 shape + internal-consistency invariants against synthetic aggregation
 buckets.
 
-Schema produced by ``stats._rollup_class_sources`` + ``stats_dataset``:
+Schema produced by ``stats_dataset.rollup_class_sources`` + ``stats_dataset``:
 
 - ``labeled.{by_human, by_vlm, by_classifier, other}``
   — *class-label* provenance. ``by_human`` counts crops whose
@@ -31,6 +31,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -99,6 +100,14 @@ def _fake_dataset_search_response() -> dict[str, Any]:
             'noise_clusters': {'doc_count': 0},
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def _default_spaces(world: Any, pg_env: Any) -> None:
+    """The stats route resolves the primary item space; a bare ``world`` row has none."""
+    from fixtures.job_rows import seed_default_spaces
+
+    seed_default_spaces(pg_env, world)
 
 
 @pytest.fixture
@@ -320,7 +329,9 @@ def test_cluster_count_query_counts_partition_clusters() -> None:
     from src.config import get_region_fields
     from src.services.curation.stats_dataset_query import build_dataset_query_body
 
-    agg = build_dataset_query_body(get_region_fields())['aggs']['distinct_clusters']
+    agg = build_dataset_query_body(get_region_fields(), embedding=DEFAULT_WRITE_FIELDS)['aggs'][
+        'distinct_clusters'
+    ]
     assert agg['filter'] == {'exists': {'field': 'cluster_uid'}}
     assert agg['aggs']['n']['cardinality']['field'] == 'cluster_uid'
 
@@ -342,10 +353,10 @@ def test_stats_dataset_surfaces_region_stall_reason(
 ) -> None:
     from src.config import DetectionProfile
     from src.routers.curation import _raw_opensearch_dep
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
-        'src.routers.curation.stats.region_profile_or_neutral',
+        'src.services.curation.stats_dataset.region_profile_or_neutral',
         lambda: DetectionProfile(name='active', detector_model='det_v1', segmenter_name=''),
     )
 

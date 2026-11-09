@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.opensearch.names import (
     DetectionCategory,
     IndexName,
@@ -46,7 +48,7 @@ def _assign_cluster(
         doc['cluster_id'] = assignment.cluster_id
         doc['cluster_distance'] = assignment.distance
         doc['clustered_at'] = doc['indexed_at']
-    except Exception as e:
+    except (RuntimeError, ValueError) as e:  # faiss RuntimeError, an untrained or mis-sized index
         logger.warning(f'Cluster assignment failed for {label}: {e}')
         return False
     return True
@@ -149,7 +151,7 @@ class IngestMixin:
                 refresh=False,
             )
             results['global'] = True
-        except Exception as e:
+        except OpenSearchException as e:
             results['errors'].append(f'Global: {e!s}')
 
         # 2. Route box embeddings to category-specific indexes
@@ -170,7 +172,7 @@ class IngestMixin:
                         metadata=metadata,
                         clustering_service=clustering_service,
                     )
-                except Exception as e:
+                except OpenSearchException as e:
                     results['errors'].append(f'{detection_id}: {e!s}')
 
         logger.info(

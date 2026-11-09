@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation import query_fakes
 from curation._cluster_cards_helpers import curation_client
@@ -25,7 +26,9 @@ URL = '/curation/projects/default'
 
 
 def test_detector_class_names_match_the_stored_spellings() -> None:
-    (clause,) = item_filter_clauses(ItemFilter(detector_class_names=['Traffic Light', 'car']))
+    (clause,) = item_filter_clauses(
+        ItemFilter(detector_class_names=['Traffic Light', 'car']), embedding=DEFAULT_WRITE_FIELDS
+    )
     terms = {
         (field, spec['value'])
         for c in clause['bool']['should']
@@ -36,22 +39,28 @@ def test_detector_class_names_match_the_stored_spellings() -> None:
 
 
 def test_detector_confidence_band_is_inclusive_below_and_exclusive_above() -> None:
-    (clause,) = item_filter_clauses(ItemFilter(detector_conf_min=0.2, detector_conf_max=0.3))
+    (clause,) = item_filter_clauses(
+        ItemFilter(detector_conf_min=0.2, detector_conf_max=0.3), embedding=DEFAULT_WRITE_FIELDS
+    )
     assert clause == {'range': {'detector_confidence': {'gte': 0.2, 'lt': 0.3}}}
-    (low,) = item_filter_clauses(ItemFilter(detector_conf_min=0.9))
+    (low,) = item_filter_clauses(ItemFilter(detector_conf_min=0.9), embedding=DEFAULT_WRITE_FIELDS)
     assert low == {'range': {'detector_confidence': {'gte': 0.9}}}
 
 
 @pytest.mark.parametrize(('lo', 'hi'), [(0.5, 0.5), (0.6, 0.5)])
 def test_an_empty_detector_band_is_refused(lo: float, hi: float) -> None:
     with pytest.raises(ValueError, match='detector_conf_min'):
-        item_filter_clauses(ItemFilter(detector_conf_min=lo, detector_conf_max=hi))
+        item_filter_clauses(
+            ItemFilter(detector_conf_min=lo, detector_conf_max=hi), embedding=DEFAULT_WRITE_FIELDS
+        )
 
 
 def test_review_tab_is_the_review_queues_own_clause() -> None:
-    (clause,) = item_filter_clauses(ItemFilter(review_tab='outliers'))
+    (clause,) = item_filter_clauses(
+        ItemFilter(review_tab='outliers'), embedding=DEFAULT_WRITE_FIELDS
+    )
     must, must_not, _reason = review_queries.build_tab_query(
-        'outliers', include_test=False, text=None, max_rank=None
+        'outliers', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
     )
     assert clause == {'bool': {'must': must, 'must_not': must_not}}
 
@@ -59,7 +68,7 @@ def test_review_tab_is_the_review_queues_own_clause() -> None:
 @pytest.mark.parametrize('tab', ['regions', 'nonsense'])
 def test_review_tab_must_be_a_simple_tab(tab: str) -> None:
     with pytest.raises(ValueError, match='review_tab'):
-        item_filter_clauses(ItemFilter(review_tab=tab))
+        item_filter_clauses(ItemFilter(review_tab=tab), embedding=DEFAULT_WRITE_FIELDS)
     assert 'outliers' in review_tab_clauses.SIMPLE_TABS
 
 

@@ -3,7 +3,7 @@
   /**
    * Shows `pending_detection`/`pending_verification`/`total_unfinished`
    * plus the BA-3 `drained` stability verdict and "last checked"
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
+   * (Ingest UI plan §A.2).
    * Polls at `config.regionDrainPollIntervalS` — BA-2's served
    * `region_drain.poll_interval_s` once `/ingest/config` is wired up by
    * the page, else the documented interim default (10s). Stops polling

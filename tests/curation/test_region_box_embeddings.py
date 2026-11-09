@@ -8,9 +8,10 @@ a box write never has to touch the vectors.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OsConnectionError
 
 from curation.test_regions_router import _FakeRegionOS
 from src.config import get_region_fields
@@ -144,7 +145,7 @@ async def test_write_retries_after_a_version_conflict() -> None:
             client._seq['c1'] += 1  # a concurrent writer got in first
         return await real_bulk(body=body, refresh=refresh)
 
-    client.bulk = _racing_bulk  # type: ignore[method-assign]
+    client.bulk = _racing_bulk
 
     counts = await write_box_embeddings(client, index=INDEX, by_crop={'c1': [entry_for(b1, [1.0])]})
 
@@ -195,6 +196,6 @@ async def test_prune_failure_is_logged_not_raised() -> None:
 
     class _Boom:
         async def mget(self, **_kw: Any) -> dict[str, Any]:
-            raise RuntimeError('down')
+            raise OsConnectionError('N/A', 'down', Exception('x'))
 
-    await prune_box_embeddings(_Boom(), index=INDEX, crop_ids=['c1'])
+    await prune_box_embeddings(cast('Any', _Boom()), index=INDEX, crop_ids=['c1'])

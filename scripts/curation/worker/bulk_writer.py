@@ -12,6 +12,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
@@ -25,6 +26,7 @@ from src.services.curation.region_box_pass import (
     worker_stamps,
 )
 from src.services.curation.wire import region_event_payload
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import pending as near_dup_pending
 
 
@@ -255,6 +257,7 @@ async def _bulk_update_one_project(
     )
     result = await occ_skip_on_conflict_bulk(
         opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
         index=items_index(),
@@ -322,7 +325,7 @@ async def _write_box_embeddings(opensearch: AsyncOpenSearch, tasks: list[_ItemTa
         return
     try:
         await write_box_embeddings(opensearch, index=items_index(), by_crop=by_crop)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('region_box_embeddings_write_failed', error=str(exc), n=len(by_crop))
 
 

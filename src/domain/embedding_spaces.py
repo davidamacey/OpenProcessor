@@ -163,3 +163,17 @@ class EmbeddingSpaceError(Exception):
         self.code = code
         self.detail = detail
         self.status = status
+
+
+class EmbeddingSpaceMismatch(Exception):  # noqa: N818 - names the broken invariant, like the plan
+    """A query vector of one space was aimed at another space's field.
+
+    A programming error, not a user error (the readers derive both from the same registry
+    lookup), so it is raised bare and answers 500."""
+
+
+def require_query_space(space: ResolvedSpace, vector_space_key: str) -> None:
+    """Refuse a kNN query whose vector was made in another space than the one it searches."""
+    if vector_space_key != space.space_key:
+        msg = f'a vector of space {vector_space_key!r} cannot query space {space.space_key!r}'
+        raise EmbeddingSpaceMismatch(msg)

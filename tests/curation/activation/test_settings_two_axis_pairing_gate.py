@@ -15,7 +15,7 @@ pytestmark = pytest.mark.usefixtures('vlm_env_active')
 def test_settings_two_axes_failure_does_not_commit_first_axis(app_client, monkeypatch):
     from src.config import DetectionProfile
     from src.services.detection import profile_registry
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _repo():
         return []  # detector not READY -> profile gate fails

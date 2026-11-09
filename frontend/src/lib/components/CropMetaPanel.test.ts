@@ -3,7 +3,7 @@
  * `@testing-library/svelte` mount harness in this repo (see
  * ClusterBadge.test.ts's header comment) — static source scan.
  *
- * Covers two frontend fixes from docs/design/data-quality-pass-2026-09-24.md:
+ * Covers two frontend fixes from the data-quality pass:
  *
  *  - DQ-m7: the modal showed item text and class history but never the
  *    region's status/text/candidates/chain, because it looked up slots via

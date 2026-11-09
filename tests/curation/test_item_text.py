@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -99,9 +100,14 @@ class TestQuery:
 
 class TestWireAndMapping:
     def test_item_text_lines_always_on_the_wire(self) -> None:
-        assert serialize_item({}, 'x', api_prefix='')['item_text_lines'] == []
+        assert (
+            serialize_item({}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')[
+                'item_text_lines'
+            ]
+            == []
+        )
         stored = item_text_update(LINES[:1], min_confidence=0.5)
-        item = serialize_item({**stored}, 'x', api_prefix='')
+        item = serialize_item({**stored}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix='')
         assert item['item_text_lines'] == [
             {
                 'text': 'ABC-1234',
@@ -113,7 +119,12 @@ class TestWireAndMapping:
         assert ITEM_TEXT_TOKENS_FIELD not in item
 
     def test_malformed_stored_value_is_empty(self) -> None:
-        assert serialize_item({'item_text_lines': 'x'}, 'x', api_prefix='')['item_text_lines'] == []
+        assert (
+            serialize_item(
+                {'item_text_lines': 'x'}, 'x', state_fields=DEFAULT_STATE_FIELDS, api_prefix=''
+            )['item_text_lines']
+            == []
+        )
 
     def test_explicit_mapping(self) -> None:
         props = _items_body()['mappings']['properties']

@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
 import { AssistLoopController } from '$lib/assistLoop/assistLoopController.svelte';
-import { loopDeps, loopNode, loopState } from '$lib/test/fixtures/assistLoop';
+import {
+  loopControl,
+  loopDeps,
+  loopNode,
+  loopState,
+} from '$lib/test/fixtures/assistLoop';
 
 let ctl: AssistLoopController;
 afterEach(() => ctl?.dispose());
@@ -103,6 +108,50 @@ describe('AssistLoopController', () => {
     await ctl.cancel();
     expect(cancel).toHaveBeenCalledWith('loop_abc123');
     expect(ctl.loop?.status).toBe('cancelled');
+  });
+
+  it('pauses a live loop and edits its budget through the server, buttons from control', async () => {
+    const pause = vi.fn(async () =>
+      loopState('running', { control: loopControl('running', { state: 'pausing' }) }),
+    );
+    const editBudget = vi.fn(async () => loopState('running'));
+    ctl = new AssistLoopController(
+      loopDeps({
+        list: async () => ({ loops: [loopState('running')] }),
+        get: async () => loopState('running'),
+        pause,
+        editBudget,
+      }),
+    );
+    await ctl.load();
+    expect(ctl.control?.can_pause).toBe(true);
+    await ctl.pause();
+    expect(pause).toHaveBeenCalledWith('loop_abc123');
+    expect(ctl.control?.state).toBe('pausing');
+    const limits = [{ pool: 'vlm' as const, unit: 'crops' as const, limit_value: 3000 }];
+    expect(await ctl.editBudget(limits)).toBe(true);
+    expect(editBudget).toHaveBeenCalledWith('loop_abc123', limits);
+  });
+
+  it('keeps the served refusal of a budget edit below what is spent', async () => {
+    const editBudget = vi.fn(async () => {
+      throw new ApiError(409, '/x', {
+        detail: { error: 'budget_below_spent', message: 'crops limit is under spent' },
+      });
+    });
+    ctl = new AssistLoopController(
+      loopDeps({ list: async () => ({ loops: [loopState('paused')] }), editBudget }),
+    );
+    await ctl.load();
+    expect(await ctl.editBudget([{ pool: 'vlm', unit: 'crops', limit_value: 1 }])).toBe(
+      false,
+    );
+    expect(ctl.actionError).toContain('under spent');
+  });
+
+  it('sends the cluster scope as uids', async () => {
+    ctl = new AssistLoopController(loopDeps());
+    expect(ctl.request.scope).toEqual({ cluster_uids: null, min_root_size: 40 });
   });
 
   it('rolls back only after a dry run, with the nodes it was asked about', async () => {

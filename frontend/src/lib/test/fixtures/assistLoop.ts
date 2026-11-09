@@ -1,9 +1,14 @@
 /** Served-shaped auto-label loop states for the controller and component tests. */
 import type { AssistLoopDeps } from '$lib/assistLoop/assistLoopController.svelte';
-import type { AssistLoopRequest, AssistLoopState, LoopNode } from '$lib/types_assistLoop';
+import type {
+  AssistLoopControl,
+  AssistLoopRequest,
+  AssistLoopState,
+  LoopNode,
+} from '$lib/types_assistLoop';
 
 export const LOOP_REQUEST: AssistLoopRequest = {
-  scope: { cluster_ids: null, min_root_size: 40 },
+  scope: { cluster_uids: null, min_root_size: 40 },
   vlm: null,
   prompt_pack: null,
   acknowledge_external: false,
@@ -20,10 +25,34 @@ export const LOOP_REQUEST: AssistLoopRequest = {
     floor: 0.85,
     on_fail: 'pause',
   },
+  on_budget: 'pause',
   vlm_concurrency: 16,
   node_concurrency: 8,
   dry_run: false,
 };
+
+/** The control block as src/domain/assist_loop_control.py serves it (tests mirror the table). */
+export function loopControl(
+  status: AssistLoopState['status'],
+  over: Partial<AssistLoopControl> = {},
+): AssistLoopControl {
+  const state = over.state ?? (status === 'dry_run' ? 'queued' : status);
+  const live = state === 'queued' || state === 'running' || state === 'pausing';
+  const resumable = state === 'paused' || state === 'interrupted';
+  const stopped =
+    resumable ||
+    ['completed', 'completed_with_errors', 'failed', 'cancelled'].includes(state);
+  return {
+    state,
+    can_pause: state === 'queued' || state === 'running',
+    can_resume: resumable,
+    can_cancel: live || resumable,
+    can_edit_budget: live || state === 'paused',
+    can_rollback: stopped,
+    resume_blocked_reason: null,
+    ...over,
+  };
+}
 
 export function loopState(
   status: AssistLoopState['status'],
@@ -98,6 +127,7 @@ export function loopState(
           skipped: { dissent: 0, drifted: 3, locked: 12 },
         }
       : null,
+    control: started ? loopControl(status) : null,
     audit: started
       ? {
           status: 'off',
@@ -143,6 +173,8 @@ export function loopDeps(over: Partial<AssistLoopDeps> = {}): AssistLoopDeps {
     nodes: async () => ({ nodes: [loopNode()], next_after: null }),
     members: async () => ({ crop_ids: ['c1', 'c2'], next_after: null }),
     cancel: async () => loopState('cancelled'),
+    pause: async () => loopState('paused', { pause_reason: 'user' }),
+    editBudget: async () => loopState('running'),
     resume: async () => loopState('queued'),
     rollback: async (_id, body) => ({
       dry_run: body.dry_run,

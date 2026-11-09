@@ -113,6 +113,69 @@ def _read_export_id_map(export_dir: Path) -> dict[int, int]:
     return {int(k): int(v) for k, v in raw_map.items()}
 
 
+def _rewrite_label_file(
+    src: Path,
+    dst: Path,
+    dense_id_to_new_id: dict[int, int],
+    per_class_counts: dict[int, int],
+) -> tuple[int, int]:
+    """Rewrite one label file through the dense->new id map; return (kept, dropped)."""
+    kept = 0
+    dropped = 0
+    new_lines: list[str] = []
+    for line in src.read_text(encoding='utf-8').splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        try:
+            cid = int(parts[0])
+        except ValueError:
+            log.warning('subset: bad class_id token in %s: %r', src, parts[0])
+            dropped += 1
+            continue
+        # ``cid`` here is the export's DENSE id -- match against
+        # ``dense_id_to_new_id``, never ``class_remap`` (registry-id
+        # keyed) directly.
+        if cid not in dense_id_to_new_id:
+            dropped += 1
+            continue
+        new_id = dense_id_to_new_id[cid]
+        kept += 1
+        per_class_counts[new_id] = per_class_counts.get(new_id, 0) + 1
+        new_lines.append(' '.join([str(new_id), *parts[1:]]))
+    # Always write the file (even when empty) so the dataset stays
+    # paired with the original images. Ultralytics treats empty label
+    # files as "background image with no boxes".
+    dst.write_text(
+        ('\n'.join(new_lines) + ('\n' if new_lines else '')),
+        encoding='utf-8',
+    )
+    return kept, dropped
+
+
+def _link_images(export_dir: Path, out_dir: Path) -> None:
+    # Mirror the images dir into out_dir as symlinks. Ultralytics infers label
+    # paths from image paths by swapping ``images/`` -> ``labels/`` -- if we
+    # point train: at the original export's images, it will read the original
+    # full-registry labels next to them and ignore our subset rewrite entirely.
+    # By symlinking images under out_dir, both ``out_dir/images/{split}/x.jpg``
+    # and ``out_dir/labels/{split}/x.txt`` live under the same root.
+    for split in SPLITS:
+        src_images = export_dir / 'images' / split
+        if not src_images.is_dir():
+            continue
+        dst_images = out_dir / 'images' / split
+        dst_images.mkdir(parents=True, exist_ok=True)
+        for img in src_images.iterdir():
+            link = dst_images / img.name
+            if link.exists() or link.is_symlink():
+                continue
+            try:
+                link.symlink_to(img.resolve())
+            except OSError as exc:
+                log.warning('subset: symlink failed for %s: %s', img, exc)
+
+
 def build_subset_view(
     export_dir: Path,
     include_classes: list[int],
@@ -200,34 +263,11 @@ def build_subset_view(
         dst_labels = out_dir / 'labels' / split
         dst_labels.mkdir(parents=True, exist_ok=True)
         for txt in src_labels.glob('*.txt'):
-            new_lines: list[str] = []
-            for line in txt.read_text(encoding='utf-8').splitlines():
-                parts = line.split()
-                if not parts:
-                    continue
-                try:
-                    cid = int(parts[0])
-                except ValueError:
-                    log.warning('subset: bad class_id token in %s: %r', txt, parts[0])
-                    dropped += 1
-                    continue
-                # ``cid`` here is the export's DENSE id -- match against
-                # ``dense_id_to_new_id``, never ``class_remap`` (registry-id
-                # keyed) directly.
-                if cid not in dense_id_to_new_id:
-                    dropped += 1
-                    continue
-                new_id = dense_id_to_new_id[cid]
-                kept += 1
-                per_class_counts[new_id] = per_class_counts.get(new_id, 0) + 1
-                new_lines.append(' '.join([str(new_id), *parts[1:]]))
-            # Always write the file (even when empty) so the dataset stays
-            # paired with the original images. Ultralytics treats empty label
-            # files as "background image with no boxes".
-            (dst_labels / txt.name).write_text(
-                ('\n'.join(new_lines) + ('\n' if new_lines else '')),
-                encoding='utf-8',
+            file_kept, file_dropped = _rewrite_label_file(
+                txt, dst_labels / txt.name, dense_id_to_new_id, per_class_counts
             )
+            kept += file_kept
+            dropped += file_dropped
 
     if kept == 0:
         msg = (
@@ -236,26 +276,7 @@ def build_subset_view(
         )
         raise ValueError(msg)
 
-    # Mirror the images dir into out_dir as symlinks. Ultralytics infers label
-    # paths from image paths by swapping ``images/`` -> ``labels/`` -- if we
-    # point train: at the original export's images, it will read the original
-    # full-registry labels next to them and ignore our subset rewrite entirely.
-    # By symlinking images under out_dir, both ``out_dir/images/{split}/x.jpg``
-    # and ``out_dir/labels/{split}/x.txt`` live under the same root.
-    for split in SPLITS:
-        src_images = export_dir / 'images' / split
-        if not src_images.is_dir():
-            continue
-        dst_images = out_dir / 'images' / split
-        dst_images.mkdir(parents=True, exist_ok=True)
-        for img in src_images.iterdir():
-            link = dst_images / img.name
-            if link.exists() or link.is_symlink():
-                continue
-            try:
-                link.symlink_to(img.resolve())
-            except OSError as exc:
-                log.warning('subset: symlink failed for %s: %s', img, exc)
+    _link_images(export_dir, out_dir)
 
     # Build the new data.yaml. Both images + labels resolve under out_dir so
     # YOLO's images -> labels path inference picks up the subset rewrite.

@@ -368,7 +368,7 @@
   {/if}
 </div>
 {#if slotUndoStack.length > 0}
-  <!-- DQ-m6 (docs/design/data-quality-pass-2026-09-24.md):
+  <!-- DQ-m6:
        this stack holds confirm, reject AND false-positive
        entries — the
        footer said "confirmed" unconditionally, so a reject

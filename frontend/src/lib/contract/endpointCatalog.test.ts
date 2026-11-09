@@ -67,6 +67,9 @@ const SCANNED_FILES = [
   'lib/api_labelOps.ts',
   'lib/api_bulkIngest.ts',
   'lib/api_ingestSources.ts',
+  'lib/api_embeddingSpaces.ts',
+  'lib/api_jobs.ts',
+  'lib/api_nearDup.ts',
 ] as const;
 
 /** The HTTP core (`apiFetch`, `scoped()`): composes no backend URL itself. */
@@ -175,10 +178,10 @@ const MANUAL_OVERRIDES: Array<{
     file: 'lib/api_reprocess.ts',
     marker: 'export function runServedNextStep(',
     // step.method/step.path: a finished import's served `next_steps`
-    // entry. The spec's one documented example is
-    // `POST /regions/cluster`; anything else it serves is the server's
-    // own route.
-    path: '/regions/cluster',
+    // entry: `POST /clusters/runs` (cluster_regions) or
+    // `POST /cluster/umap/rebuild` (recluster); anything else it serves is
+    // the server's own route.
+    path: '/clusters/runs',
     method: 'POST',
     queryParams: [],
   },
@@ -452,7 +455,7 @@ function findOperation(
   };
 }
 
-/** Per-track wrapper modules (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md);
+/** Per-track wrapper modules (w9/w10 UI plan);
  *  each must exist and sit in the scanner lists its track needs. */
 const TRACK_WRAPPER_FILES = new Set<string>([
   'lib/api_vlm.ts',

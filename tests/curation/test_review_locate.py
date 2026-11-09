@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
@@ -160,7 +161,7 @@ def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPat
 
 def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
-    fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})  # type: ignore[method-assign]
+    fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     _client(fake, monkeypatch).get('/curation/projects/default/review/all')
     assert fake.search.call_args.kwargs['body']['sort'][-1] == {'crop_id': {'order': 'asc'}}
 
@@ -253,6 +254,11 @@ def test_new_class_proposals_tab_and_summary(monkeypatch: pytest.MonkeyPatch) ->
     assert terms['kayak']['sample_crop_ids'] == ['p3']
 
 
+class _UnreachableOpenSearch:
+    async def search(self, **_: object) -> dict:
+        raise OpenSearchException('down')
+
+
 @pytest.mark.asyncio
 async def test_tab_default_beats_deployment_sort_default(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.curation import review_sorts
@@ -261,10 +267,12 @@ async def test_tab_default_beats_deployment_sort_default(monkeypatch: pytest.Mon
         'src.services.curation.strategy_registry.resolve_effective_default',
         AsyncMock(return_value='uncertainty_entropy'),
     )
-    _clause, applied, _ = await review_sorts.build_sort(None, tab='regions', opensearch=object())
+    _clause, applied, _ = await review_sorts.build_sort(
+        None, tab='regions', opensearch=_UnreachableOpenSearch()
+    )
     assert applied == 'region_score'
     # A tab with no default of its own takes the deployment default.
     _clause, applied, _ = await review_sorts.build_sort(
-        None, tab='new_class_proposals', opensearch=object()
+        None, tab='new_class_proposals', opensearch=_UnreachableOpenSearch()
     )
     assert applied == 'uncertainty_entropy'

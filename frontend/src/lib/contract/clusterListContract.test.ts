@@ -38,6 +38,12 @@ describe('cluster list contract', () => {
     expect([...CLUSTER_SORT_IDS].sort()).toEqual([...sort.schema.enum!].sort());
   });
 
+  it('the card serves display_no, nullable, and the frontend reads it from there', () => {
+    const props = S.components.schemas.ClusterCard!.properties;
+    expect(Object.keys(props)).toContain('display_no');
+    expect(JSON.stringify(props.display_no)).toContain('null');
+  });
+
   it('VALIDATION_STATES equal the card enum and the filter enum', () => {
     const card = S.components.schemas.ClusterCard!.properties.validation_state!;
     expect([...VALIDATION_STATES].sort()).toEqual([...card.enum!].sort());
@@ -75,7 +81,7 @@ describe('cluster list contract', () => {
     );
     expect(
       keys<keyof ClusterFacets>({
-        cluster_id: true,
+        cluster_uid: true,
         total: true,
         detector_classes: true,
         class_sources: true,
@@ -89,7 +95,7 @@ describe('cluster list contract', () => {
 
   it('the facets route exists', () => {
     expect(
-      S.paths['/curation/projects/{project}/clusters/{cluster_id}/facets'],
+      S.paths['/curation/projects/{project}/clusters/{cluster_uid}/facets'],
     ).toBeDefined();
   });
 });

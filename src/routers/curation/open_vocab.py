@@ -14,7 +14,12 @@ from typing import Any
 from fastapi import Query
 
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._api_error import (
+    active_conflict_error,
+    api_error,
+    revision_conflict_error,
+    unknown_revision_error,
+)
 from src.routers.curation._common import router
 from src.routers.curation._open_vocab_models import (
     OpenVocabActivateRequest,
@@ -93,15 +98,6 @@ def _to_summary(record: OpenVocabRecord) -> OpenVocabSummary:
 
 def _active_conflict(exc: ActiveConflictError) -> Any:
     return active_conflict_error('the active open-vocabulary set', exc.current)
-
-
-def _revision_conflict(name: str, exc: RevisionConflictError) -> Any:
-    return api_error(
-        409,
-        'revision_conflict',
-        f'{name!r} changed since you loaded it',
-        current_revision=exc.current_revision,
-    )
 
 
 @router.get('/open_vocab/schema', response_model=OpenVocabSchema)
@@ -256,7 +252,7 @@ async def list_open_vocab_revisions(name: str) -> OpenVocabRevisionsResponse:
 async def get_open_vocab_revision(name: str, revision: int) -> OpenVocabDoc:
     record = await get_revision_record(name, revision)
     if record is None:
-        raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        raise unknown_revision_error(name, revision)
     return _to_doc(record)
 
 
@@ -281,7 +277,7 @@ async def save_open_vocab(name: str, body: OpenVocabSaveRequest) -> OpenVocabDoc
             description=body.description if body.description is not None else existing.description,
         )
     except RevisionConflictError as exc:
-        raise _revision_conflict(name, exc) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return _to_doc(record, validation=report)
 
 
@@ -302,7 +298,7 @@ async def delete_open_vocab(name: str, expected_revision: int) -> None:
     try:
         await delete_set(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
-        raise _revision_conflict(name, exc) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return Response(status_code=204)  # type: ignore[return-value]
 
 

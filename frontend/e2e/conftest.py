@@ -1,6 +1,6 @@
 """Shared fixtures for the stubbed-backend Playwright/pytest e2e suite.
 
-See docs/design/test-audit-2026-09-24.md recommendation 5 (P1-1) and
+See the test audit, recommendation 5 (P1-1), and
 CLAUDE.md's "Development" section.
 
 The harness lives in ``harness/`` and is loaded as plugins below:
@@ -45,7 +45,7 @@ no SSR.
 """
 
 pytest_plugins = [
-    "harness.server",
-    "harness.stub",
-    "harness.page_log",
+    'harness.server',
+    'harness.stub',
+    'harness.page_log',
 ]

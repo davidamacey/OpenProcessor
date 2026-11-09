@@ -125,19 +125,14 @@ describe('mechanism: exclusion set survives a stale in-flight fetch (executable,
  */
 interface Crop {
   id: string;
-  cluster_subid: string | null;
 }
-const crops = (...specs: string[]): Crop[] =>
-  specs.map((s) => {
-    const [id, sub] = s.split(':');
-    return { id: id!, cluster_subid: sub ?? null };
-  });
+const crops = (...ids: string[]): Crop[] => ids.map((id) => ({ id }));
 
 describe('mechanism: the grid can never render a crop the pager no longer holds', () => {
   // Wired the same way the page is: the real `createPager` owns the crop
   // buffer (its `items` is the reactive source of truth) and the real
   // `createGridGroups` derives the rendered grid off it.
-  async function harness(initial: Crop[], grouped = false) {
+  async function harness(initial: Crop[]) {
     const pager = createPager<Crop>({
       fetchPage: async () => ({ items: initial, total: initial.length }),
       keyOf: (c) => c.id,
@@ -145,9 +140,7 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     await pager.loadFirst();
     const grid = createGridGroups<Crop>({
       source: () => pager.items,
-      grouped: () => grouped,
       keyOf: (c) => c.id,
-      subidOf: (c) => c.cluster_subid,
       liveIds: () => new Set(pager.items.map((c) => c.id)),
     });
     return {
@@ -221,15 +214,12 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     expect(h.rendered).toEqual(['a', 'b']);
   });
 
-  it('sub-cluster grouping keeps contiguous runs and unique keys', () => {
-    const groups = buildGroups(
-      crops('a:15b', 'b:15a', 'c:15b', 'd'),
-      true,
-      (c) => c.cluster_subid,
-    );
-    expect(groups.map((g) => g.key)).toEqual(['15a#0', '15b#1', '__none__#2']);
-    expect(new Set(groups.map((g) => g.key)).size).toBe(groups.length);
-    expect(groups.at(-1)!.label).toBe('unrefined');
+  it('renders one flat group holding a copy of the list (never the caller’s array)', () => {
+    const source = crops('a', 'b');
+    const groups = buildGroups(source);
+    expect(groups.map((g) => g.key)).toEqual(['__all__']);
+    expect(groups[0]!.items).toEqual(source);
+    expect(groups[0]!.items).not.toBe(source);
   });
 
   it('the OLD snapshot mechanism does resurrect (proves this is a real bug, not a tautology)', () => {
@@ -237,12 +227,12 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
     // rebuild effect only runs when the source list changes, and the dnd
     // handlers assign their own payload into it.
     const source = crops('a', 'b', 'c', 'd');
-    let snapshot = buildGroups(source, false, (c) => c.cluster_subid);
+    let snapshot = buildGroups(source);
     const preDrop = [...snapshot[0]!.items];
 
     // Drop handler removes b + c from the pager; the effect reruns.
     const afterDrop = source.filter((c) => c.id !== 'b' && c.id !== 'c');
-    snapshot = buildGroups(afterDrop, false, (c) => c.cluster_subid);
+    snapshot = buildGroups(afterDrop);
     expect(snapshot.flatMap((g) => g.items.map((c) => c.id))).toEqual(['a', 'd']);
 
     // Then a dnd event lands with the library's stale list and wins, with no
@@ -253,7 +243,7 @@ describe('mechanism: the grid can never render a crop the pager no longer holds'
   });
 });
 
-// P2-2 (docs/design/test-audit-2026-09-24.md T1): every extraction below
+// P2-2 (test audit T1): every extraction below
 // went through `$lib/testing/sourceScan.ts`'s `extractFunction`/
 // `extractBalanced` (brace-balanced) or `normalize` (comment-stripped,
 // whitespace-collapsed) instead of a `\n {2}\}`/`\n {4}\}?\);`-anchored
@@ -297,7 +287,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 // that used to live here (source-scanning +page.svelte for
 // `excludedCropIds.add`/`.delete` call sites across the sidebar-drop
 // handler, moveCropIds, ignoreSelected/undoIgnore, the D hotkey handler,
-// and undoLast) is deleted per docs/design/test-audit-2026-09-24.md P1-4
+// and undoLast) is deleted per the test audit P1-4
 // (second pass): that logic — and the exclusion set itself, now
 // `ExclusionGuard` — moved into `$lib/clusters/clusterController.svelte.ts`
 // (commit history: "refactor(clusters): extract action logic into
@@ -321,7 +311,7 @@ describe('wiring: /clusters/[id] +page.svelte derives the grid instead of snapsh
 //     the restored crop id back so it can reappear' — and additionally
 //     exercises both branches of the `if (cropPager.items.some(...))`
 //     check that survived as an `if (false)` mutant under the old scan
-//     (docs/design/test-audit-2026-09-24.md §2.2).
+//     (test audit §2.2).
 // The remaining `excludedCropIds`-named text above (a page-local
 // `const excludedCropIds = new Set<string>()` and its `accept:` wiring)
 // no longer exists in +page.svelte at all — the page now owns

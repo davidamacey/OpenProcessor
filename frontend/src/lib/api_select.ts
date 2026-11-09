@@ -5,7 +5,7 @@
 import { apiFetch, isPlainObject, scoped } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
 import type { ExcludeReason } from '$lib/api_cropWrites';
-import type { BulkLabelResult } from '$lib/types';
+import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   DiverseSelection,
   SelectDiverseScope,
@@ -132,7 +132,8 @@ export async function cancelSelect(signal?: AbortSignal): Promise<void> {
 // The four writes below take `selection` (an `ItemSelection`: a filter,
 // optionally limited / sampled) in place of `crop_ids`, plus `dry_run`.
 // A dry run answers `{dry_run: true, selected}` and writes nothing; the
-// real call returns the same body the crop-id form does.
+// real label and move calls answer 202 `LabelOpAccepted` (follow it with
+// `runLabelOp`), exclude and unexclude answer their counts at once.
 
 export type SelectionWrite<T> = T | SelectionDryRun;
 
@@ -141,7 +142,7 @@ export function bulkLabelSelection(
   classId: number,
   dryRun: boolean,
   signal?: AbortSignal,
-): Promise<SelectionWrite<BulkLabelResult>> {
+): Promise<SelectionWrite<LabelOpAccepted>> {
   return apiFetch(
     `${scoped()}/crops/batch_label`,
     {
@@ -192,15 +193,15 @@ export function batchUnexcludeSelection(
 
 export function moveSelectionToCluster(
   selection: ItemSelection,
-  clusterId: number,
+  clusterUid: string,
   dryRun: boolean,
   signal?: AbortSignal,
-): Promise<SelectionWrite<BulkLabelResult>> {
+): Promise<SelectionWrite<LabelOpAccepted>> {
   return apiFetch(
     `${scoped()}/crops/move`,
     {
       method: 'POST',
-      body: JSON.stringify({ selection, cluster_id: clusterId, dry_run: dryRun }),
+      body: JSON.stringify({ selection, cluster_uid: clusterUid, dry_run: dryRun }),
     },
     signal,
   );

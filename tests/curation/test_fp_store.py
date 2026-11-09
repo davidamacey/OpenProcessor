@@ -7,6 +7,7 @@ the on-disk location, rather than being hardcoded.
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -77,6 +78,23 @@ class TestFalsePositiveCentroidStore:
         cfg = CurationConfig(state_dir=tmp_path)
         store = FalsePositiveCentroidStore(config=cfg)
         assert store.load() is False
+
+    def test_load_raises_on_corrupt_metadata_instead_of_empty(self, tmp_path: Path) -> None:
+        cfg = CurationConfig(state_dir=tmp_path)
+        store = FalsePositiveCentroidStore(config=cfg)
+        store.save(np.eye(2, 3, dtype=np.float32), {'subtypes': ['a']})
+        (store.directory / 'metadata.json').write_text('{not json')
+        with pytest.raises(json.JSONDecodeError):
+            FalsePositiveCentroidStore(config=cfg).load()
+
+    def test_load_tolerates_missing_metadata_file(self, tmp_path: Path) -> None:
+        cfg = CurationConfig(state_dir=tmp_path)
+        store = FalsePositiveCentroidStore(config=cfg)
+        store.save(np.eye(2, 3, dtype=np.float32), {'subtypes': ['a']})
+        (store.directory / 'metadata.json').unlink()
+        reloaded = FalsePositiveCentroidStore(config=cfg)
+        assert reloaded.load() is True
+        assert reloaded.metadata == {}
 
     def test_save_then_load_round_trips_centroids_and_metadata(self, tmp_path: Path) -> None:
         cfg = CurationConfig(state_dir=tmp_path)

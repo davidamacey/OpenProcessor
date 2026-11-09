@@ -17,7 +17,6 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from src.core.logging import get_logger
 from src.services.curation.dataset_import.issues import ISSUE_CATALOG, DatasetIssue
 from src.services.curation.dataset_import.mapping import (
     ClassMappingEntry,
@@ -44,9 +43,6 @@ if TYPE_CHECKING:
     from src.services.curation.dataset_import.options import DatasetPreviewRequest
     from src.services.curation.dataset_import.paths import PathGuard
     from src.services.curation.dataset_import.scan import DatasetScan
-
-
-logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -103,14 +99,11 @@ def _active_profile_pin() -> PinnedProfile | None:
     if profile is None:
         return None
     revision: int | None = None
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_profile
-        if isinstance(ref, tuple):
-            revision = ref[1]
-    except Exception as exc:
-        logger.warning('import_profile_revision_unavailable', error=str(exc))
+    ref = get_config_store().current.active_profile
+    if isinstance(ref, tuple):
+        revision = ref[1]
     return PinnedProfile(
         name=profile.name,
         revision=revision,
@@ -122,11 +115,7 @@ def _active_profile_pin() -> PinnedProfile | None:
 def _pack_synonyms() -> dict[str, str]:
     from src.services.labeling.vlm_prompt_resolution import active_prompt_pack
 
-    try:
-        pack = active_prompt_pack()
-    except Exception as exc:
-        logger.warning('import_pack_synonyms_unavailable', error=str(exc))
-        return {}
+    pack = active_prompt_pack()
     return {norm_class_name(k): v for k, v in pack.synonyms.items()}
 
 

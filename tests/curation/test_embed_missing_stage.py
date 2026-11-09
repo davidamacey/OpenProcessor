@@ -8,6 +8,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.reprocess_fixtures import FakePE, docs, item, jpeg_bytes, make_fake, servable_root
 from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
@@ -164,13 +165,24 @@ async def test_an_encoder_outage_is_reported_and_does_not_fail_the_run(
 def test_the_vlm_selection_and_counts_honor_the_item_filter() -> None:
     flt = ItemFilter(class_names=['car'])
     selection = vlm_selection_query(
-        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, item_filter=flt
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+        item_filter=flt,
     )
     assert 'case_insensitive' in str(selection)
     assert 'case_insensitive' in str(
-        unvalidated_count_query(class_id=None, cluster_uid=None, item_filter=flt)
+        unvalidated_count_query(
+            embedding=DEFAULT_WRITE_FIELDS, class_id=None, cluster_uid=None, item_filter=flt
+        )
     )
-    plain = vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
+    plain = vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+    )
     assert 'case_insensitive' not in str(plain)
 
 
@@ -190,11 +202,14 @@ def test_the_stage_request_scopes_to_the_cluster_uid() -> None:
     assert flt is not None
     assert flt.cluster_uid == uid
     selection = vlm_selection_query(
-        class_id=None, cluster_uid=uid, classifier_confidence_skip_vlm=0.8
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=uid,
+        classifier_confidence_skip_vlm=0.8,
     )
     assert {'term': {'cluster_uid': str(uid)}} in selection['bool']['filter']
     assert {'term': {'cluster_uid': str(uid)}} in unvalidated_count_query(
-        class_id=None, cluster_uid=uid
+        embedding=DEFAULT_WRITE_FIELDS, class_id=None, cluster_uid=uid
     )['bool']['filter']
 
 

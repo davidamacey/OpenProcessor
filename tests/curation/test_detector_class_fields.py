@@ -9,9 +9,10 @@ relabel.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
 from curation.occ_fakes import FakeIngestOpenSearch
@@ -200,13 +201,13 @@ def test_the_fields_are_mapped_and_served() -> None:
     assert props['detector_class_name'] == {'type': 'keyword'}
     assert props['detector_class_id'] == {'type': 'integer'}
     assert props['detector_confidence'] == {'type': 'float'}
-    served = serialize_item(_stored_item())
+    served = serialize_item(_stored_item(), state_fields=DEFAULT_STATE_FIELDS)
     assert (
         served['detector_class_name'],
         served['detector_class_id'],
         served['detector_confidence'],
     ) == ('gadget', 5, 0.42)
-    bare = serialize_item({'crop_id': 'd'})
+    bare = serialize_item({'crop_id': 'd'}, state_fields=DEFAULT_STATE_FIELDS)
     assert [bare[f] for f in FIELDS] == [None, None, None]
 
 
@@ -218,5 +219,5 @@ async def test_mapping_migration_adds_the_fields_to_existing_indexes() -> None:
     from src.clients.curation_opensearch.items_extra import ensure_items_detector_fields
 
     client = SimpleNamespace(indices=SimpleNamespace(put_mapping=AsyncMock(return_value={})))
-    result = await ensure_items_detector_fields(client)
+    result = await ensure_items_detector_fields(cast('Any', client))
     assert set(result['fields_added']) == set(FIELDS)

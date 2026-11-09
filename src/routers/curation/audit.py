@@ -30,6 +30,7 @@ from src.services.curation.audit import (
     start_audit,
 )
 from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 @router.post(
@@ -63,6 +64,7 @@ async def audit_queue(
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
     guard_page_depth(page, page_size)
+    excludes = await vector_source_excludes()
     try:
         resp = await opensearch.search(
             index=items_index(),
@@ -72,17 +74,21 @@ async def audit_queue(
                 'query': pending_query(batch_id),
                 'sort': [{'crop_id': 'asc'}],
                 'track_total_hits': True,
-                '_source': {'excludes': item_list_source_excludes()},
+                '_source': {'excludes': item_list_source_excludes(excludes)},
             },
         )
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
     hits = (resp.get('hits') or {}).get('hits') or []
+    state_fields = await item_state_fields()
     return {
         'total': int(((resp.get('hits') or {}).get('total') or {}).get('value', 0)),
         'page': page,
         'page_size': page_size,
-        'items': [serialize_item(h.get('_source') or {}, h.get('_id', '')) for h in hits],
+        'items': [
+            serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
+            for h in hits
+        ],
     }
 
 

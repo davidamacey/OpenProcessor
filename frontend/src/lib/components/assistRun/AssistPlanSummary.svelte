@@ -1,8 +1,7 @@
 <script lang="ts">
   /**
    * The server's dry run, shown as served: how many members the target has,
-   * how many the VLM will see, the estimated VLM calls, the strata of a
-   * stratified sample, what was skipped, and the endpoint and pack the run
+   * how many the VLM will see, the estimated VLM calls, what was skipped, and the endpoint and pack the run
    * pinned. Nothing here is computed; a refusal is shown verbatim.
    */
   import { formatCount } from '$lib/format/count';
@@ -30,7 +29,6 @@
   const skipped = $derived(
     Object.entries(resolved?.skipped ?? {}).filter(([, n]) => (n ?? 0) > 0),
   );
-  const strata = $derived(resolved?.strata ?? []);
   const named = (o: Record<string, unknown> | null | undefined) =>
     o && typeof o.name === 'string'
       ? `${o.name}${typeof o.revision === 'number' ? ` r${o.revision}` : ''}`
@@ -63,19 +61,6 @@
           ? ` (${resolved.vlm.model})`
           : ''} · prompt pack {named(resolved.prompt_pack) ?? '—'}
       </p>
-    {/if}
-    {#if strata.length > 1}
-      <ul
-        class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-zinc-400"
-        data-testid="assist-plan-strata"
-      >
-        {#each strata as s (s.key)}
-          <li>
-            <span class="text-zinc-300">{s.key === '' ? 'no sub-cluster' : s.key}</span>
-            {s.sampled}/{s.size}
-          </li>
-        {/each}
-      </ul>
     {/if}
     {#if skipped.length > 0}
       <p class="mt-2 text-zinc-500" data-testid="assist-plan-skipped">

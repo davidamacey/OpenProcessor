@@ -79,4 +79,4 @@ async def test_it_returns_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
         'src.services.projects.bootstrap.for_each_project', lambda *_a, **_k: iter(())
     )
 
-    assert await startup_check() is None
+    assert await startup_check() is None  # type: ignore[func-returns-value]

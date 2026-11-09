@@ -11,13 +11,11 @@ export function createClusterDetailLive(view: ClusterDetailController) {
   const { cropPager, loadFirst } = view;
 
   // ---------------- SSE: live updates for this cluster's class ----
-  // cluster_id == class_id holds for class-kind clusters (see
-  // `ClusterKind` in src/lib/types.ts and the scoping note on getCluster
-  // in src/lib/api.ts), so we subscribe with `class_id=clusterId`.
-  // Crop.created without a class is hidden from per-class pages by
-  // event_hub's filter. Candidate clusters have no class, and event_hub
-  // filters on exact class_id equality, so a subscription there could
-  // never deliver anything — skip it rather than hold an idle stream open.
+  // The event stream carries no cluster uid, so the closest signal is the class:
+  // we subscribe with the registry class of the card's dominant class name. The
+  // pill is a hint that something changed (the reload shows what is really in
+  // this cluster). A cluster with no dominant class has nothing to subscribe to —
+  // skip it rather than hold an idle stream open.
   let liveNewCount = $state<number>(0);
   let scrolledPastFirst20 = $state<boolean>(false);
   let liveSub: CurationEventSubscription | null = null;

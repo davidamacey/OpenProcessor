@@ -1,6 +1,6 @@
 /**
  * Pure keymap-table builder for a slot's review queue tab
- * (docs/genericization-plan-2026-09-13.md §9.5/P2.8c). It reads the spec's
+ * (genericization plan §9.5/P2.8c). It reads the spec's
  * `queue.keymap` directly, so a slot's combos are declared exactly once
  * (no second hand-maintained copy to drift, Finding C.2).
  *

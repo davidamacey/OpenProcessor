@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.services.config_store import documents, get_config_store
+from src.services.config_store import documents, get_config_store, templates
 from src.services.config_store.documents import (
     TEMPLATE_DESCRIPTION,
     ActiveConflictError,
@@ -74,21 +74,12 @@ def _asks_region_text(body: dict[str, Any]) -> bool:
     return False
 
 
-def _template_names() -> dict[str, Path]:
-    if not _TEMPLATES_DIR.is_dir():
-        return {}
-    return {p.stem: p for p in sorted(_TEMPLATES_DIR.glob('*.json'))}
+def template_names() -> list[str]:
+    return list(templates.template_names(_TEMPLATES_DIR))
 
 
 def load_template(name: str) -> dict[str, Any] | None:
-    path = _template_names().get(name)
-    if path is None:
-        return None
-    try:
-        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
-        return typed
-    except (OSError, ValueError):
-        return None
+    return templates.load_template(_TEMPLATES_DIR, name)
 
 
 def builtin_and_file_bodies() -> dict[str, PromptPack]:
@@ -106,15 +97,11 @@ def all_known_names() -> frozenset[str]:
     stored, template) -- the uniqueness set create/clone/validate check
     against (any_domain_plan.md §3.2)."""
     store = get_config_store()
-    return frozenset({*builtin_and_file_bodies(), *store.current.packs, *_template_names()})
+    return frozenset({*builtin_and_file_bodies(), *store.current.packs, *template_names()})
 
 
 def _active_ref() -> tuple[str | None, int | None]:
-    store = get_config_store()
-    ref = store.current.active_pack
-    if ref is None or ref == 'off':
-        return None, None
-    return ref
+    return templates.active_ref(get_config_store().current.active_pack)
 
 
 def build_record(name: str, *, revision: int | None = None) -> PackRecord | None:
@@ -277,4 +264,5 @@ __all__ = [
     'load_template',
     'rollback_pack',
     'save_pack',
+    'template_names',
 ]

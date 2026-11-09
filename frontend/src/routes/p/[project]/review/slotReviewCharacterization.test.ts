@@ -1,5 +1,5 @@
 /**
- * Phase 0 characterization tests (docs/genericization-plan-2026-09-13.md
+ * Phase 0 characterization tests (genericization plan
  * §5.1, table T1-T7) for the slot tab's stateful review logic — pinned
  * BEFORE any Phase 2 component genericization touches `review/+page.svelte`
  * or `clusters/+page.svelte`.
@@ -169,7 +169,7 @@ describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bo
 
 describe('P2.10: clusters/+page.svelte routes via registeredSlots, not a class-name literal', () => {
   it("never hardcodes a registered slot's class-name string as a routing condition", () => {
-    // Finding B's four routing sites (docs/genericization-plan-2026-09-13.md
+    // Finding B's four routing sites (genericization plan
     // §1: isSlotFilter, loadSlotInventoryCards, the synthetic pinned
     // card's dominant_class_name, and card-click routing) all resolve via
     // slotForClassName()/registeredSlots instead of comparing against a

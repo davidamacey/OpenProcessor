@@ -21,7 +21,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.services.model_unload_guard import (
+from src.services.models.model_unload_guard import (
     core_pipeline_models,
     external_service_model_names,
     is_region_protected_model,
@@ -54,7 +54,20 @@ def _no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _none() -> dict[str, frozenset[str]]:
         return {}
 
-    monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
+    monkeypatch.setattr('src.services.models.model_unload_guard.ingest_models_by_project', _none)
+
+
+@pytest.fixture(autouse=True)
+def _only_the_default_projects_region_profile(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The guard reads every project's active region profile from the database; these tests
+    run one project, whose profile is whatever the test activates."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    async def _profiles() -> dict[str, object]:
+        profile = get_active_region_profile()
+        return {} if profile is None else {'default': profile}
+
+    monkeypatch.setattr('src.services.models.model_unload_guard.active_region_profiles', _profiles)
 
 
 @pytest.fixture(autouse=True)

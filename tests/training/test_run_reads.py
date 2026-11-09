@@ -48,6 +48,7 @@ def _complete(pg, job_id: str) -> None:
 async def test_a_queued_run_reads_queued_and_a_running_one_reads_its_epoch(run_env) -> None:
     job_id = await _start()
     status = await jobs.read_status(job_id)
+    assert status is not None
     assert (status.state, status.current_epoch) == ('queued', None)
 
     _run(
@@ -61,6 +62,7 @@ async def test_a_queued_run_reads_queued_and_a_running_one_reads_its_epoch(run_e
         },
     )
     status = await jobs.read_status(job_id)
+    assert status is not None
     assert (status.state, status.current_epoch, status.total_epochs) == ('running', 4, 10)
     assert status.last_epoch_metric == {'epoch': 4, 'map50': 0.4}
     active = await jobs.get_active_job()
@@ -79,10 +81,14 @@ async def test_a_finished_run_reads_its_manifest_results(run_env) -> None:
     _run(run_env.pg, job_id)
     _complete(run_env.pg, job_id)
     status = await jobs.read_status(job_id)
+    assert status is not None
     assert status.state == 'finished'
+    assert eval is not None
+    assert status.eval is not None
     assert status.eval['map50'] == 0.61
     assert status.mlflow_run_id == 'mlflow-1'
     served = await job_manifest.read_manifest(job_id)
+    assert served is not None
     assert served['results']['eval']['map50'] == 0.61
 
 
@@ -105,7 +111,7 @@ async def test_a_bad_id_is_a_value_error(run_env) -> None:
 async def test_cancel_ends_a_queued_run_at_once_and_an_unknown_run_is_not_found(run_env) -> None:
     job_id = await _start()
     assert await jobs.cancel_run(job_id) is True
-    assert (await jobs.read_status(job_id)).state == 'cancelled'
+    assert (await jobs.read_status(job_id)).state == 'cancelled'  # type: ignore[union-attr]
     assert await jobs.cancel_run(str(uuid.uuid4())) is False
 
 
@@ -136,8 +142,8 @@ async def test_a_stop_when_hit_skips_the_queued_siblings_and_the_wire_says_skipp
             )
         )
     assert skipped == 1
-    assert (await jobs.read_status(second)).state == 'skipped'
-    assert (await jobs.read_status(first)).state == 'queued'
+    assert (await jobs.read_status(second)).state == 'skipped'  # type: ignore[union-attr]
+    assert (await jobs.read_status(first)).state == 'queued'  # type: ignore[union-attr]
 
 
 @pytest.mark.asyncio
@@ -177,7 +183,10 @@ async def test_the_status_never_carries_a_filesystem_path(run_env) -> None:
             lambda s: runs_repo.set_manifest(s, uuid.UUID(job_id), manifest, None)
         )
     status = await jobs.read_status(job_id)
-    assert 'confusion_matrix_path' not in status.eval
+    assert status is not None
+    assert 'confusion_matrix_path' not in status.eval  # type: ignore[operator]
+    assert eval is not None
+    assert status.eval is not None
     assert status.eval['confusion_matrix_url'].endswith(
         f'/train/artifacts/{job_id}/confusion_matrix.png'
     )
@@ -213,5 +222,6 @@ async def test_promotion_is_stamped_on_the_stored_manifest(run_env) -> None:
         job_id, triton_name='m', promoted_at='t', force_used=True
     )
     manifest = await job_manifest.read_manifest(job_id)
+    assert manifest is not None
     assert manifest['promoted_to']['triton_model_name'] == 'm'
     assert manifest['promoted_to']['force_used'] is True

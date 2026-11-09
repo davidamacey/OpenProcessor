@@ -187,7 +187,9 @@ def test_models_roster_skips_region_models_when_unconfigured(
     region_env: pytest.MonkeyPatch,
 ) -> None:
     from src.routers.curation.models import _core_models
-    from src.services.model_unload_guard import region_protected_models as _region_protected_models
+    from src.services.models.model_unload_guard import (
+        region_protected_models as _region_protected_models,
+    )
 
     names = {name for name, *_ in _core_models()}
     assert REFERENCE_REGION_DETECTOR_MODEL not in names
@@ -220,6 +222,7 @@ def _patch_worker_io(
     pool = MagicMock()
     pool.initialize = AsyncMock()
     pool.close = AsyncMock()
+    pool.is_model_ready = AsyncMock(return_value=False)
     os_client = MagicMock()
     if seed_default_project:
         install_static_project_registry(monkeypatch)

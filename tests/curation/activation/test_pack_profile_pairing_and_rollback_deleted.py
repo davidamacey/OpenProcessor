@@ -285,7 +285,7 @@ def _clone_pair(profile_activation: tuple[str | None, int | None] | None, plant_
             lm._resolve_existing = AsyncMock(return_value=source)
             lm._get_mutable_record = AsyncMock(return_value=target)
             store_mod.run_repo = AsyncMock(return_value=target)
-            records_mod.record_from_row = lambda row: row
+            records_mod.record_from_row = lambda row: row  # type: ignore[assignment,return-value]
             reg = MagicMock()
             reg.ensure_fresh = AsyncMock(return_value=None)
             rm.get_project_registry = lambda: reg

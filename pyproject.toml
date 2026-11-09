@@ -143,6 +143,8 @@ include = [
     # the app package, but they are first-party code and held to the same
     # lint bar.
     "docker/**/*.py",
+    # Playwright e2e suite and docs-screenshot scripts under frontend/.
+    "frontend/**/*.py",
 ]
 exclude = [
     ".git",
@@ -156,9 +158,9 @@ exclude = [
     "cache",
     "benchmarks/results",
     "*.egg-info",
-    # The frontend's Playwright e2e suite and docs scripts are their own
-    # Python project (own pytest.ini and conventions), outside the backend lint scope.
-    "frontend",
+    "frontend/node_modules",
+    "frontend/build",
+    "frontend/.svelte-kit",
 ]
 # Apply `exclude` even when pre-commit passes file paths explicitly.
 force-exclude = true
@@ -238,6 +240,21 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
     "TID251",  # Tests set and read os.environ directly; the ban is for src/
 ]
 
+# Playwright e2e suite and docs-screenshot scripts: same latitude as tests/, plus the
+# route-handler callback signatures Playwright dictates (unused request/match arguments).
+"frontend/**/*.py" = [
+    "ARG001",  # Unused function argument (fixtures, Playwright handler signatures)
+    "ARG002",  # Unused method argument (same)
+    "ARG005",  # Unused lambda argument (route handlers take (route, request))
+    "PLR2004", # Magic values
+    "PT018",   # Composite assertions carry a (values) message; splitting loses nothing worth the churn
+    "PT028",   # Default arguments in test-like functions (standalone scripts)
+    "RUF001",  # Ambiguous Unicode characters (asserting on rendered text)
+    "RUF002",  # Ambiguous Unicode characters in docstrings
+    "T201",    # print() allowed in the screenshot scripts
+    "TID251",  # Separate program; the env ban is for src/
+]
+
 # Scripts can be less strict
 "scripts/**/*.py" = [
     "T201",    # print() allowed in scripts
@@ -286,7 +303,16 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Pydantic resolves these annotations at runtime, so their imports are not TYPE_CHECKING-only.
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
 # FastAPI resolves the route request/response annotations at call time, so the router modules import these models at runtime.
-exempt-modules = ["typing", "src.routers.curation._common_models"]
+exempt-modules = [
+    "typing",
+    "src.routers.curation._common_models",
+    "src.routers.curation._crop_write_models",
+    "src.routers.curation._export_models",
+    "src.routers.curation._health_models",
+    "src.routers.curation._holdout_models",
+    "src.routers.curation._ingest_config_models",
+    "src.routers.curation._settings_models",
+]
 
 [tool.ruff.lint.isort]
 # Import sorting configuration (follows black/blue style)
@@ -398,7 +424,7 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "scripts", "docker", "export"]
+files = ["src", "scripts", "docker", "export", "tests"]
 exclude = ["^src/ultralytics_patches/"]
 plugins = ["pydantic.mypy"]
 warn_return_any = true
@@ -413,8 +439,36 @@ warn_no_return = true
 strict_equality = true
 ignore_missing_imports = true
 explicit_package_bases = true
-mypy_path = ".:export:docker/trainer"
+mypy_path = "export:docker/trainer:."
 namespace_packages = true
+
+# Test code: untyped test functions and fixtures are the norm (mypy docs, "Using mypy with an
+# existing codebase" and config_file "Untyped definitions and calls": the disallow_* flags are
+# per-module options). Bodies are still checked (check_untyped_defs stays on). Modules that still
+# have errors are listed in the ignore_errors block below.
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+warn_return_any = false
+
+# Test modules that still have mypy errors; shrink-only, guarded by scripts/codegen/check_mypy_tests.py
+[[tool.mypy.overrides]]
+module = [
+    "tests.curation.test_curation_settings_router",
+    "tests.curation.test_region_profile",
+    "tests.integration.test_stats_router",
+    "tests.models.test_gpu_image_prep_geometry",
+    "tests.models.test_gpu_image_prep_stage_metrics",
+    "tests.models.test_newest_ready_engine_wins",
+]
+ignore_errors = true
+
+# tests put export/ on sys.path and import `export_tasks` by its bare name; mypy would find
+# the same file as `export.export_tasks` too and stop ("found twice"). Skip following the bare name.
+[[tool.mypy.overrides]]
+module = ["export_tasks"]
+follow_imports = "skip"
 
 # Ignore third-party packages without type stubs
 [[tool.mypy.overrides]]

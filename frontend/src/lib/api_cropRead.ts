@@ -126,7 +126,7 @@ export async function getCropsByIds(
  *
  * `filter` threads through arbitrary extra query params — same
  * `Record<string, unknown>` convention as `getReviewQueue` — so callers
- * can pass `cluster_id` (search scoped to one cluster on
+ * can pass `cluster_uid` (search scoped to one cluster on
  * `/clusters/[id]`) or the active review tab/filters (on `/review`)
  * without this function needing to know their shape.
  */
@@ -200,6 +200,7 @@ export async function searchImageCrops(
 
 type RawSearchItem = RawCrop & {
   semantic_score: number | null;
+  score_space?: string | null;
   matched_box_id?: string | null;
   matched_box_stale?: boolean | null;
 };
@@ -209,6 +210,8 @@ type RawSearchPage = {
   page_size: number;
   items: RawSearchItem[];
   unembedded_in_scope?: number | null;
+  space?: string;
+  fuse?: string[];
 };
 
 function mapSearchPage(
@@ -231,6 +234,7 @@ function mapSearchPage(
       // The backend's `_hydrate_item` (OpenProcessor semantic_search.py) sends
       // the match score as `semantic_score`.
       similarity_score: it.semantic_score ?? 0,
+      score_space: it.score_space ?? null,
       // `target=box` only: the region of the item whose vector matched.
       matched_box_id: it.matched_box_id ?? null,
       matched_box_stale: it.matched_box_stale ?? null,
@@ -242,6 +246,8 @@ function mapSearchPage(
     page: raw.page ?? page,
     page_size: raw.page_size ?? pageSize,
     unembedded_in_scope: raw.unembedded_in_scope ?? null,
+    space: raw.space,
+    fuse: raw.fuse ?? [],
   };
 }
 

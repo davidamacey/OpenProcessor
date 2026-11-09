@@ -47,6 +47,24 @@ def _json_list(raw: str | None, name: str, count: int) -> list[Any]:
     return parsed
 
 
+async def _read_images(
+    images: list[UploadFile],
+    parsed_ids: list[str | None],
+    parsed_paths: list[str | None],
+) -> list[tuple[bytes, str, str | None]]:
+    """Read the uploads into ``(bytes, id, path)`` tuples, skipping empty files."""
+    images_data: list[tuple[bytes, str, str | None]] = []
+    for i, img in enumerate(images):
+        image_bytes = await img.read()
+        if not image_bytes:
+            logger.warning(f'Empty image at index {i}: {img.filename}')
+            continue
+
+        img_id = parsed_ids[i] or str(uuid.uuid4())
+        images_data.append((image_bytes, img_id, parsed_paths[i]))
+    return images_data
+
+
 def _overall_status(result: dict[str, Any]) -> Literal['success', 'partial', 'error']:
     if result.get('errors_count', 0) <= 0:
         return 'success'
@@ -198,17 +216,7 @@ async def ingest_batch(
         parsed_ids: list[str | None] = _json_list(image_ids, 'image_ids', len(images))
         parsed_paths: list[str | None] = _json_list(image_paths, 'image_paths', len(images))
 
-        # Read all image bytes and prepare data tuples
-        images_data: list[tuple[bytes, str, str | None]] = []
-        for i, img in enumerate(images):
-            image_bytes = await img.read()
-            if not image_bytes:
-                logger.warning(f'Empty image at index {i}: {img.filename}')
-                continue
-
-            img_id = parsed_ids[i] or str(uuid.uuid4())
-            img_path = parsed_paths[i]
-            images_data.append((image_bytes, img_id, img_path))
+        images_data = await _read_images(images, parsed_ids, parsed_paths)
 
         if not images_data:
             raise HTTPException(

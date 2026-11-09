@@ -138,7 +138,7 @@ describe('discardSelected then undoLast', () => {
 
 // ---------------------------------------------------------------------
 // undoLast: the `if (cropPager.items.some(...))` branch the audit found
-// surviving as an `if (false)` mutant (docs/design/test-audit-2026-09-24.md
+// surviving as an `if (false)` mutant (test audit
 // §2.2, old +page.svelte:634) -- both branches, in-place replace vs.
 // prepend, are exercised explicitly here.
 //

@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.services.projects import capacity as capacity_mod
 from src.services.projects.capacity import capacity_status, per_project_shards
@@ -75,7 +76,7 @@ def test_status_blocked_past_hard_limit() -> None:
 def test_unreachable_cluster_returns_none() -> None:
     class _BoomTransport:
         async def perform_request(self, *args, **kwargs):  # noqa: ARG002
-            raise ConnectionError('unreachable')
+            raise OpenSearchConnectionError('N/A', 'unreachable', Exception('down'))
 
     client = _FakeClient(_BoomTransport())
     result = asyncio.run(capacity_status(client))

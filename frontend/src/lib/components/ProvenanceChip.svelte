@@ -67,7 +67,7 @@
   const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
 </script>
 
-<!-- DQ-p2 (docs/design/data-quality-pass-2026-09-24.md): the raw form
+<!-- DQ-p2: the raw form
      (`raw="combined_verify_reject:region_visible_elsewhere"`, from
      `region_detector_chain`) renders whatever the vocabulary doesn't
      recognize verbatim — a long snake_case actor/tag id, sized against

@@ -56,10 +56,6 @@ FORBIDDEN_PORTS = {4600, 4601, 4602, 4603, 4604, 4605, 4606, 4607, 4608, 9200}
 
 # Seeded cohorts (see scripts/curation/seed_live_harness.py::COHORTS).
 CLASS_NAMES = ('box', 'envelope', 'tube', 'crate', 'pallet', 'drum', 'sack', 'canister')
-PURE_CLUSTER_ID = 0
-MIXED_CLUSTER_ID = 1
-CANDIDATE_CLUSTER_ID = 10000
-SMALL_CANDIDATE_CLUSTER_ID = 10002
 REGION_CLUSTER_ID = 1
 FP_REGION_CLUSTER_ID = -100
 MERGE_SOURCE_CLASS_ID = 7
@@ -319,6 +315,14 @@ def search(opensearch: Any, index: str, body: dict[str, Any]) -> dict[str, Any]:
     )
     resp.raise_for_status()
     return resp.json()
+
+
+def cohort_cluster_uid(opensearch: Any, prefix: str) -> str:
+    """The serving-partition cluster uid the seed projection gave a placed cohort."""
+    crop_id = crop_ids_in(opensearch, prefix, limit=1)[0]
+    uid = get_doc(opensearch, INDEXES['items'], crop_id)['_source'].get('cluster_uid')
+    assert uid, f'cohort {prefix} has no cluster_uid: the seed partition was not projected'
+    return str(uid)
 
 
 def crop_ids_in(opensearch: Any, prefix: str, limit: int = 50) -> list[str]:

@@ -67,7 +67,10 @@ describe('CropCard — More like this', () => {
 
   it('is disabled, with the reason, for a crop the server says has no vector', () => {
     const onsimilar = vi.fn();
-    const el = render({ crop: crop({ embedding_state: 'deferred' }), onsimilar });
+    const el = render({
+      crop: crop({ embedding_states: { primary: 'deferred' } }),
+      onsimilar,
+    });
     const b = button(el);
     expect(b?.disabled).toBe(true);
     expect(b?.getAttribute('title')).toMatch(/vector/i);

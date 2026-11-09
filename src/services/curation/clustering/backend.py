@@ -113,7 +113,7 @@ def detect_cluster_backend() -> BackendInfo:
 
     try:
         device_count = int(cupy.cuda.runtime.getDeviceCount())
-    except Exception as exc:
+    except RuntimeError as exc:
         logger.info('curation_cluster_backend_cuda_unavailable', error=str(exc))
         return BackendInfo(
             name='cpu',
@@ -139,7 +139,7 @@ def detect_cluster_backend() -> BackendInfo:
 
     try:
         free_bytes, total_bytes = cupy.cuda.runtime.memGetInfo()
-    except Exception as exc:
+    except RuntimeError as exc:
         logger.warning('curation_cluster_backend_memgetinfo_failed', error=str(exc))
         return BackendInfo(
             name='cpu',

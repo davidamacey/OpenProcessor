@@ -16,7 +16,7 @@ def test_order_caches_are_bounded_ttl_caches() -> None:
 def test_inserting_past_maxsize_evicts_the_oldest() -> None:
     for cache in (diverse_order._ORDER_CACHE, outliers._CACHE):
         cache.clear()
-        for i in range(cache.maxsize + 1):
+        for i in range(cache.maxsize + 1):  # type: ignore[call-overload]
             cache[f'k{i}'] = {}
 
         assert len(cache) == cache.maxsize

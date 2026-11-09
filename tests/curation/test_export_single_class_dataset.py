@@ -159,7 +159,7 @@ async def test_unknown_image_mode_rejected(tmp_path):
     profile = SingleClassExportProfile(class_ids=(0,))
     service = single_class_service(tmp_path, FakeOpenSearch([]), profile)
     with pytest.raises(ValueError, match='image_mode'):
-        await service.export(image_mode='sideways')  # type: ignore[arg-type]
+        await service.export(image_mode='sideways')
 
 
 # ---------------------------------------------------------------------------

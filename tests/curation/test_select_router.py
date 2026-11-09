@@ -21,13 +21,19 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_os: Any
 
 
 if TYPE_CHECKING:
@@ -136,7 +142,9 @@ async def test_compute_diverse_order_disabled_returns_none_without_any_os_call(
 
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
+    result = await compute_diverse_order(
+        fake_os, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding'
+    )
     assert result is None
     fake_os.search.assert_not_called()
 
@@ -150,7 +158,9 @@ async def test_compute_diverse_order_returns_full_ranking_when_enabled_and_small
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     pool = _orthonormal_pool(6)
     fake_os = _fake_scroll_client(pool)
-    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
+    result = await compute_diverse_order(
+        fake_os, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding'
+    )
     assert result is not None
     assert set(result) == {cid for cid, _ in pool}
     assert len(result) == 6
@@ -171,7 +181,9 @@ async def test_compute_diverse_order_falls_back_above_inline_cap(
     # 5 trips truncation immediately on the first (only) scroll page.
     monkeypatch.setenv('OP_SELECT_SYNC_MAX_OPS', '4')
     fake_os = _fake_scroll_client(_orthonormal_pool(5))
-    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
+    result = await compute_diverse_order(
+        fake_os, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding'
+    )
     assert result is None
 
 
@@ -183,7 +195,9 @@ async def test_compute_diverse_order_empty_pool_returns_empty_list(
 
     monkeypatch.setenv('OP_SELECT_DIVERSE_ENABLED', '1')
     fake_os = _fake_scroll_client([])
-    result = await compute_diverse_order(fake_os, 'op_prj_default__items', {'match_all': {}})
+    result = await compute_diverse_order(
+        fake_os, 'op_prj_default__items', {'match_all': {}}, embedding_field='pe_embedding'
+    )
     assert result == []
 
 
@@ -202,14 +216,24 @@ async def test_compute_diverse_order_cache_hits_when_k_caps_the_order(
     fake_os = _fake_scroll_client(pool)
 
     first = await compute_diverse_order(
-        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
+        fake_os,
+        'op_prj_default__items',
+        {'match_all': {}},
+        embedding_field='pe_embedding',
+        current_count=6,
+        k=2,
     )
     assert first is not None
     assert len(first) == 2
     assert fake_os.search.await_count == 1
 
     second = await compute_diverse_order(
-        fake_os, 'op_prj_default__items', {'match_all': {}}, current_count=6, k=2
+        fake_os,
+        'op_prj_default__items',
+        {'match_all': {}},
+        embedding_field='pe_embedding',
+        current_count=6,
+        k=2,
     )
     assert second == first
     # Still 1 -- the second call hit the cache instead of re-scrolling.
@@ -264,13 +288,13 @@ def crops_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
 def test_get_crops_order_diverse_flag_off_behaves_like_default(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     r_default = crops_app_client.get(
@@ -284,7 +308,7 @@ def test_get_crops_order_diverse_flag_off_behaves_like_default(
 
 
 def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         'src.services.curation.diverse_order.compute_diverse_order',
@@ -300,7 +324,7 @@ def test_get_crops_order_diverse_uses_the_computed_order_when_enabled(
 
 
 def test_get_crops_order_diverse_falls_back_when_helper_returns_none(
-    crops_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    crops_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         'src.services.curation.diverse_order.compute_diverse_order',
@@ -346,8 +370,8 @@ def select_app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield None
 
     app.dependency_overrides[get_db] = no_database
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
@@ -361,7 +385,7 @@ def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
 
 
 def test_select_diverse_disabled_400(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv('OP_SELECT_DIVERSE_ENABLED', raising=False)
     r = select_app_client.post('/curation/projects/default/select/diverse', json={'k': 5})
@@ -369,7 +393,7 @@ def test_select_diverse_disabled_400(
     assert 'disabled' in r.json()['detail']
 
 
-def test_select_diverse_unknown_review_tab_400(select_app_client: TestClient) -> None:
+def test_select_diverse_unknown_review_tab_400(select_app_client: _Client) -> None:
     r = select_app_client.post(
         '/curation/projects/default/select/diverse', json={'k': 5, 'scope': {'review_tab': 'nope'}}
     )
@@ -377,7 +401,7 @@ def test_select_diverse_unknown_review_tab_400(select_app_client: TestClient) ->
 
 
 def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
-    select_app_client: TestClient,
+    select_app_client: _Client,
 ) -> None:
     pool = _orthonormal_pool(6)
     select_app_client.fake_os.count = AsyncMock(return_value={'count': 6})
@@ -404,7 +428,7 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
 
 
 def test_select_diverse_job_path_for_large_pool(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A tiny OP_SELECT_SYNC_MAX_OPS forces the job path: the route queues the job and answers
     202 with its state (the queue, busy and run paths are in ``tests/curation/jobs_a``)."""
@@ -426,12 +450,13 @@ def test_select_diverse_job_path_for_large_pool(
 
     assert r.status_code == 202
     assert (r.json()['status'], r.json()['k']) == ('queued', 1000)
+    assert start.await_args is not None
     assert start.await_args.kwargs['k'] == 1000
     assert start.await_args.kwargs['embedding_field'] == 'pe_embedding'
 
 
 def test_select_status_idle_with_no_job(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _job_seam(monkeypatch, None)
     r = select_app_client.get('/curation/projects/default/select/status')
@@ -440,7 +465,7 @@ def test_select_status_idle_with_no_job(
 
 
 def test_select_cancel_with_no_job_running(
-    select_app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _job_seam(monkeypatch, None)
     monkeypatch.setattr(

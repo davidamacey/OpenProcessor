@@ -2,10 +2,11 @@
  * Curation scores: field coverage and the compute job (`/scores*`).
  */
 import { apiFetch, isPlainObject, scoped } from '$lib/api';
+import { isLatestJobStatus, type LatestJobStatus } from '$lib/jobs/jobPhase';
 
 // -- curation scores (`/settings` "Curation scores" card, G10) -----------
 //
-// docs/design/frontend-coverage-audit-2026-09-24.md §G10: review queues
+// frontend coverage audit §G10: review queues
 // (Uncertainty, Model Disagreements, and the `uniqueness`/`mistakenness`
 // StrategyBar sorts) are empty not because nothing's wrong but because
 // no scorer has ever run — `/scores/*` had no frontend caller at all.
@@ -77,7 +78,7 @@ export async function getScoresCoverage(signal?: AbortSignal): Promise<ScoresCov
  *  against). */
 export interface ScoresJob {
   job_id: string;
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: LatestJobStatus;
   scorers: string[];
   processed: number;
   total: number;
@@ -102,12 +103,7 @@ const IDLE_SCORES_JOB: ScoresJob = {
 function parseScoresJob(raw: unknown): ScoresJob {
   if (!isPlainObject(raw)) return { ...IDLE_SCORES_JOB };
   const status = raw.status;
-  const validStatus =
-    status === 'idle' ||
-    status === 'running' ||
-    status === 'completed' ||
-    status === 'failed' ||
-    status === 'cancelled';
+  const validStatus = isLatestJobStatus(status);
   return {
     job_id: typeof raw.job_id === 'string' ? raw.job_id : '',
     status: validStatus ? status : 'idle',

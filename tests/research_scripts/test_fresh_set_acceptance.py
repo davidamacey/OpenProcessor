@@ -65,7 +65,7 @@ def test_rule_clusterer_gives_each_key_its_own_height() -> None:
     vecs = np.vstack([tight, loose]).astype(np.float32)
     keys = np.array(['tight'] * 12 + ['loose'] * 12)
     rc = RuleClusterer(vecs, keys)
-    assert rc.scales['loose'] > rc.scales['tight'] > 0
+    assert rc.scales['loose'] > rc.scales['tight'] > 0  # type: ignore[operator]
     cuts = rc.cuts(1.0)
     assert cuts['tight'] == pytest.approx(rc.scales['tight'])
     assert cuts['loose'] == pytest.approx(rc.scales['loose'])

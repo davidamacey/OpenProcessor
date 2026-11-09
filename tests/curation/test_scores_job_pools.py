@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -137,7 +137,7 @@ async def test_probe_scored_pool_includes_machine_labeled_excludes_gated() -> No
     }
     fake = _FakeScrollOpenSearch(docs, page_size=10)
 
-    ids = await scores_job._fetch_probe_scored_ids(fake)
+    ids = await scores_job._fetch_probe_scored_ids(cast('Any', fake))
 
     assert set(ids) == {'machine_labeled', 'plain_probe_scored'}
 
@@ -147,7 +147,7 @@ async def test_probe_scored_pool_paginates_past_one_page() -> None:
     docs = {f'item{i}': _probe_item() for i in range(5)}
     fake = _FakeScrollOpenSearch(docs, page_size=2)
 
-    ids = await scores_job._fetch_probe_scored_ids(fake)
+    ids = await scores_job._fetch_probe_scored_ids(cast('Any', fake))
 
     assert sorted(ids) == sorted(docs)
     assert fake.scroll_calls >= 2, (
@@ -221,7 +221,7 @@ async def _run_with_spies(
     monkeypatch.setattr(scores_job, '_fetch_probe_scored_ids', _fake_probe_ids)
 
     ctx = FakeCtx(uuid.uuid4(), uuid.uuid4(), {'scorers': scorer_names})
-    return await scores_job.run_scoring_job(ctx, object(), scorer_names)
+    return await scores_job.run_scoring_job(ctx, cast('Any', object()), scorer_names)
 
 
 @pytest.mark.asyncio

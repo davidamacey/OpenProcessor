@@ -119,6 +119,7 @@ def build_image_doc(
     height: int,
     imohash: str,
     now: str,
+    vector_field: str,
     whole_frame_embedding: Any | None = None,
     source_identifier: str | None = None,
     ingest_run_id: str | None = None,
@@ -148,7 +149,7 @@ def build_image_doc(
         'original_resolution': f'{width}x{height}',
     }
     if whole_frame_embedding is not None:
-        doc['pe_embedding'] = float_list(whole_frame_embedding)
+        doc[vector_field] = float_list(whole_frame_embedding)
     if source_identifier is not None:
         doc['source_identifier'] = source_identifier
     if ingest_run_id is not None:
@@ -168,6 +169,8 @@ def build_item_doc(
     now: str,
     crop_area_norm: float,
     crop_rank_in_image: int,
+    vector_field: str,
+    state_field: str,
     blur_full_var: float | None,
     blur_lap_var: float | None,
     blur_lap_ratio: float | None,
@@ -179,7 +182,8 @@ def build_item_doc(
     and the router queries in ``src/routers/curation/{crops,clusters,regions}.py``
     exactly — this is the first production writer of ``crop_area_norm``,
     ``crop_rank_in_image``, ``blur_lap_var``, ``blur_lap_ratio`` and
-    ``pe_embedding`` on the items index.
+    the vector on the items index (``vector_field`` and ``state_field`` name where the item
+    space of the bound project keeps them).
 
     When the item carries a ``class_detector``, the class-provenance
     fields (``class_detector``, ``class_detector_version``,
@@ -229,10 +233,10 @@ def build_item_doc(
     if item.placement is not None:
         doc.update(placement_fields(item.placement))
     if item.pe_embedding is not None:
-        doc['pe_embedding'] = float_list(item.pe_embedding)
-        doc['embedding_state'] = EMBEDDED
+        doc[vector_field] = float_list(item.pe_embedding)
+        doc[state_field] = EMBEDDED
     elif item.embedding_state is not None:
-        doc['embedding_state'] = item.embedding_state
+        doc[state_field] = item.embedding_state
     if item.class_detector:
         doc.update(
             class_provenance(

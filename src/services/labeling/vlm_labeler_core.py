@@ -10,6 +10,8 @@ import base64
 import time
 from typing import TYPE_CHECKING, Any, Self
 
+import httpx
+
 from src.config import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.services.curation.ops_metrics import record_vlm_request
@@ -29,6 +31,7 @@ from src.services.labeling.vlm_client import (
     post_chat_with_retry,
     record_chat_exchange,
 )
+from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
 from src.services.labeling.vlm_models import VlmHealth
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 from src.services.labeling.vlm_usage import record_call
@@ -38,12 +41,20 @@ from src.utils.upstream_errors import describe_upstream_error
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    import httpx
-
     from src.services.labeling.vlm_pinning import AddressPin
 
 
 logger = get_logger(__name__)
+
+#: What one chat call raises (``post_chat_with_retry`` and the egress check before it): an httpx
+#: transport or status error (``HTTPError``, after the tenacity retries), a reply that is not JSON
+#: (``resp.json()`` raises a ``ValueError``) and the egress refusal (``VlmEndpointUnavailableError``,
+#: which covers ``VlmEndpointDeniedError``). Anything else is a bug and must surface.
+CHAT_CALL_ERRORS: tuple[type[Exception], ...] = (
+    httpx.HTTPError,
+    ValueError,
+    VlmEndpointUnavailableError,
+)
 
 
 # vLLM's ``json_object`` grammar only admits an object, so every batched
@@ -233,7 +244,7 @@ class VlmLabelerCore:
             resp = await self._post_chat(payload, attempts=1, record_usage=False)
             _ = extract_message_content(resp)
             return VlmHealth(reachable=True, model=self.model, last_error=None)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.warning(
                 'vlm_labeler.health_failed',
                 model=self.model,

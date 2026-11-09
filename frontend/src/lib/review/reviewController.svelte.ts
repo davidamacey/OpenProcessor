@@ -1,6 +1,6 @@
 /**
  * Review-queue action controller — assign / discard / skip / undo,
- * extracted out of `review/+page.svelte` (docs/design/test-audit-2026-09-24.md
+ * extracted out of `review/+page.svelte` (test audit
  * P1-4) so the queue-mutation logic (optimistic remove + rollback-on-failure,
  * cursor advance, undo re-insert) is unit-testable without mounting the
  * page. Three of these survived mutation under only the source-scan test

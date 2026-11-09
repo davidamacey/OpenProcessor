@@ -233,18 +233,6 @@ async def liveness_loop(
             await asyncio.wait_for(stop_event.wait(), timeout=min(poll_s, interval_s))
 
 
-def read_liveness(record: ProjectRecord, *, host: str | None = None) -> dict | None:
-    host = host or socket.gethostname()
-    path = _liveness_path(record, host)
-    if not path.exists():
-        return None
-    try:
-        result: dict | None = json.loads(path.read_text())
-        return result
-    except (OSError, ValueError):
-        return None
-
-
 async def fetch_pending_multi_project(
     opensearch: Any,
     *,

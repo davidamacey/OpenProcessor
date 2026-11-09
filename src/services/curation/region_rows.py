@@ -28,10 +28,11 @@ from src.config import get_region_fields
 from src.config.curation_accessors import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.wire import serialize_item
+from src.services.embedding_spaces.readers import item_state_fields
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from opensearchpy import AsyncOpenSearch
 
@@ -137,6 +138,7 @@ def as_row(item: dict[str, Any], box_id: str | None, **row_keys: Any) -> dict[st
 def region_rows(
     hits: Sequence[dict[str, Any]],
     *,
+    state_fields: Mapping[str, str],
     boxes_selected: bool,
     F: RegionFields | None = None,
     row_keys: dict[str, Any] | None = None,
@@ -148,7 +150,9 @@ def region_rows(
     F = F or get_region_fields()
     rows: list[dict[str, Any]] = []
     for hit in hits:
-        item = serialize_item(hit.get('_source') or {}, hit.get('_id') or '')
+        item = serialize_item(
+            hit.get('_source') or {}, hit.get('_id') or '', state_fields=state_fields
+        )
         box_ids: Sequence[str | None] = list(matched_box_ids(hit, F)) if boxes_selected else [None]
         rows.extend(as_row(item, box_id, **(row_keys or {})) for box_id in box_ids)
     return rows
@@ -170,8 +174,9 @@ async def rows_for_pairs(
         return []
     docs = await client.mget(index=index, body={'ids': ids}, _source_excludes=list(source_excludes))
     sources = {d['_id']: d.get('_source') or {} for d in docs['docs'] if d.get('found')}
+    state_fields = await item_state_fields()
     return [
-        as_row(serialize_item(sources[crop_id], crop_id), box_id, **keys)
+        as_row(serialize_item(sources[crop_id], crop_id, state_fields=state_fields), box_id, **keys)
         for crop_id, box_id, keys in pairs
         if crop_id in sources
     ]
@@ -212,7 +217,13 @@ async def search_region_rows(
     hits_block = resp.get('hits') or {}
     hits = hits_block.get('hits') or []
     total = int((hits_block.get('total') or {}).get('value', 0))
-    rows = region_rows(hits, boxes_selected=box_clause is not None, F=F, row_keys=row_keys)
+    rows = region_rows(
+        hits,
+        state_fields=await item_state_fields(),
+        boxes_selected=box_clause is not None,
+        F=F,
+        row_keys=row_keys,
+    )
     # An item with more matching boxes than the inner-hits window reports
     # only the first ones; say so instead of silently dropping rows.
     truncated = box_clause is not None and any(

@@ -9,12 +9,13 @@ is a stub returning fixed unit vectors. The stage embeds each ACCEPTED box of
 
 from __future__ import annotations
 
-import io
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
+from _image_helpers import make_jpeg as _make_jpeg
 from PIL import Image
+from tritonclient.utils import InferenceServerException
 
 import scripts.curation.worker.region_embed_stage as stage
 from scripts.curation.worker.state import _ItemTask
@@ -23,12 +24,6 @@ from src.domain.region_boxes import RegionBox
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
 
 
 @pytest.fixture(autouse=True)
@@ -71,8 +66,7 @@ class _FakePE:
 
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
         if self._fail:
-            msg = 'triton down'
-            raise RuntimeError(msg)
+            raise InferenceServerException('triton down')
         self.calls.append(len(crops))
         return np.tile(np.array([1.0, 0.0, 0.0], dtype=np.float32), (len(crops), 1))
 
@@ -202,12 +196,17 @@ class TestDecodeOncePerPhoto:
         ]
         decoded: list[str] = []
         real = stage.decode_source_rgb
-        monkeypatch.setattr(stage, 'decode_source_rgb', lambda p: (decoded.append(p), real(p))[1])
+
+        def recording_decode(p: str) -> Any:
+            decoded.append(p)
+            return real(p)
+
+        monkeypatch.setattr(stage, 'decode_source_rgb', recording_decode)
 
         await stage.embed_written_regions(tasks, _FakePE())
 
         assert sorted(decoded) == sorted([photo, other])
-        assert all(set(t.box_vectors) == {t.pending_boxes[0].box_id} for t in tasks)
+        assert all(set(t.box_vectors) == {(t.pending_boxes or [])[0].box_id} for t in tasks)
 
     async def test_concurrent_decodes_are_bounded(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

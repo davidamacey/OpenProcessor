@@ -35,7 +35,7 @@ describe('single-class export wiring', () => {
     await exportSingleClass(spec, {
       image_mode: 'item_crop',
       img_max_side: 640,
-      dedup_threshold: null,
+      collapse_near_duplicates: false,
       max_positive_images: undefined,
     });
 
@@ -49,7 +49,7 @@ describe('single-class export wiring', () => {
       class_ids: [],
       image_mode: 'item_crop',
       img_max_side: 640,
-      dedup_threshold: null,
+      collapse_near_duplicates: false,
     });
   });
 

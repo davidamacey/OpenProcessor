@@ -1,4 +1,4 @@
-"""DQ-M7 (docs/design/data-quality-pass-2026-09-24.md): `/review?crop_id=`
+"""DQ-M7: `/review?crop_id=`
 deep link at a deep page used to page 1..loc.page sequentially via
 `queue.loadMore()` — 103 requests / 5.7s to reach rank 3000 (page 101) —
 and for that whole window rendered page 1's item #1 with its keybindings
@@ -35,45 +35,44 @@ the time the key lands.
 
 from __future__ import annotations
 
-from harness.constants import ACTION_TIMEOUT_MS
-from harness.waits import wait_for_paint
-
-import re
 import threading
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import make_item
+from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_paint
+
 
 CLASSES = [
     {
-        "class_id": 1,
-        "class_name": "ducati",
-        "kind": "item",
-        "group": "moto",
-        "hotkey_letter": "k",
-        "sample_count": 10,
-        "validated_count": 5,
-        "cluster_size": 12,
-        "deprecated": False,
+        'class_id': 1,
+        'class_name': 'ducati',
+        'kind': 'item',
+        'group': 'moto',
+        'hotkey_letter': 'k',
+        'sample_count': 10,
+        'validated_count': 5,
+        'cluster_size': 12,
+        'deprecated': False,
     },
 ]
 
-METHODS = {"strategies": [], "flags": {}}
+METHODS = {'strategies': [], 'flags': {}}
 
 
 def review_item(i: int) -> dict:
     item = make_item(
-        crop_id=f"crop-{i}",
-        image_id=f"img-{i}",
+        crop_id=f'crop-{i}',
+        image_id=f'img-{i}',
         class_id=1,
-        class_name="ducati",
+        class_name='ducati',
         proposed_class_id=1,
-        proposed_class_name="ducati",
+        proposed_class_name='ducati',
         label_validated=False,
-        label_source="model_suggestion",
-        thumbnail_url=f"/curation/crops/crop-{i}/thumbnail",
+        label_source='model_suggestion',
+        thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
-    item["reason"] = "uncertainty"
+    item['reason'] = 'uncertainty'
     return item
 
 
@@ -82,23 +81,23 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     label_calls: list[str] = []
     locate_gate = threading.Event()
 
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/methods(\?|$)", METHODS)
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/methods(\?|$)', METHODS)
     stub.on(
-        "GET",
-        r"/crops/[^/]+/image$",
+        'GET',
+        r'/crops/[^/]+/image$',
         lambda req, m: (
             200,
             {
-                "image": {"path": "/nas/img-0.jpg", "width": 640, "height": 480},
-                "items": [review_item(0)],
+                'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480},
+                'items': [review_item(0)],
             },
         ),
     )
 
     def review_handler(request, _match):
         qparams = parse_qs(urlparse(request.url).query)
-        page_num = int(qparams.get("page", ["1"])[0])
+        page_num = int(qparams.get('page', ['1'])[0])
         review_page_requests.append(page_num)
         # Page 1 serves item #1 (crop-0) so the "shows item #1 while
         # locating" regression is provable. Page 101 (the located page)
@@ -109,14 +108,14 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             # not `id` -- both are set so the frontend actually resolves
             # this row's id to "crop-target" (matching the locate
             # response's crop_id and the URL's ?crop_id=).
-            item["id"] = "crop-target"
-            item["crop_id"] = "crop-target"
+            item['id'] = 'crop-target'
+            item['crop_id'] = 'crop-target'
             items = [item]
         else:
             items = [review_item(0)]
-        return (200, {"items": items, "total": 3010, "page": page_num, "page_size": 30})
+        return (200, {'items': items, 'total': 3010, 'page': page_num, 'page_size': 30})
 
-    stub.on("GET", r"/review/all(\?|$)", review_handler)
+    stub.on('GET', r'/review/all(\?|$)', review_handler)
 
     def locate_handler(_request, _match):
         # Held open until the test explicitly releases it, simulating the
@@ -126,53 +125,53 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
         return (
             200,
             {
-                "crop_id": "crop-target",
-                "in_queue": True,
-                "rank": 3000,
-                "page": 101,
-                "page_size": 30,
-                "total": 3010,
-                "reason": None,
-                "sort_applied": "atypicality",
-                "sort_fallback_reason": None,
+                'crop_id': 'crop-target',
+                'in_queue': True,
+                'rank': 3000,
+                'page': 101,
+                'page_size': 30,
+                'total': 3010,
+                'reason': None,
+                'sort_applied': 'atypicality',
+                'sort_fallback_reason': None,
             },
         )
 
-    stub.on("GET", r"/review/all/locate(\?|$)", locate_handler)
+    stub.on('GET', r'/review/all/locate(\?|$)', locate_handler)
 
     def label_handler(request, match):
         label_calls.append(match.string)
         item = review_item(0)
-        item["class_id"] = (request.post_data_json or {}).get("class_id")
+        item['class_id'] = (request.post_data_json or {}).get('class_id')
         return (200, item)
 
-    stub.on("PUT", r"/crops/([^/]+)/label$", label_handler)
+    stub.on('PUT', r'/crops/([^/]+)/label$', label_handler)
 
-    page.goto(f"{app_url}/p/default/review?tab=all&crop_id=crop-target")
+    page.goto(f'{app_url}/p/default/review?tab=all&crop_id=crop-target')
 
     # This is the one page.* call proven to complete BEFORE a held-open
     # route handler can block the driver's dispatch loop for later
     # page.* calls (it polls the already-rendered DOM, same as the
     # locate request itself firing only after this text is on screen).
-    page.wait_for_selector("text=Locating crop", timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_selector('text=Locating crop', timeout=ACTION_TIMEOUT_MS)
 
     # Fire the keypress while the locate response is still held open.
     # Whether the browser processes it now or only once the driver loop
     # frees up after the gate is released below, it must never reach
     # crop-0 — see the module docstring for why this check doesn't rely
     # on further page.* calls to prove it.
-    page.keyboard.press("Enter")
+    page.keyboard.press('Enter')
 
     locate_gate.set()
-    page.wait_for_selector("text=Locating crop", state="detached", timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_selector('text=Locating crop', state='detached', timeout=ACTION_TIMEOUT_MS)
     # There should be no in-flight PUT to wait FOR — this settles the
     # event loop via a real paint tick (same rationale as the module
     # docstring: a fixed sleep here would be exactly the kind of
     # timing-fragile check this test deliberately avoids elsewhere).
     wait_for_paint(page)
 
-    assert not any("crop-0" in c for c in label_calls), (
-        f"a keypress fired while locating must never label crop-0 (item #1): {label_calls}"
+    assert not any('crop-0' in c for c in label_calls), (
+        f'a keypress fired while locating must never label crop-0 (item #1): {label_calls}'
     )
 
     # Exactly the initial page-1 load plus the located page-101 request —
@@ -181,8 +180,8 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     # F8 D6: the counter shows the served queue position (rank 3000 ->
     # #3001), not the cursor's index within the one loaded page.
-    counter = page.get_by_test_id("queue-counter").first.inner_text()
-    assert counter.startswith("#3001 "), counter
+    counter = page.get_by_test_id('queue-counter').first.inner_text()
+    assert counter.startswith('#3001 '), counter
 
-    errors = [c for c in stub.console_errors if c.startswith("pageerror")]
-    assert not errors, f"no pageerror expected: {errors[:3]}"
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, f'no pageerror expected: {errors[:3]}'

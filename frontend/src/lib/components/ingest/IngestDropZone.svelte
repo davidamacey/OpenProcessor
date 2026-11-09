@@ -2,8 +2,7 @@
   /**
    * The `/ingest` drop zone: a drag-drop target plus "Choose files" /
    * "Choose folder" file pickers. Emits the collected `IngestFile[]` —
-   * owns no upload logic (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
-   * §A.2).
+   * owns no upload logic (Ingest UI plan §A.2).
    */
   import {
     collectFromDrop,

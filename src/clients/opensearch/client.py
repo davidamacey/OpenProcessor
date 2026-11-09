@@ -54,6 +54,7 @@ import logging
 from typing import Any
 
 from opensearchpy import AsyncOpenSearch
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.opensearch.bulk import BulkMixin
 from src.clients.opensearch.clusters import ClustersMixin
@@ -140,6 +141,6 @@ class OpenSearchClient(IndexesMixin, IngestMixin, BulkMixin, SearchMixin, Cluste
         try:
             typed: bool = await self.client.ping()
             return typed
-        except Exception as e:
+        except (OpenSearchException, OSError) as e:
             logger.error(f'OpenSearch ping failed: {e}')
             return False

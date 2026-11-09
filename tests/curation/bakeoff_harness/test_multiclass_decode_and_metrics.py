@@ -207,7 +207,7 @@ def test_overall_map_equals_cocoeval_stats(tmp_path: Path) -> None:
     assert res.overall.map_75 == pytest.approx(ev.stats[2], abs=1e-9)
     per_class_mean = sum(res.per_class[k].ap50_95 for k in (0, 1, 2)) / 3
     assert per_class_mean == pytest.approx(ev.stats[0], abs=1e-9)
-    assert 0.0 < res.overall.map_50 < 1.0  # a non-trivial scenario
+    assert 0.0 < res.overall.map_50 < 1.0  # type: ignore[operator]  # a non-trivial scenario
 
 
 def _score(ds: YoloTestSet, dets, mapping: class_map.ClassMapping) -> dict:

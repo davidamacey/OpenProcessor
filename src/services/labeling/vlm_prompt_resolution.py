@@ -54,7 +54,7 @@ def _load_pack_file(path: Path) -> PromptPack | None:
 
     try:
         pack = PromptPack.from_json(path)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError) as exc:  # unreadable file, bad JSON, missing field
         logger.warning('prompt_pack_load_failed', path=str(path), error=str(exc))
         return None
     _PACK_FILE_CACHE[str(path)] = (mtime, pack)
@@ -145,10 +145,7 @@ def _stored_packs() -> dict[str, PromptPack]:
     ``ensure_fresh`` cached). Malformed stored bodies are skipped with a
     logged warning rather than raised, same degrade-not-crash contract as
     the file-pack loaders."""
-    try:
-        from src.services.config_store import get_config_store
-    except Exception:  # pragma: no cover - config_store always importable
-        return {}
+    from src.services.config_store import get_config_store
     from src.services.labeling.vlm_prompts import PromptPack
 
     snapshot = get_config_store().current
@@ -156,7 +153,7 @@ def _stored_packs() -> dict[str, PromptPack]:
     for name, stored in snapshot.packs.items():
         try:
             packs[name] = PromptPack.from_dict({**stored.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('stored_prompt_pack_invalid', name=name, error=str(exc))
     return packs
 
@@ -167,10 +164,8 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
     (:func:`resolve_prompt_pack`) -- unchanged behavior for a deployment
     that never activates anything through the store.
     """
-    try:
-        from src.services.config_store import get_config_store
-    except Exception:  # pragma: no cover - config_store always importable
-        return resolve_prompt_pack(cfg)
+    from src.services.config_store import get_config_store
+
     snapshot = get_config_store().current
     ref = snapshot.active_pack
     # 'off' has no meaning for a required axis (the VLM always needs some
@@ -187,7 +182,7 @@ def active_prompt_pack(cfg: Any | None = None) -> PromptPack:
 
         try:
             return PromptPack.from_dict({**pinned.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('active_prompt_pack_pinned_body_invalid', name=name, error=str(exc))
             # a decode failure on the
             # pinned body must not fail open to the unvalidated current
@@ -246,7 +241,7 @@ def get_prompt_pack(
 
         try:
             pack = PromptPack.from_dict({**stored.body, 'name': name})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             logger.warning('get_prompt_pack_stored_body_invalid', name=name, error=str(exc))
             return None
         # tag the EXACT revision this call
@@ -262,12 +257,9 @@ def get_prompt_pack(
         # `get_vlm_labeler` are unaffected).
         object.__setattr__(pack, '_resolved_revision', stored.revision)
         return pack
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_pack
-    except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+    ref = get_config_store().current.active_pack
     if isinstance(ref, tuple) and ref[0] == name:
         return active_prompt_pack(cfg)
     return available_prompt_packs(cfg).get(name)
@@ -303,12 +295,9 @@ def prompt_pack_stamp(pack: PromptPack, *, revision: int | None = None) -> str:
         revision = getattr(pack, '_resolved_revision', None)
     if revision is not None:
         return f'{pack.name}@{revision}'
-    try:
-        from src.services.config_store import get_config_store
+    from src.services.config_store import get_config_store
 
-        ref = get_config_store().current.active_pack
-    except Exception:  # pragma: no cover - config_store always importable
-        ref = None
+    ref = get_config_store().current.active_pack
     if isinstance(ref, tuple):
         name, active_revision = ref
         if name == pack.name and active_revision is not None:

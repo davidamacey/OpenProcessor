@@ -11,12 +11,19 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from config_store.memory_settings import current
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_os: Any
 
 
 @pytest.fixture
@@ -41,8 +48,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield None
 
     app.dependency_overrides[get_db] = no_database
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
     return client
 
 
@@ -51,16 +58,14 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 # =============================================================================
 
 
-def test_rebuild_disabled_400(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rebuild_disabled_400(app_client: _Client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
     r = app_client.post('/curation/projects/default/viz/projection/rebuild')
     assert r.status_code == 400
     assert 'disabled' in r.json()['detail']
 
 
-def test_get_projection_disabled_400(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_get_projection_disabled_400(app_client: _Client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv('OP_VIZ_PROJECTION_ENABLED', raising=False)
     r = app_client.get('/curation/projects/default/viz/projection')
     assert r.status_code == 400
@@ -68,7 +73,7 @@ def test_get_projection_disabled_400(
 
 
 def test_status_and_cancel_are_not_gated_by_the_flag(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Same convention as scores_status/select_status: read-only lifecycle
     endpoints work regardless of the feature flag, so an operator can
@@ -90,7 +95,7 @@ def test_status_and_cancel_are_not_gated_by_the_flag(
 
 
 def test_rebuild_cluster_scope_without_cluster_uid_400(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     r = app_client.post(
@@ -100,7 +105,7 @@ def test_rebuild_cluster_scope_without_cluster_uid_400(
     assert 'cluster_uid' in r.json()['detail']
 
 
-def test_rebuild_unknown_scope_422(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rebuild_unknown_scope_422(app_client: _Client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     r = app_client.post(
         '/curation/projects/default/viz/projection/rebuild', params={'scope': 'bogus'}
@@ -131,7 +136,7 @@ def _job_seam(monkeypatch: pytest.MonkeyPatch, latest) -> AsyncMock:
 
 
 def test_rebuild_queues_the_job_and_answers_202_with_its_state(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     start = _job_seam(monkeypatch, _queued_view())
@@ -140,11 +145,12 @@ def test_rebuild_queues_the_job_and_answers_202_with_its_state(
     )
     assert r.status_code == 202
     assert (r.json()['status'], r.json()['scope']) == ('queued', 'residual')
+    assert start.await_args is not None
     assert start.await_args.kwargs['scope'] == 'residual'
 
 
 def test_rebuild_cluster_scope_passes_cluster_uid_through(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     start = _job_seam(monkeypatch, _queued_view('cluster', '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'))
@@ -157,13 +163,14 @@ def test_rebuild_cluster_scope_passes_cluster_uid_through(
         'cluster',
         '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
     )
+    assert start.await_args is not None
     assert start.await_args.kwargs['cluster_uid'] == uuid.UUID(
         '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
     )
 
 
 def test_cancel_reports_whether_a_job_was_cancelled(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _job_seam(monkeypatch, _queued_view())
     cancel = AsyncMock(return_value=True)
@@ -178,7 +185,7 @@ def test_cancel_reports_whether_a_job_was_cancelled(
 # =============================================================================
 
 
-def test_get_projection_not_built(app_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_projection_not_built(app_client: _Client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     current().projection = None
 
@@ -189,7 +196,7 @@ def test_get_projection_not_built(app_client: TestClient, monkeypatch: pytest.Mo
 
 
 def test_get_projection_read_failure_is_503_not_not_built(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     from src.services.curation.embedding_viz_read import ProjectionUnavailableError
@@ -205,7 +212,7 @@ def test_get_projection_read_failure_is_503_not_not_built(
 
 
 def test_get_projection_serves_cached_points(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     current().projection = {
@@ -250,7 +257,7 @@ def test_get_projection_serves_cached_points(
 
 
 def test_get_projection_max_points_caps_the_search_size(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
@@ -264,7 +271,7 @@ def test_get_projection_max_points_caps_the_search_size(
 
 
 def test_get_projection_max_points_over_ceiling_422(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     r = app_client.get(
@@ -279,7 +286,7 @@ def test_get_projection_max_points_over_ceiling_422(
 
 
 def test_get_projection_never_imports_or_calls_fit(
-    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Monkeypatch the only fit-capable function in embedding_viz.py to
     explode, then drive the full router GET path end-to-end. If the GET

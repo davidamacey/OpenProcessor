@@ -119,7 +119,7 @@ export function visibleReviewTabs(
 
 /**
  * Slot tabs — derived from each queue-capable slot's `QueueCapability`
- * (docs/genericization-plan-2026-09-13.md §3.3/P2.8, finished by the
+ * (genericization plan §3.3/P2.8, finished by the
  * §9.5 addendum) instead of a hand-maintained literal. The internal tab
  * id is the structural `slot:${key}` template (`slotTabId`) — NOT the
  * slot's `urlId` — so a second queue-capable slot gets a real,

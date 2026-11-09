@@ -67,7 +67,7 @@ def plan(level: str = 'image', *, index: str = IMAGES) -> LevelPlan:
 
 def make_job(pg: Any, project: uuid.UUID, kind: str = 'noop') -> uuid.UUID:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute(
+        return conn.execute(  # type: ignore[index]
             'INSERT INTO jobs (project_id, kind, queue, status, max_queue_wait, requested_by) '
             "VALUES (%s, %s, 'jobs', 'queued', interval '1 hour', 'test') RETURNING id",
             (project, kind),

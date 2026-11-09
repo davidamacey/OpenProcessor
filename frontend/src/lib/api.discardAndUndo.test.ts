@@ -31,30 +31,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('bulkLabel / moveCropsToCluster: updated_ids passes through verbatim', () => {
-  it('bulkLabel returns the served updated_ids, not a locally-derived list', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        updated: 1,
-        updated_ids: ['a'],
-        conflicts: [{ crop_id: 'b', current_source: 'vlm' }],
-      }),
-    );
+describe('bulkLabel / moveCropsToCluster: the queued job comes back as served', () => {
+  const accepted = { op_id: 'op1', job_id: 'job1', status: 'queued' };
+
+  it('bulkLabel returns the 202 body (op_id, job_id) and sends the ids and class', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(accepted));
     vi.stubGlobal('fetch', fetchMock);
     const res = await bulkLabel(['a', 'b'], 3);
-    expect(res.updated_ids).toEqual(['a']);
-    expect(res.conflicts).toEqual([{ crop_id: 'b', current_source: 'vlm' }]);
+    expect(res).toEqual(accepted);
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      crop_ids: ['a', 'b'],
+      class_id: 3,
+    });
   });
 
-  it('moveCropsToCluster returns the served updated_ids', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ updated: 2, updated_ids: ['a', 'b'], conflicts: [] }),
-      );
+  it('moveCropsToCluster sends the cluster uid, never an integer id', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(accepted));
     vi.stubGlobal('fetch', fetchMock);
-    const res = await moveCropsToCluster(['a', 'b'], 42);
-    expect(res.updated_ids).toEqual(['a', 'b']);
+    const res = await moveCropsToCluster(['a', 'b'], 'uid-42');
+    expect(res).toEqual(accepted);
+    const body = JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body));
+    expect(body).toEqual({ crop_ids: ['a', 'b'], cluster_uid: 'uid-42' });
   });
 });
 

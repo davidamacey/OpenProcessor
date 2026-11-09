@@ -4,7 +4,7 @@
  * literal.
  *
  * This is the frontend half of H1 (coordination plan §5.3 — see
- * `docs/design/backend-integration-phase-d-static-plan-2026-09-20.md`).
+ * backend integration phase D static plan).
  * `T-B4` made the existing tests prefix-portable, which is a different
  * property: a suite that derives its expectations from `API_PREFIX`
  * still passes if a new call site hardcodes the prefix. These two
@@ -61,7 +61,7 @@ const BARE_PREFIX_PATTERN = /(?:['"`]|\})\/curation(?:[/'"`]|\$)/;
  * to accept even that.
  *
  * Moved to `$lib/testing/sourceScan.ts` (P2-2,
- * docs/design/test-audit-2026-09-24.md) so every scan shares one
+ * test audit) so every scan shares one
  * implementation instead of each hand-rolling its own — re-exported here
  * too, for back-compat with any existing import of this name from this
  * file.

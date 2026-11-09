@@ -31,14 +31,14 @@
       <button
         type="button"
         class="btn btn-sm"
-        disabled={ctl.busy || ctl.live}
+        disabled={ctl.busy || !ctl.control?.can_rollback}
         onclick={() => void ctl.previewRollback(null)}
         data-testid="loop-rollback-all"
       >
         Roll back all propagated labels
       </button>
-      {#if ctl.live}
-        <span class="text-zinc-500">Available once the loop stops.</span>
+      {#if ctl.control && !ctl.control.can_rollback}
+        <span class="text-zinc-500">Not available for this loop now.</span>
       {/if}
     {/if}
   </div>

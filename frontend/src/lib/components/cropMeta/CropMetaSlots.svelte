@@ -10,7 +10,7 @@
 
   let { crop }: { crop: Crop } = $props();
 
-  // DQ-m7 (docs/design/data-quality-pass-2026-09-24.md): this used to be
+  // DQ-m7: this used to be
   // `slotRegistry.forClass(crop.class_id, ...)` — slots bound to the
   // crop's OWN class. That's the wrong question for a sub-box slot: a
   // region (e.g. a tag) lives on an item of another class (e.g.

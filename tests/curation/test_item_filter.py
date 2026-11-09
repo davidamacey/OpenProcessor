@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.query_fakes import matches
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
@@ -62,13 +63,13 @@ CORPUS: dict[str, dict[str, Any]] = {
 
 
 def select(**kw: Any) -> set[str]:
-    clauses = item_filter_clauses(ItemFilter(**kw))
+    clauses = item_filter_clauses(ItemFilter(**kw), embedding=DEFAULT_WRITE_FIELDS)
     query = {'bool': {'filter': clauses}}
     return {i for i, doc in CORPUS.items() if matches(doc, query)}
 
 
 def test_empty_filter_selects_everything() -> None:
-    assert item_filter_clauses(ItemFilter()) == []
+    assert item_filter_clauses(ItemFilter(), embedding=DEFAULT_WRITE_FIELDS) == []
     assert select() == set(CORPUS)
 
 
@@ -135,7 +136,7 @@ def test_predicates_combine_with_and() -> None:
 )
 def test_malformed_bands_raise_value_error(bad: dict[str, Any]) -> None:
     with pytest.raises(ValueError, match=r'greater than|letter or digit'):
-        item_filter_clauses(ItemFilter(**bad))
+        item_filter_clauses(ItemFilter(**bad), embedding=DEFAULT_WRITE_FIELDS)
 
 
 def test_visibility_defaults_hide_holdout_and_excluded() -> None:

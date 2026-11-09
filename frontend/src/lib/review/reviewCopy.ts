@@ -10,7 +10,7 @@
 import { humanizeId } from '$lib/humanizeId';
 
 /** Toast text for a `?crop_id=` deep link `/locate` says isn't in the
- *  queue. `/locate` documents two reasons (`not_found`, `filtered_out`);
+ *  queue. `/locate` documents three reasons (`not_found`, `filtered_out`, `region_profile_off`);
  *  anything else is shown as served. */
 export function locateMissMessage(reason: string | null | undefined): string {
   if (reason === 'not_found') {
@@ -18,6 +18,9 @@ export function locateMissMessage(reason: string | null | undefined): string {
   }
   if (reason === 'filtered_out') {
     return "That crop is not in this review queue — it doesn't match this tab's filters, or it was already reviewed.";
+  }
+  if (reason === 'region_profile_off') {
+    return 'That crop is not in this review queue — this project has no region profile switched on.';
   }
   if (reason) return `That crop is not in this review queue: ${reason}`;
   return 'That crop is not in this review queue (it may already be reviewed).';

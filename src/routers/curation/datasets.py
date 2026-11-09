@@ -12,6 +12,7 @@ import asyncio
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import File, Query, Response, UploadFile
+from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
 from src.core.disk_space import DISK_GUARD
@@ -32,6 +33,7 @@ from src.routers.curation._dataset_import_models import (
 )
 from src.routers.curation._dataset_import_views import job_wire, preview_wire
 from src.routers.curation._dataset_issue_wire import issues_to_wire
+from src.services.classes.registry import ClassRegistryError
 from src.services.curation.dataset_import import control, runner, upload_job
 from src.services.curation.dataset_import.options import DatasetImportRequest, DatasetPreviewRequest  # noqa: TC001 - FastAPI body types
 from src.services.curation.dataset_import.paths import (
@@ -114,7 +116,7 @@ async def _already_indexed(opensearch: Any, prepared: PreparedImport) -> int:
             found.update(
                 h['_source'].get('image_path') for h in (resp.get('hits') or {}).get('hits') or []
             )
-    except Exception:
+    except OpenSearchException:
         return 0
     return len(found & set(paths))
 
@@ -201,7 +203,7 @@ async def start_dataset_import(
     new_groups = {m.dataset_class: m.new_class_group for m in body.mapping}
     try:
         await materialize_created_classes(prepared.resolved, registry, new_groups=new_groups)
-    except Exception as exc:
+    except ClassRegistryError as exc:
         raise api_error(422, 'class_mapping_invalid', f'could not create a class: {exc}') from None
     try:
         view = await control.start(

@@ -1,6 +1,6 @@
 /**
  * State/logic for the shared `<StrategyBar>` control (curation-strategy
- * plan Phase 3/4, docs/curation-strategy-plan-2026-09.md §5.4/§5.1).
+ * plan Phase 3/4, curation strategy plan §5.4/§5.1).
  *
  * Holds the operator's current sort selection, any active score-filter
  * thresholds, and (Phase 4) the `k` count for a pool-scale overlay
@@ -174,7 +174,7 @@ export function formatAppliedSort(
  * What the StrategyBar summary chip should show when the deployment's
  * *pinned* review-sort default (`GET {API_PREFIX}/settings`'s
  * `defaults.sort`) has zero field coverage — visual-audit S1's last
- * bullet (`docs/design/visual-audit-2026-09-24.md`). That doc's
+ * bullet (the visual audit). That doc's
  * "deferred, BACKEND" status note was wrong: `GET {API_PREFIX}/methods`
  * already serves real `field_coverage`/`field_coverage_total` on every
  * `sort` entry with a `requires_field`, and `hasFieldCoverage`

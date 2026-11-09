@@ -41,6 +41,7 @@ from src.services.detection.segmenter_http import (
     SegmenterCallError,
     segment_once,
 )
+from src.services.embedding_spaces.readers import item_state_fields
 from src.services.labeling.region_overlay import VlmBoxVerdict
 
 
@@ -232,6 +233,7 @@ async def run_region_test(
     from scripts.curation.worker.combined_resolve import resolve_combined_reply, should_classify
     from scripts.curation.worker.verify import item_verification_fields, verdicts_to_boxes
 
+    state_fields = await item_state_fields()
     detector = await _detector_leg(source, profile, jpeg, triton_pool)
     detector_hit = bool(detector.selection and detector.selection.selection.selected)
     segmenter = await _segmenter_leg(
@@ -312,7 +314,10 @@ async def run_region_test(
         if resolution.outcome == 'no_verdict':
             # The worker retries (up to its cap) and writes nothing yet.
             return RegionRun(
-                legs=legs, preview=preview_item(source, {}, crop_id), basis=basis, probe=probe
+                legs=legs,
+                preview=preview_item(source, {}, crop_id, state_fields),
+                basis=basis,
+                probe=probe,
             )
         assert resolution.status is not None
         boxes, status, extra = resolution.boxes, resolution.status, resolution.extra
@@ -345,7 +350,10 @@ async def run_region_test(
         stamps=stamps,
     )
     return RegionRun(
-        legs=legs, preview=preview_item(source, write, crop_id), basis=basis, probe=probe
+        legs=legs,
+        preview=preview_item(source, write, crop_id, state_fields),
+        basis=basis,
+        probe=probe,
     )
 
 

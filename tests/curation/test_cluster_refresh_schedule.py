@@ -111,7 +111,7 @@ def test_a_completed_run_clears_the_request_when_its_partition_covers_the_growth
     s = settled(1250)
     s.job_id, s.pending_since = 'job-1', 120.0
     assert step(s, obs(1250, built=1250, tracked='completed'), 480.0, POLICY) is Action.NONE
-    assert (s.job_id, s.pending_since) == (None, None)
+    assert (s.job_id, s.pending_since) == (None, None)  # type: ignore[comparison-overlap]
 
 
 def test_another_runs_presence_in_the_project_blocks_start() -> None:

@@ -1,6 +1,6 @@
 /**
  * Rendering helpers for the region-profile form (any_domain_plan.md §7.3,
- * §7.6 item 2; docs/design/w4-profile-editor-ui-plan-2026-09-27.md §4).
+ * §7.6 item 2; w4 profile editor UI plan §4).
  * Every list, label, group and range comes from the served schema and
  * vocabulary; these only look them up. No rule here judges a value.
  */

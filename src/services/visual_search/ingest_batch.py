@@ -6,6 +6,8 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.near_duplicates import core_candidates
@@ -352,8 +354,8 @@ class IngestBatchMixin:
             )
             logger.info(f'OCR indexed {num_texts} text regions for {img_id}')
             return True
-        except Exception as e:
-            logger.debug(f'OCR index failed for {img_id}: {e}')
+        except OpenSearchException as e:
+            logger.warning(f'OCR index failed for {img_id}: {e}')
             return False
 
     async def _index_ocr_results(

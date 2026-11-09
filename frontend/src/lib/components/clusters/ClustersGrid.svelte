@@ -119,10 +119,11 @@
               region {match?.boxId}{match?.stale ? ' (stale)' : ''}
             </span>
           {/if}
-          {#if crop.cluster_id != null}
+          {#if crop.cluster?.uid}
             <ClusterBadge
-              clusterId={crop.cluster_id}
-              dominantClassName={modes.clusterMetaMap.get(crop.cluster_id)
+              clusterUid={crop.cluster.uid}
+              displayNo={crop.cluster.display_no ?? null}
+              dominantClassName={modes.clusterMetaMap.get(crop.cluster.uid)
                 ?.dominant_class_name ?? null}
             />
           {/if}
@@ -273,7 +274,7 @@
       </p>
     {/if}
     <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {#each list.gridItems as c (c.isSlotCard ? `slot-${c.id}` : c.id)}
+      {#each list.gridItems as c (c.isSlotCard ? `slot-${c.uid}` : c.uid)}
         <ClusterGridCard {c} flagVocabulary={list.flagVocabulary} />
       {/each}
     </ul>

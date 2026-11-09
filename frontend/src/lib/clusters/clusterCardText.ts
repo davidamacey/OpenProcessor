@@ -1,18 +1,15 @@
 /**
- * Display text for a cluster's two different "purity" numbers
- * (visual audit 2026-09-24, C1/K4). The server serves both:
- *
- * - `purity` — nearest-centroid GEOMETRY purity (share of measured
- *   members whose nearest centroid is this cluster's own).
- * - `label_agreement` (mapped onto `Cluster.dominant_pct`) — the dominant
- *   class's share of the LABELLED members.
- *
- * The card subtitle used to print the geometry number as if it were the
- * dominant-class share ("class_b · 3%" on a 616/616 class_b
- * cluster). Every surface now names which one it is showing.
+ * Display text for a cluster card. The server serves the figures; this names
+ * them: `label_agreement` (mapped onto `Cluster.dominant_pct`) is the dominant
+ * class's share of the LABELLED members.
  */
 import type { Cluster } from '$lib/types';
 import type { ValidationState } from '$lib/types_clusterList';
+
+/** "#7", or "" when the serving partition gave the cluster no number. */
+export function displayNoText(c: { display_no?: number | null }): string {
+  return c.display_no == null ? '' : `#${c.display_no}`;
+}
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
@@ -32,23 +29,6 @@ export function dominantShareTitle(
     return `${c.dominant_count} of ${c.labelled_count} labeled members are ${name} (cluster size ${c.size})`;
   }
   return `Share of labeled members that are ${name}`;
-}
-
-/**
- * "purity 19% · noisy" on a class
- * cluster whose labels are 90% right read as "bad labels". The served
- * `purity` measures geometry, so the UI calls it cohesion. The value is
- * still the served `purity`/`purity_n`; the tier word stays the served
- * band.
- */
-export const COHESION_TOOLTIP =
-  'Cohesion: share of measured members whose nearest cluster centre is this one. It measures how tight the cluster is in embedding space, not whether its labels are right.';
-
-/** "cohesion 19% · n=984", "cohesion 19%", or null with no served value. */
-export function cohesionText(c: Pick<Cluster, 'purity' | 'purity_n'>): string | null {
-  if (c.purity == null) return null;
-  const base = `cohesion ${pct(c.purity)}`;
-  return c.purity_n != null ? `${base} · n=${c.purity_n}` : base;
 }
 
 /** "widget_x 62% · conf 0.81", or null when the detector served no class. */

@@ -1,5 +1,5 @@
 /**
- * Follow-up gap 2 (docs/design/audit-remediation-plan-2026-09.md
+ * Follow-up gap 2 (audit remediation plan
  * Appendix D item 3, 2026-09-11): before this module existed, `/models`
  * had no unload action at all — Phase 10's cleanup of a throwaway
  * promoted model required direct Triton API calls. These tests cover the

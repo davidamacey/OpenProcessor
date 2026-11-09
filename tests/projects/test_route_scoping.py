@@ -63,6 +63,9 @@ GLOBAL_ROUTES = frozenset(
         ('PUT', f'{API}/vlm/endpoints/{{name}}'),
         ('DELETE', f'{API}/vlm/endpoints/{{name}}'),
         ('POST', f'{API}/vlm/endpoints/{{name}}/probe'),
+        # the embedding model catalog is deployment-wide (ES-B); the spaces built from
+        # it are scoped under the project.
+        ('GET', f'{API}/embedding/models'),
         ('GET', f'{API}/serving_profiles'),
         ('GET', f'{API}/serving_profiles/active'),
         ('GET', f'{API}/serving_profiles/{{name}}'),
@@ -83,21 +86,24 @@ def test_every_curation_route_is_scoped_or_global() -> None:
     from src.main import app  # noqa: F401 - assembling the app registers the global routes
     from src.routers.curation.projects import global_router
 
-    global_endpoints = {r.endpoint for r in global_router.routes}
+    global_endpoints = {r.endpoint for r in global_router.routes}  # type: ignore[attr-defined]
     unexpected = []
     for route in _curation_routes():
+        assert route.path is not None
         if route.path.startswith(f'{SCOPED}/'):
             continue
-        pairs = {(m, route.path) for m in route.methods}
+        pairs = {(m, route.path) for m in route.methods}  # type: ignore[union-attr]
         if route.endpoint in global_endpoints and pairs <= GLOBAL_ROUTES:
             continue
-        unexpected.append(f'{sorted(route.methods)} {route.path}')
+        unexpected.append(f'{sorted(route.methods)} {route.path}')  # type: ignore[arg-type]
     assert unexpected == []
 
 
 def test_no_route_is_hidden_from_openapi() -> None:
     hidden = [
-        f'{sorted(r.methods)} {r.path}' for r in _curation_routes() if not r.include_in_schema
+        f'{sorted(r.methods)} {r.path}'  # type: ignore[arg-type]
+        for r in _curation_routes()
+        if not r.include_in_schema
     ]
     assert hidden == []
 

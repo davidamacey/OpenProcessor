@@ -1,8 +1,9 @@
 /**
- * Region browse, region clustering, FP centroids, training candidates, and
- * the region status / vocabulary reads (`/regions*`).
+ * Region browse, region cluster cards, the FP centroid build, training
+ * candidates, and the region status / vocabulary reads (`/regions*`).
  */
 import { apiFetch, qs, scoped } from '$lib/api';
+import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { SlotData, SlotKey, XYXY } from '$lib/annotations/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
@@ -48,7 +49,8 @@ export interface RegionBrowseItem {
   region_visible: boolean | null;
   class_id: number | null;
   class_name: string | null;
-  cluster_id: number | null;
+  /** The box's cluster in the serving region partition (`ClusterRef`). */
+  cluster?: ClusterRef | null;
   /** Parent-crop rank by size in its image (1 = largest). */
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
@@ -86,13 +88,8 @@ export interface RegionsQuery extends Omit<
 > {
   page?: number;
   page_size?: number;
-  cluster_id?: number;
-  /** Region clustering bucket (independent of the item cluster_id). */
-  region_cluster_id?: number;
-  /** AHC region sub-cluster id (e.g. "17a"). */
-  region_cluster_subid?: string;
-  /** Order a bucket's regions by sub-cluster so AHC groups come back contiguous. */
-  sort_by_subid?: boolean;
+  /** Rows whose box is in this cluster of the serving region partition. */
+  cluster_uid?: string;
   /** Only regions on the top-N largest crops (crop_rank_in_image<=N). */
   max_rank?: number;
   min_score?: number;
@@ -135,73 +132,23 @@ export async function getRegions(
   };
 }
 
-/** Region-clustering background-job snapshot. The one-click pipeline result also
- *  carries the FP-rebuild + auto-assign sub-steps, and may report a re-partition
- *  that was skipped to protect a fresh manual refine (TTL). */
-export interface RegionClusterJob {
-  running: boolean;
-  started_at: string | null;
-  finished_at: string | null;
-  result:
-    | ({
-        status?: string;
-        n_regions?: number;
-        n_clusters?: number;
-        assigned?: number;
-        fp_centroids?: { status: string; n_members?: number; k?: number };
-        auto_fp?: { status: string; n_moved?: number; threshold?: number };
-      } & Record<string, unknown>)
-    | null;
-  error: string | null;
+/** One card of `GET /regions/clusters`: boxes grouped by `cluster_uid`. A card's `size`
+ *  is the items with a box in the cluster, `box_count` the boxes. */
+interface RawRegionCluster {
+  cluster_uid: string;
+  size: number;
+  box_count: number;
+  validated_count: number;
+  representative_crop_ids: string[];
+  representative_thumb_urls: string[];
 }
 
-/** Launch the one-click region-clustering pipeline (background job — a large
- *  pool takes minutes): rebuild FP sub-centroids → auto-pull tight FP matches →
- *  re-partition the good regions. Returns immediately; poll getRegionClusterStatus for completion. */
-export function clusterRegions(
-  maxRank?: number,
-  opts: { forceRepartition?: boolean; autoFpThreshold?: number } = {},
-  signal?: AbortSignal,
-): Promise<RegionClusterJob> {
-  return apiFetch(
-    `${scoped()}${REGION_BASE}/cluster${qs({
-      max_rank: maxRank,
-      force_repartition: opts.forceRepartition,
-      auto_fp_threshold: opts.autoFpThreshold,
-    })}`,
-    { method: 'POST' },
-    signal,
-  );
-}
-
-/** Poll the background region-clustering job. */
-export function getRegionClusterStatus(signal?: AbortSignal): Promise<RegionClusterJob> {
-  return apiFetch(`${scoped()}${REGION_BASE}/cluster/status`, {}, signal);
-}
-
-/** Per-bucket AHC refine over the region embeddings; writes region_cluster_subid. */
-export function refineRegionCluster(
-  clusterId: number,
-  signal?: AbortSignal,
-): Promise<{
-  cluster_id: number;
-  n_members: number;
-  n_subclusters: number;
-  action: string;
-}> {
-  return apiFetch(
-    `${scoped()}${REGION_BASE}/clusters/refine/${clusterId}`,
-    { method: 'POST' },
-    signal,
-  );
-}
-
-/** Region cluster cards (mirrors getClusters' Cluster shape). */
-export function getRegionClusters(
+/** Region cluster cards in the shape the grid renders. */
+export async function getRegionClusters(
   opts: { maxClusters?: number; perCluster?: number; maxRank?: number } = {},
   signal?: AbortSignal,
 ): Promise<{ clusters: Cluster[]; count: number }> {
-  return apiFetch(
+  const raw = await apiFetch<{ clusters: RawRegionCluster[]; count: number }>(
     `${scoped()}${REGION_BASE}/clusters${qs({
       max_clusters: opts.maxClusters,
       per_cluster: opts.perCluster,
@@ -210,38 +157,33 @@ export function getRegionClusters(
     {},
     signal,
   );
+  return {
+    count: raw.count,
+    clusters: raw.clusters.map((c) => ({
+      uid: c.cluster_uid,
+      size: c.size,
+      box_count: c.box_count,
+      validated_count: c.validated_count,
+      dominant_class_name: null,
+      dominant_pct: null,
+      is_unlabeled: true,
+      representative_crop_ids: c.representative_crop_ids,
+      representative_thumb_urls: c.representative_thumb_urls,
+      updated_at: null,
+    })),
+  };
 }
 
-/** Background FP-centroid build-job snapshot + persisted centroid metadata. */
-export interface RegionFpCentroidJob {
-  running: boolean;
-  started_at: string | null;
-  finished_at: string | null;
-  result: { status: string; n_members: number; k: number } | null;
-  error: string | null;
-  centroids: {
-    trained_at: string | null;
-    k: number | null;
-    n_members: number | null;
-  } | null;
-}
-
-/** (Re)build the FP centroid store — sub-types the FP bucket (background job). */
+/** (Re)build the FP centroid store, sub-typing the false-positive boxes: queued as
+ *  a job (202; 409 `job_busy` while one is active). Follow `job_id` with `followJob`. */
 export function buildRegionFpCentroids(
   signal?: AbortSignal,
-): Promise<RegionFpCentroidJob> {
+): Promise<{ job_id: string; kind: string }> {
   return apiFetch(
     `${scoped()}${REGION_BASE}/fp_centroids/build`,
     { method: 'POST' },
     signal,
   );
-}
-
-/** Poll the FP-centroid build job + read persisted centroid metadata. */
-export function getRegionFpCentroidStatus(
-  signal?: AbortSignal,
-): Promise<RegionFpCentroidJob> {
-  return apiFetch(`${scoped()}${REGION_BASE}/fp_centroids/status`, {}, signal);
 }
 
 export interface SuspectedFpItem extends RegionBrowseItem {

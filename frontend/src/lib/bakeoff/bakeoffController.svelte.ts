@@ -4,7 +4,7 @@
  * convention (`ingestRunController`, `clusterController`); the API calls
  * are injectable so tests drive it without `fetch`.
  *
- * Thin by design (docs/design/bakeoff-v2-ui-plan-2026-09-25.md): nothing
+ * Thin by design (bakeoff v2 UI plan): nothing
  * here computes a metric, a class mapping, a rank or a winner.
  */
 import {

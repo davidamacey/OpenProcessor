@@ -213,7 +213,10 @@ def resolve_incumbent_model_name(http_url: str = TRITON_HTTP_URL) -> str | None:
         resp = requests.post(f'{http_url}/v2/repository/index', timeout=5)
         resp.raise_for_status()
         loaded = {entry.get('name') for entry in resp.json() if entry.get('state') == 'READY'}
-    except Exception as exc:  # any transport failure means "no incumbent"
+    except (
+        requests.RequestException,
+        ValueError,
+    ) as exc:  # transport, HTTP status or non-JSON body: no incumbent
         log.warning('compare: triton repository probe failed: %s', exc)
         return None
     for cand in candidates:

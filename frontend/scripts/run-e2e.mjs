@@ -14,7 +14,7 @@
  * only-on-failure` so a failure leaves a screenshot in
  * artifacts_local/cw-live/live-tier/ instead of nothing.
  *
- * See docs/design/test-audit-2026-09-24.md recommendation 5 and CLAUDE.md's
+ * See the test audit, recommendation 5, and CLAUDE.md's
  * "Development" section.
  */
 import { spawnSync } from 'node:child_process';

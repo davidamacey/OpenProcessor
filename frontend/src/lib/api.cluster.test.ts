@@ -36,7 +36,7 @@ describe('getCluster order param', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await getCluster(42, 1, 60, undefined, { order: 'mistakenness' });
+    await getCluster('cluster-uid-42', 1, 60, undefined, { order: 'mistakenness' });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -66,11 +66,13 @@ describe('getCluster order param', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getCluster(42, 1, 60, undefined, { order: 'outliers' });
+    const res = await getCluster('cluster-uid-42', 1, 60, undefined, {
+      order: 'outliers',
+    });
     expect(res.crops.n_unembedded).toBe(9);
     expect(res.crops.suggested_reprocess).toEqual(request);
 
-    const plain = await getCluster(42, 1, 60, undefined, {});
+    const plain = await getCluster('cluster-uid-42', 1, 60, undefined, {});
     fetchMock.mockImplementation((url: string) =>
       Promise.resolve(
         url.startsWith(`${API_PREFIX}/crops`)
@@ -78,7 +80,7 @@ describe('getCluster order param', () => {
           : jsonResponse({ items: [] }),
       ),
     );
-    const none = await getCluster(42, 1, 60, undefined, {});
+    const none = await getCluster('cluster-uid-42', 1, 60, undefined, {});
     expect(none.crops.n_unembedded).toBeNull();
     expect(none.crops.suggested_reprocess).toBeNull();
     expect(plain).toBeDefined();
@@ -95,7 +97,7 @@ describe('getCluster order param', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await getCluster(42, 1, 60, undefined, { order: null });
+    await getCluster('cluster-uid-42', 1, 60, undefined, { order: null });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -142,7 +144,7 @@ describe('getCluster card lookup failure', () => {
           headers: { 'content-type': 'application/json' },
         }),
     );
-    const res = await getCluster(42);
+    const res = await getCluster('cluster-uid-42');
     expect(res.cardError).toBe('aggregation unavailable');
     expect(res.crops.total).toBe(3);
   });
@@ -155,7 +157,7 @@ describe('getCluster card lookup failure', () => {
           headers: { 'content-type': 'application/json' },
         }),
     );
-    expect((await getCluster(42)).cardError).toBeNull();
+    expect((await getCluster('cluster-uid-42')).cardError).toBeNull();
   });
 });
 
@@ -183,7 +185,7 @@ describe('getCluster k param', () => {
   it('forwards k to {API_PREFIX}/crops when set alongside order=diverse', async () => {
     const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
 
-    await getCluster(42, 1, 60, undefined, { order: 'diverse', k: 120 });
+    await getCluster('cluster-uid-42', 1, 60, undefined, { order: 'diverse', k: 120 });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -195,7 +197,7 @@ describe('getCluster k param', () => {
   it('omits k entirely when null/undefined (qs() drops it, no ?k= at all)', async () => {
     const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
 
-    await getCluster(42, 1, 60, undefined, { order: null, k: null });
+    await getCluster('cluster-uid-42', 1, 60, undefined, { order: null, k: null });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -203,7 +205,7 @@ describe('getCluster k param', () => {
     expect(cropsUrl).not.toContain('k=');
 
     fetchMock.mockClear();
-    await getCluster(42, 1, 60, undefined, {});
+    await getCluster('cluster-uid-42', 1, 60, undefined, {});
     const cropsUrl2 = fetchMock.mock.calls
       .map((c) => c[0] as string)
       .find((u) => u.startsWith(`${API_PREFIX}/crops`));
@@ -221,7 +223,10 @@ describe('getCluster k param', () => {
       n_pool: 4832,
     });
 
-    const res = await getCluster(42, 1, 60, undefined, { order: 'diverse', k: 60 });
+    const res = await getCluster('cluster-uid-42', 1, 60, undefined, {
+      order: 'diverse',
+      k: 60,
+    });
 
     expect(res.crops.order_method).toBe('kcenter_greedy');
     expect(res.crops.order_version).toBe('1');
@@ -231,7 +236,7 @@ describe('getCluster k param', () => {
   it('defaults order_method/order_version/n_pool to null when the server omits them', async () => {
     stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
 
-    const res = await getCluster(42, 1, 60, undefined, { order: null });
+    const res = await getCluster('cluster-uid-42', 1, 60, undefined, { order: null });
 
     expect(res.crops.order_method).toBeNull();
     expect(res.crops.order_version).toBeNull();
@@ -239,22 +244,21 @@ describe('getCluster k param', () => {
   });
 });
 
-describe('getCluster cluster_subid param', () => {
+describe('getCluster cluster_uid param', () => {
   const jsonResponse = (body: unknown) =>
     new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
-  const crops = (fetchMock: ReturnType<typeof vi.fn>) =>
-    fetchMock.mock.calls
-      .map((c) => c[0] as string)
-      .find((u) => u.startsWith(`${API_PREFIX}/crops`)) ?? '';
+  const urlOf = (fetchMock: ReturnType<typeof vi.fn>, prefix: string) =>
+    fetchMock.mock.calls.map((c) => c[0] as string).find((u) => u.startsWith(prefix)) ??
+    '';
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  function stub() {
+  it('scopes the crops and the card to the cluster uid', async () => {
     const fetchMock = vi
       .fn()
       .mockImplementation((url: string) =>
@@ -265,20 +269,14 @@ describe('getCluster cluster_subid param', () => {
         ),
       );
     vi.stubGlobal('fetch', fetchMock);
-    return fetchMock;
-  }
-
-  it('asks the server for one sub-cluster instead of filtering the loaded page', async () => {
-    const fetchMock = stub();
-    await getCluster(42, 1, 60, undefined, { clusterSubid: '42b' });
-    const url = crops(fetchMock);
-    expect(url).toContain('cluster_id=42');
-    expect(url).toContain('cluster_subid=42b');
-  });
-
-  it('omits cluster_subid for the whole cluster', async () => {
-    const fetchMock = stub();
-    await getCluster(42, 1, 60, undefined, { clusterSubid: null });
-    expect(crops(fetchMock)).not.toContain('cluster_subid');
+    await getCluster('0b9f9a38-0000-4000-8000-000000000017');
+    expect(urlOf(fetchMock, `${API_PREFIX}/crops`)).toContain(
+      'cluster_uid=0b9f9a38-0000-4000-8000-000000000017',
+    );
+    expect(urlOf(fetchMock, `${API_PREFIX}/clusters`)).toContain(
+      'cluster_uid=0b9f9a38-0000-4000-8000-000000000017',
+    );
+    expect(urlOf(fetchMock, `${API_PREFIX}/crops`)).not.toContain('cluster_id');
+    expect(urlOf(fetchMock, `${API_PREFIX}/crops`)).not.toContain('cluster_subid');
   });
 });

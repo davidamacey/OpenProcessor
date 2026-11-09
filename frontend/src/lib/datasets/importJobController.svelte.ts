@@ -36,7 +36,10 @@ export interface JobDeps {
   runServedNextStep: typeof runServedNextStep;
   getDatasetImportIssues: typeof getDatasetImportIssues;
   getDatasetImportEntries: typeof getDatasetImportEntries;
-  subscribe: (onEvent: (e: CurationEvent) => void) => { close(): void };
+  subscribe: (
+    onEvent: (e: CurationEvent) => void,
+    onResync: () => void,
+  ) => { close(): void };
 }
 
 const DEFAULT_DEPS: JobDeps = {
@@ -47,7 +50,7 @@ const DEFAULT_DEPS: JobDeps = {
   runServedNextStep,
   getDatasetImportIssues,
   getDatasetImportEntries,
-  subscribe: (onEvent) => subscribeCurationEvents({ onEvent }),
+  subscribe: (onEvent, onResync) => subscribeCurationEvents({ onEvent, onResync }),
 };
 
 export interface UndoChoices {
@@ -124,7 +127,10 @@ export class ImportJob {
   start(): void {
     this.#stopped = false;
     void this.load();
-    this.#sub = this.#deps.subscribe((e) => this.onEvent(e));
+    this.#sub = this.#deps.subscribe(
+      (e) => this.onEvent(e),
+      () => void this.load(),
+    );
   }
 
   stop(): void {

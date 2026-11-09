@@ -33,6 +33,7 @@ from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.services.curation.ops_metrics import OP_INGEST_DECODE_TOTAL
 from src.services.detection.crop_quality import variance_from_sums
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 if TYPE_CHECKING:
@@ -84,10 +85,13 @@ def megapixels(data: bytes) -> float | None:
     try:
         with Image.open(io.BytesIO(data)) as img:
             w, h = img.size
-    except Exception:
+    except (OSError, ValueError, Image.DecompressionBombError):
         return None
     return w * h / 1e6
 
+
+#: The pool also raises RuntimeError: not initialized, or a stream closed without a response.
+_GPU_CALL_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
 
 _READY: dict[tuple[str, int, tuple[int, int, int]], bool] = {}
 
@@ -119,7 +123,7 @@ async def gpu_decode_ready(service: CurationIngestService) -> bool:
             logger.warning(
                 'ingest_gpu_decode_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
             )
-    except Exception as exc:
+    except _GPU_CALL_ERRORS as exc:
         # A failed call is not a verdict on the model: do not pin the worker to the CPU path.
         logger.warning('ingest_gpu_decode_unavailable', error=str(exc))
         return False
@@ -175,7 +179,7 @@ async def call_gpu_image_prep(
     inputs.extend(_input(name, arr, dtype) for name, arr, dtype in extra)
     try:
         result = await triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
-    except Exception as exc:
+    except _GPU_CALL_ERRORS as exc:
         logger.warning('gpu_image_prep_call_failed', caller=caller, error=str(exc))
         return 'call_failed'
     status = result.as_numpy('status')[0]

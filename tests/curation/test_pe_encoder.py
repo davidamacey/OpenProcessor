@@ -1,10 +1,9 @@
 """Unit tests for :mod:`src.clients.pe_encoder`.
 
-The PE text encoder needs PE's tokenizer plus an ONNX Runtime / PyTorch /
-Triton backend. None of those heavy dependencies are exercised here — we
-install a fake tokenizer + backend in place of what
-:meth:`PEEncoder.warm_text_encoder` would load, and stub the Triton pool
-with a ``MagicMock`` for the image path. Backend *selection* is covered in
+The PE text encoder needs PE's tokenizer plus Triton's ``pe_text_encoder``. Neither is
+exercised here: we install a fake tokenizer + backend in place of what
+:meth:`PEEncoder.warm_text_encoder` would bind, and stub the Triton pool
+with a ``MagicMock`` for the image path. The warm-up is covered in
 ``test_pe_text_backends.py``. The tests assert the public-API contract only:
 
 * image encoder returns 1024-d L2-normalized rows
@@ -209,58 +208,14 @@ def test_encode_text_empty_returns_empty_matrix():
 
 def test_text_ready_flag():
     enc = PEEncoder()
-    assert enc.text_ready is False
+    assert enc.text_status()['ready'] is False
     _stub_text_model(enc, np.ones(PE_EMBEDDING_DIM, dtype=np.float32))
-    assert enc.text_ready is True
+    assert enc.text_status()['ready'] is True
 
 
 # =============================================================================
 # Helper sanity
 # =============================================================================
-
-
-# =============================================================================
-# Embedding-space sanity (P2-14) — image vs text encoder agreement
-# =============================================================================
-
-
-def test_encode_text_and_encode_images_share_embedding_space():
-    """Both paths must land in the *same* 1024-d unit-norm space so a
-    kNN query built from ``encode_text`` output can score against
-    ``pe_embedding`` docs written by the image path
-    (the curation ingest pipeline's PE image-encoder Triton calls).
-
-    This only asserts the *shape contract* (dim, dtype, L2-normalization)
-    that :mod:`src.services.curation.semantic_search` depends on — it
-    cannot exercise real cosine-similarity agreement between the actual
-    PE-Core-L14-336 image tower and text tower without the real
-    checkpoint, which requires ``torch`` + ``perception_models`` +
-    downloaded weights, none of which are available in this sandbox.
-    Skips gracefully (module already documents itself as importable
-    without those deps — see this file's module docstring) rather than
-    faking a pass.
-    """
-    try:
-        import torch  # noqa: F401
-        from core.vision_encoder import pe  # noqa: F401
-    except ModuleNotFoundError as exc:
-        pytest.skip(
-            f'perception_models/torch checkpoint not available in this '
-            f'sandbox ({exc}); cannot verify real image/text embedding-space '
-            f'agreement here. Verified instead: both encode_images and '
-            f'encode_text return L2-normalized (1024,)/(N, 1024) float32 '
-            f'rows via the shape-contract tests above, which is the '
-            f'contract semantic_search.py relies on.'
-        )
-
-    # If the real checkpoint *is* available, do a minimal same-space smoke
-    # check: warm the text encoder for real and confirm it produces
-    # unit-norm PE_EMBEDDING_DIM rows exactly like the mocked path above.
-    enc = PEEncoder()
-    enc.warm_text_encoder()
-    out = enc.encode_text(['a photo of a white pickup truck'])
-    assert out.shape == (1, PE_EMBEDDING_DIM)
-    np.testing.assert_allclose(np.linalg.norm(out, axis=1), [1.0], atol=1e-3)
 
 
 def test_l2_normalize_handles_zero_rows():

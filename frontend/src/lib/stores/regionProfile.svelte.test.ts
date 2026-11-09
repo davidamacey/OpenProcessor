@@ -1,5 +1,5 @@
 /**
- * The served region profile gate (docs/design/domain-neutral-audit-2026-09-24.md
+ * The served region profile gate (domain-neutral audit
  * §5.2): seeded once from `{API_PREFIX}/health`, fail-closed, and a later
  * change or a region route's 409 becomes one "reload" notice rather than
  * an error toast.

@@ -13,9 +13,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import not_embedded_clause
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 if TYPE_CHECKING:
@@ -31,6 +34,7 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
     Returns ``{}`` on any OpenSearch error so the caller can degrade
     gracefully (the snapshot is observability, never load-bearing).
     """
+    vector_field = await item_vector_field()
     try:
         resp = await opensearch.search(
             index=items_index(),
@@ -49,11 +53,11 @@ async def pipeline_health_snapshot(opensearch: AsyncOpenSearch) -> dict[str, int
                     'has_class': {'filter': {'exists': {'field': 'class_id'}}},
                     # Not yet in the working set: no vector, so the VLM, clustering
                     # and search skip them.
-                    'unembedded': {'filter': not_embedded_clause()},
+                    'unembedded': {'filter': not_embedded_clause(vector_field)},
                 },
             },
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('pipeline_snapshot_failed', error=str(exc))
         return {}
     aggs = resp.get('aggregations') or {}

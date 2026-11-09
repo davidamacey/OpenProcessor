@@ -118,7 +118,7 @@
       {/if}
     </dd>
 
-    <!-- DQ-M8 (docs/design/data-quality-pass-2026-09-24.md): `label_confidence`
+    <!-- DQ-M8: `label_confidence`
        (wire `confidence`) is the classifier-detector score on EVERY row,
        including ones the VLM labeled — never the VLM's own confidence.
        Calling it plain "Confidence" next to a VLM-sourced label reads as
@@ -194,11 +194,31 @@
 
   <dt class="text-zinc-500">Cluster</dt>
   <dd class="font-mono text-zinc-200">
-    #{crop.cluster_id ?? '—'}
-    {#if crop.similarity_to_centroid != null}
-      <span class="ml-1 text-zinc-500">sim {pct(crop.similarity_to_centroid)}</span>
+    {#if crop.cluster}
+      <span title={crop.cluster.uid ?? crop.cluster.partition_id}
+        >{crop.cluster.uid
+          ? crop.cluster.uid.slice(0, 8)
+          : (crop.cluster.state ?? '—')}</span
+      >
+      {#if crop.cluster.state && crop.cluster.uid}
+        <span class="ml-1 text-zinc-500">{crop.cluster.state}</span>
+      {/if}
+      {#if crop.cluster.score != null}
+        <span class="ml-1 text-zinc-500">score {pct(crop.cluster.score)}</span>
+      {/if}
+    {:else}
+      —
     {/if}
   </dd>
+
+  {#if crop.near_dup_group_id}
+    <dt class="text-zinc-500">Near-duplicates</dt>
+    <dd class="font-mono text-zinc-200" data-testid="meta-near-dup">
+      {crop.near_dup_group_size ?? '?'} in group{crop.near_dup_is_representative
+        ? ', representative'
+        : ''}
+    </dd>
+  {/if}
 
   {#if crop.class_detector}
     <dt class="text-zinc-500">Class detector</dt>

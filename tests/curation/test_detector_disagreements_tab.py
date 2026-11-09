@@ -136,7 +136,11 @@ def test_the_unknown_tab_error_names_the_new_tab(client: TestClient) -> None:
 
 def test_the_query_never_selects_a_validated_or_excluded_item() -> None:
     must, must_not, _ = review_queries.build_tab_query(
-        'detector_disagreements', include_test=False, text=None, max_rank=None
+        'detector_disagreements',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=None,
+        max_rank=None,
     )
     assert {'term': {'class_validated': True}} in must_not
     assert {'term': {'class_excluded': True}} in must_not

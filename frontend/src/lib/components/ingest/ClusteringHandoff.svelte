@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Wraps `<AutoLabelPanel>` with the ingest-aware gate
-   * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.5):
+   * (Ingest UI plan §A.5):
    * blocked while the upload run is active, or while the served region
    * drain isn't `drained`, or while the drain fetch itself is failing.
    *
@@ -13,6 +13,7 @@
    * used to have to invent independently.
    */
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import { formatTime } from '$lib/format/time';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { RegionDrain } from '$lib/types_ingest';
@@ -59,5 +60,6 @@
   {#if note}
     <p class="text-[11px] text-zinc-500">{note}</p>
   {/if}
+  <ClusterRunPanel />
   <AutoLabelPanel {gate} />
 </div>

@@ -1,5 +1,5 @@
 /**
- * docs/design/visual-audit-2026-09-24.md R3 (empty queues gave no reason)
+ * visual audit R3 (empty queues gave no reason)
  * and R6 (raw ids in the deep-link toast / VLM empty reason).
  */
 import { describe, expect, it } from 'vitest';

@@ -246,7 +246,7 @@ def test_every_rate_and_footprint_figure_is_in_performance_md() -> None:
         preflight_rates.EMBEDDINGS_PER_IMAGE,
         preflight_rates.OPENSEARCH_BYTES_PER_IMAGE,
     ]:
-        assert measured.source_section in text
+        assert measured.source_section in text  # type: ignore[attr-defined]
 
 
 def test_manifest_counts_missing_and_out_of_root_entries(tmp_path: Path) -> None:

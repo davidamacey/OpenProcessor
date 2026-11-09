@@ -14,19 +14,32 @@ real endpoints' omitted-param resolution from the settings document.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from config_store.memory_settings import revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_os: Any
+
+
+class _UnreachableOpenSearch:
+    async def search(self, **_: object) -> dict:
+        raise OpenSearchException('down')
 
 
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
-    fake_os = object()
+    fake_os = _UnreachableOpenSearch()
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
@@ -35,14 +48,14 @@ def app_client(monkeypatch: pytest.MonkeyPatch, memory_settings) -> TestClient:
 
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
-    client = revision_aware(TestClient(app))
-    client.fake_os = fake_os  # type: ignore[attr-defined]
+    client = revision_aware(_Client(app))
+    client.fake_os = fake_os
     return client
 
 
 @pytest.mark.asyncio
 async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_default(
-    app_client: TestClient,
+    app_client: _Client,
 ) -> None:
     """Setting a shared 'sort' default (a) flips GET /methods's default flag
     and (b) is what a tab *without* its own default sorts by — but a tab's

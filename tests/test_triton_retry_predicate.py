@@ -52,7 +52,7 @@ class _Client:
 async def _calls(error: Exception) -> int:
     pool = AsyncTritonPool(url='unused:1', pool_size=1, max_concurrent=2)
     client = _Client(error)
-    pool._clients = [client]  # type: ignore[list-item]
+    pool._clients = [client]
     pool._semaphore = asyncio.Semaphore(2)
     pool._lock = asyncio.Lock()
     pool._stats.requests_per_channel[0] = 0

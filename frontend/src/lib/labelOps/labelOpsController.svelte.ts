@@ -1,7 +1,7 @@
 /**
  * `/label-ops`: the project's recorded bulk label and move operations, and
  * undo with a served dry run first (`GET /label_ops`, `POST
- * /label_ops/{id}/undo`).
+ * /label_ops/{id}/undo`; the real undo is a queued job it follows).
  *
  * Thin: whether an operation is undoable, what an undo would restore and
  * what it would keep (changed, holdout, stale class, conflicts) are all
@@ -9,7 +9,8 @@
  * The list pages by the served `next_after` (Load older), newest first.
  */
 import { apiErrorText } from '$lib/api_errors';
-import { getLabelOps, undoLabelOp } from '$lib/api_labelOps';
+import { getLabelOps } from '$lib/api_labelOps';
+import { undoLabelOpToEnd } from '$lib/labelOps/runLabelOp';
 import {
   LABEL_OPS_PAGE_SIZE,
   type LabelOp,
@@ -29,7 +30,7 @@ export interface LabelOpsDeps {
   ) => Promise<LabelOpUndoResponse>;
 }
 
-const DEFAULT_DEPS: LabelOpsDeps = { list: getLabelOps, undo: undoLabelOp };
+const DEFAULT_DEPS: LabelOpsDeps = { list: getLabelOps, undo: undoLabelOpToEnd };
 
 /** idle: detail shown; dry: dry run in flight; ready: dry run shown, awaiting
  *  Confirm; writing: the real undo in flight; done: the real undo's result. */

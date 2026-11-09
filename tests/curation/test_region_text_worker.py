@@ -76,7 +76,9 @@ async def _drive(
         # re-reads the active profile sees the same one.
         register_profile(dataclasses.replace(_profile(), **profile_overrides), default=True)
 
-    pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
+    pool = MagicMock(
+        initialize=AsyncMock(), close=AsyncMock(), is_model_ready=AsyncMock(return_value=False)
+    )
     monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
     monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that

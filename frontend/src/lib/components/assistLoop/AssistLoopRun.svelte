@@ -2,11 +2,11 @@
   /**
    * A loop in flight or finished: its status and why it stopped, the budget
    * pools against their caps, per-level counts, the totals, the audit result and
-   * the controls the server offers (cancel while live, resume when stopped).
-   * Every figure is the server's.
+   * the controls the server offers (`control`: pause, resume, cancel, edit the
+   * budget). Every figure and every enabled button is the server's.
    */
   import type { AssistLoopController } from '$lib/assistLoop/assistLoopController.svelte';
-  import { isResumableLoop } from '$lib/assistLoop/assistLoopController.svelte';
+  import AssistLoopBudgetEdit from '$components/assistLoop/AssistLoopBudgetEdit.svelte';
   import { formatCount } from '$lib/format/count';
   import { formatDuration } from '$lib/format/duration';
   import { formatTimestamp } from '$lib/format/date';
@@ -19,12 +19,16 @@
   let { ctl }: Props = $props();
 
   const loop = $derived(ctl.loop);
+  const control = $derived(ctl.control);
+  let editingBudget = $state(false);
 
   const STATUS_TEXT: Record<string, string> = {
     queued: 'Queued for the worker',
     running: 'Running',
     paused: 'Paused',
+    cancelling: 'Cancelling (the requests in flight finish first)',
     completed: 'Completed',
+    completed_with_errors: 'Completed with errors',
     cancelled: 'Cancelled',
     failed: 'Failed',
     interrupted: 'Interrupted (the worker stopped); resume to continue',
@@ -40,6 +44,13 @@
   const PAUSE_TEXT: Record<string, string> = {
     user: 'paused by a person',
     audit: 'the second opinion disagreed with too many labels',
+    budget: 'a budget limit was reached; raise it, then resume',
+    project_paused: 'the project is paused',
+    vlm_unavailable: 'the VLM endpoint did not answer',
+  };
+  const BLOCKED_TEXT: Record<string, string> = {
+    project_paused: 'Resume the project first.',
+    vlm_unavailable: 'The VLM endpoint is not available; fix it, then resume.',
   };
 
   function pct(spent: number, max: number): number {
@@ -77,6 +88,9 @@
 {/snippet}
 
 {#if loop}
+  {#if editingBudget}
+    <AssistLoopBudgetEdit {ctl} onclose={() => (editingBudget = false)} />
+  {/if}
   <div
     class="flex flex-col gap-4 text-xs"
     data-testid="loop-run"
@@ -98,30 +112,64 @@
       <span class="font-mono text-zinc-500" title={loop.created_at ?? ''}
         >{loop.loop_id} · {formatTimestamp(loop.started_at ?? loop.created_at)}</span
       >
-      <div class="ml-auto flex gap-2">
-        {#if ctl.live}
-          <button
-            type="button"
-            class="btn btn-sm"
-            disabled={ctl.busy}
-            onclick={() => void ctl.cancel()}
-            data-testid="loop-cancel"
-          >
-            Cancel the loop
-          </button>
-        {/if}
-        {#if isResumableLoop(loop.status, loop.stop_reason)}
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            disabled={ctl.busy}
-            onclick={() => void ctl.resume()}
-            data-testid="loop-resume"
-          >
-            Resume the loop
-          </button>
-        {/if}
-      </div>
+      {#if control}
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          {#if control.state === 'pausing'}
+            <span class="text-zinc-400" data-testid="loop-pausing"
+              >Pausing at the next cluster</span
+            >
+          {/if}
+          {#if control.can_pause}
+            <button
+              type="button"
+              class="btn btn-sm"
+              disabled={ctl.busy}
+              onclick={() => void ctl.pause()}
+              data-testid="loop-pause"
+            >
+              Pause the loop
+            </button>
+          {/if}
+          {#if control.can_edit_budget}
+            <button
+              type="button"
+              class="btn btn-sm"
+              disabled={ctl.busy}
+              onclick={() => (editingBudget = true)}
+              data-testid="loop-budget-edit"
+            >
+              Edit the budget
+            </button>
+          {/if}
+          {#if control.can_cancel}
+            <button
+              type="button"
+              class="btn btn-sm"
+              disabled={ctl.busy}
+              onclick={() => void ctl.cancel()}
+              data-testid="loop-cancel"
+            >
+              Cancel the loop
+            </button>
+          {/if}
+          {#if control.can_resume}
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              disabled={ctl.busy}
+              onclick={() => void ctl.resume()}
+              data-testid="loop-resume"
+            >
+              Resume the loop
+            </button>
+          {:else if control.resume_blocked_reason}
+            <span class="text-amber-300" data-testid="loop-resume-blocked"
+              >{BLOCKED_TEXT[control.resume_blocked_reason] ??
+                control.resume_blocked_reason}</span
+            >
+          {/if}
+        </div>
+      {/if}
     </div>
 
     {#if loop.error}

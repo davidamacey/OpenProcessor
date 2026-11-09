@@ -35,3 +35,17 @@ def active_conflict_error(what: str, current: dict[str, Any] | None) -> HTTPExce
         '(omit it, or send null name, only when nothing is active)',
         current=ActiveRef(**current) if current else None,
     )
+
+
+def revision_conflict_error(name: str, current_revision: int | None) -> HTTPException:
+    """The 409 for every optimistic-concurrency miss on a revisioned document."""
+    return api_error(
+        409,
+        'revision_conflict',
+        f'{name!r} changed since you loaded it',
+        current_revision=current_revision,
+    )
+
+
+def unknown_revision_error(name: str, revision: int) -> HTTPException:
+    return api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')

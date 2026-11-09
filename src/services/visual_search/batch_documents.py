@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 from src.utils.face_response import face_landmark_mismatch
 
@@ -19,7 +20,7 @@ def _image_size(result: dict, img_bytes: bytes) -> tuple[int, int]:
 
     try:
         return get_jpeg_dimensions_fast(img_bytes)
-    except Exception:
+    except (OSError, ValueError, Image.DecompressionBombError):
         return 0, 0
 
 

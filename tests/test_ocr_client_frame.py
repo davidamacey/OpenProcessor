@@ -10,9 +10,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pytest
+from _image_helpers import png_bytes as _png
 
 from src.clients import triton_ocr
 
@@ -31,12 +31,6 @@ class _Response:
             'text_scores': np.zeros(128, np.float32),
             'rec_scores': np.zeros(128, np.float32),
         }[name]
-
-
-def _png(arr: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode('.png', arr)
-    assert ok
-    return buf.tobytes()
 
 
 def _sent_inputs(image: bytes | np.ndarray) -> dict[str, np.ndarray]:

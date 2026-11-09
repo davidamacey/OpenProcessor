@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -34,7 +34,7 @@ async def start_selection(project):
             query={'match_all': {}},
             k=3,
             seed_crop_id=None,
-            scope={'cluster_id': 4},
+            scope={'cluster_uid': 'c-4'},
             max_n=100,
             embedding_field='pe_embedding',
         )
@@ -73,7 +73,7 @@ async def test_a_viz_start_with_a_bad_scope_is_refused_before_a_row_exists(
 ) -> None:
     project = make_project(pg)
     async with async_session_factory()() as session:
-        with pytest.raises(ValueError, match='cluster_id is required'):
+        with pytest.raises(ValueError, match='cluster_uid is required'):
             await embedding_viz.start(session, project, scope='cluster')
     assert sql(pg, 'SELECT count(*) FROM jobs WHERE project_id = %s', project) == [(0,)]
 
@@ -108,7 +108,9 @@ async def test_the_scoring_run_scores_each_scorer_and_reports_progress(
     monkeypatch.setattr('src.services.curation.item_scores.get_scorer', FakeScorer)
     ctx = FakeCtx(project, job.id, job.params)
 
-    result = await scores.run_scoring_job(ctx, object(), ['uniqueness', 'mistakenness'])
+    result = await scores.run_scoring_job(
+        ctx, cast('Any', object()), ['uniqueness', 'mistakenness']
+    )
 
     assert sorted(result['results']) == ['mistakenness', 'uniqueness']
     assert result['results']['uniqueness']['n_scored'] == 3
@@ -133,7 +135,9 @@ async def test_a_cancel_between_scorers_stops_the_scoring_run(
     monkeypatch.setattr(scores, '_build_pools', build_pools)
     monkeypatch.setattr(scores, 'bulk_write_result', bulk)
     monkeypatch.setattr('src.services.curation.item_scores.get_scorer', FakeScorer)
-    result = await scores.run_scoring_job(ctx, object(), ['uniqueness', 'mistakenness'])
+    result = await scores.run_scoring_job(
+        ctx, cast('Any', object()), ['uniqueness', 'mistakenness']
+    )
     assert list(result['results']) == ['uniqueness']
     assert result['cancelled'] is True
 
@@ -153,7 +157,9 @@ async def test_the_selection_run_returns_k_diverse_ids_and_status_serves_them(
         return ids, vecs, False
 
     monkeypatch.setattr('src.services.curation.selection.pool_fetch.fetch_pool_embeddings', fetch)
-    result = await selection.run_selection_job(FakeCtx(project, job.id, job.params), object())
+    result = await selection.run_selection_job(
+        FakeCtx(project, job.id, job.params), cast('Any', object())
+    )
 
     assert seen == {'index': 'p__items', 'cap': 100, 'field': 'pe_embedding'}
     chosen = result['selection']['crop_ids']
@@ -173,7 +179,7 @@ async def test_the_viz_run_fits_and_writes_through_the_existing_helpers(
     async def space(target):
         return SimpleNamespace(vector_field='pe_embedding')
 
-    async def fetch(_os, *, scope, cluster_id, max_n, embedding_field):
+    async def fetch(_os, *, scope, cluster_uid, max_n, embedding_field):
         calls.append(f'fetch:{scope}:{max_n}:{embedding_field}')
         return ['a', 'b'], np.ones((2, 3), dtype=np.float32)
 
@@ -194,7 +200,9 @@ async def test_the_viz_run_fits_and_writes_through_the_existing_helpers(
     monkeypatch.setattr(embedding_viz, '_bulk_write_coordinates', write)
     monkeypatch.setattr(embedding_viz, '_save_run_metadata', meta)
 
-    result = await embedding_viz.run_projection_job(FakeCtx(project, job.id, job.params), object())
+    result = await embedding_viz.run_projection_job(
+        FakeCtx(project, job.id, job.params), cast('Any', object())
+    )
 
     assert calls == ['fetch:residual:50:pe_embedding', 'fit', 'write', 'meta:2']
     assert result == {
@@ -225,7 +233,7 @@ async def test_a_cancel_before_the_fit_skips_the_fit_and_the_write(
     monkeypatch.setattr(embedding_viz, '_fetch_pool', fetch)
     monkeypatch.setattr(embedding_viz, 'fit_projection', never)
     monkeypatch.setattr(embedding_viz, '_bulk_write_coordinates', never)
-    assert await embedding_viz.run_projection_job(ctx, object()) == {'cancelled': True}
+    assert await embedding_viz.run_projection_job(ctx, cast('Any', object())) == {'cancelled': True}
 
 
 @pytest.mark.asyncio

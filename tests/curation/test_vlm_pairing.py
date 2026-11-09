@@ -67,7 +67,7 @@ def test_the_max_tokens_the_estimate_assumes_are_the_ones_the_labeler_sends() ->
                             and key.value == 'max_tokens'
                             and isinstance(value, ast.Constant)
                         ):
-                            sent[node.name] = int(value.value)
+                            sent[node.name] = int(value.value)  # type: ignore[arg-type]
     method_for_call = {
         'class_batch': '_label_chunk',
         'open_class_batch': '_label_chunk_open',
@@ -154,7 +154,7 @@ def test_a_server_that_rejects_its_own_cap_is_an_error_in_every_mode() -> None:
         issues=[{'code': 'vlm_max_images_exceeds_server', 'severity': 'error', 'message': 'x'}],
     )
     for mode in ('activate', 'validate', 'run'):
-        issues = vlm_pairing_issues(_endpoint(probe=capped), None, None, mode=mode)  # type: ignore[arg-type]
+        issues = vlm_pairing_issues(_endpoint(probe=capped), None, None, mode=mode)
         codes = _codes(issues)
         assert codes.get('vlm_max_images_exceeds_server') == 'error', mode
         assert not next(i for i in issues if i.code == 'vlm_max_images_exceeds_server').bypassable

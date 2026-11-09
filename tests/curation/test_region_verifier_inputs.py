@@ -51,11 +51,11 @@ class TestOverlay:
         assert out is not None
         im = Image.open(io.BytesIO(out)).convert('RGB')
         # Just outside the region's edges: the outline.
-        assert _is_red(im.getpixel((48, 50)))
-        assert _is_red(im.getpixel((100, 38)))
+        assert _is_red(im.getpixel((48, 50)))  # type: ignore[arg-type]
+        assert _is_red(im.getpixel((100, 38)))  # type: ignore[arg-type]
         # The region's own edge pixels stay as they were.
         for xy in ((51, 50), (100, 41), (149, 50), (100, 59)):
-            assert not _is_red(im.getpixel(xy)), xy
+            assert not _is_red(im.getpixel(xy)), xy  # type: ignore[arg-type]
 
 
 class TestDirective:

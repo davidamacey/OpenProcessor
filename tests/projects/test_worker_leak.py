@@ -234,7 +234,7 @@ def world(projects: dict[str, ProjectRecord]) -> tuple[AsyncOpenSearch, _Recordi
     }
     transport = _RecordingTransport(docs, lambda src: src.get(status) == 'pending_detection')
     client = AsyncOpenSearch(hosts=['http://fake:9200'])
-    client.transport = transport
+    client.transport = transport  # type: ignore[assignment]
     install_project_guard(client, _Snapshot(list(projects.values())))
     return client, transport
 
@@ -425,7 +425,7 @@ def _http_world(
 
     def _client(*_a: Any, **_kw: Any) -> AsyncOpenSearch:
         client = AsyncOpenSearch(hosts=['http://fake:9200'])
-        client.transport = transport
+        client.transport = transport  # type: ignore[assignment]
         install_project_guard(client, registry)
         return client
 

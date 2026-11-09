@@ -263,7 +263,7 @@ def test_thumbnail_cache_rejects_bad_bbox_length(
     sample_image: Path, fresh_cache: svc.ThumbnailCache
 ) -> None:
     with pytest.raises(ValueError, match='4 elements'):
-        fresh_cache.get_or_compute(sample_image, (0.0, 0.0, 1.0))  # type: ignore[arg-type]
+        fresh_cache.get_or_compute(sample_image, (0.0, 0.0, 1.0))
 
 
 def test_thumbnail_cache_rejects_zero_area_bbox(
@@ -282,7 +282,7 @@ def test_thumbnail_cache_uses_pil_correctly(
 
     def counting_open(*args: object, **kwargs: object) -> Image.Image:
         call_count['n'] += 1
-        return real_open(*args, **kwargs)
+        return real_open(*args, **kwargs)  # type: ignore[arg-type]
 
     with patch.object(Image, 'open', side_effect=counting_open):
         fresh_cache.get_or_compute(sample_image, (0.1, 0.1, 0.6, 0.6))

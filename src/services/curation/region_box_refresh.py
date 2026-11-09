@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config import get_curation_config
 from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
@@ -71,7 +73,7 @@ async def refresh_box_embeddings(
         docs = await items_by_terms(
             opensearch, 'crop_id', ids, index=cfg.items_index, includes=includes
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('box_refresh_read_failed', error=str(exc))
         return {'embedded': 0, 'pending': 0}
     before = _pending_boxes(docs)

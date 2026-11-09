@@ -91,11 +91,7 @@ from cachetools import TTLCache
 
 from src.config.env import env_bool, env_float, env_int
 from src.services.curation.selection import k_center_greedy
-from src.services.curation.selection.pool_fetch import (
-    EMBEDDING_FIELD,
-    fetch_pool_embeddings,
-    l2_normalize,
-)
+from src.services.curation.selection.pool_fetch import fetch_pool_embeddings, l2_normalize
 
 
 DEFAULT_MAX_N = 20_000
@@ -144,8 +140,8 @@ _CACHE_TTL_S = env_float('OP_SELECT_CACHE_TTL_S', 600)
 _ORDER_CACHE: TTLCache[str, dict[str, Any]] = TTLCache(maxsize=256, ttl=_CACHE_TTL_S)
 
 
-def _cache_key(index: str, query: dict[str, Any], k: int | None = None) -> str:
-    return f'diverse|{index}|{EMBEDDING_FIELD}|k={k}|{json.dumps(query, sort_keys=True)}'
+def _cache_key(index: str, query: dict[str, Any], embedding_field: str, k: int | None) -> str:
+    return f'diverse|{index}|{embedding_field}|k={k}|{json.dumps(query, sort_keys=True)}'
 
 
 async def compute_diverse_order(
@@ -153,6 +149,7 @@ async def compute_diverse_order(
     index: str,
     query: dict[str, Any],
     *,
+    embedding_field: str,
     current_count: int | None = None,
     k: int | None = None,
 ) -> list[str] | None:
@@ -170,13 +167,15 @@ async def compute_diverse_order(
         return None
 
     inline_max = _get_diverse_inline_max()
-    key = _cache_key(index, query, k)
+    key = _cache_key(index, query, embedding_field, k)
     cached = _ORDER_CACHE.get(key)
     if cached is not None and (current_count is None or cached['count'] == current_count):
         typed: list[str] | None = cached['order']
         return typed
 
-    ids, embeddings, truncated = await fetch_pool_embeddings(client, index, query, cap=inline_max)
+    ids, embeddings, truncated = await fetch_pool_embeddings(
+        client, index, query, cap=inline_max, embedding_field=embedding_field
+    )
     if truncated:
         return None
     if not ids:

@@ -78,7 +78,7 @@ def test_readme_curl_example_uses_query_params_for_search_text() -> None:
 def _face_landmarks_field_type() -> type:
     from src.routers.faces import FaceBox
 
-    return FaceBox.model_fields['landmarks'].annotation
+    return FaceBox.model_fields['landmarks'].annotation  # type: ignore[return-value]
 
 
 def test_landmarks_field_is_a_flat_list_of_floats() -> None:

@@ -1,6 +1,6 @@
 /**
  * One region profile's editor state (any_domain_plan.md §4.3, §4.4, §7.3,
- * §7.4, §7.6 items 2 and 4; docs/design/w4-profile-editor-ui-plan-2026-09-27.md
+ * §7.4, §7.6 items 2 and 4; w4 profile editor UI plan
  * §4): the profile binding of the shared `ConfigEditor` (draft, served
  * live validation, Save with `expected_revision`, revisions and restore,
  * the `config.changed axis=detection_profile` wake-up), plus

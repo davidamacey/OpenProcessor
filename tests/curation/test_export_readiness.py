@@ -24,6 +24,7 @@ from _class_registry_fake import InMemoryRegistry
 from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import TransportError
 
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
@@ -31,6 +32,7 @@ from src.services.curation.export_readiness import (
     NothingToExportError,
     export_generation_check,
     export_size_check,
+    items_index_generation,
 )
 
 
@@ -110,8 +112,12 @@ async def test_export_with_only_unregistered_classes_refuses(tmp_path: Path) -> 
     assert not (tmp_path / 'exports' / 'current').exists()
 
 
+@pytest.mark.db
 @pytest.mark.asyncio
-async def test_export_manifest_records_the_items_index_generation(tmp_path: Path) -> None:
+async def test_export_manifest_records_the_items_index_generation(
+    tmp_path: Path,
+    pg_registry: Any,  # the export's retention prune reads PostgreSQL
+) -> None:
     service = _service(tmp_path, [_doc('a', 0)])
     result = await service.export_dataset(copy_images=False)
     manifest = json.loads(Path(result.manifest_path).open().read())  # noqa: SIM115
@@ -300,3 +306,26 @@ async def test_single_class_export_with_no_matching_item_refuses(tmp_path: Path)
         await service.export(copy_images=False)
     root = tmp_path / 'exports'
     assert not root.exists() or not any(p.is_file() for p in root.rglob('*'))
+
+
+class _FailingIndices:
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    async def get_settings(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
+        raise self._exc
+
+
+@pytest.mark.asyncio
+async def test_an_opensearch_failure_reads_as_an_unknown_generation() -> None:
+    fake = AsyncMock()
+    fake.indices = _FailingIndices(TransportError(503, 'opensearch down'))
+    assert await items_index_generation(fake, 'items') is None
+
+
+@pytest.mark.asyncio
+async def test_a_bug_reading_the_generation_is_not_reported_as_unknown() -> None:
+    fake = AsyncMock()
+    fake.indices = _FailingIndices(RuntimeError('bug'))
+    with pytest.raises(RuntimeError):
+        await items_index_generation(fake, 'items')

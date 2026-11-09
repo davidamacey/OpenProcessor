@@ -40,7 +40,7 @@ def _dns(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def _body(**over: object) -> VlmEndpointBody:
     fields: dict[str, object] = {'base_url': 'http://vlm:8000/v1', 'model': 'm'}
     fields.update(over)
-    return VlmEndpointBody(**fields)  # type: ignore[arg-type]
+    return VlmEndpointBody(**fields)
 
 
 def _probe(*, errors: list[dict[str, object]] | None = None, ok: bool = True) -> VlmProbeRecord:

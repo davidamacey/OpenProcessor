@@ -7,7 +7,7 @@
    * run in the on-demand evaluator, poll, then read the served model ×
    * dataset matrix and per-class comparison. Previous runs stay viewable.
    * State lives in `bakeoffController`; this file is layout.
-   * See docs/design/bakeoff-v2-ui-plan-2026-09-25.md.
+   * See the bakeoff v2 UI plan.
    */
   import { onMount, onDestroy } from 'svelte';
   import { createBakeoffController } from '$lib/bakeoff/bakeoffController.svelte';

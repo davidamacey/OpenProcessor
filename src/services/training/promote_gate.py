@@ -165,7 +165,7 @@ async def resolve_full_registry_for_promote(job_id: str) -> dict[int, str]:
                 for c in data.get('classes') or []
                 if not c.get('deprecated')
             }
-        except Exception as exc:
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
             logger.warning(
                 'curation_promote_registry_pin_unreadable',
                 job_id=job_id,

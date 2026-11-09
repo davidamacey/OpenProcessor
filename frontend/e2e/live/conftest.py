@@ -38,7 +38,7 @@ conftest is layered under the plugins `e2e/conftest.py` loads, so no need to red
 from __future__ import annotations
 
 import base64
-import datetime
+import datetime as dt
 import os
 import re
 import urllib.error
@@ -49,20 +49,21 @@ from typing import Any
 
 import pytest
 
-API_PREFIX = "/curation"
+
+API_PREFIX = '/curation'
 
 # e2e/live/conftest.py -> e2e/live -> e2e -> repo root.
 ROOT = Path(__file__).resolve().parents[2]
 # Deliberately NOT under pytest-playwright's --output dir (live-tier/): that
 # plugin rmtree()s its output dir at session start, which silently deleted
 # every earlier run's review screenshots.
-SCREENSHOT_ROOT = ROOT / "artifacts_local" / "cw-live" / "live-shots"
+SCREENSHOT_ROOT = ROOT / 'artifacts_local' / 'cw-live' / 'live-shots'
 
 # Requests to `**/curation/**` matching this method set pass through
 # untouched; everything else is aborted and recorded. HEAD is included
 # even though the app never issues it today — it's exactly as read-only
 # as GET, and excluding it would be an arbitrary asymmetry.
-_SAFE_METHODS = {"GET", "HEAD"}
+_SAFE_METHODS = {'GET', 'HEAD'}
 
 # POSTs the backend documents as side-effect free, allowed by path suffix
 # (the scoped prefix varies per project, e.g.
@@ -72,12 +73,12 @@ _SAFE_METHODS = {"GET", "HEAD"}
 # doesn't write.
 #   /train/preflight: OpenProcessor curation_train/preflight.py `preflight` — "no side
 #   effects"; /train fires it on mount whenever an export exists.
-_READ_ONLY_POST_SUFFIXES = ("/train/preflight",)
+_READ_ONLY_POST_SUFFIXES = ('/train/preflight',)
 
 
 def _env_live_url() -> str | None:
-    url = os.environ.get("OP_CROPWRIGHT_LIVE_URL")
-    return url.rstrip("/") if url else None
+    url = os.environ.get('OP_CROPWRIGHT_LIVE_URL')
+    return url.rstrip('/') if url else None
 
 
 def basic_auth() -> tuple[str, str] | None:
@@ -88,20 +89,20 @@ def basic_auth() -> tuple[str, str] | None:
     auth. Only one set, or an unreadable/empty file, is an error rather than a
     silent unauthenticated run.
     """
-    user = os.environ.get("OP_CROPWRIGHT_LIVE_USER")
-    pw_file = os.environ.get("OP_CROPWRIGHT_LIVE_PASSWORD_FILE")
+    user = os.environ.get('OP_CROPWRIGHT_LIVE_USER')
+    pw_file = os.environ.get('OP_CROPWRIGHT_LIVE_PASSWORD_FILE')
     if not user and not pw_file:
         return None
     if not user or not pw_file:
         raise pytest.UsageError(
-            "set both OP_CROPWRIGHT_LIVE_USER and OP_CROPWRIGHT_LIVE_PASSWORD_FILE, or neither"
+            'set both OP_CROPWRIGHT_LIVE_USER and OP_CROPWRIGHT_LIVE_PASSWORD_FILE, or neither'
         )
     try:
-        password = Path(pw_file).read_text(encoding="utf-8").rstrip("\r\n")
+        password = Path(pw_file).read_text(encoding='utf-8').rstrip('\r\n')
     except OSError as exc:
-        raise pytest.UsageError(f"cannot read OP_CROPWRIGHT_LIVE_PASSWORD_FILE: {exc}") from exc
+        raise pytest.UsageError(f'cannot read OP_CROPWRIGHT_LIVE_PASSWORD_FILE: {exc}') from exc
     if not password:
-        raise pytest.UsageError("OP_CROPWRIGHT_LIVE_PASSWORD_FILE is empty")
+        raise pytest.UsageError('OP_CROPWRIGHT_LIVE_PASSWORD_FILE is empty')
     return user, password
 
 
@@ -109,11 +110,11 @@ def _auth_headers() -> dict[str, str]:
     creds = basic_auth()
     if creds is None:
         return {}
-    token = base64.b64encode(f"{creds[0]}:{creds[1]}".encode()).decode("ascii")
-    return {"Authorization": f"Basic {token}"}
+    token = base64.b64encode(f'{creds[0]}:{creds[1]}'.encode()).decode('ascii')
+    return {'Authorization': f'Basic {token}'}
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope='session', autouse=True)
 def _require_live_url() -> None:
     """Skip the entire tier, before any fixture that could touch a
     browser or network runs, unless OP_CROPWRIGHT_LIVE_URL is set.
@@ -125,14 +126,14 @@ def _require_live_url() -> None:
     """
     if _env_live_url() is None:
         pytest.skip(
-            "live tier skipped: set OP_CROPWRIGHT_LIVE_URL (e.g. "
-            "http://localhost:5184) to run it against a real deployment — "
+            'live tier skipped: set OP_CROPWRIGHT_LIVE_URL (e.g. '
+            'http://localhost:5184) to run it against a real deployment — '
             "see CLAUDE.md's 'Live read-only tier' section. Never set in "
-            "CI or by `npm run test:e2e`."
+            'CI or by `npm run test:e2e`.'
         )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def live_url(_require_live_url: None) -> str:
     """The deployment base URL, preflighted against the GLOBAL
     `{API_PREFIX}/health` (never a project-scoped one — the projects
@@ -145,20 +146,20 @@ def live_url(_require_live_url: None) -> str:
     """
     url = _env_live_url()
     assert url is not None  # guaranteed by _require_live_url not skipping
-    health_url = f"{url}{API_PREFIX}/health"
+    health_url = f'{url}{API_PREFIX}/health'
     try:
         health_req = urllib.request.Request(health_url, headers=_auth_headers())
         with urllib.request.urlopen(health_req, timeout=10) as resp:
             status = resp.status
     except (urllib.error.URLError, OSError) as exc:
-        pytest.skip(f"live tier skipped: preflight GET {health_url} failed: {exc}")
-        return ""  # unreachable, keeps type-checkers happy
+        pytest.skip(f'live tier skipped: preflight GET {health_url} failed: {exc}')
+        return ''  # unreachable, keeps type-checkers happy
     if status != 200:
-        pytest.skip(f"live tier skipped: preflight GET {health_url} returned {status}, not 200")
+        pytest.skip(f'live tier skipped: preflight GET {health_url} returned {status}, not 200')
     return url
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def live_project(live_url: str) -> dict[str, Any]:
     """The default project's `{slug, prefix}`, read once from the GLOBAL
     `GET {API_PREFIX}/projects` — never built client-side. Every scoped
@@ -167,34 +168,34 @@ def live_project(live_url: str) -> dict[str, Any]:
     the served `projects` list (shouldn't happen against a healthy
     backend, but this tier fails closed rather than guessing a prefix).
     """
-    payload = global_api_get(live_url, "/projects")
+    payload = global_api_get(live_url, '/projects')
     # OP_CROPWRIGHT_LIVE_PROJECT points the (read-only) tier at a project that
     # holds data when the served default is empty; it must still be a served slug.
-    default_slug = os.environ.get("OP_CROPWRIGHT_LIVE_PROJECT") or payload["default_slug"]
-    match = next((p for p in payload["projects"] if p["slug"] == default_slug), None)
+    default_slug = os.environ.get('OP_CROPWRIGHT_LIVE_PROJECT') or payload['default_slug']
+    match = next((p for p in payload['projects'] if p['slug'] == default_slug), None)
     if match is None:
         pytest.skip(
-            f"live tier skipped: project {default_slug!r} not present in "
-            f"GET {API_PREFIX}/projects response"
+            f'live tier skipped: project {default_slug!r} not present in '
+            f'GET {API_PREFIX}/projects response'
         )
     assert match is not None  # for type-checkers
-    return {"slug": match["slug"], "prefix": match["prefix"]}
+    return {'slug': match['slug'], 'prefix': match['prefix']}
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def browser_context_args(browser_context_args: dict[str, Any]) -> dict[str, Any]:
     creds = basic_auth()
     extra: dict[str, Any] = {}
     if creds is not None:
-        extra["http_credentials"] = {"username": creds[0], "password": creds[1]}
+        extra['http_credentials'] = {'username': creds[0], 'password': creds[1]}
     return {
         **browser_context_args,
-        "viewport": {"width": 1280, "height": 720},
+        'viewport': {'width': 1280, 'height': 720},
         **extra,
     }
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def screenshot_run_dir() -> Path:
     """One timestamped directory per test-session run
     (`artifacts_local/cw-live/live-shots/<run-timestamp>/`), holding every
@@ -207,13 +208,13 @@ def screenshot_run_dir() -> Path:
     the saved PNGs after each run — the sweep only proves a route mounted
     without erroring, never that it looks right.
     """
-    ts = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    ts = dt.datetime.now(tz=dt.UTC).strftime('%Y%m%dT%H%M%S')
     d = SCREENSHOT_ROOT / ts
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def live_region_profile(live_url: str, live_project: dict[str, Any]) -> dict[str, Any] | None:
     """The deployment's served region profile, read from the DEFAULT
     PROJECT's own scoped `{prefix}/health` `region_profile` field
@@ -222,16 +223,16 @@ def live_region_profile(live_url: str, live_project: dict[str, Any]) -> dict[str
     `src/lib/stores/regionProfile.svelte.ts`), or None when it has none.
     Region-dependent tests read the region class / tab label from here
     rather than assuming one domain."""
-    return api_get(live_url, live_project, "/health").get("region_profile")
+    return api_get(live_url, live_project, '/health').get('region_profile')
 
 
 NO_REGION_PROFILE_SKIP = (
-    "the live backend serves no region profile (/health region_profile is null), "
-    "so the region tab / region drain panel are correctly absent"
+    'the live backend serves no region profile (/health region_profile is null), '
+    'so the region tab / region drain panel are correctly absent'
 )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def require_region_profile(live_region_profile: dict[str, Any] | None) -> dict[str, Any]:
     """Skip (never fail) a test that needs a served region profile when the
     deployment has none. Still strict when one IS served: the test body runs
@@ -244,7 +245,7 @@ def require_region_profile(live_region_profile: dict[str, Any] | None) -> dict[s
 def _http_get(url: str) -> Any:
     import json
 
-    req = urllib.request.Request(url, method="GET", headers=_auth_headers())
+    req = urllib.request.Request(url, method='GET', headers=_auth_headers())
     with urllib.request.urlopen(req, timeout=15) as resp:
         return json.loads(resp.read())
 
@@ -258,21 +259,21 @@ def api_get(live_url: str, live_project: dict[str, Any], path: str) -> Any:
     served `prefix` (e.g. `/stats/dataset`), never `{API_PREFIX}` itself —
     every non-global route lives only under a project's own prefix.
     """
-    return _http_get(f"{live_url}{live_project['prefix']}{path}")
+    return _http_get(f'{live_url}{live_project["prefix"]}{path}')
 
 
 def global_api_get(live_url: str, path: str) -> Any:
     """A plain GET against a GLOBAL (never project-scoped) route —
     `/projects`, the global `/health`, the global `/events` — relative to
     `{API_PREFIX}` itself."""
-    return _http_get(f"{live_url}{API_PREFIX}{path}")
+    return _http_get(f'{live_url}{API_PREFIX}{path}')
 
 
 def page_path(live_project: dict[str, Any], path: str) -> str:
     """`/p/<slug><path>` for the default project — every page navigation
     in this tier goes through this, never a bare unscoped route (there is
     no unscoped alias post-cutover)."""
-    return f"/p/{live_project['slug']}{path}"
+    return f'/p/{live_project["slug"]}{path}'
 
 
 class GuardedPage:
@@ -306,17 +307,17 @@ def guarded_page(live_url: str, page: Any) -> Any:
 
     def _guard_curation(route: Any, request: Any) -> None:
         path = urllib.parse.urlsplit(request.url).path
-        if request.method == "POST" and path.endswith(_READ_ONLY_POST_SUFFIXES):
+        if request.method == 'POST' and path.endswith(_READ_ONLY_POST_SUFFIXES):
             route.continue_()
             return
         if request.method not in _SAFE_METHODS:
             gp.write_attempts.append((request.method, request.url))
-            route.abort("failed")
+            route.abort('failed')
             return
         route.continue_()
 
-    page.route(f"**{API_PREFIX}/**", _guard_curation)
-    page.on("pageerror", lambda exc: gp.page_errors.append(str(exc)))
+    page.route(f'**{API_PREFIX}/**', _guard_curation)
+    page.on('pageerror', lambda exc: gp.page_errors.append(str(exc)))
 
     # Exposed for tests that want it directly (`guarded_page.page`,
     # `.write_attempts`, `.page_errors`) as well as every place that just
@@ -324,15 +325,15 @@ def guarded_page(live_url: str, page: Any) -> Any:
     yield gp
 
     assert gp.write_attempts == [], (
-        "live tier is read-only: a non-GET/HEAD request to `**/curation/**` "
-        f"was attempted (and aborted before reaching the backend), but must "
-        f"never be attempted at all: {gp.write_attempts}"
+        'live tier is read-only: a non-GET/HEAD request to `**/curation/**` '
+        f'was attempted (and aborted before reaching the backend), but must '
+        f'never be attempted at all: {gp.write_attempts}'
     )
-    assert gp.page_errors == [], f"page error(s) during test: {gp.page_errors}"
+    assert gp.page_errors == [], f'page error(s) during test: {gp.page_errors}'
 
 
 def route_url(live_url: str, path: str) -> str:
-    return f"{live_url}{path}"
+    return f'{live_url}{path}'
 
 
 ALLOWED_4XX_5XX = {
@@ -344,10 +345,7 @@ ALLOWED_4XX_5XX = {
 
 
 def is_allowlisted_bad_response(method: str, path: str, status: int) -> bool:
-    for (m, pattern), _reason in ALLOWED_4XX_5XX.items():
-        if m == method and re.search(pattern, path):
-            return True
-    return False
+    return any(m == method and re.search(pattern, path) for m, pattern in ALLOWED_4XX_5XX)
 
 
 def int_field(payload: dict, *keys: str) -> int:
@@ -359,7 +357,9 @@ def int_field(payload: dict, *keys: str) -> int:
     return int(node)
 
 
-def wait_for_stable_text(page: Any, selector: str, settle_ms: int = 800, timeout_ms: int = 20_000) -> None:
+def wait_for_stable_text(
+    page: Any, selector: str, settle_ms: int = 800, timeout_ms: int = 20_000
+) -> None:
     """Wait until `selector`'s text content hasn't changed for
     `settle_ms`. Some values (e.g. the `/review` queue counter, when a
     URL-seeded `?region_status=` filter arrives before `GET

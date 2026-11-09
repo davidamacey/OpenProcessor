@@ -20,7 +20,9 @@ from pydantic import BaseModel, Field
 
 from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
+from src.core.exceptions import RequestRejectedError
 from src.schemas.detection import ImageMetadata
+from src.services.face_identity.image_search import identify_by_image, search_by_image
 from src.services.inference import InferenceService
 from src.utils.retry import RetryExhaustedError
 from src.utils.upstream_errors import UpstreamError
@@ -177,9 +179,6 @@ def detect_faces(
 
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
 
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
-
         orig_h, orig_w = result['orig_shape']
 
         faces = [
@@ -200,7 +199,7 @@ def detect_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face detection failed: {e}')
@@ -243,9 +242,6 @@ def recognize_faces(
 
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
 
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face recognition failed'))
-
         orig_h, orig_w = result['orig_shape']
 
         faces = [
@@ -267,7 +263,7 @@ def recognize_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face recognition failed: {e}')
@@ -318,11 +314,6 @@ def verify_faces(
         result1 = inference_service.detect_faces(image1_bytes, confidence=confidence)
         result2 = inference_service.detect_faces(image2_bytes, confidence=confidence)
 
-        if result1.get('status') == 'error':
-            raise HTTPException(500, f'Face detection failed on image1: {result1.get("error")}')
-        if result2.get('status') == 'error':
-            raise HTTPException(500, f'Face detection failed on image2: {result2.get("error")}')
-
         if result1['num_faces'] == 0:
             raise HTTPException(400, 'No face detected in first image')
         if result2['num_faces'] == 0:
@@ -352,7 +343,7 @@ def verify_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face verification failed: {e}')
@@ -409,65 +400,25 @@ async def search_faces(
         Query face info and list of similar faces from database.
     """
     try:
-        image_bytes = image.file.read()
-        inference_service = InferenceService()
-
-        # Detect and recognize faces
-        result = inference_service.detect_faces(image_bytes, confidence=confidence)
-
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
-
-        if result['num_faces'] == 0:
-            raise HTTPException(400, 'No faces detected in query image')
-
-        if face_index >= result['num_faces']:
-            raise HTTPException(
-                400,
-                f'Face index {face_index} out of range (0-{result["num_faces"] - 1})',
-            )
-
-        # Get query face info and embedding
-        query_embedding = np.array(result['embeddings'][face_index])
-        face_data = result['faces'][face_index]
-        query_face = FaceBox(
-            box=face_data['box'],
-            landmarks=face_data['landmarks'],
-            score=face_data['score'],
-            quality=face_data.get('quality'),
-        )
-
-        # Search faces index via OpenSearch
-        search_results = await search_service.opensearch.search_faces(
-            query_embedding=query_embedding,
+        query_face, matches = await search_by_image(
+            search_service,
+            image.file.read(),
+            face_index=face_index,
             top_k=top_k,
             min_score=min_score,
+            confidence=confidence,
         )
-
-        # Format results
-        results = [
-            FaceSearchResult(
-                face_id=r.get('face_id', r.get('_id', '')),
-                image_id=r.get('image_id', ''),
-                image_path=r.get('image_path'),
-                score=r.get('score', 0.0),
-                person_id=r.get('person_id'),
-                person_name=r.get('person_name'),
-                box=r.get('box', [0, 0, 0, 0]),
-                confidence=r.get('confidence', 0.0),
-            )
-            for r in search_results
-        ]
+        results = [FaceSearchResult(**m) for m in matches]
 
         return FaceSearchResponse(
-            query_face=query_face,
+            query_face=FaceBox(**query_face),
             results=results,
             total_results=len(results),
         )
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face search failed: {e}')
@@ -520,76 +471,33 @@ async def identify_faces(
         Identification results for each detected face.
     """
     try:
-        image_bytes = image.file.read()
-        inference_service = InferenceService()
-
-        # Detect and recognize all faces
-        result = inference_service.detect_faces(image_bytes, confidence=confidence)
-
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
-
-        if result['num_faces'] == 0:
-            return FaceIdentifyResponse(
-                num_faces=0,
-                results=[],
-            )
-
-        # Identify each face
+        identified_faces = await identify_by_image(
+            search_service,
+            image.file.read(),
+            top_k=top_k,
+            threshold=threshold,
+            confidence=confidence,
+        )
         identification_results = []
-
-        for i in range(result['num_faces']):
-            query_embedding = np.array(result['embeddings'][i])
-            face_data = result['faces'][i]
-
-            query_face = FaceBox(
-                box=face_data['box'],
-                landmarks=face_data['landmarks'],
-                score=face_data['score'],
-                quality=face_data.get('quality'),
-            )
-
-            # Search for matches
-            search_results = await search_service.opensearch.search_faces(
-                query_embedding=query_embedding,
-                top_k=top_k,
-                min_score=threshold,
-            )
-
-            # Format matches
-            all_matches = [
-                FaceIdentifyMatch(
-                    face_id=r.get('face_id', r.get('_id', '')),
-                    image_id=r.get('image_id', ''),
-                    image_path=r.get('image_path'),
-                    score=r.get('score', 0.0),
-                    person_id=r.get('person_id'),
-                    person_name=r.get('person_name'),
-                )
-                for r in search_results
-            ]
-
-            # Determine if identified (best match above threshold)
-            identified = len(all_matches) > 0
-            best_match = all_matches[0] if identified else None
-
+        for query_face, matches in identified_faces:
+            all_matches = [FaceIdentifyMatch(**m) for m in matches]
             identification_results.append(
                 FaceIdentifyResult(
-                    query_face=query_face,
-                    identified=identified,
-                    best_match=best_match,
+                    query_face=FaceBox(**query_face),
+                    identified=bool(all_matches),
+                    best_match=all_matches[0] if all_matches else None,
                     all_matches=all_matches,
                 )
             )
 
         return FaceIdentifyResponse(
-            num_faces=result['num_faces'],
+            num_faces=len(identified_faces),
             results=identification_results,
         )
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face identification failed: {e}')

@@ -93,7 +93,7 @@ def test_other_items_are_relabeled_as_before() -> None:
 
 
 def test_the_worker_asks_a_target_item_once() -> None:
-    must_not = _build_pending_query(0.8)['bool']['must_not']
+    must_not = _build_pending_query(0.8, vector_field='pe_embedding')['bool']['must_not']
     clause = next(
         c
         for c in must_not

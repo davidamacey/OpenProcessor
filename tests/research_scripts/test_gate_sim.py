@@ -6,6 +6,7 @@ The gate numbers are the auto-label loop's own published tables (theta 0.9, alph
 from __future__ import annotations
 
 import math
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -39,13 +40,13 @@ def test_required_sample_matches_the_loops_published_table() -> None:
 
 def test_a_tiny_cluster_is_asked_whole_and_propagates_nothing() -> None:
     # 5 members, theta 0.9: even 5 of 5 agreeing is the only proof, so all 5 are asked
-    res = gs.run_gate(_cluster(5, {}), InOrder())
+    res = gs.run_gate(_cluster(5, {}), cast('Any', InOrder()))
     assert (res.sampled, res.passed, res.propagated) == (5, True, ())
 
 
 def test_a_pure_cluster_passes_on_the_first_stage_sample() -> None:
     # 150 members -> sample 30 with no dissent; the other 120 take the label
-    res = gs.run_gate(_cluster(150, {}), InOrder())
+    res = gs.run_gate(_cluster(150, {}), cast('Any', InOrder()))
     assert (res.sampled, res.passed, res.top) == (30, True, 'car')
     assert res.propagated == tuple(range(30, 150))
 
@@ -53,25 +54,25 @@ def test_a_pure_cluster_passes_on_the_first_stage_sample() -> None:
 def test_one_dissent_in_the_first_look_triggers_the_top_up() -> None:
     # dog at position 5 is in the first 30. One dissent needs 44 in total, so 14 more are asked
     # (positions 30..43) and all agree: 44 asked, 106 propagated, the dog was asked so no error
-    res = gs.run_gate(_cluster(150, {5: 'dog'}), InOrder())
+    res = gs.run_gate(_cluster(150, {5: 'dog'}), cast('Any', InOrder()))
     assert (res.sampled, res.passed, res.top) == (44, True, 'car')
     assert res.propagated == tuple(range(44, 150))
 
 
 def test_an_unasked_minority_member_is_propagated_wrongly() -> None:
-    res = gs.run_gate(_cluster(150, {5: 'dog', 100: 'dog'}), InOrder())
+    res = gs.run_gate(_cluster(150, {5: 'dog', 100: 'dog'}), cast('Any', InOrder()))
     assert res.passed
     assert 100 in res.propagated  # it takes 'car'; the simulator scores it as an error
 
 
 def test_two_dissents_in_the_first_look_fail_without_a_top_up() -> None:
-    res = gs.run_gate(_cluster(150, {1: 'dog', 2: 'dog'}), InOrder())
+    res = gs.run_gate(_cluster(150, {1: 'dog', 2: 'dog'}), cast('Any', InOrder()))
     assert (res.passed, res.sampled, res.propagated) == (False, 150, ())
 
 
 def test_a_dissent_found_only_in_the_top_up_fails() -> None:
     # dog at 5 (first look) and at 35 (top-up positions 30..43): dissent 2 after the second look
-    res = gs.run_gate(_cluster(150, {5: 'dog', 35: 'dog'}), InOrder())
+    res = gs.run_gate(_cluster(150, {5: 'dog', 35: 'dog'}), cast('Any', InOrder()))
     assert (res.passed, res.sampled) == (False, 150)
 
 

@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from curation.index_fakes import FakeIndicesApi
 from src.config import CurationConfig
 from src.domain.near_dup import Seat, collapse_drops
 from src.services.curation import export_images
@@ -59,6 +60,7 @@ class _FilteringOpenSearch:
     filtered rather than every query returning every doc."""
 
     def __init__(self, docs: list[dict[str, Any]]) -> None:
+        self.indices = FakeIndicesApi()
         self._docs = docs
         self.queries: list[dict[str, Any]] = []
 

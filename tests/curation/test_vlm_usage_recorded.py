@@ -39,7 +39,7 @@ async def world(pg_env: PgDatabase, bound_async_engine: Any) -> AsyncIterator[di
     with psycopg.connect(pg_env.conninfo('super'), autocommit=True) as conn:
         project = make_project(conn, f'usage-{uuid.uuid4().hex[:6]}')
         name = f'ep-{uuid.uuid4().hex[:6]}'
-        doc = conn.execute(
+        doc = conn.execute(  # type: ignore[index]
             'INSERT INTO config_documents (project_id, kind, name, current_revision, updated_by) '
             "VALUES (NULL, 'vlm_endpoint', %s, 1, 'test') RETURNING id",
             (name,),
@@ -49,7 +49,10 @@ async def world(pg_env: PgDatabase, bound_async_engine: Any) -> AsyncIterator[di
             "VALUES (%s, 1, '{}', 'x', 'test')",
             (doc,),
         )
-        slug = conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()[0]
+        slug = (
+            conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()
+            or (None,)
+        )[0]
     yield {'project': project, 'slug': slug, 'pg': pg_env, 'endpoint': name}
     await dispose_engines()
 

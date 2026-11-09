@@ -33,6 +33,7 @@ from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_factory import build_uncached_labeler as build_vlm_labeler
 from src.services.projects.guard import make_script_opensearch
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 logger = get_logger('curation_worker')
@@ -74,6 +75,47 @@ async def _start_metrics_http_server(*, port: int) -> web.AppRunner:
     return runner
 
 
+def _install_stop_signal_handlers() -> asyncio.Event:
+    """Return an event set by the first SIGINT/SIGTERM."""
+    stop_event = asyncio.Event()
+
+    def _on_signal(*_: object) -> None:
+        if not stop_event.is_set():
+            logger.info('stop_requested')
+            stop_event.set()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _on_signal)
+    return stop_event
+
+
+async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
+    """The per-box PE encoder, or None when disabled or its model is not ready."""
+    region_embed_pe = None
+    if os.environ.get('OP_REGION_EMBED_ENABLED', 'true').strip().lower() not in (
+        '0',
+        'false',
+        'no',
+    ):
+        from src.clients.pe_encoder import PE_IMAGE_MODEL, PEEncoder
+
+        try:
+            model_ready = bool(await pool.is_model_ready(PE_IMAGE_MODEL))
+        except TRITON_CALL_ERRORS as exc:
+            logger.warning('region_embed_readiness_probe_failed', error=str(exc))
+            model_ready = False
+        if model_ready:
+            region_embed_pe = PEEncoder(triton_pool=pool)
+        else:
+            logger.warning(
+                'region_embed_disabled_model_not_ready',
+                model=PE_IMAGE_MODEL,
+                detail='box vectors will not be written this run',
+            )
+    return region_embed_pe
+
+
 async def run(args: argparse.Namespace) -> int:
     """Streaming producer/consumer pipeline.
 
@@ -99,16 +141,7 @@ async def run(args: argparse.Namespace) -> int:
     continuously fed; the OS poll + bulk-write phases overlap with GPU
     work instead of stopping it.
     """
-    stop_event = asyncio.Event()
-
-    def _on_signal(*_: object) -> None:
-        if not stop_event.is_set():
-            logger.info('stop_requested')
-            stop_event.set()
-
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, _on_signal)
+    stop_event = _install_stop_signal_handlers()
 
     pool = AsyncTritonPool(url=args.triton, pool_size=args.pool_size, max_concurrent=64)
     await pool.initialize()
@@ -120,27 +153,7 @@ async def run(args: argparse.Namespace) -> int:
     # auto-disabled with a warning if Triton doesn't report pe_image_encoder
     # READY at startup -- a missing/unloaded model must not spam a failure
     # log every flush.
-    region_embed_pe = None
-    if os.environ.get('OP_REGION_EMBED_ENABLED', 'true').strip().lower() not in (
-        '0',
-        'false',
-        'no',
-    ):
-        from src.clients.pe_encoder import PE_IMAGE_MODEL, PEEncoder
-
-        try:
-            model_ready = bool(await pool.is_model_ready(PE_IMAGE_MODEL))
-        except Exception as exc:
-            logger.warning('region_embed_readiness_probe_failed', error=str(exc))
-            model_ready = False
-        if model_ready:
-            region_embed_pe = PEEncoder(triton_pool=pool)
-        else:
-            logger.warning(
-                'region_embed_disabled_model_not_ready',
-                model=PE_IMAGE_MODEL,
-                detail='region_box_embeddings will not be written this run',
-            )
+    region_embed_pe = await _build_region_embedder(pool)
 
     # The VLM class catalog (prompt class list + name -> registry id) is
     # per project: every classifying call reads bound_class_catalog()

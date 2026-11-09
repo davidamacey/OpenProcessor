@@ -28,23 +28,7 @@ from .conftest import (
 )
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 def _registry_for(client: FakeLifecycleOpenSearch) -> ProjectRegistry:
@@ -141,7 +125,7 @@ def test_real_ensure_indexes_index_create_failure_ends_create_failed() -> None:
             raise RuntimeError('simulated OpenSearch indices.create failure')
         return await real_create(index=index, body=body)
 
-    client.indices.create = _create_but_fail_one  # type: ignore[method-assign]
+    client.indices.create = _create_but_fail_one
 
     with pytest.raises(RuntimeError, match='missing indexes'):
         asyncio.run(lifecycle.create_project(client, slug='gamma', display_name='Gamma'))

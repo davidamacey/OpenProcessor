@@ -1,6 +1,6 @@
 /**
  * Pure data-returning helpers for `/review`'s inline slot panel body
- * (Finding D, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md
+ * (Finding D, slot-generic crop mapping plan
  * §6.2). Same shape as `slotKeymap.ts`: no side effects, separately
  * unit tested, each function's doc comment names the hand-maintained
  * copy it replaces.

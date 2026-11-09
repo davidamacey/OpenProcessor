@@ -7,32 +7,38 @@ from __future__ import annotations
 import json
 
 from harness.constants import ACTION_TIMEOUT_MS
-
 from playwright.sync_api import expect
-
-from test_cluster_discard import CLASSES, CLUSTERS, crop
+from test_cluster_discard import CLASSES, CLUSTER_UID, CLUSTERS, crop
 
 
 def test_first_page_of_a_slow_cluster_says_what_it_is_doing(stub, page, app_url):
-    stub.on("GET", r"(?<!/stats)/classes(\?|$)", {"classes": CLASSES})
-    stub.on("GET", r"/clusters(\?|$)", CLUSTERS)
-    stub.on("GET", r"/crops(\?|$)", {"total": 3, "page": 1, "page_size": 60, "crops": [crop(i) for i in range(3)]})
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
+    stub.on(
+        'GET',
+        r'/crops(\?|$)',
+        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+    )
     held: list = []
     # Registered after the stub's catch-all, so it wins: hold the crops page.
-    page.route("**/crops?*cluster_id=*", lambda route: held.append(route))
+    page.route('**/crops?*cluster_uid=*', held.append)
 
-    page.goto(f"{app_url}/p/default/clusters/1")
-    hint = page.get_by_test_id("cluster-slow-load-hint")
-    expect(hint).to_contain_text("A large cluster can take a few seconds.", timeout=ACTION_TIMEOUT_MS)
-    expect(hint).to_contain_text("Ordering")
-    footer = page.get_by_test_id("cluster-status-bar")
-    expect(footer).to_contain_text("loading…")
-    expect(footer).not_to_contain_text("all loaded")
-    expect(footer).not_to_contain_text("0 / 0 listed")
+    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    hint = page.get_by_test_id('cluster-slow-load-hint')
+    expect(hint).to_contain_text(
+        'A large cluster can take a few seconds.', timeout=ACTION_TIMEOUT_MS
+    )
+    expect(hint).to_contain_text('Ordering')
+    footer = page.get_by_test_id('cluster-status-bar')
+    expect(footer).to_contain_text('loading…')
+    expect(footer).not_to_contain_text('all loaded')
+    expect(footer).not_to_contain_text('0 / 0 listed')
 
-    body = json.dumps({"total": 3, "page": 1, "page_size": 60, "crops": [crop(i) for i in range(3)]})
+    body = json.dumps(
+        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]}
+    )
     for route in held:
-        route.fulfill(status=200, content_type="application/json", body=body)
-    expect(footer).to_contain_text("3 / 3 listed", timeout=ACTION_TIMEOUT_MS)
-    expect(footer).to_contain_text("all loaded")
+        route.fulfill(status=200, content_type='application/json', body=body)
+    expect(footer).to_contain_text('3 / 3 listed', timeout=ACTION_TIMEOUT_MS)
+    expect(footer).to_contain_text('all loaded')
     expect(hint).to_have_count(0)

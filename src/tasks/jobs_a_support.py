@@ -37,15 +37,6 @@ async def bound_project(ctx: JobContext) -> AsyncIterator[None]:
         yield
 
 
-async def opensearch_client() -> Any:
-    """A project-guarded ``AsyncOpenSearch`` for this task (the context closes it)."""
-    from src.config.settings import get_settings
-    from src.services.projects.guard import make_script_opensearch
-
-    settings = get_settings()
-    return make_script_opensearch([settings.opensearch_url], timeout=settings.opensearch_timeout)
-
-
 class WorkerIngest:
     """Builds the ingest service ``detect`` and ``embed`` need, for a worker with no FastAPI app.
 

@@ -64,7 +64,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
 
     monkeypatch.setattr(bakeoff_jobs, 'start_job', _start_job)
     monkeypatch.setattr(bakeoff, 'current_project_id', uuid.uuid4)
-    dirs['started'] = started  # type: ignore[assignment]
+    dirs['started'] = started
     return dirs
 
 

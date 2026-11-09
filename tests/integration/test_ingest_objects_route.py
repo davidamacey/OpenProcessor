@@ -41,7 +41,7 @@ def opensearch() -> FakeOpenSearch:
 
 
 @pytest.fixture
-def client(
+def client(  # type: ignore[misc]
     opensearch: FakeOpenSearch, store: FakeObjectStore, monkeypatch: pytest.MonkeyPatch
 ) -> TestClient:
     monkeypatch.setenv('OP_S3_ALLOWED', 'imgs/in/')

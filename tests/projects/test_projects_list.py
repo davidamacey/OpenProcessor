@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.config.curation_accessors import base_curation_config
 from src.config.projects import ProjectRecord, resources_for_new
@@ -42,17 +43,23 @@ def _record(
     )
 
 
+def _unreachable() -> OpenSearchConnectionError:
+    return OpenSearchConnectionError('N/A', 'no fake cluster wired for this test', OSError('none'))
+
+
 class _FakeClient:
-    """No index data; ``_cat/indices`` and capacity calls degrade
-    gracefully (empty counts, capacity None) without needing a live
-    cluster."""
+    """An unreachable cluster: ``_count`` and capacity calls degrade gracefully
+    (unknown counts, capacity None) without needing a live cluster."""
 
     class _Transport:
         async def perform_request(self, method, url, params=None, **kwargs):  # noqa: ARG002
-            raise ConnectionError('no fake cluster wired for this test')
+            raise _unreachable()
 
     def __init__(self) -> None:
         self.transport = self._Transport()
+
+    async def count(self, **_: object) -> dict[str, int]:
+        raise _unreachable()
 
 
 def _registry_with(*records: ProjectRecord) -> ProjectRegistry:
@@ -177,7 +184,7 @@ def test_get_project_missing_raises_404(monkeypatch: pytest.MonkeyPatch) -> None
 
     with pytest.raises(Exception) as excinfo:  # noqa: PT011 - HTTPException from api_error
         asyncio.run(projects_router.get_project(project='missing'))
-    detail = excinfo.value.detail
+    detail = excinfo.value.detail  # type: ignore[attr-defined]
     parsed = ConfigErrorDetail.model_validate(detail)
     assert parsed.error == 'project_not_found'
 

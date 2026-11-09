@@ -15,7 +15,7 @@ pytestmark = pytest.mark.usefixtures('vlm_env_active')
 def test_settings_reactivate_after_off(app_client, monkeypatch, axis):
     from src.config import DetectionProfile
     from src.services.detection import profile_registry
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _repo():
         return [{'name': 'wheel_detector', 'state': 'READY', 'version': '1'}]

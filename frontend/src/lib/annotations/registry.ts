@@ -1,7 +1,7 @@
 /**
  * Resolves the deployed set of annotation slots.
  *
- * Merge order (docs/genericization-plan-2026-09-13.md §2.3): built-ins
+ * Merge order (genericization plan §2.3): built-ins
  * ← deployment override (`static/annotation-profiles.json`, tier 2 —
  * fetched at boot by `./deploymentProfiles.ts` and merged in via the
  * root layout, see `docs/design/tier2-annotation-profile-config-plan-

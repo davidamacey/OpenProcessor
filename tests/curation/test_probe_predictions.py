@@ -10,7 +10,7 @@ the query construction, not just a trusted assertion.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from _class_registry_fake import InMemoryRegistry, use_registry
@@ -257,8 +257,8 @@ async def test_probe_skips_test_holdout_crops(
     fake_os = _FakeOpenSearch(docs)
 
     processed = await pp.run_probe_inference(
-        tmp_path / 'fake.onnx', fake_os, architecture='yolov5_objectness'
-    )  # type: ignore[arg-type]
+        tmp_path / 'fake.onnx', cast('Any', fake_os), architecture='yolov5_objectness'
+    )
 
     assert processed == 1
     updated_ids = {u['id'] for u in fake_os.updates}

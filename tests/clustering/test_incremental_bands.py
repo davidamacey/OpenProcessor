@@ -49,7 +49,7 @@ async def _serving(project, pg, bands_body: dict | None):
     calibration = None
     if bands_body is not None:
         with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-            calibration = conn.execute(
+            calibration = conn.execute(  # type: ignore[index]
                 'INSERT INTO cluster_calibrations (project_id, target, level, embedding_field, '
                 'embedding_model, preprocess_id, kind, fitted_on, body, dev_metrics, created_by) '
                 "VALUES (%s, 'item', 'class', 'pe_embedding', 'pe_core@v1', 'pe_core_v1', "
@@ -67,7 +67,7 @@ async def _serving(project, pg, bands_body: dict | None):
             params={'n_clusters': 4, 'nredo': 5},
             keys=keys,
             vectors=vectors,
-            bands=(calibration, AssignBands(**bands_body)) if bands_body else None,
+            bands=(calibration, AssignBands(**bands_body)) if bands_body else None,  # type: ignore[arg-type]
         )
         await activate(
             session,

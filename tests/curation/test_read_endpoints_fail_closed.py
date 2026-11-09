@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import NotFoundError
 
 
 # The regions queue exists only while a region profile is active (GH #51).
@@ -76,5 +77,5 @@ def test_stats_classes_registry_failure_is_503(monkeypatch: pytest.MonkeyPatch) 
 
 def test_missing_item_is_still_404() -> None:
     fake = AsyncMock()
-    fake.get = AsyncMock(side_effect=KeyError('c1'))
+    fake.get = AsyncMock(side_effect=NotFoundError(404, 'not_found', {}))
     assert _client(fake).get('/curation/projects/default/crops/c1/history').status_code == 404

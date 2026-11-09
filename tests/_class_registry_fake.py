@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from typing import Any
+from typing import Any, cast
 
 from src.clients.curation_opensearch import RegistryClassEntry
 from src.db.repos.classes import (
@@ -112,7 +112,8 @@ class InMemoryRegistry:
     async def copy_from(self, source_slug: str) -> int:
         from src.services.classes.registry import registry_for
 
-        self._doc = registry_for(source_slug).load().model_copy(deep=True)
+        source = cast('InMemoryRegistry', registry_for(source_slug))
+        self._doc = source._doc.model_copy(deep=True)
         return len(self._doc.classes)
 
     async def add_class(
@@ -255,7 +256,7 @@ def make_registry(base_dir: Any, names: list[str], **entry_kw: Any) -> InMemoryR
     return InMemoryRegistry(base_dir, names, **entry_kw)
 
 
-class InMemoryRegistries(dict):  # type: ignore[type-arg]
+class InMemoryRegistries(dict[str, Any]):
     """Stands in for ``registry._registries``: every project gets its own empty in-memory
     registry the first time the code under test asks for it."""
 
@@ -273,7 +274,7 @@ def use_registry(registry: InMemoryRegistry) -> InMemoryRegistry:
     """Make ``registry`` the one every project's ``get_class_registry()`` answers in this test."""
     from src.services.classes import registry as registry_module
 
-    registry_module._registries.override = registry
+    cast('InMemoryRegistries', registry_module._registries).override = registry
     return registry
 
 

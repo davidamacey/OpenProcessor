@@ -46,6 +46,7 @@ from scripts.bench.baseline_report import percentile
 from scripts.bench.host_pressure import pressure_io
 from scripts.bench.suite_lib import SCHEMA, summarize_runs
 from scripts.bench.suite_probes import cgroup_cpu_s
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 
 
 ARMS: dict[str, dict[str, Any]] = {
@@ -360,9 +361,13 @@ def main(argv: list[str] | None = None) -> int:
         item_t, item_src = load_templates(client, src_url, args.items_index, args.templates)
         image_t, image_src = load_templates(client, src_url, args.images_index, args.templates)
         pool = {
-            'pe': np.array([t['pe_embedding'] for t in item_t if 'pe_embedding' in t], np.float32),
+            'pe': np.array(
+                [t[LEGACY_ITEM_VECTOR_FIELD] for t in item_t if LEGACY_ITEM_VECTOR_FIELD in t],
+                np.float32,
+            ),
             'img_pe': np.array(
-                [t['pe_embedding'] for t in image_t if 'pe_embedding' in t], np.float32
+                [t[LEGACY_ITEM_VECTOR_FIELD] for t in image_t if LEGACY_ITEM_VECTOR_FIELD in t],
+                np.float32,
             ),
             'img_clip': np.array([t['embedding'] for t in image_t if 'embedding' in t], np.float32),
         }
@@ -383,14 +388,18 @@ def main(argv: list[str] | None = None) -> int:
             docs_by_mode[mode] = {
                 'items': build_docs(
                     item_t,
-                    {'pe_embedding': synth_vectors(_pool('pe'), args.docs, 1024, rng, args.noise)},
+                    {
+                        LEGACY_ITEM_VECTOR_FIELD: synth_vectors(
+                            _pool('pe'), args.docs, 1024, rng, args.noise
+                        )
+                    },
                     'items',
                     args.docs,
                 ),
                 'images': build_docs(
                     image_t,
                     {
-                        'pe_embedding': synth_vectors(
+                        LEGACY_ITEM_VECTOR_FIELD: synth_vectors(
                             _pool('img_pe'), n_images, 1024, rng, args.noise
                         ),
                         'embedding': synth_vectors(

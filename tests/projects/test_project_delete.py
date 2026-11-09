@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.core.exceptions import RequestRejectedError
 from src.services.projects import lifecycle
@@ -22,23 +23,7 @@ from .conftest import (
 )
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -227,7 +212,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
             raise RuntimeError('simulated cluster hiccup')
         return await real_delete(index=index, ignore=ignore)
 
-    client.indices.delete = _delete_but_fail_one  # type: ignore[method-assign]
+    client.indices.delete = _delete_but_fail_one
 
     asyncio.run(lifecycle.delete_project(slug='alpha', confirm='alpha'))
     with pytest.raises(RequestRejectedError) as exc_info:
@@ -241,7 +226,7 @@ def test_delete_finish_index_failure_leaves_record_retryable_not_tombstoned() ->
 
     # A retried delete_project_finish, once the transient failure clears,
     # succeeds and tombstones -- idempotent resumability, not a dead end.
-    client.indices.delete = real_delete  # type: ignore[method-assign]
+    client.indices.delete = real_delete
     tombstoned = asyncio.run(lifecycle.delete_project_finish(client, slug='alpha')).record
     assert tombstoned.status == 'deleted'
 
@@ -255,7 +240,7 @@ def test_dry_run_index_count_failure_reports_docs_null_not_zero() -> None:
     asyncio.run(lifecycle.create_project(client, slug='alpha', display_name='Alpha'))
 
     async def _boom(*, index, body=None):
-        raise RuntimeError('simulated count failure')
+        raise OpenSearchConnectionError('N/A', 'simulated count failure', RuntimeError('x'))
 
     client.count = _boom  # type: ignore[method-assign]
 

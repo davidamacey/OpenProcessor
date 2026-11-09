@@ -1,7 +1,7 @@
 /**
  * RegionProfileStore — whether the backend has a region profile, and
  * which one (`GET {API_PREFIX}/health` `region_profile`, OpenProcessor
- * naming-w2; docs/design/domain-neutral-audit-2026-09-24.md §5.2).
+ * naming-w2; domain-neutral audit §5.2).
  *
  * THE gate for every region feature: with no profile the registry holds
  * no region slot (so no region tab, gallery, inventory card, sub-box

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { jobPhase } from '$lib/jobs/jobPhase';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * "Run probe predictions" control — `/train`, embedded in `RunResults`
@@ -115,7 +116,7 @@
   async function adoptInFlightJob(): Promise<void> {
     try {
       const st = await getProbeStatus();
-      if (st.status === 'running') {
+      if (jobPhase(st.status) === 'active') {
         job = st;
         startJobPoll();
       }

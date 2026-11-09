@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.services import model_readiness as mr
+from src.services.models import model_readiness as mr
 
 
 if TYPE_CHECKING:

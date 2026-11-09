@@ -31,6 +31,7 @@ from src.services.curation.dataset_import.scan import LabelBox
 from src.services.curation.item_doc import DetectedItem
 from src.services.curation.wire import item_source_excludes
 from src.services.detection.geometry import crop_id as make_crop_id, stored_bbox_norm
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -79,7 +80,7 @@ async def _items_for_image(ctx: ImportContext, image_id: str) -> list[dict[str, 
         body={
             'size': 1000,
             'query': {'term': {'image_id': image_id}},
-            '_source': {'excludes': item_source_excludes()},
+            '_source': {'excludes': item_source_excludes(await vector_source_excludes())},
         },
     )
     return [h['_source'] for h in (resp.get('hits') or {}).get('hits') or []]

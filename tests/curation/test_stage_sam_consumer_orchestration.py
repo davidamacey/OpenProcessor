@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import structlog
+from tritonclient.utils import InferenceServerException
 
 from scripts.curation.worker import stage_sam, verify_choice
 from scripts.curation.worker.client import SegmenterUnavailable
@@ -36,7 +37,7 @@ def _task(crop_id: str = 'c1', *, jpeg: bytes | None = b'jpeg') -> _ItemTask:
         class_name='',
         request_id=f'req-{crop_id}',
         crop_jpeg=jpeg,
-        project=SimpleNamespace(slug='alpha'),  # type: ignore[arg-type]
+        project=SimpleNamespace(slug='alpha'),
     )
 
 
@@ -83,7 +84,6 @@ class Harness:
             args=MagicMock(),
             stop_event=asyncio.Event(),
             opensearch=MagicMock(),
-            sentinel=MagicMock(),
             started_at=0.0,
             region_embed_pe=None,
             project_registry=MagicMock(),
@@ -98,13 +98,13 @@ class Harness:
             in_flight_owner={},
             in_flight_lock=asyncio.Lock(),
             released_at={},
-            metrics=Counter(),  # type: ignore[arg-type]
+            metrics=Counter(),
             no_verdict_cap=3,
             visible_no_verdict=NoVerdictCounter(3),
             combined_no_verdict=NoVerdictCounter(3),
             crop_gate=self.gate,
         )
-        self.ctx.rt_for = lambda _t: self.rt  # type: ignore[method-assign]
+        self.ctx.rt_for = lambda _t: self.rt  # type: ignore[assignment]
         m = monkeypatch
         m.setattr(stage_sam, 'bind_task_project', lambda t: self.calls.append(('bind', t.crop_id)))
         m.setattr(stage_sam, 'is_region_stage_paused', lambda _p: self.paused)
@@ -366,7 +366,7 @@ async def test_text_hint_without_ocr_regions_is_a_miss(h: Harness) -> None:
 async def test_text_hint_prefers_stored_ocr_lines(h: Harness) -> None:
     h.rt.text_hint_on = True
     t = _task()
-    t.item_ocr_lines = [{'line': 1}]
+    t.item_ocr_lines = [{'line': 1}]  # type: ignore[list-item]
     await h.run(t)
     h.ocr.regions_from_lines.assert_called_once_with([{'line': 1}])
     h.ocr.detect_regions.assert_not_awaited()
@@ -375,7 +375,7 @@ async def test_text_hint_prefers_stored_ocr_lines(h: Harness) -> None:
 @pytest.mark.asyncio
 async def test_text_hint_ocr_failure_counts_as_no_regions(h: Harness) -> None:
     h.rt.text_hint_on = True
-    h.ocr.detect_regions = AsyncMock(side_effect=RuntimeError('ocr down'))
+    h.ocr.detect_regions = AsyncMock(side_effect=InferenceServerException('ocr down'))
     t = _task()
     await h.run(t)
     assert t.detection_trace == ['rec-x:text_hint:miss']

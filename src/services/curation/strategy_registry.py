@@ -60,6 +60,7 @@ from src.services.curation.strategy_flags import (
     _viz_projection_enabled,
 )
 from src.services.curation.vlm_strategies import vlm_strategies
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 logger = get_logger(__name__)
@@ -102,7 +103,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
     strategies = [
         *_sort_strategies(sort_default),
         *_score_strategies(),
-        *_overlay_strategies(),
+        *_overlay_strategies(await item_vector_field()),
         *_export_strategies(),
         *detection_profile_strategies(detection_profile_default),
         *_prompt_pack_strategies(prompt_pack_default),
@@ -113,17 +114,7 @@ async def get_registry(opensearch: Any | None = None) -> dict[str, Any]:
 
     coverage: dict[str, int | None] = {}
     if opensearch is not None and fields:
-        try:
-            coverage = await _compute_field_coverage(opensearch, fields)
-        except Exception as exc:
-            # Defense in depth: _compute_field_coverage already catches
-            # per-query failures internally and never raises in practice,
-            # but this module's whole reason for being dependency-light is
-            # "GET /curation/methods never fails or blocks" -- honor that even
-            # against a totally broken client (e.g. one whose .count
-            # attribute isn't even callable).
-            logger.warning('curation_methods_field_coverage_failed', error=str(exc))
-            coverage = {}
+        coverage = await _compute_field_coverage(opensearch, fields)
 
     total = coverage.get(_COVERAGE_TOTAL_KEY)
     for entry in strategies:

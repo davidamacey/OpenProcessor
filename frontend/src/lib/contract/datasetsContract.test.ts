@@ -276,10 +276,13 @@ const CASES: [string, string[]][] = [
   ],
   [
     'NextStep',
-    keys({ action: true, method: true, path: true, reason: true } satisfies Record<
-      keyof T.NextStep,
-      true
-    >),
+    keys({
+      action: true,
+      method: true,
+      path: true,
+      reason: true,
+      body: true,
+    } satisfies Record<keyof T.NextStep, true>),
   ],
   [
     'DatasetUndoReportWire',
@@ -314,6 +317,7 @@ const CASES: [string, string[]][] = [
     'DatasetImportJob',
     keys({
       project: true,
+      job_id: true,
       import_id: true,
       import_key: true,
       name: true,
@@ -366,13 +370,12 @@ const CASES: [string, string[]][] = [
     } satisfies Record<keyof T.DatasetImportEntry, true>),
   ],
   [
-    'DatasetUploadResponse',
+    'DatasetUploadAccepted',
     keys({
       upload_id: true,
-      dataset_path: true,
-      bytes: true,
-      files: true,
-    } satisfies Record<keyof T.DatasetUploadResponse, true>),
+      job_id: true,
+      status: true,
+    } satisfies Record<keyof T.DatasetUploadAccepted, true>),
   ],
   // -- Reprocess --
   [
@@ -383,8 +386,7 @@ const CASES: [string, string[]][] = [
       class_names: true,
       class_source: true,
       classifier_conf_lt: true,
-      cluster_id: true,
-      cluster_subid: true,
+      cluster_uid: true,
       conf_max: true,
       conf_min: true,
       dataset_split: true,

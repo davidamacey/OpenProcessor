@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import subprocess
 import time
@@ -11,11 +12,10 @@ import urllib.request
 from typing import Any
 
 import pytest
-
 from harness.constants import ROOT
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
     """Force software rendering off entirely.
 
@@ -27,12 +27,12 @@ def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[s
     sidesteps the crash loop entirely (verified: `new_page()` returns in
     under a second with it, hangs for minutes without it).
     """
-    return {**browser_type_launch_args, "args": ["--disable-gpu"]}
+    return {**browser_type_launch_args, 'args': ['--disable-gpu']}
 
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
+        s.bind(('127.0.0.1', 0))
         return s.getsockname()[1]
 
 
@@ -41,18 +41,12 @@ def _stop_group(proc: subprocess.Popen[str]) -> None:
     import os
     import signal
 
-    try:
+    with contextlib.suppress(ProcessLookupError):
         os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired):
         proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        pass
-    try:
+    with contextlib.suppress(ProcessLookupError):
         os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
     proc.wait(timeout=15)
 
 
@@ -60,8 +54,8 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float 
     deadline = time.time() + timeout
     while time.time() < deadline:
         if proc.poll() is not None:
-            out = proc.stdout.read() if proc.stdout else ""
-            raise RuntimeError(f"vite preview exited early (code {proc.returncode}):\n{out}")
+            out = proc.stdout.read() if proc.stdout else ''
+            raise RuntimeError(f'vite preview exited early (code {proc.returncode}):\n{out}')
         try:
             urllib.request.urlopen(base_url, timeout=1)
             break
@@ -69,7 +63,7 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float 
             time.sleep(0.5)
     else:
         _stop_group(proc)
-        raise RuntimeError(f"vite preview did not come up within {timeout}s at {base_url}")
+        raise RuntimeError(f'vite preview did not come up within {timeout}s at {base_url}')
 
     # Warm-up request: the port accepting connections doesn't guarantee the
     # static handler's own first-request bookkeeping (route table build,
@@ -78,13 +72,12 @@ def _wait_for_server(base_url: str, proc: subprocess.Popen[str], timeout: float 
     # every one after it. A single throwaway fetch here, outside any test's
     # own timeout budget, absorbs that cost once instead of it landing on
     # whichever test happens to run first.
-    try:
+    # A failure here is ignored: the real per-test navigation will surface it.
+    with contextlib.suppress(urllib.error.URLError):
         urllib.request.urlopen(base_url, timeout=max(timeout, 10))
-    except urllib.error.URLError:
-        pass  # the real per-test navigation will surface a genuine failure
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope='session')
 def app_url() -> Any:
     """Build the app once, serve it via `vite preview`, tear down at session end.
 
@@ -98,24 +91,25 @@ def app_url() -> Any:
     """
     import os
 
-    preset = os.environ.get("E2E_APP_URL")
+    preset = os.environ.get('E2E_APP_URL')
     if preset:
-        yield preset.rstrip("/")
+        yield preset.rstrip('/')
         return
 
     build = subprocess.run(
-        ["npm", "run", "build"],
+        ['npm', 'run', 'build'],
         cwd=ROOT,
         capture_output=True,
         text=True,
         timeout=600,
+        check=False,
     )
     if build.returncode != 0:
-        raise RuntimeError(f"npm run build failed:\n{build.stdout}\n{build.stderr}")
+        raise RuntimeError(f'npm run build failed:\n{build.stdout}\n{build.stderr}')
 
     port = _free_port()
     proc = subprocess.Popen(
-        ["npx", "vite", "preview", "--port", str(port), "--strictPort"],
+        ['npx', 'vite', 'preview', '--port', str(port), '--strictPort'],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -124,7 +118,7 @@ def app_url() -> Any:
         # can be stopped; terminating the wrapper alone orphans the server.
         start_new_session=True,
     )
-    base_url = f"http://localhost:{port}"
+    base_url = f'http://localhost:{port}'
     try:
         _wait_for_server(base_url, proc)
         yield base_url

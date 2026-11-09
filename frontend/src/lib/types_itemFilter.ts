@@ -3,7 +3,7 @@
  * the query-parameter form every list/stats route accepts, and the
  * `ItemFilter` / `ItemSelection` body schemas `selection` and
  * `export/yolo item_filter` take. Owned by track C after the v0.4.0
- * Step 0 prelude (docs/design/v040-backend-deltas-ui-plan-2026-10-03.md).
+ * Step 0 prelude (v0.4.0 backend deltas plan).
  *
  * Pinned to the vendored OpenAPI by
  * `src/lib/contract/itemFilterContract.test.ts`. The backend serves no
@@ -58,8 +58,7 @@ export interface ItemFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_id?: number | null;
-  cluster_subid?: string | null;
+  cluster_uid?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

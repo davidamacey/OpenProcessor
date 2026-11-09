@@ -21,12 +21,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
 from src.domain.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
 from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -142,7 +145,7 @@ async def scroll_box_rows(
         if scroll_id:
             try:
                 await client.clear_scroll(scroll_id=scroll_id)
-            except Exception as exc:
+            except OpenSearchException as exc:
                 logger.warning('curation_clear_scroll_failed', error=str(exc))
     rows.sort(key=lambda r: (r.crop_id, r.box_id))
     return rows
@@ -237,7 +240,12 @@ async def write_box_edits(
         if not pending:
             break
         result = await occ_skip_on_conflict_bulk(
-            client, doc_ids=pending, merger=merger, index=index, writer_id=writer_id
+            client,
+            vector_excludes=await vector_source_excludes(),
+            doc_ids=pending,
+            merger=merger,
+            index=index,
+            writer_id=writer_id,
         )
         items_written += int(result['updated'])
         errored.update(str(e.get('doc_id')) for e in result['errors'])

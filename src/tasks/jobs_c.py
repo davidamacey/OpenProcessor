@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.db.session import async_session_factory
+from src.services.curation.job_binding import opensearch_client
 from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.register import register_job
 
@@ -28,12 +30,7 @@ OPENSEARCH_TIMEOUT_S = 60
 logger = get_logger(__name__)
 
 
-async def _opensearch() -> Any:
-    """A project-guarded client of this task's own; the wrapper closes it with the task."""
-    from src.config.settings import get_settings
-    from src.services.projects.guard import make_script_opensearch
-
-    return make_script_opensearch([get_settings().opensearch_url], timeout=OPENSEARCH_TIMEOUT_S)
+_opensearch = functools.partial(opensearch_client, OPENSEARCH_TIMEOUT_S)
 
 
 async def bound_project(ctx: JobContext) -> AbstractContextManager[Any]:
@@ -121,7 +118,6 @@ async def directory_ingest(ctx: JobContext) -> JobResult | dict[str, Any]:
         resume_batch=resume,
         should_stop=ctx.cancelled,
         on_batch=batch_done,
-        servers=[ctx.server] if ctx.server else None,
     )
     return JobResult(result, with_errors=result['status'] != 'success')
 
@@ -165,7 +161,6 @@ async def bulk_ingest_run(ctx: JobContext) -> JobResult:
                 options=BulkOptions(**ctx.params['options']),
                 run_id=str(ctx.job_id),
                 prior=ctx.resume_from,
-                servers=[ctx.server] if ctx.server else [],
             )
             result = await run.run()
         finally:

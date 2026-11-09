@@ -41,11 +41,11 @@ def _checkpoint_sha256(checkpoint_path: Path) -> str | None:
 
 def _ultralytics_version() -> str | None:
     """Best-effort read of the installed ultralytics package version."""
-    try:
-        import importlib.metadata as md
+    import importlib.metadata as md
 
+    try:
         return md.version('ultralytics')
-    except Exception:  # PackageNotFoundError family
+    except md.PackageNotFoundError:
         return None
 
 

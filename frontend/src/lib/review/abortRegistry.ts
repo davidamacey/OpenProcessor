@@ -1,6 +1,6 @@
 /**
  * Per-key in-flight-request registry, extracted from `review/+page.svelte`'s
- * slot-metadata abort map (P0.3, docs/genericization-plan-2026-09-13.md
+ * slot-metadata abort map (P0.3, genericization plan
  * §5.1/§5a).
  *
  * Keyed by crop id (not cursor position) so that if the operator advances

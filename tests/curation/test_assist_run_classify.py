@@ -80,7 +80,7 @@ def car_pack(stack: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     pack = dataclasses.replace(
         GENERIC_ITEM_PACK,
         name='cars',
-        attributes=[AttributeSpec(**MAKE)],
+        attributes=[AttributeSpec(**MAKE)],  # type: ignore[arg-type]
     )
     monkeypatch.setattr('src.services.curation.assist.prepare.resolve_pack', lambda *_a, **_k: pack)
     monkeypatch.setattr('src.services.curation.assist.runner.get_vlm_labeler', _labeler_for(pack))

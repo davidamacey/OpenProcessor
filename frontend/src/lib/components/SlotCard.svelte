@@ -1,12 +1,12 @@
 <script lang="ts">
   /**
    * Compact card for one slot detection, read through the `readSlot`
-   * adapter against the given `slot` (docs/genericization-plan-2026-09-13.md
+   * adapter against the given `slot` (genericization plan
    * §3.1/§5a): swap the `slot` prop and the card renders a completely
    * different capability set with zero further code change.
    *
    * `getRegions` (`api.ts`) now maps every row's `slots` server-side
-   * (C2, docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §4) —
+   * (C2, slot-generic crop mapping plan §4) —
    * this card prefers that pre-computed `crop.slots[slot.key]` and only
    * falls back to calling `readSlot()` itself when the raw row never
    * went through `getRegions` (e.g. a locally-constructed fixture).

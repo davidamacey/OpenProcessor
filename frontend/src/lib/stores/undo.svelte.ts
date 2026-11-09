@@ -1,7 +1,8 @@
 /**
  * UndoStore — ring buffer of the last 50 human write *actions*, spanning
  * kinds (`UndoEntry.kind`): class-label writes (`'label'`, default),
- * region writes (`'region'`, M6), VLM-suggestion dismissals
+ * bulk relabels and moves recorded as label operations (`'label_op'`,
+ * undone by operation id), region writes (`'region'`, M6), VLM-suggestion dismissals
  * (`'vlm_dismiss'`, M6/V1 undo) and ignore / restore writes (`'exclude'`
  * / `'unexclude'`, the selection actions). One entry per confirmed write, however
  * many crops it touched — a bulk label, a move, a batch region status
@@ -27,6 +28,8 @@
  */
 
 import { activeProjectKey } from '$lib/api';
+import { getCropsByIds } from '$lib/api_cropRead';
+import { undoLabelOpToEnd } from '$lib/labelOps/runLabelOp';
 import {
   undoCropLabel,
   undoCropRegion,
@@ -124,6 +127,17 @@ class UndoStore {
   }
 
   /**
+   * A bulk relabel or move recorded by the server as a label operation: Z undoes it
+   * by `opId` (queued as a job). `cropIds` are the items the request named, used only
+   * to show the restored items afterwards; a selection write has none and the page
+   * reloads instead. Skipped when the server queued nothing.
+   */
+  recordLabelOp(opId: string | null, cropIds: string[]): void {
+    if (opId === null) return;
+    this.push({ crop_ids: [...cropIds], at: Date.now(), kind: 'label_op', op_id: opId });
+  }
+
+  /**
    * M6: record a confirmed human region write (confirm, reject, false
    * positive, box edit, status/text change — single or batch) as one
    * undo entry. Same "server's own updated-ids list, never the request
@@ -157,6 +171,7 @@ class UndoStore {
   /**
    * Z: undo the newest entry (any kind) on the server and return the
    * restored crop(s). Route selection is `kind` × batch-vs-single:
+   *  - `'label_op'`: `POST /label_ops/{op_id}/undo` (a queued job, followed).
    *  - `'label'` (default, unset on any entry pushed before this field
    *    existed): `POST /crops/{id}/label/undo` / `.../label/undo_batch`.
    *  - `'region'`: `POST /crops/{id}/region/undo` / `.../region/undo_batch`.
@@ -173,13 +188,20 @@ class UndoStore {
       toastStore.info('Nothing to undo.');
       return [];
     }
-    if (entry.crop_ids.length === 0) {
+    if (entry.kind !== 'label_op' && entry.crop_ids.length === 0) {
       // A strict batch body 422s on an empty list; nothing to revert.
       toastStore.info('Nothing to undo.');
       return [];
     }
     const kind = entry.kind ?? 'label';
     try {
+      if (kind === 'label_op') {
+        const out = await undoLabelOpToEnd(entry.op_id!, false);
+        toastStore.success(
+          `Reverted ${out.restored}${out.kept_changed > 0 ? ` (${out.kept_changed} changed since, kept)` : ''}.`,
+        );
+        return entry.crop_ids.length > 0 ? await getCropsByIds(entry.crop_ids) : [];
+      }
       if (kind === 'exclude' || kind === 'unexclude') {
         if (kind === 'exclude') await unexcludeCrops(entry.crop_ids);
         else await excludeCrops(entry.crop_ids, 'ignore');

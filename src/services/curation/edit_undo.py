@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from src.clients.occ import OCC_BULK_MGET_SOURCE_EXCLUDES, OCC_BULK_PAGE_SIZE
+from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.clients.occ_bulk import occ_bulk_rounds
 from src.config.curation_accessors import items_index
 from src.db.repos import job_items
@@ -23,6 +23,7 @@ from src.services.curation.edit_history import (
     record_edit,
     restore_edit_state,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.jobs.service import start_job
 from src.utils.timeutil import now_iso
 
@@ -87,7 +88,7 @@ async def undo_edit_writes(
         on_failed=on_failed,
         max_retries=UNDO_MAX_RETRIES,
         refresh='wait_for',
-        source_excludes=OCC_BULK_MGET_SOURCE_EXCLUDES,
+        source_excludes=await vector_source_excludes(),
     )
     by: dict[str, list[str]] = {name: [] for name in OUTCOMES}
     for crop_id in crop_ids:

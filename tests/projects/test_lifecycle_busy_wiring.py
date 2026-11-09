@@ -17,23 +17,7 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, seed_default_project
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 def test_running_jobs_delegates_to_busy_module() -> None:

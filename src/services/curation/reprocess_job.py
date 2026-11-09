@@ -179,7 +179,7 @@ async def run_reprocess(
                 'decode_routes': {},
                 'stage_seconds': {},
                 'pe_calls_per_image': 0.0,
-                'servers': [] if ctx.server is None else [ctx.server],
+                'servers': [],
             },
         },
         failed,

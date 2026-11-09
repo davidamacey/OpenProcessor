@@ -148,8 +148,19 @@ def test_on_train_end_registry_metadata_is_byte_identical_to_lineage(
     assert metadata['docker_digest_trainer'] == lineage['trainer_image_id']
 
 
+class _FakeMlflowError(Exception):
+    """``mlflow.exceptions.MlflowException``: ``error_code`` is the ErrorCode name string."""
+
+    def __init__(self, message: str, error_code: str = 'INTERNAL_ERROR') -> None:
+        super().__init__(message)
+        self.error_code = error_code
+
+
 class _FakeRegistryClient:
     """Records registry calls; any stage API raises like a removed MLflow API."""
+
+    get_error: Exception | None = None
+    created: list[str] = []
 
     instances: list[_FakeRegistryClient] = []
 
@@ -159,7 +170,11 @@ class _FakeRegistryClient:
         _FakeRegistryClient.instances.append(self)
 
     def get_registered_model(self, _name: str) -> None:
-        return None
+        if _FakeRegistryClient.get_error is not None:
+            raise _FakeRegistryClient.get_error
+
+    def create_registered_model(self, name: str) -> None:
+        _FakeRegistryClient.created.append(name)
 
     def create_model_version(self, **kwargs: Any) -> Any:
         self.versions.append(kwargs)
@@ -183,9 +198,13 @@ def test_register_model_sets_the_staging_alias_and_never_a_stage(
 
     fake_tracking = types.ModuleType('mlflow.tracking')
     fake_tracking.MlflowClient = _FakeRegistryClient  # type: ignore[attr-defined]
+    fake_exceptions = types.ModuleType('mlflow.exceptions')
+    fake_exceptions.MlflowException = _FakeMlflowError  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, 'mlflow', types.ModuleType('mlflow'))
+    monkeypatch.setitem(sys.modules, 'mlflow.exceptions', fake_exceptions)
     monkeypatch.setitem(sys.modules, 'mlflow.tracking', fake_tracking)
     _FakeRegistryClient.instances.clear()
+    _FakeRegistryClient.get_error = None
     model = _FakeModel()
     _register(model, tmp_path, lineage)
     callbacks = model.callbacks['on_train_end']
@@ -196,3 +215,56 @@ def test_register_model_sets_the_staging_alias_and_never_a_stage(
 
     (client,) = _FakeRegistryClient.instances
     assert client.aliases == [(owner.registry_name, 'staging', '7')]
+
+
+def _registry_owner(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lineage: dict[str, Any], get_error: Exception
+) -> Any:
+    import types
+
+    fake_tracking = types.ModuleType('mlflow.tracking')
+    fake_tracking.MlflowClient = _FakeRegistryClient  # type: ignore[attr-defined]
+    fake_exceptions = types.ModuleType('mlflow.exceptions')
+    fake_exceptions.MlflowException = _FakeMlflowError  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, 'mlflow', types.ModuleType('mlflow'))
+    monkeypatch.setitem(sys.modules, 'mlflow.exceptions', fake_exceptions)
+    monkeypatch.setitem(sys.modules, 'mlflow.tracking', fake_tracking)
+    _FakeRegistryClient.instances.clear()
+    _FakeRegistryClient.created = []
+    _FakeRegistryClient.get_error = get_error
+    model = _FakeModel()
+    _register(model, tmp_path, lineage)
+    return model.callbacks['on_train_end'][0].__self__
+
+
+def test_a_new_registry_name_is_created(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lineage: dict[str, Any]
+) -> None:
+    owner = _registry_owner(
+        monkeypatch,
+        tmp_path,
+        lineage,
+        _FakeMlflowError('no such model', 'RESOURCE_DOES_NOT_EXIST'),
+    )
+    owner._register_model('run-abc', {})
+    assert _FakeRegistryClient.created == [owner.registry_name]
+
+
+def test_a_registry_outage_is_not_read_as_a_missing_name(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lineage: dict[str, Any]
+) -> None:
+    owner = _registry_owner(
+        monkeypatch, tmp_path, lineage, _FakeMlflowError('server error', 'INTERNAL_ERROR')
+    )
+    owner._register_model('run-abc', {})  # best-effort: logged, not raised
+    assert _FakeRegistryClient.created == []
+    (client,) = _FakeRegistryClient.instances
+    assert client.aliases == []
+
+
+def test_a_bug_in_the_registry_push_is_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, lineage: dict[str, Any]
+) -> None:
+    owner = _registry_owner(monkeypatch, tmp_path, lineage, KeyError('bug'))
+    with pytest.raises(KeyError):
+        owner._register_model('run-abc', {})

@@ -47,7 +47,7 @@ def _load_manifest(export_dir: Path) -> dict[str, Any]:
             (export_dir / 'manifest.json').read_text(encoding='utf-8')
         )
         return typed
-    except Exception as exc:  # missing/corrupt manifest -- every field falls back to None
+    except FileNotFoundError as exc:  # no manifest: every field falls back to None
         logger.warning('lineage_manifest_read_failed', export_dir=str(export_dir), error=str(exc))
         return {}
 

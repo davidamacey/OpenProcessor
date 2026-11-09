@@ -1,7 +1,7 @@
 <!--
   The "Embedding" row of `CropMetaPanel`'s main <dl>: the served
-  `embedding_state` (a `<dt>/<dd>` pair). `null` is an item written before
-  the field existed.
+  `embedding_states` (a `<dt>/<dd>` pair), one line per embedding space. A space
+  with no key has no state for the item.
 -->
 <script lang="ts">
   import type { Crop } from '$lib/types';
@@ -9,16 +9,23 @@
 
   let { crop }: { crop: Crop } = $props();
 
-  const state = $derived(crop.embedding_state ?? null);
+  const states = $derived(Object.entries(crop.embedding_states ?? {}));
 </script>
 
 <dt class="text-zinc-500">Embedding</dt>
 <dd class="text-zinc-200" data-testid="embedding-row">
-  {#if state === null}
-    unknown (written before v0.4.0)
-  {:else if state === 'embedded'}
-    embedded
+  {#if states.length === 0}
+    no state served
   {:else}
-    <EmbeddingStateBadge {state} />
+    {#each states as [space, state] (space)}
+      <div data-testid="embedding-row-space" data-space={space}>
+        <span class="font-mono text-zinc-400">{space}</span>
+        {#if state === 'embedded'}
+          embedded
+        {:else}
+          <EmbeddingStateBadge {state} {space} />
+        {/if}
+      </div>
+    {/each}
   {/if}
 </dd>

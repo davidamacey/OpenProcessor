@@ -1,7 +1,7 @@
 /**
  * Test fixture: a second slot that proves the capability model
  * generalizes beyond the served region slot
- * (docs/genericization-plan-2026-09-13.md §5.4, Slot A).
+ * (genericization plan §5.4, Slot A).
  *
  * Uses every capability the region slot uses, with deliberately
  * DIFFERENT values everywhere, so a region-shaped default or assumption
@@ -10,7 +10,7 @@
  * (region: true), and no `falsePositiveState` (region has one).
  *
  * Not bound to any real class or route. Its operator-facing JSON form is
- * `examples/annotation-profiles/aircraft-tail-number.json`, which
+ * `frontend/examples/annotation-profiles/aircraft-tail-number.json`, which
  * `roundTrip.test.ts` proves parses to exactly this spec.
  */
 

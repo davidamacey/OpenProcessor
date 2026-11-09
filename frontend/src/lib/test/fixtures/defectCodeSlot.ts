@@ -1,12 +1,12 @@
 /**
  * Test fixture, part B — proves the capability model degrades correctly
- * with NO geometry at all (docs/genericization-plan-2026-09-13.md §5.4,
+ * with NO geometry at all (genericization plan §5.4,
  * Slot B). The region slot and `aircraft_tail_number` both use `subBox`;
  * this one deliberately omits it, which is the specific case that breaks
  * an over-fitted "every slot has a box" abstraction.
  *
  * Not bound to any real class or route. Its operator-facing JSON form is
- * `examples/annotation-profiles/defect-code.json`.
+ * `frontend/examples/annotation-profiles/defect-code.json`.
  */
 
 import type { SlotSpec } from '$lib/annotations/types';

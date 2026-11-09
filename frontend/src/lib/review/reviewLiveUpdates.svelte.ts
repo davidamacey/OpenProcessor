@@ -33,6 +33,9 @@ export function createReviewLiveUpdates(reload: () => void) {
           liveNewCount += 1;
         }
       },
+      // A server `reset` means missed events: the count is unknown, so
+      // re-read the queue once instead.
+      onResync: () => refreshFromLive(),
     });
     return () => {
       liveSub?.close();

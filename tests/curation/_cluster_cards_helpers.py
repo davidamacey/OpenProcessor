@@ -86,9 +86,16 @@ def curation_client(fake: Any, monkeypatch: Any) -> Any:
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
+    from src.core.db_session import get_db
+
+    async def no_database():
+        yield None
+
+    monkeypatch.setattr('src.routers.curation.clusters.attach_display_nos', AsyncMock())
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+    app.dependency_overrides[get_db] = no_database
     return TestClient(app)
 
 

@@ -27,6 +27,16 @@ pytest_plugins = [
     'config_store.memory_config',
 ]
 
+
+@pytest.fixture
+def queue_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A valid queue URL and password file, so a lazily loaded Celery config can resolve."""
+    password = tmp_path / 'queue_password'
+    password.write_text('test-password\n')
+    monkeypatch.setenv('OP_QUEUE_URL', 'redis://valkey:6379/0')
+    monkeypatch.setenv('OP_QUEUE_PASSWORD_FILE', str(password))
+
+
 # OP_VLM_MODEL has no hardcoded default (src/services/labeling/vlm_client.py
 # DEFAULT_MODEL). A deterministic test value, set before any test module
 # imports vlm_client, so the whole suite doesn't have to configure it
@@ -42,7 +52,7 @@ os.environ.setdefault('OPENSEARCH_URL', 'http://127.0.0.1:9')
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 
 class _EnvDefaultProjectRecord:
@@ -164,6 +174,18 @@ def model_registry_fake(request: pytest.FixtureRequest, monkeypatch: pytest.Monk
 
 
 @pytest.fixture(autouse=True)
+def embedding_registry(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Every project's embedding registry is the three default spaces of a fresh project unless
+    a test adds more (``embedding_registry.add(...)``); the real one is PostgreSQL, which a
+    ``db`` test uses."""
+    if request.node.get_closest_marker('db') is not None:
+        return None
+    from _embedding_registry_fake import EmbeddingRegistryFake
+
+    return EmbeddingRegistryFake().install(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
 def pending_calls(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> object:
     """Near-duplicate pending rows are PostgreSQL rows; the offline tier records the calls
     instead (``.calls``), and a ``db`` test writes the real rows."""
@@ -256,7 +278,7 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     from src.services.projects import registry as registry_mod
 
-    real_request = TestClient.request
+    real_request: Callable[..., object] = TestClient.request
 
     def _unbound_request(self: TestClient, *args: object, **kwargs: object) -> object:
         return contextvars.Context().run(real_request, self, *args, **kwargs)
@@ -304,15 +326,14 @@ def _requests_start_unbound(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     # The lifespan's mapping check reads OpenSearch, which unit tests never reach. The check
     # itself is tested in tests/opensearch/test_mapping_gate.py against its original function.
-    # It still builds the shared client the way the real one does (a failed ping leaves the
-    # client cached), because later lifespan steps take that client without pinging again.
+    # Later lifespan steps take the shared client without pinging, so it is installed unpinged
+    # (a real one is cached only after a successful ping, which unit tests never get).
     async def _no_mapping_check() -> None:
-        from contextlib import suppress
+        from src.core.dependencies import OpenSearchClientFactory, app_state
 
-        from src.core.dependencies import OpenSearchClientFactory
-
-        with suppress(RuntimeError):
-            await OpenSearchClientFactory.get_client()
+        monkeypatch.setattr(
+            app_state, '_opensearch_client', OpenSearchClientFactory.create_client()
+        )
 
     monkeypatch.setattr('src.core.dependencies.bootstrap_opensearch_indexes', _no_mapping_check)
 
@@ -409,7 +430,7 @@ def _detector_config_is_usable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Profile validation reads a loaded detector's output names from Triton (#362); no test
     reaches a real server, and a stubbed repository lists usable detectors. A test of the
     unusable case passes ``get_model_config`` to ``validate_profile``."""
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _config(_self: object, _model: str) -> dict[str, object]:
         return {'output': [{'name': 'output0'}]}
@@ -539,7 +560,7 @@ def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _none() -> dict[str, frozenset[str]]:
         return {}
 
-    monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
+    monkeypatch.setattr('src.services.models.model_unload_guard.ingest_models_by_project', _none)
 
 
 @pytest.fixture

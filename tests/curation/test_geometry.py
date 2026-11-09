@@ -8,12 +8,20 @@ from PIL import Image
 
 from src.services.detection.geometry import (
     bbox_norm,
+    box_area,
     crop_id,
     crop_to_jpeg,
     iou,
     letterbox_to_square,
     undo_letterbox,
 )
+
+
+class TestBoxArea:
+    def test_area_and_inverted_sides_count_as_zero(self) -> None:
+        assert box_area((0.1, 0.2, 0.5, 0.4)) == pytest.approx(0.08)
+        assert box_area((0.5, 0.2, 0.1, 0.4)) == 0.0
+        assert box_area((0.1, 0.4, 0.5, 0.2)) == 0.0
 
 
 class TestBboxNorm:
@@ -121,7 +129,7 @@ def _expected_letterbox_pixels(img, target: int, fill=(114, 114, 114)) -> np.nda
     new_w, new_h = max(1, round(w * scale)), max(1, round(h * scale))
     canvas = PILImage.new('RGB', (target, target), fill)
     canvas.paste(
-        img.resize((new_w, new_h), PILImage.BILINEAR),
+        img.resize((new_w, new_h), PILImage.BILINEAR),  # type: ignore[attr-defined]
         (int((target - new_w) / 2.0), int((target - new_h) / 2.0)),
     )
     return np.transpose(np.asarray(canvas), (2, 0, 1))[None, ...]

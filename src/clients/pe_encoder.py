@@ -1,62 +1,26 @@
 """Unified PE-Core-L14-336 client.
 
-Two encoders ship under one class:
+Two encoders ship under one class, both on Triton:
 
-* **Image encoder** — runs on Triton (model name ``pe_image_encoder``)
-  through an :class:`AsyncTritonPool`, mirroring how
-  ``mobileclip2_s2_image_encoder`` is invoked from
-  the curation ingest pipeline.
-* **Text encoder** — runs **in-process on CPU** by default, deliberately
-  independent of the GPU and Triton so semantic search keeps working when
-  both are down. The queries are short, operator-issued curation prompts,
-  LRU-cached so the same phrase typed twice is never re-encoded.
+* **Image encoder**: the model ``pe_image_encoder`` through an :class:`AsyncTritonPool`.
+* **Text encoder**: the text-tower graph from ``export/export_pe_text_encoder.py`` served as
+  ``pe_text_encoder`` (onnxruntime backend, one CPU instance shared by every uvicorn worker),
+  called synchronously through :class:`~src.clients.pe_text_backends.TritonTextBackend` and
+  LRU-cached so the same phrase typed twice is never re-encoded. There is no in-process
+  fallback: with the text model not ready :meth:`PEEncoder.warm_text_encoder` raises
+  :class:`TextModelNotReady` (before the tokenizer, and so any ``torch`` import, is loaded) and
+  semantic search answers 503 naming that model.
 
-Text backends (picked once by :meth:`PEEncoder.warm_text_encoder`):
+Tokenization stays in Python with PE's own ``SimpleTokenizer`` (context length 32). Because the
+text tower's attention mask is strictly causal and pooling reads the EOT position, padding after
+a row's EOT can never change its embedding, so the model is fed tokens trimmed to the batch's
+last EOT (:func:`~src.clients.pe_text_backends.trim_text_tokens`).
 
-``triton``
-    The text-tower graph from ``export/export_pe_text_encoder.py`` served
-    by Triton as ``pe_text_encoder`` (onnxruntime backend, one CPU
-    instance shared by every uvicorn worker). Used whenever Triton reports
-    that model ready; a failed call permanently falls back to an
-    in-process backend for the rest of that worker's life, so Triton is
-    never a hard dependency.
-``torch``
-    PyTorch eager through ``perception_models``' ``pe.CLIP`` — the
-    in-process fallback when Triton's ``pe_text_encoder`` isn't ready.
-    Loaded lazily (see :class:`LazyTorchTextBackend`): never at warm time,
-    only from the first query a given worker actually serves.
-``onnx``
-    ONNX Runtime ``CPUExecutionProvider`` over the same text-tower graph,
-    loaded **in-process** from ``OP_PE_TEXT_ONNX_PATH``. Explicit opt-in
-    only (``OP_PE_TEXT_BACKEND=onnx``) -- this is exactly the backend that
-    used to run once per uvicorn worker: with 32 workers each loading its own ~1.4 GB ONNX
-    Runtime session, ``auto`` mode alone put container RSS at ~84 GiB. ``auto``
-    no longer considers this backend at all; pin it explicitly only for a
-    single-worker/CLI process where Triton isn't available. Also loaded
-    lazily, never at warm time.
+Heavy imports (the tokenizer's package, tritonclient) live inside the loaders so this module
+stays importable without them.
 
-``OP_PE_TEXT_BACKEND`` selects ``auto`` (default: triton -> torch), or
-pins one of the three; a pinned ``onnx``/``torch`` that cannot load
-raises (on first use, since both load lazily), a pinned ``triton`` that
-is not ready falls back in-process.
-
-Tokenization always stays in Python with PE's own ``SimpleTokenizer``
-(context length 32). Because the text tower's attention mask is strictly
-causal and pooling reads the EOT position, padding after a row's EOT can
-never change its embedding, so every backend is fed tokens trimmed to the
-batch's last EOT (:func:`trim_text_tokens`) — a 3-word query runs ~5
-positions instead of 32.
-
-Heavy imports (torch, perception_models, onnxruntime, tritonclient) live
-inside the loaders so this module stays importable without them — that
-keeps the unit tests independent of the heavy ML stack.
-
-Embedding contract (both paths):
-
-* Shape: ``(N, 1024)`` for batch, ``(1024,)`` for single (text helper).
-* dtype: ``float32``.
-* Each row is L2-normalized — callers can use a dot-product as cosine
-  similarity without re-normalizing.
+Embedding contract (both paths): shape ``(N, 1024)`` for a batch, ``float32``, each row
+L2-normalized, so a dot product is the cosine similarity.
 """
 
 from __future__ import annotations
@@ -64,27 +28,18 @@ from __future__ import annotations
 import os
 import threading
 from collections import OrderedDict, namedtuple
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from src.clients.pe_text_backends import (
-    DEFAULT_PE_TEXT_ONNX_PATH,
-    PE_TEXT_BACKENDS,
     PE_TEXT_CHECKPOINT,
     PE_TEXT_CONTEXT_LENGTH,
-    PE_TEXT_INPUT,
-    PE_TEXT_OUTPUT,
     PE_TEXT_TRITON_MODEL,
-    LazyOnnxTextBackend,
-    LazyTorchTextBackend,
-    OnnxTextBackend,
-    TorchTextBackend,
     TritonTextBackend,
     trim_text_tokens,
 )
-from src.config.env import env_int, env_str
+from src.config.env import env_str
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
 from src.utils.cpu_pool import run_cpu
@@ -151,52 +106,35 @@ def _l2_normalize(matrix: np.ndarray) -> np.ndarray:
     return (matrix / norms).astype(np.float32, copy=False)
 
 
+class TextModelNotReady(RuntimeError):  # noqa: N818 - names the state, not an error class
+    """Triton's PE text model is not ready; nothing else can answer a text query."""
+
+
 class PEEncoder:
     """Unified PE-Core-L14-336 client.
 
-    The image path is routed to Triton (``pe_image_encoder``); the text
-    path runs in-process (ONNX Runtime or PyTorch) or, optionally, on
-    Triton (``pe_text_encoder``), behind a per-query LRU cache.
-
-    Text-backend settings default to the environment
-    (``OP_PE_TEXT_BACKEND``, ``OP_PE_TEXT_ONNX_PATH``,
-    ``OP_PE_TEXT_TRITON_MODEL``, ``OP_PE_TEXT_ORT_THREADS``); keyword
-    arguments override them (tests, scripts).
+    Both the image path (``pe_image_encoder``) and the text path (``pe_text_encoder``) run on
+    Triton; text queries sit behind a per-query LRU cache. The text model name defaults to
+    ``OP_PE_TEXT_TRITON_MODEL``; the keyword overrides it (tests, scripts).
     """
 
     def __init__(
         self,
         triton_pool: AsyncTritonPool | None = None,
         *,
-        text_backend: str | None = None,
-        text_onnx_path: str | Path | None = None,
         text_triton_model: str | None = None,
-        ort_threads: int | None = None,
         triton_client_factory: Any = None,
     ) -> None:
         self.triton_pool = triton_pool
-        self._text_backend_pref = (
-            (text_backend or env_str('OP_PE_TEXT_BACKEND', 'auto')).strip().lower()
-        )
-        self._text_onnx_path = str(
-            text_onnx_path or env_str('OP_PE_TEXT_ONNX_PATH', str(DEFAULT_PE_TEXT_ONNX_PATH))
-        )
         self._text_triton_model = text_triton_model or env_str(
             'OP_PE_TEXT_TRITON_MODEL', PE_TEXT_TRITON_MODEL
-        )
-        self._ort_threads = (
-            ort_threads
-            if ort_threads is not None
-            else env_int('OP_PE_TEXT_ORT_THREADS', 0, minimum=0)
         )
         self._triton_client_factory = triton_client_factory
 
         # Populated by warm_text_encoder().
         self._text_tokenizer: Any = None
         self._text_backend: Any = None
-        self._local_text_backend: Any = None
         self._text_ready: bool = False
-        self._triton_fallbacks = 0
         self._text_lock = threading.RLock()
 
         self._text_cache: OrderedDict[str, np.ndarray] = OrderedDict()
@@ -285,81 +223,58 @@ class PEEncoder:
         return typed
 
     # ------------------------------------------------------------------
-    # Text path — in-process ONNX Runtime / PyTorch, optional Triton,
-    # LRU-cached per query
+    # Text path: Triton's pe_text_encoder, LRU-cached per query
     # ------------------------------------------------------------------
 
     def warm_text_encoder(self) -> None:
-        """Pick and load the text backend (idempotent).
+        """Bind the Triton text backend and load the tokenizer (idempotent).
 
-        Called from the FastAPI lifespan so the first /search/text request
-        doesn't pay the load cost. Raises when no backend can be loaded
-        (the lifespan logs it; search then returns 503).
+        Raises :class:`TextModelNotReady` when Triton does not report the text model ready; the
+        tokenizer (and whatever it imports) is loaded only after that check passes.
         """
         if self._text_ready:
             return
         with self._text_lock:
             if self._text_ready:
                 return
-            if self._text_backend_pref not in PE_TEXT_BACKENDS:
-                raise ValueError(
-                    f'OP_PE_TEXT_BACKEND={self._text_backend_pref!r}; '
-                    f'expected one of {PE_TEXT_BACKENDS}'
-                )
+            backend = self._triton_backend()
             if self._text_tokenizer is None:
                 self._text_tokenizer = self._load_tokenizer()
-
-            pref = self._text_backend_pref
-            backend: Any = None
-            # 'auto'
-            # tries Triton's shared pe_text_encoder first -- NOT the
-            # in-process ONNX path, which used to load its own ~1.4 GB
-            # session in every uvicorn worker. In-process ONNX is now only
-            # reachable via an explicit OP_PE_TEXT_BACKEND=onnx pin.
-            if pref == 'onnx':
-                backend = self._try_onnx_backend(required=True)
-            if backend is None and pref in ('auto', 'triton'):
-                backend = self._try_triton_backend()
-            if backend is None:
-                if pref == 'triton':
-                    logger.warning(
-                        'pe_text_triton_unavailable_using_local',
-                        model=self._text_triton_model,
-                    )
-                backend = self._local_backend()
-
             self._text_backend = backend
             self._text_ready = True
             logger.info(
                 'pe_text_encoder_ready',
                 checkpoint=PE_TEXT_CHECKPOINT,
-                backend=backend.name,
-                requested=pref,
+                model=self._text_triton_model,
             )
 
-    def prime_text_backend(self) -> None:
-        """Send one trivial query through the Triton text backend, bypassing the LRU.
+    def ensure_text_ready(self) -> bool:
+        """:meth:`warm_text_encoder`, reporting instead of raising: whether text queries can run.
 
-        Opens the gRPC channel and the model instance so a worker's first real
-        search does not pay for them. Local (ONNX/torch) backends load lazily and
-        are multi-GB, so they are left alone. A backend error propagates (the lifespan
-        logs it and carries on; the first real query then retries).
+        Triton may come up after the API did, so a request retries the (cheap) readiness probe
+        instead of trusting the one made at startup.
         """
-        backend = self._text_backend
-        if not self._text_ready or backend is None or backend.name != 'triton':
-            return
-        self._encode_uncached(['warmup'])
+        try:
+            self.warm_text_encoder()
+        except TextModelNotReady as exc:
+            logger.info('pe_text_model_not_ready', error=str(exc))
+            return False
+        return True
+
+    def prime_text_backend(self) -> None:
+        """Send one trivial query to Triton, bypassing the LRU.
+
+        Opens the gRPC channel and the model instance so a worker's first real search does not
+        pay for them. A backend error propagates (the lifespan logs it and carries on; the first
+        real query then retries).
+        """
+        if self._text_ready:
+            self._encode_uncached(['warmup'])
 
     @property
-    def text_ready(self) -> bool:
-        """Whether :meth:`warm_text_encoder` has completed."""
-        return self._text_ready
-
-    @property
-    def text_backend(self) -> str | None:
-        """Name of the active text backend (``onnx``/``triton``/``torch``)."""
-        backend = self._text_backend
-        return None if backend is None else backend.name
+    def text_model(self) -> str:
+        """The Triton model that answers text queries."""
+        return self._text_triton_model
 
     def text_status(self) -> dict[str, Any]:
         """Operator-facing snapshot for ``GET /health/pe_text``."""
@@ -370,12 +285,7 @@ class PEEncoder:
             'cache_scope': 'process',
             'pid': os.getpid(),
             'ready': self._text_ready,
-            'backend': self.text_backend,
-            'requested_backend': self._text_backend_pref,
-            'onnx_path': self._text_onnx_path,
-            'onnx_path_exists': Path(self._text_onnx_path).is_file(),
             'triton_model': self._text_triton_model,
-            'triton_fallbacks': self._triton_fallbacks,
             'cache': info._asdict(),
         }
 
@@ -389,49 +299,17 @@ class PEEncoder:
 
         return SimpleTokenizer(context_length=PE_TEXT_CONTEXT_LENGTH)
 
-    def _try_onnx_backend(self, *, required: bool) -> LazyOnnxTextBackend | None:
-        """Explicit-opt-in only (``OP_PE_TEXT_BACKEND=onnx``) -- 'auto'
-        never calls this. Only checks the file exists here (cheap); the
-        actual ``ort.InferenceSession`` construction is deferred to the
-        first query via :class:`LazyOnnxTextBackend`, never at warm time.
-        """
-        path = self._text_onnx_path
-        if not Path(path).is_file():
-            if required:
-                raise FileNotFoundError(
-                    f'OP_PE_TEXT_BACKEND=onnx but {path} does not exist '
-                    '(export it with export/export_pe_text_encoder.py)'
-                )
-            logger.info('pe_text_onnx_not_found', path=path)
-            return None
-        return LazyOnnxTextBackend(lambda: self._load_onnx_backend(path))
-
-    def _load_onnx_backend(self, path: str) -> OnnxTextBackend:
-        import onnxruntime as ort
-
-        logger.info('pe_text_encoder_loading', checkpoint=path, backend='onnx')
-        opts = ort.SessionOptions()
-        if self._ort_threads:
-            opts.intra_op_num_threads = self._ort_threads
-        session = ort.InferenceSession(path, sess_options=opts, providers=['CPUExecutionProvider'])
-        names_in = [i.name for i in session.get_inputs()]
-        names_out = [o.name for o in session.get_outputs()]
-        if PE_TEXT_INPUT not in names_in or PE_TEXT_OUTPUT not in names_out:
-            raise ValueError(
-                f'{path} has inputs {names_in} / outputs {names_out}; expected '
-                f'{PE_TEXT_INPUT!r} -> {PE_TEXT_OUTPUT!r}'
-            )
-        return OnnxTextBackend(session, path)
-
-    def _try_triton_backend(self) -> TritonTextBackend | None:
+    def _triton_backend(self) -> TritonTextBackend:
         try:
             client = self._make_triton_client()
-            if not client.is_model_ready(self._text_triton_model):
-                logger.info('pe_text_triton_model_not_ready', model=self._text_triton_model)
-                return None
+            ready = client.is_model_ready(self._text_triton_model)
         except Exception as exc:
-            logger.info('pe_text_triton_unreachable', error=str(exc))
-            return None
+            raise TextModelNotReady(
+                f'Triton is unreachable, so its text model {self._text_triton_model!r} is not '
+                f'ready: {exc}'
+            ) from exc
+        if not ready:
+            raise TextModelNotReady(f'Triton text model {self._text_triton_model!r} is not ready')
         return TritonTextBackend(client, self._text_triton_model)
 
     def _make_triton_client(self) -> Any:
@@ -441,39 +319,6 @@ class PEEncoder:
         from src.config import get_settings
 
         return TritonClientManager.get_sync_client(get_settings().triton_url)
-
-    def _load_torch_backend(self) -> TorchTextBackend:
-        import torch
-        from core.vision_encoder import pe
-
-        logger.info('pe_text_encoder_loading', checkpoint=PE_TEXT_CHECKPOINT, backend='torch')
-        model = pe.CLIP.from_config(PE_TEXT_CHECKPOINT, pretrained=True)
-        # Inference mode (no dropout). getattr indirection keeps the literal
-        # token away from the python-no-eval pre-commit hook.
-        getattr(model, 'ev' + 'al')()
-        model.to('cpu')
-        return TorchTextBackend(model, torch)
-
-    def _local_backend(self) -> Any:
-        """In-process PyTorch fallback for 'auto'/'triton' when Triton's
-        ``pe_text_encoder`` isn't ready. Cached.
-
-        Reached only for ``pref in ('auto', 'triton')`` -- an explicit
-        ``pref == 'onnx'`` is resolved directly in :meth:`warm_text_encoder`
-        (raising if missing) and never falls through to here. A pinned
-        ``OP_PE_TEXT_BACKEND=torch`` loads eagerly, same as always — the
-        operator asked for it explicitly, so failing fast on load is
-        correct. ``auto``/``triton`` instead defer the torch load to first
-        query via :class:`LazyTorchTextBackend` eagerly loading a multi-GB fallback
-        model in every uvicorn worker at startup is the bug, not a
-        feature.
-        """
-        if self._local_text_backend is None:
-            if self._text_backend_pref == 'torch':
-                self._local_text_backend = self._load_torch_backend()
-            else:
-                self._local_text_backend = LazyTorchTextBackend(self._load_torch_backend)
-        return self._local_text_backend
 
     # -- encoding --------------------------------------------------------
 
@@ -485,20 +330,7 @@ class PEEncoder:
         if not self._text_ready:
             raise RuntimeError('PEEncoder text encoder not warmed; call warm_text_encoder() first.')
         tokens = self._tokenize(queries)
-        backend = self._text_backend
-        try:
-            vectors = backend.encode(tokens)
-        except Exception as exc:
-            if backend.name != 'triton':
-                raise
-            # Triton is optional: switch to in-process encoding for good
-            # rather than flapping between backends per request.
-            logger.warning('pe_text_triton_failed_falling_back', error=str(exc))
-            with self._text_lock:
-                local = self._local_backend()
-                self._text_backend = local
-                self._triton_fallbacks += 1
-            vectors = local.encode(tokens)
+        vectors = self._text_backend.encode(tokens)
         return _l2_normalize(np.asarray(vectors, dtype=np.float32).reshape(len(queries), -1))
 
     def encode_text(self, queries: list[str]) -> np.ndarray:

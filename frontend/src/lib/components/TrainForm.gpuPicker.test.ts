@@ -1,6 +1,6 @@
 /**
  * Mount-based behavior test for TrainForm's GPU picker
- * (docs/design/test-audit-2026-09-24.md P1-4): it must render the served
+ * (test audit P1-4): it must render the served
  * options and preselect the backend's marked default. `getTrainGpus` goes
  * through the real `api.ts` fetch path, mocked at the `fetch` boundary so
  * the assertion covers the actual wiring (effect -> getTrainGpus ->

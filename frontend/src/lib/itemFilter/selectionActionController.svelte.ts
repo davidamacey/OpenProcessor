@@ -7,11 +7,17 @@
  * changing the limit / sample / seed, runs the same write with
  * `dry_run: true` and shows its `selected`. Confirm repeats it with
  * `dry_run: false` against the filter as it was when the dialog opened.
- * The ids the write served go to `undoStore` so Z reverts it. Refusals
+ * The recorded operation (or, for ignore / restore, the ids the write served)
+ * goes to `undoStore` so Z reverts it. Label and move are queued jobs: confirm
+ * follows the job and reports the server's counts from its result. Refusals
  * (both/neither of crop ids and filter, an empty filter without a limit,
  * too many items) are the server's own message.
  */
+import { getClusters } from '$lib/api_clusters';
 import { apiErrorText } from '$lib/api_errors';
+import { runLabelOp } from '$lib/labelOps/runLabelOp';
+import type { Cluster } from '$lib/types';
+import type { LabelOpAccepted } from '$lib/types_labelOps';
 import {
   batchExcludeSelection,
   batchUnexcludeSelection,
@@ -33,12 +39,10 @@ export interface SelectionActionResult {
   summary: string;
 }
 
-type WriteBody = {
-  updated?: number;
+type ExcludeBody = {
   excluded?: number;
   unexcluded?: number;
   updated_ids: string[];
-  conflicts?: unknown[];
 };
 
 function isDryRun(r: unknown): r is SelectionDryRun {
@@ -49,7 +53,8 @@ export function createSelectionActionController(filter: () => ItemFilter) {
   let action = $state<SelectionActionId | null>(null);
   let snapshot: ItemFilter = {};
   let classId = $state<number | null>(null);
-  let clusterId = $state<number | null>(null);
+  let clusterUid = $state<string | null>(null);
+  let clusterOptions = $state<Cluster[]>([]);
   let limit = $state<number | null>(null);
   let sample = $state<SelectionSample | null>(null);
   let seed = $state<number | null>(null);
@@ -71,7 +76,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
   /** The missing field an action needs before it can ask the server. */
   function missingParam(): boolean {
     if (action === 'label') return classId == null;
-    if (action === 'move') return clusterId == null;
+    if (action === 'move') return clusterUid == null;
     return false;
   }
 
@@ -85,7 +90,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
       case 'label':
         return bulkLabelSelection(sel, classId!, dryRun, signal);
       case 'move':
-        return moveSelectionToCluster(sel, clusterId!, dryRun, signal);
+        return moveSelectionToCluster(sel, clusterUid!, dryRun, signal);
       default:
         return Promise.reject(new Error('no action chosen'));
     }
@@ -120,21 +125,23 @@ export function createSelectionActionController(filter: () => ItemFilter) {
     snapshot = structuredClone($state.snapshot(filter()));
     confirmed = false;
     result = null;
+    let optionsError: string | null = null;
+    if (next === 'move') {
+      try {
+        // The target must be a cluster of the serving partition: offer the served cards.
+        clusterOptions = (await getClusters({ per_cluster: 0 })).items;
+      } catch (e) {
+        clusterOptions = [];
+        optionsError = apiErrorText(e);
+      }
+    }
     await refresh();
+    if (optionsError) error = optionsError;
   }
 
-  function summarize(body: WriteBody): string {
-    const n = body.updated ?? body.excluded ?? body.unexcluded ?? body.updated_ids.length;
-    const conflicts = body.conflicts?.length ?? 0;
-    const verb =
-      action === 'exclude'
-        ? 'Ignored'
-        : action === 'unexclude'
-          ? 'Restored'
-          : action === 'label'
-            ? 'Labeled'
-            : 'Moved';
-    return conflicts > 0 ? `${verb} ${n} (${conflicts} blocked)` : `${verb} ${n}`;
+  function summarizeExclusion(body: ExcludeBody): string {
+    const n = body.excluded ?? body.unexcluded ?? body.updated_ids.length;
+    return `${action === 'exclude' ? 'Ignored' : 'Restored'} ${n}`;
   }
 
   const canConfirm = $derived(
@@ -154,12 +161,24 @@ export function createSelectionActionController(filter: () => ItemFilter) {
         error = 'The server answered a dry run; nothing was written.';
         return;
       }
-      const body = res as WriteBody;
-      if (action === 'exclude') undoStore.recordExclusion(body.updated_ids);
-      else if (action === 'unexclude') undoStore.recordUnexclusion(body.updated_ids);
-      else undoStore.recordWrites(body.updated_ids);
+      let summary: string;
+      if (action === 'label' || action === 'move') {
+        const out = await runLabelOp(res as LabelOpAccepted, { signal: ctrl.signal });
+        // A selection names no ids; the page reloads to show the write.
+        undoStore.recordLabelOp(out.opId, []);
+        const verb = action === 'label' ? 'Labeled' : 'Moved';
+        summary =
+          out.conflicts > 0
+            ? `${verb} ${out.updated} (${out.conflicts} blocked)`
+            : `${verb} ${out.updated}`;
+      } else {
+        const body = res as ExcludeBody;
+        if (action === 'exclude') undoStore.recordExclusion(body.updated_ids);
+        else undoStore.recordUnexclusion(body.updated_ids);
+        summary = summarizeExclusion(body);
+      }
       confirmed = true;
-      result = { summary: summarize(body) };
+      result = { summary };
       toastStore.success(`${result.summary}.`);
     } catch (e) {
       error = apiErrorText(e);
@@ -208,11 +227,14 @@ export function createSelectionActionController(filter: () => ItemFilter) {
     set classId(v: number | null) {
       classId = v;
     },
-    get clusterId() {
-      return clusterId;
+    get clusterUid() {
+      return clusterUid;
     },
-    set clusterId(v: number | null) {
-      clusterId = v;
+    set clusterUid(v: string | null) {
+      clusterUid = v;
+    },
+    get clusterOptions() {
+      return clusterOptions;
     },
     get limit() {
       return limit;

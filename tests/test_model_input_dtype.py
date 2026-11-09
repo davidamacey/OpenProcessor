@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import pytest
@@ -68,7 +68,9 @@ def _sync_client(datatype: str, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, l
     monkeypatch.setattr(tc, 'resolve_adapter', lambda _m: _Adapter())
     monkeypatch.setattr(tc, 'InferRequestedOutput', lambda name: name)
     monkeypatch.setattr(
-        client, '_infer_with_retry', lambda _n, inputs, _o: sent.append(inputs[0]) or object()
+        client,
+        '_infer_with_retry',
+        lambda _n, inputs, _o: sent.append(inputs[0]) or object(),  # type: ignore[func-returns-value]
     )
     return client, sent
 
@@ -117,7 +119,7 @@ def _pool(datatype: str, monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncTritonPo
     monkeypatch.setattr('src.clients.triton_pool_core.ensure_loaded', _loaded)
     pool = AsyncTritonPool(pool_size=1)
     meta = _MetaClient(datatype)
-    pool._clients = [meta]  # type: ignore[list-item]
+    pool._clients = [meta]
     pool._lock = asyncio.Lock()
     pool._initialized = True
     return pool, meta
@@ -183,8 +185,11 @@ def _detector(pool: _IngestPool) -> WholeImageDetector:
         assigns_class=False,
     )
     return WholeImageDetector(
-        triton_pool=pool, registry=None, profile=profile, secondary_profile=profile
-    )  # type: ignore[arg-type]
+        triton_pool=pool,
+        registry=cast('Any', None),
+        profile=cast('Any', profile),
+        secondary_profile=profile,  # type: ignore[arg-type]
+    )
 
 
 _IMGS = [Image.new('RGB', (80, 40), (10 * i + 10, 50, 200)) for i in range(3)]

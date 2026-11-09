@@ -100,6 +100,41 @@ def _same_box(a: BBox, b: BBox) -> bool:
     return all(abs(x - y) <= SAME_BOX_TOLERANCE for x, y in zip(a, b, strict=True))
 
 
+def _candidate_pairs(
+    existing: list[ExistingItem], proposals: list[Proposal]
+) -> list[tuple[float, str, int, int]]:
+    """``(-iou, crop_id, proposal index, item index)`` for every overlap, best first."""
+    pairs: list[tuple[float, str, int, int]] = []
+    for ei, item in enumerate(existing):
+        for pi, prop in enumerate(proposals):
+            value = iou(item.bbox_norm, prop.bbox_norm)
+            if value >= LABEL_IOU_MATCH:
+                pairs.append((-value, item.crop_id, pi, ei))
+    pairs.sort()
+    return pairs
+
+
+def _record_match(plan: MergePlan, item: ExistingItem, prop: Proposal, match_iou: float) -> None:
+    """File one matched item/proposal pair under merged, refreshed or replaced."""
+    if item.locked:
+        plan.merged_into_locked.append((item.crop_id, prop))
+        if item.class_name != prop.class_name:
+            plan.disagreements.append(
+                Disagreement(
+                    DISAGREEMENT_CLASS_MISMATCH,
+                    item.crop_id,
+                    item.bbox_norm,
+                    label_class=item.class_name,
+                    detector_class=prop.class_name,
+                    iou=match_iou,
+                )
+            )
+    elif _same_box(item.bbox_norm, prop.bbox_norm):
+        plan.refreshed.append((item.crop_id, prop))
+    else:
+        plan.replaced.append((item.crop_id, prop))
+
+
 def merge_item_proposals(
     existing: list[ExistingItem],
     proposals: list[Proposal],
@@ -117,13 +152,7 @@ def merge_item_proposals(
     ``missed_label``. ``on_negative_frame`` reports an unmatched proposal as
     an ``unmatched_detection`` (a likely false positive).
     """
-    pairs: list[tuple[float, str, int, int]] = []
-    for ei, item in enumerate(existing):
-        for pi, prop in enumerate(proposals):
-            value = iou(item.bbox_norm, prop.bbox_norm)
-            if value >= LABEL_IOU_MATCH:
-                pairs.append((-value, item.crop_id, pi, ei))
-    pairs.sort()
+    pairs = _candidate_pairs(existing, proposals)
 
     plan = MergePlan()
     taken_items: set[int] = set()
@@ -133,24 +162,7 @@ def merge_item_proposals(
             continue
         taken_items.add(ei)
         taken_props.add(pi)
-        item, prop = existing[ei], proposals[pi]
-        if item.locked:
-            plan.merged_into_locked.append((item.crop_id, prop))
-            if item.class_name != prop.class_name:
-                plan.disagreements.append(
-                    Disagreement(
-                        DISAGREEMENT_CLASS_MISMATCH,
-                        item.crop_id,
-                        item.bbox_norm,
-                        label_class=item.class_name,
-                        detector_class=prop.class_name,
-                        iou=-neg_iou,
-                    )
-                )
-        elif _same_box(item.bbox_norm, prop.bbox_norm):
-            plan.refreshed.append((item.crop_id, prop))
-        else:
-            plan.replaced.append((item.crop_id, prop))
+        _record_match(plan, existing[ei], proposals[pi], -neg_iou)
 
     for pi, prop in enumerate(proposals):
         if pi in taken_props:

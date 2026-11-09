@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from tritonclient.utils import InferenceServerException
 
 from curation.ingest_fakes import FakePEEncoder, _jpeg_bytes, _make_service
 from src.routers.curation.ingest import _batch_response
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 class _FailingEncoder(FakePEEncoder):
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
-        raise RuntimeError('triton down')
+        raise InferenceServerException('triton down')
 
 
 @pytest.mark.asyncio

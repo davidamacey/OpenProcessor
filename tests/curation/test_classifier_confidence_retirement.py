@@ -66,7 +66,9 @@ def test_field_removed_from_crop_sort_fields() -> None:
     ],
 )
 def test_field_never_appears_in_any_tab_query(tab: str) -> None:
-    must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)
+    must, must_not, _reason = build_tab_query(
+        tab, vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+    )
     assert not _has_field({'must': must, 'must_not': must_not}, 'classifier_raw_confidence')
 
 
@@ -83,7 +85,9 @@ def test_outlier_flagged_removed_from_every_tab() -> None:
         'classifier_blind_spots',
         'new_class_proposals',
     ):
-        must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)
+        must, must_not, _reason = build_tab_query(
+            tab, vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+        )
         assert not _has_field({'must': must, 'must_not': must_not}, 'outlier_flagged')
 
 
@@ -95,7 +99,11 @@ def test_outlier_flagged_removed_from_every_tab() -> None:
 
 def test_primary_low_conf_gates_confidence_on_classifier_sources() -> None:
     must, _must_not, _reason = build_tab_query(
-        'primary_low_conf', include_test=False, text=None, max_rank=None
+        'primary_low_conf',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=None,
+        max_rank=None,
     )
     should_clauses = None
     for clause in must:
@@ -122,7 +130,11 @@ def test_primary_low_conf_matches_a_low_confidence_classifier_item(
         lambda: {'classifier_model'},
     )
     must, must_not, _reason = build_tab_query(
-        'primary_low_conf', include_test=False, text=None, max_rank=None
+        'primary_low_conf',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=None,
+        max_rank=None,
     )
     query = {'bool': {'must': must, 'must_not': must_not}}
     doc = {
@@ -141,7 +153,11 @@ def test_primary_low_conf_matches_a_low_confidence_classifier_item(
 
 def test_primary_low_conf_matches_a_blind_spot_with_no_classifier_source() -> None:
     must, must_not, _reason = build_tab_query(
-        'primary_low_conf', include_test=False, text=None, max_rank=None
+        'primary_low_conf',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=None,
+        max_rank=None,
     )
     query = {'bool': {'must': must, 'must_not': must_not}}
     [proposal_source] = sorted(unlabeled_proposal_class_sources())[:1] or ['x']
@@ -161,7 +177,9 @@ def test_primary_low_conf_matches_a_blind_spot_with_no_classifier_source() -> No
 
 
 def test_all_tab_gates_probe_entropy_on_a_threshold_not_mere_existence() -> None:
-    must, _must_not, _reason = build_tab_query('all', include_test=False, text=None, max_rank=None)
+    must, _must_not, _reason = build_tab_query(
+        'all', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+    )
     should_clauses = next(
         c['bool']['should'] for c in must if 'bool' in c and 'should' in c['bool']
     )
@@ -176,7 +194,9 @@ def test_all_tab_excludes_a_low_entropy_item_that_only_has_the_field() -> None:
     *had* a probe_pred_entropy value (regardless of how low) matched the
     'all' tab via `exists`. A confidently-predicted item (low entropy)
     must not match anymore."""
-    must, must_not, _reason = build_tab_query('all', include_test=False, text=None, max_rank=None)
+    must, must_not, _reason = build_tab_query(
+        'all', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+    )
     query = {'bool': {'must': must, 'must_not': must_not}}
     confident_item = {
         'probe_pred_entropy': 0.01,

@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Single-crop box-set editor (modal) for the given region slot
-   * (docs/design/w8-multibox-frontend-plan-2026-09-26.md).
+   * (w8 multibox frontend plan).
    *
    * Opens from CropCard's pencil button. Lets a curator add, move and
    * delete any number of boxes on top of the parent crop thumbnail (the

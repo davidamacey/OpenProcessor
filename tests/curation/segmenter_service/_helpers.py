@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import base64
 import importlib.util
-import io
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import numpy as np
-from PIL import Image
+from _image_helpers import make_jpeg as _make_jpeg
+
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 
 _SEGMENTER_DIR = Path(__file__).resolve().parents[3] / 'docker' / 'segmenter'
@@ -105,12 +108,6 @@ class _FakeProcessor:
 def _full_mask(h: int = 8, w: int = 8) -> np.ndarray:
     """A mask that fills its own bbox — rectangularity 1.0."""
     return np.ones((1, h, w), dtype=np.float32)
-
-
-def _make_jpeg(width: int = 320, height: int = 240) -> bytes:
-    buf = io.BytesIO()
-    Image.new('RGB', (width, height), (50, 80, 120)).save(buf, format='JPEG', quality=85)
-    return buf.getvalue()
 
 
 def _asgi_client() -> httpx.AsyncClient:

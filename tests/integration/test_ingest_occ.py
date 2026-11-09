@@ -29,9 +29,10 @@ tests against ``occ_skip_on_conflict_bulk``.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from curation.occ_fakes import VECTOR_EXCLUDES
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
@@ -231,8 +232,11 @@ async def test_existing_crop_with_human_label_preserved_on_reingest() -> None:
         'region_text_source': 'ingest',
     }
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         index=index,
         human_field_guards=_HUMAN_GUARDS,
         writer_id='ingest',
@@ -284,10 +288,24 @@ async def test_parallel_ingest_of_same_image_yields_n_crops_not_2n() -> None:
 
     results = await asyncio.gather(
         occ_upsert_bulk(
-            client, docs_a, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest-a'
+            cast('Any', client),
+            docs_a,
+            vector_excludes=VECTOR_EXCLUDES,
+            vector_field='pe_embedding',
+            state_field='embedding_state',
+            index=index,
+            human_field_guards=_HUMAN_GUARDS,
+            writer_id='ingest-a',
         ),
         occ_upsert_bulk(
-            client, docs_b, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest-b'
+            cast('Any', client),
+            docs_b,
+            vector_excludes=VECTOR_EXCLUDES,
+            vector_field='pe_embedding',
+            state_field='embedding_state',
+            index=index,
+            human_field_guards=_HUMAN_GUARDS,
+            writer_id='ingest-b',
         ),
     )
     total_created = sum(r['created'] for r in results)
@@ -335,8 +353,11 @@ async def test_non_human_doc_overwritten_normally() -> None:
         'class_source': 'ingest',
     }
     result = await occ_upsert_bulk(
-        client,
+        cast('Any', client),
         [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         index=index,
         human_field_guards=_HUMAN_GUARDS,
         writer_id='ingest',
@@ -392,7 +413,14 @@ async def test_bulk_update_phase_issues_one_bulk_call_not_n() -> None:
     bulk_calls_before = len(client.bulk_calls)
 
     result = await occ_upsert_bulk(
-        client, docs, index=index, human_field_guards=_HUMAN_GUARDS, writer_id='ingest'
+        cast('Any', client),
+        docs,
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        index=index,
+        human_field_guards=_HUMAN_GUARDS,
+        writer_id='ingest',
     )
 
     assert result['updated'] == 5
@@ -412,7 +440,9 @@ _LOCKED_EXISTING = {
         'class_source': 'human',
         'label_source': 'human',
         'class_validated': True,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': False,
     },
     # Issue #31: a holdout item whose class came from a machine writer.
@@ -427,7 +457,9 @@ _LOCKED_EXISTING = {
         'label_source': 'vlm',
         'class_detector': 'vlm_model',
         'class_validated': False,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': True,
     },
     'validated_import': {
@@ -436,7 +468,9 @@ _LOCKED_EXISTING = {
         'class_source': 'external_label',
         'label_source': 'import',
         'class_validated': True,
-        'cluster_id': 5,
+        'cluster_partition_id': 'p1',
+        'cluster_uid': 'u5',
+        'cluster_state': 'assigned',
         'test_holdout': False,
     },
 }
@@ -462,12 +496,21 @@ async def test_reingest_keeps_every_class_field_of_a_locked_item(kind: str) -> N
         'class_source': 'ingest',
         'label_source': 'ingest',
         'class_validated': False,
-        'cluster_id': 9,
+        'cluster_partition_id': 'p2',
+        'cluster_uid': 'u9',
+        'cluster_state': 'candidate',
         'confidence': 0.4,
         'test_holdout': False,
     }
     result = await occ_upsert_bulk(
-        client, [reingest_doc], index=index, human_field_guards=_CLASS_GUARDS, writer_id='ingest'
+        cast('Any', client),
+        [reingest_doc],
+        vector_excludes=VECTOR_EXCLUDES,
+        vector_field='pe_embedding',
+        state_field='embedding_state',
+        index=index,
+        human_field_guards=_CLASS_GUARDS,
+        writer_id='ingest',
     )
     assert result['preserved_human'] >= 1
 

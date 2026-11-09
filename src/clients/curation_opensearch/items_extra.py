@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
 from src.domain.audit_math import AUDIT_FIELDS
 
@@ -39,7 +41,7 @@ async def _put_fields(client: AsyncOpenSearch, mapping: dict[str, Any]) -> dict[
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
-        except Exception as exc:
+        except OpenSearchException as exc:
             msg = str(exc)
             if not _is_recoverable_mapping_conflict(msg):
                 logger.error('curation_mapping_migration_failed', index=index, error=msg)

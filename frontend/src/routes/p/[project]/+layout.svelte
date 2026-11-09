@@ -18,10 +18,8 @@
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
   import ClassSidebar from '$components/ClassSidebar.svelte';
-  import {
-    slotForClassName,
-    slotRegistryWarnings,
-  } from '$lib/annotations/registeredSlots';
+  import { slotRegistryWarnings } from '$lib/annotations/registeredSlots';
+  import { findActiveClassByName } from '$lib/classNameKey';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -164,7 +162,7 @@
     return () => window.removeEventListener('keydown', onKeydown);
   });
 
-  // K2 (docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md
+  // K2 (configurable keyboard shortcuts plan
   // §5.1): the served keymap applies live, with no reload — a
   // `config.changed axis=keymap` frame refetches `GET {prefix}/keymap`
   // and swaps `keymapStore`'s document in place; every dispatch resolves
@@ -199,36 +197,31 @@
   }
   const showSidebar = $derived(section === 'clusters');
 
-  // Class filter applied to the cluster grid. Page reads from URL (?class=ID).
+  // Class filter applied to the cluster grid. Page reads from URL (?class=NAME;
+  // an id still resolves).
   const selectedClassId = $derived.by(() => {
     const v = page.url.searchParams.get('class');
-    return v == null ? null : Number.isFinite(+v) ? +v : null;
+    if (v == null) return null;
+    if (Number.isFinite(+v)) return +v;
+    return findActiveClassByName(classesStore.classes, v)?.id ?? null;
   });
 
   function selectClass(cls: { id: number } | null): void {
     void (async () => {
-      // For `cluster_kind === 'class'` clusters the backend guarantees
-      // cluster_id == class_id (see `ClusterKind` in src/lib/types.ts), so
-      // clicking a class in the sidebar navigates straight to that class's
-      // cluster instead of filtering the current page. Behaves the same on
-      // /classes since /clusters/{id} is the canonical view.
+      // A class is not a cluster: clicking one filters the cluster grid to the
+      // clusters whose dominant class it is (class identity is the name). A class
+      // bound to a slot opens the slot gallery through the same link, since its
+      // regions are sub-bboxes on other items; driven by registeredSlots.
       if (cls) {
-        // A class bound to a slot isn't a cluster — its regions are
-        // sub-bboxes on other items (region_bbox_norm). Route to the slot
-        // gallery so the operator sees every slot-bearing crop, not just
-        // the 1-2 rows whose PRIMARY class matches the slot's bound class
-        // name. Driven by registeredSlots, so a new registered slot gets
-        // this routing for free.
         const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
-        if (slotForClassName(clsName) != null) {
-          void goto(resolve(projectHref(`/clusters?class=${cls.id}`)), {
-            reset: false,
-          });
-          return;
+        if (clsName) {
+          void goto(
+            resolve(projectHref(`/clusters?class=${encodeURIComponent(clsName)}`)),
+            {
+              reset: false,
+            },
+          );
         }
-        void goto(resolve(projectHref(`/clusters/${cls.id}`)), {
-          reset: false,
-        });
         return;
       }
       const q = [...page.url.searchParams]
@@ -242,7 +235,7 @@
   }
 
   // Crumbs from the path below `/p/<slug>`: the section, plus the
-  // cluster id on `/clusters/<id>` (the only nested page).
+  // cluster uid on `/clusters/<uid>` (the only nested page).
   const crumbs = $derived.by(() => {
     // No crumb on /dashboard — it is "home", already labeled by the
     // title/nav; a redundant lowercase "dashboard" crumb added nothing.

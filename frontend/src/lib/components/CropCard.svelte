@@ -16,7 +16,7 @@
   import SourceImageOverlay from './SourceImageOverlay.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
   import EmbeddingStateBadge from './embedding/EmbeddingStateBadge.svelte';
-  import { noVectorCopy } from './embedding/embeddingCopy';
+  import { noVectorAnywhereCopy, noVectorEntries } from './embedding/embeddingCopy';
   import DetectorClass from './labelConfirmation/DetectorClass.svelte';
   import Modal from '$components/Modal.svelte';
   import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
@@ -104,7 +104,7 @@
 
   // The predicate for "a human has confirmed this box" is the boolean
   // `verified` field, not a status string (see Finding C.3,
-  // docs/genericization-plan-2026-09-13.md §2.7 / §3.8).
+  // genericization plan §2.7 / §3.8).
   const slotVerified = $derived<boolean>(!!slotData?.lifecycle?.verified);
 
   const noSlot = $derived(
@@ -188,7 +188,7 @@
 
   // Scalar-box slot ring color: green when a human has confirmed the box
   // (verified === true), yellow for unverified machine-suggested boxes
-  // (Finding C.3, docs/genericization-plan-2026-09-13.md §2.7: `verified`
+  // (Finding C.3, genericization plan §2.7: `verified`
   // — not any status value — is the confirmed-ring predicate).
   const scalarRingColorClass = $derived(
     slotVerified
@@ -349,7 +349,7 @@
       {/if}
 
       {#if onsimilar}
-        {@const noVector = noVectorCopy(crop.embedding_state)}
+        {@const noVector = noVectorAnywhereCopy(crop.embedding_states)}
         <button
           type="button"
           class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white disabled:opacity-50"
@@ -418,7 +418,9 @@
         </svg>
       </span>
     {/if}
-    <EmbeddingStateBadge state={crop.embedding_state ?? null} compact />
+    {#each noVectorEntries(crop.embedding_states) as [space, state] (space)}
+      <EmbeddingStateBadge {state} {space} compact />
+    {/each}
     {#if hasClass}
       <span
         class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
 from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
@@ -47,7 +49,7 @@ async def ensure_items_inner_result_window(
                 index=index, body={'index': {'max_inner_result_window': wanted}}
             )
             _INNER_RESULT_WINDOWS[index] = wanted
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('curation_inner_result_window_failed', index=index, error=str(exc))
         return {'acknowledged': False, 'index': index, 'error': str(exc)}
     return {
@@ -98,7 +100,7 @@ async def ensure_images_upload_fields(
             acknowledged=ack,
         )
         return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -130,7 +132,7 @@ async def _put_items_keyword_field(client: AsyncOpenSearch, field: str) -> dict[
             acknowledged=ack,
         )
         return {'acknowledged': ack, 'index': index, 'fields_added': [field]}
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -193,7 +195,7 @@ async def ensure_items_quality_fields(
             'index': index,
             'fields_added': list(body['properties'].keys()),
         }
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -259,7 +261,7 @@ async def ensure_items_score_fields(
         ack = bool(resp.get('acknowledged', False))
         logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
         return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -313,7 +315,7 @@ async def ensure_items_probe_fields(
         ack = bool(resp.get('acknowledged', False))
         logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
         return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error
@@ -354,7 +356,7 @@ async def ensure_items_viz_fields(
         ack = bool(resp.get('acknowledged', False))
         logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
         return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except Exception as exc:
+    except OpenSearchException as exc:
         msg = str(exc)
         is_field_conflict = _is_recoverable_mapping_conflict(msg)
         log_fn = logger.info if is_field_conflict else logger.error

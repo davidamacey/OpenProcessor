@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, Field
 
 from src.config import get_curation_config, get_region_fields
@@ -107,7 +108,7 @@ async def count_validated_and_test_per_class(
     empty = dict.fromkeys(class_ids, 0)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('train_class_count_failed', error=str(exc))
         return dict(empty), dict(empty)
     aggs = resp.get('aggregations') or {}
@@ -144,7 +145,7 @@ async def count_pending_ingest(opensearch: Any) -> int | None:
     }
     try:
         resp = await opensearch.count(index=items_index(), body=body)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('train_pending_count_failed', error=str(exc))
         return None
     return int(resp.get('count', 0))
@@ -324,7 +325,7 @@ def unresolvable_include_classes(
 
     try:
         payload = json.loads((Path(dataset_export_dir) / 'class_registry.json').read_text())
-    except Exception:
+    except (OSError, ValueError):
         return list(include_classes)
     export_id_map = payload.get('export_id_map')
     if not isinstance(export_id_map, dict):

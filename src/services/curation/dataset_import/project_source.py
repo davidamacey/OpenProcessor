@@ -25,6 +25,7 @@ from src.services.curation.dataset_import.scan import (
     class_box_counts,
 )
 from src.services.curation.registry_access import project_registry
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -34,7 +35,6 @@ if TYPE_CHECKING:
 
 PAGE_SIZE = 200
 _ITEM_PAGE = 1000
-_VECTOR_FIELDS = ('pe_embedding',)
 
 
 @dataclass
@@ -84,8 +84,13 @@ def item_class_name(item: dict[str, Any], names: dict[int, str]) -> str | None:
     return names.get(class_id) if isinstance(class_id, int) else None
 
 
-def _excludes(with_vectors: bool) -> list[str]:
-    return [] if with_vectors else list(_VECTOR_FIELDS)
+async def _excludes(record: ProjectRecord, with_vectors: bool) -> list[str]:
+    """The ``_source`` excludes of a read of ``record``'s items: every vector of its registry,
+    unless the caller wants them."""
+    if with_vectors:
+        return []
+    with bind_project(record, read_only=True):
+        return await vector_source_excludes()
 
 
 async def _search(
@@ -116,7 +121,7 @@ async def fetch_items(
             'size': _ITEM_PAGE,
             'query': {'bool': {'filter': filters}},
             'sort': [{'crop_id': 'asc'}],
-            '_source': {'excludes': _excludes(with_vectors)},
+            '_source': {'excludes': await _excludes(record, with_vectors)},
         }
         if cursor is not None:
             body['search_after'] = cursor
@@ -147,7 +152,7 @@ async def iter_source_pages(
             'size': page_size,
             'query': {'match_all': {}},
             'sort': [{'image_id': 'asc'}],
-            '_source': {'excludes': _excludes(with_vectors)},
+            '_source': {'excludes': await _excludes(record, with_vectors)},
         }
         if cursor is not None:
             body['search_after'] = cursor

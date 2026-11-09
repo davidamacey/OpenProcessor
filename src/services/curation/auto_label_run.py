@@ -22,7 +22,8 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from src.config.curation import ITEM_EMBEDDING_FIELD
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.curation.autolabel.embed_stage import run_embed_missing_stage
@@ -44,20 +45,25 @@ from src.services.curation.autolabel.selection import (
 from src.services.curation.autolabel.vlm_stage import run_vlm_stage
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, ClassWriteGuard
 from src.services.curation.item_filter import ItemFilter
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 logger = get_logger(__name__)
 
-# Fields the VLM sweep reads per unvalidated item.
+# Fields the VLM sweep reads per unvalidated item, besides the vector of the item space.
 # The class-state fields are the state the sweep decides on; the VLM
 # write lands only if it is unchanged at write time.
 VLM_SWEEP_SOURCE_FIELDS: tuple[str, ...] = (
     'crop_id',
     'image_path',
     'bbox_norm',
-    ITEM_EMBEDDING_FIELD,
     *CLASS_GUARD_SOURCE_FIELDS,
 )
+
+
+def vlm_sweep_source_fields(vector_field: str) -> list[str]:
+    """What the VLM sweep reads per item: its fixed fields and the vector of the item space."""
+    return [*VLM_SWEEP_SOURCE_FIELDS, vector_field]
 
 
 async def _resolve_pack_pin(
@@ -212,11 +218,11 @@ async def run_auto_label(
             opensearch,
             index=items_index(),
             query=selection.query,
-            source_fields=list(VLM_SWEEP_SOURCE_FIELDS),
+            source_fields=vlm_sweep_source_fields(await item_vector_field()),
             cap=selection.cap,
             guard=guard,
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         return {**summary, 'stages_error': f'fetch unvalidated failed: {exc}'}
 
     stages['unvalidated_after_promote'] = len(unvalidated_ids)

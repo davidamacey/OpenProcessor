@@ -115,6 +115,24 @@ class FakeRegistryOpenSearch:
         return {'hits': {'hits': hits}}
 
 
+@pytest.fixture
+def projects_state_env(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
+    """A private state dir and projects data root, with the config, capacity and registry caches reset."""
+    import src.config.curation_accessors as curation_mod
+    from src.services.projects import capacity as capacity_mod
+    from src.services.projects.registry import set_project_registry
+
+    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
+    curation_mod._default_curation_config = None
+    capacity_mod._cache = None
+    set_project_registry(None)
+    yield
+    curation_mod._default_curation_config = None
+    capacity_mod._cache = None
+    set_project_registry(None)
+
+
 @pytest.fixture(autouse=True)
 def _reset_ensure_indexes_bootstrap_cache() -> Any:
     """``index_bootstrap._INDEXES_BOOTSTRAPPED`` is a process-wide cache keyed
@@ -153,6 +171,10 @@ class _FakeLifecycleIndices:
 
     async def exists(self, *, index: str) -> bool:
         return index in self._outer.indexes
+
+    async def get(self, *, index: str, **_kw: Any) -> dict[str, Any]:  # noqa: ARG002
+        # no schema marker recorded: the bootstrap shortcut reads "not current"
+        return {}
 
     async def refresh(self, *, index: str) -> dict[str, Any]:  # noqa: ARG002
         self._outer._refresh_all()

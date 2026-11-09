@@ -30,6 +30,7 @@ from src.services.curation.dataset_import.item_labels import human_owned, import
 from src.services.curation.edit_history import EDIT_HISTORY_FIELD, EditKind, record_edit
 from src.services.curation.item_doc import DetectedItem
 from src.services.curation.region_box_edits import same_box
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
@@ -144,6 +145,7 @@ async def write_parent_regions(
 
     await occ_update_one(
         ctx.opensearch,
+        vector_excludes=await vector_source_excludes(),
         doc_id=parent_key,
         merger=merger,
         index=ctx.items_index,

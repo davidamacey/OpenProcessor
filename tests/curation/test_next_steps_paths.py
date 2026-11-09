@@ -45,3 +45,12 @@ def test_no_producer_hand_writes_a_step() -> None:
         and "'reason':" in p.read_text()
     ]
     assert offenders == []
+
+
+def test_cluster_regions_serves_its_request_body() -> None:
+    assert next_steps.cluster_regions()['body'] == {'target': 'region_box'}
+
+
+def test_recluster_runs_the_item_clustering_route_not_the_umap_refit() -> None:
+    step = next_steps.recluster_items()
+    assert (step['path'], step['body']) == ('/clusters/runs', {'target': 'item'})

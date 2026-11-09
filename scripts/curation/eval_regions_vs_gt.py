@@ -56,7 +56,7 @@ index names follow ``RegionFields`` (``OP_REGION_FIELD_*``) and
         --out-dir ./state/regions/eval
 
 Exit codes: 0 done; 1 bad input; 2 ``--wait-pending`` timed out with frames
-still pending; 3 a region box is stored in an unmappable coordinate frame.
+still pending.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ from src.config import RegionStatus, get_curation_config, get_region_fields
 from src.db.engine import run_with_engine
 from src.services.curation.region_eval import DEFAULT_ACCEPTED_STATUSES, EvalResult, run_eval
 from src.services.curation.region_eval_data import CohortImage
-from src.services.curation.region_eval_geometry import RegionFrameError, parse_yolo_labels
+from src.services.curation.region_eval_geometry import parse_yolo_labels
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import add_project_argument, bind_script_project
 
@@ -440,9 +440,6 @@ async def _async_main(args: argparse.Namespace, cohort: list[CohortImage]) -> in
             poll_interval_s=args.poll_interval,
             on_poll=_progress if args.wait_pending > 0 else None,
         )
-    except RegionFrameError as exc:
-        logger.error('%s', exc)
-        return 3
     finally:
         await client.close()
     write_outputs(result, args.out_dir)

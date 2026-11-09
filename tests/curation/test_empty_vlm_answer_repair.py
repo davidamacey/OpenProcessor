@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -118,7 +118,7 @@ async def test_plans_restore_the_pre_write_class_source() -> None:
 def test_primary_with_a_class_is_not_guessed() -> None:
     # A proposer never writes a class_id; such a doc is inconsistent.
     doc = {'class_detector': 'det_x', 'class_id': 2}
-    assert repair.ingest_class_source(doc, PROFILES) is None
+    assert repair.ingest_class_source(doc, cast('Any', PROFILES)) is None
 
 
 @pytest.mark.asyncio

@@ -56,7 +56,7 @@ async def validate_profile(
 ) -> ValidationReport:
     """Validate a region-profile envelope (``{name, body}``)."""
     from src.schemas.curation.config_common import ValidationReport
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     name_issues = _check_name(name, existing_names=existing_names)
     profile, decode_issues = _decode(name, body)

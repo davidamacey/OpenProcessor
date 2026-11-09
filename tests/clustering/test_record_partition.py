@@ -151,3 +151,32 @@ async def test_a_face_partition_is_core_scoped(pg_env, project) -> None:
             )
         ).scalar_one()
     assert seen == 0  # a project scope never sees a core partition
+
+
+async def test_display_numbers_name_the_serving_partitions_clusters(pg_env, project) -> None:
+    from src.services.clustering.partitions import display_numbers
+
+    async with async_session_factory()() as session, project_tx(session, project):
+        uids = await mint_uids(session, 3)
+        await record_partition(
+            session,
+            project=project,
+            target='item',
+            level='class',
+            space=SPACE,
+            method='ivf',
+            params={},
+            members=_members(uids, 9),
+        )
+        await session.execute(
+            text(
+                'INSERT INTO cluster_activations (project_id, target, level, embedding_field, '
+                'serving_partition_id, pending_partition_id, updated_by) '
+                'SELECT project_id, target, level, embedding_field, id, id, :by '
+                'FROM cluster_partitions'
+            ),
+            {'by': 'test'},
+        )
+        numbers = await display_numbers(session, [str(u) for u in uids] + [str(uuid.uuid4())])
+    assert sorted(numbers.values()) == [1, 2, 3]
+    assert set(numbers) == {str(u) for u in uids}

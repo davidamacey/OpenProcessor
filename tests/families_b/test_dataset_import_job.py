@@ -16,7 +16,7 @@ import pytest
 from curation.dataset_import.harness import write_yolo
 from curation.query_fakes import QueryFakeOpenSearch
 from families_b.support import bind_worker_to, project
-from fixtures.job_rows import sql
+from fixtures.job_rows import seed_default_spaces, sql
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 
 from src.config import DetectionProfile
@@ -103,6 +103,7 @@ async def _run(worker_app, name: str, job_id: str) -> Any:
 
 def _setup(app, pg, tmp_path):
     slug, pid = project(app, pg)
+    seed_default_spaces(pg, pid)
     root = tmp_path / 'ds'
     _dataset(root)
     return slug, pid, root
@@ -239,7 +240,9 @@ async def test_a_cancelled_import_resumes_as_a_new_job_without_a_rescan_in_the_r
     scans: list[Path] = []
     real = runner.scan_dataset
     monkeypatch.setattr(
-        runner, 'scan_dataset', lambda source, **kw: scans.append(source) or real(source, **kw)
+        runner,
+        'scan_dataset',
+        lambda source, **kw: scans.append(source) or real(source, **kw),  # type: ignore[func-returns-value]
     )
 
     reply = await client.post(

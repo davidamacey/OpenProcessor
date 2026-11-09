@@ -15,7 +15,12 @@ from fastapi import Query
 
 from src.config import get_curation_config
 from src.core.wire_json import WireJSONResponse
-from src.routers.curation._api_error import active_conflict_error, api_error
+from src.routers.curation._api_error import (
+    active_conflict_error,
+    api_error,
+    revision_conflict_error,
+    unknown_revision_error,
+)
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._region_profile_models import (
     RegionProfileActivateRequest,
@@ -56,6 +61,7 @@ from src.services.config_store.profiles import (
     list_revisions,
     rollback_profile,
     save_profile,
+    template_names,
 )
 from src.services.curation.class_registry_names import registry_class_names
 from src.services.curation.region_impact import ActivationImpact, compute_activation_impact
@@ -132,12 +138,6 @@ def _to_summary(record: ProfileRecord) -> RegionProfileSummary:
         active_revision=record.active_revision,
         updated_at=record.updated_at,
     )
-
-
-def _template_names_only() -> list[str]:
-    from src.services.config_store.profiles import _template_names
-
-    return list(_template_names())
 
 
 # =============================================================================
@@ -255,11 +255,11 @@ async def list_region_profiles(
 ) -> RegionProfileList:
     store = get_config_store()
     await store.refresh()
-    names = all_known_names() - set(_template_names_only())
+    names = all_known_names() - set(template_names())
     records = [build_record(name) for name in sorted(names)]
     templates: list[RegionProfileTemplateSummary] = []
     if include_templates:
-        for template_name in sorted(_template_names_only()):
+        for template_name in sorted(template_names()):
             rec = build_record(template_name)
             body = rec.body if rec else {}
             templates.append(
@@ -356,7 +356,7 @@ async def list_region_profile_revisions(name: str) -> RegionProfileRevisionsResp
 async def get_region_profile_revision(name: str, revision: int) -> RegionProfileDoc:
     record = await get_revision_record(name, revision)
     if record is None:
-        raise api_error(404, 'unknown_revision', f'{name!r} has no revision {revision}')
+        raise unknown_revision_error(name, revision)
     return _to_doc(record)
 
 
@@ -407,12 +407,7 @@ async def save_region_profile(name: str, body: RegionProfileSaveRequest) -> Regi
             else (existing.description if existing else ''),
         )
     except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'{name!r} changed since you loaded it',
-            current_revision=exc.current_revision,
-        ) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return _to_doc(record, validation=report)
 
 
@@ -433,12 +428,7 @@ async def delete_region_profile_route(name: str, expected_revision: int) -> None
     try:
         await delete_profile(name=name, expected_revision=expected_revision)
     except RevisionConflictError as exc:
-        raise api_error(
-            409,
-            'revision_conflict',
-            f'{name!r} changed since you loaded it',
-            current_revision=exc.current_revision,
-        ) from exc
+        raise revision_conflict_error(name, exc.current_revision) from exc
     return Response(status_code=204)  # type: ignore[return-value]
 
 

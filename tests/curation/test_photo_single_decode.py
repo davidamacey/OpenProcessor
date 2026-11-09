@@ -37,7 +37,7 @@ def _reference_square(img: Image.Image, target: int = PE_SIZE) -> np.ndarray:
     w, h = img.size
     scale = target / min(w, h)
     nw, nh = max(target, round(w * scale)), max(target, round(h * scale))
-    full = np.asarray(img.resize((nw, nh), Image.BILINEAR))
+    full = np.asarray(img.resize((nw, nh), Image.BILINEAR))  # type: ignore[attr-defined]
     top, left = (nh - target) // 2, (nw - target) // 2
     return full[top : top + target, left : left + target]
 

@@ -13,8 +13,7 @@ import type { XYXY } from './types';
 const licensePlateSlot = loadExampleProfile('license-plate.json').slots[0]!;
 
 /**
- * Phase 3 falsification test (docs/genericization-plan-2026-09-13.md
- * §5.4): loads all three profiles through the same registry/adapter
+ * Phase 3 falsification test: loads all three profiles through the same registry/adapter
  * used by license_plate, and asserts the derived surface for each
  * without any per-slot special-casing in this file or in
  * registry.ts/readSlot.ts/types.ts. If either example needed a code
@@ -120,7 +119,7 @@ describe('capability-model falsification: three independently-configured slots',
 });
 
 /**
- * P3.5 (docs/genericization-plan-2026-09-13.md §9.7/§9.9): extends the
+ * P3.5 (genericization plan §9.7/§9.9): extends the
  * falsification test to the cohort layer, added by the §9.2 addendum.
  * Derivation is pure and runs against the same three profiles — no
  * per-slot special-casing in cohorts.ts, registry.ts, or this file. If

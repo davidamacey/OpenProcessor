@@ -40,4 +40,5 @@ async def take(sub: Subscription, count: int, *, timeout: float = 6.0) -> list[E
 
 async def assert_quiet(sub: Subscription, *, wait: float = 0.5) -> None:
     await asyncio.sleep(wait)
-    assert sub.queue.empty(), f'unexpected events: {list(sub.queue._queue)}'
+    pending = list(sub.queue._queue)  # type: ignore[attr-defined]  # asyncio.Queue keeps its items in _queue
+    assert sub.queue.empty(), f'unexpected events: {pending}'

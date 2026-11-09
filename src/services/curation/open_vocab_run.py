@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE, OPEN_VOCAB_TARGET_CLASS_SOURCE
@@ -354,7 +356,7 @@ async def stamp_open_vocab_status(
                 }
             },
         )
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning(
             'open_vocab_status_stamp_failed', image_id=image_id, status=status, error=str(exc)
         )

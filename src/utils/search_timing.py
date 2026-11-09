@@ -7,8 +7,8 @@ nothing when no timer is bound, so other callers of ``encode_text`` are unaffect
 
 The timer is a mutable object held in a ``ContextVar``: ``asyncio.gather`` children and
 ``run_in_executor_bound`` threads run on a copy of the context, and a mutable recorder (not a
-re-set variable) is what makes their writes visible. ``knn`` and ``unembedded_count`` overlap
-(#384), so ``knn_page`` is the wall span of both; the stage values are not meant to sum.
+re-set variable) is what makes their writes visible. The kNN page and the unembedded count
+travel in one ``_msearch`` (#384), so ``knn_page`` is the wall span of both.
 
 Nothing is observed or emitted until the route calls :meth:`SearchTimer.finish` on success,
 so error responses carry no header and leave the histogram alone.
@@ -33,8 +33,6 @@ SEARCH_STAGES: tuple[str, ...] = (
     'source_vector',
     'filter_build',
     'knn_page',
-    'knn',
-    'unembedded_count',
     'hydrate',
 )
 

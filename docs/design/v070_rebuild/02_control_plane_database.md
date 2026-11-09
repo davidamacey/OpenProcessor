@@ -185,7 +185,7 @@ family that owns them; none survives as a file-protocol test.
 | Mechanism | Where | Destination |
 |---|---|---|
 | trainer job protocol (`job.json`, `status.json`, `cancel`, claim generations) | `src/services/training/jobs.py`, `job_files.py:30-114`; `docker/trainer/job_protocol.py`, `job_claim.py:30-100`, `job_status.py`, `trainer.py:55,296-324` | queue `gpu_train`, kind `train` (stage 5, lane 5A) |
-| model export (`queue/`, `claimed/`, heartbeats, `reconcile_claimed`) | `src/services/model_export.py:8-328`; `export/export_worker.py:44-150,364` | queue `gpu_export`, kind `model_export`, gains cancel (5B) |
+| model export (`queue/`, `claimed/`, heartbeats, `reconcile_claimed`) | `src/services/models/model_export.py:8-328`; `export/export_worker.py:44-150,364` | queue `gpu_export`, kind `model_export`, gains cancel (5B) |
 | bake-off evaluator (`bakeoff_jobs/*.job.json`, no claim) | `scripts/curation/bakeoff/bakeoff_runner.py:385-421` | queue `gpu_eval`, kind `bakeoff` (5C; D-31 settled by owner decision 4) |
 | region cluster and FP jobs (`job.json`, `fp_job.json`, markers) | `clustering/region_cluster_jobs.py:46-56,123-127,201,275,284,336,366` | kinds `region_cluster`, `region_fp_centroids`; markers in `project_state` (4B) |
 | region drain, dependency health | `region_drain.py:57-68`, `region_dependency_health.py:44-54` | `project_state` keys (2D) |

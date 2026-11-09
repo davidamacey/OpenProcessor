@@ -19,7 +19,7 @@ box's area rank among the items stored on its image).
 from __future__ import annotations
 
 import uuid
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +27,10 @@ from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause
 from src.domain.item_text import item_text_query
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
 from src.services.curation.name_match import DETECTOR_NAME_FIELDS, name_clause
+
+
+if TYPE_CHECKING:
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 Origin = Literal['detector', 'sam3', 'human', 'import']
@@ -140,10 +144,10 @@ def _review_clause(status: str) -> dict[str, Any]:
     }
 
 
-def _embedding_clause(state: str) -> dict[str, Any]:
+def _embedding_clause(state: str, embedding: WriteFields) -> dict[str, Any]:
     if state == EMBEDDED:
-        return embedded_clause()
-    return state_clause(state)
+        return embedded_clause(embedding.vector_field)
+    return state_clause(state, embedding.state_field)
 
 
 def _name_clauses(f: ItemFilter) -> list[dict[str, Any]]:
@@ -173,7 +177,7 @@ def _size_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return out
 
 
-def _detector_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+def _detector_clauses(f: ItemFilter, embedding: WriteFields) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     names = name_clause(f.detector_class_names, DETECTOR_NAME_FIELDS)
     if names is not None:
@@ -186,27 +190,29 @@ def _detector_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     if bounds:
         out.append({'range': {'detector_confidence': bounds}})
     if f.review_tab is not None:
-        out.append(_review_tab_clause(f.review_tab))
+        out.append(_review_tab_clause(f.review_tab, embedding))
     return out
 
 
-def _review_tab_clause(tab: str) -> dict[str, Any]:
+def _review_tab_clause(tab: str, embedding: WriteFields) -> dict[str, Any]:
     from src.services.curation.review_queries import build_tab_query
     from src.services.curation.review_tab_clauses import SIMPLE_TABS
 
     if tab not in SIMPLE_TABS:
         msg = f'unknown review_tab {tab!r}; choose from {sorted(SIMPLE_TABS)}'
         raise ValueError(msg)
-    must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)
+    must, must_not, _reason = build_tab_query(
+        tab, include_test=False, text=None, max_rank=None, vector_field=embedding.vector_field
+    )
     return {'bool': {'must': must, 'must_not': must_not}}
 
 
-def _state_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+def _state_clauses(f: ItemFilter, embedding: WriteFields) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if f.origin:
         out.append(_any_of([_origin_clause(o) for o in f.origin]))
     if f.embedding_state:
-        out.append(_any_of([_embedding_clause(s) for s in f.embedding_state]))
+        out.append(_any_of([_embedding_clause(s, embedding) for s in f.embedding_state]))
     if f.review_status:
         out.append(_any_of([_review_clause(s) for s in f.review_status]))
     return out
@@ -285,8 +291,11 @@ def _quality_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return out
 
 
-def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+def item_filter_clauses(f: ItemFilter, *, embedding: WriteFields) -> list[dict[str, Any]]:
     """The filter as AND-ed (filter-context) clauses.
+
+    ``embedding`` are the primary item space's vector and state fields (``item_write_fields()``):
+    the ``embedding_state`` predicate and the ``all`` review tab read them.
 
     Raises ``ValueError`` for a malformed band (``conf_min`` above
     ``conf_max``, ``min_area`` above ``max_area``) or an ``item_text`` with no
@@ -295,18 +304,18 @@ def item_filter_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return [
         *_name_clauses(f),
         *_size_clauses(f),
-        *_detector_clauses(f),
-        *_state_clauses(f),
+        *_detector_clauses(f, embedding),
+        *_state_clauses(f, embedding),
         *_term_clauses(f),
         *_flag_clauses(f),
         *_quality_clauses(f),
     ]
 
 
-def item_filter_query(f: ItemFilter) -> dict[str, Any]:
+def item_filter_query(f: ItemFilter, *, embedding: WriteFields) -> dict[str, Any]:
     """The filter as one query (``match_all`` when it constrains nothing), for
     routes that count or aggregate over the matching items."""
-    clauses = item_filter_clauses(f)
+    clauses = item_filter_clauses(f, embedding=embedding)
     return {'bool': {'filter': clauses}} if clauses else {'match_all': {}}
 
 

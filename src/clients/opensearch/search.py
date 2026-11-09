@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.opensearch.names import IndexMappingError, IndexName
 from src.utils.upstream_errors import UpstreamError
 
@@ -251,7 +253,7 @@ class SearchMixin:
                     'doc_count': int(count['count']),
                     'size_bytes': int(response['_all']['primaries']['store']['size_in_bytes']),
                 }
-            except Exception as e:
+            except OpenSearchException as e:
                 logger.error(f'Index stats failed for {name}: {e}')
                 stats[name] = {'exists': False, 'doc_count': 0, 'size_bytes': 0, 'error': str(e)}
         return stats

@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.query_fakes import matches
-from src.config.curation import ITEM_EMBEDDING_FIELD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +31,7 @@ def _proposal(crop_id: str, *, vector: bool) -> dict[str, Any]:
         'confidence': 0.9,
     }
     if vector:
-        doc[ITEM_EMBEDDING_FIELD] = [0.1, 0.2]
+        doc['pe_embedding'] = [0.1, 0.2]
     return doc
 
 
@@ -46,27 +46,37 @@ def _bool(must: list[dict[str, Any]], must_not: list[dict[str, Any]]) -> dict[st
 def _vlm_worker() -> dict[str, Any]:
     from scripts.curation.vlm_pending import _build_pending_query
 
-    return _build_pending_query(0.8)
+    return _build_pending_query(0.8, vector_field='pe_embedding')
 
 
 def _vlm_sweep() -> dict[str, Any]:
     from src.services.curation.autolabel.selection import vlm_selection_query
 
-    return vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
+    return vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+    )
 
 
 def _vlm_cluster_scope() -> dict[str, Any]:
     from src.services.curation.autolabel.selection import vlm_selection_query
 
     return vlm_selection_query(
-        class_id=None, cluster_uid=CLUSTER, classifier_confidence_skip_vlm=0.8
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=CLUSTER,
+        classifier_confidence_skip_vlm=0.8,
     )
 
 
 def _review_all() -> dict[str, Any]:
     from src.services.curation.review_queries import build_tab_query
 
-    must, must_not, _ = build_tab_query('all', include_test=True, text=None, max_rank=None)
+    must, must_not, _ = build_tab_query(
+        'all', vector_field='pe_embedding', include_test=True, text=None, max_rank=None
+    )
     return _bool(must, must_not)
 
 

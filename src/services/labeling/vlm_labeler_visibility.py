@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
 from src.services.labeling.vlm_client import extract_message_content
-from src.services.labeling.vlm_labeler_core import VlmLabelerCore, _b64_jpeg
+from src.services.labeling.vlm_labeler_core import CHAT_CALL_ERRORS, VlmLabelerCore, _b64_jpeg
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
     _coerce_bool,
+    _extract_batch_array,
     _strip_markdown_fences,
 )
 
@@ -69,7 +70,7 @@ class VisibilityOps(VlmLabelerCore):
         try:
             response = await self._post_chat(payload)
             parsed = json.loads(_strip_markdown_fences(extract_message_content(response)))
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.warning(
                 'vlm_labeler.prompt_visible_failed', error=str(exc), error_type=type(exc).__name__
             )
@@ -161,7 +162,7 @@ class VisibilityOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.region_visible_chunk_failed',
                 chunk_size=len(chunk),
@@ -211,34 +212,7 @@ class VisibilityOps(VlmLabelerCore):
         # garbled a few entries — keep recall on those).
         out: dict[str, bool] = {c.crop_id: True for c in chunk}
 
-        candidates: list[str] = [raw]
-        depth = 0
-        start = -1
-        for i, ch in enumerate(raw):
-            if ch == '[':
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == ']' and depth > 0:
-                depth -= 1
-                if depth == 0 and start >= 0:
-                    candidates.append(raw[start : i + 1])
-                    start = -1
-
-        parsed: Any = None
-        for c in candidates:
-            try:
-                parsed = json.loads(c)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(parsed, dict):
-                for key in ('results', 'predictions', 'data'):
-                    if key in parsed and isinstance(parsed[key], list):
-                        parsed = parsed[key]
-                        break
-            if isinstance(parsed, list):
-                break
-            parsed = None
+        parsed = _extract_batch_array(raw)
 
         if not isinstance(parsed, list):
             logger.warning(

@@ -6,11 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _embedding_registry_fake import default_space
+from _msearch_fake import install_msearch
 
 from src.config.region_fields import get_region_fields
 from src.core.exceptions import RequestRejectedError
+from src.domain.embedding_spaces import Target
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
+from src.services.curation.semantic_search_box import no_box_vectors_clause
 
 
 F = get_region_fields()
@@ -45,7 +49,7 @@ def _hit(crop_id: str, offsets: list[int], *, score=0.8, boxes=None, entries=Non
 
 
 def _fake_os(hits: list[dict], *, source_hits: list[dict] | None = None, unembedded=0):
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
 
     async def _search(*, index: str, body: dict) -> dict:
         if 'ids' in body.get('query', {}):
@@ -60,6 +64,7 @@ def _fake_os(hits: list[dict], *, source_hits: list[dict] | None = None, unembed
 
 def _enc() -> MagicMock:
     enc = MagicMock()
+    enc.text_model = 'pe_text_encoder'
     enc.encode_text = MagicMock(return_value=np.asarray([VEC], dtype=np.float32))
     return enc
 
@@ -167,7 +172,7 @@ async def test_box_target_counts_items_without_any_box_vector():
     out = await _text(fake, target=SearchTarget.BOX)
     assert out['unembedded_in_scope'] == 3
     clauses = fake.count.call_args.kwargs['body']['query']['bool']['filter']
-    assert semantic_search.no_box_vectors_clause(F) in clauses
+    assert no_box_vectors_clause(default_space(Target.BOX)) in clauses
 
 
 # --- /search/similar with box_id ---------------------------------------------------------------

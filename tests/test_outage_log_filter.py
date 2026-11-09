@@ -20,7 +20,7 @@ class _Clock:
 
 def _record(exc: BaseException | None, name: str = 'opensearch') -> logging.LogRecord:
     info = (type(exc), exc, None) if exc is not None else None
-    return logging.LogRecord(name, logging.WARNING, __file__, 1, 'GET /x [status:N/A]', (), info)  # type: ignore[arg-type]
+    return logging.LogRecord(name, logging.WARNING, __file__, 1, 'GET /x [status:N/A]', (), info)
 
 
 def test_a_connection_failure_is_one_line_then_backed_off() -> None:

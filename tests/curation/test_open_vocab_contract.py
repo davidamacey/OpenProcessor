@@ -257,7 +257,7 @@ async def test_models_status_lists_a_segmenter_row_with_no_region_profile(
         raise httpx.ConnectError('refused', request=request)
 
     _patch_http(monkeypatch, handler)
-    rows = [m for m in (await models_mod.models_status(None))['models'] if m['kind'] == 'external']
+    rows = [m for m in (await models_mod.models_status(None))['models'] if m['kind'] == 'external']  # type: ignore[arg-type]
     assert len(rows) == 1
     assert rows[0]['name'] == 'sam3'
     assert rows[0]['status'] == status

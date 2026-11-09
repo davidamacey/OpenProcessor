@@ -485,7 +485,7 @@
             </span>
             <span class="text-xs text-zinc-500">of crops have a box</span>
           </div>
-          <!-- DQ-m11 (docs/design/data-quality-pass-2026-09-24.md): this
+          <!-- DQ-m11: this
                used to assert "(includes rejected/failed attempts)" about
                `total_detected` as fact. The field's own contract
                (DatasetStats.regions.total_detected in api.ts) says it

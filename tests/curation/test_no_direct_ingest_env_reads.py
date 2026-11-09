@@ -19,7 +19,7 @@ ALLOWED = {
     'src/config/ingest_profiles.py',
     'src/services/curation/ingest_detector.py',
     # Global routes call it with no project bound: it guards the env models.
-    'src/services/model_unload_guard.py',
+    'src/services/models/model_unload_guard.py',
 }
 RESOLVER_CONSUMERS = [
     'src/services/curation/ingest_service_factory.py',
@@ -31,7 +31,8 @@ RESOLVER_CONSUMERS = [
     'src/services/config_store/open_vocab_inputs.py',
     'src/routers/curation/ingest.py',
     'src/routers/curation/class_seed.py',
-    'src/routers/curation/datasets.py',
+    # dataset import runs as a queued job; the job resolves the profile, the route no longer does
+    'src/services/curation/dataset_import/job.py',
     'src/routers/curation/ingest_policy.py',
 ]
 

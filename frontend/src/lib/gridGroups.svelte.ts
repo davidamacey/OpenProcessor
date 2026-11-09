@@ -1,7 +1,7 @@
 /**
  * Grid-group state for the /clusters/[id] crop grid.
  *
- * The grid renders one `svelte-dnd-action` dndzone per sub-cluster group, so
+ * The grid renders a `svelte-dnd-action` dndzone, so
  * the rendered list can't be `cropPager.items` itself: the dnd library owns
  * the zone's item order for the duration of a drag and hands it back through
  * `consider`/`finalize` events. The page used to hold that rendered list in a
@@ -21,7 +21,7 @@
  *    repainted from a list that still contains a crop the drop handler just
  *    labelled away.
  *  - Nothing re-derived the snapshot afterwards. The rebuild `$effect` only
- *    re-runs when the pager list (or the grouping mode) changes, so a stale
+ *    re-runs when the pager list (or the source list) changes, so a stale
  *    dnd-sourced write that lands *after* the optimistic removal is the last
  *    word until a hard page reload.
  *
@@ -48,12 +48,8 @@ export interface GridGroup<T> {
 export interface GridGroupsOptions<T> {
   /** The list the grid should show — `filteredCrops` on the cluster page. */
   source: () => T[];
-  /** Whether to partition into contiguous sub-cluster groups. */
-  grouped: () => boolean;
   /** Stable identity. */
   keyOf: (item: T) => string;
-  /** Sub-cluster bucket, or null for "unrefined". */
-  subidOf: (item: T) => string | null;
   /**
    * Ids the page still considers present. A dnd event list is filtered
    * against this before it is allowed to drive the grid, which is what stops
@@ -75,52 +71,16 @@ export interface GridGroupsState<T> {
 }
 
 /**
- * Partition `source` into render groups.
- *
- * Ungrouped: one `__all__` group holding a copy of the whole list (never hand
- * the caller's array to a zone — the dnd action treats it as its own).
- * Grouped: sort by sub-cluster id (unrefined last) and walk contiguous runs.
+ * The render groups of `source`: one `__all__` group holding a copy of the whole
+ * list (never hand the caller's array to a zone — the dnd action treats it as
+ * its own).
  */
-export function buildGroups<T>(
-  source: T[],
-  grouped: boolean,
-  subidOf: (item: T) => string | null,
-): GridGroup<T>[] {
-  if (!grouped) {
-    return [{ key: '__all__', label: '', items: [...source] }];
-  }
-  const sorted = [...source].sort((a, b) => {
-    const sa = subidOf(a) ?? '￿';
-    const sb = subidOf(b) ?? '￿';
-    return sa < sb ? -1 : sa > sb ? 1 : 0;
-  });
-  const groups: GridGroup<T>[] = [];
-  let lastSub: string | null = null;
-  for (const c of sorted) {
-    const sub = subidOf(c) ?? '__none__';
-    const last = groups[groups.length - 1];
-    if (!last || lastSub !== sub) {
-      // The key carries the run index, not just the subid: this is a
-      // contiguity walk, so a subid that reappears non-contiguously (a
-      // transient render over a not-yet-sorted list) would emit the same key
-      // twice and crash the keyed {#each} with each_key_duplicate.
-      groups.push({
-        key: `${sub}#${groups.length}`,
-        label: sub === '__none__' ? 'unrefined' : `sub-cluster ${sub}`,
-        items: [c],
-      });
-      lastSub = sub;
-    } else {
-      last.items.push(c);
-    }
-  }
-  return groups;
+export function buildGroups<T>(source: T[]): GridGroup<T>[] {
+  return [{ key: '__all__', label: '', items: [...source] }];
 }
 
 export function createGridGroups<T>(opts: GridGroupsOptions<T>): GridGroupsState<T> {
-  const derivedGroups = $derived.by(() =>
-    buildGroups(opts.source(), opts.grouped(), opts.subidOf),
-  );
+  const derivedGroups = $derived.by(() => buildGroups(opts.source()));
 
   // Transient dnd-owned view of the grid. Non-null only between a `consider`
   // and the matching `reset()`.

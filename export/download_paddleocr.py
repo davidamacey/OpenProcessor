@@ -167,10 +167,7 @@ def verify_onnx_model(filepath: Path) -> bool:
         return False
 
 
-def download_model(model_id: str, config: dict, force: bool = False) -> bool:
-    """Download a single model."""
-    output_path = OUTPUT_DIR / config['filename']
-
+def _print_model_banner(model_id: str, config: dict, output_path: Path) -> None:
     print(f'\n{"=" * 60}')
     print(f'Model: {model_id}')
     print(f'{"=" * 60}')
@@ -183,30 +180,62 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
         print(f'Output: {config["output"]}')
     print(f'Output path: {output_path}')
 
-    # Check if already exists
-    if output_path.exists() and not force:
-        actual_size = get_file_size_mb(output_path)
 
-        if 'size_mb' in config:
-            expected_size = config['size_mb']
-            # Allow 50% tolerance for size (ONNX sizes vary)
-            if abs(actual_size - expected_size) / expected_size < 0.5 or actual_size > 0.1:
-                print(f'  Already exists: {actual_size:.2f} MB')
-                if output_path.suffix == '.onnx':
-                    if verify_onnx_model(output_path):
-                        print('  Skipping download (use --force to re-download)')
-                        return True
-                else:
-                    # For dictionaries, just check file exists
+def _existing_file_is_usable(output_path: Path, config: dict) -> bool:
+    """True when a previously downloaded file can stand in for a fresh download."""
+    actual_size = get_file_size_mb(output_path)
+
+    if 'size_mb' in config:
+        expected_size = config['size_mb']
+        # Allow 50% tolerance for size (ONNX sizes vary)
+        if abs(actual_size - expected_size) / expected_size < 0.5 or actual_size > 0.1:
+            print(f'  Already exists: {actual_size:.2f} MB')
+            if output_path.suffix == '.onnx':
+                if verify_onnx_model(output_path):
                     print('  Skipping download (use --force to re-download)')
                     return True
-        # Dictionary file
-        elif actual_size > 0:
-            print(f'  Already exists: {actual_size:.2f} MB')
-            print('  Skipping download (use --force to re-download)')
-            return True
+            else:
+                # For dictionaries, just check file exists
+                print('  Skipping download (use --force to re-download)')
+                return True
+    # Dictionary file
+    elif actual_size > 0:
+        print(f'  Already exists: {actual_size:.2f} MB')
+        print('  Skipping download (use --force to re-download)')
+        return True
+    return False
 
-    # Try each URL
+
+def _fetch_from_source(url: str, output_path: Path, config: dict) -> bool:
+    """Download one source and validate it; False means try the next source."""
+    if not download_with_progress(url, output_path, config.get('filename', '')):
+        return False
+    actual_size = get_file_size_mb(output_path)
+    print(f'  Downloaded: {actual_size:.2f} MB')
+
+    if output_path.suffix == '.onnx':
+        if verify_onnx_model(output_path):
+            return True
+        print('  Model verification failed, trying next source...')
+        output_path.unlink(missing_ok=True)
+    # Dictionary file - just check it's not empty
+    elif actual_size > 0:
+        # Count lines for dictionary
+        with Path(output_path).open(encoding='utf-8') as f:
+            lines = len(f.readlines())
+        print(f'  Dictionary: {lines} characters')
+        return True
+    return False
+
+
+def download_model(model_id: str, config: dict, force: bool = False) -> bool:
+    """Download a single model."""
+    output_path = OUTPUT_DIR / config['filename']
+    _print_model_banner(model_id, config, output_path)
+
+    if output_path.exists() and not force and _existing_file_is_usable(output_path, config):
+        return True
+
     for i, url in enumerate(config['urls']):
         print(f'\n  Trying source {i + 1}/{len(config["urls"])}...')
 
@@ -215,22 +244,8 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
             print('  Note: .tar format not supported, trying next source...')
             continue
 
-        if download_with_progress(url, output_path, config.get('filename', '')):
-            actual_size = get_file_size_mb(output_path)
-            print(f'  Downloaded: {actual_size:.2f} MB')
-
-            if output_path.suffix == '.onnx':
-                if verify_onnx_model(output_path):
-                    return True
-                print('  Model verification failed, trying next source...')
-                output_path.unlink(missing_ok=True)
-            # Dictionary file - just check it's not empty
-            elif actual_size > 0:
-                # Count lines for dictionary
-                with Path(output_path).open(encoding='utf-8') as f:
-                    lines = len(f.readlines())
-                print(f'  Dictionary: {lines} characters')
-                return True
+        if _fetch_from_source(url, output_path, config):
+            return True
 
     print(f'\n  Failed to download {model_id} from all sources')
     return False

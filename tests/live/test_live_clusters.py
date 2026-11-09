@@ -13,11 +13,9 @@ from typing import Any
 import pytest
 
 from .conftest import (
-    CANDIDATE_CLUSTER_ID,
     FP_REGION_CLUSTER_ID,
     INDEXES,
-    MIXED_CLUSTER_ID,
-    PURE_CLUSTER_ID,
+    cohort_cluster_uid,
     refresh,
     search,
     wait_for_state,
@@ -67,28 +65,23 @@ def _region_subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
     return {b['key']: b['doc_count'] for b in resp['in_cluster']['subids']['buckets']}
 
 
-def test_cluster_cards_report_kind_purity_and_subclusters(api_client: Any) -> None:
+def test_cluster_cards_report_agreement_and_unlabeled(api_client: Any, opensearch: Any) -> None:
     resp = api_client.get('/clusters', params={'per_cluster': 2, 'max_clusters': 100})
     assert resp.status_code == 200, resp.text
-    body = resp.json()
-    by_id = {item['cluster_id']: item for item in body['items']}
+    by_uid = {item['cluster_uid']: item for item in resp.json()['items']}
 
-    pure = by_id[PURE_CLUSTER_ID]
-    assert pure['cluster_kind'] == 'class'
-    assert pure['purity'] == 1.0
+    pure = by_uid[cohort_cluster_uid(opensearch, 'cls0')]
+    assert pure['label_agreement'] == 1.0
     assert pure['dominant_class_name'] == 'box'
+    assert pure['is_unlabeled'] is False
     assert len(pure['representatives']) == 2
 
-    mixed = by_id[MIXED_CLUSTER_ID]
-    assert mixed['cluster_kind'] == 'class'
-    assert 0.5 < mixed['purity'] < 0.85, mixed
+    mixed = by_uid[cohort_cluster_uid(opensearch, 'cls1')]
+    assert 0.5 < mixed['label_agreement'] < 0.85, mixed
 
-    candidate = by_id[CANDIDATE_CLUSTER_ID]
-    assert candidate['cluster_kind'] == 'candidate'
-    assert candidate['is_unlabeled'] is True
-    assert candidate['n_subclusters'] >= 2
-
-    assert by_id[-1]['cluster_kind'] == 'unassigned'
+    unlabeled = by_uid[cohort_cluster_uid(opensearch, 'cnd10000')]
+    assert unlabeled['is_unlabeled'] is True
+    assert unlabeled['size'] == 30
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +234,7 @@ def test_diverse_select_returns_an_ordering_and_mutates_nothing(
 
     resp = api_client.post(
         '/select/diverse',
-        json={'k': 10, 'scope': {'cluster_id': CANDIDATE_CLUSTER_ID}},
+        json={'k': 10, 'scope': {'cluster_uid': cohort_cluster_uid(opensearch, 'cnd10000')}},
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()

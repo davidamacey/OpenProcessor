@@ -1,6 +1,6 @@
 /**
  * The project-change reset registry
- * (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+ * (any-domain rev3 and projects contract review
  * §7.1). Every client-side store or cache that holds one project's data
  * registers a hook here from its OWN module; `projectsStore.select()`
  * runs them all when the active project changes, so nothing from the

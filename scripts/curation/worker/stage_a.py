@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any
 
 import structlog
 
@@ -258,6 +259,90 @@ async def stage_a_consumer(ctx: PipelineContext, consumer_id: int) -> None:
             structlog.contextvars.unbind_contextvars('request_id')
 
 
+async def _visibility_verdicts(
+    rt: Any,
+    chunk: list[_ItemTask],
+    region_crops: list[RegionCrop],
+    consumer_id: int,
+) -> dict[str, bool]:
+    """One batched visibility call; any RPC error fails OPEN (everyone visible)."""
+    if not region_crops:
+        return {}
+    _vis_t0 = time.monotonic()
+    try:
+        if rt.vlm is None:
+            msg = 'visibility stage fed without a VLM'
+            raise RuntimeError(msg)
+        verdicts: dict[str, bool] = await rt.vlm.region_visible_batch(region_crops)
+        # only a write this call actually
+        # informed gets stamped `vlm_prompt_pack` downstream.
+        for _t in chunk:
+            if _t.crop_jpeg is not None:
+                _t.mark_vlm_called(rt.vlm_identity)
+        OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
+            time.monotonic() - _vis_t0
+        )
+    except Exception as exc:
+        OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='error').observe(
+            time.monotonic() - _vis_t0
+        )
+        logger.warning(
+            'stage_a_vlm_visible_failed',
+            consumer_id=consumer_id,
+            chunk_size=len(region_crops),
+            request_ids=[t.request_id for t in chunk],
+            error=str(exc),
+        )
+        # Fail-OPEN: pretend everyone is visible so the
+        # secondary segmenter still gets a crack at them.
+        return {c.crop_id: True for c in region_crops}
+    return verdicts
+
+
+async def _route_visibility_verdict(
+    ctx: PipelineContext, t: _ItemTask, is_visible: bool | None
+) -> None:
+    """Send one crop to ``sam_q``, ``out_q`` or back to pending on its verdict."""
+    F = get_region_fields()
+    metrics = ctx.metrics
+    visible_no_verdict = ctx.visible_no_verdict
+    if is_visible is None:
+        # No verdict (the VLM answered the chunk with
+        # nothing): not a "no region visible". Leave the
+        # item pending -- drop it from in_flight so the
+        # next producer poll retries it -- until the cap.
+        metrics['visible_no_verdict'] += 1
+        if not visible_no_verdict.record(t.crop_id):
+            async with ctx.in_flight_lock:
+                ctx.in_flight.discard(t.crop_id)
+            return
+        # Cap reached: fail open, like the stage's other
+        # no-answer paths -- detection decides.
+        metrics['visible_no_verdict_cap_hits'] += 1
+        logger.warning(
+            'region_worker_no_verdict_cap',
+            stage='visibility',
+            crop_id=t.crop_id,
+            attempts=ctx.no_verdict_cap,
+        )
+        t.detection_trace.append('vlm_visible:no_verdict')
+        await ctx.sam_q.put(t)
+        return
+    visible_no_verdict.clear(t.crop_id)
+    if is_visible:
+        metrics['vlm_visible_kept'] += 1
+        t.detection_trace.append('vlm_visible:yes')
+        await ctx.sam_q.put(t)
+    else:
+        metrics['vlm_visible_skipped'] += 1
+        t.detection_trace.append('vlm_visible:no')
+        t.update_doc = {
+            F.status: RegionStatus.NO_REGION_VISIBLE,
+            F.detector_chain: list(t.detection_trace),
+        }
+        await ctx.out_q.put(t)
+
+
 async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
     """Stage A.vlm_visible: batched yes/no region-visibility filter.
 
@@ -278,13 +363,9 @@ async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
     to the no-verdict cap; at the cap they fail open to ``sam_q``.
     """
     vlm_visible_q = ctx.vlm_visible_q
-    sam_q = ctx.sam_q
     out_q = ctx.out_q
     in_flight = ctx.in_flight
     in_flight_lock = ctx.in_flight_lock
-    metrics = ctx.metrics
-    no_verdict_cap = ctx.no_verdict_cap
-    visible_no_verdict = ctx.visible_no_verdict
     _rt_for = ctx.rt_for
 
     carry: list[_ItemTask] = []
@@ -316,7 +397,6 @@ async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
                 if poisoned:
                     return
                 continue
-            batch_request_ids = [t.request_id for t in chunk]
             region_crops: list[RegionCrop] = []
             bad_indices: list[int] = []
             for i, t in enumerate(chunk):
@@ -325,38 +405,8 @@ async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
                     continue
                 region_crops.append(RegionCrop(crop_id=t.crop_id, jpeg_bytes=t.crop_jpeg))
 
-            verdicts: dict[str, bool] = {}
-            if region_crops:
-                _vis_t0 = time.monotonic()
-                try:
-                    if rt.vlm is None:
-                        msg = 'visibility stage fed without a VLM'
-                        raise RuntimeError(msg)
-                    verdicts = await rt.vlm.region_visible_batch(region_crops)
-                    # only a write this call actually
-                    # informed gets stamped `vlm_prompt_pack` downstream.
-                    for _t in chunk:
-                        if _t.crop_jpeg is not None:
-                            _t.mark_vlm_called(rt.vlm_identity)
-                    OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='ok').observe(
-                        time.monotonic() - _vis_t0
-                    )
-                except Exception as exc:
-                    OP_STAGE_A_VLM_VISIBLE_DURATION_SECONDS.labels(outcome='error').observe(
-                        time.monotonic() - _vis_t0
-                    )
-                    logger.warning(
-                        'stage_a_vlm_visible_failed',
-                        consumer_id=consumer_id,
-                        chunk_size=len(region_crops),
-                        request_ids=batch_request_ids,
-                        error=str(exc),
-                    )
-                    # Fail-OPEN: pretend everyone is visible so the
-                    # secondary segmenter still gets a crack at them.
-                    verdicts = {c.crop_id: True for c in region_crops}
+            verdicts = await _visibility_verdicts(rt, chunk, region_crops, consumer_id)
 
-            F = get_region_fields()
             for i, t in enumerate(chunk):
                 structlog.contextvars.bind_contextvars(request_id=t.request_id)
                 try:
@@ -364,42 +414,7 @@ async def stage_a_vlm_visible(ctx: PipelineContext, consumer_id: int) -> None:
                         t.update_doc = unreadable_crop_update(t)
                         await out_q.put(t)
                         continue
-                    is_visible = verdicts.get(t.crop_id)
-                    if is_visible is None:
-                        # No verdict (the VLM answered the chunk with
-                        # nothing): not a "no region visible". Leave the
-                        # item pending -- drop it from in_flight so the
-                        # next producer poll retries it -- until the cap.
-                        metrics['visible_no_verdict'] += 1
-                        if not visible_no_verdict.record(t.crop_id):
-                            async with in_flight_lock:
-                                in_flight.discard(t.crop_id)
-                            continue
-                        # Cap reached: fail open, like the stage's other
-                        # no-answer paths -- detection decides.
-                        metrics['visible_no_verdict_cap_hits'] += 1
-                        logger.warning(
-                            'region_worker_no_verdict_cap',
-                            stage='visibility',
-                            crop_id=t.crop_id,
-                            attempts=no_verdict_cap,
-                        )
-                        t.detection_trace.append('vlm_visible:no_verdict')
-                        await sam_q.put(t)
-                        continue
-                    visible_no_verdict.clear(t.crop_id)
-                    if is_visible:
-                        metrics['vlm_visible_kept'] += 1
-                        t.detection_trace.append('vlm_visible:yes')
-                        await sam_q.put(t)
-                    else:
-                        metrics['vlm_visible_skipped'] += 1
-                        t.detection_trace.append('vlm_visible:no')
-                        t.update_doc = {
-                            F.status: RegionStatus.NO_REGION_VISIBLE,
-                            F.detector_chain: list(t.detection_trace),
-                        }
-                        await out_q.put(t)
+                    await _route_visibility_verdict(ctx, t, verdicts.get(t.crop_id))
                 finally:
                     structlog.contextvars.unbind_contextvars('request_id')
         if poisoned:

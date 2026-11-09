@@ -26,6 +26,14 @@ class S3Location(BaseModel):
     prefix: str = Field(default='', max_length=1024)
 
 
+def require_exactly_one_source(
+    folder: str | None, manifest: str | None, s3: S3Location | None, source_id: str | None
+) -> None:
+    """The shared check of the bulk start and preview requests."""
+    if sum(x is not None for x in (folder, manifest, s3, source_id)) != 1:
+        raise ValueError('send exactly one of folder, manifest, s3 and source_id')
+
+
 class WatchTriggerWire(BaseModel):
     model_config = ConfigDict(extra='forbid')
 

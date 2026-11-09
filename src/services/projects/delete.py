@@ -19,6 +19,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
 from sqlalchemy import text
 
 from src.config.curation_accessors import base_curation_config
@@ -122,7 +123,7 @@ async def dry_run_delete(client: Any, *, slug: str) -> dict[str, Any]:
             with bind_project(record, read_only=True):
                 count_resp = await client.count(index=name)
             docs: int | None = int(count_resp.get('count') or 0)
-        except Exception:
+        except OpenSearchException:
             # m10: a genuinely uncountable index reports null, the same
             # rule ProjectCounts.validated already follows -- never a
             # made-up 0 that looks like "confirmed empty".

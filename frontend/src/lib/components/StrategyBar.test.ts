@@ -35,7 +35,6 @@ const CLUSTER_DETAIL_FILES = [
   '../clusters/clusterDetailLive.svelte.ts',
   './clusters/ClusterDetailToolbar.svelte',
   './clusters/ClusterDetailFilters.svelte',
-  './clusters/SubClusterTabs.svelte',
   './clusters/ClusterDetailGrid.svelte',
   './clusters/MoveClusterPicker.svelte',
 ];

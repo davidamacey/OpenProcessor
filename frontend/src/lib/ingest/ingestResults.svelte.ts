@@ -1,6 +1,6 @@
 /**
  * Compact per-file result storage for an ingest run
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2). A
+ * (Ingest UI plan §A.2). A
  * `Map<id, IngestFileResult>` plus running totals — never the whole file
  * list rendered at once (`page()`), and a CSV export for the Failed tab's
  * "Download CSV" button.

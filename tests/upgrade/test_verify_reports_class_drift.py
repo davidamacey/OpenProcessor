@@ -22,7 +22,7 @@ pytestmark = pytest.mark.db
 @pytest.mark.asyncio
 async def test_the_upgrade_verify_reports_the_drift_it_finds_but_does_not_fail(make_runner) -> None:
     result = await make_runner().run()
-    drift = result.verify.class_drift  # type: ignore[union-attr]
+    drift = result.verify.class_drift
     assert drift['default']['items'] == 5
     assert drift['default']['unknown_class_id'] == 1  # class 99
     assert drift['default']['name_disagrees'] == 1  # class 0 named 'truck' on the item

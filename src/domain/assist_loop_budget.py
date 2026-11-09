@@ -19,8 +19,6 @@ if TYPE_CHECKING:
 
     from src.domain.vlm_usage import VlmUsage
 
-POOLS: tuple[str, ...] = ('vlm', 'audit')
-UNITS: tuple[str, ...] = ('crops', 'requests', 'prompt_tokens', 'completion_tokens', 'wall_s')
 PROMPT_HISTORY_CALLS = 20
 PROMPT_MARGIN = 1.2
 # Prompt tokens one image costs when no call has been measured yet; a deliberately high figure,

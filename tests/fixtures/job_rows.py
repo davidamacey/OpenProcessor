@@ -35,6 +35,48 @@ def make_project(pg: PgDatabase, slug: str | None = None, status: str = 'active'
     return project
 
 
+def seed_default_spaces(pg: PgDatabase, project: uuid.UUID) -> None:
+    """The three primary, ready default embedding spaces a real project create writes.
+
+    ``make_project`` writes the bare row; code that resolves a vector field (ingest, export)
+    needs the spaces too and fails closed without them.
+    """
+    import json
+
+    from src.db.repos import embedding_spaces as spaces_repo
+    from src.services.embedding_spaces.catalog import sync_catalog
+    from src.services.embedding_spaces.spaces import default_space_rows
+    from src.services.projects.store import DEFAULT_ENCODER
+
+    with Session(pg.engine('app')) as session:
+        sync_catalog(session)
+    with Session(pg.engine('super')) as session:
+        encoder = spaces_repo.get_model_version(session, *DEFAULT_ENCODER)
+    assert encoder is not None, 'the shipped catalog carries the default encoder'
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+        for row in default_space_rows(project, encoder, created_by='test'):
+            conn.execute(
+                'INSERT INTO embedding_spaces (project_id, space_key, model_version_id, target, '
+                'dim, role, status, index_role, vector_field, state_field, nested_path, '
+                'knn_method, created_by) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                (
+                    row.project_id,
+                    row.space_key,
+                    row.model_version_id,
+                    row.target.value,
+                    row.dim,
+                    row.role.value,
+                    row.status.value,
+                    row.index_role,
+                    row.vector_field,
+                    row.state_field,
+                    row.nested_path,
+                    json.dumps(row.knn_method.model_dump(mode='json', exclude_none=True)),
+                    row.created_by,
+                ),
+            )
+
+
 def sql(pg: PgDatabase, statement: str, *params: Any) -> list[tuple[Any, ...]]:
     """Run ``statement`` as the superuser (past row-level security); rows, or [] for no result."""
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:

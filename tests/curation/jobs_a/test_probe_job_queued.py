@@ -28,7 +28,7 @@ async def start(project, **kw):
         'resume': False,
     } | kw
     async with async_session_factory()() as session:
-        return await probe_job.start(session, project, **args)
+        return await probe_job.start(session, project, **args)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -99,6 +99,7 @@ async def test_the_run_calls_the_inference_with_the_params_and_claims_the_gpu(
     assert path == Path('/x/best.onnx')
     assert (kw['model_version'], kw['architecture'], kw['resume']) == ('run-1', 'yolo26', True)
     claim.assert_awaited_once()
+    assert claim.await_args is not None
     assert claim.await_args.args[0] is ctx
     release.assert_awaited_once_with(ctx)
 
@@ -188,6 +189,7 @@ async def test_the_claim_names_the_cards_at_the_container_positions_of_the_host_
     monkeypatch.setattr(probe_job, 'release_cards', AsyncMock())
     ctx = FakeCtx(project, job.id, job.params)
     await probe_job.run_probe(ctx, object())
+    assert claim.await_args is not None
     [find] = claim.await_args.args[1:]
 
     from sqlalchemy.orm import Session

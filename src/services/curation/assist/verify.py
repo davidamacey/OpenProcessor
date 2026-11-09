@@ -25,6 +25,7 @@ from src.domain.region_boxes import read_boxes
 from src.services.curation.assist.chunk import ChunkOutcome
 from src.services.curation.crop_bytes import load_region_jpeg
 from src.services.curation.region_verify import BoxVerdict, verifiable_boxes, verify_regions_update
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.run_labeler import vlm_stamp
 from src.services.labeling.vlm_models import RegionCrop
 from src.utils.timeutil import now_iso
@@ -108,6 +109,7 @@ async def verify_chunk(
 
         await occ_skip_on_conflict_bulk(
             opensearch,
+            vector_excludes=await vector_source_excludes(),
             doc_ids=list(verdicts_by_id),
             merger=merge,
             index=items_index(),

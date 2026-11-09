@@ -13,6 +13,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.env import env_float
 
 
@@ -209,7 +211,7 @@ async def capacity_status(
             max_shards_per_node,
             heap_max_bytes_total,
         ) = await _fetch_cluster_facts(opensearch)
-    except Exception:
+    except OpenSearchException:
         _cache = (now, None)
         return None
 

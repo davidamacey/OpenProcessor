@@ -106,13 +106,23 @@ async def _current_epoch(slug: str) -> int:
     return int(epoch)
 
 
-async def embedding_space(target: Target, key: str | None = None) -> ResolvedSpace:
-    """The bound project's primary space for ``target``, or its live space named ``key``."""
-    slug = current_project().record.slug
+async def _entry(slug: str) -> _Entry:
     entry = _cache.get(slug)
     if entry is None or entry.epoch != await _current_epoch(slug):
         entry = await _load(slug)
         _cache[slug] = entry
+    return entry
+
+
+async def live_spaces() -> tuple[ResolvedSpace, ...]:
+    """Every live space of the bound project, every target (the vector-field exclusion lists)."""
+    return (await _entry(current_project().record.slug)).spaces
+
+
+async def embedding_space(target: Target, key: str | None = None) -> ResolvedSpace:
+    """The bound project's primary space for ``target``, or its live space named ``key``."""
+    slug = current_project().record.slug
+    entry = await _entry(slug)
     if key is None:
         wanted = next((k for t, k in entry.primary_keys if t is target), None)
         if wanted is None:

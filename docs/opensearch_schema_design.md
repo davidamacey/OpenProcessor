@@ -250,8 +250,8 @@ text (a cluster-only write does not). Editors send it back as
 Routes: `GET /curation/projects/{project}/regions` lists one row per box;
 `PUT /curation/projects/{project}/crops/{crop_id}/regions` and
 `PATCH /curation/projects/{project}/crops/{crop_id}/regions/{box_id}` edit them;
-`POST /curation/projects/{project}/regions/cluster` clusters boxes by their own
-embeddings.
+Clustering of boxes by their own embeddings runs through
+`POST /curation/projects/{project}/clusters/runs`.
 
 ### `labels_confirmed`
 

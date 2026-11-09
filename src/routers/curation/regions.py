@@ -36,6 +36,7 @@ from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
+from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
 from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
@@ -47,14 +48,96 @@ def _reason(mode: str) -> str:
     return TRAINING_CANDIDATE_MODES[mode].description
 
 
-# Large embedding fields (1024 floats) + class_id_history (a
-# list-only field no browse renderer reads) — excluded from browse _source.
-_REGION_SOURCE_EXCLUDES = item_list_source_excludes()
+async def region_source_excludes() -> list[str]:
+    """Large embedding fields (1024 floats) + class_id_history (a list-only field no browse
+    renderer reads): excluded from the browse ``_source``."""
+    return item_list_source_excludes(await vector_source_excludes())
 
 
 def _box_clause(parts: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The one per-box predicate: every part must hold for the SAME box."""
     return {'bool': {'filter': parts}} if parts else None
+
+
+def _box_filter_parts(
+    *,
+    status: str | None,
+    box_state: str | None,
+    cluster_uid: str | None,
+    min_score: float | None,
+    max_score: float | None,
+    detector: str | None,
+    text: str | None,
+) -> list[dict[str, Any]]:
+    """The nested-box predicates that must all hold on the SAME box."""
+    F = get_region_fields()
+    parts: list[dict[str, Any]] = []
+    if box_state is not None:
+        parts.append({'term': {f'{F.boxes}.{F.boxes_state}': box_state}})
+    elif status is None:
+        # No status and no explicit box state: the boxes a region browse is
+        # about -- accepted, or false_positive (kept for FP analysis).
+        parts.append(
+            {
+                'terms': {
+                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
+                }
+            }
+        )
+    if cluster_uid is not None:
+        parts.append({'term': {f'{F.boxes}.cluster_uid': cluster_uid}})
+    if min_score is not None or max_score is not None:
+        rng: dict[str, float] = {}
+        if min_score is not None:
+            rng['gte'] = min_score
+        if max_score is not None:
+            rng['lte'] = max_score
+        parts.append({'range': {f'{F.boxes}.score': rng}})
+    if detector is not None:
+        parts.append({'term': {f'{F.boxes}.detector': detector}})
+    if text:
+        parts.append(region_text_clause(f'{F.boxes}.text', text))
+    return parts
+
+
+def _region_sort(cluster_uid: str | None) -> list[dict[str, Any]]:
+    F = get_region_fields()
+    # In a cluster, float the regions least like its centre (outliers) first. The sort reads the
+    # boxes of the cluster only (the nested filter), so an item with a box in another cluster
+    # doesn't sort by that box.
+    sort: list[dict[str, Any]]
+    if cluster_uid is not None:
+        sort = [
+            {
+                f'{F.boxes}.cluster_score': {
+                    'order': 'asc',
+                    'mode': 'min',
+                    'missing': '_last',
+                    'unmapped_type': 'float',
+                    'nested': {
+                        'path': F.boxes,
+                        'filter': {'term': {f'{F.boxes}.cluster_uid': cluster_uid}},
+                    },
+                }
+            }
+        ]
+    else:
+        # Items order by their most recently detected box: a nested sort
+        # with mode='max' (region_boxes carries detected_at per box).
+        sort = [
+            {
+                f'{F.boxes}.detected_at': {
+                    'order': 'desc',
+                    'missing': '_last',
+                    'unmapped_type': 'date',
+                    'nested': {'path': F.boxes},
+                    'mode': 'max',
+                }
+            }
+        ]
+    sort.append({'crop_id': {'order': 'asc'}})
+    sort.append({'crop_id': {'order': 'asc'}})
+    return sort
 
 
 @router.get(
@@ -115,32 +198,15 @@ async def list_regions(
             detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
         )
 
-    parts: list[dict[str, Any]] = []
-    if box_state is not None:
-        parts.append({'term': {f'{F.boxes}.{F.boxes_state}': box_state}})
-    elif status is None:
-        # No status and no explicit box state: the boxes a region browse is
-        # about -- accepted, or false_positive (kept for FP analysis).
-        parts.append(
-            {
-                'terms': {
-                    f'{F.boxes}.{F.boxes_state}': ['accepted', RegionStatus.FALSE_POSITIVE.value]
-                }
-            }
-        )
-    if cluster_uid is not None:
-        parts.append({'term': {f'{F.boxes}.cluster_uid': cluster_uid}})
-    if min_score is not None or max_score is not None:
-        rng: dict[str, float] = {}
-        if min_score is not None:
-            rng['gte'] = min_score
-        if max_score is not None:
-            rng['lte'] = max_score
-        parts.append({'range': {f'{F.boxes}.score': rng}})
-    if detector is not None:
-        parts.append({'term': {f'{F.boxes}.detector': detector}})
-    if text:
-        parts.append(region_text_clause(f'{F.boxes}.text', text))
+    parts = _box_filter_parts(
+        status=status,
+        box_state=box_state,
+        cluster_uid=cluster_uid,
+        min_score=min_score,
+        max_score=max_score,
+        detector=detector,
+        text=text,
+    )
 
     filt: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = []
@@ -149,47 +215,15 @@ async def list_regions(
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
     try:
-        filt.extend(item_filter_clauses(item_filter))
+        filt.extend(item_filter_clauses(item_filter, embedding=await item_write_fields()))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if verified is not None:
         filt.append({'term': {F.verified: verified}})
 
-    # In a cluster, float the regions least like its centre (outliers) first. The sort reads the
-    # boxes of the cluster only (the nested filter), so an item with a box in another cluster
-    # doesn't sort by that box.
-    sort: list[dict[str, Any]]
-    if cluster_uid is not None:
-        sort = [
-            {
-                f'{F.boxes}.cluster_score': {
-                    'order': 'asc',
-                    'mode': 'min',
-                    'missing': '_last',
-                    'unmapped_type': 'float',
-                    'nested': {
-                        'path': F.boxes,
-                        'filter': {'term': {f'{F.boxes}.cluster_uid': cluster_uid}},
-                    },
-                }
-            }
-        ]
-    else:
-        # Items order by their most recently detected box: a nested sort
-        # with mode='max' (region_boxes carries detected_at per box).
-        sort = [
-            {
-                f'{F.boxes}.detected_at': {
-                    'order': 'desc',
-                    'missing': '_last',
-                    'unmapped_type': 'date',
-                    'nested': {'path': F.boxes},
-                    'mode': 'max',
-                }
-            }
-        ]
-    sort.append({'crop_id': {'order': 'asc'}})
+    sort = _region_sort(cluster_uid)
     guard_page_depth(page, page_size)
+    excludes = await region_source_excludes()
     try:
         return await search_region_rows(
             opensearch,
@@ -200,7 +234,7 @@ async def list_regions(
             page=page,
             page_size=page_size,
             box_clause=_box_clause(parts),
-            source_excludes=_REGION_SOURCE_EXCLUDES,
+            source_excludes=excludes,
         )
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
@@ -358,6 +392,7 @@ async def training_candidates(
         },
         {'crop_id': {'order': 'asc'}},
     ]
+    excludes = await region_source_excludes()
     try:
         page_body = await search_region_rows(
             opensearch,
@@ -368,7 +403,7 @@ async def training_candidates(
             page=page,
             page_size=page_size,
             box_clause=box_clause,
-            source_excludes=_REGION_SOURCE_EXCLUDES,
+            source_excludes=excludes,
             row_keys={'selection_reason': reason},
         )
     except Exception as exc:

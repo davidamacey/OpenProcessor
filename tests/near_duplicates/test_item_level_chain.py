@@ -4,6 +4,7 @@ image level's leak groups)."""
 from __future__ import annotations
 
 import uuid
+from typing import Any, cast
 
 import psycopg
 import pytest
@@ -55,7 +56,7 @@ async def _build_item_run(env) -> None:
             algorithm_version='nd-1',
         )
         run = await repo.get_run(session, run_id)
-        await repo.flip_current(session, run, {})
+        await repo.flip_current(session, cast('Any', run), {})
 
 
 async def test_a_full_image_build_starts_a_full_item_build(
@@ -65,6 +66,7 @@ async def test_a_full_image_build_starts_a_full_item_build(
     env, _ = await make_env(pg, project, docs)
     run = await full_build(env)
 
+    assert run is not None
     started = await chain.after_image_run(env, run.run_id, touched=None)
 
     assert started is not None
@@ -91,6 +93,7 @@ async def test_an_incremental_run_marks_the_items_of_the_regrouped_images(
     run = await full_build(env)
     await _build_item_run(env)
 
+    assert run is not None
     started = await chain.after_image_run(env, run.run_id, touched={'a1', 'a2'})
 
     assert started is not None
@@ -110,6 +113,7 @@ async def test_an_item_level_never_built_gets_a_full_build_not_a_rescore(
     env, _ = await make_env(pg, project, docs)
     run = await full_build(env)
 
+    assert run is not None
     await chain.after_image_run(env, run.run_id, touched={'a1'})
 
     ((kind, _, _),) = _jobs(pg, project)
@@ -127,6 +131,7 @@ async def test_a_busy_item_level_is_not_an_error_and_the_start_is_idempotent(
             session, project, wire.NearDupRunRequest(level='item', mode='full'), 'tester'
         )
 
+    assert run is not None
     assert await chain.after_image_run(env, run.run_id, touched=None) is None
     assert len(_jobs(pg, project)) == 1
 

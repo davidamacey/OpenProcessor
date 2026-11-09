@@ -138,3 +138,19 @@ def test_saved_metadata_is_plain_json_and_a_pickled_file_is_not_loaded(tmp_path:
     (tmp_path / f'{ClusterIndex.GLOBAL.value}.meta.json').write_bytes(b'\x80\x04not json')
     restarted = ClusteringService(index_dir=tmp_path, use_gpu=False, embedding_dim=8)
     assert restarted.is_trained(ClusterIndex.GLOBAL) is False
+
+
+def test_load_index_does_not_swallow_a_bug(tmp_path: Path) -> None:
+    """Only what faiss, the file and the JSON metadata raise means "unloadable"; a TypeError
+    from our own code must surface."""
+    (tmp_path / f'{ClusterIndex.GLOBAL.value}.index').write_bytes(b'x')
+    svc = ClusteringService(index_dir=tmp_path, use_gpu=False)
+
+    class _Faiss:
+        @staticmethod
+        def read_index(_path: str) -> None:
+            raise TypeError('bug')
+
+    svc._faiss = _Faiss()  # type: ignore[assignment]
+    with pytest.raises(TypeError):
+        svc.load_index(ClusterIndex.GLOBAL)

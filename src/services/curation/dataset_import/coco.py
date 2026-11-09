@@ -124,6 +124,46 @@ def _annotation_box(
     )
 
 
+def _annotations_by_image(data: dict[str, Any]) -> dict[Any, list[dict[str, Any]]]:
+    anns_by_image: dict[Any, list[dict[str, Any]]] = {}
+    for ann in data['annotations']:
+        if isinstance(ann, dict) and 'image_id' in ann:
+            anns_by_image.setdefault(ann['image_id'], []).append(ann)
+    return anns_by_image
+
+
+def _image_boxes(
+    anns: list[dict[str, Any]],
+    categories: dict[Any, str],
+    width: Any,
+    height: Any,
+    file_name: str,
+    issues: IssueCollector,
+) -> tuple[list[LabelBox], LabelState]:
+    """One image's usable boxes and the label state they imply."""
+    boxes: list[LabelBox] = []
+    has_objects = False
+    for ann in anns:
+        has_objects = True
+        if ann.get('iscrowd'):
+            issues.add('coco_crowd_skipped', file=file_name)
+            continue
+        box = _annotation_box(ann, categories, width, height)
+        if box is None:
+            issues.add('coco_bbox_out_of_image', file=file_name)
+            continue
+        boxes.append(box)
+
+    label_state: LabelState
+    if not has_objects:
+        label_state = 'negative'
+    elif boxes:
+        label_state = 'labeled'
+    else:
+        label_state = 'unlabeled'
+    return boxes, label_state
+
+
 def read_coco(
     files: list[CocoAnnotationFile],
     *,
@@ -154,10 +194,7 @@ def read_coco(
                 if isinstance(cat_id, int):
                     class_ids[cat_name] = cat_id
 
-        anns_by_image: dict[Any, list[dict[str, Any]]] = {}
-        for ann in data['annotations']:
-            if isinstance(ann, dict) and 'image_id' in ann:
-                anns_by_image.setdefault(ann['image_id'], []).append(ann)
+        anns_by_image = _annotations_by_image(data)
 
         split = f.split or _infer_split(f.path)
 
@@ -182,26 +219,9 @@ def read_coco(
                         detail={'declared': list(declared), 'actual': list(actual)},
                     )
                     continue
-            boxes: list[LabelBox] = []
-            has_objects = False
-            for ann in anns_by_image.get(img.get('id'), []):
-                has_objects = True
-                if ann.get('iscrowd'):
-                    issues.add('coco_crowd_skipped', file=file_name)
-                    continue
-                box = _annotation_box(ann, categories, width, height)
-                if box is None:
-                    issues.add('coco_bbox_out_of_image', file=file_name)
-                    continue
-                boxes.append(box)
-
-            label_state: LabelState
-            if not has_objects:
-                label_state = 'negative'
-            elif boxes:
-                label_state = 'labeled'
-            else:
-                label_state = 'unlabeled'
+            boxes, label_state = _image_boxes(
+                anns_by_image.get(img.get('id'), []), categories, width, height, file_name, issues
+            )
 
             entries.append(
                 ScanEntry(

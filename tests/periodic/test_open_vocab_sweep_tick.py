@@ -39,7 +39,7 @@ def world(monkeypatch: pytest.MonkeyPatch):
     state = {'client': FakeOpenSearch(pending=3), 'active': (SimpleSet(run_on_ingest=True), 2)}
 
     async def client() -> FakeOpenSearch:
-        return state['client']
+        return state['client']  # type: ignore[return-value]
 
     async def active() -> Any:
         return state['active']

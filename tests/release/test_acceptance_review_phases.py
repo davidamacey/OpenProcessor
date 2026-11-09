@@ -180,7 +180,7 @@ def _label_ops_world(*, undo_works=True, dry_run_writes=False, holdout_moves=Fal
             items[i].update(class_id=body['class_id'], label_validated=True, class_source='human')
         if holdout_moves:
             items['h']['class_id'] = 5
-        world['ops'].append('op1')
+        world['ops'].append('op1')  # type: ignore[attr-defined]
         return 200, {'updated': len(body['crop_ids']), 'op_id': 'op1', 'conflicts': []}
 
     def listing(_p):
@@ -191,15 +191,15 @@ def _label_ops_world(*, undo_works=True, dry_run_writes=False, holdout_moves=Fal
     def undo(payload):
         dry = json.loads(payload).get('dry_run', True)
         if dry and not dry_run_writes:
-            return 200, {'op_id': 'op1', 'dry_run': True, 'restored': len(world['prior']),
-                         'matched': len(world['prior'])}  # fmt: skip
+            return 200, {'op_id': 'op1', 'dry_run': True, 'restored': len(world['prior']),  # type: ignore[arg-type]
+                         'matched': len(world['prior'])}  # type: ignore[arg-type]  # fmt: skip
         if world['undone']:
             return 409, {'detail': {'error': 'already_undone'}}
         world['undone'] = True
         if undo_works:
-            for i, old in world['prior'].items():
+            for i, old in world['prior'].items():  # type: ignore[attr-defined]
                 items[i].update(old)
-        return 200, {'op_id': 'op1', 'dry_run': dry, 'restored': len(world['prior']),
+        return 200, {'op_id': 'op1', 'dry_run': dry, 'restored': len(world['prior']),  # type: ignore[arg-type]
                      'kept_changed': 0, 'kept_holdout': 0}  # fmt: skip
 
     routes = _happy_routes()

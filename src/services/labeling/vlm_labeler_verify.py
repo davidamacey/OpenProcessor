@@ -11,11 +11,17 @@ from typing import Any
 from src.core.logging import get_logger
 from src.services.labeling.vlm_chunks import run_chunks
 from src.services.labeling.vlm_client import extract_message_content, extract_reasoning_content
-from src.services.labeling.vlm_labeler_core import _RESULTS_ENVELOPE, VlmLabelerCore, _b64_jpeg
+from src.services.labeling.vlm_labeler_core import (
+    _RESULTS_ENVELOPE,
+    CHAT_CALL_ERRORS,
+    VlmLabelerCore,
+    _b64_jpeg,
+)
 from src.services.labeling.vlm_models import RegionCrop, VlmRegionVerdict, VlmTransportError
 from src.services.labeling.vlm_reply_parse import (
     _align_batch_entries,
     _coerce_bool,
+    _extract_batch_array,
     _extract_region_text,
     _normalize_confidence,
     _strip_markdown_fences,
@@ -72,7 +78,7 @@ class VerifyOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.verify_region_failed',
                 crop_id=crop.crop_id,
@@ -178,7 +184,7 @@ class VerifyOps(VlmLabelerCore):
 
         try:
             response = await self._post_chat(payload)
-        except Exception as exc:
+        except CHAT_CALL_ERRORS as exc:
             logger.error(
                 'vlm_labeler.verify_region_chunk_failed',
                 chunk_size=len(chunk),
@@ -237,36 +243,7 @@ class VerifyOps(VlmLabelerCore):
                 logger.warning('vlm_labeler.region_batch_parse_empty', chunk_size=len(chunk))
             return []
 
-        # Try the bare reply first; fall back to scanning for the first
-        # balanced JSON array embedded in any preamble.
-        candidates: list[str] = [raw]
-        depth = 0
-        start = -1
-        for i, ch in enumerate(raw):
-            if ch == '[':
-                if depth == 0:
-                    start = i
-                depth += 1
-            elif ch == ']' and depth > 0:
-                depth -= 1
-                if depth == 0 and start >= 0:
-                    candidates.append(raw[start : i + 1])
-                    start = -1
-
-        parsed: Any = None
-        for c in candidates:
-            try:
-                parsed = json.loads(c)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(parsed, dict):
-                for key in ('results', 'predictions', 'data'):
-                    if key in parsed and isinstance(parsed[key], list):
-                        parsed = parsed[key]
-                        break
-            if isinstance(parsed, list):
-                break
-            parsed = None
+        parsed = _extract_batch_array(raw)
 
         if not isinstance(parsed, list):
             if log_failures:

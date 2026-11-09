@@ -11,6 +11,7 @@
 import { apiFetch, globalApi } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
 import { projectPrefix } from '$lib/api_projects';
+import { nextStepInit } from '$lib/nextStep';
 import type {
   CombineFormatsVocabulary,
   CombineJobResponse,
@@ -102,8 +103,8 @@ export function getDatasetFormatsFor(
 }
 
 /** A finished job's served `next_steps` entry, run as served against the
- *  target project's own prefix: the step's `method` and `path`, no body
- *  (plan question P4-5). */
+ *  target project's own prefix: the step's `method` and `path` (`nextStepInit`
+ *  says which step needs a body). */
 export function runCombineNextStep(
   project: { prefix: string },
   step: CombineNextStep,
@@ -111,7 +112,7 @@ export function runCombineNextStep(
 ): Promise<unknown> {
   return apiFetch<unknown>(
     `${projectPrefix(project)}${step.path}`,
-    { method: step.method.toUpperCase() },
+    nextStepInit(step),
     signal,
     GLOBAL,
   );

@@ -237,7 +237,7 @@ def test_deprecated_class_disappears_from_non_deprecated_class_name_lists(
     from src.services.training.job_models import TrainJobSpec
     from src.services.training.preflight_checks import resolve_target_classes
 
-    spec = TrainJobSpec(job_id='j', include_classes=None, dataset_export_dir='/tmp/export')
+    spec = TrainJobSpec(include_classes=None, dataset_export_dir='/tmp/export')
     import src.services.training.preflight_checks as curation_train_mod
 
     orig = curation_train_mod.get_class_registry

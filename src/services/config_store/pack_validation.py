@@ -13,6 +13,7 @@ from dataclasses import fields as dc_fields
 from typing import TYPE_CHECKING, Any
 
 from src.services.config_store.pack_attribute_validation import check_attributes
+from src.services.config_store.profile_issues import issue_builder
 from src.services.labeling.detector_hint import MAX_DETECTOR_HINT_PCT
 from src.services.labeling.region_overlay import REPLY_TEXT_KEY
 from src.services.labeling.vlm_prompts import (
@@ -66,24 +67,7 @@ BYPASSABLE_CODES: frozenset[str] = frozenset()
 _TEXT_ASKING_KEYS = (REPLY_TEXT_KEY, 'text')
 
 
-def _issue(
-    code: str,
-    severity: str,
-    message: str,
-    *,
-    field: str | None = None,
-    detail: dict[str, Any] | None = None,
-) -> ValidationIssue:
-    from src.schemas.curation.config_common import ValidationIssue
-
-    return ValidationIssue(
-        code=code,
-        severity=severity,
-        field=field,
-        message=message,
-        detail=detail or {},
-        bypassable=code in BYPASSABLE_CODES,
-    )
+_issue = issue_builder(BYPASSABLE_CODES)
 
 
 def _check_denylist(deny: Any) -> list[ValidationIssue]:
@@ -444,7 +428,7 @@ def _check_vocabulary(
         from src.services.labeling.vlm_prompts import prompt_text_examples
 
         examples = sorted(prompt_text_examples(pack))
-    except Exception:  # pragma: no cover - defensive; malformed draft
+    except (TypeError, ValueError, KeyError):  # malformed draft: other checks report it
         examples = []
     if examples:
         issues.append(

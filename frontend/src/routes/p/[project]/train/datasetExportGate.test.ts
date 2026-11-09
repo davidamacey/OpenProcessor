@@ -1,6 +1,6 @@
 /**
  * Static source scan for T-C3's dataset-export capability gate
- * (docs/design/backend-integration-phase-c-plan-2026-09-20.md §3).
+ * (backend integration phase C plan §3).
  * This repo has no `@testing-library/svelte` harness (see
  * `TrainForm.test.ts`'s header, `StrategyBar.test.ts`), so — same
  * convention — this asserts the wiring a reviewer would check by eye.
@@ -79,15 +79,12 @@ describe('/train dataset-export capability gate', () => {
     expect(section).toMatch(/datasetExportSpec\.blurb/);
   });
 
-  // v0.4.0 facts: the near-duplicate threshold is the served
-  // `dedup_threshold_default` of the export kind, never a literal here.
-  // A scan, since the page is too big to mount for one request body.
-  it('takes the dedup threshold from the served export entry, with no literal 0.98', () => {
+  // The server dropped dedup_threshold for collapse_near_duplicates: a stale
+  // threshold would be silently ignored, so no trace of it may remain.
+  it('sends collapse_near_duplicates, never a dedup threshold or a literal 0.98', () => {
     expect(all).not.toMatch(/0\.98/);
-    expect(exporter).toMatch(/exportDedupDefault\(/);
-    expect(exporter).toMatch(
-      /dedup_threshold: singleClassDedup \? singleClassDedupThreshold/,
-    );
-    expect(section).toMatch(/\{#if exporter\.singleClassDedupThreshold != null\}/);
+    expect(all).not.toMatch(/dedup_threshold|exportDedupDefault/);
+    expect(exporter).toMatch(/collapse_near_duplicates: singleClassCollapse/);
+    expect(section).toMatch(/bind:checked=\{exporter\.singleClassCollapse\}/);
   });
 });

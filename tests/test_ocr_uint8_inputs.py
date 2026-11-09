@@ -12,9 +12,9 @@ import asyncio
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-import cv2
 import numpy as np
 import pytest
+from _image_helpers import png_bytes as _png
 from PIL import Image
 from test_ocr_pipeline_rec_width import _FakeTensor, model_module  # noqa: F401 -- fixture + stub
 
@@ -32,12 +32,6 @@ BGR = RNG.integers(0, 256, (70, 90, 3), dtype=np.uint8)
 
 class _StopError(Exception):
     """Raised by the stubs to end a call once the inputs were captured."""
-
-
-def _png(arr: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode('.png', arr)
-    assert ok
-    return buf.tobytes()
 
 
 def _values(inp: InferInput) -> np.ndarray:
@@ -139,7 +133,7 @@ def _pool(monkeypatch: pytest.MonkeyPatch) -> tuple[AsyncTritonPool, _MetaClient
     monkeypatch.setattr('src.clients.triton_pool_core.ensure_loaded', _loaded)
     pool = AsyncTritonPool(pool_size=1)
     meta = _MetaClient()
-    pool._clients = [meta]  # type: ignore[list-item]
+    pool._clients = [meta]
     pool._lock = asyncio.Lock()
     pool._initialized = True
     return pool, meta
@@ -179,7 +173,7 @@ class TestSyncDatatypeLookup:
         monkeypatch.setattr(tc, 'ensure_loaded_sync', lambda *_a: None)
         client = tc.TritonClient.__new__(tc.TritonClient)
         client._input_datatypes = {}
-        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)
+        client.client = SimpleNamespace(get_model_metadata=lambda n: calls.append(n) or metadata)  # type: ignore[func-returns-value]
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert client._input_datatype('ocr_pipeline', 'ocr_images') == 'UINT8'
         assert len(calls) == 1

@@ -82,9 +82,9 @@ def draw_region_overlay(jpeg_bytes: bytes, boxes: Sequence[BBoxNorm]) -> bytes |
     """
     if not boxes:
         return None
-    try:
-        from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw, ImageFont
 
+    try:
         with Image.open(BytesIO(jpeg_bytes)) as src:
             im = src.convert('RGB')
             w, h = im.size
@@ -103,7 +103,9 @@ def draw_region_overlay(jpeg_bytes: bytes, boxes: Sequence[BBoxNorm]) -> bytes |
             out = BytesIO()
             im.save(out, format='JPEG', quality=90)
             return out.getvalue()
-    except Exception:
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError):
+        # Pillow's decode failures: UnidentifiedImageError/truncated (OSError), a broken PNG
+        # (SyntaxError), a bad mode or size (ValueError), a decompression bomb.
         return None
 
 

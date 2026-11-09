@@ -4,6 +4,7 @@
       "reason"
     ],
     "search": [
+      "score_space",
       "semantic_score"
     ],
     "training_candidate": [
@@ -24,7 +25,7 @@
     "class_name",
     "class_source",
     "confidence",
-    "embedding_state",
+    "embedding_states",
     "class_confidence",
     "class_confidence_source",
     "label_source",
@@ -202,6 +203,19 @@
             ],
             "default": null,
             "title": "Assigned By"
+          },
+          "display_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The number the serving partition gave the cluster; null until a list route looks it up or when no serving partition numbers it.",
+            "title": "Display No"
           },
           "margin": {
             "anyOf": [
@@ -791,23 +805,18 @@
         "default": null,
         "title": "Detector Confidence"
       },
-      "embedding_state": {
-        "anyOf": [
-          {
-            "enum": [
-              "embedded",
-              "not_selected",
-              "deferred",
-              "failed"
-            ],
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Embedding State"
+      "embedding_states": {
+        "additionalProperties": {
+          "enum": [
+            "embedded",
+            "not_selected",
+            "deferred",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "title": "Embedding States",
+        "type": "object"
       },
       "excluded_at": {
         "anyOf": [

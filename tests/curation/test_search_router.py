@@ -8,12 +8,21 @@ of keeping router-level tests independent of the heavy ML stack.
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+class _Client(TestClient):
+    """The test client with the fakes its fixture hangs on it."""
+
+    fake_encoder: Any
+    fake_os: Any
 
 
 PE_DIM = 1024
@@ -22,6 +31,8 @@ PE_DIM = 1024
 def _fake_pe_encoder(ready: bool = True) -> MagicMock:
     enc = MagicMock()
     enc.text_ready = ready
+    enc.ensure_text_ready = MagicMock(return_value=ready)
+    enc.text_model = 'pe_text_encoder'
     vec = np.zeros((1, PE_DIM), dtype=np.float32)
     vec[0, 0] = 1.0
     enc.encode_text = MagicMock(return_value=vec)
@@ -29,7 +40,7 @@ def _fake_pe_encoder(ready: bool = True) -> MagicMock:
 
 
 def _fake_opensearch(hits: list[dict] | None = None) -> AsyncMock:
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = AsyncMock(
         return_value={'hits': {'hits': hits or [], 'total': {'value': len(hits or [])}}}
     )
@@ -56,13 +67,13 @@ def app_client(monkeypatch: pytest.MonkeyPatch):
     app.state.pe_encoder = fake_encoder
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
 
-    client = TestClient(app)
-    client.fake_os = fake_os  # type: ignore[attr-defined]
-    client.fake_encoder = fake_encoder  # type: ignore[attr-defined]
+    client = _Client(app)
+    client.fake_os = fake_os
+    client.fake_encoder = fake_encoder
     return client
 
 
-def test_search_text_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_client: TestClient):
+def test_search_text_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_client: _Client):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'false')
     resp = app_client.get(
         '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
@@ -72,7 +83,7 @@ def test_search_text_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_c
 
 
 def test_search_text_is_on_when_the_flag_is_unset(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
+    monkeypatch: pytest.MonkeyPatch, app_client: _Client
 ):
     # A fresh install sets nothing: text search must answer, not 400 (#371).
     monkeypatch.delenv('OP_SEMANTIC_SEARCH_ENABLED', raising=False)
@@ -87,7 +98,7 @@ def test_search_text_is_on_when_the_flag_is_unset(
 
 @pytest.mark.parametrize('off', ['0', 'false'])
 def test_search_text_explicit_off_still_returns_400(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient, off: str
+    monkeypatch: pytest.MonkeyPatch, app_client: _Client, off: str
 ):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', off)
     resp = app_client.get(
@@ -96,16 +107,16 @@ def test_search_text_explicit_off_still_returns_400(
     assert resp.status_code == 400
 
 
-def test_search_text_encoder_not_ready_returns_503(app_client: TestClient):
-    app_client.fake_encoder.text_ready = False
+def test_search_text_encoder_not_ready_returns_503(app_client: _Client):
+    app_client.fake_encoder.ensure_text_ready.return_value = False
     resp = app_client.get(
         '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
     )
     assert resp.status_code == 503
-    assert 'pe_text' in resp.json()['detail']
+    assert "text model 'pe_text_encoder'" in resp.json()['detail']
 
 
-def test_search_text_happy_path(app_client: TestClient):
+def test_search_text_happy_path(app_client: _Client):
     hit = {
         '_id': 'crop_1',
         '_score': 0.83,
@@ -151,7 +162,7 @@ def test_search_text_happy_path(app_client: TestClient):
     assert 'pe_embedding' in body_sent['query']['knn']
 
 
-def test_search_text_min_score_filters_results(app_client: TestClient):
+def test_search_text_min_score_filters_results(app_client: _Client):
     """min_score is applied by OpenSearch itself now (top-level
     request body field), not filtered out of the full hit list in
     Python -- so the fake must apply it like real OpenSearch would."""
@@ -179,12 +190,12 @@ def test_search_text_min_score_filters_results(app_client: TestClient):
     assert body['items'][0]['crop_id'] == 'a'
 
 
-def test_search_text_empty_query_string_rejected(app_client: TestClient):
+def test_search_text_empty_query_string_rejected(app_client: _Client):
     resp = app_client.get('/curation/projects/default/search/text', params={'q': ''})
     assert resp.status_code == 422
 
 
-def test_search_text_no_hits_returns_empty(app_client: TestClient):
+def test_search_text_no_hits_returns_empty(app_client: _Client):
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [], 'total': {'value': 0}}}
     )
@@ -199,10 +210,12 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
         'page': 1,
         'page_size': 30,
         'unembedded_in_scope': 0,
+        'space': 'pe_core_l14_336_v1',
+        'fuse': [],
     }
 
 
-def test_search_text_inverted_confidence_band_is_400(app_client: TestClient):
+def test_search_text_inverted_confidence_band_is_400(app_client: _Client):
     resp = app_client.get(
         '/curation/projects/default/search/text',
         params={'q': 'truck', 'conf_min': 0.9, 'conf_max': 0.1},
@@ -218,7 +231,7 @@ def test_search_text_inverted_confidence_band_is_400(app_client: TestClient):
 SIMILAR = '/curation/projects/default/search/similar'
 
 
-def _similar_os(app_client: TestClient, *, source: list[dict], knn: list[dict] | None = None):
+def _similar_os(app_client: _Client, *, source: list[dict], knn: list[dict] | None = None):
     async def _search(*, index: str, body: dict) -> dict:
         if 'ids' in body.get('query', {}):
             return {'hits': {'hits': source, 'total': {'value': len(source)}}}
@@ -241,27 +254,33 @@ _NEIGHBOR = {
 }
 
 
-def test_search_similar_disabled_returns_400(
-    monkeypatch: pytest.MonkeyPatch, app_client: TestClient
-):
+def test_search_similar_disabled_returns_400(monkeypatch: pytest.MonkeyPatch, app_client: _Client):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'false')
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 400
     assert 'OP_SEMANTIC_SEARCH_ENABLED' in resp.json()['detail']
 
 
-def test_search_similar_needs_no_encoder(app_client: TestClient):
-    app_client.app.state.pe_encoder = None
+def test_search_similar_needs_no_encoder(app_client: _Client):
+    app_client.app.state.pe_encoder = None  # type: ignore[attr-defined]
     _similar_os(app_client, source=_SOURCE, knn=[_NEIGHBOR])
     assert app_client.get(SIMILAR, params={'crop_id': 'src'}).status_code == 200
 
 
-def test_search_similar_happy_path(app_client: TestClient):
+def test_search_similar_happy_path(app_client: _Client):
     _similar_os(app_client, source=_SOURCE, knn=[_NEIGHBOR])
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert set(body) == {
+        'items',
+        'total',
+        'page',
+        'page_size',
+        'unembedded_in_scope',
+        'space',
+        'fuse',
+    }
     assert body['items'][0]['semantic_score'] == 0.9
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [_NEIGHBOR], 'total': {'value': 1}}}
@@ -270,14 +289,14 @@ def test_search_similar_happy_path(app_client: TestClient):
     assert set(body['items'][0]) == set(text['items'][0])
 
 
-def test_search_similar_unknown_crop_404(app_client: TestClient):
+def test_search_similar_unknown_crop_404(app_client: _Client):
     _similar_os(app_client, source=[])
     resp = app_client.get(SIMILAR, params={'crop_id': 'nope'})
     assert resp.status_code == 404
     assert resp.json()['detail']['error'] == 'not_found'
 
 
-def test_search_similar_unembedded_409(app_client: TestClient):
+def test_search_similar_unembedded_409(app_client: _Client):
     _similar_os(app_client, source=[{'_id': 'src', '_source': {'embedding_state': 'deferred'}}])
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 409
@@ -285,33 +304,33 @@ def test_search_similar_unembedded_409(app_client: TestClient):
     assert 'deferred' in resp.json()['detail']['message']
 
 
-def test_search_similar_unknown_project_404(app_client: TestClient):
+def test_search_similar_unknown_project_404(app_client: _Client):
     resp = app_client.get('/curation/projects/nope/search/similar', params={'crop_id': 'src'})
     assert resp.status_code == 404
     assert resp.json()['detail']['error'] == 'project_not_found'
 
 
-def test_search_similar_opensearch_outage_is_503(app_client: TestClient):
+def test_search_similar_opensearch_outage_is_503(app_client: _Client):
     app_client.fake_os.search = AsyncMock(side_effect=ConnectionError('down'))
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 503
 
 
-def test_search_text_503_hides_the_exception_text(app_client: TestClient):
+def test_search_text_503_hides_the_exception_text(app_client: _Client):
     app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('secret-host:9200 refused'))
     resp = app_client.get('/curation/projects/default/search/text', params={'q': 'truck'})
     assert resp.status_code == 503
     assert 'secret-host' not in resp.text
 
 
-def test_search_similar_503_hides_the_exception_text(app_client: TestClient):
+def test_search_similar_503_hides_the_exception_text(app_client: _Client):
     app_client.fake_os.search = AsyncMock(side_effect=RuntimeError('secret-host:9200 refused'))
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 503
     assert 'secret-host' not in resp.text
 
 
-def test_search_similar_requires_crop_id(app_client: TestClient):
+def test_search_similar_requires_crop_id(app_client: _Client):
     assert app_client.get(SIMILAR).status_code == 422
 
 
@@ -333,14 +352,14 @@ _BOX_HIT = {
 
 
 @pytest.mark.parametrize('target', ['frame', 'boxes', ''])
-def test_search_text_unknown_target_is_422(app_client: TestClient, target: str):
+def test_search_text_unknown_target_is_422(app_client: _Client, target: str):
     resp = app_client.get(
         '/curation/projects/default/search/text', params={'q': 'wheel', 'target': target}
     )
     assert resp.status_code == 422
 
 
-def test_search_text_box_target_returns_the_matched_box(app_client: TestClient):
+def test_search_text_box_target_returns_the_matched_box(app_client: _Client):
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [_BOX_HIT], 'total': {'value': 1}}}
     )
@@ -353,7 +372,7 @@ def test_search_text_box_target_returns_the_matched_box(app_client: TestClient):
     assert item['matched_box_stale'] is False
 
 
-def test_search_text_item_target_omits_the_matched_box(app_client: TestClient):
+def test_search_text_item_target_omits_the_matched_box(app_client: _Client):
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [_BOX_HIT], 'total': {'value': 1}}}
     )
@@ -363,14 +382,14 @@ def test_search_text_item_target_omits_the_matched_box(app_client: TestClient):
     assert 'matched_box_id' not in item
 
 
-def test_search_similar_unknown_box_404(app_client: TestClient):
+def test_search_similar_unknown_box_404(app_client: _Client):
     _similar_os(app_client, source=[{'_id': 'src', '_source': {'region_boxes': []}}])
     resp = app_client.get(SIMILAR, params={'crop_id': 'src', 'box_id': 'b9'})
     assert resp.status_code == 404
     assert resp.json()['detail']['error'] == 'box_not_found'
 
 
-def test_search_similar_box_without_vector_409(app_client: TestClient):
+def test_search_similar_box_without_vector_409(app_client: _Client):
     _similar_os(
         app_client, source=[{'_id': 'src', '_source': {'region_boxes': [{'box_id': 'b1'}]}}]
     )

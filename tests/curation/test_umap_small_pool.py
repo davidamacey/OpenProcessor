@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import warnings
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -69,6 +70,6 @@ def test_rebuild_fits_above_floor(monkeypatch):
 
     monkeypatch.setattr(er, 'fetch_residual_embeddings', _fetch)
     monkeypatch.setattr(er, 'save_reducer', lambda _reducer, *, state_id: state_id)
-    out = asyncio.run(er.umap_rebuild(object()))
+    out = asyncio.run(er.umap_rebuild(cast('Any', object())))
     assert out['status'] == 'success'
     assert out['n_residuals'] == n

@@ -32,11 +32,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from src.config.curation_accessors import images_index, items_index
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project, add_project_argument
 
 
-VECTOR_FIELD = 'pe_embedding'
+VECTOR_FIELD = LEGACY_ITEM_VECTOR_FIELD
 META_FIELDS = (
     'crop_id',
     'image_id',

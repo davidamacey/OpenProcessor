@@ -26,7 +26,7 @@ def test_stamp_suffixes_a_repeat_and_is_stable() -> None:
 
 def test_validation_report_ids_are_unique_across_errors_and_warnings() -> None:
     def issue(code: str, field: str | None, severity: str = 'error') -> ValidationIssue:
-        return ValidationIssue(code=code, severity=severity, field=field, message='m')  # type: ignore[arg-type]
+        return ValidationIssue(code=code, severity=severity, field=field, message='m')
 
     report = ValidationReport(
         ok=False,

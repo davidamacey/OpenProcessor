@@ -20,7 +20,6 @@ from dataclasses import fields as dataclass_fields
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ_locks import is_locked_box, is_locked_item
-from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
@@ -33,6 +32,8 @@ from src.services.curation.class_sources import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from src.domain.region_boxes import RegionBox
 
 # Stock defaults double as the wire vocabulary. Never build this from env.
@@ -79,19 +80,15 @@ def region_wire_key(attr: str) -> str:
 
 REGION_WIRE_KEYS: tuple[str, ...] = tuple(region_wire_key(a) for a in REGION_WIRE_ATTRS)
 
-# Heavy vectors never shipped to a client. Callers pass the storage
-# instance so an overridden embedding key is excluded too.
-_EMBEDDING_SOURCE_EXCLUDES = (ITEM_EMBEDDING_FIELD,)
 
-
-def item_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """``_source.excludes`` list for any item search/get that feeds
-    :func:`serialize_item`."""
-    f = storage or get_region_fields()
-    return [*_EMBEDDING_SOURCE_EXCLUDES, f.box_embeddings]
+    :func:`serialize_item`: heavy vectors are never shipped to a client, so it is every vector
+    field of the index (``vector_excludes``, ``vector_source_excludes()``)."""
+    return list(vector_excludes)
 
 
-def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_list_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """``_source.excludes`` for a *list* endpoint (card grid / review queue
     / regions browse / semantic search) — :func:`item_source_excludes`
     plus ``class_id_history``.
@@ -103,14 +100,14 @@ def item_list_source_excludes(storage: RegionFields | None = None) -> list[str]:
     renderer reads it. Shipping it in every row of a paginated list
     response decompresses + serializes a field nobody displays.
     """
-    return [*item_source_excludes(storage), 'class_id_history', 'mask_polygon']
+    return [*item_source_excludes(vector_excludes), 'class_id_history', 'mask_polygon']
 
 
-def item_context_source_excludes(storage: RegionFields | None = None) -> list[str]:
+def item_context_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """:func:`item_list_source_excludes` keeping ``mask_polygon``: the items of
     ``GET /crops/{id}/context`` are drawn together over the source image, so
     each carries its outline (bounded by that route's sibling cap)."""
-    return [e for e in item_list_source_excludes(storage) if e != 'mask_polygon']
+    return [e for e in item_list_source_excludes(vector_excludes) if e != 'mask_polygon']
 
 
 def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> dict[str, Any]:
@@ -173,6 +170,7 @@ def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
         'score': src.get('cluster_score'),
         'margin': src.get('cluster_margin'),
         'assigned_by': src.get('cluster_assigned_by'),
+        'display_no': None,
     }
 
 
@@ -229,12 +227,14 @@ def serialize_item(
     src: dict[str, Any],
     fallback_id: str = '',
     *,
+    state_fields: Mapping[str, str],
     storage: RegionFields | None = None,
     api_prefix: str | None = None,
 ) -> dict[str, Any]:
     """Project one stored items-index document onto the wire item.
 
-    ``storage`` is the ``RegionFields`` instance the document was written
+    ``state_fields`` maps each live item space's key to its state field
+    (``item_state_fields()``); ``embedding_states`` reports the stored state of each. ``storage`` is the ``RegionFields`` instance the document was written
     with (default: the process-wide one); ``api_prefix`` defaults to the
     configured ``OP_API_PREFIX`` so server-built URLs match the mount.
     """
@@ -299,8 +299,13 @@ def serialize_item(
         # Human flagged "needs a class the registry doesn't have yet".
         'needs_new_class': bool(src.get('needs_new_class', False)),
         'needs_new_class_note': src.get('needs_new_class_note'),
-        # Why the item has no vector (null = written before the field existed).
-        'embedding_state': src.get('embedding_state'),
+        # Per item space: whether the item has a vector in it, and why not. A space the item
+        # has no state in (written before the field existed, or not built yet) is absent.
+        'embedding_states': {
+            space_key: state
+            for space_key, field in state_fields.items()
+            if (state := src.get(field))
+        },
         'cluster': cluster_object(src),
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
@@ -452,7 +457,7 @@ def region_boxes_to_wire(
     }
 
 
-ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', api_prefix=''))
+ITEM_WIRE_KEYS: frozenset[str] = frozenset(serialize_item({}, 'x', state_fields={}, api_prefix=''))
 
 # Endpoint-specific keys layered on top of the shared item. Everything
 # else is identical across endpoints.
@@ -461,7 +466,7 @@ REVIEW_EXTRA_KEYS = frozenset({'reason'})
 # and ``row_key``, its always-present list-unique key.
 REGION_ROW_EXTRA_KEYS = frozenset({'region_box_id', 'row_key'})
 TRAINING_CANDIDATE_EXTRA_KEYS = REGION_ROW_EXTRA_KEYS | {'selection_reason'}
-SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
+SEARCH_EXTRA_KEYS = frozenset({'semantic_score', 'score_space'})
 
 
 def region_event_payload(

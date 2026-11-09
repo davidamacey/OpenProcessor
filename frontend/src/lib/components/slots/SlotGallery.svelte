@@ -1,11 +1,12 @@
 <script lang="ts">
   /**
    * A slot's region gallery for /clusters, backed by the slot's browse
-   * endpoint (docs/genericization-plan-2026-09-13.md §3.4/§5a). All
+   * endpoint (genericization plan §3.4/§5a). All
    * state/logic lives in the injected `gallery` controller
    * (`slotGalleryController.svelte.ts`), which carries the slot; this
    * component renders it, naming regions by `gallery.slot.label`.
    */
+  import { displayNoText } from '$lib/clusters/clusterCardText';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { resolveApiUrl } from '$lib/api';
   import SlotBboxEditor from '$lib/components/SlotBboxEditor.svelte';
@@ -194,7 +195,7 @@
           disabled={gallery.clusterBusy}
           class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
           onclick={gallery.runBuildFpCentroids}
-          title="Sub-type the false-positive bucket and (re)build its centroids"
+          title="Sub-type the false-positive boxes and (re)build their centroids"
         >
           {gallery.clusterBusy ? 'Building…' : 'Build FP centroids'}
         </button>
@@ -220,41 +221,9 @@
         >
           ← Clusters
         </button>
-        {#if gallery.selectedClusterIsFalsePositive}
-          <span
-            class="rounded bg-red-500/25 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-red-200 uppercase"
-          >
-            ✗ False-positive cluster
-          </span>
-          <span class="text-[11px] text-zinc-400"
-            >not {label.plural} — hard negatives for the detector</span
-          >
-          <button
-            type="button"
-            disabled={gallery.clusterBusy}
-            class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
-            onclick={gallery.runBuildFpCentroids}
-            title="Refine the FP bucket into sub-types and rebuild its centroids"
-          >
-            {gallery.clusterBusy ? 'Refining…' : 'Refine FP (build centroids)'}
-          </button>
-        {:else}
-          <span class="font-mono text-[11px] text-zinc-300"
-            >bucket #{gallery.selectedCluster}</span
-          >
-          <button
-            type="button"
-            disabled={gallery.clusterBusy}
-            class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30 disabled:opacity-50"
-            onclick={gallery.runRefineCluster}
-            title="AHC-refine this bucket into sub-clusters to isolate outliers"
-          >
-            {gallery.clusterBusy ? 'Refining…' : 'Refine AHC'}
-          </button>
-          {#if gallery.refineMsg}
-            <span class="text-[11px] text-zinc-400">{gallery.refineMsg}</span>
-          {/if}
-        {/if}
+        <span class="font-mono text-[11px] text-zinc-300" title={gallery.selectedCluster}
+          >cluster {gallery.selectedCluster.slice(0, 8)}</span
+        >
       {/if}
       <span class="grow"></span>
       {#if gallery.pager.items.length > 0}
@@ -371,21 +340,15 @@
     <p class="text-sm text-red-300">API unavailable: {gallery.pager.error}</p>
   {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
     <!-- Region cluster cards. Click one to open its regions (with the
-         bulk toolbar + AHC Refine). Buckets with sub-clusters (refined)
-         get a blue border so refined buckets are easy to spot. The
-         permanent false-positive bucket gets a red border + label. -->
+         bulk toolbar). False positives are a box state, not a cluster:
+         list them with the box-state filter. -->
     <ul class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-      {#each gallery.clusters as c (c.id)}
+      {#each gallery.clusters as c (c.uid)}
         <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
           <button
             type="button"
-            class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {c.cluster_kind ===
-            'false_positive'
-              ? 'border-red-500/70'
-              : c.has_subclusters
-                ? 'border-blue-500/60'
-                : 'border-zinc-700'}"
-            onclick={() => gallery.openCluster(c.id)}
+            class="flex w-full flex-col rounded-md border-2 border-zinc-700 bg-zinc-900 text-left transition hover:border-zinc-300"
+            onclick={() => gallery.openCluster(c.uid)}
           >
             <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
               {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
@@ -398,16 +361,9 @@
               {/each}
             </div>
             <div class="flex items-center justify-between gap-1 p-2 text-xs">
-              {#if c.cluster_kind === 'false_positive'}
-                <span
-                  class="rounded bg-red-500/25 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-red-200 uppercase"
-                  title="Permanent false-positive bucket — these are NOT {label.plural}"
-                >
-                  ✗ False positives
-                </span>
-              {:else}
-                <span class="font-semibold text-zinc-200">#{c.id}</span>
-              {/if}
+              <span class="font-mono font-semibold text-zinc-200" title={c.uid}
+                >{displayNoText(c)}</span
+              >
               <span
                 class="text-zinc-400"
                 title={c.box_count != null && c.box_count !== c.size
@@ -417,12 +373,6 @@
                 {c.size.toLocaleString()}{#if c.box_count != null && c.box_count !== c.size}
                   &nbsp;/&nbsp;{c.box_count.toLocaleString()} boxes{/if}
               </span>
-              {#if c.n_subclusters > 0}
-                <span
-                  class="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] text-blue-200"
-                  >{c.n_subclusters} sub</span
-                >
-              {/if}
             </div>
           </button>
         </li>
@@ -436,61 +386,22 @@
       provenance — fresh rows appear here as the worker processes them.
     </p>
   {:else}
-    <!-- Sub-cluster tabs: appear once a bucket has been AHC-refined.
-         "All" shows the grouped view (separators per sub-cluster);
-         clicking a chip filters to that one sub-cluster. -->
-    {#if gallery.selectedCluster != null && gallery.subclusterIds.length > 0}
-      <div class="mb-3 flex flex-wrap items-center gap-1.5">
-        <span class="text-[11px] text-zinc-500">sub-clusters:</span>
-        <button
-          type="button"
-          class="chip {gallery.subTab === null
-            ? 'bg-blue-500/30 text-blue-100'
-            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-          onclick={() => gallery.selectSubTab(null)}
-        >
-          all
-        </button>
-        {#each gallery.subclusterIds as sid (sid)}
-          <button
-            type="button"
-            class="chip font-mono {gallery.subTab === sid
-              ? 'bg-blue-500/30 text-blue-100'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
-            onclick={() => gallery.selectSubTab(sid)}
-          >
-            {sid}
-            <span class="text-zinc-500">{gallery.subCounts.get(sid) ?? ''}</span>
-          </button>
-        {/each}
-      </div>
-    {/if}
-
-    {#each gallery.groups as g (g.key)}
-      {#if g.label}
-        <div class="mt-3 mb-1.5 flex items-center gap-2">
-          <span class="font-mono text-[11px] text-zinc-300">{g.label}</span>
-          <span class="text-[11px] text-zinc-500">{g.items.length}</span>
-          <span class="h-px grow bg-zinc-800"></span>
-        </div>
-      {/if}
-      <div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {#each g.items as p (p.row_key)}
-          <SlotCard
-            crop={p}
-            slot={gallery.slot}
-            selected={gallery.sel.has(p.row_key)}
-            onclick={gallery.toggleSelect}
-            onedit={gallery.openEditor}
-            onreprocessed={(items) => void gallery.adoptReprocessed(items)}
-            onmarkfp={(c) =>
-              gallery.selectedCluster != null
-                ? gallery.applyBoxState([c.row_key], gallery.falsePositiveBoxState())
-                : gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
-          />
-        {/each}
-      </div>
-    {/each}
+    <div class="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
+      {#each gallery.pager.items as p (p.row_key)}
+        <SlotCard
+          crop={p}
+          slot={gallery.slot}
+          selected={gallery.sel.has(p.row_key)}
+          onclick={gallery.toggleSelect}
+          onedit={gallery.openEditor}
+          onreprocessed={(items) => void gallery.adoptReprocessed(items)}
+          onmarkfp={(c) =>
+            gallery.selectedCluster != null
+              ? gallery.applyBoxState([c.row_key], gallery.falsePositiveBoxState())
+              : gallery.applyStatus([c.crop_id], gallery.falsePositiveState())}
+        />
+      {/each}
+    </div>
     <!-- Sentinel AFTER the grid (not on it): the observer must root on a
          small element that only intersects once the user scrolls to the
          bottom. Attaching to the tall grid itself keeps it permanently

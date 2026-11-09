@@ -155,4 +155,4 @@ def test_the_embedding_seed_selects_items_through_the_embedding_state_helper() -
     from scripts.curation import seed_docs_embeddings as embeddings
     from src.domain.embedding_state import not_embedded_clause
 
-    assert embeddings.pending_query()['query'] == not_embedded_clause()
+    assert embeddings.pending_query()['query'] == not_embedded_clause('pe_embedding')

@@ -113,12 +113,12 @@ def test_crop_single_get_keeps_class_id_history_source_but_excludes_vectors(
 
 
 def test_label_undo_internal_fetch_still_reads_class_id_history() -> None:
-    """label_undo.py's own internal history fetch (distinct from any list
+    """The label_undo service's own history fetch (distinct from any list
     endpoint) must keep reading class_id_history -- it's the one caller
     that actually needs it."""
     import inspect
 
-    from src.routers.curation import label_undo
+    from src.services.curation import label_undo
 
     source = inspect.getsource(label_undo)
     assert "_source_includes=['class_id_history']" in source
@@ -126,3 +126,33 @@ def test_label_undo_internal_fetch_still_reads_class_id_history() -> None:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def _flip(embedding_registry: Any) -> None:
+    from _embedding_registry_fake import new_space
+
+    from src.domain.embedding_spaces import Target
+
+    embedding_registry.add(new_space(Target.ITEM, 'mobileclip2_s2'), primary=True)
+    embedding_registry.add(new_space(Target.BOX, 'mobileclip2_s2'), primary=True)
+
+
+@pytest.mark.parametrize('route', ['crops', 'review/all', 'regions'])
+@pytest.mark.usefixtures('reference_region_profile')
+def test_list_routes_exclude_the_vectors_of_a_flipped_primary(
+    client: TestClient, fake_os: _RecordingOS, embedding_registry: Any, route: str
+) -> None:
+    _flip(embedding_registry)
+    r = client.get(f'{P}/{route}')
+    assert r.status_code == 200, r.text
+    excludes = fake_os.search_bodies[-1]['_source']['excludes']
+    assert {'vec_mobileclip2_s2_v1', 'boxvec_mobileclip2_s2_v1', 'pe_embedding'} <= set(excludes)
+
+
+def test_the_single_crop_get_excludes_the_vectors_of_a_flipped_primary(
+    client: TestClient, fake_os: _RecordingOS, embedding_registry: Any
+) -> None:
+    _flip(embedding_registry)
+    r = client.get(f'{P}/crops/c0')
+    assert r.status_code == 200, r.text
+    assert 'vec_mobileclip2_s2_v1' in fake_os.get_calls[-1]['_source_excludes']

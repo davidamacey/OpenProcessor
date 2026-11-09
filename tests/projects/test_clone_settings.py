@@ -16,23 +16,7 @@ from src.services.projects.registry import ProjectRegistry, set_project_registry
 from .conftest import FakeLifecycleOpenSearch, fake_ensure_indexes
 
 
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
-
-
-@pytest.fixture(autouse=True)
-def _env(tmp_path, monkeypatch):
-    import src.config.curation_accessors as curation_mod
-    from src.services.projects import capacity as capacity_mod
-
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path / 'state'))
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path / 'projects_data'))
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
-    yield
-    curation_mod._default_curation_config = None
-    capacity_mod._cache = None
-    set_project_registry(None)
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('projects_state_env', 'pg_registry')]
 
 
 @pytest.fixture(autouse=True)
@@ -207,7 +191,7 @@ def test_clone_keymap_axis_all_or_nothing_reports_class_conflicts(
         from src.routers.curation import get_class_registry
 
         reg = get_class_registry()
-        reg.seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')
+        reg.seed(['ice_cream_truck'], group='vehicle', hotkey_letter='i')  # type: ignore[attr-defined]
 
     conflicts = asyncio.run(
         lifecycle.clone_settings(client, target_record=target, from_slug='source', axes=['keymap'])

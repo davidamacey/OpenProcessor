@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * `/settings/models/vlm/[name]` — one VLM endpoint's editor
-   * (any_domain_plan.md §7.8.5; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md
+   * (any_domain_plan.md §7.8.5; w9/w10 UI plan
    * §3.3). The form, its groups, types, ranges and help, every list, every
    * validation issue, the revisions and the probe results are served;
    * `VlmEndpointEditor` holds the draft and follows the server. There is no

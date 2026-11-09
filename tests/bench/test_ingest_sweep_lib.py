@@ -87,7 +87,7 @@ def test_parse_clock_line_and_summary() -> None:
     assert idle is not None
     assert idle['throttled'] == 0.0
     assert w.parse_clock_line('garbage') is None
-    summary = w.clock_summary([row, idle])  # type: ignore[list-item]
+    summary = w.clock_summary([row, idle])
     assert summary['sm_mhz_min'] == 210.0
     assert summary['throttled_share'] == 0.5
 

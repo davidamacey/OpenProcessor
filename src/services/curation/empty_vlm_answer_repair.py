@@ -50,11 +50,13 @@ from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.ingest_detector import IngestProfiles, refreshed_ingest_profiles
 from src.services.curation.item_doc import INGEST_CLASS_LABELER
+from src.services.curation.repair_scan import scan_plans
 from src.services.curation.vlm_class_attempt import (
     EmptyClassReason,
     class_attempt_fields,
     with_class_snapshot,
 )
+from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 REPAIR_WRITER = 'operator:repair_empty_vlm_answer'
@@ -207,31 +209,15 @@ async def plan_repairs(
     Refuses (:class:`IngestProfileUnresolvedError`) when the bound project's ingest
     profile cannot be read, since which detector wrote a class depends on it."""
     ingest = await refreshed_ingest_profiles()
-    plans: list[RepairPlan] = []
-    cursor: list[Any] | None = None
-    while True:
-        body: dict[str, Any] = {
-            'size': page_size,
-            'query': candidate_query(id_prefix=id_prefix),
-            'sort': [{'crop_id': 'asc'}],
-            '_source': {'excludes': ['*embedding*']},
-        }
-        if cursor is not None:
-            body['search_after'] = cursor
-        resp = await client.search(index=index, body=body)
-        hits = (resp.get('hits') or {}).get('hits') or []
-        if not hits:
-            break
-        cursor = hits[-1].get('sort')
-        for h in hits:
-            plan = plan_repair(
-                h['_id'], h.get('_source') or {}, ingest, record_attempt=record_attempt
-            )
-            if plan is not None:
-                plans.append(plan)
-        if len(hits) < page_size or cursor is None:
-            break
-    return plans
+    return await scan_plans(
+        client,
+        index=index,
+        query=candidate_query(id_prefix=id_prefix),
+        plan_one=lambda crop_id, src: plan_repair(
+            crop_id, src, ingest, record_attempt=record_attempt
+        ),
+        page_size=page_size,
+    )
 
 
 def summarize(plans: list[RepairPlan]) -> dict[str, Counter[str]]:
@@ -263,7 +249,12 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
 
         try:
             await occ_update_one(
-                client, doc_id=plan.crop_id, merger=_merge, index=index, writer_id=REPAIR_WRITER
+                client,
+                vector_excludes=await vector_source_excludes(),
+                doc_id=plan.crop_id,
+                merger=_merge,
+                index=index,
+                writer_id=REPAIR_WRITER,
             )
         except (_StaleError, OCCFinalConflictError):
             counts['skipped_changed'] += 1

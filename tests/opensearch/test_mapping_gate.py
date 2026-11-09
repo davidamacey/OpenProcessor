@@ -97,7 +97,7 @@ async def test_the_startup_check_binds_each_active_project_and_refuses_a_stale_o
         lambda: SimpleNamespace(snapshot=lambda: snapshot),
     )
 
-    assert await startup_check() is None  # deleted 'gone' is skipped
+    assert await startup_check() is None  # type: ignore[func-returns-value]  # deleted 'gone' is skipped
 
     stale = next(n for n in cluster.indexes if n.startswith('op_prj_beta__items'))
     cluster.indexes[stale]['_meta'] = {}

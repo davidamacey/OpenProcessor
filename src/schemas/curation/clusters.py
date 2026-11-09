@@ -23,6 +23,13 @@ class ClusterRepresentative(TypedDict):
 
 class ClusterCard(TypedDict):
     cluster_uid: str
+    display_no: Annotated[
+        int | None,
+        Field(
+            description='The number the serving partition gave the cluster (r<display_no>); '
+            'null when no serving partition names it.'
+        ),
+    ]
     size: int
     validated_count: int
     labelled_count: int

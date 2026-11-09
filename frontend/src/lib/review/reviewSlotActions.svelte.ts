@@ -36,7 +36,7 @@ export function createReviewSlotActions(opts: ReviewSlotActionsOptions) {
   const activeSlot = $derived(opts.tabs.activeSlot);
   const current = $derived(loader.current);
 
-  // DQ-m6 (docs/design/data-quality-pass-2026-09-24.md): rejectSlot()
+  // DQ-m6: rejectSlot()
   // used `window.prompt()` for this — a native, OS-level dialog. It
   // blocks the JS thread while open, which is exactly why the audit's
   // screenshot/automation pass saw "no prompt before or after the

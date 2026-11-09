@@ -9,6 +9,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.config.env import env_float
 from src.core.logging import get_logger
 
@@ -49,7 +51,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     never ``0`` ("empty") -- so a transient OpenSearch hiccup can never
     make a working sort/chip disappear ("fall back to None
     (not 0) on OpenSearch failure, so a transient error hides nothing that
-    already works"). The whole helper never raises; callers get a dict
+    already works"). An OpenSearch failure never raises; callers get a dict
     with real ints, ``None``s, or (only if OpenSearch is totally
     unreachable) a ``None`` total too.
 
@@ -92,7 +94,7 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
         for field in missing:
             bucket = aggs.get(field)
             counts[field] = int(bucket['doc_count']) if bucket is not None else None
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('curation_methods_field_coverage_failed', error=str(exc))
         if need_total:
             counts[_COVERAGE_TOTAL_KEY] = None

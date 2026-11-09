@@ -5,7 +5,7 @@
  * free (no api.ts, no Svelte) so it can be unit-tested in isolation and
  * mutation-checked without a component mount.
  *
- * See docs/design/w8-multibox-frontend-plan-2026-09-26.md.
+ * See the w8 multibox frontend plan.
  */
 
 import type { SlotBox, BBoxNormLike, XYXY } from './types';

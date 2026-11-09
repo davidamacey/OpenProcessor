@@ -35,6 +35,7 @@ from src.services.curation.metrics import OP_STAGE_A_SEGMENTER_DURATION_SECONDS
 from src.services.curation.ops_metrics import record_segmenter_request
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 from src.services.detection.segmenter_gate import RUN
+from src.utils.retry import TRITON_CALL_ERRORS
 
 
 logger = get_logger('curation_worker')
@@ -284,7 +285,7 @@ async def _text_hint_pass(
     else:
         try:
             ocr_regions = await rt.ocr_recognizer.detect_regions(crop_jpeg)
-        except Exception as exc:
+        except TRITON_CALL_ERRORS as exc:
             logger.warning('text_hint_ocr_failed', crop_id=t.crop_id, error=str(exc))
             ocr_regions = []
     ocr_pick = rt.ocr_recognizer.pick_best_text_region(ocr_regions) if ocr_regions else None

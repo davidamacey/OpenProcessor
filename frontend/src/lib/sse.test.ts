@@ -1,5 +1,5 @@
 /**
- * C7 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
+ * C7 (slot-generic crop mapping plan §7.1):
  * `subscribeCurationEvents` used to hardcode a fixed KNOWN_EVENT_TYPES list
  * (`crop.created` / `crop.classified` / `crop.region_verified`).
  * `EventSource.addEventListener` requires an exact type name, so any

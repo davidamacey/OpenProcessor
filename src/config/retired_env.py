@@ -42,6 +42,15 @@ RETIRED_ENV: dict[str, str] = {
     'OP_MAX_REFINE_MEMBERS': (
         f'{_REMOVED} the per-cluster AHC refine is gone; the assist loop splits a node itself'
     ),
+    'OP_PE_TEXT_BACKEND': (
+        f'{_REMOVED} the PE text tower runs on Triton only; OP_PE_TEXT_TRITON_MODEL names the model'
+    ),
+    'OP_PE_TEXT_ONNX_PATH': (
+        f'{_REMOVED} the PE text tower runs on Triton only; there is no in-process ONNX backend'
+    ),
+    'OP_PE_TEXT_ORT_THREADS': (
+        f'{_REMOVED} the in-process ONNX Runtime session is gone; Triton sizes its own instances'
+    ),
     'OP_RESIDUAL_EMBEDDING_FIELD': (
         f'{_REMOVED} the vector field is the primary space of the project embedding registry'
     ),

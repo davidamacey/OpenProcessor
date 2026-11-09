@@ -21,6 +21,7 @@ export interface ClusterRef {
   score: number | null;
   margin: number | null;
   assigned_by: string | null;
+  display_no: number | null;
 }
 
 export interface ItemAssistWire {
@@ -58,7 +59,7 @@ export interface ItemWire {
   class_name: string | null;
   class_source: string | null;
   confidence: number;
-  embedding_state: string | null;
+  embedding_states: Record<string, unknown>;
   class_confidence: number | null;
   class_confidence_source: string | null;
   label_source: string | null;
@@ -180,7 +181,7 @@ export const ITEM_WIRE_KEYS = [
   'class_name',
   'class_source',
   'confidence',
-  'embedding_state',
+  'embedding_states',
   'class_confidence',
   'class_confidence_source',
   'label_source',
@@ -319,6 +320,7 @@ export const REVIEW_EXTRA_KEYS = [
   'reason',
 ] as const;
 export const SEARCH_EXTRA_KEYS = [
+  'score_space',
   'semantic_score',
 ] as const;
 export const TRAINING_CANDIDATE_EXTRA_KEYS = [

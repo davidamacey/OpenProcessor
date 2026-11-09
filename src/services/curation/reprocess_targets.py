@@ -19,6 +19,8 @@ from src.services.curation.reprocess_models import MAX_TARGET_IDS, ReprocessFilt
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from src.services.embedding_spaces.readers import WriteFields
+
 _PAGE = 500
 _ID_CHUNK = 1000
 
@@ -28,7 +30,7 @@ class ReprocessTargetsError(ValueError):
     ``reprocess_targets_invalid``)."""
 
 
-def validate_targets(targets: ReprocessTargets) -> str:
+def validate_targets(targets: ReprocessTargets, embedding: WriteFields) -> str:
     """The one target form in use: ``image_ids``, ``crop_ids`` or ``filter``.
 
     Raises :class:`ReprocessTargetsError` for none, several, an empty id
@@ -70,13 +72,15 @@ def validate_targets(targets: ReprocessTargets) -> str:
         raise ReprocessTargetsError('limit applies to item filters, not to image-level selectors')
     if targets.filter is not None:
         try:
-            item_filter_clauses(targets.filter)
+            item_filter_clauses(targets.filter, embedding=embedding)
         except ValueError as exc:
             raise ReprocessTargetsError(str(exc)) from exc
     return kind
 
 
-def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[dict[str, Any]]:
+def selector_clauses(
+    f: ReprocessFilter, embedding: WriteFields, F: RegionFields | None = None
+) -> list[dict[str, Any]]:
     """Clauses every scope shares: the profile stamp selectors plus the item
     filter."""
     F = F or get_region_fields()
@@ -108,7 +112,7 @@ def selector_clauses(f: ReprocessFilter, F: RegionFields | None = None) -> list[
         out.append({'bool': {'must_not': [{'term': {F.profile: f.profile_not}}]}})
     elif f.profile_revision_below is not None:
         out.append({'range': {F.profile_revision: {'lt': f.profile_revision_below}}})
-    return [*out, *item_filter_clauses(f)]
+    return [*out, *item_filter_clauses(f, embedding=embedding)]
 
 
 def has_image_selector(f: ReprocessFilter) -> bool:
@@ -127,12 +131,14 @@ def has_profile_selector(f: ReprocessFilter) -> bool:
     return f.profile_not is not None or f.profile_revision_below is not None
 
 
-def item_filter_query(f: ReprocessFilter, F: RegionFields | None = None) -> dict[str, Any]:
+def item_filter_query(
+    f: ReprocessFilter, embedding: WriteFields, F: RegionFields | None = None
+) -> dict[str, Any]:
     """The whole filter as one items query (the non-region scopes; the
     region scope builds a :class:`~...region_requeue.RequeueSelection`
     per status instead)."""
     F = F or get_region_fields()
-    filt = selector_clauses(f, F)
+    filt = selector_clauses(f, embedding, F)
     must_not: list[dict[str, Any]] = []
     if f.region_status:
         filt.append({'terms': {F.status: list(f.region_status)}})

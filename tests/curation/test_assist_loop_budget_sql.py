@@ -42,9 +42,10 @@ def _run(pg: PgDatabase, project: uuid.UUID, token: int = 1) -> tuple[uuid.UUID,
     """A running job and its run."""
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         run = make_loop_run(conn, project)
-        job = conn.execute('SELECT job_id FROM assist_loop_runs WHERE id = %s', (run,)).fetchone()[
-            0
-        ]
+        job = (
+            conn.execute('SELECT job_id FROM assist_loop_runs WHERE id = %s', (run,)).fetchone()
+            or (None,)
+        )[0]
         conn.execute(
             "UPDATE jobs SET status = 'running', fencing_token = %s, attempt = 1, "
             "owner = 'test', started_at = now(), heartbeat_at = now(), "

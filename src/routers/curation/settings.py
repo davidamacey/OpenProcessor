@@ -33,7 +33,7 @@ from fastapi import HTTPException
 
 from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._common_models import (
+from src.routers.curation._settings_models import (
     CurationSettingsResponse,
     CurationSettingsUpdateRequest,
 )

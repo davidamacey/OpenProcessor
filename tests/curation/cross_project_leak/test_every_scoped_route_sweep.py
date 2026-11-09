@@ -283,6 +283,9 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     monkeypatch.setattr('src.routers.curation.select.embedding_space', item_space)
     monkeypatch.setattr('src.services.curation.embedding_viz_read.embedding_space', item_space)
     monkeypatch.setattr('src.routers.curation.cluster_partitions.embedding_space', item_space)
+    monkeypatch.setattr(
+        'src.services.curation.clustering.embedding_reduce.embedding_space', item_space
+    )
     app = leak_env.app
     routes = _scoped_routes(app)
     assert len(routes) > 100, f'expected the full scoped surface, got {len(routes)} routes'

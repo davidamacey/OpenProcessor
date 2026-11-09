@@ -44,6 +44,7 @@ from src.services.curation.ops_metrics import (
     OTHER_PROJECT,
     allowed_project_slugs,
 )
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.projects.guard_policy import bind_index_inventory_read
 
 
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from src.config.projects import ProjectRecord
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 logger = get_logger(__name__)
@@ -66,7 +68,7 @@ def _oldest(agg: dict[str, Any], now: float) -> float | None:
     return max(0.0, now - float(value) / 1000.0) if value is not None else None
 
 
-def _agg_body() -> dict[str, Any]:
+def _agg_body(embedding: WriteFields) -> dict[str, Any]:
     oldest = {'oldest': {'min': {'field': 'updated_at'}}}
     return {
         'size': 0,
@@ -79,9 +81,12 @@ def _agg_body() -> dict[str, Any]:
                 'filter': {'terms': {get_region_fields().status: list(_LABEL_STATUSES)}},
                 'aggs': oldest,
             },
-            'embed': {'filter': es.state_clause(es.DEFERRED), 'aggs': oldest},
-            'embedded': {'filter': es.embedded_clause()},
-            'failed': {'filter': es.state_clause(es.FAILED)},
+            'embed': {
+                'filter': es.state_clause(es.DEFERRED, embedding.state_field),
+                'aggs': oldest,
+            },
+            'embedded': {'filter': es.embedded_clause(embedding.vector_field)},
+            'failed': {'filter': es.state_clause(es.FAILED, embedding.state_field)},
         },
     }
 
@@ -91,7 +96,7 @@ async def _project_snapshot(client: Any, record: ProjectRecord, now: float) -> d
     # The refresh loop runs outside any request, so nothing is bound: bind this
     # project (read-only) for its own reads, as every other cross-project reader does.
     with bind_project(record, read_only=True):
-        resp = await client.search(index=items, body=_agg_body())
+        resp = await client.search(index=items, body=_agg_body(await item_write_fields()))
     aggs = resp.get('aggregations') or {}
 
     def count(name: str) -> int:

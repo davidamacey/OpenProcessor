@@ -23,7 +23,7 @@ class _StubVlm(VlmLabeler):
         self.peak = 0
         self.calls = 0
 
-    async def _post_chat(self, _payload: dict[str, Any], **_: Any) -> dict[str, Any]:
+    async def _post_chat(self, _payload: dict[str, Any], **_: Any) -> dict[str, Any]:  # type: ignore[override]
         self.live += 1
         self.calls += 1
         self.peak = max(self.peak, self.live)

@@ -24,15 +24,15 @@ async def test_warmed_project_request_does_no_opensearch_work(
     assert client.method_calls == []
 
 
-def test_text_status_labels_cache_as_per_process(tmp_path) -> None:
+def test_text_status_labels_cache_as_per_process() -> None:
     from src.clients.pe_encoder import PEEncoder
 
-    status = PEEncoder(text_onnx_path=tmp_path / 'x.onnx').text_status()
+    status = PEEncoder().text_status()
     assert status['cache_scope'] == 'process'
     assert status['pid'] == os.getpid()
 
 
-def test_prime_text_backend_hits_backend_without_touching_cache(tmp_path) -> None:
+def test_prime_text_backend_hits_backend_without_touching_cache() -> None:
     import numpy as np
 
     from src.clients.pe_encoder import PEEncoder
@@ -46,7 +46,7 @@ def test_prime_text_backend_hits_backend_without_touching_cache(tmp_path) -> Non
             calls.append(len(tokens))
             return np.ones((len(tokens), 1024), dtype=np.float32)
 
-    enc = PEEncoder(text_onnx_path=tmp_path / 'x.onnx')
+    enc = PEEncoder()
     enc._text_tokenizer = lambda qs: np.zeros((len(qs), 77), dtype=np.int64)
     enc._text_backend = _Backend()
     enc._text_ready = True
@@ -56,18 +56,3 @@ def test_prime_text_backend_hits_backend_without_touching_cache(tmp_path) -> Non
     assert calls == [1]
     info = enc.text_cache_info()
     assert (info.hits, info.misses, info.currsize) == (0, 0, 0)
-
-
-def test_prime_text_backend_skips_lazy_local_backends(tmp_path) -> None:
-    from src.clients.pe_encoder import PEEncoder
-
-    class _Lazy:
-        name = 'torch'
-
-        def encode(self, _tokens):
-            raise AssertionError('must not load a local model at startup')
-
-    enc = PEEncoder(text_onnx_path=tmp_path / 'x.onnx')
-    enc._text_backend = _Lazy()
-    enc._text_ready = True
-    enc.prime_text_backend()

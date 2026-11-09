@@ -111,7 +111,9 @@ async def test_groups_page_by_size_and_open_by_lineage(pg, project) -> None:
     assert sum(m.is_representative for m in detail.members) == 1
     async with async_session_factory()() as session:
         listed = await service.runs(session, project, 'image', 10)
+        assert run is not None
         one = await service.run(session, project, run.run_id)
+    assert run is not None
     assert [r.id for r in listed.items] == [str(run.run_id)]
     assert one.dedup_groups == 2
 
@@ -122,6 +124,7 @@ async def test_another_projects_runs_and_groups_are_not_found(pg, project) -> No
     run = await full_build(env)
     other = await make_project()
     async with async_session_factory()() as session:
+        assert run is not None
         with pytest.raises(RequestRejectedError) as missing:
             await service.run(session, other, run.run_id)
     assert missing.value.status_code == 404

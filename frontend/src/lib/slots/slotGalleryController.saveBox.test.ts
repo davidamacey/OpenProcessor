@@ -1,5 +1,5 @@
 /**
- * C8 (docs/design/slot-generic-crop-mapping-plan-2026-09-21.md §7.1):
+ * C8 (slot-generic crop mapping plan §7.1):
  * `saveBox` used to re-PUT the box a second time even though
  * `SlotBboxEditor` had already saved it (`PUT /crops/{id}/regions`) — a redundant
  * double-write on every region-gallery bbox save. It is now a pure local
@@ -28,9 +28,7 @@ function fakeCropWithSlot(id: string, slot: SlotData): Crop {
     label_source: 'human',
     label_validated: true,
     label_confidence: null,
-    cluster_id: null,
-    similarity_to_centroid: null,
-    cluster_subid: null,
+    cluster: null,
     test_holdout: false,
     updated_at: '',
     slots: { [widgetTagSlot.key]: slot },
@@ -55,7 +53,7 @@ function fakeRegionItem(id: string): RegionBrowseItem {
     region_visible: null,
     class_id: 3,
     class_name: 'widget_tag',
-    cluster_id: null,
+    cluster: null,
     updated_at: '',
   } as RegionBrowseItem;
 }

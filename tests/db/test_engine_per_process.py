@@ -88,17 +88,17 @@ def test_a_forked_child_gets_its_own_engine_and_leaves_the_parents_connection_al
 
 def test_the_api_pool_follows_the_plan(pg_env) -> None:
     pool = db_engine.get_async_engine().sync_engine.pool
-    assert pool.size() == 32  # 128 connections // (4 workers x 1 replica)
-    assert pool.timeout() == 5
-    assert pool._max_overflow == 0
+    assert pool.size() == 32  # type: ignore[attr-defined]  # 128 connections // (4 workers x 1 replica)
+    assert pool.timeout() == 5  # type: ignore[attr-defined]
+    assert pool._max_overflow == 0  # type: ignore[attr-defined]
     assert pool._pre_ping is True
-    assert pool._pool.use_lifo is True
+    assert pool._pool.use_lifo is True  # type: ignore[attr-defined]
     assert pool._recycle == 1800
 
 
 def test_the_poll_and_child_engines_are_small(pg_env) -> None:
-    assert db_engine.get_poll_engine().pool.size() == 1
-    assert db_engine.get_sync_engine().pool.size() == 2
+    assert db_engine.get_poll_engine().pool.size() == 1  # type: ignore[attr-defined]
+    assert db_engine.get_sync_engine().pool.size() == 2  # type: ignore[attr-defined]
 
 
 def test_the_task_engine_does_not_pool(pg_env) -> None:

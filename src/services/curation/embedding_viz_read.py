@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config.curation_accessors import items_index
@@ -127,7 +128,7 @@ async def get_cached_projection(
             body['search_after'] = search_after
         try:
             resp = await opensearch.search(index=items_index(), body=body)
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('curation_viz_projection_points_read_failed', error=str(exc))
             raise ProjectionUnavailableError(str(exc)) from exc
         hits = resp.get('hits', {}).get('hits') or []
@@ -151,7 +152,7 @@ async def get_cached_projection(
         }
         count_resp = await opensearch.count(index=items_index(), body={'query': missing_query})
         stale = int(count_resp.get('count', 0)) > 0
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('curation_viz_projection_staleness_check_failed', error=str(exc))
 
     return {

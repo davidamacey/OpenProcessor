@@ -7,7 +7,7 @@ import asyncio
 import uuid
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from fixtures.job_fixtures import job_env, kinds, producer, wakes  # noqa: F401
@@ -53,7 +53,7 @@ def alpha_loop(records: dict[str, Any], producer: Any, wakes: Any) -> Iterator[s
 
     async def start() -> str:
         async with async_session_factory()() as session:
-            return (await service.start_loop(session, prepared)).loop_id
+            return (await service.start_loop(session, cast('Any', prepared))).loop_id  # type: ignore[return-value]
 
     with bind_project(records['alpha']):
         yield asyncio.run(start())

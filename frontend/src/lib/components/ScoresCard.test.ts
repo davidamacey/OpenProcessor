@@ -1,6 +1,6 @@
 /**
  * Mount-based behavior test for the `/settings` "Curation scores" card
- * (docs/design/frontend-coverage-audit-2026-09-24.md §G10): coverage
+ * (frontend coverage audit §G10): coverage
  * render, null → "—", the compute request body sourced from served
  * scorer keys (never hardcoded), polling to completion, cancel, and the
  * server's error detail surfacing verbatim.

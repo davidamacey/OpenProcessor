@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -65,7 +65,7 @@ async def test_owned_pool_is_initialized_before_use(
 
     monkeypatch.setattr(embed_stage, 'embed_image_chunk', _embed)
     out = await embed_stage.run_embed_missing_stage(
-        None, class_id=None, cluster_uid=None, item_filter=None
+        cast('Any', None), class_id=None, cluster_uid=None, item_filter=None
     )
     assert out['images'] == 1
     assert 'status' not in out
@@ -81,7 +81,7 @@ async def test_every_image_failing_is_an_error_stage(
 
     monkeypatch.setattr(embed_stage, 'embed_image_chunk', _embed)
     out = await embed_stage.run_embed_missing_stage(
-        None, class_id=None, cluster_uid=None, item_filter=None
+        cast('Any', None), class_id=None, cluster_uid=None, item_filter=None
     )
     assert out['status'] == 'error'
     assert out['images_failed'] == 2

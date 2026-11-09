@@ -1,6 +1,6 @@
 /**
  * Pure chunk planner for an ingest run
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2/§A.4).
+ * (Ingest UI plan §A.2/§A.4).
  * Packs a flat file list into request-sized chunks respecting both an
  * image-count cap and a byte cap, greedily and in input order.
  */

@@ -7,12 +7,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import AutoLabelPanel from './AutoLabelPanel.svelte';
-import { getAutoLabelStatus, startAutoLabel } from '$lib/api_autoLabel';
+import {
+  getAutoLabelStatus,
+  pauseAutoLabel,
+  resumeAutoLabel,
+  startAutoLabel,
+} from '$lib/api_autoLabel';
 
 vi.mock('$lib/api_autoLabel', async () => {
   const actual =
     await vi.importActual<typeof import('$lib/api_autoLabel')>('$lib/api_autoLabel');
-  return { ...actual, getAutoLabelStatus: vi.fn(), startAutoLabel: vi.fn() };
+  return {
+    ...actual,
+    getAutoLabelStatus: vi.fn(),
+    startAutoLabel: vi.fn(),
+    pauseAutoLabel: vi.fn(),
+    resumeAutoLabel: vi.fn(),
+  };
 });
 
 const IDLE = { status: 'idle', stage: '', progress: null };
@@ -48,7 +59,7 @@ async function start(tick: boolean) {
     box.dispatchEvent(new Event('change', { bubbles: true }));
     flushSync();
   }
-  button('Recluster now')!.click();
+  button('Auto-label now')!.click();
   flushSync();
   button('Start')!.click();
   await vi.waitFor(() => expect(startAutoLabel).toHaveBeenCalledTimes(1));
@@ -81,7 +92,7 @@ describe('AutoLabelPanel embed_missing', () => {
       flushSync();
       expect(target.textContent).toContain('embedding items without a vector');
     });
-    expect(target.textContent).toContain('stage 1/6');
+    expect(target.textContent).toContain('stage 1/3');
   });
 
   it('a failed job shows the served error and marks the errored stage', async () => {
@@ -111,5 +122,71 @@ describe('AutoLabelPanel embed_missing', () => {
     expect(row.getAttribute('data-stage-status')).toBe('error');
     expect(row.className).toContain('red');
     expect(row.textContent).toContain('embedding items without a vector');
+  });
+});
+
+describe('AutoLabelPanel queued job states', () => {
+  const state = (status: string, extra: Record<string, unknown> = {}) => ({
+    job_id: 'j',
+    status,
+    stage: 'vlm',
+    processed: 3,
+    total: 10,
+    args: {},
+    result: {},
+    ...extra,
+  });
+
+  it('shows a queued run as queued with Pause and Cancel, and no Start', async () => {
+    vi.mocked(getAutoLabelStatus).mockResolvedValue(state('queued') as never);
+    instance = mount(AutoLabelPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('auto-label-status')?.textContent?.trim()).toBe('queued');
+    });
+    expect(q('auto-label-pause')).not.toBeNull();
+    expect(button('Cancel')).toBeDefined();
+    expect(button('Auto-label now')).toBeUndefined();
+  });
+
+  it('shows a paused run with the served reason and Resume, which calls the resume route', async () => {
+    vi.mocked(getAutoLabelStatus).mockResolvedValue(
+      state('paused', { pause_reason: 'vlm_unavailable' }) as never,
+    );
+    vi.mocked(resumeAutoLabel).mockResolvedValue(
+      state('queued', { done: false }) as never,
+    );
+    instance = mount(AutoLabelPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('auto-label-pause-reason')?.textContent).toContain('vlm unavailable');
+    });
+    expect(q('auto-label-pause')).toBeNull();
+    q('auto-label-resume')!.click();
+    await vi.waitFor(() => expect(resumeAutoLabel).toHaveBeenCalledTimes(1));
+  });
+
+  it('Pause calls the pause route', async () => {
+    vi.mocked(getAutoLabelStatus).mockResolvedValue(state('running') as never);
+    vi.mocked(pauseAutoLabel).mockResolvedValue(
+      state('paused', { done: false }) as never,
+    );
+    instance = mount(AutoLabelPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('auto-label-pause')).not.toBeNull();
+    });
+    q('auto-label-pause')!.click();
+    await vi.waitFor(() => expect(pauseAutoLabel).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows cancelling without a second Cancel', async () => {
+    vi.mocked(getAutoLabelStatus).mockResolvedValue(state('cancelling') as never);
+    instance = mount(AutoLabelPanel, { target, props: {} });
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('auto-label-status')?.textContent?.trim()).toBe('cancelling');
+    });
+    expect(button('Cancel')).toBeUndefined();
   });
 });

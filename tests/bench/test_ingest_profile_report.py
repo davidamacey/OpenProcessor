@@ -78,7 +78,7 @@ def test_triton_rows_are_ms_per_request() -> None:
 
 def test_prep_rows_take_the_median_over_repetitions() -> None:
     rows = {s: (ms, sh) for s, ms, sh in ipr.prep_stage_rows([_report(1), _report(2), _report(3)])}
-    assert rows['decode'] == (pytest.approx(60.0), 0.75)
+    assert rows['decode'] == (pytest.approx(60.0), 0.75)  # type: ignore[comparison-overlap]
 
 
 def test_render_names_every_stage_and_the_headline() -> None:

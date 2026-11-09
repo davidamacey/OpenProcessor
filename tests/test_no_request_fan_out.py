@@ -44,12 +44,6 @@ ROUTER_HELPERS = {
     ),
 }
 
-# A handler-only service whose fan-out another lane is replacing (one ``_msearch`` instead of two
-# parallel requests); that lane deletes this entry (a stale entry fails below).
-PENDING_REPLACEMENT = {
-    'services/curation/semantic_search.py': 'kNN and unembedded count in parallel',
-}
-
 
 def fan_out_calls(source: str) -> list[tuple[str, int]]:
     """``(name, line)`` of every gather, create_task or ensure_future call in ``source``."""
@@ -72,7 +66,7 @@ def _modules() -> list[str]:
 def test_no_handler_module_fans_out() -> None:
     offenders = []
     for rel in _modules():
-        if rel in ROUTER_HELPERS or rel in PENDING_REPLACEMENT:
+        if rel in ROUTER_HELPERS:
             continue
         calls = fan_out_calls((SRC / rel).read_text(encoding='utf-8'))
         offenders += [f'src/{rel}:{line} {name}' for name, line in calls]
@@ -88,7 +82,7 @@ def test_the_ingest_data_plane_has_no_create_task_or_gather_outside_task_groups(
 
 
 def test_every_helper_and_leftover_entry_still_applies() -> None:
-    for rel in (*ROUTER_HELPERS, *PENDING_REPLACEMENT):
+    for rel in ROUTER_HELPERS:
         assert fan_out_calls((SRC / rel).read_text(encoding='utf-8')), f'{rel} no longer needs it'
 
 

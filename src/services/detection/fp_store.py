@@ -86,7 +86,7 @@ class FalsePositiveCentroidStore:
         self._index = faiss.read_index(str(path))
         try:
             self.metadata = json.loads((self._dir / 'metadata.json').read_text())
-        except Exception:
+        except FileNotFoundError:
             self.metadata = {}
         return True
 

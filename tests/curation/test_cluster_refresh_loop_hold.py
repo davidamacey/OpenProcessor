@@ -33,7 +33,7 @@ START = '/curation/projects/default/pipeline/auto_label/start'
 
 @pytest.fixture
 def http(request: pytest.FixtureRequest) -> TestClient:
-    return request.getfixturevalue('client')  # type: ignore[no-any-return]
+    return request.getfixturevalue('client')
 
 
 LOOP_ID = '01a1b198-3400-7fd7-a7c3-1acc88024d4a'

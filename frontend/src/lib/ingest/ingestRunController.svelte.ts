@@ -1,7 +1,7 @@
 /**
  * `/ingest`'s run state machine — the only place upload concurrency
  * lives. Factory-function convention, matching `clusterController`/
- * `reviewController` (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md
+ * `reviewController` (Ingest UI plan
  * §A.4).
  *
  * States: `idle → enumerating → prefiltering → uploading ⇄ paused →

@@ -7,11 +7,14 @@ from curation.cross_project_leak._constants import SCOPED
 
 # Routes whose data is rows in PostgreSQL, not documents in an OpenSearch index: this sweep watches
 # OpenSearch accesses and files, so it cannot see them. Their isolation is row-level security,
-# proven in the database tier (tests/db/test_row_level_security.py, tests/config_store/).
+# proven in the database tier (tests/db/test_row_level_security.py, tests/config_store/). The
+# embedding space routes (spaces, build, promote, retire, re-index runs) are proven per route in
+# tests/embedding_spaces/test_space_routes.py (another project's space or run is a 404).
 POSTGRES_BACKED_PREFIXES: tuple[str, ...] = (
     '/cluster_profiles',
     '/assist_loop_presets',
     '/near_dup_profiles',
+    '/embedding',
 )
 
 # Mutating routes that write nothing by design (read-only work under POST,
@@ -254,6 +257,7 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
             ('POST', '/probe/run'),
             ('POST', '/probe/cancel'),
             ('POST', '/clusters/runs'),
+            ('POST', '/regions/fp_centroids/build'),
             ('POST', '/train/cancel/{job_id}'),
             ('POST', '/train/cancel_campaign/{campaign_id}'),
         ),
@@ -264,6 +268,11 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
     ('PUT', '/clusters/activation'): _NO_SUCH_ROW,
     ('POST', '/assist/loops/{loop_id}/pause'): _NO_SUCH_ROW,
     ('PATCH', '/assist/loops/{loop_id}/budget'): _NO_SUCH_ROW,
+    ('POST', '/pipeline/auto_label'): (
+        'the synchronous run with its defaults (no embed-missing, no VLM stage) over fully '
+        'embedded seed items has nothing to write; its scoped reads are still swept, and the '
+        'writing stages are covered by tests/curation/test_pipeline.py'
+    ),
     ('POST', '/train/start'): _NO_TRAINER,
     ('POST', '/train/start_campaign'): _NO_TRAINER,
     ('PUT', '/models/{model_name}/sharing'): (

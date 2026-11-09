@@ -4,7 +4,7 @@
 import type { IngestDetectorInfo, IngestPolicy } from '$lib/types_detector';
 
 // -- ingest --
-// docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §B.1. Wire
+// Ingest UI plan §B.1. Wire
 // shapes for OpenProcessor's `{API_PREFIX}/ingest/*` router
 // (`src/routers/curation/ingest.py`, `_common_models.py` on the
 // backend). BA-1..BA-7 (OpenProcessor #36, c5c606f) landed: upload bytes

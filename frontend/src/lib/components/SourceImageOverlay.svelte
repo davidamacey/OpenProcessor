@@ -37,7 +37,7 @@
    * `GET {API_PREFIX}/crops/{id}/context` metadata — replaces the
    * server-side burn-in OpenProcessor is removing from
    * `GET {API_PREFIX}/crops/{id}/image` (K6,
-   * docs/design/k6-frontend-overlay-plan-2026-09-24.md). Domain-neutral
+   * K6 frontend overlay plan). Domain-neutral
    * by construction: every region box/color/label comes from the
    * matching registered `SlotSpec`, never a hardcoded noun.
    */

@@ -6,8 +6,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
 
 from src.services.curation.export_readiness import (
     NO_VALIDATED_ITEMS_REASON,
@@ -55,7 +57,9 @@ def test_status_blocks_with_the_422_reason_when_nothing_validated(client_factory
     assert body['can_export'] is False
     assert body['blocking_reasons'] == [NO_VALIDATED_ITEMS_REASON]
     # The count ran the very query the export scrolls.
-    assert fake.count.await_args.kwargs['body'] == {'query': validated_export_query()}
+    assert fake.count.await_args.kwargs['body'] == {
+        'query': validated_export_query(embedding=DEFAULT_WRITE_FIELDS)
+    }
 
 
 def test_status_can_export_when_validated_items_exist(client_factory) -> None:
@@ -66,7 +70,7 @@ def test_status_can_export_when_validated_items_exist(client_factory) -> None:
 
 def test_status_readiness_is_null_not_false_when_count_fails(client_factory) -> None:
     body = (
-        client_factory(_os_with_count(ConnectionError('down')))
+        client_factory(_os_with_count(OpenSearchException('down')))
         .get('/curation/projects/default/export/status')
         .json()
     )
@@ -88,10 +92,10 @@ async def test_export_service_refuses_with_the_same_reason_and_query(
     )
     service = GenericYoloExportService.__new__(GenericYoloExportService)
     service.opensearch = AsyncMock()
-    service.config = type('C', (), {'items_index': 'idx'})()  # type: ignore[assignment]
+    service.config = type('C', (), {'items_index': 'idx'})()
     with pytest.raises(NothingToExportError) as exc:
         await service.export_dataset(copy_images=False)
     assert str(exc.value) == NO_VALIDATED_ITEMS_REASON
     assert scroll.await_args is not None
-    assert scroll.await_args.args[0] == validated_export_query()
+    assert scroll.await_args.args[0] == validated_export_query(embedding=DEFAULT_WRITE_FIELDS)
     assert await export_blocking_reasons(_os_with_count(0), 'idx') == [NO_VALIDATED_ITEMS_REASON]

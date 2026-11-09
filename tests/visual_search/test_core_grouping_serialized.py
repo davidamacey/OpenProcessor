@@ -48,7 +48,7 @@ def opensearch(monkeypatch: pytest.MonkeyPatch) -> FakeCoreOpenSearch:
 
 def _service(fake: FakeCoreOpenSearch) -> VisualSearchService:
     service = VisualSearchService.__new__(VisualSearchService)
-    service.opensearch = fake  # type: ignore[assignment]
+    service.opensearch = fake
     service.inference = None  # type: ignore[assignment]
     return service
 
@@ -85,7 +85,7 @@ async def _drain(pg: Any, fake: FakeCoreOpenSearch) -> Any:
         async with async_session_factory()() as session, core_tx(session, 'test drain'):
             yield session
 
-    env = core_group.core_env(fake, scope=scope, job_id=job)  # type: ignore[arg-type]
+    env = core_group.core_env(fake, scope=scope, job_id=job)
     return await core_group.drain(env)
 
 
@@ -133,7 +133,7 @@ async def test_two_concurrent_batches_with_a_shared_pair_give_one_group(
 
 C = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 B2 = 0.99995 * A + 0.01 * C
-VECTORS[b'bytes-b2'] = B2 / np.linalg.norm(B2)
+VECTORS[b'bytes-b2'] = (B2 / np.linalg.norm(B2)).astype(np.float32)
 VECTORS[b'bytes-c'] = C
 
 

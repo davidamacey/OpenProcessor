@@ -2,11 +2,12 @@
  * The cached 2-d embedding projection (`/viz/projection*`).
  */
 import { apiFetch, isPlainObject, qs, scoped } from '$lib/api';
+import type { LatestJobStatus } from '$lib/jobs/jobPhase';
 import { ApiError, structuredDetail } from '$lib/api_errors';
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
 //
-// docs/curation-strategy-plan-2026-09.md §2.7/§5.6/§7 — `embedding_viz.py`
+// curation strategy plan §2.7/§5.6/§7 — `embedding_viz.py`
 // + `viz.py` (OpenProcessor). UMAP-as-a-visualization-only overlay is the
 // one method in the whole curation-strategy plan that was NOT validated
 // in Phase 2 before implementation started; its own §6 acceptance bar
@@ -23,7 +24,7 @@ import { ApiError, structuredDetail } from '$lib/api_errors';
 // produced.
 
 /**
- * One projected point. Color is derived client-side from `cluster_id`
+ * One projected point. Color is derived client-side from `cluster_uid`
  * (see `colorForCluster` in `embeddingPlot.ts`) — this overlay decorates
  * an existing assignment, it never computes or chooses one.
  */
@@ -31,7 +32,7 @@ export interface VizPoint {
   crop_id: string;
   x: number;
   y: number;
-  cluster_id: number | null;
+  cluster_uid: string | null;
   class_name: string | null;
   class_source: string | null;
 }
@@ -67,15 +68,12 @@ function parseVizPoint(raw: unknown): VizPoint | null {
   if (typeof crop_id !== 'string' || !crop_id) return null;
   if (typeof x !== 'number' || !Number.isFinite(x)) return null;
   if (typeof y !== 'number' || !Number.isFinite(y)) return null;
-  const cluster_id =
-    typeof raw.cluster_id === 'number' && Number.isFinite(raw.cluster_id)
-      ? raw.cluster_id
-      : null;
+  const cluster_uid = typeof raw.cluster_uid === 'string' ? raw.cluster_uid : null;
   return {
     crop_id,
     x,
     y,
-    cluster_id,
+    cluster_uid,
     class_name: typeof raw.class_name === 'string' ? raw.class_name : null,
     class_source: typeof raw.class_source === 'string' ? raw.class_source : null,
   };
@@ -90,7 +88,7 @@ function parseVizPoint(raw: unknown): VizPoint | null {
  */
 export async function getVizProjection(
   params: {
-    cluster_id?: number | null;
+    cluster_uid?: string | null;
     class_id?: number | null;
     max_points?: number;
   } = {},
@@ -100,7 +98,7 @@ export async function getVizProjection(
   try {
     raw = await apiFetch<unknown>(
       `${scoped()}/viz/projection${qs({
-        cluster_id: params.cluster_id ?? undefined,
+        cluster_uid: params.cluster_uid ?? undefined,
         class_id: params.class_id ?? undefined,
         max_points: params.max_points ?? undefined,
       })}`,
@@ -139,9 +137,9 @@ export async function getVizProjection(
  */
 export interface VizProjectionJob {
   job_id: string;
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: LatestJobStatus;
   scope: string;
-  cluster_id: number | null;
+  cluster_uid: string | null;
   n_pool: number;
   n_written: number;
   started_at: number;

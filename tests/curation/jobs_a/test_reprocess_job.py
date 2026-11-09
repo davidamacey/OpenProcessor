@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fixtures.job_rows import make_project, sql
@@ -132,7 +133,9 @@ async def test_the_run_goes_slice_by_slice_and_aggregates(
     rec = Recorder(fail={'img0003'})
     monkeypatch.setattr(reprocess_job, 'process_images', rec)
     ctx = ctx_for(job, project)
-    result, with_errors = await reprocess_job.run_reprocess(ctx, object(), object())
+    result, with_errors = await reprocess_job.run_reprocess(
+        ctx, cast('Any', object()), cast('Any', object())
+    )
     assert [len(s) for s in rec.slices] == [256, 256, 88]
     assert [i for s in rec.slices for i in s] == ids  # in order, once each
     [detect] = result['results']
@@ -155,14 +158,16 @@ async def test_an_interrupted_job_resumes_from_its_checkpoint_without_repeats(
     first = Recorder()
     monkeypatch.setattr(reprocess_job, 'process_images', first)
     ctx = ctx_for(job, project, cancel_after_checkpoints=1)  # stops after the first checkpoint
-    await reprocess_job.run_reprocess(ctx, object(), object())
+    await reprocess_job.run_reprocess(ctx, cast('Any', object()), cast('Any', object()))
     seen += [i for s in first.slices for i in s]
     assert ctx.checkpoints[-1]['done'] == 256
 
     second = Recorder()
     monkeypatch.setattr(reprocess_job, 'process_images', second)
     resumed = ctx_for(job, project, resume_from=ctx.checkpoints[-1])
-    result, with_errors = await reprocess_job.run_reprocess(resumed, object(), object())
+    result, with_errors = await reprocess_job.run_reprocess(
+        resumed, cast('Any', object()), cast('Any', object())
+    )
     seen += [i for s in second.slices for i in s]
     assert seen == ids  # the item count at the end equals the total, no repeats
     assert result['results'][0]['selected'] == 600
@@ -178,7 +183,7 @@ async def test_a_cancel_inside_a_slice_stops_without_counting_the_slice(
     job = await start(project, [f'img{i}' for i in range(300)])
     ctx = ctx_for(job, project)
     monkeypatch.setattr(reprocess_job, 'process_images', Recorder(ctx, cancel_on_call=1))
-    result, _ = await reprocess_job.run_reprocess(ctx, object(), object())
+    result, _ = await reprocess_job.run_reprocess(ctx, cast('Any', object()), cast('Any', object()))
     assert result['cancelled'] is True
     assert ctx.checkpoints == []  # a partial slice is never a resume point
 
@@ -195,7 +200,9 @@ async def test_a_job_planned_for_other_indexes_refuses_to_run(
         lambda: SimpleNamespace(items_index='x', images_index='y'),
     )
     with pytest.raises(RuntimeError, match='other indexes'):
-        await reprocess_job.run_reprocess(ctx_for(job, project), object(), object())
+        await reprocess_job.run_reprocess(
+            ctx_for(job, project), cast('Any', object()), cast('Any', object())
+        )
 
 
 @pytest.mark.asyncio
@@ -204,6 +211,7 @@ async def test_the_registered_task_runs_the_coroutine_once_through_the_wrapper(
 ):
     from contextlib import asynccontextmanager
 
+    from src.services.projects import guard
     from src.tasks import jobs_a_support
 
     project = make_project(pg, 'rp-task')
@@ -219,14 +227,14 @@ async def test_the_registered_task_runs_the_coroutine_once_through_the_wrapper(
         async def service(self, _os):
             return object()
 
-    async def fake_client():
+    def fake_client(*_a, **_k):
         return SimpleNamespace(close=lambda: None)
 
     async def fake_ingest():
         return Ingest()
 
     monkeypatch.setattr(jobs_a_support, 'bound_project', no_bind)
-    monkeypatch.setattr(jobs_a_support, 'opensearch_client', fake_client)
+    monkeypatch.setattr(guard, 'make_script_opensearch', fake_client)
     monkeypatch.setattr(jobs_a_support, 'worker_ingest', fake_ingest)
 
     outcome = await asyncio.to_thread(

@@ -1,5 +1,5 @@
 /**
- * DQ-M5 (docs/design/data-quality-pass-2026-09-24.md): the review crop
+ * DQ-M5: the review crop
  * panel's `<img>` used `h-full w-full object-contain` (phase-A p9's "fit
  * width" fix) so a small/tall crop — a 98×106 crop in the repro — was
  * stretched to fill the whole panel height: 758×820 at

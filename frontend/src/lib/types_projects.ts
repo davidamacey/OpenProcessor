@@ -1,6 +1,6 @@
 /**
  * Wire types for the projects surface
- * (`docs/design/any-domain-rev3-and-projects-contract-review-2026-09-26.md`
+ * (any-domain rev3 and projects contract review
  * §7; OpenProcessor `cutover/projects-foundation` P1 +
  * `cutover/projects-lifecycle` P3). `GET {globalApi()}/projects` is the
  * switcher vocabulary and the only global read the app needs before
@@ -135,6 +135,8 @@ export interface KeymapCloneConflict {
  *  clone_settings, and a real delete's 202) answers this envelope. */
 export interface ProjectLifecycleResponse {
   project: ProjectSummary;
+  /** The queued job doing the lifecycle work (delete is a 202), when there is one. */
+  job_id?: string | null;
   warnings?: ProjectWarning[];
   keymap_clone_conflicts?: KeymapCloneConflict[];
 }

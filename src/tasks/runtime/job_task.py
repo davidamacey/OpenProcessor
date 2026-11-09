@@ -169,10 +169,9 @@ def _execute(
     beat: JobHeartbeat,
 ) -> _Ran:
     """Run the handler on a loop this function owns and closes without joining threads."""
-    server = hooks.choose_server(kind.name) if kind.gpu_affinity == 'any_card' else None
     loop = asyncio.new_event_loop()
     try:
-        return loop.run_until_complete(_main(kind, handler, client_factories, claim, beat, server))
+        return loop.run_until_complete(_main(kind, handler, client_factories, claim, beat))
     except SoftTimeLimitExceeded:
         return _Ran('time_limit')
     except SystemExit as exc:
@@ -199,7 +198,6 @@ async def _main(
     client_factories: Mapping[str, ClientFactory],
     claim: _Claim,
     beat: JobHeartbeat,
-    server: str | None,
 ) -> _Ran:
     engine = new_task_async_engine(f'op-job-{kind.name}')
     ctx = JobContext(
@@ -209,7 +207,6 @@ async def _main(
         beat=beat,
         engine=engine,
         client_factories=client_factories,
-        server=server,
     )
     loop = asyncio.get_running_loop()
     # The handler task copies the context it is created in, so every service it awaits (or

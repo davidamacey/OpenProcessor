@@ -92,7 +92,7 @@ async def _export(fake: QueryFakeOpenSearch, registry: InMemoryRegistry, tmp_pat
 async def _human_label_paths(fake, registry, monkeypatch) -> None:
     from curation.queued_label import call_route
     from src.routers.curation import crops_write as crops
-    from src.routers.curation._common_models import CropBatchLabelRequest, CropLabelRequest
+    from src.routers.curation._crop_write_models import CropBatchLabelRequest, CropLabelRequest
 
     monkeypatch.setattr(crops, 'get_class_registry', lambda: registry)
     await crops.label_crop('h1', CropLabelRequest(class_id=1), fake, registry)

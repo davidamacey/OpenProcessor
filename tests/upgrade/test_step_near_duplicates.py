@@ -3,7 +3,7 @@ report names the projects that should run the source backfill."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from sqlalchemy import text
@@ -91,9 +91,9 @@ async def test_a_second_clear_starts_no_task(v060) -> None:
 
     _dirty(v060)
     ctx = SimpleNamespace(writer=v060.writer)
-    first = await step.clear_index(ctx, ITEMS, step.ITEM_FIELDS)
+    first = await step.clear_index(cast('Any', ctx), ITEMS, step.ITEM_FIELDS)
     calls_after_first = list(v060.os.calls)
-    second = await step.clear_index(ctx, ITEMS, step.ITEM_FIELDS)
+    second = await step.clear_index(cast('Any', ctx), ITEMS, step.ITEM_FIELDS)
     assert first > 0
     assert second == 0
     assert v060.os.calls[len(calls_after_first) :] == ['count']

@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
+from curation.occ_fakes import FakeIndicesApi
 
 from src.config import CurationConfig
 from src.services.curation.export import GenericYoloExportService
@@ -37,6 +38,7 @@ pytestmark = pytest.mark.integration
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
         self._docs = docs
+        self.indices = FakeIndicesApi()
 
     async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
@@ -49,8 +51,12 @@ class _FakeOpenSearch:
         return None
 
 
+@pytest.mark.db
 @pytest.mark.asyncio
-async def test_include_classes_filter_actually_applies_to_a_real_export(tmp_path):
+async def test_include_classes_filter_actually_applies_to_a_real_export(
+    tmp_path,
+    pg_registry,  # the export's retention prune reads PostgreSQL
+):
     reg = InMemoryRegistry()
     car_id = reg.add('car')
     truck_id = reg.add('truck')

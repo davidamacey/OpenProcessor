@@ -45,7 +45,7 @@ class _Triton:
 
 def _service(fake: FakeCoreOpenSearch) -> VisualSearchService:
     service = VisualSearchService.__new__(VisualSearchService)
-    service.opensearch = fake  # type: ignore[assignment]
+    service.opensearch = fake
     service.inference = None  # type: ignore[assignment]
     return service
 
@@ -79,7 +79,7 @@ async def test_a_deferred_or_disabled_lookup_asks_the_index_nothing(opensearch) 
         asked.append(body)
         return await real(body=body)
 
-    opensearch.msearch = spy  # type: ignore[method-assign]
+    opensearch.msearch = spy
     service = _service(opensearch)
     for flags in ({'defer_heavy_ops': True}, {'detect_near_duplicates': False}):
         result = await service.ingest_batch(
@@ -167,6 +167,6 @@ def test_the_threshold_form_field_is_gone(client: TestClient) -> None:
     for path in ('/ingest', '/ingest/batch', '/ingest/directory'):
         params = app.openapi()['paths'][path]['post']
         body = params.get('requestBody', {}).get('content', {})
-        form = next(iter(body.values()), {}).get('schema', {})
+        form: dict[str, Any] = next(iter(body.values()), {'schema': {}})['schema']
         names = set(form.get('properties', {})) | {p['name'] for p in params.get('parameters', [])}
         assert 'near_duplicate_threshold' not in names

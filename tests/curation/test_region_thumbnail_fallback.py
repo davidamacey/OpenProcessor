@@ -114,7 +114,7 @@ def _get(client: TestClient, crop_id: str, **params: str) -> Any:
 
 
 def _docs_behind(client: TestClient, module: Any) -> dict[str, dict[str, Any]]:
-    return client.app.dependency_overrides[module._raw_opensearch_dep]()._docs
+    return client.app.dependency_overrides[module._raw_opensearch_dep]()._docs  # type: ignore[attr-defined]
 
 
 def test_region_thumbnail_renders_a_rejected_box(app_client: TestClient) -> None:

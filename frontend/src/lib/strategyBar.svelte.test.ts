@@ -167,7 +167,7 @@ describe('createStrategyBar', () => {
     expect(bar.toQueryParams()).toEqual({ min_mistakenness: 0 });
   });
 
-  // Phase 4 — 'diverse' mode's k stepper (docs/curation-strategy-plan-2026-09.md
+  // Phase 4 — 'diverse' mode's k stepper (curation strategy plan
   // §5/§7). k is deliberately NOT part of toQueryParams(): only
   // /clusters/[id] forwards it, and it reads bar.k directly the same way
   // it already reads bar.sort directly (see this file's header comment

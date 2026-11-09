@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Query, Response
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
@@ -109,7 +110,7 @@ async def _active_in() -> dict[str, list[str]]:
     live and refuses)."""
     try:
         activations = await activations_by_project()
-    except Exception as exc:
+    except (SQLAlchemyError, OSError) as exc:
         logger.warning('vlm_active_in_unavailable', error=str(exc))
         return {}
     names = {ref.name for ref in activations.values() if ref is not None} | {ENV_ENDPOINT_NAME}

@@ -70,7 +70,7 @@ async def test_promote_does_not_rmtree_before_copy(
     served = onnx.load(str(model_dir / '2' / 'model.onnx'))
     assert served.graph.input[0].type.tensor_type.elem_type == onnx.TensorProto.UINT8
     # the trainer's own best.onnx (the shared/exported copy) stays standard FP32
-    source = onnx.load(str(Path(fake_status.checkpoint_path).with_suffix('.onnx')))
+    source = onnx.load(str(Path(fake_status.checkpoint_path).with_suffix('.onnx')))  # type: ignore[arg-type]
     assert source.graph.input[0].type.tensor_type.elem_type == onnx.TensorProto.FLOAT
     assert 'TYPE_UINT8' in (model_dir / 'config.pbtxt').read_text()
 

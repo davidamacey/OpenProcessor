@@ -78,9 +78,9 @@ class TestPruneCropCache:
 
         from src.services.curation.metrics import OP_SHM_CROP_CACHE_EVICTIONS
 
-        before_value = OP_SHM_CROP_CACHE_EVICTIONS._value.get()  # type: ignore[attr-defined]
+        before_value = OP_SHM_CROP_CACHE_EVICTIONS._value.get()
         removed_files, _ = prune_crop_cache(cache_dir, 2 * 1024 * 1024)
-        after_value = OP_SHM_CROP_CACHE_EVICTIONS._value.get()  # type: ignore[attr-defined]
+        after_value = OP_SHM_CROP_CACHE_EVICTIONS._value.get()
         assert removed_files > 0
         assert after_value == before_value + removed_files
 

@@ -6,15 +6,37 @@ from typing import Annotated, Any
 
 from fastapi import Header, HTTPException, Query
 from fastapi.sse import EventSourceResponse
+from pydantic import BaseModel
 
 from src.config import get_curation_config
 from src.routers.curation._common import router
-from src.routers.curation._common_models import _PublishEvent
 from src.routers.curation._event_streams import ProjectSubscriptionDep, to_sse
 from src.services.curation.wire import region_wire_key
 from src.services.events import publish as event_publish
 from src.services.events.listener import get_listener
 from src.services.events.sse import event_stream
+
+
+class _PublishEvent(BaseModel):
+    """Event-publish payload — used by out-of-process workers.
+
+    ``extra='forbid'``: a publisher posting an unknown key (e.g. a storage
+    field name instead of the wire ``region_status``) gets a 422 instead
+    of an event silently stripped of its payload.
+    """
+
+    model_config = {'extra': 'forbid'}
+
+    type: str
+    crop_id: str | None = None
+    class_id: int | None = None
+    class_name: str | None = None
+    class_source: str | None = None
+    region_status: str | None = None
+    region_count: int | None = None
+    image_path: str | None = None
+    topic: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 @router.get('/events', response_class=EventSourceResponse)

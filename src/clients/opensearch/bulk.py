@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from opensearchpy.exceptions import OpenSearchException
 from opensearchpy.helpers import async_bulk
 
 from src.clients.opensearch.names import DetectionCategory, IndexName, get_category, get_class_name
@@ -245,7 +246,7 @@ class BulkMixin:
             logger.info(f'Bulk indexed {success} faces')
             return {'indexed': success, 'errors': error_msgs}
 
-        except Exception as e:
+        except OpenSearchException as e:
             logger.error(f'Bulk face index failed: {e}')
             return {'indexed': 0, 'errors': [str(e)]}
 
@@ -305,7 +306,7 @@ class BulkMixin:
                 )
                 results['people'] = success
 
-        except Exception as e:
+        except OpenSearchException as e:
             results['errors'].append(str(e))
 
         logger.info(

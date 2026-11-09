@@ -174,7 +174,7 @@ async def test_clone_refuses_a_profile_whose_detector_is_private_to_the_source_p
     monkeypatch, model_registry_fake
 ) -> None:
     from src.services.config_store.profile_validation import validate_profile
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     model_registry_fake.promote('alpha__wheel_det', owner='alpha', labels=['wheel'])
 

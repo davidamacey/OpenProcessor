@@ -1,6 +1,6 @@
 /**
  * Rendering helpers for the VLM endpoint form (any_domain_plan.md §7.8.5;
- * docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §3.2). The VLM schema's
+ * w9/w10 UI plan §3.2). The VLM schema's
  * rows are a subset of the region-profile schema's (`string`/`int`/
  * `float`/`bool`/`enum`, `choices_from`, `empty_choice`, `min`/`max`,
  * `advanced`, `help`, `default`; no `applies_when`), so the profile field

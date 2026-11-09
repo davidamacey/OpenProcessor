@@ -86,7 +86,7 @@ async def test_mapping_migration_puts_every_field_on_the_bound_projects_indexes(
             return {'acknowledged': True}
 
     client = type('C', (), {'indices': Indices()})()
-    await ensure_open_vocab_fields(client)  # type: ignore[arg-type]
+    await ensure_open_vocab_fields(client)
 
     cfg = get_curation_config()
     assert {f for i, f in calls if i == cfg.items_index} == set(OPEN_VOCAB_ITEM_MAPPING)
@@ -101,7 +101,7 @@ async def test_mapping_migration_surfaces_a_real_failure() -> None:
 
     client = type('C', (), {'indices': Indices()})()
     with pytest.raises(RuntimeError, match='connection refused'):
-        await ensure_open_vocab_fields(client)  # type: ignore[arg-type]
+        await ensure_open_vocab_fields(client)
 
 
 @pytest.mark.asyncio

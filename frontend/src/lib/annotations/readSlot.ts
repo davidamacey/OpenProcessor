@@ -1,8 +1,7 @@
 /**
  * Reads a `SlotSpec`'s capabilities off a raw crop JSON object.
  *
- * This is the field-mapping adapter (docs/genericization-plan-2026-09-13.md
- * §2.2/§2.6): each capability names the wire field(s) it reads, so this
+ * This is the field-mapping adapter: each capability names the wire field(s) it reads, so this
  * function works for any slot whose fields exist on the raw payload,
  * without the caller needing a canonical schema.
  *
@@ -107,9 +106,8 @@ export function mapRegionBoxWire(el: unknown): SlotBox | null {
     textDisagreement: asBoolean(r.text_disagreement),
     textChoice: asString(r.text_choice),
     textVlmInvalid: asString(r.text_vlm_invalid),
-    clusterId: asNumber(r.cluster_id),
-    clusterSubid: asString(r.cluster_subid),
-    clusterDistance: asNumber(r.cluster_distance),
+    clusterUid: asString(r.cluster_uid),
+    clusterScore: asNumber(r.cluster_score),
     detectedAt: asString(r.detected_at),
     thumbnailUrl: asString(r.thumbnail_url),
   };

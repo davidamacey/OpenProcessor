@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the `/settings` "Curation scores" card
- * (docs/design/frontend-coverage-audit-2026-09-24.md §G10). Split out of
+ * (frontend coverage audit §G10). Split out of
  * `ScoresCard.svelte` so the null→"—" formatting and the compute-job
  * status classification are unit-testable without mounting a component,
  * same convention as `trainResults.ts`'s `formatMetric`/`formatScalar`
@@ -8,6 +8,7 @@
  */
 
 import type { ScoreCoverageEntry, ScoresJob } from '$lib/api_scores';
+import { jobPhase } from '$lib/jobs/jobPhase';
 
 /** "N / total", or "—" when the scorer has no coverage row at all
  *  (never a bare `0`, matching `formatCount()`'s null-vs-zero rule). */
@@ -30,9 +31,10 @@ export type ScoresPollOutcome = 'running' | 'completed' | 'failed' | 'cancelled'
  *  so unlike `classifyRebuildPoll` there's no "was I even tracking this"
  *  ambiguity to resolve. */
 export function classifyScoresPoll(status: ScoresJob['status']): ScoresPollOutcome {
-  if (status === 'running') return 'running';
-  if (status === 'failed') return 'failed';
-  if (status === 'cancelled') return 'cancelled';
+  const phase = jobPhase(status);
+  if (phase === 'active') return 'running';
+  if (phase === 'failed') return 'failed';
+  if (phase === 'cancelled') return 'cancelled';
   // 'completed' and the terminal-but-never-started 'idle' both mean
   // "stop polling, nothing more to report as a failure" — 'idle' should
   // be unreachable here (the card only polls after seeing 'running'),

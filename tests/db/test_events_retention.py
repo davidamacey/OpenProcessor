@@ -22,7 +22,7 @@ def pg(pg_events):
 
 def _count(pg) -> int:
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        return conn.execute('SELECT count(*) FROM events').fetchone()[0]
+        return (conn.execute('SELECT count(*) FROM events').fetchone() or (None,))[0]
 
 
 def test_only_rows_older_than_the_age_are_deleted_one_batch_at_a_time(pg_env) -> None:

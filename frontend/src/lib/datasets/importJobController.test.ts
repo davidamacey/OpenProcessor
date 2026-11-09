@@ -18,6 +18,7 @@ const ID = 'imp_20260927T120000_1a2b3c4d';
 function make(sequence: ReturnType<typeof jobFixture>[]) {
   let i = 0;
   let onEvent: ((e: CurationEvent) => void) | null = null;
+  let onResync: (() => void) | null = null;
   const close = vi.fn();
   const deps = {
     getDatasetImport: vi
@@ -35,13 +36,22 @@ function make(sequence: ReturnType<typeof jobFixture>[]) {
     getDatasetImportEntries: vi
       .fn()
       .mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 }),
-    subscribe: vi.fn().mockImplementation((cb: (e: CurationEvent) => void) => {
-      onEvent = cb;
-      return { close };
-    }),
+    subscribe: vi
+      .fn()
+      .mockImplementation((cb: (e: CurationEvent) => void, resync: () => void) => {
+        onEvent = cb;
+        onResync = resync;
+        return { close };
+      }),
   };
   const job = new ImportJob(ID, deps);
-  return { job, deps, emit: (e: CurationEvent) => onEvent?.(e), close };
+  return {
+    job,
+    deps,
+    emit: (e: CurationEvent) => onEvent?.(e),
+    resync: () => onResync?.(),
+    close,
+  };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -106,6 +116,17 @@ describe('following a job', () => {
     expect(deps.getDatasetImport).toHaveBeenCalledTimes(2);
     job.stop();
     expect(close).toHaveBeenCalled();
+  });
+
+  it('a server reset re-reads the job once', async () => {
+    const { job, deps, resync } = make([jobFixture({ poll_after_s: 30 })]);
+    job.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(deps.getDatasetImport).toHaveBeenCalledTimes(1);
+    resync();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(deps.getDatasetImport).toHaveBeenCalledTimes(2);
+    job.stop();
   });
 
   it('a load failure shows the served message', async () => {
@@ -208,10 +229,11 @@ describe('actions', () => {
   it('a served next step runs as served', async () => {
     const { job, deps } = make([jobFixture()]);
     const step = {
-      action: 'cluster',
+      action: 'cluster_regions',
       method: 'POST',
-      path: '/regions/cluster',
+      path: '/clusters/runs',
       reason: 'r',
+      body: { target: 'region_box' },
     };
     expect(await job.runNextStep(step)).toBe(true);
     expect(deps.runServedNextStep).toHaveBeenCalledWith(step);

@@ -32,7 +32,9 @@ workflow (``GET /export/datasets``).
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
 from src.services.curation.dataset_thresholds import (
@@ -40,6 +42,11 @@ from src.services.curation.dataset_thresholds import (
     MIN_VAL_INSTANCES_PER_CLASS,
 )
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
+
+
+if TYPE_CHECKING:
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 logger = get_logger(__name__)
@@ -56,7 +63,9 @@ NO_VALIDATED_ITEMS_REASON = (
 )
 
 
-def validated_export_query(item_filter: ItemFilter | None = None) -> dict[str, Any]:
+def validated_export_query(
+    embedding: WriteFields, item_filter: ItemFilter | None = None
+) -> dict[str, Any]:
     """The cohort ``POST /export/yolo`` scrolls: validated items, minus
     excluded / review-dismissed ones, narrowed by ``item_filter``. Shared
     with ``GET /export/status``'s readiness count so the two cannot disagree
@@ -65,7 +74,7 @@ def validated_export_query(item_filter: ItemFilter | None = None) -> dict[str, A
         'bool': {
             'filter': [
                 {'term': {'class_validated': True}},
-                *item_filter_clauses(item_filter or ItemFilter()),
+                *item_filter_clauses(item_filter or ItemFilter(), embedding=embedding),
             ],
             'must_not': [
                 {'exists': {'field': 'review_dismissed_at'}},
@@ -84,10 +93,11 @@ async def export_blocking_reasons(
     class, fully-labeled filter) are still raised by the export itself."""
     try:
         resp = await opensearch.count(
-            index=index, body={'query': validated_export_query(item_filter)}
+            index=index,
+            body={'query': validated_export_query(await item_write_fields(), item_filter)},
         )
         count = int(resp.get('count') or 0)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('export_readiness_count_failed', index=index, error=str(exc))
         return None
     return [] if count else [NO_VALIDATED_ITEMS_REASON]
@@ -102,7 +112,7 @@ async def items_index_generation(opensearch: Any, index: str) -> dict[str, Any] 
     ``None`` when it can't be read (logged; callers treat it as unknown)."""
     try:
         resp = await opensearch.indices.get_settings(index=index)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('items_index_generation_unavailable', index=index, error=str(exc))
         return None
     if not isinstance(resp, dict) or len(resp) != 1:

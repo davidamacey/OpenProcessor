@@ -1,7 +1,7 @@
 /**
  * TypeScript types mirroring the OpenProcessor `GET {API_PREFIX}/methods` capability-
  * discovery response (curation-strategy plan, Phase 0 —
- * docs/curation-strategy-plan-2026-09.md §3, §5.3, §7).
+ * curation strategy plan §3, §5.3, §7).
  *
  * CONFIRMED AGAINST THE REAL BACKEND (2026-09-10, live end-to-end check
  * after rebuilding/restarting the backend from its curation-scores branch):
@@ -122,7 +122,7 @@ export interface OverlayInfo extends MethodInfoBase {
   /** `diverse` only: the served cap on `k` of the pool selection job. */
   select_max_k?: number | null;
   /** The measured 2-d neighborhood-purity value backing `requires_banner`
-   *  (see `docs/design/curation_scores.md` in OpenProcessor for the full
+   *  (see `docs/research/curation_scores.md` in OpenProcessor for the full
    *  measurement writeup). Informational — nothing in this file
    *  re-derives a ship-tier decision from it; that's the backend's job. */
   purity?: number | null;
@@ -159,21 +159,16 @@ export interface ScoreInfo extends MethodInfoBase {
 export interface DatasetExportInfo extends MethodInfoBase {
   /** True on the kind the backend treats as its primary export. */
   default?: boolean;
-  /** `yolo` / `single_class`: the served near-duplicate threshold default and
-   *  its bounds; absent when the kind serves none. */
-  dedup_threshold_default?: number | null;
-  dedup_threshold_min?: number | null;
-  dedup_threshold_max?: number | null;
 }
 
 /**
  * One vision-detection profile (model + config) an assisted auto-label
  * run can be pointed at (`axis: 'detection_profile'`, agreed with the
  * OpenProcessor session 2026-09-20,
- * docs/design/vlm-scoped-labeling-assist-plan-2026-09-20.md §1.3).
+ * VLM-scoped labeling assist plan §1.3).
  *
  * **Now live on OpenProcessor (corrected 2026-09-21 — see
- * docs/design/curation-settings-ui-plan-2026-09-21.md §1.3.2).** An
+ * curation settings UI plan §1.3.2).** An
  * earlier version of this comment claimed the axis was "not yet live on
  * any backend" and absent from every `/methods` response; that was true
  * when it was written but is now stale. `strategy_registry.py` registers
@@ -397,9 +392,6 @@ export function parseMethodsResponse(raw: unknown): MethodsResponse {
       (base, e) => ({
         ...base,
         default: optBool(e.default),
-        dedup_threshold_default: optNumber(e.dedup_threshold_default),
-        dedup_threshold_min: optNumber(e.dedup_threshold_min),
-        dedup_threshold_max: optNumber(e.dedup_threshold_max),
       }),
     ),
     detection_profiles: normalizeAxis<DetectionProfileInfo>(
@@ -538,15 +530,6 @@ export function isDatasetExportAvailable(
   return datasetExports.some(
     (e) => e.id === kind && (e.status === 'stable' || e.status === 'experimental'),
   );
-}
-
-/** The served near-duplicate threshold default of an export kind, or `null`
- *  when the kind is absent or serves none (the option is then not offered). */
-export function exportDedupDefault(
-  datasetExports: DatasetExportInfo[],
-  kind: string | undefined,
-): number | null {
-  return datasetExports.find((e) => e.id === kind)?.dedup_threshold_default ?? null;
 }
 
 /**

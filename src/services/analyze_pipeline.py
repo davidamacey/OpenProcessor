@@ -23,6 +23,8 @@ from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.services.ocr_service import get_ocr_service
 from src.utils.affine import format_detections_from_triton
+from src.utils.retry import TRITON_CALL_ERRORS
+from src.utils.upstream_errors import UpstreamError
 
 
 if TYPE_CHECKING:
@@ -158,11 +160,17 @@ def _run_yolo_and_clip(image_bytes: bytes, timing: dict[str, float]) -> dict[str
 
 def _run_faces(
     service: InferenceService, image_bytes: bytes, face_confidence: float, timing: dict[str, float]
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], str | None]:
+    """The face result and the reason the face stage failed (``None`` when it ran): a failed
+    stage must not look like an image with no faces, and it must not drop the other stages."""
     t0 = time.perf_counter()
-    result = service.detect_faces(image_bytes, confidence=face_confidence)
+    try:
+        result, error = service.detect_faces(image_bytes, confidence=face_confidence), None
+    except UpstreamError as exc:
+        logger.warning(f'Face stage failed: {exc.reason}')
+        result, error = {'num_faces': 0}, exc.reason
     timing['faces_ms'] = (time.perf_counter() - t0) * 1000
-    return result
+    return result, error
 
 
 def _run_ocr(
@@ -212,7 +220,7 @@ def _attach_crop_embeddings(
         if crop_embeddings is not None:
             for i, det in enumerate(detections):
                 det.embedding = crop_embeddings[i].tolist()
-    except Exception:
+    except TRITON_CALL_ERRORS:
         logger.warning('Failed to generate batched crop embeddings')
 
 
@@ -271,7 +279,9 @@ def analyze_single_image(
             )
 
         # Wait for faces and OCR (may already be done)
-        faces_result = faces_future.result() if faces_future else {'num_faces': 0}
+        faces_result, faces_error = (
+            faces_future.result() if faces_future else ({'num_faces': 0}, None)
+        )
         ocr_result = ocr_future.result()
 
         _attach_crop_embeddings(detections, crop_future)
@@ -279,7 +289,7 @@ def analyze_single_image(
     global_embedding, embedding_norm = _global_embedding(yolo_clip_result, include_embedding)
 
     faces = []
-    if faces_result.get('status') != 'error' and faces_result.get('num_faces', 0) > 0:
+    if faces_result.get('num_faces', 0) > 0:
         faces = faces_from_result(faces_result, include_face_embeddings)
 
     return AnalyzeResponse(
@@ -294,6 +304,7 @@ def analyze_single_image(
         ocr=ocr_from_result(ocr_result),
         ocr_error=ocr_failure(ocr_result),
         timing=timing if timing else None,
+        faces_error=faces_error,
         faces_enabled=faces_on,
     )
 
@@ -323,7 +334,7 @@ def _embed_detection_crops(
         crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
         for det_i, det in enumerate(detections):
             det.embedding = crop_embeddings[det_i].tolist()
-    except Exception:
+    except TRITON_CALL_ERRORS:
         logger.warning(f'Failed to generate crop embeddings for {filename}')
 
 

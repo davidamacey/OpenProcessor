@@ -24,6 +24,7 @@ ERROR_KIND_TOO_LARGE = 'too_large'
 ERROR_KIND_DECODE_FAILED = 'decode_failed'
 ERROR_KIND_DETECTOR_INFER = 'detector_infer'
 ERROR_KIND_BULK_INDEX = 'bulk_index'
+ERROR_KIND_BLUR = 'blur_failed'
 
 
 class IngestSummary(BaseModel):

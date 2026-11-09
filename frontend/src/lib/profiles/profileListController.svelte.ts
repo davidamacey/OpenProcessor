@@ -1,6 +1,6 @@
 /**
  * The region-profile list page's state (any_domain_plan.md §7.3, §7.6
- * items 2 and 4; docs/design/w4-profile-editor-ui-plan-2026-09-27.md §3):
+ * items 2 and 4; w4 profile editor UI plan §3):
  * the profile binding of the shared `ConfigList` (the served list and
  * templates, the active profile with Rollback and Turn off, Clone and
  * Delete), plus the served activation impact on demand. A

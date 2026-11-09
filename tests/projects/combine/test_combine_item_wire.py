@@ -8,6 +8,7 @@ against what the combiner actually stores.
 from __future__ import annotations
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 
 from src.routers.curation._item_models import ItemDoc
 from src.services.curation.wire import ITEM_WIRE_KEYS, serialize_item
@@ -33,7 +34,7 @@ def test_the_keys_are_on_the_wire_contract_and_the_model() -> None:
 
 
 def test_an_item_that_never_went_through_a_combine_serves_neutral_values() -> None:
-    wire = serialize_item({'crop_id': 'c1'})
+    wire = serialize_item({'crop_id': 'c1'}, state_fields=DEFAULT_STATE_FIELDS)
     assert {k: wire[k] for k in COMBINE_KEYS} == {
         'origin_project': None,
         'origin_item_id': None,
@@ -51,7 +52,7 @@ async def test_combined_items_serve_their_origin_and_conflict(world: World) -> N
     await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
 
     conflict = target_item(world, sc, sc.crops['a_s2'], 'cars-a')
-    wire = serialize_item(conflict)
+    wire = serialize_item(conflict, state_fields=DEFAULT_STATE_FIELDS)
     assert wire['origin_project'] == 'cars-a'
     assert wire['origin_item_id'] == sc.crops['a_s2']
     assert wire['origin_image_id'] == sc.a_shared
@@ -61,13 +62,17 @@ async def test_combined_items_serve_their_origin_and_conflict(world: World) -> N
     )
     assert ItemDoc.model_validate(wire).combine_conflict is True
 
-    merged = serialize_item(target_item(world, sc, sc.crops['b_s1'], 'cars-b'))
+    merged = serialize_item(
+        target_item(world, sc, sc.crops['b_s1'], 'cars-b'), state_fields=DEFAULT_STATE_FIELDS
+    )
     assert merged['combine_conflict'] is False
     assert merged['combine_merged_origins'] == sorted(
         [f'cars-a:{sc.crops["a_s1"]}', f'cars-b:{sc.crops["b_s1"]}']
     )
 
-    plain = serialize_item(target_item(world, sc, sc.crops['a2_truck'], 'cars-a'))
+    plain = serialize_item(
+        target_item(world, sc, sc.crops['a2_truck'], 'cars-a'), state_fields=DEFAULT_STATE_FIELDS
+    )
     assert plain['origin_project'] == 'cars-a'
     assert plain['combine_conflict'] is False
     assert plain['combine_conflict_origins'] == []

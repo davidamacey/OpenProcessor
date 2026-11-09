@@ -177,8 +177,8 @@ async def test_activating_the_env_builtin_stores_a_system_revision_and_keeps_the
     async with documents.tx() as session:
         assert (
             stored.id
-            == (await repo.get_config(session, project_id=None, kind='vlm_endpoint', name='env')).id
-        )  # type: ignore[union-attr]
+            == (await repo.get_config(session, project_id=None, kind='vlm_endpoint', name='env')).id  # type: ignore[union-attr]
+        )
         assert len(await repo.list_revisions(session, stored.id)) == 1
 
 
@@ -244,7 +244,7 @@ async def test_every_write_is_announced_on_the_global_stream(pg_env) -> None:
     saved = await save_endpoint(name=name, body=body, expected_revision=None)
     await record_probe(name=name, revision=saved.revision, body=body, record=_probe())
     await set_local_desired(catalog_id=load_catalog()[0].id)
-    await delete_endpoint(name=name, expected_revision=saved.revision)
+    await delete_endpoint(name=name, expected_revision=saved.revision)  # type: ignore[arg-type]
     announced = _global_vlm_events(pg_env)[before:]
     assert len(announced) == 4
     assert all(payload['topic'] == 'vlm' for _, payload in announced)

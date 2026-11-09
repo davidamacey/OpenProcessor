@@ -97,8 +97,7 @@ Clustering groups items by embedding (residual clustering reduces
 unassigned/noise, `0..N` mirrors class ids, and ids from 10000 up are
 **candidate** clusters that still need a class. Each card carries
 `cluster_kind`, dominant class, purity, validated count, sub-clusters
-and representatives; `POST /clusters/refine/{cluster_id}` splits one
-further, and `POST /clusters/auto_promote` validates classifier-labelled
+and representatives; the auto-promote step validates classifier-labelled
 items in high-purity clusters. Promotion is gated on the accuracy audit
 ([section 5](#5-label-vlm-suggestions-and-review-queues)): every class a run
 would promote needs at least `min_per_class` audited crops and an audited

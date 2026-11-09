@@ -39,7 +39,7 @@ def opensearch(monkeypatch: pytest.MonkeyPatch) -> FakeCoreOpenSearch:
 
 def _service(fake: FakeCoreOpenSearch) -> VisualSearchService:
     service = VisualSearchService.__new__(VisualSearchService)
-    service.opensearch = fake  # type: ignore[assignment]
+    service.opensearch = fake
     service.inference = None  # type: ignore[assignment]
     return service
 
@@ -89,9 +89,9 @@ async def test_a_later_upload_of_the_same_file_is_a_duplicate_until_the_image_is
     duplicate = await _batch(service, data, again)
     assert (duplicate['processed'], duplicate['duplicates']) == (0, 1)
 
-    opensearch.delete = lambda **kw: _drop(opensearch, kw['index'], kw['id'])  # type: ignore[method-assign]
-    opensearch.delete_by_query = _no_hits  # type: ignore[method-assign]
-    await delete_image_everywhere(opensearch, first)  # type: ignore[arg-type]
+    opensearch.delete = lambda **kw: _drop(opensearch, kw['index'], kw['id'])
+    opensearch.delete_by_query = _no_hits
+    await delete_image_everywhere(opensearch, first)
     fresh = await _batch(service, data, again)
     assert (fresh['processed'], fresh['duplicates']) == (1, 0)
 

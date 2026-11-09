@@ -59,10 +59,6 @@ class TestClientContract:
         assert pe_text_parity.trim_to_eot(tokens).shape == (3, 6)
         assert pe_text_constants.EOT_TOKEN_ID == 49407
 
-    def test_default_onnx_destination_is_the_client_default(self) -> None:
-        args = text_export.build_parser().parse_args([])
-        assert str(args.onnx_out) == text_backends.DEFAULT_PE_TEXT_ONNX_PATH
-
     def test_rendered_config_declares_the_client_tensors(self) -> None:
         out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
         assert f'name: "{text_backends.PE_TEXT_TRITON_MODEL}"' in out
@@ -126,7 +122,7 @@ class TestRenderConfig:
     )
     def test_rejects_invalid_field(self, field: str, value: object) -> None:
         with pytest.raises(ValueError, match=field.split('_', maxsplit=1)[0]):
-            pe_text_triton_config.PETextTritonConfig(**{field: value})
+            pe_text_triton_config.PETextTritonConfig(**{field: value})  # type: ignore[arg-type]
 
     def test_gpu_kind_requires_gpu_ids(self) -> None:
         with pytest.raises(ValueError, match='gpu_ids'):

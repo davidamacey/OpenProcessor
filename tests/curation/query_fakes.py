@@ -274,7 +274,7 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
         metric = next((m for m in ('avg', 'max', 'min') if m in spec), None)
         if metric is not None:
             nums = [v for d in docs for v in _values(d, spec[metric]['field'])]
-            reduce = {'avg': lambda xs: sum(xs) / len(xs), 'max': max, 'min': min}[metric]
+            reduce: Any = {'avg': lambda xs: sum(xs) / len(xs), 'max': max, 'min': min}[metric]
             # A metric over no values is null, as in OpenSearch.
             out[name] = {'value': reduce(nums) if nums else None}
             continue
@@ -675,7 +675,7 @@ class SettingsFakeOpenSearch(QueryFakeOpenSearch):
         op_type: str | None = None,
         if_seq_no: int | None = None,
         **_: Any,
-    ) -> None:
+    ) -> dict[str, Any]:
         if (op_type == 'create' and id in self.docs(index)) or (
             if_seq_no is not None and if_seq_no != self.seq.get((index, id), 1)
         ):
@@ -683,6 +683,7 @@ class SettingsFakeOpenSearch(QueryFakeOpenSearch):
         self.docs(index)[id] = body
         self._bump(index, id)
         self.write_calls += 1
+        return {'result': 'created'}
 
     async def update(
         self,

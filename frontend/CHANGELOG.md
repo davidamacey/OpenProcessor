@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Backend v0.7.0 wire: clusters are addressed by `cluster_uid` (a string) everywhere; items carry a nested `cluster` reference and `embedding_states` per embedding space; label operations, crop moves, dataset uploads, cluster runs and partition activation answer 202 and are followed through `GET /jobs/{id}`; undo of a bulk label or move goes through the label operation (`POST /label_ops/{op_id}/undo`).
+- Cluster run panel on the dashboard and the ingest hand-off: the serving partition, "Cluster items", and "Activate" for a ready pending partition.
+- Auto-label runs the `embed_missing`, `vlm` and `finalize` stages with pause, resume and cancel, and shows the queued, paused and cancelling states.
+- Assist loop: Pause, Resume, Cancel, Edit budget and Rollback are enabled from the served `control` block.
+- Semantic search takes an embedding space and can fuse the other ready spaces; the result line names the space searched.
+- A holdout freeze or training export refused with 409 `near_dup_stale` shows the stale levels with an "Update near-duplicate groups" button; the freeze result reports items pulled in as near-duplicates, and the item panel shows the near-duplicate group.
 - Ingest policy page (`/settings/ingest-policy`): an "Ingest profiles" list (`GET /ingest_profiles`) marks the active profile and activates another (`POST /ingest_profiles/{name}/activate`). A refused activation shows the served message and each served issue (`detector_model_not_ready`, `detector_model_unusable`, `triton_unreachable`) verbatim; "Activate anyway" appears only when the served report says `force_allowed`. A successful activation re-reads the active-profile card; a failing follow-up read is reported as that, never as a refused activation. A 404 or any 409 refusal re-reads the stale list, and only the newest list read is kept. Each button is named for its profile ("Activate yolo-large"), a refusal is an alert that takes focus, warnings are announced through a status region, focus lands on the newly active row, and the in-flight button stays focusable with `aria-disabled` (#440).
 
 ### Fixed
@@ -16,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/export` takes its source chips from the same stats request as the class table, so Refresh updates them (it used to make a second raw request that never re-ran).
 - The diverse review page loads its items with one `GET /crops?ids=` request instead of one request per item.
 - Links to another project preload on tap, not hover, so hovering no longer binds that project in the background.
-- After the event stream reconnects, the keymap and the pack, region-profile, open-vocabulary and VLM pages re-read their state (missed `config.changed` events are not replayed); an editor with unsaved edits flags the change instead of replacing the draft.
+- The event streams follow the server's replay protocol: a browser reconnect resumes from `Last-Event-ID` with nothing to do, and the keymap and the pack, region-profile, open-vocabulary and VLM pages re-read their state only after a server `reset` or when the client had to open a new stream; an editor with unsaved edits flags the change instead of replacing the draft.
+- The scores, projection, probe, diverse-selection and combine pollers keep following a queued, paused or cancelling job, and read `completed_with_errors` as done and `interrupted` as failed (a queued job used to read as finished).
+- The single-class export's near-duplicate checkbox did nothing; both exports now send `collapse_near_duplicates`.
 - `/projects` at phone width: the table becomes stacked rows (counts under the project, actions below) instead of needing sideways scrolling to reach Embedded and the Open/Edit/Archive buttons. The count labels are real text ("Images 0"), not CSS-generated content that read as "Images0".
 
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
@@ -27,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Clusters have no sub-clusters, core cut line, purity or kind on the wire, so the cluster detail view and cards no longer show them; excluded items stay in their cluster; labeling an item no longer moves it to another cluster.
+- Auto-label no longer takes the clustering parameters (`train_clusters`, `recluster_unvalidated`, `gate_*`, `n_clusters`); clustering has its own run panel.
 - Settings save (`PUT /settings`): sends the `revision` read from `GET /settings` as `expected_revision`, adopts the new revision from the response, and on a 409 `revision_conflict` re-reads the record before reporting that nothing was saved.
 - The label-operation dialog no longer shows the "members not recorded" notice: every operation records its members, so `members_known` is gone from the wire and the UI. Label operations may have the kinds `assist_loop_propagate` and `assist_loop_review`, and their ids are UUIDs.
 - Dev dependency bumps within their ranges (the closed Dependabot group #474, regenerated with `npm update`): vite 8.3.6, vitest 5.1.0, eslint 10.14.0, eslint-plugin-svelte 3.24.0, globals 17.14.0, knip 6.44.1, svelte-check 4.7.8, tailwindcss and `@tailwindcss/vite` 4.3.4. TypeScript stays on 6.0 and jsdom on 30.x.
@@ -36,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The dedup threshold of the exports and the methods entries, the region cluster, refine and status calls, and the cluster refine call.
 - The classes page "Sync to OpenSearch" button and its client call: the class registry is stored in PostgreSQL and the route is gone.
 
 ### Added

@@ -4952,6 +4952,18 @@
             "description": "That class as a share of the members that have a detector class.",
             "title": "Detector Top Share"
           },
+          "display_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the serving partition gave the cluster (r<display_no>); null when no serving partition names it.",
+            "title": "Display No"
+          },
           "dominant_class_name": {
             "anyOf": [
               {
@@ -5057,6 +5069,7 @@
         },
         "required": [
           "cluster_uid",
+          "display_no",
           "size",
           "validated_count",
           "labelled_count",
@@ -5394,6 +5407,18 @@
               }
             ],
             "title": "Assigned By"
+          },
+          "display_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the serving partition gave the cluster; null until a list route looks it up or when no serving partition numbers it.",
+            "title": "Display No"
           },
           "margin": {
             "anyOf": [
@@ -14186,22 +14211,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -19284,6 +19305,19 @@
           "action": {
             "title": "Action",
             "type": "string"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "JSON request body to send with the step, when it needs one.",
+            "title": "Body"
           },
           "method": {
             "title": "Method",
@@ -25531,22 +25565,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -29438,22 +29468,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -30669,6 +30695,14 @@
       "SearchImageResponse": {
         "description": "``POST /search/image``: the ``/search/text`` page; ``semantic_score`` is the kNN\nsimilarity to the encoded picture (or to its ``box``).",
         "properties": {
+          "fuse": {
+            "description": "The space keys fused in by reciprocal rank fusion.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fuse",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SearchItemDoc"
@@ -30683,6 +30717,11 @@
           "page_size": {
             "title": "Page Size",
             "type": "integer"
+          },
+          "space": {
+            "description": "The space key searched (the target primary unless named).",
+            "title": "Space",
+            "type": "string"
           },
           "total": {
             "title": "Total",
@@ -30699,6 +30738,7 @@
           "total",
           "page",
           "page_size",
+          "space",
           "unembedded_in_scope"
         ],
         "title": "SearchImageResponse",
@@ -31036,22 +31076,18 @@
             ],
             "title": "Detector Confidence"
           },
-          "embedding_state": {
-            "anyOf": [
-              {
-                "enum": [
-                  "embedded",
-                  "not_selected",
-                  "deferred",
-                  "failed"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding State"
+          "embedding_states": {
+            "additionalProperties": {
+              "enum": [
+                "embedded",
+                "not_selected",
+                "deferred",
+                "failed"
+              ],
+              "type": "string"
+            },
+            "title": "Embedding States",
+            "type": "object"
           },
           "excluded_at": {
             "anyOf": [
@@ -31712,6 +31748,18 @@
             ],
             "title": "Review Dismissed At"
           },
+          "score_space": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The space key `semantic_score` was measured in (the first space that found it).",
+            "title": "Score Space"
+          },
           "semantic_score": {
             "anyOf": [
               {
@@ -31882,6 +31930,14 @@
       "SearchSimilarResponse": {
         "description": "``GET /search/similar``: the ``/search/text`` page; ``semantic_score`` is the\nkNN similarity to the source crop's stored vector.",
         "properties": {
+          "fuse": {
+            "description": "The space keys fused in by reciprocal rank fusion.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fuse",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SearchItemDoc"
@@ -31896,6 +31952,11 @@
           "page_size": {
             "title": "Page Size",
             "type": "integer"
+          },
+          "space": {
+            "description": "The space key searched (the target primary unless named).",
+            "title": "Space",
+            "type": "string"
           },
           "total": {
             "title": "Total",
@@ -31912,6 +31973,7 @@
           "total",
           "page",
           "page_size",
+          "space",
           "unembedded_in_scope"
         ],
         "title": "SearchSimilarResponse",
@@ -31929,6 +31991,14 @@
       "SearchTextResponse": {
         "description": "``GET /search/text``.",
         "properties": {
+          "fuse": {
+            "description": "The space keys fused in by reciprocal rank fusion.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Fuse",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SearchItemDoc"
@@ -31943,6 +32013,11 @@
           "page_size": {
             "title": "Page Size",
             "type": "integer"
+          },
+          "space": {
+            "description": "The space key searched (the target primary unless named).",
+            "title": "Space",
+            "type": "string"
           },
           "total": {
             "title": "Total",
@@ -31959,6 +32034,7 @@
           "total",
           "page",
           "page_size",
+          "space",
           "unembedded_in_scope"
         ],
         "title": "SearchTextResponse",
@@ -57906,6 +57982,45 @@
             }
           },
           {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
+            }
+          },
+          {
             "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
             "in": "query",
             "name": "class_name",
@@ -58502,6 +58617,45 @@
             }
           },
           {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
+            }
+          },
+          {
             "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
             "in": "query",
             "name": "class_name",
@@ -59037,6 +59191,45 @@
               "default": false,
               "title": "Include Test",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
             }
           },
           {

@@ -35,6 +35,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from src.clients.occ_locks import lock_includes
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
 from src.services.curation import reprocess_job
@@ -71,6 +72,7 @@ from src.services.curation.reprocess_targets import (
     validate_targets,
 )
 from src.services.curation.reprocess_vlm import apply_vlm, vlm_class_clause, vlm_restore_update
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.jobs import status as job_status
 
 
@@ -145,7 +147,7 @@ async def resolve_image_ids(
             id_field='image_id',
         )
         return [image_id for image_id, _ in images], 0, None
-    query = item_filter_query(targets.filter)
+    query = item_filter_query(targets.filter, await item_write_fields())
     if targets.limit is not None:
         capped = await resolve_ids(
             opensearch,
@@ -191,7 +193,7 @@ async def _plan_vlm(
     items_index = _cfg_indexes()[0]
     if kind == 'filter':
         assert targets.filter is not None
-        base = item_filter_query(targets.filter)
+        base = item_filter_query(targets.filter, await item_write_fields())
 
         async def count(*extra: dict[str, Any], not_locked: bool = False) -> int:
             query = {
@@ -259,19 +261,12 @@ async def _plan_images(
             'image_id',
             image_ids,
             index=items_index,
-            includes=_lock_includes(),
+            includes=lock_includes(),
         )
         result.locked_skipped = sum(1 for _, src in docs if item_locked(src))
     if scope == 'embed' and embed is not None and image_ids:
         result.detail = {**await plan_embed_counts(opensearch, image_ids, embed)}
     return result
-
-
-def _lock_includes() -> list[str]:
-    from src.config.region_fields import get_region_fields
-
-    F = get_region_fields()
-    return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
 
 
 async def _item_targets(
@@ -285,7 +280,7 @@ async def _item_targets(
     assert targets.filter is not None
     capped = await resolve_ids(
         opensearch,
-        item_filter_query(targets.filter),
+        item_filter_query(targets.filter, await item_write_fields()),
         index=_cfg_indexes()[0],
         limit=targets.limit,
         sample=targets.sample,
@@ -299,7 +294,7 @@ async def plan_reprocess(opensearch: AsyncOpenSearch, request: ReprocessRequest)
     selected and what the lock rule skips. Raises
     :class:`~...reprocess_targets.ReprocessTargetsError` for malformed
     targets."""
-    kind = validate_targets(request.targets)
+    kind = validate_targets(request.targets, await item_write_fields())
     scopes = _ordered(request.scopes)
     flt = request.targets.filter
     if flt is not None and has_image_selector(flt):
@@ -425,11 +420,15 @@ async def apply_reprocess(
     if 'vlm' in by_scope:
         if vlm_ids is None:
             assert request.targets.filter is not None
+            embedding = await item_write_fields()
             hits = await scan_items(
                 opensearch,
                 {
                     'bool': {
-                        'filter': [item_filter_query(request.targets.filter), vlm_class_clause()],
+                        'filter': [
+                            item_filter_query(request.targets.filter, embedding),
+                            vlm_class_clause(),
+                        ],
                         'must_not': [class_locked_clause()],
                     }
                 },

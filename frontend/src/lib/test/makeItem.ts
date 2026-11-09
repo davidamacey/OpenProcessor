@@ -1,6 +1,6 @@
 /**
  * Shared raw-item fixture builder for `{API_PREFIX}/crops` payloads
- * (docs/design/test-audit-2026-09-24.md, recommendation 4 / P0-3).
+ * (test audit, recommendation 4 / P0-3).
  *
  * Every field carries a distinct, non-default value (distinct strings/
  * numbers, `true` where the mapped default is `false`, non-null where the
@@ -31,12 +31,15 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   vlm_raw_class: 'widget_a-ish',
   vlm_class_attempted_at: '2026-09-24T01:02:03Z',
   vlm_class_empty_reason: 'no_match',
-  cluster_id: 17,
-  cluster_distance: 0.33,
-  cluster_nearest_id: 23,
-  cluster_similarity: 0.81,
-  cluster_is_core: true,
-  cluster_subid: '47a',
+  cluster: {
+    uid: '0b9f9a38-0000-4000-8000-000000000017',
+    partition_id: '5e1c0000-0000-4000-8000-000000000001',
+    state: 'assigned',
+    score: 0.81,
+    margin: 0.12,
+    assigned_by: 'run',
+    display_no: 17,
+  },
   label_validated: true,
   class_validated: true,
   label_source: 'human_review',
@@ -98,7 +101,10 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   combine_conflict: true,
   combine_conflict_origins: ['widgets_a', 'widgets_b'],
   combine_merged_origins: ['widgets_c'],
-  embedding_state: 'deferred',
+  embedding_states: { primary: 'deferred' },
+  near_dup_group_id: 'grp-1',
+  near_dup_group_size: 3,
+  near_dup_is_representative: false,
   source_prompt: 'red widget',
   open_vocab_set: 'widget_set',
   open_vocab_revision: 4,

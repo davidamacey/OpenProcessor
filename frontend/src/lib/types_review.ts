@@ -76,6 +76,8 @@ export interface ReviewItem extends Crop {
  */
 export interface SearchCrop extends Crop {
   similarity_score: number;
+  /** The space `similarity_score` was measured in (the first space that found the item). */
+  score_space?: string | null;
   /** `target=box` searches: the box of this item that matched, and whether its vector predates a
    *  move of the box. Null for a crop-target search. */
   matched_box_id?: string | null;
@@ -84,7 +86,7 @@ export interface SearchCrop extends Crop {
 
 /**
  * `POST {API_PREFIX}/select/diverse`'s scope object (P2-10, `/review`'s diverse
- * overlay — docs/CLAUDE.md's curation-strategy-selector-bar section).
+ * overlay — the curation strategy selector bar).
  * Distinct from `/clusters/[id]`'s `GET {API_PREFIX}/crops?order=diverse&k=N` —
  * that path is a small, synchronous, cluster-scoped selection; this one
  * scopes to a review-tab cohort (`review_tab` reuses the backend's
@@ -94,7 +96,7 @@ export interface SearchCrop extends Crop {
  * NOT `conf_min`/`conf_max`/`min_blur_ratio`/`max_rank`/region `text`.
  */
 export interface SelectDiverseScope {
-  cluster_id?: number | null;
+  cluster_uid?: string | null;
   review_tab?: string | null;
   filters?: Record<string, unknown>;
 }

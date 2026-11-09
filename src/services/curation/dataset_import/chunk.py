@@ -40,6 +40,7 @@ from src.services.curation.dataset_import.proposals import note_matches
 from src.services.curation.dataset_import.report import ImportReport
 from src.services.curation.ingest_index import ImageContext
 from src.services.curation.proposal_merge import count_disagreements
+from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
@@ -93,6 +94,7 @@ async def _stamp_existing_image(
 
     await occ_update_one(
         ctx.opensearch,
+        vector_excludes=await vector_source_excludes('images'),
         doc_id=image_id,
         merger=merger,
         index=ctx.images_index,

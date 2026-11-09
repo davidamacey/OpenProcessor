@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-import pytest
 from fixtures.job_fixtures import (
     FakeProducer,
     FakeQueueHooks,
@@ -19,18 +16,6 @@ from src.schemas.train_promote import PromoteRequest
 from src.services.training.class_remap import ClassRemapResult
 from src.services.training.job_models import TrainJobStatus
 from src.services.training.promote_run import PromotePlan
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-
-@pytest.fixture
-def queue_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    password = tmp_path / 'queue_password'
-    password.write_text('test-password\n')
-    monkeypatch.setenv('OP_QUEUE_URL', 'redis://valkey:6379/0')
-    monkeypatch.setenv('OP_QUEUE_PASSWORD_FILE', str(password))
 
 
 def make_plan(
@@ -63,7 +48,6 @@ __all__ = [
     'kinds',
     'make_plan',
     'producer',
-    'queue_env',
     'queue_hooks',
     'wakes',
 ]

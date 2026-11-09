@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { ApiError } from '$lib/api_errors';
 import { AssistLoopController } from '$lib/assistLoop/assistLoopController.svelte';
-import { loopDeps, loopNode, loopState } from '$lib/test/fixtures/assistLoop';
+import {
+  loopControl,
+  loopDeps,
+  loopNode,
+  loopState,
+} from '$lib/test/fixtures/assistLoop';
 import { EMPTY_METHODS } from '$lib/strategies';
 import { strategiesStore } from '$stores/strategies.svelte';
 import AssistLoopPanel from '$components/assistLoop/AssistLoopPanel.svelte';
@@ -108,7 +113,7 @@ describe('AssistLoopPanel', () => {
     expect((q('loop-rollback-all') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('says why a paused loop stopped and offers resume, not cancel', async () => {
+  it('says why a paused loop stopped and offers resume and cancel (the server allows both)', async () => {
     await render(
       loopDeps({
         list: async () => ({
@@ -131,11 +136,62 @@ describe('AssistLoopPanel', () => {
     await settle();
     expect(q('loop-status')?.textContent).toContain('second opinion disagreed');
     expect(q('loop-resume')).not.toBeNull();
-    expect(q('loop-cancel')).toBeNull();
+    expect(q('loop-cancel')).not.toBeNull();
+    expect(q('loop-pause')).toBeNull();
     const audit = q('loop-audit')?.textContent?.replace(/\s+/g, ' ') ?? '';
     expect(audit).toContain('30 of 40 sampled labels agreed');
     expect(audit).toContain('75.0 percent');
     expect(audit).toContain('lower bound 63.0 percent');
+  });
+
+  it('offers pause and the budget edit from the served control, and a pausing note', async () => {
+    const running = loopState('running');
+    await render(
+      loopDeps({
+        list: async () => ({ loops: [running] }),
+        get: async () => running,
+      }),
+    );
+    await settle();
+    expect(q('loop-pause')).not.toBeNull();
+    expect(q('loop-budget-edit')).not.toBeNull();
+    expect(q('loop-pausing')).toBeNull();
+    click('loop-budget-edit');
+    expect(q('loop-budget-dialog')).not.toBeNull();
+    expect((q('loop-budget-crops') as HTMLInputElement).value).toBe('2000');
+  });
+
+  it('says a pause was requested and hides the pause button', async () => {
+    const pausing = loopState('running', {
+      control: loopControl('running', { state: 'pausing', can_pause: false }),
+    });
+    await render(
+      loopDeps({ list: async () => ({ loops: [pausing] }), get: async () => pausing }),
+    );
+    await settle();
+    expect(q('loop-pausing')).not.toBeNull();
+    expect(q('loop-pause')).toBeNull();
+  });
+
+  it('names what blocks a resume instead of a resume button', async () => {
+    await render(
+      loopDeps({
+        list: async () => ({
+          loops: [
+            loopState('paused', {
+              pause_reason: 'vlm_unavailable',
+              control: loopControl('paused', {
+                can_resume: false,
+                resume_blocked_reason: 'vlm_unavailable',
+              }),
+            }),
+          ],
+        }),
+      }),
+    );
+    await settle();
+    expect(q('loop-resume')).toBeNull();
+    expect(q('loop-resume-blocked')?.textContent).toContain('VLM endpoint');
   });
 
   it('states that the audit was off rather than leaving it blank', async () => {

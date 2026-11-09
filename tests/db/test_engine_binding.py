@@ -8,7 +8,7 @@ is lazy and nothing here connects.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from sqlalchemy import pool
@@ -95,7 +95,7 @@ def test_the_api_engine_is_used_when_nothing_is_bound(
 def test_a_worker_engine_is_a_small_bounded_pool_and_a_one_shot_engine_holds_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seen: dict[str, object] = {}
+    seen: dict[str, Any] = {}
 
     async def probe(name: str, *, one_shot: bool) -> None:
         async def inside() -> None:

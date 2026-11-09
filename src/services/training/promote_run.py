@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.config import get_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
@@ -293,7 +295,7 @@ async def _stamp_lineage(plan: PromotePlan, result_triton_name: str, *, force: b
             force_used=force,
             gate_report=plan.gate_report if plan.gate_failures else None,
         )
-    except Exception as exc:
+    except (SQLAlchemyError, OSError) as exc:
         logger.error('manifest_stamp_failed', job_id=plan.job_id, error=str(exc))
         return False
     if not stamped:

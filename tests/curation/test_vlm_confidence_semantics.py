@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_STATE_FIELDS
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -89,7 +90,10 @@ def test_vlm_low_conf_selects_on_the_vlm_confidence_only(monkeypatch: pytest.Mon
 
 def test_vlm_label_serves_the_vlm_confidence() -> None:
     item = serialize_item(
-        {'class_source': 'vlm', 'vlm_confidence': 'low', 'confidence': 0.946}, 'x', api_prefix=''
+        {'class_source': 'vlm', 'vlm_confidence': 'low', 'confidence': 0.946},
+        'x',
+        state_fields=DEFAULT_STATE_FIELDS,
+        api_prefix='',
     )
     assert item['class_confidence'] == VLM_CATEGORY_SCORE['low']
     assert item['class_confidence_source'] == 'vlm'
@@ -98,7 +102,12 @@ def test_vlm_label_serves_the_vlm_confidence() -> None:
 
 
 def test_classifier_label_serves_the_classifier_score() -> None:
-    item = serialize_item({'class_source': MODEL_SOURCE, 'confidence': 0.61}, 'x', api_prefix='')
+    item = serialize_item(
+        {'class_source': MODEL_SOURCE, 'confidence': 0.61},
+        'x',
+        state_fields=DEFAULT_STATE_FIELDS,
+        api_prefix='',
+    )
     assert item['class_confidence'] == pytest.approx(0.61)
     assert item['class_confidence_source'] == 'model'
 

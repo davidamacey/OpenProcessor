@@ -38,6 +38,7 @@ def test_a_counted_backlog_keeps_its_two_outcomes() -> None:
     assert ingest_idle_check(0, ['w']).severity == 'ok'
     busy = ingest_idle_check(7, ['w'])
     assert busy.severity == 'warn'
+    assert busy.detail is not None
     assert busy.detail['pending_ingest'] == 7
 
 

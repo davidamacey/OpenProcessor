@@ -69,7 +69,7 @@ async def _reader(world: World, env: LoopEnv) -> AsyncIterator[PartitionReader]:
     world.serve(env)
     async with _sessions(env) as sessions:
         reader = PartitionReader(
-            world.os,  # type: ignore[arg-type]
+            world.os,
             sessions,
             project=env.project,
         )
@@ -224,7 +224,7 @@ async def test_a_reader_bound_to_another_partition_finds_none_of_the_items(
     world.serve(loop_env)
     async with _sessions(loop_env) as sessions:
         stranger = PartitionReader.for_run(
-            world.os,  # type: ignore[arg-type]
+            world.os,
             sessions,
             project=loop_env.project,
             pinned={'partition': {'partition_id': str(uuid.uuid4())}},
@@ -241,13 +241,13 @@ async def test_a_resumed_run_binds_to_the_partition_its_first_slice_pinned(
     partition = world.serve(loop_env)
     async with _sessions(loop_env) as sessions:
         resumed = PartitionReader.for_run(
-            world.os,  # type: ignore[arg-type]
+            world.os,
             sessions,
             project=loop_env.project,
             pinned={'partition': {'kind': 'serving_partition', 'partition_id': str(partition)}},
         )
         first = PartitionReader.for_run(
-            world.os,  # type: ignore[arg-type]
+            world.os,
             sessions,
             project=loop_env.project,
             pinned={},

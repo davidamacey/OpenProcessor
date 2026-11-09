@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * "Keyboard shortcuts" card — `/settings#keyboard` (K2 + K2b,
-   * docs/design/configurable-keyboard-shortcuts-plan-2026-09-26.md §5.4).
+   * configurable keyboard shortcuts plan §5.4).
    *
    * Two sections:
    *  - **Verb groups** (K2b) — one row per served `group` id shared by
