@@ -140,3 +140,23 @@ def test_a_failed_verify_marks_the_space_failed(pg, engine) -> None:
     run_job(KINDS[KIND], _handler(index, encoder), {}, str(job.id))
     assert sql(pg, 'SELECT status FROM jobs WHERE id = %s', job.id) == [('failed',)]
     assert _space_status(pg, space) == 'failed'
+
+
+def test_a_cancel_of_an_abandoned_build_clears_the_partial_field(pg, engine) -> None:
+    index = FakeIndex(20)
+    _, space, job = _start(engine, pg)
+
+    def abandon_then_cancel(idx: FakeIndex) -> None:
+        if idx.vectors:  # after the first durable batch: the route marked failed, cancel is asked
+            sql(pg, "UPDATE embedding_spaces SET status = 'failed' WHERE id = %s", space)
+            sql(
+                pg,
+                "UPDATE jobs SET status = 'cancelling', cancel_requested_at = now() WHERE id = %s",
+                job.id,
+            )
+
+    index.on_write = abandon_then_cancel
+    run_job(KINDS[KIND], _handler(index, CountingEncoder()), {}, str(job.id))
+    assert sql(pg, 'SELECT status FROM jobs WHERE id = %s', job.id) == [('cancelled',)]
+    assert _space_status(pg, space) == 'failed'
+    assert index.vectors == {}

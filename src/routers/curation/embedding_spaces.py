@@ -2,7 +2,7 @@
 
 ``GET /curation/embedding/models`` is deployment-wide; the rest live under
 ``/curation/projects/{project}/embedding``. Register, build and retire answer 202 with the job that
-works on the space; cancel and pause use the generic job routes. Every refusal is the registry's
+works on the space; pause uses the generic job route; cancel (with `abandon`) is the run route. Every refusal is the registry's
 stable ``{"error": code, "message": ...}`` body.
 """
 
@@ -28,6 +28,7 @@ from src.routers.curation._embedding_space_models import (
     EmbeddingPromoteRequest,
     EmbeddingPromoteResponse,
     EmbeddingReindexRunResponse,
+    EmbeddingRunCancelResponse,
     EmbeddingSpaceListResponse,
     EmbeddingSpaceRegisterRequest,
     EmbeddingSpaceStartResponse,
@@ -243,3 +244,29 @@ async def get_embedding_reindex_run(
     if found is None:
         raise rejection(404, 'job_not_found', f'no re-index run {run_id}')
     return EmbeddingReindexRunResponse(**found)
+
+
+@router.post(
+    '/embedding/reindex-runs/{run_id}/cancel',
+    response_model=EmbeddingRunCancelResponse,
+    tags=['Embedding'],
+)
+async def cancel_embedding_reindex_run(
+    run_id: uuid.UUID,
+    session: DbSessionDep,
+    abandon: Annotated[
+        bool, Query(description='Mark the building space failed and clear its partial vectors.')
+    ] = False,
+) -> EmbeddingRunCancelResponse:
+    """Cancel a run. Without `abandon` the space stays `building` (re-startable as a backfill)."""
+    async with _refusals():
+        done = await start.cancel_run(
+            session, current_project_id(), run_id, abandon=abandon, requested_by=REQUESTER
+        )
+    return EmbeddingRunCancelResponse(
+        run_id=str(done.run_id),
+        job_status=done.job_status,
+        abandoned=done.abandoned,
+        space_status=done.space_status,
+        clear_job_id=None if done.clear_job_id is None else str(done.clear_job_id),
+    )

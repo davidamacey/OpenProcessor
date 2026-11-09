@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
@@ -72,6 +73,32 @@ async def finish_run(session: AsyncSession, job_id: uuid.UUID) -> None:
         .where(EmbeddingReindexRun.job_id == job_id)
         .values(finished_at=dt.datetime.now(dt.UTC))
     )
+
+
+@dataclass(frozen=True)
+class RunRef:
+    job_id: uuid.UUID
+    space_id: uuid.UUID
+    space_key: str
+    target: str
+    mode: str
+
+
+async def get_run_ref(session: AsyncSession, run_id: uuid.UUID) -> RunRef | None:
+    found = (
+        await session.execute(
+            select(
+                EmbeddingReindexRun.job_id,
+                EmbeddingSpace.id,
+                EmbeddingSpace.space_key,
+                EmbeddingSpace.target,
+                EmbeddingReindexRun.mode,
+            )
+            .join(EmbeddingSpace, EmbeddingSpace.id == EmbeddingReindexRun.space_id)
+            .where(EmbeddingReindexRun.id == run_id)
+        )
+    ).one_or_none()
+    return None if found is None else RunRef(*found)
 
 
 async def get_run_view(session: AsyncSession, run_id: uuid.UUID) -> dict[str, Any] | None:

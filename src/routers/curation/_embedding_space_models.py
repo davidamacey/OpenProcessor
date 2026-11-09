@@ -96,3 +96,11 @@ class EmbeddingReindexRunResponse(BaseModel):
     job_id: str
     job_status: str | None
     job_progress: dict[str, Any]
+
+
+class EmbeddingRunCancelResponse(BaseModel):
+    run_id: str
+    job_status: str
+    abandoned: bool
+    space_status: str
+    clear_job_id: str | None = None
