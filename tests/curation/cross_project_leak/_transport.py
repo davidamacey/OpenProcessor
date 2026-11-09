@@ -361,3 +361,4 @@ class LeakEnv:
     own_dirs: dict[str, list[Path]]
     root: Path
     events: list[dict[str, Any]] = field(default_factory=list)
+    pg_ids: dict[str, dict[str, str]] = field(default_factory=dict)

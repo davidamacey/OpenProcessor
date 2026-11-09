@@ -13,6 +13,7 @@ from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
 from curation.cross_project_leak._constants import CLASS_NAMES
+from curation.cross_project_leak._pg_rows import seed_pg_rows
 from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
 from curation.cross_project_leak._seeders import _seed_vlm
 from curation.cross_project_leak._transport import (
@@ -22,6 +23,7 @@ from curation.cross_project_leak._transport import (
     _FakeTransport,
     _RecordingTransport,
 )
+from src.config.settings import TritonModelConfig
 
 
 if TYPE_CHECKING:
@@ -47,6 +49,14 @@ class _LeakPEEncoder(FakePEEncoder):
     async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         return np.array([_vec(100 + i) for i in range(len(crops))], dtype=np.float32)
 
+    text_model = TritonModelConfig.PE_TEXT_MODEL
+
+    def ensure_text_ready(self) -> bool:
+        return True
+
+    def encode_text(self, queries: list[str]) -> np.ndarray:
+        return np.array([_vec(300 + i) for i in range(len(queries))], dtype=np.float32)
+
     async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
         self.whole_frame_sizes.append(img.size)
         return np.array(_vec(200), dtype=np.float32)
@@ -58,6 +68,7 @@ def leak_env(
     monkeypatch: pytest.MonkeyPatch,
     reference_region_profile: None,
     pg_registry: Any,
+    pg: Any,
     captured_events: list[dict[str, Any]],
 ) -> Any:
     """The real app, three seeded projects, a recording layer above the
@@ -217,6 +228,7 @@ def leak_env(
     for slug in records:
         _seed_vlm(env, slug)
     env.events = captured_events
+    env.pg_ids = seed_pg_rows(pg, records)
 
     def _no_network(*_a: Any, **_k: Any) -> Any:
         raise httpx.ConnectError('network disabled in the leak test')
