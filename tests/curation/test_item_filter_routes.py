@@ -119,6 +119,8 @@ def test_the_filter_reaches_the_query(
 
 
 @pytest.mark.parametrize('path', ['/crops', '/stats/classes', '/clusters'])
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_a_malformed_band_is_a_400(app: FastAPI, path: str) -> None:
     with TestClient(app, raise_server_exceptions=False) as client:
         r = client.get(
