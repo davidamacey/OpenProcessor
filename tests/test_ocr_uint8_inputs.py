@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 from _image_helpers import png_bytes as _png
+from _ocr_model_module import FakeTensor
 from PIL import Image
-from test_ocr_pipeline_rec_width import _FakeTensor, model_module  # noqa: F401 -- fixture + stub
 
 from src.clients import triton_client as tc, triton_ocr
 from src.clients.triton_pool_core import AsyncTritonPool
@@ -237,7 +237,7 @@ def _request(module: Any, ocr: np.ndarray, orig: np.ndarray) -> _Request:
         'original_image': orig,
         'orig_shape': np.array([4, 4], dtype=np.int32),
     }
-    module.pb_utils.get_input_tensor_by_name = lambda r, n: _FakeTensor(n, r.tensors[n])
+    module.pb_utils.get_input_tensor_by_name = lambda r, n: FakeTensor(n, r.tensors[n])
     return _Request(tensors)
 
 
@@ -254,7 +254,7 @@ def _bls(module: Any) -> Any:
 
 
 class TestPipelineBLS:
-    def test_uint8_is_normalized_for_the_detector(self, model_module: Any) -> None:  # noqa: F811
+    def test_uint8_is_normalized_for_the_detector(self, model_module: Any) -> None:
         model = _bls(model_module)
         u8 = RNG.integers(0, 256, (3, 32, 32), dtype=np.uint8)
         with pytest.raises(_StopError):
@@ -262,7 +262,7 @@ class TestPipelineBLS:
         assert model.seen['det_in'].dtype == np.float32
         assert np.array_equal(model.seen['det_in'], u8.astype(np.float32) / 127.5 - 1.0)
 
-    def test_crop_source_is_the_uint8_hwc_array(self, model_module: Any) -> None:  # noqa: F811
+    def test_crop_source_is_the_uint8_hwc_array(self, model_module: Any) -> None:
         model = _bls(model_module)
         model._call_detection = lambda _i: np.zeros((1, 1, 8, 8), np.float32)
         model.db_postprocess = lambda _o, _s: (np.zeros((1, 4, 2)), np.ones(1))
@@ -281,7 +281,7 @@ class TestPipelineBLS:
         assert got['img'].dtype == np.uint8
         assert np.array_equal(got['img'], orig.transpose(1, 2, 0))
 
-    def test_float_input_is_refused(self, model_module: Any) -> None:  # noqa: F811
+    def test_float_input_is_refused(self, model_module: Any) -> None:
         model = _bls(model_module)
         with pytest.raises(ValueError, match=r"'ocr_images' must be UINT8"):
             model._process_request(

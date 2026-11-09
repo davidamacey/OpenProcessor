@@ -108,7 +108,6 @@ tests/projects/test_project_delete_batched.py	1	suppressions recorded when the r
 tests/projects/test_projects_list.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/projects/test_route_scoping.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/release/test_acceptance_run.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/test_ocr_uint8_inputs.py	4	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/test_opensearch_client_fail_closed.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/test_opensearch_serializer.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/test_query_routes_fail_closed.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
