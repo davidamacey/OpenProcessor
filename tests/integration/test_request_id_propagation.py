@@ -17,7 +17,7 @@ curation async pipeline:
    rather than hitting a live dev OpenSearch.
 2. ``test_worker_structlog_emits_request_id`` /
    ``test_worker_unbind_clears_request_id`` — pure-Python checks that
-   ``bind_request_id`` / ``unbind_contextvars`` propagate through
+   ``bind_contextvars`` / ``unbind_contextvars`` propagate through
    structlog's contextvars merge into a captured event dict. Mirrors
    the binding pattern the detection worker's consumers use.
 """
@@ -63,18 +63,6 @@ def test_request_id_is_generated_when_absent(client: TestClient) -> None:
     assert generated != '-'
 
 
-def test_bind_request_id_updates_context() -> None:
-    from src.core.logging import bind_request_id, get_request_id
-
-    assert get_request_id() == '-'
-    bind_request_id('ctx-abc')
-    try:
-        assert get_request_id() == 'ctx-abc'
-    finally:
-        _clear_request_id()
-    assert get_request_id() == '-'
-
-
 @pytest.mark.asyncio
 async def test_items_request_id_field_migration_is_idempotent() -> None:
     """``ensure_items_request_id_field`` PUTs an additive keyword-field
@@ -112,8 +100,6 @@ def test_worker_structlog_emits_request_id() -> None:
     is wired up in :mod:`src.core.logging` and that worker emissions
     will carry ``request_id`` once the consumer binds it.
     """
-    from src.core.logging import bind_request_id
-
     # configure_logging() is invoked at FastAPI startup but not in pytest
     # context — apply a minimal capture chain that includes the
     # contextvars merge processor.
@@ -137,9 +123,9 @@ def test_worker_structlog_emits_request_id() -> None:
     log = structlog.get_logger('worker_test')
 
     try:
-        bind_request_id('testid_abc123')
+        structlog.contextvars.bind_contextvars(request_id='testid_abc123')
         log.info('stage_a_detect_took_ms', crop_id='crop-1', ms=42.0)
-        bind_request_id('testid_def456')
+        structlog.contextvars.bind_contextvars(request_id='testid_def456')
         log.info('stage_b_verify_took_ms', crop_id='crop-2', ms=99.0)
     finally:
         _clear_request_id()

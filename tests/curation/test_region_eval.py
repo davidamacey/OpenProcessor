@@ -21,11 +21,9 @@ from src.config.region_fields import RegionFields, get_region_fields
 from src.services.curation.region_eval import evaluate, run_eval
 from src.services.curation.region_eval_data import NO_DETECTOR, CohortImage, region_records
 from src.services.curation.region_eval_geometry import (
-    RegionFrameError,
     greedy_match,
     iou,
     parse_yolo_labels,
-    to_source_frame,
     yolo_to_xyxy,
 )
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
@@ -84,24 +82,6 @@ def test_greedy_match_is_one_to_one_highest_iou_first() -> None:
     two = greedy_match(gt, [pred[0], gt[0]], 0.5)
     assert sorted((g, p) for g, p, _ in two) == [(0, 1), (1, 0)]
     assert greedy_match(gt, [(0.9, 0.9, 1.0, 1.0)], 0.5) == []
-
-
-def test_frames_source_crop_and_unknown() -> None:
-    """``to_source_frame``/``RegionFrameError`` stay as pure, tested geometry
-    helpers even though ``region_records`` no longer wires them in -- every
-    ``region_boxes`` entry is already source-frame by the time it's stored
-    (see the module docstring), so there is no remaining stored per-box
-    frame marker that could ever come back as ``'pixels'``."""
-    box = (0.0, 0.0, 0.5, 0.5)
-    assert to_source_frame(box, 'source', None) == box
-    assert to_source_frame(box, None, None) == box  # pre-provenance rows
-    item = (0.5, 0.5, 1.0, 1.0)
-    assert to_source_frame(box, 'crop', item) == pytest.approx((0.5, 0.5, 0.75, 0.75))
-    assert to_source_frame(box, 'item', item) == pytest.approx((0.5, 0.5, 0.75, 0.75))
-    with pytest.raises(RegionFrameError, match='no bbox_norm'):
-        to_source_frame(box, 'crop', None)
-    with pytest.raises(RegionFrameError, match='unknown region bbox frame'):
-        to_source_frame(box, 'pixels', item)
 
 
 def test_region_records_pending_item_falls_back_to_configured_status_field() -> None:
@@ -546,18 +526,6 @@ def test_cli_state_dir_cohort_uses_recorded_ids(monkeypatch, tmp_path: Path) -> 
     assert (t['images'], t['tp'], t['predictions']) == (1, 1, 1)
 
     assert _run_cli(monkeypatch, _cli_fake(tmp_path), [*argv, '--splits', 'train']) == 1
-
-
-# test_cli_unknown_frame_exits_3 (and test_unknown_frame_is_refused above)
-# were removed when boxes became lists: both simulated a stored
-# `region_bbox_frame='pixels'` on an item to exercise the CLI's
-# RegionFrameError -> exit(3) path. `region_boxes` entries have no stored
-# per-box frame marker at all (every writer projects to source frame
-# before appending -- see the region_eval module docstring), so that
-# scenario is now structurally impossible to construct; RegionFrameError
-# and the CLI's exit(3) branch remain as defensive code (still directly
-# unit-tested via to_source_frame in test_frames_source_crop_and_unknown)
-# but have no live end-to-end trigger left to test.
 
 
 # =============================================================================

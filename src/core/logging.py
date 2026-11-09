@@ -37,20 +37,6 @@ def get_request_id() -> str:
     return request_id_ctx.get() or '-'
 
 
-def bind_request_id(request_id: str) -> None:
-    """Bind ``request_id`` to both the ContextVar and structlog contextvars.
-
-    Both bindings are needed: the ContextVar drives :func:`get_request_id`
-    callers, and the structlog contextvars binding makes every subsequent
-    ``logger.info(...)`` call on this asyncio task auto-attach
-    ``request_id=<id>`` to its event dict (via the
-    :func:`structlog.contextvars.merge_contextvars` processor wired into
-    the chain below).
-    """
-    request_id_ctx.set(request_id)
-    structlog.contextvars.bind_contextvars(request_id=request_id)
-
-
 def add_request_id(
     _logger: Any, _method: str, event_dict: structlog.typing.EventDict
 ) -> structlog.typing.EventDict:
