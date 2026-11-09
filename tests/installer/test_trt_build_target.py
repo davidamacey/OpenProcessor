@@ -293,7 +293,13 @@ def test_check_gpu_memory_reports_free_not_total(monkeypatch: pytest.MonkeyPatch
 
     torch = yolo_formats.torch
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: True)
-    monkeypatch.setattr(torch.cuda, 'mem_get_info', lambda _d: (1 * GB, 48 * GB), raising=False)
+    queried: list[object] = []
+
+    def mem_get_info(device: object) -> tuple[int, int]:
+        queried.append(device)
+        return 1 * GB, 48 * GB
+
+    monkeypatch.setattr(torch.cuda, 'mem_get_info', mem_get_info, raising=False)
     monkeypatch.setattr(
         torch.cuda,
         'get_device_properties',
@@ -302,6 +308,8 @@ def test_check_gpu_memory_reports_free_not_total(monkeypatch: pytest.MonkeyPatch
     with caplog.at_level('WARNING'):
         assert yolo_formats.check_gpu_memory(4.0) is True
     assert any('Low GPU memory: 1.0GB free' in r.message for r in caplog.records)
+    # the engine build's card, not the export's trace device (always the CPU)
+    assert queried == [0]
 
 
 def test_models_install_accepts_yes_like_the_other_subcommands(bash) -> None:

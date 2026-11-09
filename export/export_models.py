@@ -88,7 +88,7 @@ from yolo_export_report import (  # noqa: E402  # imports follow the interpreter
     print_summary,
     save_results_file,
 )
-from yolo_export_settings import CONF_THRESHOLD, DEVICE, HALF, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # imports follow the interpreter re-exec guard above
+from yolo_export_settings import CONF_THRESHOLD, DEVICE, IMG_SIZE, IOU_THRESHOLD  # noqa: E402  # imports follow the interpreter re-exec guard above
 from yolo_formats import (  # noqa: E402  # imports follow the interpreter re-exec guard above
     check_gpu_memory,
     export_onnx_end2end,
@@ -427,7 +427,7 @@ def _log_run_banner(args: argparse.Namespace, models_to_export: dict[str, dict[s
     logger.info(f'Formats: {", ".join(args.formats)}')
     logger.info(f'Image size: {IMG_SIZE}x{IMG_SIZE}')
     logger.info(f'Device: {f"cuda:{DEVICE}" if DEVICE != "cpu" else "cpu"}')
-    logger.info(f'Precision: {"FP16" if HALF else "FP32"}')
+    logger.info('ONNX trace: FP32 on the CPU')
     logger.info(f'Workspace: {workspace_gb("yolo")}GB')
     if 'onnx_end2end' in args.formats or 'trt_end2end' in args.formats or 'all' in args.formats:
         logger.info(f'NMS IoU threshold: {IOU_THRESHOLD}')
