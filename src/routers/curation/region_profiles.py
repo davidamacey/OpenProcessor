@@ -61,6 +61,7 @@ from src.services.config_store.profiles import (
     list_revisions,
     rollback_profile,
     save_profile,
+    template_names,
 )
 from src.services.curation.class_registry_names import registry_class_names
 from src.services.curation.region_impact import ActivationImpact, compute_activation_impact
@@ -137,12 +138,6 @@ def _to_summary(record: ProfileRecord) -> RegionProfileSummary:
         active_revision=record.active_revision,
         updated_at=record.updated_at,
     )
-
-
-def _template_names_only() -> list[str]:
-    from src.services.config_store.profiles import _template_names
-
-    return list(_template_names())
 
 
 # =============================================================================
@@ -260,11 +255,11 @@ async def list_region_profiles(
 ) -> RegionProfileList:
     store = get_config_store()
     await store.refresh()
-    names = all_known_names() - set(_template_names_only())
+    names = all_known_names() - set(template_names())
     records = [build_record(name) for name in sorted(names)]
     templates: list[RegionProfileTemplateSummary] = []
     if include_templates:
-        for template_name in sorted(_template_names_only()):
+        for template_name in sorted(template_names()):
             rec = build_record(template_name)
             body = rec.body if rec else {}
             templates.append(

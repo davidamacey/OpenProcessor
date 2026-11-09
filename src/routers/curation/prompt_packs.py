@@ -59,6 +59,7 @@ from src.services.config_store.packs import (
     list_revisions,
     rollback_pack,
     save_pack,
+    template_names,
 )
 from src.services.curation.class_registry_names import registry_class_names
 from src.services.detection.profile_registry import resolve_region_profile
@@ -292,11 +293,11 @@ async def rollback_active_prompt_pack(body: PromptPackRollbackRequest) -> Active
 async def list_prompt_packs() -> PromptPackList:
     store = get_config_store()
     await store.refresh()
-    names = all_known_names() - set(_template_names_only())
+    names = all_known_names() - set(template_names())
     packs = [build_record(name) for name in sorted(names)]
     templates = [
         PromptPackTemplateSummary(name=n, path=f'examples/prompt_packs/{n}.json')
-        for n in sorted(_template_names_only())
+        for n in sorted(template_names())
     ]
     active_name, active_revision = None, None
     ref = store.current.active_pack
@@ -309,12 +310,6 @@ async def list_prompt_packs() -> PromptPackList:
         config_revision=store.current.config_revision,
         stale=store.current.stale,
     )
-
-
-def _template_names_only() -> list[str]:
-    from src.services.config_store.packs import _template_names
-
-    return list(_template_names())
 
 
 @router.post('/prompt_packs', response_model=PromptPackDoc, status_code=201)

@@ -74,8 +74,8 @@ def _asks_region_text(body: dict[str, Any]) -> bool:
     return False
 
 
-def _template_names() -> dict[str, Path]:
-    return templates.template_names(_TEMPLATES_DIR)
+def template_names() -> list[str]:
+    return list(templates.template_names(_TEMPLATES_DIR))
 
 
 def load_template(name: str) -> dict[str, Any] | None:
@@ -97,7 +97,7 @@ def all_known_names() -> frozenset[str]:
     stored, template) -- the uniqueness set create/clone/validate check
     against (any_domain_plan.md §3.2)."""
     store = get_config_store()
-    return frozenset({*builtin_and_file_bodies(), *store.current.packs, *_template_names()})
+    return frozenset({*builtin_and_file_bodies(), *store.current.packs, *template_names()})
 
 
 def _active_ref() -> tuple[str | None, int | None]:
@@ -264,4 +264,5 @@ __all__ = [
     'load_template',
     'rollback_pack',
     'save_pack',
+    'template_names',
 ]
