@@ -11,7 +11,7 @@ from typing import Any
 from celery.signals import beat_init, worker_init, worker_process_shutdown
 
 from src.config.retired_env import reject_retired_env
-from src.tasks import beat_lock, queue_hooks, queue_liveness
+from src.tasks import beat_lock, queue_hooks, queue_liveness, worker_metrics
 from src.tasks.beat_schedule import apply_schedule
 from src.tasks.runtime.gpu_app import build_app, install_worker_signals
 from src.tasks.runtime.log_context import install_log_context
@@ -44,6 +44,7 @@ install_worker_signals()
 install_log_context()
 queue_hooks.install()
 queue_liveness.install()
+worker_metrics.install()
 app.on_after_configure.connect(apply_schedule, sender=app, weak=False)
 
 
