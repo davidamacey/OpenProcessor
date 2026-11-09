@@ -14,6 +14,7 @@ import asyncio
 import math
 from typing import TYPE_CHECKING, Any
 
+from src.clients.occ_locks import lock_includes
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.config_store import get_config_store
@@ -91,7 +92,7 @@ async def plan_open_vocab_scope(
             'image_id',
             image_ids,
             index=get_curation_config().items_index,
-            includes=_lock_includes(),
+            includes=lock_includes(),
         )
         locked = sum(1 for _, src in docs if item_locked(src))
     return ReprocessScopeResult(
@@ -107,13 +108,6 @@ async def plan_open_vocab_scope(
             'estimated_minutes': minutes,
         },
     )
-
-
-def _lock_includes() -> list[str]:
-    from src.config.region_fields import get_region_fields
-
-    F = get_region_fields()
-    return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
 
 
 class OpenVocabPass:
