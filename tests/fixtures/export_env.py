@@ -67,7 +67,6 @@ class ExportEnv:
             'model_name': name,
             'max_batch': 16,
             'formats': ['trt'],
-            'normalize_boxes': True,
             'auto_load': auto_load,
             'head_kind': 'nms',
             'num_classes': 2,

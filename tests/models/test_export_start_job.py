@@ -25,8 +25,7 @@ async def start(name: str, *, new_version: bool = True):
         triton_name=name,
         pt_file=Path(f'/app/pytorch_models/{name}.pt'),
         max_batch=16,
-        formats=['onnx_end2end', 'trt_end2end'],
-        normalize_boxes=True,
+        formats=['trt'],
         auto_load=False,
         model_info=INFO,
         new_version=new_version,
@@ -55,7 +54,7 @@ class TestStartInTheDatabase:
         )
         rows = sql(pg, "SELECT version, origin, labels FROM models WHERE name = 'onejobonemessage'")
         assert rows == [(1, 'uploaded', ['car', 'bus'])]
-        assert result.job.params['formats'] == ['onnx_end2end', 'trt_end2end']
+        assert result.job.params['formats'] == ['trt']
 
     @pytest.mark.asyncio
     async def test_a_second_export_of_the_same_name_while_active_is_409(self, pg, producer) -> None:
@@ -110,7 +109,7 @@ class TestStartInTheDatabase:
             'thestatusreadsthe',
             2,
         )
-        assert task.formats_pending == ['onnx_end2end', 'trt_end2end']
+        assert task.formats_pending == ['trt']
         assert str(started.job.id) in [t.task_id for t in await jobs.list_export_tasks()]
         assert await jobs.get_export_task('not-a-uuid') is None
 

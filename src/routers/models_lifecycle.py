@@ -140,9 +140,8 @@ async def load_model(model_name: str) -> ModelLoadResponse:
     The model must exist in the Triton model repository (models/ directory).
     Use this to load a model that was previously unloaded or just exported.
 
-    **Note:** Model names should include the format suffix:
-    - `{name}_trt` for standard TRT
-    - `{name}_trt_end2end` for End2End TRT
+    **Note:** Model names include the engine suffix: `{name}_trt` for the NMS-free head
+    (YOLO26, YOLOv10) and `{name}_trt_end2end` for an embedded-NMS head.
     """
     _valid_name(model_name)
     model_dir = resolve_load_dir(TRITON_MODELS_DIR, model_name)
@@ -171,7 +170,7 @@ async def unload_model(
     """
     Unload a model from Triton (files stay in the repository, reloadable).
 
-    Model names include the format suffix (`{name}_trt`, `{name}_trt_end2end`).
+    Model names include the engine suffix (`{name}_trt`, `{name}_trt_end2end`).
     Same guard as the delete routes: 403 for the configured detector / OCR
     (even with ``force``), 409 for core models without ``force``.
     """

@@ -64,7 +64,7 @@ def test_upload_saves_the_weights_and_starts_the_job(client, weights, pg, produc
 
 def test_export_route_starts_the_job_for_stored_weights(client, weights, pg, producer) -> None:
     (weights / 'exproute.pt').write_bytes(b'w' * 2000)
-    resp = client.post('/models/exproute/export', json={'formats': ['onnx_end2end']})
+    resp = client.post('/models/exproute/export', json={'formats': ['onnx']})
     assert resp.status_code == 200, resp.text
     task_id = resp.json()['task_id']
     assert producer.sent() == [task_id]
