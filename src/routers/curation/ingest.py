@@ -39,12 +39,14 @@ from src.routers.curation._common import (
 from src.routers.curation._common_models import (
     BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
+    IngestImageRequest,
+    IngestImageResponse,
+)
+from src.routers.curation._ingest_config_models import (
     IngestBatchConfig,
     IngestConfigResponse,
     IngestDetectorInfo,
     IngestDetectorLabel,
-    IngestImageRequest,
-    IngestImageResponse,
     IngestRegionDrainConfig,
     IngestRegionDrainResponse,
     IngestStatusResponse,

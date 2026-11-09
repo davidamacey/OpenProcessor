@@ -30,7 +30,7 @@ from src.routers.curation._common import (
     items_index,
     router,
 )
-from src.routers.curation._common_models import HealthResponse
+from src.routers.curation._health_models import HealthResponse
 from src.services.classes.registry import ClassRegistryError
 from src.services.labeling.run_labeler import get_vlm_labeler
 from src.services.resource_links import service_url

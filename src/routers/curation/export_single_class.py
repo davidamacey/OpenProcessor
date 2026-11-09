@@ -26,7 +26,7 @@ from fastapi import Depends, HTTPException, Query
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, logger, router
-from src.routers.curation._common_models import ExportSingleClassRequest
+from src.routers.curation._export_models import ExportSingleClassRequest
 from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export_models import MANIFEST_FILENAME, SingleClassExportProfile
 from src.services.curation.export_readiness import NothingToExportError

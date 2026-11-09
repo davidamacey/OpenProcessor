@@ -29,7 +29,7 @@ from src.domain.history import (
 )
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, is_not_found, items_index, router
-from src.routers.curation._common_models import (
+from src.routers.curation._crop_write_models import (
     CropDiscardBatchRequest,
     CropDiscardRequest,
     CropUndoBatchRequest,

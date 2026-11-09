@@ -29,7 +29,7 @@ from src.routers.curation._common import (
     logger,
     router,
 )
-from src.routers.curation._common_models import (
+from src.routers.curation._crop_write_models import (
     HUMAN_REGION_STATUS_VALUES,
     CropBatchStatusRequest,
     ItemRegionMetaRequest,

@@ -582,7 +582,7 @@ def test_export_entries_serve_no_cosine_cut(app_client: TestClient) -> None:
 def test_export_requests_collapse_near_duplicates_is_off_by_default_and_a_cut_is_refused() -> None:
     from pydantic import ValidationError
 
-    from src.routers.curation._common_models import ExportSingleClassRequest, ExportYoloRequest
+    from src.routers.curation._export_models import ExportSingleClassRequest, ExportYoloRequest
 
     assert ExportYoloRequest().collapse_near_duplicates is False
     assert (

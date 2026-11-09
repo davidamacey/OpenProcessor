@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, items_index, logger, router
-from src.routers.curation._common_models import ExportYoloRequest
+from src.routers.curation._export_models import ExportYoloRequest
 from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_models import REGISTRY_ARTIFACT_CONTENT_TYPES

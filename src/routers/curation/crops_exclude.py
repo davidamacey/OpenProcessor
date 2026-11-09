@@ -9,7 +9,7 @@ from opensearchpy.exceptions import NotFoundError
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, router
-from src.routers.curation._common_models import CropExcludeRequest, CropUnexcludeRequest
+from src.routers.curation._crop_write_models import CropExcludeRequest, CropUnexcludeRequest
 from src.routers.curation._selection import selected_crop_ids
 from src.routers.curation._selection_write_models import (
     BatchExcludeResponse,

@@ -13,7 +13,7 @@ from src.core.exceptions import RequestRejectedError
 from src.db.session import project_tx
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, items_index, logger, router
-from src.routers.curation._common_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
+from src.routers.curation._holdout_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.routers.curation.near_dup_gate import require_near_dup_freezable
 from src.services.curation.dataset_thresholds import MIN_TEST_CROPS_PER_CLASS
 from src.services.curation.holdout import (

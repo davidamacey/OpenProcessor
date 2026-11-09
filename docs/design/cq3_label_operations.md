@@ -21,7 +21,7 @@ brackets after the path, as the docs checker requires.
 
 | Finding | Evidence |
 |---|---|
-| Undo of a bulk label is capped at 5,000 ids while the label covers up to 20,000 | `CropUndoBatchRequest.crop_ids` `max_length=5000` (`src/routers/curation/_common_models.py`); `MAX_BULK_SELECTION = 20_000` (`src/routers/curation/_selection.py`) |
+| Undo of a bulk label is capped at 5,000 ids while the label covers up to 20,000 | `CropUndoBatchRequest.crop_ids` `max_length=5000` (`src/routers/curation/_crop_write_models.py`); `MAX_BULK_SELECTION = 20_000` (`src/routers/curation/_selection.py`) |
 | Undo has no concurrency limit | `undo_crop_labels` in `src/routers/curation/label_undo.py` runs `asyncio.gather` over every id, each an `occ_update_one` with `refresh='wait_for'`; `discard_crops` (same file) and `undo_crop_regions` (`src/routers/curation/edit_undo.py`) have the same unbounded gather |
 | Undo does not survive a reload | Cropwright keeps the written ids client side (`undoStore.recordWrites(body.updated_ids)` in `frontend/src/lib/itemFilter/selectionActionController.svelte.ts`) and replays them through `POST /crops/label/undo_batch` |
 | `POST /crops/label/undo_batch` is untyped | `LEGACY_DICT` in `tests/test_contract_typed_responses.py` |
