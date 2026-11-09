@@ -23,9 +23,21 @@ pytest_plugins = [
     'fixtures.db_marker_policy',
     'fixtures.event_capture',
     'fixtures.postgres_events',
+    'fixtures.job_fixtures',
+    'curation.cross_project_leak._env',
+    'curation.dataset_import.db_fixture',
     'config_store.memory_settings',
     'config_store.memory_config',
 ]
+
+
+@pytest.fixture
+def worker_app(queue_env: None) -> Any:
+    """The Celery worker app with every task module imported."""
+    from src.tasks.app import app
+
+    app.loader.import_default_modules()
+    return app
 
 
 @pytest.fixture

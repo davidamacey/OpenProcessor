@@ -105,7 +105,7 @@ async def test_an_encoder_failure_leaves_the_boxes_pending_and_raises_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class Broken(FakePE):
-        async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:  # noqa: ARG002
+        async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:
             raise RuntimeError('triton down')
 
     fake = _world(tmp_path, monkeypatch)

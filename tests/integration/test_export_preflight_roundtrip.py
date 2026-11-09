@@ -43,14 +43,14 @@ class _FakeOpenSearch:
         self._docs = docs
         self.indices = FakeIndicesApi()
 
-    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any], scroll: str | None = None) -> dict:
         hits = [{'_id': d['crop_id'], '_source': d} for d in self._docs]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
 
-    async def scroll(self, scroll_id: str, scroll: str) -> dict:  # noqa: ARG002
+    async def scroll(self, scroll_id: str, scroll: str) -> dict:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
 
-    async def clear_scroll(self, scroll_id: str) -> None:  # noqa: ARG002
+    async def clear_scroll(self, scroll_id: str) -> None:
         return None
 
 

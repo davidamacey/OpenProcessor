@@ -176,7 +176,7 @@ def test_delete_finish_rolls_back_to_pre_delete_status_on_drain_timeout(monkeypa
     monkeypatch.setattr(
         busy,
         '_detection_worker_inflight',
-        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
+        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],
     )
 
     with pytest.raises(RequestRejectedError) as exc_info:
@@ -271,7 +271,7 @@ def test_drain_timeout_rollback_preserves_a_concurrent_patch(monkeypatch) -> Non
     monkeypatch.setattr(
         busy,
         '_detection_worker_inflight',
-        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],  # noqa: ARG005
+        lambda record: [busy.JobRef(kind='detection_worker', job_id='still-busy')],
     )
 
     async def _finish_expect_busy():

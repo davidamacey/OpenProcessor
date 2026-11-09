@@ -54,8 +54,8 @@ class _VersionedFakeOpenSearch(FakeUpsertOpenSearch):
     async def get(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         _source_excludes: list[str] | None = None,
     ) -> dict[str, Any]:
         source = dict(self._docs[id])

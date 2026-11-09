@@ -83,7 +83,9 @@ def test_the_public_routes_refuse_it_and_remove_nothing(
     monkeypatch.setattr(public, 'TRITON_MODELS_DIR', tmp_path / 'models')
     (tmp_path / 'models' / 'birds').mkdir(parents=True)
     app = create_app()
-    app.dependency_overrides[get_curation_opensearch] = lambda: object()  # noqa: PLW0108  # FastAPI parses a class here as a dependency with parameters
+    app.dependency_overrides[get_curation_opensearch] = lambda: (
+        object()
+    )  # FastAPI parses a class here as a dependency with parameters
     resp = TestClient(app).request(method, path, params={'force': str(force).lower()})
 
     assert resp.status_code == 403, resp.text

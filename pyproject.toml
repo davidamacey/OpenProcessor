@@ -264,8 +264,12 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/codegen/vulture_whitelist.py" = ["B018"]
 # Test files can have additional flexibility
 "tests/**/*.py" = [
+    "A002",    # Argument shadows a builtin: fakes of the OpenSearch/Triton clients keep the real keyword (`id=`)
     "ARG001",  # Unused function argument (fixtures)
+    "ARG002",  # Unused method argument: fakes and stubs implement the real collaborator's signature
+    "ARG005",  # Unused lambda argument: monkeypatch replacements take the replaced callable's signature
     "PLR2004", # Magic values
+    "PLW0108", # `lambda: Cls()` in dependency_overrides: FastAPI would read a bare class as a dependency with parameters
     "PT028",   # Default arguments in test-like functions (standalone test scripts, not pytest)
     "RUF001",  # Ambiguous Unicode characters (intentional for display)
     "TID251",  # Tests set and read os.environ directly; the ban is for src/

@@ -22,11 +22,11 @@ class _OS:
     def __init__(self, docs: dict[str, dict[str, Any]]) -> None:
         self.docs = docs
 
-    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         hits = [{'_id': k, '_source': v} for k, v in self.docs.items()]
         return {'hits': {'total': {'value': len(hits)}, 'hits': hits}}
 
-    async def get(self, *, index: str, id: str, **_: Any) -> dict[str, Any]:  # noqa: A002, ARG002
+    async def get(self, *, index: str, id: str, **_: Any) -> dict[str, Any]:
         return {'_id': id, '_source': self.docs[id], 'found': True}
 
 

@@ -9,7 +9,6 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from fixtures import job_fixtures
 from fixtures.job_rows import sql
 
 from src.core.db_session import install_database_error_handlers
@@ -28,9 +27,6 @@ from src.services.visual_search.directory_ingest import (
 if TYPE_CHECKING:
     from pathlib import Path
 
-
-kinds = job_fixtures.kinds
-producer = job_fixtures.producer
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('bound_async_engine', 'api_async_engine')]
 

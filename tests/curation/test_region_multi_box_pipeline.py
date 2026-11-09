@@ -235,7 +235,7 @@ class TestPerBoxEmbeddings:
         from scripts.curation.worker import bulk_writer as bulk_writer_mod
 
         class _FakePE:
-            async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:  # noqa: ARG002
+            async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:
                 return np.tile(np.array([0.0, 1.0, 0.0], dtype=np.float32), (len(crops), 1))
 
         monkeypatch.setattr(pe_encoder_mod, 'PEEncoder', MagicMock(return_value=_FakePE()))
@@ -256,7 +256,7 @@ class TestPerBoxEmbeddings:
         published: list[dict[str, Any]] = []
 
         class _FakeEventClient:
-            async def post(self, url: str, json: Any = None, timeout: Any = None) -> None:  # noqa: ARG002
+            async def post(self, url: str, json: Any = None, timeout: Any = None) -> None:
                 published.append({'url': url, 'body': json})
 
         monkeypatch.setattr(bulk_writer_mod, '_EVENT_API_URL', 'http://fake-event-api')

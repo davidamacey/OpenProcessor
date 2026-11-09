@@ -28,11 +28,11 @@ class _RecordingOS:
     def __init__(self) -> None:
         self.bodies: list[dict[str, Any]] = []
 
-    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         self.bodies.append(body)
         return {'hits': {'total': {'value': 0}, 'hits': []}, 'aggregations': {}}
 
-    async def count(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
         self.bodies.append(body)
         return {'count': 0}
 

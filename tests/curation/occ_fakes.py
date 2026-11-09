@@ -129,7 +129,7 @@ class FakeOccOpenSearch:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002 - part of the AsyncOpenSearch.bulk signature
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         items = []
@@ -245,7 +245,7 @@ class FakeIngestOpenSearch:
         self,
         *,
         body: list[dict[str, Any]],
-        refresh: bool | str = False,  # noqa: ARG002
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         from src.config import get_curation_config
 
@@ -298,12 +298,12 @@ class FakeIngestOpenSearch:
     async def update(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         body: dict[str, Any],
         if_seq_no: int,
-        if_primary_term: int,  # noqa: ARG002
-        refresh: bool | str = False,  # noqa: ARG002
+        if_primary_term: int,
+        refresh: bool | str = False,
     ) -> dict[str, Any]:
         self.update_calls.append({'id': id, 'body': body, 'if_seq_no': if_seq_no})
         current_seq = self._seq.get(id, 1)
@@ -317,8 +317,8 @@ class FakeIngestOpenSearch:
     async def get(
         self,
         *,
-        index: str,  # noqa: ARG002
-        id: str,  # noqa: A002
+        index: str,
+        id: str,
         _source_excludes: list[str] | None = None,
     ) -> dict[str, Any]:
         return {

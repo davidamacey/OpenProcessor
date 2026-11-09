@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from curation.dataset_import.db_fixture import import_database, world  # noqa: F401 - fixtures
-
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

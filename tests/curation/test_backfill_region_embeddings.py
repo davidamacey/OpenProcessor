@@ -56,7 +56,7 @@ class _FakePE:
     def __init__(self, *_args: Any, **_kwargs: Any) -> None:
         self.embed_crops_calls: list[int] = []
 
-    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> np.ndarray:
         self.embed_crops_calls.append(len(crops))
         return np.tile(np.array([0.6, 0.8, 0.0], dtype=np.float32), (len(crops), 1))
 
@@ -87,7 +87,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, client: _OS, *, root: Path | None) -
     fake_pe = _FakePE()
     if root is not None:
         resolved = root.resolve()
-        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))  # noqa: ARG005
+        monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (resolved,))
         for cid, doc in client.docs(INDEX).items():
             (resolved / f'{cid}.jpg').write_bytes(_tiny_jpeg())
             doc['image_path'] = str(resolved / f'{cid}.jpg')

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class _FailingEncoder(FakePEEncoder):
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         raise InferenceServerException('triton down')
 
 

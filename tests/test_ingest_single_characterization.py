@@ -215,8 +215,8 @@ def _plain(value: Any) -> Any:
 async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     sc = SCENARIOS[name]
     triton, face, ocr, opensearch = FakeTriton(sc), FakeFace(sc), FakeOcr(sc), FakeOpenSearch(sc)
-    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)  # noqa: ARG005
-    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)  # noqa: ARG005
+    monkeypatch.setattr('src.clients.triton_client.get_sync_triton_client', lambda url: triton)
+    monkeypatch.setattr('src.clients.fast_face_client.get_fast_face_client', lambda url: face)
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', lambda: ocr)
     svc = VisualSearchService.__new__(VisualSearchService)
     svc.opensearch = opensearch  # type: ignore[assignment]

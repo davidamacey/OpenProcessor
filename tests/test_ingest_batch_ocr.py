@@ -22,7 +22,7 @@ from src.services.visual_search import VisualSearchService
 class _FakeOcrService:
     """Stands in for get_ocr_service(); always finds one text region."""
 
-    def extract_text(self, image_bytes: bytes, filter_by_score: bool = True) -> dict[str, Any]:  # noqa: ARG002
+    def extract_text(self, image_bytes: bytes, filter_by_score: bool = True) -> dict[str, Any]:
         return {
             'status': 'success',
             'texts': ['HELLO123'],
@@ -54,11 +54,11 @@ def service(monkeypatch: pytest.MonkeyPatch) -> tuple[VisualSearchService, _Fake
 
     monkeypatch.setattr(
         'src.clients.triton_client.get_sync_triton_client',
-        lambda url: object(),  # noqa: ARG005
+        lambda url: object(),
     )
     monkeypatch.setattr(
         'src.clients.fast_face_client.get_fast_face_client',
-        lambda url: object(),  # noqa: ARG005
+        lambda url: object(),
     )
     monkeypatch.setattr('src.services.ocr_service.get_ocr_service', _FakeOcrService)
     return svc, fake_opensearch

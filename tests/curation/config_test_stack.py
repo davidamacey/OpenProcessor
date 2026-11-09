@@ -169,7 +169,7 @@ def build_stack(vlm_api: VlmApi, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     buf = io.BytesIO()
     Image.new('RGB', (400, 300), (90, 120, 150)).save(buf, format='JPEG')
     frame.write_bytes(buf.getvalue())
-    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (tmp_path,))  # noqa: ARG005
+    monkeypatch.setattr(image_serving, '_configured_roots', lambda config=None: (tmp_path,))
     image_serving.THUMBNAIL_CACHE.clear()
 
     import src.config.curation_accessors as curation_config_mod

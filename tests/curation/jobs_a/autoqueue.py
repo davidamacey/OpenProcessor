@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from curation.jobs_a.optin_queue import fake_queue, job_env, kinds, producer, queue_hooks, wakes  # noqa: F401
+
+pytest_plugins = ['curation.jobs_a.optin_queue']
 
 
 @pytest.fixture(autouse=True)

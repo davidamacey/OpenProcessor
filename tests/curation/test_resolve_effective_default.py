@@ -108,7 +108,7 @@ async def test_detection_profile_and_prompt_pack_resolve_their_single_entry(
 @pytest.mark.asyncio
 async def test_broken_opensearch_client_falls_back_rather_than_raising() -> None:
     class _Broken:
-        async def get(self, *args: object, **kwargs: object) -> None:  # noqa: ARG002
+        async def get(self, *args: object, **kwargs: object) -> None:
             raise RuntimeError('opensearch unreachable')
 
     assert await resolve_effective_default('sort', _Broken()) is None

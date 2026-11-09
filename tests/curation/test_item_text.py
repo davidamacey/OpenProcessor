@@ -139,7 +139,7 @@ class _RecordingOS:
     def __init__(self) -> None:
         self.bodies: list[dict[str, Any]] = []
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         json.dumps(body)
         self.bodies.append(body)
         return {'hits': {'total': {'value': 0}, 'hits': []}}

@@ -32,7 +32,7 @@ class _Search:
         self.paths = paths
         self.calls = 0
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.calls += 1
         after = (body.get('search_after') or [''])[0]
         ids = [i for i in sorted(self.paths) if i > after][: body['size']]

@@ -19,8 +19,6 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 import pytest
 
-from curation.jobs_a.optin_queue import job_env, kinds, producer, wakes  # noqa: F401
-
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
@@ -39,11 +37,11 @@ def _run_queued(job_id: str, opensearch: Any) -> None:
 
 @pytest.fixture
 def assist_queue(
-    job_env: Any,  # noqa: F811 - the fixture is requested by name
+    job_env: Any,
     memory_config: Any,
     captured_events: Any,
-    producer: Any,  # noqa: F811 - the fixture is requested by name
-    wakes: Any,  # noqa: F811 - the fixture is requested by name
+    producer: Any,
+    wakes: Any,
     stack: Any,
     api_async_engine: None,
     monkeypatch: pytest.MonkeyPatch,

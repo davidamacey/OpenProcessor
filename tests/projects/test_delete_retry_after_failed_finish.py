@@ -11,7 +11,6 @@ import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from curation.cross_project_leak import _env as _sweep
 from fastapi.testclient import TestClient
 
 from src.core.exceptions import RequestRejectedError
@@ -26,8 +25,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('pg_registry')]
 
-
-leak_env = _sweep.leak_env
 
 API = '/curation/projects'
 

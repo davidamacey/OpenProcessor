@@ -101,7 +101,7 @@ class FakeModelRegistry:
         shared: bool,
         expected_revision: int,
         consumers: Collection[uuid.UUID],
-        requested_by: str,  # noqa: ARG002 - the real signature
+        requested_by: str,
     ) -> int:
         if triton_name not in self.live:
             raise model_registry.ModelNotOwnedError(triton_name)

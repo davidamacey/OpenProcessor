@@ -1,4 +1,3 @@
-# ruff: noqa: F811 - pytest fixtures are imported by name and used as test arguments
 """Starting auto-label queues one job; no trigger file, a second start is 409, cancel is a row write."""
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ import pytest
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from fixtures.job_fixtures import job_env, kinds, producer, wakes  # noqa: F401
 from fixtures.job_rows import make_project, sql
 
 from src.config.curation_accessors import base_curation_config

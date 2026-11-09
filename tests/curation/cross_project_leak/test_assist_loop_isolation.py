@@ -1,4 +1,3 @@
-# ruff: noqa: F811 - pytest fixtures are imported by name and used as test arguments
 """Auto-label loops belong to one project: its run rows, and its hold on retraining."""
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
-from fixtures.job_fixtures import job_env, kinds, producer, wakes  # noqa: F401
 from fixtures.job_rows import make_project
 
 from src.config.curation_accessors import base_curation_config

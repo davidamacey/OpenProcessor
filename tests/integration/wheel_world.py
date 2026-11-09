@@ -116,7 +116,7 @@ class RoutedOpenSearch:
 
     # ------------------------------------------------------------ operations
 
-    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:  # noqa: A002
+    async def get(self, *, index: str, id: str, **kw: Any) -> dict[str, Any]:
         return await self._pick('get', index).get(index=index, id=id, **kw)
 
     async def index(self, *, index: str, **kw: Any) -> dict[str, Any]:

@@ -62,14 +62,14 @@ class FakeItemsOpenSearch:
         def __init__(self, outer: FakeItemsOpenSearch) -> None:
             self._outer = outer
 
-        async def put_mapping(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+        async def put_mapping(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
             self._outer.mapping_puts.append(body)
             return {'acknowledged': True}
 
-        async def exists(self, index: str) -> bool:  # noqa: ARG002
+        async def exists(self, index: str) -> bool:
             return True
 
-    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         docs = [d for d in self.items.values() if _matches(d, body.get('query'))]
         aggs = body.get('aggs')
         if aggs:
@@ -88,7 +88,7 @@ class FakeItemsOpenSearch:
             }
         }
 
-    async def bulk(self, *, body: list[dict[str, Any]], refresh: Any = False) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, *, body: list[dict[str, Any]], refresh: Any = False) -> dict[str, Any]:
         self.bulk_bodies.append(body)
         out = []
         for action, doc in zip(body[0::2], body[1::2], strict=True):

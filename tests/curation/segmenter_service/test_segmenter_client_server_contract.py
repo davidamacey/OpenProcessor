@@ -45,7 +45,7 @@ class TestClientServerContract:
     @pytest.mark.asyncio
     async def test_candidate_source_is_the_configured_segmenter_name(
         self,
-        served: _FakeProcessor,  # noqa: ARG002
+        served: _FakeProcessor,
     ) -> None:
         async with _asgi_client() as http:
             client = SegmenterClient(

@@ -2,16 +2,6 @@
 
 from __future__ import annotations
 
-from fixtures.job_fixtures import (
-    FakeProducer,
-    FakeQueueHooks,
-    job_env,
-    kinds,
-    producer,
-    queue_hooks,
-    wakes,
-)
-
 from src.schemas.train_promote import PromoteRequest
 from src.services.training.class_remap import ClassRemapResult
 from src.services.training.job_models import TrainJobStatus
@@ -41,13 +31,4 @@ def make_plan(
     return plan, PromoteRequest(triton_name='det')
 
 
-__all__ = [
-    'FakeProducer',
-    'FakeQueueHooks',
-    'job_env',
-    'kinds',
-    'make_plan',
-    'producer',
-    'queue_hooks',
-    'wakes',
-]
+__all__ = ['make_plan']

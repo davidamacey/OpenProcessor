@@ -19,10 +19,10 @@ from src.services.config_store.store import reset_config_stores
 class Fake:
     """The OpenSearch client of the clone flow: only item counts and bulks are asked of it."""
 
-    async def count(self, index: str, body: Any = None) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, index: str, body: Any = None) -> dict[str, Any]:
         return {'count': 0}
 
-    async def bulk(self, body: list[Any], refresh: Any = False) -> dict[str, Any]:  # noqa: ARG002
+    async def bulk(self, body: list[Any], refresh: Any = False) -> dict[str, Any]:
         return {'errors': False, 'items': []}
 
 

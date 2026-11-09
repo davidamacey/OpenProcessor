@@ -69,17 +69,17 @@ class FakeTritonPool:
         self.batch_sizes: list[int] = []
         self.fail_on_batch_gt = fail_on_batch_gt
 
-    async def is_model_ready(self, model_name: str) -> bool:  # noqa: ARG002
+    async def is_model_ready(self, model_name: str) -> bool:
         return False
 
     async def load_model(self, model_name: str) -> None:
         # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
         raise InferenceServerException(f'{model_name}: not in the repository')
 
-    async def get_model_input_datatype(self, model_name: str) -> str:  # noqa: ARG002
+    async def get_model_input_datatype(self, model_name: str) -> str:
         return 'UINT8'
 
-    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:  # noqa: ARG002
+    async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:
         batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1
         if self.fail_on_batch_gt is not None and batch > self.fail_on_batch_gt:
             raise RuntimeError(f'model does not support batch={batch}')
@@ -107,11 +107,11 @@ class FakePEEncoder:
     def __init__(self) -> None:
         self.embed_crops_calls: list[int] = []
 
-    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:  # noqa: ARG002
+    async def embed_crops(self, crops: list[np.ndarray], max_batch: int = 32) -> np.ndarray:
         self.embed_crops_calls.append(len(crops))
         return np.tile(np.array([1.0, 0.0, 0.0], dtype=np.float32), (len(crops), 1))
 
-    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:  # noqa: ARG002
+    async def embed_whole_frame_image(self, img: Any) -> np.ndarray:
         return np.array([0.0, 1.0, 0.0], dtype=np.float32)
 
 

@@ -25,7 +25,6 @@ from typing import Any
 import pytest
 from _class_registry_fake import InMemoryRegistry
 
-from curation.dataset_import.db_fixture import import_database  # noqa: F401 - fixture
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 

@@ -51,7 +51,7 @@ class _StubOpenSearch:
         self.search_calls: list[dict[str, Any]] = []
         self.count_calls: list[dict[str, Any]] = []
 
-    async def search(self, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def search(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.search_calls.append(body)
         return {
             'hits': {'total': {'value': 12345, 'relation': 'eq'}},
@@ -80,7 +80,7 @@ class _StubOpenSearch:
             },
         }
 
-    async def count(self, index: str, body: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG002
+    async def count(self, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.count_calls.append(body)
         return {'count': 7}
 

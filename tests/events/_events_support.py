@@ -68,7 +68,7 @@ class FakePubSub:
 
     async def get_message(
         self,
-        ignore_subscribe_messages: bool = False,  # noqa: ARG002  # the real signature
+        ignore_subscribe_messages: bool = False,  # the real signature
         timeout: float = 0.0,
     ):
         self._check()
