@@ -55,8 +55,8 @@ def _client(
 def test_single_and_batch_use_the_model_input_size(monkeypatch: pytest.MonkeyPatch) -> None:
     client, sent, meta_calls = _client(320, monkeypatch)
     img = np.zeros((480, 600, 3), dtype=np.uint8)
-    client.infer_yolo_end2end(img, 'm')
-    client.infer_yolo_end2end_batch([img, img], 'm')
+    client.infer_fused_detector(img, 'm')
+    client.infer_fused_detector_batch([img, img], 'm')
     assert sent == [(1, 3, 320, 320), (2, 3, 320, 320)]
     assert meta_calls == ['m']  # cached after the first read
 

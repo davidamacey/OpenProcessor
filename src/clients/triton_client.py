@@ -9,7 +9,7 @@ Architecture:
 - Shared gRPC connection pool via TritonClientManager
 - Shared affine matrix calculation and JPEG parsing from utils/affine.py
 - Shared detection formatting from utils/affine.py
-- Clear method names: infer_yolo_end2end(), infer_yolo_clip_cpu()
+- Clear method names: infer_fused_detector(), infer_yolo_clip_cpu()
 
 Performance:
 - Sync client with thread pool: Proper backpressure, 200+ RPS
@@ -62,7 +62,7 @@ class TritonClient:
     at high concurrency (256+ clients). FastAPI handles async via thread pool.
 
     Pipelines:
-    - infer_yolo_end2end: fused detector engine (CPU preprocessing)
+    - infer_fused_detector: fused detector engine (CPU preprocessing)
     - infer_yolo_clip_cpu: YOLO + MobileCLIP (CPU preprocessing)
     - infer_ocr: PP-OCRv5 text detection + recognition (BLS pipeline)
     """
@@ -162,7 +162,7 @@ class TritonClient:
     # Fused detector: CPU preprocessing + TensorRT, NMS in the engine
     # =========================================================================
 
-    def infer_yolo_end2end(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
+    def infer_fused_detector(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
         """
         Fused-detector inference: CPU preprocessing + TensorRT with NMS in the engine.
 
@@ -173,10 +173,10 @@ class TritonClient:
         Returns:
             Dict with num_dets, boxes, scores, classes, orig_shape, scale, padding
         """
-        typed: dict[str, Any] = self.infer_yolo_end2end_batch([image_array], model_name)[0]
+        typed: dict[str, Any] = self.infer_fused_detector_batch([image_array], model_name)[0]
         return typed
 
-    def infer_yolo_end2end_batch(self, images: list, model_name: str) -> list:
+    def infer_fused_detector_batch(self, images: list, model_name: str) -> list:
         """
         Batch Fused-detector inference: CPU preprocessing + TensorRT with NMS in the engine.
 
