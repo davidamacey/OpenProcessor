@@ -288,3 +288,17 @@ async def test_the_result_carries_the_report_and_the_next_step(world: World) -> 
     assert run.result['next_steps'][0]['action'] == 'recluster'
     assert run.ctx.stages[0] == 'registry'
     assert 'images' in run.ctx.stages
+
+
+@pytest.mark.asyncio
+async def test_every_copied_image_claims_its_exact_key_in_the_target(
+    world: World, content_rows: Any
+) -> None:
+    build(world)
+    run, _ = await run_job(world, world.request(['cars-a', 'cars-b'], MAPPING))
+    assert run.status == 'completed'
+    images = world.images('combined')
+    assert images
+    assert sorted(content_rows.rows.items()) == sorted(
+        (d['imohash'], image_id) for image_id, d in images.items()
+    )
