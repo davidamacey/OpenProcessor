@@ -42,7 +42,7 @@ pytorch_models/
 ├── mobileclip2_s2_image_encoder.onnx   # MobileCLIP image encoder ONNX
 ├── mobileclip2_s2_text_encoder.onnx    # MobileCLIP text encoder ONNX
 ├── pe_image_encoder.onnx               # PE-Core-L14-336 image encoder ONNX
-└── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (installed into Triton by make pe-export-text-triton)
+└── pe_text_encoder.onnx                # PE-Core-L14-336 text encoder ONNX (installed into Triton by make pe-export-text-triton; the API does not mount it)
 
 models/
 ├── yolov11_small_trt/                  # YOLO11 TensorRT (standard)
@@ -133,7 +133,7 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`, `src/clients/pe_text_backends.py`) |
 |-------|----------|---------|-----------------------------------------------------|
 | Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
-| Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** (preferred: one shared CPU instance for every uvicorn worker), lazily-loaded in-process PyTorch fallback; in-process ONNX Runtime is an explicit opt-in only | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
+| Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** only (one shared CPU instance for every uvicorn worker); there is no in-process fallback | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
@@ -246,22 +246,12 @@ the `nn.MultiheadAttention` reshapes, so this exporter uses the
 `torch.export`-based exporter (`dynamo=True`, opset 18) with symbolic
 `Dim`s.
 
-The API picks the text backend at startup (`OP_PE_TEXT_BACKEND`, default
-`auto`): **Triton** `pe_text_encoder` if it reports ready, else a
-**lazily-loaded PyTorch eager** fallback (loaded once, on the first query
-a given worker actually serves — never at warm time). **ONNX Runtime**
-(`CPUExecutionProvider`, also lazy) only runs when explicitly pinned
-(`OP_PE_TEXT_BACKEND=onnx`); `auto` no longer considers it at all. This
-matters because it's an in-process backend: with N uvicorn workers, N
-independent ~1.4 GB ONNX Runtime sessions (or worse, N PyTorch eager
-loads) is exactly the failure this ordering avoids.
-Pin with `onnx` / `triton` / `torch`. A Triton call that fails switches
-the process to in-process encoding for good, so Triton is never a hard
-dependency. `GET /health/pe_text` (`make pe-text-status`) reports the
-active backend. Tokenization always stays in Python with PE's own
-`SimpleTokenizer`, so `perception_models` stays a runtime dependency (for
-the tokenizer only, when the PyTorch or ONNX in-process backend is
-used).
+Text encoding is Triton-only: the API sends tokens to the `pe_text_encoder`
+model and keeps no in-process encoder, so N uvicorn workers share one ~1.4 GB
+instance instead of loading N copies. The `OP_PE_TEXT_*` variables are
+retired and refused at startup. `GET /health/pe_text` (`make pe-text-status`)
+reports whether the Triton model is ready. Tokenization stays in Python with
+PE's own `SimpleTokenizer`.
 
 Reference CPU numbers (Xeon E5-2680 v3, 8 intra-op threads on a shared,
 loaded host — treat as relative; median ms per call, typical queries):
@@ -286,13 +276,12 @@ docker compose run --rm model-export python /app/export/export_pe_text_encoder.p
 
 `models/pe_text_encoder/config.pbtxt` (committed) is the rendered default
 (`--config-only` re-renders it): `text_tokens` `dims: [ -1 ]` so trimmed
-batches are accepted. The API only routes to it when no local ONNX file is
-configured or `OP_PE_TEXT_BACKEND=triton`.
+batches are accepted.
 
 | Flag | Purpose |
 |------|---------|
 | `--checkpoint-path`, `--no-verify-checkpoint` | As for the image exporter. |
-| `--onnx-out` | Destination (default `/app/pytorch_models/pe_text_encoder.onnx` = the API default). |
+| `--onnx-out` | Destination (default `/app/pytorch_models/pe_text_encoder.onnx`). |
 | `--install-triton`, `--models-dir`, `--kind`, `--gpus`, `--instance-count`, `--max-batch` | Triton model-repo entry. |
 | `--config-only` | Re-render only `config.pbtxt` (no torch needed). |
 | `--skip-validate`, `--skip-parity`, `--parity-threshold` | QA gates. A failed gate exits 1 and never installs into Triton. |
@@ -371,8 +360,7 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
   trimmed after the batch's last EOT by the client
 - Output: `text_embeddings` `[B, 1024]` FP32, L2-normalized
 - Served by Triton `pe_text_encoder` (`onnxruntime_onnx`, CPU, max batch 32,
-  preferred), else a lazily loaded in-process PyTorch fallback; in-process ONNX
-  Runtime only with `OP_PE_TEXT_BACKEND=onnx`
+  the only text backend)
 
 ### PP-OCRv5 Detection
 - Input: `[B, 3, H, W]` FP32, dynamic size
