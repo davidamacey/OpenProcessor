@@ -137,7 +137,7 @@ class TestStoredBoxes:
 
     def _boxes(self, seed: int) -> list[tuple[float, ...]]:
         rng = np.random.default_rng(seed)
-        out = list(self.BOXES)
+        out: list[tuple[float, ...]] = list(self.BOXES)
         for _ in range(300):
             x1, x2 = sorted(float(v) for v in rng.random(2))
             y1, y2 = sorted(float(v) for v in rng.random(2))
