@@ -66,11 +66,10 @@ class Harness:
         self.resolutions: dict[str, list[CombinedResolution]] = {}
         self.replies_for: dict[str, Any] = {}
         self.metric = MagicMock()
-        self.ctx = PipelineContext(  # type: ignore[call-arg]
+        self.ctx = PipelineContext(
             args=MagicMock(),
             stop_event=asyncio.Event(),
             opensearch=MagicMock(),
-            sentinel=MagicMock(),
             started_at=0.0,
             region_embed_pe=None,
             project_registry=MagicMock(),
