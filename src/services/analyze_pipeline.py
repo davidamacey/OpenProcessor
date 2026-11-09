@@ -33,6 +33,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# What a failed crop-embedding batch raises (Triton call, retries spent, a crop that will not
+# decode): the detections are still returned, without embeddings. Anything else is a bug.
+_CROP_EMBED_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, ValueError, RuntimeError)
+
 
 @lru_cache(maxsize=1)
 def get_inference_service() -> InferenceService:
@@ -56,9 +60,7 @@ def detections_from_yolo(
     detections: list[DetectionResult] = []
     if yolo_clip_result.get('num_dets', 0) > 0:
         formatted = format_detections_from_triton(
-            yolo_clip_result,
-            input_size=yolo_clip_result['input_size'],
-            model_name=TritonModelConfig.YOLO_MODEL,
+            yolo_clip_result, model_name=TritonModelConfig.YOLO_MODEL
         )
         detections.extend(
             DetectionResult(
@@ -217,7 +219,7 @@ def _attach_crop_embeddings(
         if crop_embeddings is not None:
             for i, det in enumerate(detections):
                 det.embedding = crop_embeddings[i].tolist()
-    except TRITON_CALL_ERRORS:
+    except _CROP_EMBED_ERRORS:
         logger.warning('Failed to generate batched crop embeddings')
 
 
@@ -331,7 +333,7 @@ def _embed_detection_crops(
         crop_embeddings = client.infer_mobileclip_batch(batch_tensor)
         for det_i, det in enumerate(detections):
             det.embedding = crop_embeddings[det_i].tolist()
-    except TRITON_CALL_ERRORS:
+    except _CROP_EMBED_ERRORS:
         logger.warning(f'Failed to generate crop embeddings for {filename}')
 
 

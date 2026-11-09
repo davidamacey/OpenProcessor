@@ -3,8 +3,9 @@ Triton models it names).
 
 Shape is checked on every save; servability only when activating (a saved
 profile may name a model that is not loaded yet, as a region profile can). The
-primary must serve the end2end four-tensor contract ingest reads; the secondary
-the single raw tensor the ensemble path reads. ``force`` bypasses only a Triton
+primary must serve the fused ``[300, 6]`` detection tensor ingest reads (an engine
+exported before that contract is refused with the export command); the secondary the single
+raw tensor the ensemble path reads. ``force`` bypasses only a Triton
 outage (``triton_unreachable``, which may be stale); a model that is loaded but
 not ready or lacks the outputs is never bypassable.
 """
@@ -16,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 from tritonclient.utils import InferenceServerException
 
-from src.clients.model_adapters import END2END_OUTPUTS
+from src.clients.model_adapters import FUSED_OUTPUT, is_fused_shape
 from src.schemas.curation.config_common import ValidationReport
 from src.schemas.curation.ingest_profile import IngestProfileBody
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
@@ -77,11 +78,16 @@ def _shape_issues(body: dict[str, Any]) -> list[ValidationIssue]:
 
 
 async def _servable_issues(
-    pool: Any, model: str, required: Sequence[str], field: str
+    pool: Any, model: str, required: Sequence[str], field: str, *, fused: bool = False
 ) -> list[ValidationIssue]:
     try:
         ready = await pool.is_model_ready(model)
         outputs = set(await pool.get_model_output_names(model)) if ready else set()
+        shape = (
+            await pool.get_model_output_shape(model, FUSED_OUTPUT)
+            if fused and FUSED_OUTPUT in outputs
+            else None
+        )
     except (InferenceServerException, OSError, TimeoutError, RuntimeError) as exc:
         return [
             _issue('triton_unreachable', 'error', f'Triton could not be asked: {exc}', field=field)
@@ -102,6 +108,16 @@ async def _servable_issues(
                 'detector_model_unusable',
                 'error',
                 f'{model!r} does not serve the outputs ingest reads: {missing}',
+                field=field,
+            )
+        ]
+    if shape is not None and not is_fused_shape(shape):
+        return [
+            _issue(
+                'detector_model_unusable',
+                'error',
+                f'{model!r} declares {FUSED_OUTPUT!r} as {list(shape)}, not the fused '
+                '[300, 6] detection tensor; export the model again (./openprocessor export)',
                 field=field,
             )
         ]
@@ -134,7 +150,9 @@ async def validate_ingest_profile(
             )
         else:
             errors.extend(
-                await _servable_issues(pool, spec.primary.model, END2END_OUTPUTS, 'primary.model')
+                await _servable_issues(
+                    pool, spec.primary.model, (FUSED_OUTPUT,), 'primary.model', fused=True
+                )
             )
             if spec.secondary is not None:
                 errors.extend(

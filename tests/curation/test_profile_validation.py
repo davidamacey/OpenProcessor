@@ -241,9 +241,9 @@ def test_detector_model_not_ready_errors_on_activation_unless_force() -> None:
     assert report.force_allowed is True
 
 
-def _config_with_outputs(*names: str) -> Any:
+def _config_with_outputs(*names: str, dims: tuple[str, ...] = ('300', '6')) -> Any:
     async def _config(_model: str) -> dict[str, Any] | None:
-        return {'name': 'my_detector', 'output': [{'name': n} for n in names]}
+        return {'name': 'my_detector', 'output': [{'name': n, 'dims': list(dims)} for n in names]}
 
     return _config
 
@@ -278,6 +278,45 @@ def test_detector_with_output0_activates() -> None:
         )
     )
     assert not any(e.code == 'detector_model_unusable' for e in report.errors)
+
+
+@pytest.mark.parametrize(
+    ('dims', 'for_activation'),
+    [(('5', '8400'), False), (('5', '8400'), True), (('300', '5'), False), ((), False)],
+)
+def test_detector_with_a_raw_head_is_an_error_on_every_save_naming_the_export_command(
+    dims: tuple[str, ...], for_activation: bool
+) -> None:
+    body = _body(detector_model='my_detector', text_reader='none')
+    report = _run(
+        validate_profile(
+            None,
+            body,
+            get_repository_index=_always_reachable,
+            get_model_config=_config_with_outputs('output0', dims=dims),
+            for_activation=for_activation,
+        )
+    )
+    assert not report.ok
+    issue = next(e for e in report.errors if e.code == 'detector_model_unusable')
+    assert str([int(d) for d in dims]) in issue.message
+    assert 'export' in issue.message
+    assert issue.field == 'detector_model'
+    assert issue.bypassable is False
+
+
+def test_detector_with_the_fused_head_saves_without_a_head_issue() -> None:
+    body = _body(detector_model='my_detector', text_reader='none')
+    report = _run(
+        validate_profile(
+            None,
+            body,
+            get_repository_index=_always_reachable,
+            get_model_config=_config_with_outputs('output0', dims=('300', '6')),
+        )
+    )
+    assert report.ok
+    assert not any(i.code == 'detector_model_unusable' for i in [*report.errors, *report.warnings])
 
 
 def test_detector_config_unreadable_fails_closed_at_activation() -> None:

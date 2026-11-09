@@ -155,12 +155,12 @@ def whole_square_geometry(w: int, h: int, target: int) -> Square:
 
 
 def undo_letterbox(
-    box: tuple[float, float, float, float], net: int, lb: Letterbox
+    box: tuple[float, float, float, float], lb: Letterbox
 ) -> tuple[float, float, float, float]:
-    """A detector box (normalized to the network input) in frame pixels, as
-    ``WholeImageDetector.decode_primary_row`` maps it."""
+    """A detector box (letterboxed network-input pixels, as the fused engine emits it) in frame
+    pixels, as ``WholeImageDetector.decode_primary_row`` maps it."""
     s = max(lb.scale, 1e-6)
-    x1, y1, x2, y2 = (float(v) * net for v in box)
+    x1, y1, x2, y2 = (float(v) for v in box)
     return ((x1 - lb.pad_w) / s, (y1 - lb.pad_h) / s, (x2 - lb.pad_w) / s, (y2 - lb.pad_h) / s)
 
 

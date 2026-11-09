@@ -66,7 +66,7 @@ def test_a_matching_build_writes_every_engine_column(pg, export_env) -> None:
     assert stamp.startswith('min1/opt8/max16 640x640 ')
     assert onnx is None  # the fake build leaves no ONNX
     assert len(sha) == 64
-    assert (mib, maxb, opt, trt, arch) == (900, 16, 8, '11.1.0.106', 'sm_86')
+    assert (mib, maxb, opt, trt, arch) == (900, 16, 8, '11.4.0.106', 'sm_86')
     assert key == f'models/{export_env.engine_of(job)}/1/model.plan'
     assert build_job == job.id
     assert built_at is not None

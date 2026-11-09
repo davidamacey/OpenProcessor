@@ -17,6 +17,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 
+# Read by ultralytics.utils at import: no package is pip-installed from inside a test.
+os.environ.setdefault('YOLO_AUTOINSTALL', 'False')
+
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
 pytest_plugins = [
     'fixtures.postgres',
@@ -452,7 +455,7 @@ def _detector_config_is_usable(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.services.models.triton_control import TritonControlService
 
     async def _config(_self: object, _model: str) -> dict[str, object]:
-        return {'output': [{'name': 'output0'}]}
+        return {'output': [{'name': 'output0', 'dims': ['300', '6']}]}
 
     monkeypatch.setattr(TritonControlService, 'get_model_config', _config)
 

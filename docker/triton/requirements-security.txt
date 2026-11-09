@@ -1,0 +1,9 @@
+# Security floors for the Python env of the Triton base image, exact so the build is reproducible.
+# Installed with --upgrade by Dockerfile.triton before the torch set.
+# - anyio >=4.14.2 clears CVE-2026-63374; starlette 1.x accepts any anyio >=3.6.
+# - certifi >=2026.10.18 clears GHSA-6q48-6c7w-9gw2, a CRITICAL the release gate fails on.
+starlette==1.10.0
+anyio==4.16.0
+certifi==2026.10.23
+filelock==4.2.9
+virtualenv==21.15.6

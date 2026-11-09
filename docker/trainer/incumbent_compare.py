@@ -63,6 +63,35 @@ SCORE_THRESHOLD = 0.25
 _LETTERBOX_FILL = 114
 
 
+class IncumbentInferenceError(RuntimeError):
+    """The incumbent could not be scored; the comparison must fail, not read as "no detections"."""
+
+
+def incumbent_input_datatype(triton_model: str, http_url: str = TRITON_HTTP_URL) -> str:
+    """Datatype of the incumbent's ``images`` input from Triton's model metadata.
+
+    KServe v2 ``GET /v2/models/{name}`` lists each input's ``datatype``
+    (KServe v2 inference protocol, "Model Metadata", as served by Triton). The in-graph-normalised
+    engines this repo builds take ``UINT8`` pixels; an older engine takes ``FP32`` 0..1.
+    """
+    import requests
+
+    try:
+        resp = requests.get(f'{http_url}/v2/models/{triton_model}', timeout=10)
+        resp.raise_for_status()
+        inputs = {t['name']: t['datatype'] for t in resp.json()['inputs']}
+        datatype = inputs['images']
+    except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
+        raise IncumbentInferenceError(
+            f'cannot read the input metadata of {triton_model}: {exc}'
+        ) from exc
+    if datatype not in ('FP32', 'UINT8'):
+        raise IncumbentInferenceError(
+            f'{triton_model} takes {datatype} images; only FP32 and UINT8 can be fed'
+        )
+    return str(datatype)
+
+
 # ---------------------------------------------------------------------------
 # Candidate-side metric extraction (Ultralytics artifacts)
 # ---------------------------------------------------------------------------
@@ -213,10 +242,7 @@ def resolve_incumbent_model_name(http_url: str = TRITON_HTTP_URL) -> str | None:
         resp = requests.post(f'{http_url}/v2/repository/index', timeout=5)
         resp.raise_for_status()
         loaded = {entry.get('name') for entry in resp.json() if entry.get('state') == 'READY'}
-    except (
-        requests.RequestException,
-        ValueError,
-    ) as exc:  # transport, HTTP status or non-JSON body: no incumbent
+    except (requests.RequestException, ValueError) as exc:  # a failed probe means "no incumbent"
         log.warning('compare: triton repository probe failed: %s', exc)
         return None
     for cand in candidates:
@@ -297,8 +323,9 @@ def run_incumbent_inference(
     Returns per-image detections as ``[(x1, y1, x2, y2, score, class_id), ...]``
     in the *original* image's pixel space. Uses Triton's HTTP v2 ``infer``
     endpoint with a JSON envelope so the trainer image doesn't need
-    ``tritonclient``. Assumes the end-to-end NMS output signature
-    (``num_dets``/``det_boxes``/``det_scores``/``det_classes``) this repo's
+    ``tritonclient``, and sends the pixels in the datatype the incumbent's metadata
+    declares. Any inference error raises :class:`IncumbentInferenceError`. Reads the fused ``output0`` tensor (``[1, 300, 6]`` rows
+    ``x1, y1, x2, y2, score, class`` in letterbox pixels, zero-padded) this repo's
     promote path emits.
     """
     try:
@@ -306,9 +333,9 @@ def run_incumbent_inference(
         import numpy as np
         import requests
     except ImportError as exc:
-        log.warning('compare: missing deps for incumbent inference: %s', exc)
-        return []
+        raise IncumbentInferenceError(f'missing deps for incumbent inference: {exc}') from exc
 
+    datatype = incumbent_input_datatype(triton_model, http_url)
     out: list[list[Detection]] = []
     sample = image_paths[:max_images]
     url = f'{http_url}/v2/models/{triton_model}/infer'
@@ -330,50 +357,43 @@ def run_incumbent_inference(
             pad_h = (COMPARE_INPUT_SIZE - new_h) // 2
             canvas[pad_h : pad_h + new_h, pad_w : pad_w + new_w] = resized
             rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
-            chw = np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1))[None, ...]
+            if datatype == 'UINT8':
+                chw = np.transpose(rgb, (2, 0, 1))[None, ...]
+            else:
+                chw = np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1))[None, ...]
 
             payload = {
                 'inputs': [
                     {
                         'name': 'images',
                         'shape': list(chw.shape),
-                        'datatype': 'FP32',
+                        'datatype': datatype,
                         'data': chw.flatten().tolist(),
                     }
                 ],
-                'outputs': [
-                    {'name': 'num_dets'},
-                    {'name': 'det_boxes'},
-                    {'name': 'det_scores'},
-                    {'name': 'det_classes'},
-                ],
+                'outputs': [{'name': 'output0'}],
             }
             resp = requests.post(url, json=payload, timeout=30)
             resp.raise_for_status()
             outputs_by_name = {o['name']: o for o in resp.json().get('outputs', [])}
-            num_dets = int(outputs_by_name['num_dets']['data'][0])
-            boxes_flat = outputs_by_name['det_boxes']['data']
-            scores = outputs_by_name['det_scores']['data']
-            classes = outputs_by_name['det_classes']['data']
-            dets: list[Detection] = []
-            for i in range(num_dets):
-                bx = boxes_flat[i * 4 : (i + 1) * 4]
-                if len(bx) != 4:
-                    continue
-                dets.append(
-                    (
-                        (bx[0] - pad_w) / scale,
-                        (bx[1] - pad_h) / scale,
-                        (bx[2] - pad_w) / scale,
-                        (bx[3] - pad_h) / scale,
-                        float(scores[i]),
-                        int(classes[i]),
-                    )
+            if 'output0' not in outputs_by_name:
+                raise IncumbentInferenceError(f'{triton_model} returned no output0 tensor')
+            rows = np.asarray(outputs_by_name['output0']['data'], dtype=np.float64).reshape(-1, 6)
+            dets: list[Detection] = [
+                (
+                    (row[0] - pad_w) / scale,
+                    (row[1] - pad_h) / scale,
+                    (row[2] - pad_w) / scale,
+                    (row[3] - pad_h) / scale,
+                    float(row[4]),
+                    int(row[5]),
                 )
+                for row in rows
+                if row[4] > 0.0
+            ]
             out.append(dets)
-        except Exception as exc:  # one bad image must not abort the sweep
-            log.warning('compare: incumbent infer failed for %s: %s', img_path, exc)
-            out.append([])
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            raise IncumbentInferenceError(f'incumbent infer failed for {img_path}: {exc}') from exc
     return out
 
 

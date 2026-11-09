@@ -10,7 +10,7 @@ conventions this repo uses.
 git clone https://github.com/davidamacey/OpenProcessor.git
 cd OpenProcessor
 python3 -m venv .venv
-.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
 .venv/bin/pip install -r requirements-test.txt pre-commit
 .venv/bin/pre-commit install
 ```
@@ -190,7 +190,8 @@ keep the old values).
 
 Two production Dockerfiles at the repo root: `Dockerfile` (the FastAPI `api`
 image, with `export` and `evaluator` targets; base `python:3.13-slim-trixie`) and
-`Dockerfile.triton` (Triton; base `nvcr.io/nvidia/tritonserver:26.06-py3`).
+`Dockerfile.triton` (Triton; base `nvcr.io/nvidia/tritonserver:26.10-py3`). The `api` image
+stays on Python 3.13 because `faiss-gpu-cu12` requires Python below 3.14; the trainer image is on 3.14.
 `scripts/docker-build-push.sh` builds, scans and pushes them:
 
 ```bash

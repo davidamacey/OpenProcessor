@@ -637,12 +637,10 @@ licenses. The AGPL-3.0-or-later license above applies to the original code
 written for this project. The following components are governed by their
 respective licenses (see [ATTRIBUTION.md](ATTRIBUTION.md) for full details):
 
-1. Ultralytics YOLO (levipereira/ultralytics fork), vendored in
-   src/ultralytics_patches/
+1. Ultralytics YOLO (the `ultralytics` package, a dependency, not vendored)
    License: AGPL-3.0
-   Note: End-to-end TensorRT export code (~600 lines) used for model export.
-         This project as a whole is licensed AGPL-3.0-or-later precisely
-         because it incorporates this AGPL-3.0 component.
+   Note: Used to load and export detection models. This project as a whole
+         is licensed AGPL-3.0-or-later.
          See: https://www.gnu.org/licenses/agpl-3.0.en.html
 
 2. NVIDIA Triton Inference Server

@@ -593,26 +593,21 @@ download-models: ## Fetch the .pt/.onnx weights export-models etc. need (yolo11s
 	$(EXPORT_RUN) bash -c 'source scripts/lib/download.sh && download_essential_models'
 
 .PHONY: export-models
-export-models: ## Export YOLO models (TRT + End2End with normalized boxes)
-	@echo "Exporting YOLO models to TensorRT formats (normalized boxes)..."
+export-models: ## Export the default YOLO11 detector (fused TensorRT engine, boxes in input pixels)
+	@echo "Exporting the default detector to a TensorRT engine..."
 	@echo "(run 'make download-models' first on a fresh clone if yolo11s.pt is missing)"
-	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
+	$(EXPORT_RUN) python /app/export/ultralytics_export.py --models small --formats trt
 
 .PHONY: export-all
-export-all: ## Export all models (nano through xlarge) in all formats
-	@echo "Exporting all YOLO models in all formats (normalized boxes)..."
+export-all: ## Export all YOLO11 sizes (nano through xlarge) as TensorRT engines
+	@echo "Exporting all YOLO11 sizes..."
 	@echo "WARNING: This will take 60-120 minutes depending on GPU"
-	$(EXPORT_RUN) python /app/export/export_models.py --models nano small medium large xlarge --formats all --normalize-boxes --save-labels --generate-config
-
-.PHONY: export-small
-export-small: ## Quick export for small model (TRT + End2End with normalized boxes)
-	@echo "Exporting small model (TRT + End2End, normalized boxes)..."
-	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats trt trt_end2end --normalize-boxes --save-labels --generate-config
+	$(EXPORT_RUN) python /app/export/ultralytics_export.py --models nano small medium large xlarge --formats all
 
 .PHONY: export-onnx
-export-onnx: ## Export ONNX-only format (with normalized boxes)
-	@echo "Exporting ONNX models only (normalized boxes)..."
-	$(EXPORT_RUN) python /app/export/export_models.py --models small --formats onnx onnx_end2end --normalize-boxes --save-labels
+export-onnx: ## Export the default detector's fused ONNX only (no engine)
+	@echo "Exporting the fused ONNX only..."
+	$(EXPORT_RUN) python /app/export/ultralytics_export.py --models small --formats onnx
 
 .PHONY: export-custom
 export-custom: ## Export custom model (usage: make export-custom MODEL=/path/to/model.pt [NAME=custom_name] [BATCH=32])
@@ -629,12 +624,9 @@ export-custom: ## Export custom model (usage: make export-custom MODEL=/path/to/
 	if [ -n "$(NAME)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:$(NAME)"; elif [ -n "$(BATCH)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:"; fi; \
 	if [ -n "$(BATCH)" ]; then CUSTOM_ARG="$$CUSTOM_ARG:$(BATCH)"; fi; \
 	echo "Exporting custom model: $$CUSTOM_ARG"; \
-	$(EXPORT_RUN) python /app/export/export_models.py \
+	$(EXPORT_RUN) python /app/export/ultralytics_export.py \
 		--custom-model "$$CUSTOM_ARG" \
-		--formats trt trt_end2end \
-		--normalize-boxes \
-		--save-labels \
-		--generate-config
+		--formats trt
 
 .PHONY: export-config
 export-config: ## Export models from YAML config file (usage: make export-config CONFIG=/path/to/config.yaml)
@@ -651,16 +643,13 @@ export-config: ## Export models from YAML config file (usage: make export-config
 		exit 1; \
 	fi
 	@echo "Exporting models from config: $(CONFIG)"
-	$(EXPORT_RUN) python /app/export/export_models.py \
+	$(EXPORT_RUN) python /app/export/ultralytics_export.py \
 		--config-file "$(CONFIG)" \
-		--formats trt trt_end2end \
-		--normalize-boxes \
-		--save-labels \
-		--generate-config
+		--formats trt
 
 .PHONY: export-list
 export-list: ## List available built-in models
-	@$(EXPORT_RUN) python /app/export/export_models.py --list-models
+	@$(EXPORT_RUN) python /app/export/ultralytics_export.py --list-models
 
 .PHONY: export-mobileclip
 export-mobileclip: ## Export MobileCLIP models

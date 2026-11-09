@@ -79,13 +79,6 @@ def declared_input(size: int = IMG_SIZE) -> EngineInputContract:
     )
 
 
-def declared_output_kind(engine_name: str, head_kind: str) -> str:
-    """``end2end_boxes`` when NMS is in the graph (the NMS-free head, or ``*_trt_end2end``)."""
-    if head_kind == 'one2one' or engine_name.endswith('_trt_end2end'):
-        return 'end2end_boxes'
-    return 'anchors_raw'
-
-
 def read_plan(plan_path: Path) -> PlanFacts:
     """Deserialize ``plan_path`` and describe its I/O tensors (TensorRT Python API)."""
     import tensorrt as trt
@@ -185,11 +178,9 @@ def measured_mib(before: float, after: float) -> int | None:
     return round(delta) if delta > 0 else None
 
 
-def contracts_for(
-    plan: PlanFacts, *, engine_name: str, head_kind: str
-) -> tuple[dict[str, Any], dict[str, Any], int]:
+def contracts_for(plan: PlanFacts) -> tuple[dict[str, Any], dict[str, Any], int]:
     """Check ``plan`` against the declared contract and return the two jsonb values and the size."""
     declared = declared_input()
     size = check_contract(plan, declared)
-    out = output_contract(plan, declared_output_kind(engine_name, head_kind))
+    out = output_contract(plan, 'end2end_boxes')
     return declared.model_dump(mode='json'), out.model_dump(mode='json'), size

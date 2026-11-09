@@ -31,7 +31,6 @@ src/
 ├── config/              # settings.py, curation config, project context, retired-env guard
 ├── core/                # CORS, dependencies, error handlers, logging, metrics, upload limits
 ├── utils/               # Image decode, preprocessing, atomic writes (see utils/README.md)
-├── ultralytics_patches/ # Vendored YOLO export patches (see ultralytics_patches/README.md)
 └── static/docs/         # Self-hosted Swagger UI and ReDoc assets
 ```
 

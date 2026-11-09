@@ -10,45 +10,22 @@ input [
   }
 ]
 
+# One row per detection, [x1, y1, x2, y2, score, class], in letterboxed input pixels
 output [
   {
-    name: "num_dets"
-    data_type: TYPE_INT32
-    dims: [ 1 ]
-  },
-  {
-    name: "det_boxes"
-    # Boxes/scores precision follows the built engine (TRT-version
-    # dependent); the exporter rewrites this config from the engine. The values
-    # here are what the default FP16 build produces (FP32 boxes, FP16 scores).
+    name: "output0"
     data_type: TYPE_FP32
-    dims: [ 300, 4 ]
-  },
-  {
-    name: "det_scores"
-    data_type: TYPE_FP16
-    dims: [ 300 ]
-  },
-  {
-    name: "det_classes"
-    data_type: TYPE_INT32
-    dims: [ 300 ]
+    dims: [ 300, 6 ]
   }
 ]
 
 dynamic_batching {
   preferred_batch_size: [ 8, 16, 32, 64 ]
-  # 25ms (was 5ms): under sustained ingest the per-image arrival rate is
-  # too slow to assemble preferred-size batches in 5ms, so Triton fired
-  # near batch=1. 25ms reaches batch 8-16 while staying well inside the
-  # request latency budget.
   max_queue_delay_microseconds: 25000
 }
 
 instance_group [
   {
-    # Baseline for 12 GB cards (each context is ~1.8 GB at max_batch 64).
-    # Raise to 3+ on 24 GB+ GPUs for higher ingest throughput.
     count: 2
     kind: KIND_GPU
     gpus: [ 0 ]

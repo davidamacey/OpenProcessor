@@ -9,14 +9,14 @@ Architecture:
 - Shared gRPC connection pool via TritonClientManager
 - Shared affine matrix calculation and JPEG parsing from utils/affine.py
 - Shared detection formatting from utils/affine.py
-- Clear method names: infer_yolo_end2end(), infer_yolo_clip_cpu()
+- Clear method names: infer_fused_detector(), infer_yolo_clip_cpu()
 
 Performance:
 - Sync client with thread pool: Proper backpressure, 200+ RPS
 - Shared connection enables Triton dynamic batching (5-10x throughput)
 
 Active models:
-- yolov11_small_trt_end2end: Object detection (YOLO11 End2End TRT)
+- yolov11_small_trt_end2end: Object detection (fused [300, 6] TRT engine)
 - scrfd_10g_bnkps: Face detection with 5-point landmarks (SCRFD)
 - arcface_w600k_r50: Face embedding extraction (ArcFace)
 - mobileclip2_s2_image_encoder: Image embedding (MobileCLIP)
@@ -62,7 +62,7 @@ class TritonClient:
     at high concurrency (256+ clients). FastAPI handles async via thread pool.
 
     Pipelines:
-    - infer_yolo_end2end: End2End TRT + GPU NMS (CPU preprocessing)
+    - infer_fused_detector: fused detector engine (CPU preprocessing)
     - infer_yolo_clip_cpu: YOLO + MobileCLIP (CPU preprocessing)
     - infer_ocr: PP-OCRv5 text detection + recognition (BLS pipeline)
     """
@@ -104,7 +104,7 @@ class TritonClient:
         )
 
     def _read_model_info(self, model_name: str) -> tuple[DetectionAdapter, int, str]:
-        """Output adapter (YOLO11 end2end 4-tensor or YOLO26 fused) and the
+        """Output adapter (the fused ``[300, 6]`` detector contract) and the
         square input size ``model_name`` was exported at (``images`` is
         ``[N, 3, H, W]``; 640 when dynamic or absent) and the datatype of its
         ``images`` input (UINT8 or FP32), cached for
@@ -159,12 +159,12 @@ class TritonClient:
         return self._read_model_info(model_name)[2]
 
     # =========================================================================
-    # YOLO End2End: CPU Preprocessing + TensorRT + GPU NMS
+    # Fused detector: CPU preprocessing + TensorRT, NMS in the engine
     # =========================================================================
 
-    def infer_yolo_end2end(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
+    def infer_fused_detector(self, image_array: np.ndarray, model_name: str) -> dict[str, Any]:
         """
-        YOLO End2End inference: CPU preprocessing + TensorRT with GPU NMS.
+        Fused-detector inference: CPU preprocessing + TensorRT with NMS in the engine.
 
         Args:
             image_array: Preprocessed image (HWC, BGR, 0-255) from cv2.imdecode
@@ -173,12 +173,12 @@ class TritonClient:
         Returns:
             Dict with num_dets, boxes, scores, classes, orig_shape, scale, padding
         """
-        typed: dict[str, Any] = self.infer_yolo_end2end_batch([image_array], model_name)[0]
+        typed: dict[str, Any] = self.infer_fused_detector_batch([image_array], model_name)[0]
         return typed
 
-    def infer_yolo_end2end_batch(self, images: list, model_name: str) -> list:
+    def infer_fused_detector_batch(self, images: list, model_name: str) -> list:
         """
-        Batch YOLO End2End inference: CPU preprocessing + TensorRT with GPU NMS.
+        Batch Fused-detector inference: CPU preprocessing + TensorRT with NMS in the engine.
 
         Args:
             images: List of images (HWC, BGR, 0-255) from cv2.imdecode
@@ -230,7 +230,6 @@ class TritonClient:
                 'orig_shape': orig_shapes[i],
                 'scale': scales[i],
                 'padding': paddings[i],
-                'input_size': size,
             }
             for i, detections in enumerate(adapter.parse(response, batch_size))
         ]
@@ -268,8 +267,7 @@ class TritonClient:
         # CLIP preprocessing (CPU resize/crop)
         clip_input = self._preprocess_clip_cpu(img_array)
 
-        # Run YOLO TRT inference (default detector; adapter handles either
-        # the end2end 4-tensor or the fused single-tensor contract)
+        # Run YOLO TRT inference (default detector; the adapter reads the fused tensor)
         adapter = self._get_detection_adapter(yolo_model)
         yolo_inputs = [images_input(yolo_input, self._model_input_datatype(yolo_model))]
         yolo_outputs = [InferRequestedOutput(name) for name in adapter.requested_outputs]
@@ -300,7 +298,7 @@ class TritonClient:
                 (orig_h, orig_w),
                 scale,
                 padding,
-                yolo_size,
+                detections['box_frame'],
             ).astype(np.float32)
             from src.utils.cpu_preprocess import embed_boxes_from_full_res
 
@@ -314,7 +312,6 @@ class TritonClient:
             'orig_shape': (orig_h, orig_w),
             'scale': scale,
             'padding': padding,
-            'input_size': yolo_size,
             'normalized_boxes': normalized_boxes,
             'box_embeddings': box_embeddings,
         }
@@ -398,9 +395,7 @@ class TritonClient:
         ``model_name`` the detection came from (see
         :func:`src.utils.affine.format_detections_from_triton`).
         """
-        return format_detections_from_triton(
-            result, input_size=result.get('input_size', 640), model_name=model_name
-        )
+        return format_detections_from_triton(result, model_name=model_name)
 
     # =========================================================================
     # Optimized Batched Inference Methods (Bypass Python BLS)

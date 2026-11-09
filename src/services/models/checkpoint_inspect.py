@@ -1,6 +1,5 @@
 """What an uploaded ``.pt`` checkpoint is, read without running anything from it.
 
-* :func:`head_kind` says which export toolchain the detection head needs.
 * :func:`is_original_yolov5` recognises a checkpoint written by the original ``ultralytics/yolov5``
   repository, which the Ultralytics library cannot load (YOLOv5u checkpoints are the supported
   form: https://docs.ultralytics.com/models/yolov5/).
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import pickletools  # nosec B403 - only disassembles a pickle stream, never loads it
 import zipfile
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
@@ -45,11 +44,3 @@ def is_original_yolov5(path: Path) -> bool:
         )
     except (ValueError, EOFError, IndexError):  # a stream pickletools cannot read
         return False
-
-
-def head_kind(model: Any) -> str:
-    """``one2one`` for the NMS-free head (YOLO26, YOLOv10), else ``nms``.
-
-    ``model.end2end`` is not reliable: a loaded ``yolo26n.pt`` reports ``False`` on 8.4.197.
-    """
-    return 'one2one' if hasattr(model.model[-1], 'one2one_cv2') else 'nms'

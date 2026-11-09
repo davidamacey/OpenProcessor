@@ -8,7 +8,7 @@
 # usage: test_triton.sh [image_tag] [gpu_index]
 set -euo pipefail
 
-TAG="${1:-triton-hardened:26.06}"
+TAG="${1:-triton-hardened:26.10}"
 GPU="${2:-2}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$HERE/model_repository"

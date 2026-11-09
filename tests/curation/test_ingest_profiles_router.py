@@ -119,10 +119,28 @@ def test_activation_requires_a_servable_model_and_force_does_not_bypass(
     assert client.get(f'{PREFIX}/active').json()['active']['name'] is None
 
     pool.ready['birds'] = True
-    pool.outputs['birds'] = ['output0']
+    pool.outputs['birds'] = ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
     r = client.post(f'{PREFIX}/birds/activate', json={})
     assert r.status_code == 422
     assert _codes(r) == ['detector_model_unusable']
+
+
+def test_a_primary_whose_output0_is_not_the_fused_tensor_is_refused_with_the_export_command(
+    client: TestClient, pool: Pool
+) -> None:
+    client.post(PREFIX, json={'name': 'birds', 'body': body()})
+    pool.shapes['birds'] = (-1, 5, 8400)
+    r = client.post(f'{PREFIX}/birds/activate', json={'force': True})
+    assert r.status_code == 422
+    assert _codes(r) == ['detector_model_unusable']
+    assert 'export' in r.json()['detail']['report']['errors'][0]['message']
+    assert client.get(f'{PREFIX}/active').json()['active']['name'] is None
+
+
+def test_a_primary_serving_the_fused_tensor_activates(client: TestClient, pool: Pool) -> None:
+    client.post(PREFIX, json={'name': 'birds', 'body': body()})
+    pool.shapes['birds'] = (300, 6)
+    assert client.post(f'{PREFIX}/birds/activate', json={}).status_code == 200
 
 
 def test_the_secondary_is_checked_against_the_raw_output_contract(

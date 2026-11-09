@@ -13,7 +13,7 @@ Pipeline, per image:
 
 1. Decode (EXIF-transposed) + exact-content dedup (``imohash`` against ``image_contents``, confirmed by SHA-256).
 2. Run the primary detector (:class:`~src.config.DetectionProfile`,
-   an end2end model whose Triton response is already NMS'd) over the
+   a fused model whose ``[300, 6]`` Triton output is already NMS'd) over the
    full image.
 3. If a secondary ``DetectionProfile`` is configured, run it too (a
    raw-output ensemble/backbone detector requiring client-side NMS via

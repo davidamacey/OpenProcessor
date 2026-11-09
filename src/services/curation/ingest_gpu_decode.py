@@ -85,7 +85,7 @@ def megapixels(data: bytes) -> float | None:
     try:
         with Image.open(io.BytesIO(data)) as img:
             w, h = img.size
-    except (OSError, ValueError, Image.DecompressionBombError):
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
         return None
     return w * h / 1e6
 
@@ -205,13 +205,7 @@ async def run_gpu_decode(
     boxes = result.as_numpy('det_boxes').reshape(-1, 4)
     n = boxes.shape[0]
     items = service.detector.decode_primary_row(
-        np.array([n]),
-        boxes,
-        result.as_numpy('det_scores'),
-        result.as_numpy('det_classes'),
-        scale,
-        (pad_w, pad_h),
-        service.profile.input_size,
+        boxes, result.as_numpy('det_scores'), result.as_numpy('det_classes'), scale, (pad_w, pad_h)
     )
     crops = result.as_numpy('crop_embeddings').reshape(
         -1, result.as_numpy('whole_embedding').shape[0]

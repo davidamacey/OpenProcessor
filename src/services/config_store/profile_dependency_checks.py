@@ -5,7 +5,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import httpx
+from sqlalchemy.exc import SQLAlchemyError
+
+from src.clients.model_adapters import FUSED_OUTPUT, is_fused_shape
 from src.config.env import env_str
+from src.db.repos.classes import ClassRegistryError
 from src.services.config_store.profile_field_checks import _needs_ocr_models
 from src.services.config_store.profile_issues import IssueBuilder, region_issue as _issue
 
@@ -21,7 +26,7 @@ if TYPE_CHECKING:
     ModelConfigFn = Callable[[str], Awaitable[dict[str, Any] | None]]
 
 # The tensor the region and ingest detectors read; a model without it yields no box.
-DETECTOR_OUTPUT = 'output0'
+DETECTOR_OUTPUT = FUSED_OUTPUT
 
 
 async def _triton_state(
@@ -29,7 +34,7 @@ async def _triton_state(
 ) -> tuple[bool, dict[str, str]]:
     try:
         index = await get_repository_index()
-    except Exception:
+    except (httpx.HTTPError, OSError, TimeoutError, RuntimeError):
         return False, {}
     return True, {entry['name']: entry.get('state', '') for entry in index if 'name' in entry}
 
@@ -93,7 +98,7 @@ async def _check_detector(
                                 detail={'unmapped': list(mapping.unmapped)},
                             )
                         )
-                except Exception as exc:  # pragma: no cover - defensive; no registry bound
+                except (ClassRegistryError, SQLAlchemyError) as exc:  # pragma: no cover - defensive
                     from src.core.logging import get_logger
 
                     get_logger(__name__).warning(
@@ -133,17 +138,31 @@ async def _check_detector(
 async def _check_detector_output(
     name: str, for_activation: bool, get_model_config: ModelConfigFn
 ) -> list[ValidationIssue]:
-    """A loaded detector must declare the ``output0`` tensor the detectors request; otherwise
-    every item would end ``no_region_box`` (#362). Unreadable config fails closed."""
+    """A loaded detector must declare the fused ``[300, 6]`` ``output0`` tensor the detectors
+    request. A model without ``output0`` would end every item ``no_region_box`` (#362); a model
+    that declares another head (a raw anchors head ``[5, N]``, or a missing shape) is refused
+    on every save, not only on activation, with the export command. Unreadable config fails
+    closed."""
     config = await get_model_config(name)
     severity = 'error' if for_activation else 'warning'
     if config is None:
         message = f'the configuration of {name!r} could not be read from Triton'
     else:
-        outputs = [str(o.get('name', '')) for o in config.get('output', [])]
-        if DETECTOR_OUTPUT in outputs:
+        declared = {str(o.get('name', '')): o for o in config.get('output', [])}
+        if DETECTOR_OUTPUT not in declared:
+            message = (
+                f'{name!r} has no {DETECTOR_OUTPUT!r} output (outputs: {sorted(declared)}); '
+                f'the region detector reads {DETECTOR_OUTPUT!r}'
+            )
+            return [_issue('detector_model_unusable', severity, message, field='detector_model')]
+        dims = [int(d) for d in declared[DETECTOR_OUTPUT].get('dims', [])]
+        if is_fused_shape(dims):
             return []
-        message = f'{name!r} has no {DETECTOR_OUTPUT!r} output (outputs: {outputs}); the region detector reads {DETECTOR_OUTPUT!r}'
+        message = (
+            f'{name!r} declares {DETECTOR_OUTPUT!r} as {dims}, not the fused [300, 6] detection '
+            'tensor; export the model again (./openprocessor export)'
+        )
+        severity = 'error'
     return [_issue('detector_model_unusable', severity, message, field='detector_model')]
 
 
@@ -239,7 +258,7 @@ async def _check_segmenter(
     elif profile.segmenter_text_prompt and configured and segmenter_health is not None:
         try:
             status, last_error = await segmenter_health()
-        except Exception as exc:
+        except (httpx.HTTPError, OSError, ValueError) as exc:
             status, last_error = 'unavailable', str(exc)
         if status != 'ready':
             severity = 'error' if for_activation else 'warning'

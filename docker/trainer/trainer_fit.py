@@ -6,11 +6,14 @@ import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
+import yaml
 from job_manifest import build_lineage
 from job_spec import DEFAULT_EXPORT_BATCH, JobSpec
 from logutil import get_logger
 from trainer_callbacks import CancelRequestedError, _make_ultralytics_callbacks
 from trainer_kwargs import MAX_OOM_RETRIES, _is_oom_error
+
+from src.domain.model_families import export_kwargs, head_kind_of
 
 
 if TYPE_CHECKING:
@@ -20,6 +23,18 @@ if TYPE_CHECKING:
 
 
 logger = get_logger('trainer.fit')
+
+# What a failed Ultralytics export raises (torch.onnx errors are RuntimeErrors); a run is not
+# failed for it.
+_EXPORT_FAILURES = (
+    RuntimeError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    AssertionError,
+    ImportError,
+    OSError,
+)
 
 
 def _build_model(
@@ -36,8 +51,9 @@ def _build_model(
     model = YOLO(weights_name)
     try:
         import mlflow_callbacks
-        import yaml
-
+    except ImportError as exc:  # tracking is optional
+        logger.warning('mlflow callbacks unavailable', error=str(exc))
+    else:
         with data_yaml_path.open('r', encoding='utf-8') as fh:
             data_cfg = yaml.safe_load(fh) or {}
         mlflow_callbacks.register_callbacks(
@@ -49,8 +65,6 @@ def _build_model(
             data_cfg=data_cfg,
             data_yaml_path=data_yaml_path,
         )
-    except Exception as exc:  # tracking is optional
-        logger.warning('mlflow callback registration failed', error=str(exc))
 
     cb_start, cb_end, cb_fit = _make_ultralytics_callbacks(spec, state, total_epochs)
     model.add_callback('on_train_epoch_start', cb_start)
@@ -120,9 +134,12 @@ def _export_onnx(spec: JobSpec, model: Any, best_pt: Path) -> None:
     ``POST {api_prefix}/train/promote/{job_id}`` copies this ONNX into the
     Triton model repo and lets Triton's TensorRT execution accelerator JIT the
     engine (rather than shipping a pre-built plan), so ``dynamic=True`` +
-    ``simplify=True`` is the right shape. ``half=False`` keeps the
-    float-encoded class id precise for large class counts (Ultralytics issue
-    #24428); FP16 is selected at promote time instead.
+    ``simplify=True`` is the right shape. The head comes from the checkpoint:
+    :func:`src.domain.model_families.export_kwargs` selects the NMS-free
+    one-to-one head, or embeds NMS for any other head, so the ONNX ends in the
+    ``[batch, 300, 6]`` tensor promote requires. No ``half``: FP32 is the
+    default and keeps the float-encoded class id precise for large class counts
+    (Ultralytics issue #24428); FP16 is selected at promote time instead.
 
     ``batch`` caps the dynamic axis and defaults to
     :data:`DEFAULT_EXPORT_BATCH`, matching the promote config's default
@@ -132,11 +149,15 @@ def _export_onnx(spec: JobSpec, model: Any, best_pt: Path) -> None:
     export_batch = int(spec.hyperparameters.get('export_batch', DEFAULT_EXPORT_BATCH))
     try:
         onnx_model = type(model)(str(best_pt))
+        kind = head_kind_of(onnx_model.model.model[-1])
         onnx_model.export(
-            format='onnx', dynamic=True, batch=export_batch, simplify=True, half=False
+            format='onnx', dynamic=True, simplify=True, **export_kwargs(kind, export_batch)
         )
-        print(f'[trainer] exported {best_pt.with_suffix(".onnx")} (dynamic, batch<={export_batch})')
-    except Exception as exc:  # a promote can still be retried by hand
+        print(
+            f'[trainer] exported {best_pt.with_suffix(".onnx")} '
+            f'({kind} head, dynamic, batch<={export_batch})'
+        )
+    except _EXPORT_FAILURES as exc:  # a promote can still be retried by hand
         logger.warning('onnx export failed', error=str(exc))
         with (
             contextlib.suppress(OSError),

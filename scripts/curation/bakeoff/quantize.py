@@ -7,7 +7,7 @@ side by side (the ``quantize`` block of a job spec, see ``bakeoff_runner``):
     fp16.onnx      ~2x smaller; runs on ONNX Runtime CUDA EP with no engine build
     int8_qdq.onnx  portable QDQ INT8 (edge/CPU datapoint): ~4x smaller
 
-FP16 ONNX comes from Ultralytics' own exporter (``half=True``). Ultralytics has
+FP16 ONNX comes from Ultralytics' own exporter (``quantize=16``). Ultralytics has
 no INT8-ONNX path, so INT8 uses ONNX Runtime's static quantizer
 (``quantize_static`` + QDQ), post-training-calibrated on images from a YOLO
 dataset export (by default its ``train`` split -- never calibrate on the frozen
@@ -168,16 +168,19 @@ def _ultralytics_export_onnx(pt_path: Path, out: Path, imgsz: int, *, half: bool
     device = 0 if torch.cuda.is_available() else 'cpu'
     if half and device == 'cpu':
         raise QuantizeError('fp16 ONNX export requires a GPU (Ultralytics casts on device=0)')
+    # ``quantize`` replaces the deprecated ``half`` (https://docs.ultralytics.com/modes/export/);
+    # unset is FP32.
+    precision = {'quantize': 16} if half else {}
     produced = YOLO(str(pt_path)).export(
         format='onnx',
         imgsz=imgsz,
         dynamic=False,
         simplify=True,
-        half=half,
         opset=17,
         nms=False,
         device=device,
         verbose=False,
+        **precision,
     )
     produced_path = Path(produced)
     if produced_path.resolve() != out.resolve():
@@ -234,7 +237,7 @@ def export_trt_plan(onnx_path: Path, out: Path, *, int8: bool) -> Path | None:
     used elsewhere in ``export/trt_utils.py``) no longer exist. Precision
     is decided entirely by ``onnx_path``'s own tensor dtypes, so the
     caller is responsible for passing an already fp16-baked ONNX (e.g.
-    ``fp16.onnx`` from Ultralytics' ``half=True`` export) when it wants a
+    ``fp16.onnx`` from Ultralytics' ``quantize=16`` export) when it wants a
     reduced-precision engine; this function never adds a precision flag.
     """
     trtexec = shutil.which('trtexec') or '/usr/src/tensorrt/bin/trtexec'

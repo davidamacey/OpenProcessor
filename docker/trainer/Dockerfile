@@ -32,7 +32,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build -- resolve every wheel into a relocatable --user tree
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
+FROM python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
 
 WORKDIR /build
 
@@ -48,14 +48,15 @@ RUN apt-get update && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 # PyTorch CUDA wheel index. Override for a different CUDA minor
-# (--build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu124).
-ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+# (--build-arg TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu130).
+ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu132
 
-# Ultralytics is pinned to a commit rather than a release tag: the training
-# recipe (and the MuSGD optimizer path) moves between releases, and a run's
-# manifest records this SHA so the image can be rebuilt at the same point in
-# time. Override with --build-arg ULTRALYTICS_SHA=<sha>.
-ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
+# Ultralytics is installed from the commit of the release tag, the same release as every other
+# image (requirements.txt; tests/test_requirements_contract.py reads the line below): a run's
+# manifest records this SHA so the image can be rebuilt at the same point in time.
+# ULTRALYTICS_VERSION=8.4.208
+# SHA of tag v8.4.208 (`gh api repos/ultralytics/ultralytics/commits/v8.4.208 --jq .sha`).
+ARG ULTRALYTICS_SHA=675c5569220bc7b6695ef552610882e6dca5e9a9
 
 COPY docker/trainer/requirements.txt requirements.txt
 
@@ -65,14 +66,14 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
         -r requirements.txt \
     && pip install --user --no-cache-dir --no-warn-script-location \
         "ultralytics @ git+https://github.com/ultralytics/ultralytics.git@${ULTRALYTICS_SHA}" \
-    && rm -rf /root/.local/lib/python3.12/site-packages/pip \
-        /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
-        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12
+    && rm -rf /root/.local/lib/python3.14/site-packages/pip \
+        /root/.local/lib/python3.14/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.14
 
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+FROM python:3.14-slim-trixie@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
       org.opencontainers.image.description="YOLO training worker for the gpu_train job queue" \
@@ -95,9 +96,9 @@ RUN apt-get update && apt-get upgrade -y \
 # No package manager in the runtime image (Trivy flags the vendored libraries of even the
 # newest pip, and nothing here installs packages at run time). The builder's user-site copy is
 # stripped in the builder stage.
-RUN rm -rf /usr/local/lib/python3.12/site-packages/pip \
-        /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
-        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
+RUN rm -rf /usr/local/lib/python3.14/site-packages/pip \
+        /usr/local/lib/python3.14/site-packages/pip-*.dist-info \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14
 
 # Non-root user, uid 1000 with the video group -- same as this repo's other
 # images so bind-mounted volumes keep consistent ownership on the host.
@@ -117,6 +118,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONPATH=/app \
     TORCH_HOME=/home/appuser/.cache/torch \
     YOLO_CONFIG_DIR=/home/appuser/.config/Ultralytics \
+    YOLO_AUTOINSTALL=False \
     OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
 
 # Flat module layout: /app is on PYTHONPATH, so `celery -A celery_tasks:app` resolves
@@ -153,7 +155,7 @@ ARG OP_BUILD_SHA=""
 ENV OP_BUILD_SHA=${OP_BUILD_SHA}
 LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 
-ARG ULTRALYTICS_SHA=8f5d355cd05b91503e7bf62429681dea4fa4b004
+ARG ULTRALYTICS_SHA=675c5569220bc7b6695ef552610882e6dca5e9a9
 # Promoted from ARG to ENV so it is readable at *runtime*
 # (`os.environ['ULTRALYTICS_SHA']`) and lands in each run's manifest under
 # code_versions.ultralytics_sha. An ARG alone only exists at build time.

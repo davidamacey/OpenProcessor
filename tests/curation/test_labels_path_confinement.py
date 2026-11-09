@@ -19,7 +19,10 @@ class _Pool:
         return True
 
     async def get_model_output_names(self, _name: str) -> list[str]:
-        return ['num_dets', 'det_boxes', 'det_scores', 'det_classes']
+        return ['output0']
+
+    async def get_model_output_shape(self, _name: str, _output: str) -> tuple[int, ...]:
+        return (-1, 300, 6)
 
 
 if TYPE_CHECKING:

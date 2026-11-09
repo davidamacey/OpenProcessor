@@ -82,7 +82,7 @@ def _on_worker_init(**_: Any) -> None:
 def _phase_of(line: str) -> tuple[float, str] | None:
     """(progress percent, step text) for an export script output line that marks a step."""
     if 'ONNX' in line and 'Export' in line:
-        return 40.0, 'Exporting ONNX End2End'
+        return 40.0, 'Exporting the fused ONNX'
     if 'TensorRT' in line or 'Building' in line:
         return 60.0, 'Building TensorRT engine (this takes 2-5 min)'
     if 'Engine saved' in line:
@@ -174,15 +174,10 @@ def _plan_path(engine_name: str) -> Path:
 
 
 def _onnx_sha256(engine_name: str) -> str | None:
-    """Hash of the ONNX the engine came from, when the export left one next to it."""
+    """Hash of the ONNX the engine came from: the file the exporter leaves for it."""
     base = engine_name.removesuffix('_trt_end2end').removesuffix('_trt')
-    for candidate in (
-        MODELS_DIR / f'{base}_end2end' / '1' / 'model.onnx',
-        APP_DIR / 'export' / f'{base}.onnx',
-    ):
-        if candidate.is_file():
-            return engine_facts.file_sha256(candidate)
-    return None
+    candidate = MODELS_DIR / f'{base}_end2end' / '1' / 'model.onnx'
+    return engine_facts.file_sha256(candidate) if candidate.is_file() else None
 
 
 async def _begin_engines(ctx: JobContext, names: list[str], max_batch: int) -> dict[str, Any]:
@@ -213,15 +208,13 @@ async def _fail_building(ctx: JobContext) -> None:
         await session.run_sync(lambda sync: engine_builds.fail_building(sync, ctx.job_id))
 
 
-async def _facts_of(name: str, head_kind: str, max_batch: int) -> engine_builds.EngineFacts:
+async def _facts_of(name: str, max_batch: int) -> engine_builds.EngineFacts:
     """Read the built plan, check it against the declared contract and describe the build."""
     plan_path = _plan_path(name)
     if not plan_path.is_file():
         raise FileNotFoundError(f'the export did not leave {plan_path}')
     plan = await asyncio.to_thread(engine_facts.read_plan, plan_path)
-    input_contract, output_contract, size = engine_facts.contracts_for(
-        plan, engine_name=name, head_kind=head_kind
-    )
+    input_contract, output_contract, size = engine_facts.contracts_for(plan)
     opt = max(1, max_batch // 2)
     profile = trt_build_settings.build_target()
     flags = f'target={profile} workspace={trt_build_settings.workspace_gb(name)}G'
@@ -306,7 +299,7 @@ async def export_model(ctx: JobContext) -> dict[str, Any]:
         await _stage(ctx, 'exporting', f'Exporting: {", ".join(job["formats"])}')
         if not await _run_build(ctx, cmd, step_times) or ctx.cancelled():
             return await _cancelled(ctx, names, had_ready)
-        facts = {name: await _facts_of(name, job['head_kind'], max_batch) for name in names}
+        facts = {name: await _facts_of(name, max_batch) for name in names}
         await _stage(ctx, 'loading', 'Loading into Triton', step_times=step_times)
         t0 = perf_counter()
         loaded = await _load_all(names, facts, bool(job.get('auto_load')))

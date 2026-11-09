@@ -40,12 +40,10 @@ repos:
     rev: v1.10.0
     hooks:
       - id: python-check-blanket-noqa
-        exclude: ^src/ultralytics_patches/
       - id: python-check-blanket-type-ignore
-        exclude: ^src/ultralytics_patches/
       - id: python-no-eval
         # PyTorch model.eval() is safe; it is not the eval() builtin.
-        exclude: ^(src/ultralytics_patches/|export/|docker/segmenter/sam3_backend\.py)
+        exclude: ^(export/|docker/segmenter/sam3_backend\.py)
       - id: python-use-type-annotations
 
   # Every coded noqa says why. A bare `# noqa: CODE` is how a silenced rule is forgotten.
@@ -82,7 +80,7 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
-        exclude: ^(src/ultralytics_patches/|tests/|models/|frontend/)
+        exclude: ^(tests/|models/|frontend/)
 
   # Shell script linting with shellcheck
   - repo: https://github.com/shellcheck-py/shellcheck-py

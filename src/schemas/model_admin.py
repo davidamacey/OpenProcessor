@@ -40,7 +40,7 @@ class ExportRequest(BaseModel):
     """Request body for model export."""
 
     formats: list[ExportFormat] = Field(
-        default=[ExportFormat.TRT_END2END],
+        default=[ExportFormat.TRT],
         description='Export formats to generate',
     )
     max_batch: int = Field(
@@ -48,10 +48,6 @@ class ExportRequest(BaseModel):
         ge=1,
         le=128,
         description='Maximum batch size for dynamic batching',
-    )
-    normalize_boxes: bool = Field(
-        default=True,
-        description='Output boxes in [0,1] normalized range',
     )
     auto_load: bool = Field(
         default=True,

@@ -26,7 +26,7 @@ STUB_BUILD = textwrap.dedent(
     """
     import pathlib, sys
     root, name = pathlib.Path(sys.argv[1]), sys.argv[2]
-    print("ONNX End2End Export", flush=True)
+    print("Exporting fused ONNX", flush=True)
     print("Building TensorRT engine", flush=True)
     (root / name / "1").mkdir(parents=True, exist_ok=True)
     (root / name / "1" / "model.plan").write_bytes(b"plan-bytes")
@@ -46,7 +46,7 @@ def plan_facts(input_dtype: str = 'uint8', shape: tuple[int, ...] = (-1, 3, 640,
             PlanTensor('det_scores', 'fp16', (-1, 300)),
             PlanTensor('det_classes', 'int32', (-1, 300)),
         ),
-        trt_version='11.1.0.106',
+        trt_version='11.4.0.106',
         gpu_arch='sm_86',
     )
 
@@ -66,8 +66,7 @@ class ExportEnv:
             'triton_name': name,
             'model_name': name,
             'max_batch': 16,
-            'formats': ['onnx_end2end', 'trt_end2end'],
-            'normalize_boxes': True,
+            'formats': ['trt'],
             'auto_load': auto_load,
             'head_kind': 'nms',
             'num_classes': 2,

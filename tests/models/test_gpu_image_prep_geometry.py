@@ -96,7 +96,9 @@ class TestGeometry:
         assert (lb.scale, lb.pad_w, lb.pad_h) == (scale, *pad)
         box = (0.1, 0.2, 0.7, 0.9)
         x1, y1, x2, y2 = (v * 640 for v in box)
-        assert fg.undo_letterbox(box, 640, lb) == undo_letterbox((x1, y1, x2, y2), scale, pad)
+        assert fg.undo_letterbox((x1, y1, x2, y2), lb) == undo_letterbox(
+            (x1, y1, x2, y2), scale, pad
+        )
 
     @pytest.mark.parametrize(
         'box', [(10.4, 20.6, 50.5, 70.49), (-5.0, -3.2, 30.0, 400.7), (1.0, 1.0, 1.2, 1.3)]

@@ -81,8 +81,7 @@ async def upload_model(
     file: UploadFile = File(..., description='YOLO11 .pt model file'),
     triton_name: str | None = Form(default=None, description='Custom Triton model name'),
     max_batch: int = Form(default=32, ge=1, le=128, description='Max batch size'),
-    formats: list[ExportFormat] = Form(default=[ExportFormat.TRT_END2END]),
-    normalize_boxes: bool = Form(default=True),
+    formats: list[ExportFormat] = Form(default=[ExportFormat.TRT]),
     auto_load: bool = Form(default=True),
 ) -> ExportTaskResponse:
     """
@@ -139,17 +138,12 @@ async def upload_model(
 
     format_strs = [f.value for f in formats]
 
-    # TRT End2End requires ONNX End2End as prerequisite
-    if 'trt_end2end' in format_strs and 'onnx_end2end' not in format_strs:
-        format_strs.insert(0, 'onnx_end2end')
-
     try:
         started = await start_export(
             triton_name=name,
             pt_file=staged.final_path,
             max_batch=max_batch,
             formats=format_strs,
-            normalize_boxes=normalize_boxes,
             auto_load=auto_load,
             model_info=staged.model_info,
             new_version=True,
@@ -178,11 +172,12 @@ async def export_model(
     Use this endpoint to re-export with different settings.
 
     **Export Formats:**
-    - `trt`: Standard TensorRT with CPU NMS
-    - `trt_end2end`: TensorRT with GPU NMS (faster)
-    - `onnx`: ONNX format (intermediate)
-    - `onnx_end2end`: ONNX with NMS (intermediate for trt_end2end)
-    - `all`: All formats
+    - `trt`: TensorRT engine (the fused ONNX it is built from is kept)
+    - `onnx`: the fused ONNX only
+    - `all`: same as `trt`
+
+    Every detection family exports to one output, `output0 [300, 6]`: `x1, y1, x2, y2, score,
+    class` per row, in letterboxed input pixels.
 
     The export runs in the model-export worker (503 when it is not running). Returns task_id
     for status polling.
@@ -214,16 +209,11 @@ async def export_model(
 
     format_strs = [f.value for f in request.formats]
 
-    # TRT End2End requires ONNX End2End as prerequisite
-    if 'trt_end2end' in format_strs and 'onnx_end2end' not in format_strs:
-        format_strs.insert(0, 'onnx_end2end')
-
     started = await start_export(
         triton_name=model_name,
         pt_file=pt_file,
         max_batch=request.max_batch,
         formats=format_strs,
-        normalize_boxes=request.normalize_boxes,
         auto_load=request.auto_load,
         model_info=model_info,
         new_version=False,

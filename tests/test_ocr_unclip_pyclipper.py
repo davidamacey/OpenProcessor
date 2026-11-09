@@ -68,8 +68,12 @@ class TestMissingDependency:
 class TestDeclaredRequirement:
     def test_triton_image_installs_pyclipper_pinned(self) -> None:
         # The BLS runs in the Triton python backend, i.e. in Dockerfile.triton's image.
-        text = (ROOT / 'Dockerfile.triton').read_text()
-        assert re.search(r'pip install[^\n]*\bpyclipper==\d+(\.\d+)+', text.replace('\\\n', ' '))
+        dockerfile = (ROOT / 'Dockerfile.triton').read_text().replace('\\\n', ' ')
+        assert re.search(
+            r'pip install[^\n]*-r \S*triton-requirements/requirements\.txt', dockerfile
+        )
+        text = (ROOT / 'docker' / 'triton' / 'requirements.txt').read_text()
+        assert re.search(r'^pyclipper==\d+(\.\d+)+', text, re.M)
 
     def test_offline_tests_install_pyclipper(self) -> None:
         text = (ROOT / 'requirements-test.txt').read_text()

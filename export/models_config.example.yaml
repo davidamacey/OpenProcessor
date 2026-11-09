@@ -1,5 +1,5 @@
-# Example Model Configuration File for export_models.py
-# =====================================================
+# Example Model Configuration File for ultralytics_export.py
+# ==========================================================
 #
 # This file demonstrates how to configure multiple custom YOLO11 models
 # for export to Triton-compatible formats.
@@ -7,12 +7,9 @@
 # Usage:
 #   make export-config CONFIG=/app/export/models_config.yaml
 #   # or
-#   docker compose run --rm model-export python /app/export/export_models.py \
+#   docker compose run --rm model-export python /app/export/ultralytics_export.py \
 #       --config-file /app/export/models_config.yaml \
-#       --formats trt trt_end2end \
-#       --normalize-boxes \
-#       --save-labels \
-#       --generate-config
+#       --formats trt
 #
 # Copy this file to models_config.yaml and customize for your deployment.
 
@@ -32,14 +29,6 @@ models:
     # Smaller models can handle larger batches
     # Default: 32
     max_batch: 64
-
-    # Optional: Maximum detections per image (topk for NMS)
-    # Default: 300
-    topk: 300
-
-    # Optional: Number of classes
-    # Auto-detected from model if not specified
-    # num_classes: 5
 
     # Optional: Class names
     # Auto-extracted from model if not specified
@@ -99,7 +88,8 @@ models:
 #
 # 4. Output directory structure:
 #    models/
-#    └── {triton_name}_trt_end2end/
+#    ├── {triton_name}_end2end/1/model.onnx   (the fused ONNX)
+#    └── {triton_name}_trt_end2end/           ({triton_name}_trt for YOLO26 and YOLOv10)
 #        ├── 1/
 #        │   └── model.plan
 #        ├── config.pbtxt

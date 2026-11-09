@@ -328,7 +328,7 @@ test_dual_family() {
     ok=$(curl -s -X POST "$API_URL/models/yolo26_small_trt/load" | jq -r '.success')
     if [ "$ok" != "true" ]; then
         # Config present but no engine: yolo26 is an optional export
-        skip "yolo26 engine not exported (optional: export/export_yolo26.py --models small)"
+        skip "yolo26 engine not exported (optional: export/ultralytics_export.py --models yolo26_small)"
         return
     fi
     pass "yolo26 dynamic load"

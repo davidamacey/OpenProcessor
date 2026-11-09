@@ -37,6 +37,22 @@ WEIGHTS: dict[str, tuple[str, str]] = {
         ASSETS + 'yolov10n.pt',
         '11287ed0735678e7ba1ac2a9b3098c049155b3fde123992e724c1264bcc16b6f',
     ),
+    'yolov8n.pt': (
+        ASSETS + 'yolov8n.pt',
+        'f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36',
+    ),
+    'yolov9t.pt': (
+        ASSETS + 'yolov9t.pt',
+        '410e3caca789aa8fec19971c05577616cbb963a416bcd0228171b2dff7f718f7',
+    ),
+    'yolo12n.pt': (
+        ASSETS + 'yolo12n.pt',
+        '419ff3dca37d69bacc93a50fa0c186a1c6f9fe62fae0f108b0872829689e9ca6',
+    ),
+    'yolo26s.pt': (
+        ASSETS + 'yolo26s.pt',
+        '646f8bc3fe0a656803d95c294f7852321748cb29d13466a1af8862e2db384a1b',
+    ),
     'yolov5nu.pt': (
         ASSETS + 'yolov5nu.pt',
         '9e9c1be448b0e1b8598975a9abcab9a0fd0e21182eb422cda7f044a0442d0937',

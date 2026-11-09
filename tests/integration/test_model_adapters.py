@@ -1,9 +1,8 @@
-"""Adapter-registry behavior pins for dual-family YOLO serving.
+"""Adapter-registry behavior pins for the one fused detector contract.
 
-The registry must pick the right parser purely from Triton model metadata
-(output names/shapes), so YOLO11 end2end (EfficientNMS 4-tensor) and
-YOLO26 (fused single-tensor) engines serve side by side without name
-conventions.
+The registry picks the parser purely from Triton model metadata (output names/shapes): every
+family serves the single ``[..., 300, 6]`` tensor, and anything else fails closed with the
+export command.
 """
 
 from __future__ import annotations
@@ -11,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from src.clients.model_adapters import End2EndNMSAdapter, FusedDetAdapter, resolve_adapter
+from src.clients.model_adapters import FusedDetAdapter, resolve_adapter
 
 
 pytestmark = pytest.mark.integration
@@ -49,8 +48,10 @@ def _end2end_metadata() -> _Metadata:
     )
 
 
-def test_resolve_end2end_signature() -> None:
-    assert isinstance(resolve_adapter(_end2end_metadata()), End2EndNMSAdapter)
+def test_resolve_refuses_the_four_tensor_signature_naming_the_export_command() -> None:
+    with pytest.raises(ValueError, match='unsupported_detector_contract') as err:
+        resolve_adapter(_end2end_metadata())
+    assert 'export' in str(err.value)
 
 
 @pytest.mark.parametrize('shape', [[-1, 300, 6], [300, 6]])
@@ -61,28 +62,14 @@ def test_resolve_fused_signature_with_and_without_batch_axis(shape: list[int]) -
 
 
 def test_resolve_rejects_unknown_signature() -> None:
-    with pytest.raises(ValueError, match='neither'):
+    with pytest.raises(ValueError, match='unsupported_detector_contract'):
         resolve_adapter(_Metadata([_Output('embeddings', [512])]))
 
 
-def test_end2end_parse_truncates_to_num_dets() -> None:
-    batch = 2
-    tensors = {
-        'num_dets': np.array([[2], [0]], dtype=np.int32),
-        'det_boxes': np.zeros((batch, 300, 4), dtype=np.float32),
-        'det_scores': np.zeros((batch, 300), dtype=np.float32),
-        'det_classes': np.zeros((batch, 300), dtype=np.int32),
-    }
-    tensors['det_scores'][0, :2] = [0.9, 0.8]
-    tensors['det_classes'][0, :2] = [3, 1]
-
-    results = End2EndNMSAdapter().parse(_Response(tensors), batch)
-
-    assert results[0]['num_dets'] == 2
-    assert results[0]['boxes'].shape == (2, 4)
-    assert list(results[0]['classes']) == [3, 1]
-    assert results[1]['num_dets'] == 0
-    assert results[1]['boxes'].shape == (0, 4)
+@pytest.mark.parametrize('shape', [[-1, 100, 6], [-1, 5, 8400], [-1, 300, 7], [6]])
+def test_resolve_refuses_a_single_tensor_that_is_not_300_by_6(shape: list[int]) -> None:
+    with pytest.raises(ValueError, match='unsupported_detector_contract'):
+        resolve_adapter(_Metadata([_Output('output0', shape)]))
 
 
 def test_fused_parse_drops_zero_score_padding() -> None:
@@ -95,8 +82,7 @@ def test_fused_parse_drops_zero_score_padding() -> None:
 
     assert results[0]['num_dets'] == 2
     assert results[1]['num_dets'] == 1
-    # Same normalized contract as the end2end adapter
-    assert set(results[0]) == {'num_dets', 'boxes', 'scores', 'classes'}
+    assert set(results[0]) == {'num_dets', 'boxes', 'scores', 'classes', 'box_frame'}
     assert results[0]['classes'].dtype == np.int32
     assert results[0]['boxes'].shape == (2, 4)
     assert pytest.approx(results[0]['scores'][0], abs=1e-6) == 0.9

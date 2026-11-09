@@ -7,9 +7,16 @@ Performance optimizations:
 """
 
 from io import BytesIO
+from typing import Literal
 
 import numpy as np
 from PIL import Image
+
+
+BoxFrame = Literal['pixels']
+"""Frame of detector boxes relative to the letterboxed model input. The fused detector
+contract emits input pixels, the only frame served; the adapter declares it and anything
+else fails closed."""
 
 
 def get_jpeg_dimensions_fast(image_bytes: bytes) -> tuple[int, int]:
@@ -62,24 +69,28 @@ def inverse_letterbox_coords(
     orig_shape: tuple[int, int],
     scale: float,
     padding: tuple[float, float],
-    input_size: int = 640,
+    frame: BoxFrame,
 ) -> np.ndarray:
     """
     Convert bounding boxes from letterboxed space to original image coordinates.
 
-    EfficientNMS with normalize_boxes=True outputs coords normalized to the 640x640
-    letterboxed input [0,1]. This function applies inverse letterbox transformation
-    to convert them to [0,1] normalized coordinates relative to original image dimensions.
+    The fused detector emits boxes in letterboxed input pixels. This function applies the
+    inverse letterbox transformation to convert them to [0,1] normalized coordinates relative
+    to original image dimensions.
 
     This matches Ultralytics PyTorch which uses boxes.xyxyn for
     original-image-normalized output.
 
     Args:
-        boxes: np.ndarray [N, 4] in XYXY format, normalized to letterbox [0,1]
+        boxes: np.ndarray [N, 4] in XYXY format in the letterbox frame
         orig_shape: Tuple (height, width) of original image
         scale: Letterbox scale factor
         padding: Tuple (pad_x, pad_y) letterbox padding
-        input_size: Letterbox target size (default 640)
+        frame: the frame ``boxes`` are in, declared by the adapter that produced them;
+            only ``pixels`` (letterbox pixels) exists
+
+    Raises:
+        ValueError: ``frame`` is not ``pixels``
 
     Returns:
         np.ndarray [N, 4] in XYXY format, normalized to original image [0,1]
@@ -93,13 +104,8 @@ def inverse_letterbox_coords(
     # Work on copy to avoid modifying input
     boxes_out = boxes.copy().astype(np.float64)
 
-    # Auto-detect if boxes are normalized [0,1] or pixel coordinates
-    # If max value > 1.0, boxes are already in pixel coords (640x640 space)
-    is_pixel_coords = float(boxes_out.max()) > 1.0
-
-    # 1. Scale letterbox-normalized [0,1] to letterbox pixels (skip if already pixels)
-    if not is_pixel_coords:
-        boxes_out *= input_size
+    if frame != 'pixels':
+        raise ValueError(f"box frame must be 'pixels', got {frame!r}")
 
     # 2. Remove padding and scale to get original pixels
     boxes_out[:, 0] = (boxes_out[:, 0] - pad_x) / scale  # x1
@@ -204,18 +210,17 @@ COCO_CLASSES = {
 }
 
 
-def format_detections_from_triton(
-    result: dict, input_size: int = 640, model_name: str | None = None
-) -> list:
+def format_detections_from_triton(result: dict, model_name: str | None = None) -> list:
     """
-    Format Triton EfficientNMS detections with original-image-normalized coordinates.
+    Format fused-detector detections with original-image-normalized coordinates.
 
-    Shared utility for TensorRT End2End models with EfficientNMS.
-    Applies inverse letterbox transformation to match Ultralytics boxes.xyxyn format.
+    Shared utility for the fused ``[300, 6]`` detector contract
+    (:mod:`src.clients.model_adapters`). Applies inverse letterbox transformation to match
+    Ultralytics boxes.xyxyn format.
 
     Args:
         result: Inference result dict with:
-            - boxes: np.ndarray [N, 4] letterbox-normalized
+            - boxes: np.ndarray [N, 4] letterbox pixels
             - scores: np.ndarray [N]
             - classes: np.ndarray [N]
             - orig_shape: (height, width) optional
@@ -244,7 +249,7 @@ def format_detections_from_triton(
     padding = result.get('padding')
 
     if orig_shape is not None and scale is not None and padding is not None:
-        boxes = inverse_letterbox_coords(boxes, orig_shape, scale, padding, input_size)
+        boxes = inverse_letterbox_coords(boxes, orig_shape, scale, padding, result['box_frame'])
 
     if model_name is not None:
         from src.utils.class_names import get_class_names

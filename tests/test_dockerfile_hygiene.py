@@ -168,7 +168,29 @@ def test_export_target_carries_the_toolchain_and_the_seed() -> None:
     assert '--from=builder-export' in stage
     assert 'export/' in stage
     assert 'models/' in stage
-    assert '/opt/venv-y11' in stage
+
+
+@pytest.mark.parametrize('rel', _dockerfiles())
+def test_no_image_builds_a_second_python_environment(rel: str) -> None:
+    """One Ultralytics version means one environment: the YOLO11 export runs in the main one."""
+    text = (REPO_ROOT / rel).read_text(encoding='utf-8')
+    assert 'venv-y11' not in text
+    assert not re.search(r'python3?(\.\d+)? -m venv', text), 'a second environment is built'
+
+
+def test_the_export_code_reads_no_second_toolchain_variable() -> None:
+    banned = ('YOLO11_EXPORT_PYTHON', '_Y11_REEXEC', 'venv-y11', 'execv')
+    hits = {
+        f'{path.name}: {word}'
+        for path in sorted((REPO_ROOT / 'export').glob('*.py'))
+        for word in banned
+        if word in path.read_text(encoding='utf-8')
+    }
+    assert not hits, sorted(hits)
+
+
+def test_the_second_environment_requirements_file_is_gone() -> None:
+    assert not (REPO_ROOT / 'requirements-export-y11.txt').exists()
 
 
 def test_evaluator_target_takes_only_the_evaluator_delta() -> None:
@@ -342,9 +364,7 @@ def test_export_image_copies_every_scripts_file_it_imports_or_sources() -> None:
     (scripts/lib/model_setup.sh)."""
     dirs, files = _copied_scripts('Dockerfile', 'export')
     assert 'scripts' not in dirs
-    needed = _scripts_modules_imported(
-        ['export', 'models', 'config_templates', 'src/ultralytics_patches']
-    )
+    needed = _scripts_modules_imported(['export', 'models', 'config_templates'])
     needed |= _scripts_modules_imported(['scripts/datasets'])
     needed |= _COCO_SAMPLE | _SHELL_LIBS
     missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))
@@ -372,10 +392,14 @@ def test_trainer_sets_its_build_identity_after_the_big_layers() -> None:
     assert sha_pin > last_copy
 
 
-@pytest.mark.parametrize('rel', ['docker/trainer/Dockerfile', 'docker/segmenter/Dockerfile'])
-def test_runtime_stage_strips_the_base_images_pip(rel: str) -> None:
+@pytest.mark.parametrize(
+    ('rel', 'python_minor'),
+    [('docker/trainer/Dockerfile', '3.14'), ('docker/segmenter/Dockerfile', '3.12')],
+)
+def test_runtime_stage_strips_the_base_images_pip(rel: str, python_minor: str) -> None:
     runs = ' '.join(r for k, r in _stages(rel)[-1] if k == 'RUN')
-    assert re.search(r'rm -rf /usr/local/lib/python3\.12/(site|dist)-packages/pip\b', runs)
+    pattern = rf'rm -rf /usr/local/lib/python{re.escape(python_minor)}/(site|dist)-packages/pip\b'
+    assert re.search(pattern, runs)
 
 
 def test_segmenter_has_no_wget_probe_or_package() -> None:

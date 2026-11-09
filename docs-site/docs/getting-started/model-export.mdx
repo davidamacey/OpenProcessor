@@ -43,13 +43,13 @@ in `docker-compose.yml`:
 | Step | Target | What it does |
 |---|---|---|
 | Base weights | `make download-models` | Fetches `yolo11s.pt`, `scrfd_10g_bnkps.onnx`, `arcface_w600k_r50.onnx` and `mobileclip_s2.pt` into `pytorch_models/` |
-| YOLO11 detection | `make export-models` | Exports YOLO11 small to TensorRT and to a TensorRT end2end engine (EfficientNMS, GPU NMS, normalized boxes), writes `labels.txt` and `config.pbtxt` |
+| YOLO11 detection | `make export-models` | Exports YOLO11 small to one fused TensorRT engine (`output0` `[300, 6]`, boxes in letterboxed input pixels), writes `labels.txt` and `config.pbtxt` |
 | Faces | `make setup-face-pipeline` | `download-face-models`, `export-face-recognition` (ArcFace) and `export-scrfd` (SCRFD-10G), then loads both |
 | CLIP embeddings | `make export-mobileclip` | Exports the MobileCLIP image and text encoders, then restarts Triton |
 | OCR | `make setup-ocr` | `download-paddleocr` (PP-OCRv5 ONNX + dictionaries), `export-paddleocr` (det + rec to TensorRT), then restarts Triton |
 
-`make export-small` is the same as `export-models`; `make export-all`
-builds nano through xlarge in every format, which takes a long time.
+`make export-all` builds nano through xlarge, which takes a long time;
+`make export-onnx` writes the fused ONNX only.
 `make export-status`, `make validate-exports` and `make models-list`
 show what exists and what Triton has loaded.
 

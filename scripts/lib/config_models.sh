@@ -18,73 +18,14 @@ generate_yolo_detection_config() {
     local profile="$2"
     local gpu_id="$3"
 
-    # If config exists, just update profile settings
+    # The exporter (export/ultralytics_export.py) writes the detector's config.pbtxt with the
+    # engine, from the engine's own tensors; a profile only tunes a config that exists.
     if [[ -f "$config_file" ]]; then
         update_config_profile_settings "$config_file" "$profile" "$gpu_id"
         return $?
     fi
-
-    local instance_count="$PROFILE_INSTANCE_COUNT"
-    local max_batch="$PROFILE_MAX_BATCH"
-    local batch_sizes
-    batch_sizes=$(get_batch_sizes_string "$profile")
-
-    cat > "$config_file" << EOF
-name: "yolov11_small_trt_end2end"
-platform: "tensorrt_plan"
-max_batch_size: $max_batch
-
-input [
-  {
-    name: "images"
-    data_type: TYPE_FP32
-    dims: [ 3, 640, 640 ]
-  }
-]
-
-output [
-  {
-    name: "num_dets"
-    data_type: TYPE_INT32
-    dims: [ 1 ]
-  },
-  {
-    name: "det_boxes"
-    data_type: TYPE_FP32
-    dims: [ 300, 4 ]
-  },
-  {
-    name: "det_scores"
-    data_type: TYPE_FP32
-    dims: [ 300 ]
-  },
-  {
-    name: "det_classes"
-    data_type: TYPE_INT32
-    dims: [ 300 ]
-  }
-]
-
-dynamic_batching {
-  preferred_batch_size: [ $batch_sizes ]
-  max_queue_delay_microseconds: 25000
-  preserve_ordering: false
-  default_queue_policy {
-    timeout_action: REJECT
-    default_timeout_microseconds: 30000000
-    allow_timeout_override: false
-    max_queue_size: 4096
-  }
-}
-
-instance_group [
-  {
-    count: $instance_count
-    kind: KIND_GPU
-    gpus: [ $gpu_id ]
-  }
-]
-EOF
+    log_info "No detector config.pbtxt yet: ultralytics_export.py writes it with the engine"
+    return 0
 }
 
 generate_scrfd_config() {

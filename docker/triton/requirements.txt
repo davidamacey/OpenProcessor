@@ -1,0 +1,8 @@
+# Python backend runtime deps of the Triton image, on top of the torch pair
+# (requirements-torch.txt). The OpenCV release is the one in requirements.txt.
+# pyclipper: ocr_pipeline's DB unclip (ocr_postprocess imports it at load; no fallback).
+# CuPy: gpu_image_prep (the GPU decode) compiles its kernels with it; the base image ships a
+# CuPy, pinned here so a base bump cannot drop it silently.
+opencv-python-headless==5.0.0.93
+pyclipper==1.4.0
+cupy-cuda13x==14.2.0

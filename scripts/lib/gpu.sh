@@ -170,36 +170,8 @@ load_profile() {
 }
 
 # =============================================================================
-# CUDA Validation
+# Docker GPU runtime validation
 # =============================================================================
-
-# Check CUDA driver version compatibility
-validate_cuda() {
-    if ! command -v nvidia-smi &> /dev/null; then
-        log_error "nvidia-smi not found."
-        return 1
-    fi
-
-    local driver_version
-    driver_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-
-    # Extract major version
-    local major_version
-    major_version=$(echo "$driver_version" | cut -d'.' -f1)
-
-    # Triton 26.06 (CUDA 13.x) requires driver >= 570
-    local min_driver=570
-
-    if [[ "$major_version" -lt "$min_driver" ]]; then
-        log_error "NVIDIA driver $driver_version is too old."
-        log_error "Minimum required: $min_driver.x"
-        log_info "Update drivers: https://www.nvidia.com/drivers"
-        return 1
-    fi
-
-    log_debug "CUDA driver version: $driver_version (OK)"
-    return 0
-}
 
 # Check Docker with NVIDIA runtime
 validate_docker_nvidia() {

@@ -52,6 +52,11 @@ PLANS = {
     'ocr': ['paddleocr_det_trt', 'paddleocr_rec_trt'],
 }
 GROUPS = list(ENGINES)
+# Groups whose unstamped engines can be adopted: the detector's cannot (no recipe is provable).
+ADOPTABLE = [g for g in GROUPS if g != 'yolo']
+YOLO = 'yolov11_small_trt_end2end'
+# The detector engine is built by the fused export recipe (B3); its stamp must say so.
+RECIPE = 'recipe=fused-v1'
 
 
 def _onnx_bytes(model: str) -> bytes:
@@ -72,6 +77,8 @@ def _put_onnx(tmp_path: Path, group: str) -> None:
 def _row(model: str, precision: str, *, cc: str = '8.6', sha: str | None = None) -> str:
     ws = 8 if model == 'paddleocr_rec_trt' else 4
     flags = f'trt-python-api target=default workspace={ws}G'
+    if model == YOLO:
+        flags += f' {RECIPE}'
     return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha or _sha(model)}\t{flags}\n'
 
 
@@ -119,6 +126,7 @@ def test_build_records_a_full_stamp_for_every_engine(tmp_path: Path, bash, group
         assert rows[model][1] == precision
         assert rows[model][3:6] == ['v110100', '8.6', _sha(model)]
         assert rows[model][6]
+        assert (RECIPE in rows[model][6]) == (model == YOLO)
 
 
 @pytest.mark.parametrize('group', GROUPS)
@@ -184,7 +192,7 @@ def _rows(tmp_path: Path) -> dict[str, list[str]]:
 
 
 @pytest.mark.parametrize('with_pe_row', [True, False])
-@pytest.mark.parametrize('group', GROUPS)
+@pytest.mark.parametrize('group', ADOPTABLE)
 def test_a_valid_unstamped_engine_is_adopted_not_rebuilt(
     tmp_path: Path, bash, group: str, with_pe_row: bool
 ) -> None:
@@ -204,12 +212,44 @@ def test_a_valid_unstamped_engine_is_adopted_not_rebuilt(
     assert 'up to date, skipped' in again
 
 
-def test_an_adopted_yolo_stamp_records_the_config_input_datatype(tmp_path: Path, bash) -> None:
+def test_an_unstamped_detector_engine_is_never_adopted(tmp_path: Path, bash) -> None:
+    """Nothing proves which recipe built an engine that has no stamp (before B3 it was the
+    EfficientNMS export), so the detector group rebuilds instead of adopting it."""
     prelude = _unstamped(tmp_path, 'yolo')
-    cfg = tmp_path / 'models' / 'yolov11_small_trt_end2end' / 'config.pbtxt'
+    cfg = tmp_path / 'models' / YOLO / 'config.pbtxt'
     cfg.write_text('input [\n  {\n    name: "images"\n    data_type: TYPE_UINT8\n  }\n]\n')
-    assert 'up to date, skipped' in bash(prelude + 'model_setup_run_group yolo').stdout
-    assert 'input=uint8' in _rows(tmp_path)['yolov11_small_trt_end2end'][6]
+    out = bash(prelude + 'model_setup_run_group yolo').stdout
+    assert 'skipped' not in out
+    assert 'engine stamp is stale (no build stamp' in out
+    assert (tmp_path / 'rebuilt').exists()
+
+
+def test_a_0_6_0_detector_stamp_is_stale_and_the_group_exports_again(tmp_path: Path, bash) -> None:
+    """An upgrade keeps the old ONNX, so its hash still matches: only the recipe token can make
+    the stamp of an engine built by the EfficientNMS export stale, and the rebuild is the whole
+    group (a re-export), not a plan built from the old ONNX."""
+    old = (
+        f'{YOLO}\tfp16\t\tv110100\t8.6\t{_sha(YOLO)}\ttrt-python-api target=default workspace=4G\n'
+    )
+    prelude = _installed(tmp_path, 'yolo', {YOLO: old}) + (
+        'dc() { echo "$*" >> "$OP_DIR/dc.log"; return 0; }; '
+    )
+    out = bash(prelude + 'model_setup_run_group yolo').stdout
+    assert 'skipped' not in out
+    assert 'engine stamp is stale (exported by recipe none, now fused-v1' in out
+    assert 'ultralytics_export.py' in (tmp_path / 'dc.log').read_text()
+    assert RECIPE in _rows(tmp_path)[YOLO][6]
+
+
+def test_only_the_detector_stamp_carries_a_recipe(tmp_path: Path, bash) -> None:
+    out = bash(
+        f'source {LIB}; OP_DIR="{tmp_path}"; '
+        f'for m in {YOLO} mobileclip2_s2_image_encoder scrfd_10g_bnkps paddleocr_det_trt; do '
+        'echo "$m: $(_ms_build_flags $m)"; done'
+    ).stdout
+    lines = dict(line.split(': ', 1) for line in out.strip().splitlines())
+    assert RECIPE in lines[YOLO]
+    assert not [m for m, flags in lines.items() if m != YOLO and 'recipe=' in flags]
 
 
 def _unadoptable(tmp_path: Path, group: str, case: str) -> str:
@@ -313,7 +353,8 @@ def test_every_engine_of_a_group_is_stamped_when_docker_reads_stdin(
 
 def _old_format_stamps(group: str) -> dict[str, str]:
     return {
-        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec}\n'
+        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec}'
+        f'{f" {RECIPE}" if m == YOLO else ""}\n'
         for m, (_, prec) in ENGINES[group].items()
     }
 
@@ -340,7 +381,8 @@ def test_old_format_stamps_rebuild_under_the_small_target(tmp_path: Path, bash, 
 
 def test_a_group_already_built_small_is_kept_under_the_small_target(tmp_path: Path, bash) -> None:
     fresh = {
-        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec} target=small workspace=2G\n'
+        m: f'{m}\t{prec}\t\tv110100\t8.6\t{_sha(m)}\ttrt-python-api {prec} target=small '
+        f'workspace=2G {RECIPE}\n'
         for m, (_, prec) in ENGINES['yolo'].items()
     }
     prelude = _installed(tmp_path, 'yolo', fresh)
@@ -348,14 +390,15 @@ def test_a_group_already_built_small_is_kept_under_the_small_target(tmp_path: Pa
     assert 'up to date, skipped' in out
 
 
-def test_a_v060_ledger_keeps_every_engine(tmp_path: Path, bash) -> None:
-    """v0.6.0 stamped only the PE encoder (old flags); the other engines are adopted, none rebuilt."""
+def test_a_v060_ledger_keeps_every_engine_but_the_detector(tmp_path: Path, bash) -> None:
+    """v0.6.0 stamped only the PE encoder (old flags); the other engines are adopted, none rebuilt.
+    The detector is rebuilt: its 0.6.0 engine was built by the EfficientNMS export."""
     pe = (
         'pe_image_encoder\tfp16\t\tv110100\t8.6\t'
         + 'a' * 64
         + '\tmin1/opt8/max32 336x336 workspace8G strongly-typed input=uint8\n'
     )
-    for group in GROUPS:
+    for group in ADOPTABLE:
         prelude = _unstamped(tmp_path, group, pe_row=pe)
         out = bash(prelude + f'model_setup_run_group {group}').stdout
         assert 'up to date, skipped' in out, group
@@ -407,7 +450,7 @@ def test_a_stamped_engine_whose_onnx_is_absent_is_kept(tmp_path: Path, bash, gro
     assert 'up to date, skipped' in bash(prelude + f'model_setup_run_group {group}').stdout
 
 
-@pytest.mark.parametrize('group', GROUPS)
+@pytest.mark.parametrize('group', ADOPTABLE)
 def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, group: str) -> None:
     prelude = _unstamped(tmp_path, group)
     for rel, _ in ENGINES[group].values():
@@ -426,7 +469,7 @@ def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, g
     assert not (tmp_path / 'rebuilt').exists()
 
 
-@pytest.mark.parametrize('group', GROUPS)
+@pytest.mark.parametrize('group', ADOPTABLE)
 def test_a_pinned_stamp_catches_a_later_onnx_change(tmp_path: Path, bash, group: str) -> None:
     prelude = _unstamped(tmp_path, group)
     onnx = {model: tmp_path / rel for model, (rel, _) in ENGINES[group].items()}
@@ -444,12 +487,12 @@ def test_a_pinned_stamp_catches_a_later_onnx_change(tmp_path: Path, bash, group:
 
 def test_an_unready_engine_keeps_the_placeholder_hash(tmp_path: Path, bash) -> None:
     # Only an engine Triton serves is pinned; the placeholder is never rewritten blind.
-    prelude = _unstamped(tmp_path, 'yolo')
-    model = next(iter(ENGINES['yolo']))
-    (tmp_path / ENGINES['yolo'][model][0]).unlink()
-    bash(prelude + 'model_setup_run_group yolo')
-    _put_onnx(tmp_path, 'yolo')
-    bash(prelude + 'triton_model_ready() { return 1; }; _ms_group_stamp_stale yolo')
+    prelude = _unstamped(tmp_path, 'mobileclip')
+    model = next(iter(ENGINES['mobileclip']))
+    (tmp_path / ENGINES['mobileclip'][model][0]).unlink()
+    bash(prelude + 'model_setup_run_group mobileclip')
+    _put_onnx(tmp_path, 'mobileclip')
+    bash(prelude + 'triton_model_ready() { return 1; }; _ms_group_stamp_stale mobileclip')
     assert _rows(tmp_path)[model][5] == '-'
 
 

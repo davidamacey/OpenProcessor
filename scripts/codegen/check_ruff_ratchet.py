@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Pre-commit guard: per-function complexity and per-file broad-except counts may not grow.
 
-Two ratchets over ``src scripts docker export models`` (third-party
-``src/ultralytics_patches`` excluded), both read from ruff run with ``--isolated``
-so a per-file ignore cannot hide a finding:
+Two ratchets over ``src scripts docker export models``, both read from ruff run with
+``--isolated`` so a per-file ignore cannot hide a finding:
 
 * ``C901`` at 15: key ``path::function`` (``#2``, ``#3`` for same-named functions in
   one file, in source order), value = McCabe score. A function over 15 must be in
@@ -31,7 +30,6 @@ import _baseline
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINES = REPO_ROOT / 'scripts' / 'codegen' / 'baselines'
 TARGETS = ('src', 'scripts', 'docker', 'export', 'models')
-EXCLUDE = 'src/ultralytics_patches'
 MAX_COMPLEXITY = 15
 _SCORE = re.compile(r'`(?P<name>[^`]+)` is too complex \((?P<score>\d+) >')
 
@@ -51,8 +49,6 @@ def run_ruff(root: Path, *rule_args: str) -> list[dict[str, object]]:
             '--no-cache',
             '--output-format',
             'json',
-            '--exclude',
-            EXCLUDE,
             *rule_args,
             *targets,
         ],

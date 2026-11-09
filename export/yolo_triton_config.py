@@ -1,8 +1,9 @@
-"""Triton ``config.pbtxt`` rendering and saving for the YOLO11 exporter."""
+"""Triton ``config.pbtxt`` of a fused detector engine: one ``output0 [300, 6]`` tensor."""
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from config_write import write_generated_config
@@ -16,127 +17,89 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def generate_triton_config(
-    triton_name: str,
-    model_format: str,
-    max_batch: int,
-    num_classes: int = 80,
-    has_nms: bool = False,
-    output_dtypes: dict[str, str] | None = None,
+class BatchMismatchError(ValueError):
+    """The batch an ONNX was exported for and the batch Triton would send disagree."""
+
+
+def onnx_batch(onnx_path: Path) -> int:
+    """The ``batch`` Ultralytics recorded in the ONNX metadata when it exported the graph."""
+    import onnx
+
+    meta = {
+        p.key: p.value for p in onnx.load(str(onnx_path), load_external_data=False).metadata_props
+    }
+    try:
+        return int(meta['batch'])
+    except (KeyError, ValueError) as e:
+        raise BatchMismatchError(
+            f'{onnx_path} does not record the batch it was exported for: export it again'
+        ) from e
+
+
+def check_served_batch(
+    onnx_path: Path, model_dir: Path, max_batch: int, *, overwrite: bool
+) -> None:
+    """Refuse an engine whose Triton ``max_batch_size`` could exceed the batch it was exported for.
+
+    With NMS in the graph the export ``batch`` is a hard cap: images past it come back with no
+    detections and no error (``tests/export/test_family_matrix.py``). The writer's own config is
+    ``max_batch_size == batch``. A tracked config that is kept (``overwrite`` false) may be
+    smaller, because a GPU profile tunes it down (``scripts/lib/config.sh``), and is never larger.
+    """
+    exported = onnx_batch(onnx_path)
+    if exported != max_batch:
+        raise BatchMismatchError(
+            f'{onnx_path} was exported for batch {exported}, the engine is built for {max_batch}'
+        )
+    kept = model_dir / 'config.pbtxt'
+    if overwrite or not kept.is_file():
+        return
+    found = re.search(r'^max_batch_size:\s*(\d+)', kept.read_text(), re.MULTILINE)
+    served = int(found.group(1)) if found else None
+    if served is None or served > exported:
+        raise BatchMismatchError(
+            f'{kept} serves max_batch_size {served}, past the batch {exported} the ONNX was '
+            'exported for (images beyond it would come back empty): pass --overwrite-config'
+        )
+    if served < exported:
+        logger.warning(f'{kept} serves max_batch_size {served}, below the engine batch {exported}')
+
+
+def render_fused_config(
+    triton_name: str, max_batch: int, output_name: str, output_dims: list[int]
 ) -> str:
+    """The ``config.pbtxt`` of an engine that takes uint8 pixels and returns the fused tensor.
+
+    The output is FP32: its last column is the class index, which must stay integral
+    (``tests/export/test_family_matrix.py``).
     """
-    Generate Triton config.pbtxt content for a model.
-
-    Args:
-        triton_name: Triton model name
-        model_format: Model format ('onnx', 'trt', 'trt_end2end')
-        max_batch: Maximum batch size
-        num_classes: Number of classes (default 80 for COCO)
-        has_nms: Whether model has built-in NMS (end2end models)
-
-    Returns:
-        config.pbtxt content as string
-    """
-    # Determine backend
-    if model_format in ('trt', 'trt_end2end'):
-        backend = 'tensorrt'
-    else:
-        backend = 'onnxruntime'
-
-    # A TensorRT engine scales its own uint8 pixels (parse_onnx_model); the ORT graphs keep float32.
-    input_dtype = 'TYPE_UINT8' if backend == 'tensorrt' else 'TYPE_FP32'
-
-    # Calculate preferred batch sizes
-    preferred_batches = [size for size in [8, 16, 32, 64] if size <= max_batch]
-    if not preferred_batches:
-        preferred_batches = [1]
-
-    preferred_batch_str = ', '.join(str(b) for b in preferred_batches)
-
-    # Determine platform string
-    platform = f'{backend}_plan' if backend == 'tensorrt' else 'onnxruntime_onnx'
-
-    if has_nms:
-        # End2End model with NMS outputs. Box/score precision follows the
-        # BUILT engine (differs across TRT releases) — see engine_output_dtypes.
-        dtypes = output_dtypes or {}
-        box_dtype = dtypes.get('det_boxes', 'TYPE_FP32')
-        score_dtype = dtypes.get('det_scores', 'TYPE_FP32')
-        config = f"""name: "{triton_name}"
-platform: "{platform}"
+    preferred = [size for size in (8, 16, 32, 64) if size <= max_batch] or [1]
+    preferred_str = ', '.join(str(b) for b in preferred)
+    dims_str = ', '.join(str(d) for d in output_dims)
+    return f"""name: "{triton_name}"
+platform: "tensorrt_plan"
 max_batch_size: {max_batch}
 
 input [
   {{
     name: "images"
-    data_type: {input_dtype}
+    data_type: TYPE_UINT8
     dims: [ 3, {IMG_SIZE}, {IMG_SIZE} ]
   }}
 ]
 
+# One row per detection, [x1, y1, x2, y2, score, class], in letterboxed input pixels
 output [
   {{
-    name: "num_dets"
-    data_type: TYPE_INT32
-    dims: [ 1 ]
-  }},
-  {{
-    name: "det_boxes"
-    data_type: {box_dtype}
-    dims: [ 300, 4 ]
-  }},
-  {{
-    name: "det_scores"
-    data_type: {score_dtype}
-    dims: [ 300 ]
-  }},
-  {{
-    name: "det_classes"
-    data_type: TYPE_INT32
-    dims: [ 300 ]
-  }}
-]
-
-dynamic_batching {{
-  preferred_batch_size: [ {preferred_batch_str} ]
-  max_queue_delay_microseconds: 5000
-}}
-
-instance_group [
-  {{
-    count: 2
-    kind: KIND_GPU
-    gpus: [ 0 ]
-  }}
-]
-"""
-    else:
-        # Standard model without NMS
-        # Output shape: [batch, 84, 8400] for YOLO11 with 80 classes
-        output_dim_1 = 4 + num_classes  # 4 bbox coords + num_classes
-        config = f"""name: "{triton_name}"
-platform: "{platform}"
-max_batch_size: {max_batch}
-
-input [
-  {{
-    name: "images"
-    data_type: {input_dtype}
-    dims: [ 3, {IMG_SIZE}, {IMG_SIZE} ]
-  }}
-]
-
-output [
-  {{
-    name: "output0"
+    name: "{output_name}"
     data_type: TYPE_FP32
-    dims: [ {output_dim_1}, 8400 ]
+    dims: [ {dims_str} ]
   }}
 ]
 
 dynamic_batching {{
-  preferred_batch_size: [ {preferred_batch_str} ]
-  max_queue_delay_microseconds: 5000
+  preferred_batch_size: [ {preferred_str} ]
+  max_queue_delay_microseconds: 25000
 }}
 
 instance_group [
@@ -148,46 +111,21 @@ instance_group [
 ]
 """
 
-    return config
 
-
-def save_triton_config(
+def save_fused_config(
     model_dir: Path,
     triton_name: str,
-    model_format: str,
     max_batch: int,
-    num_classes: int = 80,
-    has_nms: bool = False,
-    output_dtypes: dict[str, str] | None = None,
+    output_name: str,
+    output_dims: list[int],
+    *,
     overwrite: bool = False,
 ) -> Path:
-    """
-    Save Triton config.pbtxt file for a model (see ``config_write``: an
-    existing config that differs is kept unless ``overwrite``).
-
-    Args:
-        model_dir: Model directory path
-        triton_name: Triton model name
-        model_format: Model format
-        max_batch: Maximum batch size
-        num_classes: Number of classes
-        has_nms: Whether model has built-in NMS
-
-    Returns:
-        Path to saved config file
-    """
-    config_content = generate_triton_config(
-        triton_name=triton_name,
-        model_format=model_format,
-        max_batch=max_batch,
-        num_classes=num_classes,
-        has_nms=has_nms,
-        output_dtypes=output_dtypes,
-    )
-
+    """Write ``model_dir/config.pbtxt`` (see ``config_write``: a differing tracked config is kept
+    unless ``overwrite``). Returns the file written."""
+    model_dir.mkdir(parents=True, exist_ok=True)
     return write_generated_config(
         model_dir / 'config.pbtxt',
-        config_content,
+        render_fused_config(triton_name, max_batch, output_name, output_dims),
         overwrite=overwrite,
-        output_dtypes=output_dtypes if has_nms else None,
     )

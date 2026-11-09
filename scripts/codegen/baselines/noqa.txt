@@ -77,7 +77,6 @@ src/services/visual_search/clustering.py	1	suppressions recorded when the ratche
 src/tasks/runtime/gpu_app.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/tasks/runtime/hooks.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/tasks/runtime/register.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/ultralytics_patches/export_method.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/utils/cache.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/_fake_model_registry.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/bakeoff/test_bakeoff_start_job.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower

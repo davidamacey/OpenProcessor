@@ -41,6 +41,7 @@ def _fake_result(class_ids: list[int]) -> dict:
         'boxes': np.tile(np.array([0.1, 0.1, 0.2, 0.2], dtype=np.float32), (n, 1)),
         'scores': np.full(n, 0.9, dtype=np.float32),
         'classes': np.array(class_ids, dtype=np.float32),
+        'box_frame': 'pixels',
     }
 
 
@@ -107,7 +108,7 @@ class TestInferenceServiceThreadsModelNameThrough:
         from src.services import inference as inference_module
 
         fake_client = MagicMock()
-        fake_client.infer_yolo_end2end.return_value = {'boxes': [], 'scores': [], 'classes': []}
+        fake_client.infer_fused_detector.return_value = {'boxes': [], 'scores': [], 'classes': []}
         fake_client.format_detections.return_value = []
         monkeypatch.setattr(inference_module, 'routed_triton_client', lambda *_a, **_k: fake_client)
         monkeypatch.setattr(

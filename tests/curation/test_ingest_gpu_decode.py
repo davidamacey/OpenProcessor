@@ -38,7 +38,7 @@ def _gpu_decode_result(
             'status': np.array([b'ok'], dtype=np.object_),
             'size': np.array([width, height], np.int32),
             'letterbox': np.array([scale, (320 - new_w) / 2, (320 - new_h) / 2], np.float64),
-            'det_boxes': np.array([[0.05, 0.05, 0.6, 0.6]], np.float32),
+            'det_boxes': np.array([[16.0, 16.0, 192.0, 192.0]], np.float32),
             'det_scores': np.array([0.9], np.float32),
             'det_classes': np.array([1], np.int32),
             'whole_embedding': np.array([0.0, 0.0, 2.0], np.float32),

@@ -8,6 +8,7 @@ import io
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
+from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
 from tritonclient.utils import InferenceServerException
 
@@ -26,6 +27,9 @@ if TYPE_CHECKING:
 F = get_region_fields()
 
 IMPORT = 'import'
+
+#: The network input size of the primary profile these tests build.
+NET = 320
 
 
 def items_index() -> str:
@@ -144,9 +148,9 @@ class FakeInferResult:
         return self._outputs[name]
 
 
-class FakeTriton:
-    """End2end detections (x1, y1, x2, y2, score, class_id) in network-input
-    coordinates; ``detections`` can be swapped between calls."""
+class FakeTriton(GpuDecodeAbsent):
+    """Fused-tensor detections (x1, y1, x2, y2, score, class_id), box coordinates as fractions
+    of the network input; ``detections`` can be swapped between calls."""
 
     def __init__(self, detections: list[tuple[float, float, float, float, float, int]]) -> None:
         self.detections = detections
@@ -167,22 +171,7 @@ class FakeTriton:
     async def infer(self, model_name: str, inputs: list, outputs: list) -> FakeInferResult:
         self.calls += 1
         batch = int(inputs[0].shape()[0]) if hasattr(inputs[0], 'shape') else 1
-        n = len(self.detections)
-        boxes = np.array([d[:4] for d in self.detections], dtype=np.float32).reshape(1, n, 4)
-        return FakeInferResult(
-            {
-                'num_dets': np.tile(np.array([[n]], dtype=np.int32), (batch, 1)),
-                'det_boxes': np.tile(boxes, (batch, 1, 1)),
-                'det_scores': np.tile(
-                    np.array([d[4] for d in self.detections], dtype=np.float32).reshape(1, n),
-                    (batch, 1),
-                ),
-                'det_classes': np.tile(
-                    np.array([d[5] for d in self.detections], dtype=np.float32).reshape(1, n),
-                    (batch, 1),
-                ),
-            }
-        )
+        return FakeInferResult({'output0': fused_tensor(self.detections, net=NET, batch=batch)})
 
 
 class FakePE:
@@ -224,7 +213,7 @@ def make_service(
         detector_model='primary_end2end',
         assigns_class=True,
         detector_version='1',
-        input_size=320,
+        input_size=NET,
         confidence_floor=0.5,
         batch_limit=8,
     )
