@@ -13,7 +13,6 @@ import os
 import signal
 import time
 from functools import partial
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from scripts.curation.worker.cascade import SegmenterClient
@@ -149,7 +148,6 @@ async def run(args: argparse.Namespace) -> int:
     opensearch = make_script_opensearch([args.opensearch])
 
     started_at = time.monotonic()
-    sentinel = Path(args.pause_sentinel)
 
     from src.services.projects.registry import ProjectRegistry
     from src.services.projects.script_binding import only_project
@@ -386,7 +384,6 @@ async def run(args: argparse.Namespace) -> int:
         args=args,
         stop_event=stop_event,
         opensearch=opensearch,
-        sentinel=sentinel,
         started_at=started_at,
         region_embed_pe=region_embed_pe,
         project_registry=project_registry,

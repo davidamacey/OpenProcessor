@@ -2,7 +2,8 @@
 
 A pause is ``projects.paused_at``. The workers read it from the registry snapshot at the start of
 each cycle and skip a paused project while serving the others; the global GPU pause (the
-trainer's single-GPU claim) still pauses every project's workers regardless.
+GPU claim of a running train, probe or bake-off job) still pauses every project's workers
+regardless.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pydantic import BaseModel
 from src.config.curation_accessors import get_curation_config
 from src.config.project_context import current_project
 from src.routers.curation._common import router
+from src.services.jobs.gpu_pause import training_claim_reason
 from src.services.projects import pause as pause_service
 
 
@@ -27,22 +29,9 @@ class PipelinePauseState(BaseModel):
     reason: str | None = None
 
 
-def _global_gpu_training_reason() -> str | None:
-    """Best-effort: is the trainer's single-GPU claim (§ gpu_arbiter) live
-    right now? Never fatal -- an unreadable lock file just reports no
-    global pause, same as no lock at all."""
-    from src.services.training.gpu_arbiter_policy import read_training_lock
-
-    lock = read_training_lock()
-    if lock is None:
-        return None
-    devices = lock.get('cuda_visible_devices') or ''
-    return f'GPU training claim active (cuda_visible_devices={devices!r})'
-
-
-def _state(*, project_paused: bool) -> PipelinePauseState:
+async def _state(*, project_paused: bool) -> PipelinePauseState:
     cfg = get_curation_config()
-    gpu_reason = _global_gpu_training_reason()
+    gpu_reason = await training_claim_reason()
     paused_by: list[str] = []
     if project_paused:
         paused_by.append('project')
@@ -71,7 +60,7 @@ async def pause_pipeline() -> PipelinePauseState:
     cfg = get_curation_config()
     await pause_service.set_paused(cfg.project_slug, paused=True)
     await _publish_pause_event(event_type='project.paused', cfg=cfg)
-    return _state(project_paused=True)
+    return await _state(project_paused=True)
 
 
 @router.post('/resume', response_model=PipelinePauseState)
@@ -81,12 +70,12 @@ async def resume_pipeline() -> PipelinePauseState:
     cfg = get_curation_config()
     await pause_service.set_paused(cfg.project_slug, paused=False)
     await _publish_pause_event(event_type='project.resumed', cfg=cfg)
-    return _state(project_paused=False)
+    return await _state(project_paused=False)
 
 
 @router.get('/pause', response_model=PipelinePauseState)
 async def get_pipeline_pause_state() -> PipelinePauseState:
-    return _state(project_paused=current_project().record.paused_at is not None)
+    return await _state(project_paused=current_project().record.paused_at is not None)
 
 
 __all__ = [

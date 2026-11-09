@@ -15,7 +15,7 @@ from scripts.curation.worker.fairness import (
     write_liveness,
 )
 from scripts.curation.worker.region_embed_stage import embed_written_regions
-from scripts.curation.worker.state import _ItemTask, _wait_for_sentinel_clear
+from scripts.curation.worker.state import _ItemTask, _wait_while_gpu_claimed
 from src.core.logging import get_logger
 from src.services.curation.crop_bytes import cache_stats as crop_cache_stats
 from src.services.curation.ops_metrics import OP_DETECTION_WORKER_ITEMS_TOTAL
@@ -76,7 +76,6 @@ async def _produce(
     args = ctx.args
     stop_event = ctx.stop_event
     opensearch = ctx.opensearch
-    sentinel = ctx.sentinel
     project_registry = ctx.project_registry
     fairness_scheduler = ctx.fairness_scheduler
     in_q = ctx.in_q
@@ -94,7 +93,7 @@ async def _produce(
     # single project the cap is the pipeline itself, as before.
     pipeline_capacity = sum(q.maxsize for q in (in_q, vlm_visible_q, sam_q, combined_q, out_q))
     while not stop_event.is_set():
-        await _wait_for_sentinel_clear(sentinel, sleep_s=args.sentinel_sleep)
+        await _wait_while_gpu_claimed(sleep_s=args.claim_poll_interval)
         if stop_event.is_set():
             return
         # Backpressure: don't overfill the queue.

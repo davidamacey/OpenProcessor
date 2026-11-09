@@ -2,7 +2,7 @@
 
 Functions take the caller's sync session inside its transaction and never commit. The start
 service inserts the row in the job's own transaction (``start_job(with_rows=...)``); the handler
-records where the results are; the GPU arbiter asks which bake-offs hold the GPUs.
+records where the results are; retention asks which bake-offs are still active.
 """
 
 from __future__ import annotations

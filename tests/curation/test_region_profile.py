@@ -264,7 +264,6 @@ def _worker_args(
             '--opensearch=http://os.local:9200',
             '--triton=triton:8001',
             f'--segmenter-url={segmenter_url}',
-            f'--pause-sentinel={tmp_path / "pause.sentinel"}',
             '--max-iterations=1',
         ]
     )

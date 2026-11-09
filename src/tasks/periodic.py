@@ -11,6 +11,7 @@ from src.services.periodic import (
     cache_prune,
     cluster_refresh,
     db_backup,
+    gpu_arbiter,
     ingest_dispatch,
     job_stats,
     near_dup_ticks,
@@ -92,3 +93,9 @@ def cluster_refresh_tick() -> None:
 def db_backup_tick() -> None:
     """Dump the control-plane database to the backup directory and prune old dumps."""
     run_periodic('db_backup', db_backup.tick())
+
+
+@app.task(name='op.periodic.gpu_arbiter', **_TICK)
+def gpu_arbiter_tick() -> None:
+    """Stop the GPU-resident services the running claims need and start the ones they freed."""
+    run_periodic('gpu_arbiter', gpu_arbiter.tick())

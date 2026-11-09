@@ -71,18 +71,11 @@ def app_client(
     monkeypatch.setattr('src.routers.curation.train.runs.promote_job.latest_for_run', _no_promote)
     monkeypatch.setattr('src.routers.curation.train.runs.current_project_id', uuid.uuid4)
 
-    # claim_gpus_for_training (called unconditionally by /start and
-    # /start_campaign before the run is queued) writes a sentinel/lock
-    # file under CurationConfig.state_dir. get_curation_config() is a
-    # process-wide cached singleton, so setting OP_STATE_DIR here would
-    # have no effect once the process has already built it once -- patch
-    # the arbiter's own _state_dir() seam instead (same pattern
-    # test_gpu_arbiter.py uses) so these tests exercise a real,
-    # succeeding claim instead of relying on an exception being silently
-    # swallowed by a broad except-Exception (now removed).
-    from src.services.training import gpu_arbiter_policy
-
-    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
+    # The preflight asks the database whether gpu-arbiter-worker is alive; these tests have none.
+    # A test that cares overrides it.
+    monkeypatch.setattr(
+        'src.services.training.preflight_run.arbiter_consumer_live', AsyncMock(return_value=True)
+    )
 
     from src.routers.curation._common import _raw_opensearch_dep
     from src.routers.curation.train import router as curation_train_router

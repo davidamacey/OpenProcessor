@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -24,7 +23,6 @@ class World:
     def __init__(self) -> None:
         self.events: list[str] = []
         self.fail: set[str] = set()
-        self.arbiter_calls = 0
 
     def step(self, name: str) -> None:
         self.events.append(name)
@@ -93,22 +91,9 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         def warm_text_encoder(self) -> None:
             w.step('pe_encoder_warm')
 
-    async def fake_reconcile_on_startup() -> Any:
-        w.arbiter_calls += 1
-        w.step('arbiter_reconcile')
-        return SimpleNamespace(action='noop', detail='stub')
-
     async def fake_ops_refresh_loop() -> None:
         w.step('ops_metrics_loop')
         await _forever()
-
-    arbiter_cfg = SimpleNamespace(
-        allowed_gpu_ids=frozenset({2, 0}), containers=('c1',), trainer_container='trainer'
-    )
-
-    def fake_get_arbiter_config() -> Any:
-        w.step('arbiter_config')
-        return arbiter_cfg
 
     patches: list[tuple[str, str, Any]] = [
         ('src.config.retired_env', 'reject_retired_env', _sync_step(w, 'retired_env')),
@@ -140,8 +125,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
             'make_curation_opensearch',
             _fake_lease_client,
         ),
-        ('src.config', 'get_gpu_arbiter_config', fake_get_arbiter_config),
-        ('src.services.training.gpu_arbiter', 'reconcile_on_startup', fake_reconcile_on_startup),
         ('src.clients.pe_encoder', 'PEEncoder', FakeEncoder),
         (
             'src.services.projects.bootstrap',
@@ -188,8 +171,6 @@ EXPECTED_STARTUP = [
     'opensearch_bootstrap',
     'config_store_bootstrap',
     'event_listener_start',
-    'arbiter_config',
-    'arbiter_reconcile',
     'pe_encoder_created',
     'pe_encoder_warm',
 ]
@@ -216,7 +197,6 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
         seen['startup'] = list(world.events)
         seen['executor'] = AppResources.shared_executor
         seen['pool'] = AppResources.async_triton_pool
-        seen['arbiter'] = AppResources.arbiter_task
         seen['ops'] = AppResources.ops_metrics_task
         seen['bus'] = AppResources.event_bus_started
         await asyncio.sleep(0)
@@ -227,20 +207,17 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
     assert 'ops_metrics_loop' in world.events
     assert seen['executor'] is not None
     assert seen['pool'] is not None
-    assert seen['arbiter'] is not None
     assert seen['ops'] is not None
     assert seen['bus'] is True
     assert app.state.pe_encoder.triton_pool is seen['pool']
     assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
     # shutdown clears the tasks and flags but keeps the pool and executor references
     assert AppResources.ops_metrics_task is None
-    assert AppResources.arbiter_task is None
     assert AppResources.project_registry_poll_task is None
     assert AppResources.config_store_poll_task is None
     assert AppResources.event_bus_started is False
     assert AppResources.async_triton_pool is seen['pool']
     assert AppResources.shared_executor is seen['executor']
-    assert seen['arbiter'].cancelled() or seen['arbiter'].done()
 
 
 def test_a_failing_event_listener_start_is_skipped_and_its_stop_is_not_attempted(
@@ -258,18 +235,6 @@ def test_a_failing_event_listener_stop_does_not_stop_the_rest_of_shutdown(world:
     _run_lifespan()
     tail = _normalized(world.events)[len(EXPECTED_STARTUP) :]
     assert tail == EXPECTED_SHUTDOWN
-
-
-def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_rest_of_startup(world: World) -> None:
-    world.fail = {'arbiter_reconcile'}
-    seen: dict[str, Any] = {}
-
-    async def body() -> None:
-        seen['arbiter'] = AppResources.arbiter_task
-
-    _run_lifespan(body)
-    assert seen['arbiter'] is None
-    assert 'pe_encoder_warm' in world.events
 
 
 def test_a_failing_pe_encoder_warmup_does_not_block_startup(world: World) -> None:
@@ -318,28 +283,11 @@ def test_startup_failures_before_serving_propagate(world: World) -> None:
     assert 'pool_created:4x64' not in world.events
 
 
-def test_the_arbiter_loop_reconciles_on_a_timer_and_survives_a_failing_tick(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr('src.app.lifespan.ARBITER_RECONCILE_INTERVAL_SECONDS', 0.01)
-    calls = {'n': 0}
-
-    async def flaky_reconcile() -> Any:
-        calls['n'] += 1
-        if calls['n'] == 2:
-            raise RuntimeError('tick failed')
-        return SimpleNamespace(action='noop', detail='stub')
-
-    monkeypatch.setattr('src.services.training.gpu_arbiter.reconcile_on_startup', flaky_reconcile)
-
-    async def body() -> None:
-        for _ in range(100):
-            if calls['n'] >= 4:
-                return
-            await asyncio.sleep(0.01)
-
-    _run_lifespan(body)
-    assert calls['n'] >= 4
+def test_the_api_runs_no_arbiter_loop() -> None:
+    """The GPU arbiter is the ``op.periodic.gpu_arbiter`` beat tick in gpu-arbiter-worker; the API
+    lifespan starts none and the API holds no Docker socket."""
+    assert not hasattr(lifespan_module, '_start_gpu_arbiter')
+    assert not hasattr(AppResources, 'arbiter_task')
 
 
 def _app_with_nested_routers() -> FastAPI:

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
 
 from scripts.curation._project_worker_utils import is_project_paused, unpaused_projects
 from src.services.projects.bootstrap import bootstrap_default_project
@@ -112,24 +113,30 @@ def test_pausing_one_project_leaves_the_others_paused_state_alone(
     assert other.paused_at is None
 
 
-def test_pause_state_reports_global_gpu_training_claim(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import src.config.curation_accessors as curation_config_mod
-    from src.services.training import gpu_arbiter_policy
+def test_pause_state_reports_global_gpu_training_claim(app_client: TestClient, pg) -> None:
+    """A running job that holds cards (the arbiter tick's record) idles every project's workers."""
+    from fixtures.job_rows import sql
 
-    monkeypatch.setenv('OP_STATE_DIR', str(tmp_path))
-    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    monkeypatch.setattr(
-        gpu_arbiter_policy, 'read_training_lock', lambda **_: {'cuda_visible_devices': '0'}
+    from src.domain import gpu_arbiter_state as state
+
+    assert app_client.get('/curation/projects/default/pause').json()['paused'] is False
+    sql(
+        pg,
+        'INSERT INTO deployment_settings (key, value, updated_by) VALUES (%s, %s, %s) '
+        'ON CONFLICT (key) DO UPDATE SET value = excluded.value',
+        state.KEY,
+        Jsonb({state.ARBITER: state.ArbiterRecord(claims=('job-1',)).to_json()}),
+        'test',
     )
-
-    r = app_client.get('/curation/projects/default/pause')
-    assert r.status_code == 200
-    body = r.json()
-    assert body['paused'] is True
-    assert body['paused_by'] == ['gpu_training']
-    assert body['reason'] is not None
+    try:
+        r = app_client.get('/curation/projects/default/pause')
+        assert r.status_code == 200
+        body = r.json()
+        assert body['paused'] is True
+        assert body['paused_by'] == ['gpu_training']
+        assert body['reason'] == 'GPU claim active (1 running job)'
+    finally:
+        sql(pg, 'DELETE FROM deployment_settings WHERE key = %s', state.KEY)
 
 
 def test_pause_publishes_a_global_event(

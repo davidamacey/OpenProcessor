@@ -128,7 +128,7 @@ async def count_pending_ingest(opensearch: Any) -> int | None:
     when they could not be counted (an outage is not an idle backlog).
 
     A training claim that stops GPU-resident ingest containers
-    (``gpu_arbiter.containers_to_stop``) pauses that detection/verification
+    (``gpu_claims.containers_to_stop``) pauses that detection/verification
     until the run ends. This lets preflight warn the operator how much
     in-flight ingest that will stall.
     """

@@ -7,7 +7,7 @@ stop/start to free GPUs for a run (a module-level container-name
 tuple), and the name of the trainer container to probe for
 reachability (a module-level constant). All three are host/deployment
 facts, not generic training-pipeline logic, so they live here rather
-than in ``src/services/training/gpu_arbiter.py``.
+than in the arbiter tick (``src/services/periodic/gpu_arbiter.py``).
 
 **Default is permissive/empty, deliberately.** A generic OSS install has
 no fixed GPU layout and no fixed set of sibling containers to coordinate
@@ -35,7 +35,7 @@ separates containers). A bare ``name`` is unscoped and keeps the
 original semantics — stopped only when a claim spans more than one
 GPU. A scoped container is stopped whenever the training claim
 intersects its GPU set, regardless of claim size (see
-:func:`src.services.training.gpu_arbiter.containers_to_stop`).
+:func:`src.domain.gpu_claims.containers_to_stop`).
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def _parse_gpu_labels(raw: str) -> dict[int, str]:
 
 @dataclass(frozen=True)
 class GpuArbiterConfig:
-    """Deployment facts for :mod:`src.services.training.gpu_arbiter`.
+    """Deployment facts for the GPU arbiter tick (:mod:`src.services.periodic.gpu_arbiter`).
 
     ``containers`` are stopped (in order) when a training/bake-off run
     claims all configured GPUs, and started (in the same order) when the

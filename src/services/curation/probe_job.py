@@ -1,17 +1,25 @@
 """The queued probe job: :func:`run_probe_inference` over the whole items index.
 
 ``POST /probe/run`` queues a ``probe`` job (one at a time per project); a Celery worker runs
-:func:`run_probe`. A requested GPU is claimed through the same
-:mod:`src.services.training.gpu_arbiter` path ``POST /train/start`` uses, inside the worker,
-and released when the run ends; a claim failure fails the job (never a silent unclaimed run).
+:func:`run_probe`. A requested GPU is claimed inside the worker: the job
+reserves the cards and waits for the GPU arbiter tick to stop the services that share them
+(:mod:`src.tasks.runtime.gpu_claim`), and releases them when the run ends; a claim that is not
+confirmed in time fails the job with ``gpu_busy`` (never a silent unclaimed run).
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from src.config.env import env_str
 from src.core.logging import get_logger
+from src.db.repos import gpu_devices
+from src.domain.gpu_claims import parse_cuda_visible_devices
+from src.domain.gpu_order import parse_order, position_of
 from src.services.jobs.service import start_job
+from src.tasks.runtime.gpu_claim import claim_cards, release_cards
 
 
 if TYPE_CHECKING:
@@ -82,17 +90,17 @@ def status_dict(view: JobView | None) -> dict[str, Any]:
 
 async def run_probe(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
     """Execute the job: the existing probe inference, checking for a cancel once per page."""
+    from pathlib import Path
+
     from src.services.curation.probe_predictions import run_probe_inference
 
     params = ctx.params
     gpu = params.get('gpu')
-    if gpu is not None:
-        from src.services.training.gpu_arbiter import claim_gpus_for_training
-
-        await claim_gpus_for_training(gpu)  # GpuArbiterStopFailedError fails the job
     try:
-        from pathlib import Path
-
+        if gpu is not None:
+            order = parse_order(env_str('OP_TRAIN_GPU_ORDER'))
+            positions = [position_of(order, host_id) for host_id in parse_cuda_visible_devices(gpu)]
+            await claim_cards(ctx, lambda session: gpu_devices.at_positions(session, positions))
         updated = await run_probe_inference(
             Path(params['model_path']),
             opensearch,
@@ -103,11 +111,9 @@ async def run_probe(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
         )
     finally:
         if gpu is not None:
-            from src.services.training.gpu_arbiter import release_gpus_after_training
-
             try:
-                await release_gpus_after_training(gpu)
-            except Exception as exc:
+                await release_cards(ctx)
+            except SQLAlchemyError as exc:
                 logger.error('probe_job_gpu_release_failed', job_id=str(ctx.job_id), error=str(exc))
     return {'updated_count': updated, 'cancelled': ctx.cancelled()}
 

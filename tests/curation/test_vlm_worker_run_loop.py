@@ -42,6 +42,7 @@ class Fakes:
         self.bound: list[str] = []
         self.classless: set[str] = set()
         self.hooks: list[Any] = []
+        self.paused = False
         m = monkeypatch
         m.setattr(vlm_worker, 'curation_api_prefix', lambda: '/curation')
         m.setattr(vlm_worker, 'script_project_registry', lambda *_a, **_kw: object())
@@ -52,6 +53,7 @@ class Fakes:
         m.setattr(vlm_worker, 'heartbeat_loop', self._heartbeat)
         m.setattr(vlm_worker, 'project_has_item_classes', self._has_classes)
         m.setattr(vlm_worker, 'bind_project', self._bind)
+        m.setattr(vlm_worker, 'vlm_paused', self._vlm_paused)
         real_sleep = asyncio.sleep
 
         async def _sleep(seconds: float) -> None:
@@ -66,6 +68,9 @@ class Fakes:
 
     async def close(self) -> None:
         self.closed = True
+
+    async def _vlm_paused(self) -> bool:
+        return self.paused
 
     async def _projects(self, _registry: Any, only: str | None) -> list[Any]:
         return [p for p in self.projects if only in (None, p.slug)]
@@ -122,8 +127,6 @@ def _args(*extra: str) -> Any:
             '2',
             '--poll-interval',
             '0.5',
-            '--pause-sentinel',
-            '',
             *extra,
         ]
     )
@@ -276,19 +279,16 @@ async def test_continuous_mode_never_stops_on_idle(fakes: Fakes) -> None:
 
 
 @pytest.mark.asyncio
-async def test_pause_sentinel_holds_the_producer_until_removed(
-    fakes: Fakes, tmp_path: Path
-) -> None:
-    sentinel = tmp_path / 'pause.sentinel'
-    sentinel.write_text('1')
+async def test_a_gpu_claim_holds_the_producer_until_it_clears(fakes: Fakes) -> None:
+    fakes.paused = True
     fakes.pending['alpha'] = [['c1']]
 
     def _unpause(seconds: float) -> None:
         if seconds == 7.0:
-            sentinel.unlink()
+            fakes.paused = False
 
     fakes.hooks.append(_unpause)
-    args = _args('--until-empty', '--pause-sentinel', str(sentinel), '--pause-poll-interval', '7')
+    args = _args('--until-empty', '--pause-poll-interval', '7')
     await asyncio.wait_for(vlm_worker.run(args), 10)
     assert fakes.sleeps[0] == 7.0
     assert fakes.labelled == [('alpha', ['c1'])]

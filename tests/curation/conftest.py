@@ -227,14 +227,16 @@ def loop_env(pg: Any, tmp_path: Any, captured_events: Any) -> Any:
 
 
 @pytest.fixture(autouse=True)
-def _no_active_bakeoff(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The GPU arbiter reads bake-off jobs from PostgreSQL; these tests have no database."""
-    from src.services.training import gpu_arbiter
+def _no_gpu_claim_offline(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The detection worker asks the database whether a GPU claim pauses it; the offline tier has
+    none, so nothing is claimed (a ``db`` test reads the real document)."""
+    if request.node.get_closest_marker('db') is not None:
+        return
 
-    async def _none() -> bool:
+    async def _free() -> bool:
         return False
 
-    monkeypatch.setattr(gpu_arbiter, '_bakeoff_holds_gpus', _none)
+    monkeypatch.setattr('scripts.curation.worker.state.vlm_paused', _free)
 
 
 @pytest.fixture(autouse=True)

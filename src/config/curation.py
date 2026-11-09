@@ -264,24 +264,6 @@ class CurationConfig:
         if self.bakeoff_results_dir is _FOLLOWS_STATE_DIR:
             object.__setattr__(self, 'bakeoff_results_dir', self.state_dir / 'bakeoff_jobs')
 
-    @property
-    def pause_sentinel_path(self) -> Path:
-        """The ONE path every pause-sentinel writer/reader must agree on.
-
-        The GPU arbiter (``src/services/training/gpu_arbiter.py``) used
-        to default to ``{state_dir}/training_worker/pause.sentinel``
-        while the workers that are supposed to pause when it appears
-        (``scripts/curation/worker/state.py``,
-        ``scripts/curation/vlm_worker.py``) defaulted to
-        ``{state_dir}/vlm_worker/pause.sentinel`` -- a single-GPU
-        training claim never actually paused anything, because the
-        writer and the readers were watching two different files. All
-        three now resolve through this property (env overrides on each
-        side are unchanged and still work; they just need to agree if
-        set).
-        """
-        return self.state_dir / 'vlm_worker' / 'pause.sentinel'
-
     @classmethod
     def from_env(cls, prefix: str = 'OP_') -> CurationConfig:
         """Build a :class:`CurationConfig` from ``{prefix}*`` env vars.

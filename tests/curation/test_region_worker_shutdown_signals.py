@@ -1,56 +1,21 @@
-"""Sentinel pause and SIGTERM handling of the region worker loop."""
+"""SIGTERM handling of the region worker loop (the GPU-claim pause is in
+test_worker_gpu_claim_pause.py)."""
 
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import scripts.curation.worker.state as worker_state
 from curation.vlm_opt_in import project_opts_in_to_env_vlm
 from scripts.curation.worker import runner as runner_mod
 from scripts.curation.worker.__main__ import parse_args
 
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 # The cascade needs an active region profile; the default is none.
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
-
-
-# =============================================================================
-# Sentinel pause
-# =============================================================================
-
-
-class TestSentinel:
-    @pytest.mark.asyncio
-    async def test_wait_returns_immediately_when_sentinel_absent(self, tmp_path: Path) -> None:
-        sentinel = tmp_path / 'pause.sentinel'  # does not exist
-        # Should not block.
-        await asyncio.wait_for(
-            worker_state._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=0.5
-        )
-
-    @pytest.mark.asyncio
-    async def test_wait_blocks_then_unblocks(self, tmp_path: Path) -> None:
-        sentinel = tmp_path / 'pause.sentinel'
-        sentinel.write_text('paused')
-
-        async def _delete_after(delay: float) -> None:
-            await asyncio.sleep(delay)
-            sentinel.unlink()
-
-        # Kick off the deletion concurrently with the wait.
-        deleter = asyncio.create_task(_delete_after(0.05))
-        await asyncio.wait_for(
-            worker_state._wait_for_sentinel_clear(sentinel, sleep_s=0.01), timeout=1.0
-        )
-        await deleter
-        assert not sentinel.exists()
 
 
 # =============================================================================
@@ -60,9 +25,7 @@ class TestSentinel:
 
 class TestSignalHandling:
     @pytest.mark.asyncio
-    async def test_run_exits_cleanly_on_stop(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_run_exits_cleanly_on_stop(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A faked ``run``-style loop respects the stop event and shuts down
         all owned resources (httpx clients, OpenSearch, Triton pool)."""
 
@@ -120,7 +83,6 @@ class TestSignalHandling:
         # default 4609 on this host.
         monkeypatch.setenv('OP_REGION_WORKER_METRICS_PORT', '0')
 
-        sentinel = tmp_path / 'pause.sentinel'  # absent
         monkeypatch.setenv('OP_VLM_URL', 'http://vlm.local:8000')
         project_opts_in_to_env_vlm(monkeypatch)
         args = parse_args(
@@ -128,7 +90,6 @@ class TestSignalHandling:
                 '--opensearch=http://os.local:9200',
                 '--triton=triton:8001',
                 '--segmenter-url=http://segmenter.local:8000',
-                f'--pause-sentinel={sentinel}',
                 '--max-iterations=1',
             ]
         )

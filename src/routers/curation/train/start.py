@@ -8,10 +8,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
-from src.core.logging import get_logger
 from src.routers.curation._common import OpenSearchDep  # noqa: TC001 - used at runtime by FastAPI
 from src.services.training import job_campaigns, jobs as train_jobs
-from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
 from src.services.training.job_models import TrainCampaignSpec, TrainJobSpec
 from src.services.training.preflight_checks import PreflightReport
 from src.services.training.preflight_run import (
@@ -21,8 +19,6 @@ from src.services.training.preflight_run import (
 )
 from src.services.training.profiles import PROFILES_YOLO26
 
-
-logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -70,29 +66,6 @@ async def start_train(
             status_code=422,
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
-    # GPU arbiter — pause the VLM worker (single-GPU) or stop the container
-    # (dual-GPU) BEFORE the trainer picks the job up, and BEFORE the job
-    # is queued. Fails closed -- claim_gpus_for_training raises
-    # GpuArbiterStopFailedError when a claim needs to stop a configured
-    # GPU-resident container and can't (docker SDK/socket unavailable, or
-    # the stop itself failed). Starting anyway would run training right
-    # next to that service on the same GPU, so refuse with 409 and never
-    # reach write_job.
-    from src.services.training.gpu_arbiter import claim_gpus_for_training
-
-    try:
-        await claim_gpus_for_training(spec.cuda_visible_devices)
-    except GpuArbiterStopFailedError as exc:
-        logger.warning('gpu_arbiter_claim_failed', error=str(exc))
-        raise HTTPException(
-            status_code=409,
-            detail={
-                'message': (
-                    'cannot claim the requested GPU(s): a configured GPU-resident '
-                    f'container could not be stopped ({exc})'
-                ),
-            },
-        ) from exc
     try:
         job_id = await train_jobs.start_run(session, spec)
     except ValueError as exc:
@@ -145,24 +118,6 @@ async def start_campaign(
             detail={'message': 'preflight blocked', 'preflight': report.model_dump()},
         )
 
-    # GPU arbiter — claim once for the entire campaign. The reconcile loop
-    # in src/app/lifespan.py releases when no run is left in a non-terminal state.
-    # Fails closed -- see the matching comment in start_train above.
-    from src.services.training.gpu_arbiter import claim_gpus_for_training
-
-    try:
-        await claim_gpus_for_training(campaign.cuda_visible_devices)
-    except GpuArbiterStopFailedError as exc:
-        logger.warning('gpu_arbiter_claim_failed', error=str(exc))
-        raise HTTPException(
-            status_code=409,
-            detail={
-                'message': (
-                    'cannot claim the requested GPU(s): a configured GPU-resident '
-                    f'container could not be stopped ({exc})'
-                ),
-            },
-        ) from exc
     try:
         campaign_id, job_ids = await job_campaigns.write_campaign(session, campaign)
     except ValueError as exc:

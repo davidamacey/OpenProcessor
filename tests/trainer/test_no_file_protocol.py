@@ -11,9 +11,9 @@ SCANNED = (ROOT / 'docker' / 'trainer', ROOT / 'src' / 'services' / 'training')
 # `.job.json`, `.status.json` and the `.cancel` sentinel are file names of the protocol;
 # `claim.g<N>` is the O_EXCL claim generation file. `.cancelled(` and `.cancel_requested` are not.
 PROTOCOL = re.compile(r'\.job\.json|\.status\.json|claim\.g|\.cancel(?![A-Za-z_])')
-# Other lanes own these and delete their file scans in the same wave: the claim-file cleanup of
-# the run retention (job-directory lane, 5E-3) and the arbiter's job-file scan (scheduler lane, 6A).
-NOT_YET = {'run_retention.py', 'gpu_arbiter.py'}
+# Another lane owns this and deletes its file scan in the same wave: the claim-file cleanup of
+# the run retention (job-directory lane, 5E-3).
+NOT_YET = {'run_retention.py'}
 
 
 def _hits() -> list[str]:

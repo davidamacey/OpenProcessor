@@ -23,7 +23,6 @@ logger = get_logger('curation_worker')
 from scripts.curation.worker.runner import run
 from scripts.curation.worker.state import (
     DEFAULT_OPENSEARCH,
-    DEFAULT_PAUSE_SENTINEL,
     DEFAULT_SEGMENTER_URL,
     DEFAULT_SEGMENTER_URLS,
     DEFAULT_TRITON,
@@ -48,11 +47,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             'http://segmenter-gpu1:8000).'
         ),
     )
-    p.add_argument(
-        '--pause-sentinel',
-        default=str(DEFAULT_PAUSE_SENTINEL),
-        help='File whose presence pauses the worker (trainer arbiter writes it).',
-    )
     p.add_argument('--batch-size', type=int, default=32)
     p.add_argument(
         '--concurrency',
@@ -72,10 +66,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help='Sleep between polls when the queue is empty (continuous mode only).',
     )
     p.add_argument(
-        '--sentinel-sleep',
+        '--claim-poll-interval',
         type=float,
         default=10.0,
-        help='Seconds to sleep between sentinel checks while paused.',
+        help='Seconds to sleep between GPU-claim checks while paused.',
     )
     p.add_argument(
         '--max-iterations',

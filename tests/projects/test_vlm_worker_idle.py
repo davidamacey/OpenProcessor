@@ -65,6 +65,11 @@ def _world(
         return None
 
     monkeypatch.setattr(vlm_worker, 'heartbeat_loop', _no_heartbeat)
+
+    async def _not_paused() -> bool:
+        return False
+
+    monkeypatch.setattr(vlm_worker, 'vlm_paused', _not_paused)
     return transport, api, inactive_hits
 
 

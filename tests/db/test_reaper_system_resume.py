@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from fixtures.job_rows import insert_row, make_project, sql
 from fixtures.reaper_support import Broker, environment, reaper, row, status
+from psycopg.types.json import Jsonb
 
 from src.services.jobs import blockers
 
@@ -113,7 +114,10 @@ def test_the_default_vlm_check_needs_the_setting_cleared_and_an_ok_probe(env) ->
     assert available() is True
     sql(
         env,
-        "INSERT INTO deployment_settings (key, value, updated_by) VALUES ('vlm_paused_for_training', 'true', 'test')",
+        'INSERT INTO deployment_settings (key, value, updated_by) VALUES (%s, %s, %s)',
+        'vlm_paused_for_training',
+        Jsonb({'arbiter': {'claims': ['a-running-job']}}),
+        'test',
     )
     assert available() is False  # taken for training
     assert project  # the helper project keeps the module's fixtures honest

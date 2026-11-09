@@ -86,19 +86,42 @@ async def test_the_run_calls_the_inference_with_the_params_and_claims_the_gpu(
         calls.append((model_path, kw))
         return 7
 
-    claim, release = AsyncMock(), AsyncMock()
+    claim, release = AsyncMock(return_value=['GPU-a']), AsyncMock()
     monkeypatch.setattr('src.services.curation.probe_predictions.run_probe_inference', inference)
-    monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', claim)
-    monkeypatch.setattr('src.services.training.gpu_arbiter.release_gpus_after_training', release)
+    monkeypatch.setattr(probe_job, 'claim_cards', claim)
+    monkeypatch.setattr(probe_job, 'release_cards', release)
+    ctx = FakeCtx(project, job.id, job.params)
 
-    result = await probe_job.run_probe(FakeCtx(project, job.id, job.params), object())
+    result = await probe_job.run_probe(ctx, object())
 
     assert result == {'updated_count': 7, 'cancelled': False}
     [(path, kw)] = calls
     assert path == Path('/x/best.onnx')
     assert (kw['model_version'], kw['architecture'], kw['resume']) == ('run-1', 'yolo26', True)
-    claim.assert_awaited_once_with('0')
-    release.assert_awaited_once_with('0')
+    claim.assert_awaited_once()
+    assert claim.await_args.args[0] is ctx
+    release.assert_awaited_once_with(ctx)
+
+
+@pytest.mark.asyncio
+async def test_a_probe_without_a_gpu_claims_and_releases_nothing(
+    pg, job_env, producer, wakes, monkeypatch
+) -> None:
+    project = make_project(pg)
+    job = await start(project, gpu=None)
+
+    async def inference(*_a, **_k):
+        return 1
+
+    claim, release = AsyncMock(), AsyncMock()
+    monkeypatch.setattr('src.services.curation.probe_predictions.run_probe_inference', inference)
+    monkeypatch.setattr(probe_job, 'claim_cards', claim)
+    monkeypatch.setattr(probe_job, 'release_cards', release)
+
+    await probe_job.run_probe(FakeCtx(project, job.id, job.params), object())
+
+    claim.assert_not_called()
+    release.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -113,11 +136,66 @@ async def test_the_gpu_is_released_when_the_inference_fails(
 
     release = AsyncMock()
     monkeypatch.setattr('src.services.curation.probe_predictions.run_probe_inference', inference)
-    monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', AsyncMock())
-    monkeypatch.setattr('src.services.training.gpu_arbiter.release_gpus_after_training', release)
+    monkeypatch.setattr(probe_job, 'claim_cards', AsyncMock())
+    monkeypatch.setattr(probe_job, 'release_cards', release)
+    ctx = FakeCtx(project, job.id, job.params)
     with pytest.raises(RuntimeError, match='boom'):
+        await probe_job.run_probe(ctx, object())
+    release.assert_awaited_once_with(ctx)
+
+
+@pytest.mark.asyncio
+async def test_a_claim_the_arbiter_does_not_confirm_fails_the_run_before_any_inference(
+    pg, job_env, producer, wakes, monkeypatch
+) -> None:
+    from src.tasks.runtime.gpu_claim import GpuBusyError
+
+    project = make_project(pg)
+    job = await start(project, gpu='0')
+    inference, release = AsyncMock(), AsyncMock()
+    monkeypatch.setattr('src.services.curation.probe_predictions.run_probe_inference', inference)
+    monkeypatch.setattr(probe_job, 'claim_cards', AsyncMock(side_effect=GpuBusyError('gpu_busy')))
+    monkeypatch.setattr(probe_job, 'release_cards', release)
+
+    with pytest.raises(GpuBusyError):
         await probe_job.run_probe(FakeCtx(project, job.id, job.params), object())
-    release.assert_awaited_once_with('1')
+
+    inference.assert_not_called()
+    release.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_the_claim_names_the_cards_at_the_container_positions_of_the_host_ids(
+    pg, job_env, producer, wakes, monkeypatch
+) -> None:
+    from src.db.repos import gpu_devices
+    from src.db.session import sync_deployment_tx
+    from tests.training._cards import card
+
+    project = make_project(pg)
+    sql(pg, 'DELETE FROM gpu_reservations')
+    sql(pg, 'DELETE FROM gpu_devices')
+    # The trainer container is pinned to host cards 2,0: host card 0 is at position 1.
+    monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '2,0')
+    job = await start(project, gpu='0')
+    claim = AsyncMock()
+
+    async def inference(*_a, **_k):
+        return 0
+
+    monkeypatch.setattr('src.services.curation.probe_predictions.run_probe_inference', inference)
+    monkeypatch.setattr(probe_job, 'claim_cards', claim)
+    monkeypatch.setattr(probe_job, 'release_cards', AsyncMock())
+    ctx = FakeCtx(project, job.id, job.params)
+    await probe_job.run_probe(ctx, object())
+    [find] = claim.await_args.args[1:]
+
+    from sqlalchemy.orm import Session
+
+    with Session(pg.engine('app')) as session, sync_deployment_tx(session, 'test'):
+        gpu_devices.upsert(session, [card('GPU-a', 0), card('GPU-b', 1)])
+    with Session(pg.engine('app')) as session, sync_deployment_tx(session, 'test'):
+        assert [c.gpu_uuid for c in find(session)] == ['GPU-b']
 
 
 @pytest.mark.asyncio

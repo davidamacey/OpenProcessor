@@ -38,9 +38,6 @@ BAD = {'enabled': True, 'preset': 'no_such_preset'}
 @pytest.fixture
 def app_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     runs = install_run_fakes(monkeypatch)  # the active-run check reads PostgreSQL otherwise
-    from src.services.training import gpu_arbiter_policy
-
-    monkeypatch.setattr(gpu_arbiter_policy, '_state_dir', lambda: tmp_path)
 
     class _Reg:
         async def snapshot(self, *_a: Any, **_k: Any) -> Any:
@@ -148,37 +145,32 @@ def test_preflight_ignores_the_preset_of_a_disabled_block(
     assert _check(body, 'augmentation_preset')['severity'] == 'ok'
 
 
-# ------------------------------------------------ start: 422 before any claim
+# ------------------------------------------- start: 422 before the run is queued
 
 
 @pytest.mark.parametrize('force', ['false', 'true'])
-def test_start_refuses_an_unknown_preset_before_claiming_the_gpu(
+def test_start_refuses_an_unknown_preset_before_queueing_the_run(
     app_client: TestClient,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     force: str,
     project_export_root: Path,
 ) -> None:
-    claim = AsyncMock()
-    monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', claim)
     r = app_client.post(
         f'/curation/projects/default/train/start?force={force}',
         json={'dataset_export_dir': str(project_export_root / 'x'), 'augmentation': BAD},
     )
     assert r.status_code == 422, r.text
     assert 'no_such_preset' in r.text
-    claim.assert_not_called()
     assert app_client.runs.started == []  # type: ignore[attr-defined]
 
 
-def test_start_campaign_refuses_an_unknown_preset_before_claiming_the_gpu(
+def test_start_campaign_refuses_an_unknown_preset_before_queueing_the_run(
     app_client: TestClient,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     project_export_root: Path,
 ) -> None:
-    claim = AsyncMock()
-    monkeypatch.setattr('src.services.training.gpu_arbiter.claim_gpus_for_training', claim)
     r = app_client.post(
         '/curation/projects/default/train/start_campaign?force=true',
         json={
@@ -189,7 +181,6 @@ def test_start_campaign_refuses_an_unknown_preset_before_claiming_the_gpu(
     )
     assert r.status_code == 422, r.text
     assert 'no_such_preset' in r.text
-    claim.assert_not_called()
     assert app_client.runs.started == []  # type: ignore[attr-defined]
 
 

@@ -25,6 +25,7 @@ from src.clients import task_queue
 from src.config.env import env_str
 from src.config.queue import TaskQueues
 from src.db.models.jobs import GpuDevice, WorkerCapability
+from src.db.repos import worker_liveness
 from src.db.session import async_session_factory, deployment_tx
 from src.domain.gpu_order import host_id_at, parse_order
 
@@ -98,4 +99,16 @@ async def probe_trainer_reachable() -> tuple[str, str]:
     return 'ok', f'trainer available on {sorted(hosts)}'
 
 
-__all__ = ['consumer_hosts', 'probe_trainer_reachable', 'read_trainer_gpu_order']
+async def arbiter_consumer_live() -> bool:
+    """Whether ``gpu-arbiter-worker`` refreshed its liveness row recently (a fresh row, not a
+    broadcast ``inspect()``: ``queue_liveness`` writes it for the ``arbiter`` queue)."""
+    async with async_session_factory()() as session, deployment_tx(session, 'arbiter liveness'):
+        return await worker_liveness.live_consumers(session, TaskQueues.ARBITER) > 0
+
+
+__all__ = [
+    'arbiter_consumer_live',
+    'consumer_hosts',
+    'probe_trainer_reachable',
+    'read_trainer_gpu_order',
+]

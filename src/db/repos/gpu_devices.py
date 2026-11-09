@@ -16,7 +16,7 @@ from src.db.models.jobs import GpuDevice
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
 
     from sqlalchemy.orm import Session
 
@@ -62,5 +62,21 @@ def on_host_at(session: Session, host: str, positions: Sequence[int]) -> list[Ca
     """The cards of ``host`` at container positions ``positions`` (``nvml_index``)."""
     found = session.execute(
         select(GpuDevice).where(GpuDevice.host == host, GpuDevice.nvml_index.in_(list(positions)))
-    ).scalars()
-    return [Card(**{k: getattr(row, k) for k in Card.__dataclass_fields__}) for row in found]
+    )
+    return _cards(found.scalars())
+
+
+def on_host(session: Session, host: str) -> list[Card]:
+    """Every card the worker of ``host`` recorded at start (a GPU container sees its own)."""
+    return _cards(session.execute(select(GpuDevice).where(GpuDevice.host == host)).scalars())
+
+
+def at_positions(session: Session, positions: Sequence[int]) -> list[Card]:
+    """The cards recorded at ``nvml_index`` in ``positions`` on any host (a CPU-side job names
+    host card numbers and has no card inventory of its own)."""
+    found = session.execute(select(GpuDevice).where(GpuDevice.nvml_index.in_(list(positions))))
+    return _cards(found.scalars())
+
+
+def _cards(rows: Iterable[GpuDevice]) -> list[Card]:
+    return [Card(**{k: getattr(row, k) for k in Card.__dataclass_fields__}) for row in rows]

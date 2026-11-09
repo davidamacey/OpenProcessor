@@ -40,7 +40,6 @@ import os
 import signal
 import sys
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -59,6 +58,7 @@ from src.db.engine import run_with_engine
 from src.services.curation.ops_metrics import start_worker_metrics_server
 from src.services.curation.vlm_scope import ScopeCache
 from src.services.curation.worker_liveness import heartbeat_loop
+from src.services.jobs.gpu_pause import vlm_paused
 from src.services.jobs.stream_claims import ProjectClaims
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import bind_script_project, script_project_registry
@@ -304,8 +304,8 @@ class _StreamWorker:
         them into the queue."""
         args = self.args
         while not self.stop_event.is_set():
-            # Pause if the GPU arbiter says so (training claimed the GPU).
-            if args.pause_sentinel and Path(args.pause_sentinel).exists():
+            # Pause while a run holds cards or a model swap is in progress.
+            if await vlm_paused():
                 await asyncio.sleep(args.pause_poll_interval)
                 continue
             if self.backing_off:

@@ -82,11 +82,10 @@ _ALLOWLIST = {
     # on failure, with every caller falling back to sklearn/umap on CPU.
     # Not part of the base image by design. (cupy itself is declared.)
     'cuml': 'optional GPU-clustering overlay dependency with a CPU (sklearn/umap) fallback',
-    # src/services/training/gpu_arbiter.py's _docker_client() wraps the
-    # import (and the socket connection) in a try/except Exception and
-    # returns None on any failure, falling back to the sentinel-only path.
-    # The GPU arbiter is a documented no-op on main.
-    'docker': 'optional docker-SDK path with a graceful None fallback (GPU arbiter, currently a no-op)',
+    # src/services/periodic/gpu_arbiter_docker.py imports it at module level, and the arbiter tick
+    # module imports that. Only the opt-in gpu-arbiter-worker mounts the Docker socket and runs
+    # the tick; every other process loads the module but never makes a call.
+    'docker': 'docker-SDK used only by the opt-in gpu-arbiter overlay worker',
     # perception_models (top-level `core`): its own requirements exact-pin
     # timm==1.0.15, which conflicts with open-clip-torch>=3.2, so it is
     # declared as pyproject's `pe` extra and installed --no-deps at a pinned

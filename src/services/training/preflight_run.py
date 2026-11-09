@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from src.config import get_curation_config
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
+from src.domain.gpu_claims import containers_to_stop, needs_service_stop, parse_cuda_visible_devices
 from src.services.classes.registry import get_class_registry
 from src.services.curation.dataset_thresholds import (
     HARD_MIN_CROPS_PER_CLASS,
@@ -30,12 +31,6 @@ from src.services.curation.export_readiness import (
 from src.services.rejections import rejection
 from src.services.training import jobs as train_jobs
 from src.services.training.augmentation_presets import PRESET_IDS
-from src.services.training.gpu_arbiter_docker import docker_client_available
-from src.services.training.gpu_arbiter_policy import (
-    containers_to_stop,
-    needs_service_stop,
-    parse_cuda_visible_devices,
-)
 from src.services.training.preflight_checks import (
     MIN_FREE_DISK_GB,
     SINGLE_CLASS_DATASET_KINDS,
@@ -57,6 +52,7 @@ from src.services.training.preflight_checks import (
 )
 from src.services.training.profiles import RESERVED_OPTIMIZERS_YOLO26
 from src.services.training.trainer_reachability import (
+    arbiter_consumer_live,
     probe_trainer_reachable,
     read_trainer_gpu_order,
 )
@@ -228,32 +224,31 @@ async def _trainer_reachable_check() -> PreflightCheck:
     return PreflightCheck(name='trainer_reachable', severity=severity, message=detail)
 
 
-def _gpu_arbiter_check(spec: TrainJobSpec) -> PreflightCheck | None:
-    """The GPU arbiter can actually stop what this claim requires.
+async def _gpu_arbiter_check(spec: TrainJobSpec) -> PreflightCheck | None:
+    """The GPU arbiter worker is there to stop what this claim requires.
 
-    ``containers_to_stop()`` names real GPU-resident containers (e.g. a large
-    vLLM/Triton process) this run's GPU claim must free. If the docker SDK/socket
-    isn't usable from this container, ``claim_gpus_for_training`` cannot stop them
-    -- proceeding would start training right next to that service on the same GPU.
-    Blocking here (not just at /start) means the form surfaces the failure before
-    the user submits.
+    ``containers_to_stop()`` names the GPU-resident services (e.g. a large vLLM/Triton process)
+    this run's GPU claim must free. The trainer waits for the ``gpu_arbiter`` tick, which runs
+    only in ``gpu-arbiter-worker``; with no such worker the run would start and fail with
+    ``gpu_busy`` after the wait. Blocking here (not just at /start) means the form surfaces the
+    failure before the user submits.
     """
     required_stop_names = containers_to_stop(spec.cuda_visible_devices)
     if not required_stop_names:
         return None
-    if not docker_client_available():
+    if not await arbiter_consumer_live():
         return PreflightCheck(
             name='gpu_arbiter',
             severity='block',
             message=(
-                f'docker SDK/socket unavailable in the API container -- cannot stop '
-                f'{", ".join(required_stop_names)} for this GPU claim'
+                'no GPU arbiter worker is running (queue arbiter; start the gpu-arbiter overlay) '
+                f'-- cannot stop {", ".join(required_stop_names)} for this GPU claim'
             ),
         )
     return PreflightCheck(
         name='gpu_arbiter',
         severity='ok',
-        message=f'can stop: {", ".join(required_stop_names)}',
+        message=f'will stop: {", ".join(required_stop_names)}',
     )
 
 
@@ -548,7 +543,7 @@ async def run_preflight(spec: TrainJobSpec, opensearch: Any) -> PreflightReport:
     checks.append(_augmentation_check(spec))
     checks.append(_free_disk_check(spec))
     checks.append(await _trainer_reachable_check())
-    if (arbiter := _gpu_arbiter_check(spec)) is not None:
+    if (arbiter := await _gpu_arbiter_check(spec)) is not None:
         checks.append(arbiter)
     checks.append(await _trainer_gpus_check(spec))
     checks.append(await _active_run_check())

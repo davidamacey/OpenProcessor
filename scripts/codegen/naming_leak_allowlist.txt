@@ -74,7 +74,6 @@ src/services/training/preflight_checks.py:lpr_single_class # comment explaining 
 
 # Historical/provenance docstrings describing what a field or alias used to
 # be (not a live hardcoded value).
-tests/curation/test_gpu_arbiter.py:(?i)gemma # historical: documents the removed needs_gemma_stop alias, and this deployment's real GPU-to-service placement, by name
 tests/curation/test_crop_cache_dir_consistency.py:GEMMA_CROP_CACHE_DIR # historical: documents the pre-fix env-var mismatch this test guards against
 tests/curation/test_crops_browse_params.py:hdd_source # negative test: asserts the retired hdd_source query param is gone
 tests/curation/test_router_wireup.py:plate_meta # historical: names the reference test file's pre-port route name

@@ -151,7 +151,7 @@ async def build_runtime(
     Extracted, byte-for-byte, from the build block ``runner.py`` used to
     run inline at module-startup time so it can be re-run at a
     quiesce point without duplicating the construction logic. Never
-    touches OpenSearch or the OS-level pause sentinel -- those stay in
+    touches OpenSearch or the GPU-claim pause -- those stay in
     ``runner.py``'s own startup path.
 
     The heavy-IO constructors are passed in by the caller rather

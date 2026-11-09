@@ -12,8 +12,6 @@ from fixtures.job_rows import make_project, sql
 from src.db.session import async_session_factory
 from src.routers.curation import bakeoff as route
 from src.schemas.bakeoff.run import BakeoffRunRequest
-from src.services.training import gpu_arbiter_docker
-from src.services.training.gpu_arbiter_policy import GpuArbiterStopFailedError
 
 
 if TYPE_CHECKING:
@@ -31,16 +29,9 @@ def world(pg, job_env, producer, wakes, monkeypatch, tmp_path: Path) -> dict[str
     async def build(_request: Any, *, out_root: Path) -> Any:
         return spec, accepted
 
-    async def stopped(**_: Any) -> Any:
-        class Done:
-            action = 'stopped'
-
-        return Done()
-
     monkeypatch.setattr(route.bakeoff_jobs, 'build_job_spec', build)
     monkeypatch.setattr(route, 'current_project_id', lambda: project, raising=False)
     monkeypatch.setattr(route, '_out_dir', lambda: tmp_path / 'out')
-    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', stopped)
     return {'project': project, 'job_id': job_id, 'tmp': tmp_path, 'pg': pg, 'producer': producer}
 
 
@@ -84,21 +75,3 @@ async def test_the_same_job_id_twice_is_a_conflict_and_starts_one_job(world) -> 
         "SELECT count(*) FROM jobs WHERE kind = 'bakeoff' AND project_id = %s",
         world['project'],
     ) == [(1,)]
-
-
-@pytest.mark.asyncio
-async def test_a_gpu_that_cannot_be_freed_cancels_the_job_and_answers_409(
-    world, monkeypatch
-) -> None:
-    async def refuse(**_: Any) -> Any:
-        raise GpuArbiterStopFailedError('docker down')
-
-    monkeypatch.setattr(gpu_arbiter_docker, 'stop_gpu_services', refuse)
-    with pytest.raises(Exception) as caught:  # noqa: PT011
-        await run()
-    assert getattr(caught.value, 'status_code', None) == 409
-    assert sql(
-        world['pg'],
-        "SELECT status FROM jobs WHERE kind = 'bakeoff' AND project_id = %s",
-        world['project'],
-    ) == [('cancelled',)]

@@ -14,8 +14,6 @@ _VLM_SWITCH_SH_LOADED=1
 
 # The alias the API always sends, whatever model the container serves.
 VLM_ALIAS="local-vlm"
-# Where the shared state volume is mounted inside the API container.
-_VLM_STATE_IN_CONTAINER='${OP_STATE_DIR:-/var/lib/openprocessor}'
 
 # _vlm_host -> the address the host reaches published ports on
 _vlm_host() {
@@ -119,21 +117,11 @@ _vlm_own_mib() {
         END { print sum + 0 }' <<< "$apps"
 }
 
-# _vlm_in_api SUBCOMMAND -> runs one of the three fixed state-volume actions
-# inside the API container (the state volume is not visible from the host)
+# _vlm_in_api SUBCOMMAND -> runs one of the three fixed pause actions inside the API container
+# (the database is reachable there; the host holds no credentials): lock-check, pause-create,
+# pause-remove (scripts/db/vlm_pause.py)
 _vlm_in_api() {
-    dc exec -T api sh -c '
-        d="'"${_VLM_STATE_IN_CONTAINER}"'"
-        s="$d/vlm_worker/pause.sentinel"
-        case "$1" in
-            lock-check) [ -e "$d/training_gpus.lock" ] ;;
-            pause-create)
-                mkdir -p "$d/vlm_worker"
-                if [ -e "$s" ]; then echo present
-                else printf "{\"owner\": \"vlm-switch\", \"created_at\": %s}\n" "$(date +%s)" > "$s"; echo created; fi ;;
-            pause-remove) rm -f "$s" ;;
-            *) exit 2 ;;
-        esac' _ "$1"
+    dc exec -T api python -m scripts.db.vlm_pause "$1"
 }
 
 # _vlm_hf_ok REPO -- a gated entry needs an HF_TOKEN that can see the repo
@@ -324,7 +312,7 @@ _vlm_switch() {
 
     # 2. a training run owns the GPUs
     if _vlm_in_api lock-check; then
-        log_error "a training run holds the GPUs (training_gpus.lock); switch the VLM after it finishes"
+        log_error "a training, probe or bake-off run holds the GPUs (see GET /pause); switch the VLM after it finishes"
         return 1
     fi
 

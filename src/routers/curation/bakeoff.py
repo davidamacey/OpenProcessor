@@ -21,13 +21,12 @@ Endpoints:
     GET  /bakeoff/results/{id}      ranked comparison for one dataset of a job
     GET  /bakeoff/matrix/{id}       model x dataset matrix
 
-GPU: enqueueing stops the GPU-resident containers configured in
-``GpuArbiterConfig`` and answers 409 (cancelling the job) if it cannot. When
-``OP_BAKEOFF_HOST_GPUS`` is set (the host GPU ids the evaluator container is
-attached to), only containers scoped (``GpuArbiterConfig.container_gpus``) to
-those ids are stopped. Unset stops everything configured. The arbiter's reconcile
-loop keeps the scoped set stopped while a ``bakeoff`` job is active and restarts them
-once it ends.
+GPU: the evaluator reserves its cards when it picks the job up, and the GPU arbiter tick
+(``op.periodic.gpu_arbiter``) stops the GPU-resident services configured in ``GpuArbiterConfig``
+before the run starts and starts them again after it ends. When ``OP_BAKEOFF_HOST_GPUS`` is set
+(the host GPU ids the evaluator container is attached to), only services scoped
+(``GpuArbiterConfig.container_gpus``) to those ids are stopped. Unset stops everything
+configured.
 
 What a run measures (classes, thresholds, rank metric, cascade context
 classes) comes from a ``BakeoffProfile`` (``scripts/curation/bakeoff/profile.py``)
@@ -46,7 +45,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.config import get_curation_config, get_gpu_arbiter_config
+from src.config import get_curation_config
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.core.logging import get_logger
@@ -69,7 +68,6 @@ from src.schemas.bakeoff.run import (
 )
 from src.services.classes.registry import ClassRegistryError, get_class_registry
 from src.services.curation import bakeoff_jobs, bakeoff_resolve, eval_datasets
-from src.services.jobs.service import cancel_job
 from src.services.training.run_retention import bakeoff_out_dir
 from src.utils.atomic_write import atomic_write_json
 from src.utils.upstream_errors import UpstreamError
@@ -220,15 +218,9 @@ async def bakeoff_run(payload: BakeoffRunRequest, session: DbSessionDep) -> Bake
     """Start a comparison as a ``bakeoff`` job for the evaluator worker.
 
     Order: resolve + validate (400/422) -> ``status.json`` ``queued`` -> ``start_job`` (the job
-    row, its ``bakeoff_runs`` row and the queue message) -> stop GPU-resident containers. If they
-    cannot be stopped the job is cancelled, the status set to ``error`` and the answer is 409.
+    row, its ``bakeoff_runs`` row and the queue message). The evaluator reserves its cards when it
+    picks the job up and the GPU arbiter tick frees them (fails closed with ``gpu_busy``).
     """
-    from src.services.training.gpu_arbiter_docker import stop_gpu_services
-    from src.services.training.gpu_arbiter_policy import (
-        GpuArbiterStopFailedError,
-        containers_to_stop,
-    )
-
     try:
         spec, accepted = await bakeoff_jobs.build_job_spec(payload, out_root=_out_dir())
     except bakeoff_resolve.BakeoffRequestError as exc:
@@ -262,20 +254,9 @@ async def bakeoff_run(payload: BakeoffRunRequest, session: DbSessionDep) -> Bake
         raise
     if not started.created:
         raise HTTPException(status_code=409, detail=f'bake-off job {spec.job_id} already exists')
-    scope = get_gpu_arbiter_config().bakeoff_host_gpus
-    try:
-        action = await stop_gpu_services(containers=containers_to_stop(scope) if scope else None)
-    except GpuArbiterStopFailedError as exc:
-        await cancel_job(session, started.job.id, project, requested_by='api')
-        status.state, status.error = 'error', f'could not free the GPU: {exc}'
-        status.finished_at = datetime.now(UTC).isoformat()
-        _write_json(status_file, status.model_dump(mode='json'))
-        logger.warning('bakeoff_gpu_claim_failed', job_id=spec.job_id, error=str(exc))
-        raise HTTPException(status_code=409, detail=status.error) from exc
     logger.info(
         'bakeoff_enqueued',
         job_id=spec.job_id,
-        gpu_action=action.action,
         n_models=len(models),
         n_datasets=len(spec.datasets),
     )

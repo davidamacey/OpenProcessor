@@ -12,14 +12,16 @@ The module is named after its worker, not ``celery_tasks``, which the trainer im
 from __future__ import annotations
 
 import asyncio
+import socket
 from typing import TYPE_CHECKING, Any
 
 from celery.signals import worker_init
 
 from src.config.retired_env import reject_retired_env
-from src.db.repos import bakeoff as bakeoff_repo
+from src.db.repos import bakeoff as bakeoff_repo, gpu_devices
 from src.tasks.runtime.context import JobResult
 from src.tasks.runtime.gpu_app import make_app
+from src.tasks.runtime.gpu_claim import claim_cards, release_cards
 from src.tasks.runtime.register import register_job
 
 from .bakeoff_runner import run_job
@@ -47,13 +49,21 @@ def evaluate(spec: dict[str, Any], cancelled: Callable[[], bool]) -> dict[str, A
 async def bakeoff(ctx: JobContext) -> JobResult:
     """Run one bake-off; the results are the files under the spec's ``out_dir``.
 
-    ``bakeoff_runs.results_storage_key`` records that directory. A run that ends in the
+    ``bakeoff_runs.results_storage_key`` records that directory. With an arbiter configured the run
+    holds the evaluator's cards for its whole length. A run that ends in the
     ``error`` state fails the job; a run that scored some pairs and failed others is
     ``completed_with_errors``.
     """
     spec = dict(ctx.params)
-    await ctx.progress(0, None, 'evaluating')
-    status = await asyncio.to_thread(evaluate, spec, ctx.cancelled)
+    host = socket.gethostname()
+    try:
+        # The evaluator container sees only its own cards: hold them all, and run once the
+        # arbiter has stopped the services that share them (fails closed with gpu_busy).
+        await claim_cards(ctx, lambda session: gpu_devices.on_host(session, host))
+        await ctx.progress(0, None, 'evaluating')
+        status = await asyncio.to_thread(evaluate, spec, ctx.cancelled)
+    finally:
+        await release_cards(ctx)
     out_dir = str(spec['out_dir'])
     async with ctx.session() as session:
         await session.run_sync(lambda sync: bakeoff_repo.set_results_key(sync, ctx.job_id, out_dir))

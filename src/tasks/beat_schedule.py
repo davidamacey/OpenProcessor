@@ -4,7 +4,7 @@ Each entry carries ``expires`` equal to its interval, so a backlog behind a stal
 dropped instead of replayed (Celery periodic tasks guide). ``src/tasks/app.py`` applies the
 schedule when the app's configuration loads, never at import. An interval that an operator can set
 (``OP_INGEST_DISPATCH_S`` and the like) is read when the schedule is built; ``0`` leaves the entry
-out.
+out. ``gpu_arbiter`` is present only when ``OP_GPU_ARBITER_CONTAINERS`` is set.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.config.cluster_profile import DEFAULT_REFRESH_INTERVAL_S, REFRESH_INTERVAL_ENV
-from src.config.env import env_float, env_int
+from src.config.env import env_float, env_int, env_str
 
 
 REAPER_INTERVAL_S = 30
@@ -26,6 +26,7 @@ CACHE_PRUNE_INTERVAL_S = 60
 RELOAD_PROMOTED_INTERVAL_S = 15
 SERVING_INVENTORY_INTERVAL_S = 60
 NEAR_DUP_FULL_BUILD_INTERVAL_S = 7 * 24 * 60 * 60
+GPU_ARBITER_INTERVAL_S = 15
 
 
 def _every(task: str, seconds: float) -> dict[str, Any]:
@@ -56,6 +57,10 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     backup_hours = env_float('OP_DB_BACKUP_INTERVAL_H', 0.0, minimum=0.0)
     if backup_hours > 0:
         schedule['db_backup'] = _every('op.periodic.db_backup', backup_hours * 3600)
+    if env_str('OP_GPU_ARBITER_CONTAINERS').strip():
+        # Only with the overlay: ``expires`` is checked by the worker that receives the message,
+        # so a queue with no consumer (``arbiter`` without gpu-arbiter-worker) would pile up.
+        schedule['gpu_arbiter'] = _every('op.periodic.gpu_arbiter', GPU_ARBITER_INTERVAL_S)
     schedule['near_dup_rescore'] = _every(
         'op.periodic.near_dup_rescore', NEAR_DUP_RESCORE_INTERVAL_S
     )
