@@ -32,6 +32,7 @@ from src.services.detection.cascade_detect.region_detector import RegionDetector
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.labeling.vlm_factory import build_uncached_labeler as build_vlm_labeler
 from src.services.projects.guard import make_script_opensearch
+from src.services.serving_router import open_routed_pool, sync_router
 from src.utils.retry import TRITON_CALL_ERRORS
 
 
@@ -144,7 +145,6 @@ async def run(args: argparse.Namespace) -> int:
     stop_event = _install_stop_signal_handlers()
 
     from src.app.resources import AppResources
-    from src.services.serving_router import open_routed_pool, sync_router
 
     pool = await open_routed_pool(pool_size=args.pool_size, max_concurrent=64, url=args.triton)
     # Sync callers (the OCR service, PE text) route through the same router.

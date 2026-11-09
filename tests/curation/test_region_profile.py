@@ -237,7 +237,8 @@ def _patch_worker_io(
     vlm = MagicMock()
     vlm.aclose = AsyncMock()
     mocks = {
-        'AsyncTritonPool': MagicMock(return_value=pool),
+        'open_routed_pool': AsyncMock(return_value=pool),
+        'sync_router': AsyncMock(),
         'make_script_opensearch': MagicMock(return_value=os_client),
         'SegmenterClient': MagicMock(return_value=segmenter),
         'build_vlm_labeler': MagicMock(return_value=vlm),

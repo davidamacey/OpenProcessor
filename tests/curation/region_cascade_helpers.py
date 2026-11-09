@@ -277,7 +277,8 @@ async def _drive_worker(
 
     pool = MagicMock(initialize=AsyncMock(), close=AsyncMock())
     pool.is_model_ready = AsyncMock(return_value=region_embed_ready)
-    monkeypatch.setattr(runner_mod, 'AsyncTritonPool', MagicMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'open_routed_pool', AsyncMock(return_value=pool))
+    monkeypatch.setattr(runner_mod, 'sync_router', AsyncMock())
     monkeypatch.setattr(runner_mod, 'make_script_opensearch', MagicMock(return_value=fake_os))
     # The worker discovers its projects through the registry; keep that
     # read in-memory too, never against the unresolvable --opensearch host.
