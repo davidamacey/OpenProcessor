@@ -227,7 +227,7 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 - **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
 
 ### Usage in This Project
-- `docker/segmenter/Dockerfile` pip-installs SAM 3 from an upstream checkout (`SAM3_SHA`, default `main`; pass a commit to pin it); no SAM 3 source is vendored into this repository
+- `docker/segmenter/Dockerfile` pip-installs SAM 3 from an upstream checkout (`SAM3_SHA`, pinned by default to the full commit `f1647e8d0c1d280991f4d1b7d974c2704537fe66`; pass `--build-arg SAM3_SHA=<sha>` to move the pin deliberately); no SAM 3 source is vendored into this repository
 - `docker/segmenter/sam3_backend.py` imports `sam3.model_builder.build_sam3_image_model` and `sam3.model.sam3_image_processor.Sam3Processor`
 - Service-local attribution detail: [`docker/segmenter/NOTICE`](docker/segmenter/NOTICE)
 
@@ -398,6 +398,20 @@ propagates to the combined work.
 | OpenCLIP | MIT | ✓ Yes |
 | cachetools (bounded per-process TTL and LRU caches) | MIT | ✓ Yes |
 | pyclipper (Clipper polygon offset, OCR box unclip) | MIT (Clipper: Boost Software License 1.0) | ✓ Yes (this file) |
+| PostgreSQL 18 (control-plane database, `postgres` image) | PostgreSQL License | ✓ Yes |
+| Valkey 9 (task broker, `valkey` image) | BSD 3-Clause | ✓ Yes |
+| SQLAlchemy 2.1.8 | MIT (installed wheel metadata) | ✓ Yes |
+| Alembic 1.20.1 | MIT (installed wheel metadata) | ✓ Yes |
+| psycopg 3.3.8 | LGPL-3.0-only (installed wheel metadata; used as an unmodified dynamically linked library) | ✓ Yes |
+| Celery 5.7.0, kombu 5.7.0 | BSD 3-Clause (installed wheel metadata) | ✓ Yes |
+| billiard 4.3.2 | BSD (installed wheel metadata) | ✓ Yes |
+| redis-py 8.1.0 (the Valkey client) | MIT (installed wheel metadata) | ✓ Yes |
+| Flower 2.2.0 (`flower` service, monitoring profile) | BSD 3-Clause (upstream licence; not installed in the offline test environment) | ✓ Yes |
+| asgi-correlation-id 5.0.1 | MIT (installed wheel metadata) | ✓ Yes |
+| testcontainers 4.15.0 (tests only) | Apache 2.0 (installed wheel metadata) | ✓ Yes |
+| PgBouncer (`docker-compose.pgbouncer.yml`, opt-in overlay) | ISC | ✓ Yes |
+| ExifTool (`libimage-exiftool-perl` in the API image) | Perl Artistic License or GPL (dual, upstream) | ✓ Yes |
+| PyExifTool 0.5.6 | GPL-3.0-or-later or BSD (dual; the BSD terms are used) | ✓ Yes |
 | nvidia-ml-py (NVML GPU inventory in the export worker, `requirements-export.txt`) | BSD 3-Clause (NVIDIA) | ✓ Yes |
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |

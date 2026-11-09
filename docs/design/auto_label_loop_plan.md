@@ -1,5 +1,11 @@
 # Cluster-sampled VLM auto-labeling loop over assist runs
 
+> **Rebuild note.** In the 0.7.0 rebuild the storage, event, budget and control sections of this
+> plan are superseded by [09e_research_auto_label_assist.md](v070_rebuild/09e_research_auto_label_assist.md):
+> the loop record is in PostgreSQL, the budgets are reserved per call, the loop runs as a job in time
+> slices, and pause and budget edit are routes. The gate, propagate-or-split and audit design below
+> still holds.
+
 Status: implemented (reference). S1 to S11 shipped; the S11 live run on public COCO was done
 2026-11-02 (#286 closed). S0 (the label-rate measurement) was never run, and the pause control, event
 log and token budgets are tracked in issue N16 (`v070_rebuild/reference/github_actions.md`, v0.8.0). Issue #286,

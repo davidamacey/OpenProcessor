@@ -682,7 +682,8 @@ the TypeScript form. `tests/curation/test_wire_contract.py` pins the key set.
 | Class | `class_id`, `class_name`, `class_source`, `confidence`, `class_confidence`, `class_confidence_source`, `label_source`, `label_validated`, `class_validated`, `class_detector`, `class_detector_version`, `class_labeled_at`, `class_labeler`, `label_locked`, `test_holdout`, `proposal_name`, `proposal_chain` |
 | Exclusion and review | `class_excluded`, `excluded_reason`, `excluded_at`, `review_dismissed_at`, `needs_new_class`, `needs_new_class_note` |
 | VLM | `vlm_confidence`, `vlm_prompt_pack`, `vlm_endpoint`, `vlm_model`, `vlm_class_attempted_at`, `vlm_class_empty_reason`, `vlm_raw_class`, `vlm_proposed_class_id`, `vlm_proposed_class_name`, `proposed_class_id`, `proposed_class_name` |
-| Cluster | `cluster_id`, `cluster_kind`, `cluster_distance`, `cluster_similarity`, `cluster_is_core`, `cluster_nearest_id`, `cluster_subid` |
+| Cluster | `cluster` (`ClusterRef`: `uid`, `partition_id`, `state` (`assigned`, `review`, `unassigned`), `score`, `margin`, `assigned_by`, `display_no`; `null` when the serving partition has not placed the item) |
+| Near-duplicates | `near_dup_group_id`, `near_dup_group_size`, `near_dup_is_representative` |
 | Probe and scores | `probe_pred_class`, `probe_pred_class_id`, `probe_pred_entropy`, `probe_disagreement`, `probe_in_scope`, `probe_model_version`, `probe_actionable`, `mistakenness_score`, `mistakenness_method`, `mistakenness_version`, `mistakenness_scored_at`, `uniqueness_score`, `dup_group_id`, `dup_group_size`, `dup_is_representative` |
 | Region (item level) | `region_status`, `region_reason`, `region_rejection_reason`, `region_validated`, `region_auto_confirmed`, `region_verified`, `region_verified_at`, `region_verifier`, `region_verifier_version`, `region_visible`, `region_detector_chain`, `region_detected_at`, `region_profile`, `region_profile_revision`, `region_class_id`, `region_label_source`, `region_pairing`, `region_skip_verify` |
 | Region boxes | `region_boxes`, `region_count`, `region_rejected_count`, `region_max_score`, `region_set_complete`, `region_revision` |
@@ -716,7 +717,7 @@ Endpoint-specific extra keys on top of the item:
   `0.92`, medium `0.70`, low `0.40` with source `vlm`. For a classifier
   source it is the stored score with source `model`. Human, move, merge,
   import, cluster-vote and unclassified-proposal labels have `null`.
-- `cluster_kind` is `class`, `candidate` or `unassigned`, from `cluster_id`
+- `cluster` is the served cluster placement of the item (see [Clusters](#clusters)).
   (see [Clusters](#clusters)). `cluster_similarity` is `1 - cluster_distance`.
   `cluster_is_core` is similarity at or above `core_similarity_min` (served
   on `GET /clusters`, default `0.75`). When the distance was measured against
@@ -801,7 +802,7 @@ separate single-box shape. Each element:
 | `bbox_correct`, `confidence` | the verifier's verdict on the geometry and its category; `bbox_correct` is `null` when no verdict was given |
 | `rejection_reason` | why the box is `rejected` (see below) |
 | `text`, `text_raw`, `text_source`, `text_engine_version`, `text_confidence`, `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | per-box text, only when the region profile reads text |
-| `cluster_id`, `cluster_subid`, `cluster_distance` | per-box region cluster placement |
+| `cluster` | per-box served cluster placement (the `ClusterRef` of an item) |
 | `locked` | server-derived: [the lock rule](#the-lock-rule) for this box |
 | `bbox_in_parent` | server-derived: the box in the item-crop frame, clamped to `[0, 1]`; `null` when the item has no usable `bbox_norm`. Draw it on the item thumbnail as is |
 | `thumbnail_url` | server-derived: `GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>` |
@@ -946,12 +947,12 @@ default state of a new box.
 |---|---|
 | `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
 | `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
-| `cluster_id`, `cluster_subid`, `label_source`, `class_source`, `label_validated`, `source` | exact filters (`cluster_subid` is one AHC sub-cluster such as `10000b`; it embeds the cluster id, so it works without `cluster_id`). A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
+| `cluster_uid`, `label_source`, `class_source`, `label_validated`, `source` | exact filters. A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
 | `needs_new_class`, `review_dismissed` | boolean filters |
 | `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
 | `include_test`, `include_excluded` | include frozen test-holdout and excluded items |
 | `max_rank`, `min_blur_ratio`, `classifier_conf_lt`, `conf_min`, `conf_max` | numeric bands (`400` if `conf_min` is above `conf_max`) |
-| `order` | `default`, `outliers`, `core_first`, `diverse`. `outliers` and `core_first` need `cluster_id` and order by distance to the live centroid of the matched members. Under `core_first` each item's cluster distance keys are recomputed against that centroid. `method` reports the order that ran |
+| `order` | `default`, `outliers`, `core_first`, `diverse`. `outliers` and `core_first` need `cluster_uid` and order by distance to the live centroid of the matched members. `method` reports the order that ran |
 | `k` | 1 to 10000, `order=diverse` only: the first `k` k-center-greedy picks; `total` is then `k` |
 | `item_text` | at most 200 characters. Every letter or digit word must be a case-insensitive prefix of one of the item's text tokens. A query with no letter or digit is `400` |
 | `import_id` | items whose label or proposal came from that dataset import |
@@ -972,7 +973,7 @@ applies to automated writers.
 |---|---|---|---|---|
 | PUT | `/crops/{crop_id}/label` | `CropLabelRequest`: `class_id`, `label_source` (`human` default, `human_confirmed`, `new_class_proposal`) | `{crop_id, class_id, class_name}` | `400` for an unknown `class_id`, `404` for an unknown crop. The server always writes `class_source: "human"` and `class_validated: true` |
 | PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[], op_id}` | `conflicts` is `[{crop_id, current_source}]`, not written. `op_id` names the recorded [label operation](#label-operations) (`null` when nothing was selected; a dry run has no `op_id`) |
-| POST | `/crops/move` | `CropMoveRequest`: `crop_ids`, `cluster_id` | `{updated, updated_ids, conflicts[], op_id}` | a class cluster is also a relabel (`class_source: human_move`, validated); a candidate cluster is placement only (a human-owned class is cleared, a machine suggestion is kept, nothing is validated). `400` for an unassigned (negative) target, an unknown class id or a candidate with no members |
+| POST | `/crops/move` | `CropMoveRequest`: `cluster_uid`, `crop_ids` or a `selection`, `dry_run` | `202` with `{op_id, job_id}`; follow `GET /curation/projects/{project}/jobs/{job_id}` | placement only: the crops join a cluster of the serving partition (`cluster_assigned_by: edit`), a human-owned class is cleared, a machine suggestion is kept, nothing is validated. `400` when `cluster_uid` is not a cluster of the serving partition; nothing is written |
 | POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
 | POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
 | POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
@@ -995,8 +996,8 @@ applies to automated writers.
 
 - A class snapshot holds `class_id`, `class_name`, `class_source`,
   `label_source`, `confidence`, `class_detector`, `class_detector_version`,
-  `class_labeler`, `class_labeled_at`, `class_validated`, `cluster_id` and
-  `cluster_subid`. Repeated undo steps back through successive human writes.
+  `class_labeler`, `class_labeled_at` and `class_validated`. Repeated undo steps back
+  through successive human writes.
   A restored validated class sits in its class cluster
   (`cluster_id == class_id`); anything else returns to the cluster recorded
   before the write (`null` is the residual pool). Undo on an excluded item
@@ -1042,8 +1043,8 @@ wins.
 
 ## Regions: multi-box edits and queues
 
-The region write routes, `GET /regions`, `GET /regions/training_candidates`, `GET /regions/suspected_false_positives`, `POST /regions/cluster`, `POST /regions/fp_centroids/build`, the region undo routes and the region
-cluster card and refine routes need an active region profile. Without one they
+The region write routes, `GET /regions`, `GET /regions/training_candidates`, `GET /regions/suspected_false_positives`, `POST /regions/fp_centroids/build`, the region undo routes and the region
+cluster cards need an active region profile. Without one they
 answer `409` `{detail: {error: "no_active_profile", message: "no region profile is configured"}}` (published as `RegionProfileUnavailableResponse` on every such route).
 
 ### Per-box edits
@@ -1146,17 +1147,13 @@ and `false_positive`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `cluster_id` (the item cluster), `region_cluster_id`, `region_cluster_subid`, `sort_by_subid`, `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
+| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `cluster_uid` (the item cluster), `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
 | GET | `/regions/statuses` | the lifecycle vocabulary (see above) |
 | GET | `/regions/vocabulary` | `RegionVocabularyResponse`: `detectors[]` (`id`, `label`, `role`, `filterable`), `region_sources[]`, `chain_actors[]`, `rejection_reasons[]`, `text_rules`, `text_choices`, `region_profile` summary. Built from the active profile, the ingest profiles and the VLM registry, never from a fixed model id |
 | GET | `/regions/training_candidates` | `RegionRowPage`, `mode` required |
 | GET | `/regions/suspected_false_positives` | `RegionRowPage`. `threshold` (0 to 2) is optional; omitted, the server applies `default_threshold` (0.35) and serves both |
-| POST | `/regions/cluster` | job. Query `max_rank`, `auto_fp_threshold` (default 0.2), `rebuild_fp_centroids` (default true), `force_repartition` |
-| GET | `/regions/cluster/status` | job state |
 | GET | `/regions/clusters` | cluster cards (`max_clusters`, `per_cluster`, `max_rank`) |
-| POST | `/regions/clusters/refine/{cluster_id}` | AHC refine of one region cluster |
-| POST | `/regions/fp_centroids/build` | rebuild the false-positive sub-centroids from FP boxes |
-| GET | `/regions/fp_centroids/status` | |
+| POST | `/regions/fp_centroids/build` | 202 job: rebuild the false-positive sub-centroids from FP boxes |
 | GET | `/crops/{crop_id}/region_thumbnail` | `box_id` is required (`422 box_id_required`, `404 unknown_box_id`), `size` 32 to 512. Renders that box, also a rejected one |
 
 Rows. `GET /regions`, `/regions/training_candidates`,
@@ -1169,10 +1166,9 @@ on the page matched more boxes than `index.max_inner_result_window` reports,
 so some of its rows are missing.
 
 `GET /regions` filters. The box filters (`detector`, `min_score`,
-`max_score`, `text`, `region_cluster_id`, `region_cluster_subid`,
-`box_state`) all apply to the same box, and each matching box is its own row.
+`max_score`, `text`, `box_state`) all apply to the same box, and each matching box is its own row.
 With no box filter and no `status` the rows are the accepted and
-`false_positive` boxes. The item filters (`status`, `cluster_id`,
+`false_positive` boxes. The item filters (`status`, `cluster_uid`,
 `verified`, `max_rank`) select items. `status` is any value from
 `GET /regions/statuses` (`400` otherwise) and lists every item in that status
 as item rows. `box_state` is `proposed`, `accepted`, `rejected` or
@@ -1200,16 +1196,13 @@ false-positive boxes into `k` sub-clusters and keeps one centroid per
 sub-type. A candidate matches the nearest of them. Re-run the build after
 marking a batch of false positives.
 
-Region clustering is over boxes. A card's `size` is the number of items with
+Region clustering is over boxes and is a cluster run with target `region_box`
+(`POST /clusters/runs`, see [Clusters](#clusters)). A card's `size` is the number of items with
 at least one box in the cluster and `box_count` is the number of boxes.
 `representatives` are rows for the boxes nearest the centroid, next to
 `representative_crop_ids`, `representative_box_ids` and
 `representative_thumb_urls`. The permanent false-positive cluster (`-100`)
-pins first. The count fields name their unit: the cluster job result has
-`n_boxes`, `n_boxes_changed` and `n_items_written`; a region refine has
-`n_boxes` and `n_boxes_updated`; an item refine has `n_items` and
-`n_items_updated`; the centroid build has `n_boxes`; the automatic FP pull
-has `n_boxes_scanned` and `n_boxes_moved`.
+pins first. The count fields name their unit: the centroid build has `n_boxes`.
 
 Automated region writers (worker, clustering, reprocess) never touch a locked
 box or a human-final item (see [the lock rule](#the-lock-rule)).
@@ -1401,60 +1394,44 @@ among active classes of a project. See [Class identity](#class-identity).
 
 ## Clusters
 
-Cluster ids partition into ranges:
-
-| `cluster_id` | `cluster_kind` | Meaning |
-|---|---|---|
-| `< 0` | `unassigned` | not clustered, noise, or excluded (`-2`) |
-| `0` to the offset | `class` | equals the class id, for labeled items |
-| `>= cluster_id_offset` | `candidate` | a residual cluster that needs a class |
+A cluster is a member of a **partition**: a versioned, immutable result of one clustering run
+over one target (`item`, `region_box`, `face`, `image`) and level (`class`, `identity`, `scene`).
+One partition per target and level is *serving*; the cluster fields of an item or box are its
+placement in the serving partition. A cluster has a stable `cluster_uid` that a later run keeps
+when its members mostly stay together; an integer cluster id, `cluster_kind` and sub-cluster ids
+no longer exist.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `kind` (`class`, `candidate`, `all`), `cluster_id`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class` (repeatable), `min_size`, `max_size`, `validation_state`, `flag` (repeatable, any of), `needs_review` |
-| GET | `/clusters/{cluster_id}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing`. Each count is the `total` of the matching filtered `GET /crops` call; the test holdout and excluded items are not members. A cluster with no members answers zeros |
+| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `cluster_uid`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class`, `min_size`, `max_size`, `validation_state`, `flag` (repeatable) and `needs_review`, plus the shared item filter |
+| GET | `/clusters/{cluster_uid}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing` |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters` (max 1000), `class_id`, `offset` (max 64535, so `offset + max_clusters` stays within OpenSearch `search.max_buckets`; above it `422`) |
-| POST | `/clusters/auto_promote` | `min_purity` (default 0.85), `min_members` (default 4), `dry_run`, `promote_min_precision` (default 0.95), `force`. Validates classifier-labelled members of pure clusters. Refused with `409 audit_required` / `audit_precision_low` (and `classes`) unless every class it would promote has enough audited crops at the required detector precision, or `force=true`; a dry run is never gated |
-| POST | `/clusters/refine/{cluster_id}` | AHC refine of one cluster. `distance_threshold`, `max_members`. Writes `cluster_subid` |
-| POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool and re-cluster it. Returns the clustering summary |
+| POST | `/clusters/runs` | `ClusterRunRequest` (`target`, optional `level`); `202` `{job_id}`. Writes a new partition with the active `cluster_profile`; the serving partition keeps serving |
+| PUT | `/clusters/activation` | `ClusterActivationRequest` (`target`, `partition_id`, optional `level`, `expected_serving_partition_id`, `expected_revision`); `202` `{job_id, pending_partition_id, revision}`. `409 partition_conflict` when the caller did not see the current serving partition |
+| GET | `/clusters/partitions` | `ClusterPartitionList`; query `target`, `limit`. Method, backend, counts, metrics and stage durations of each run |
+| GET | `/clusters/partitions/{partition_id}` | one partition with its calibration and lineage |
+| POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool. Returns the clustering summary |
 
-Cards. `labelled_count` counts members with any `class_name`. `dominant_count`
-and `label_agreement` describe the top class among them: `label_agreement` is
-that class's share of the labelled members (`null` with none labelled). For a
-candidate, `dominant_class_name` is set only for a unique top class with at
-least 3 members and half of the labelled ones, else `null`, and
-`dominant_class_id` is `null`. Frozen test-holdout and excluded items are never
-counted in any card number.
+Cards. `ClusterCard` has `cluster_uid`, `display_no` (a short number for the screen), `size`,
+`labelled_count`, `labelled_share`, `validated_count`, `dominant_class_name`, `dominant_count`,
+`label_agreement`, `is_unlabeled`, the quality fields below, `representatives` and `updated_at`.
+`label_agreement` is the top class's share of the labelled members (`null` with none labelled).
+Frozen test-holdout and excluded items are never counted in any card number.
 
-Quality fields, all from the one aggregation: `detector_top_class` (the
-detector's most common class among the members), `detector_top_share` (that
-class as a share of the members that have a detector class),
-`detector_conf_mean`, `validation_state` (`none`, `partial` or `complete`),
-`review_counts` (members each of `all`, `detector_disagreements`, `outliers`,
-`vlm_low_conf` and `mismatches` would show, built from the same clauses as
-`GET /review/{tab}`), `needs_review_count` (`review_counts.all`) and `flags`.
-The response serves `flag_vocabulary` (`id`, `label`, `description`):
-`mixed_detector_classes`, `low_geometry_purity`, `label_disagreement`,
-`promotable`, `needs_review`, `unvalidated`.
+Quality fields, all from the one aggregation: `detector_top_class` (the detector's most common
+class among the members), `detector_top_share` (that class as a share of the members that have a
+detector class), `detector_conf_mean`, `validation_state` (`none`, `partial` or `complete`),
+`review_counts` (members each of `all`, `detector_disagreements`, `outliers`, `vlm_low_conf` and
+`mismatches` would show, built from the same clauses as `GET /review/{tab}`),
+`needs_review_count` (`review_counts.all`) and `flags`. The response serves `flag_vocabulary`
+(`id`, `label`, `description`).
 
-`sort` is one of `needs_review_desc`, `size_desc` (default), `size_asc`,
-`label_agreement_asc`, `purity_asc`, `purity_desc`, `detector_conf_asc`,
-`unvalidated_desc`, `updated_desc`, `dominant_class`; the response serves the
-applied `sort` and `sort_options` (`id`, `label`). A card with no value for the
-sort key comes after every card that has one, and ties break on `cluster_id`.
-The filters apply to the aggregated cards; `total` counts the cards left.
-`truncated` is true when the aggregation returned `max_clusters` buckets, so
-the list may be incomplete: raise `max_clusters` or narrow the filters.
-
-`purity` is geometric and independent of labels: the share of members whose
-nearest cluster centroid is their own cluster. `purity_n` is how many members
-it covers and `purity_basis` is `nearest_centroid`; with `purity_n` of `0`
-both `purity` and `purity_tier` are `null`. `purity_tier` is `pure`, `mixed`
-or `noisy`. `promotable` is the auto-promote gate on labels (enough members,
-enough of them labelled, `label_agreement` at or above `pure_min`); never true
-for a class cluster. The response serves `purity_thresholds` (`pure_min`
-0.85, `mixed_min` 0.6, `promote_min_members` 4, `promote_min_labelled_share`
-0.5) and `core_similarity_min` (0.75).
+`sort` is one of `needs_review_desc`, `size_desc` (default), `size_asc`, `label_agreement_asc`,
+`detector_conf_asc`, `unvalidated_desc`, `updated_desc`, `dominant_class`; the response serves the
+applied `sort` and `sort_options` (`id`, `label`). A card with no value for the sort key comes after
+every card that has one, and ties break on `cluster_uid`. The filters apply to the aggregated
+cards; `total` counts the cards left. `truncated` is true when the aggregation returned
+`max_clusters` buckets, so the list may be incomplete: raise `max_clusters` or narrow the filters.
 
 The shared item filter (every route that takes it, such as `GET /crops`, `GET /review/{tab}` and
 `GET /clusters`) also takes the detector's view of an item: `detector_class_name` (repeatable,
@@ -1465,16 +1442,77 @@ the test holdout hidden). `GET /crops` `sort` accepts `detector_confidence`. On 
 narrow the members every card counts, whereas `detector_class` (without `_name`) keeps the cards whose
 detector top class matches.
 
-Representatives are paged. Every card is returned with `size`, `purity` and
-the rest, but `representatives` is filled only for cards in the
-`[offset, offset + limit)` window of the served list (after the filters and the
-`sort`) (`limit` default 50, max 500). Other cards carry `representatives: []`.
-Each card carries `n_subclusters` (the exact count) and `subcluster_ids` (the sorted ids, at most 200), which the Cropwright sub-cluster tabs use. `per_cluster=0` skips representatives. `GET /clusters/representatives`
-pages the same way by `offset` and `max_clusters`.
+Representatives are paged. Every card is returned with `size` and the rest, but `representatives`
+is filled only for cards in the `[offset, offset + limit)` window of the served list (after the
+filters and the `sort`) (`limit` default 50, max 500). Other cards carry `representatives: []`.
+`per_cluster=0` skips representatives. `GET /clusters/representatives` pages the same way by
+`offset` and `max_clusters`.
 
-Clustering runs inside the auto-label pipeline. Setting
-`recluster_unvalidated=true` broadens the residual pool so candidate clusters
-can fuse. The default pool is fresh and class-bucketed unvalidated items.
+## Jobs
+
+Work that outlives a request is a job row run by a Celery worker. The routes that start one answer
+`202` with a job id (and where a record is also created, its id: `op_id`, `run_id`, `import_id`). A
+start that finds the same kind already active for its scope answers `409 job_busy` naming the active
+job; the `Idempotency-Key` header makes a repeated start return the first job (`422
+idempotency_key_reused` when the same key is sent with different parameters).
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/jobs` | a project's jobs, newest first. Query `kind`, `status`, `cursor`, `limit`. Keyset pages |
+| GET | `/jobs/{job_id}` | one job: `status` (`queued`, `running`, `paused`, `cancelling`, `completed`, `completed_with_errors`, `failed`, `cancelled`, `interrupted`), `progress`, `result`, `error`. `404 job_not_found` for another project's job |
+| GET | `/curation/jobs/{job_id}` | a deployment job by id (project create runs before the project is usable) |
+| GET | `/pause` | the project pause flag; `POST /pause` and `POST /resume` write it |
+
+Routes that answer `202` on this branch: project create, delete and combine; `PUT /crops/batch_label`,
+`POST /crops/move`, `POST /label_ops/{op_id}/undo`; `POST /crops/region/undo_batch` and
+`POST /review/new_class_proposals/resolve` above `OP_BATCH_SYNC_MAX` matching items (default 500; at
+or below it they answer `200`); `POST /datasets/uploads`, `POST /datasets/imports` and its resume;
+`POST /ingest/bulk` and the source run and events routes; `POST /assist/runs` (when not a dry run);
+`POST /pipeline/auto_label/start`; `POST /scores/compute`, `POST /probe/run`,
+`POST /viz/projection/rebuild`, `POST /regions/fp_centroids/build`; `POST /vlm/label_batch` and
+`POST /vlm/verify_region_batch`; `POST /train/promote/{job_id}`; cluster runs and activation;
+embedding space create, build and retire; `POST /near_duplicates/runs`; `POST /source_backfill/runs`.
+
+## Embedding spaces
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/curation/embedding/models` | the encoder versions the deployment can serve |
+| GET | `/embedding/spaces` | the project's spaces (`target` filter): `space_key`, target, dimension, role (`primary`, `optional`, `candidate`), status, the model version, `vector_field` |
+| POST | `/embedding/spaces` | `EmbeddingSpaceRegisterRequest` (`model_key`, `model_version`, `target`, optional `dim`); `202` with `space_key`, `bytes_estimate`, `job_id`, `run_id`. `409 embedding_space_exists`, `409 embedding_model_unavailable`, `409 embedding_insufficient_storage`, `409 embedding_capacity_unknown` |
+| POST | `/embedding/spaces/{space_key}/build` | fill the space (`202`, a reindex run) |
+| POST | `/embedding/spaces/{space_key}/promote` | make it the primary of its target (one fenced transaction; the old primary becomes optional; starts a cluster run and a near-duplicate score on the new primary). `409 embedding_space_not_ready`, `409 embedding_evaluation_missing` |
+| POST | `/embedding/spaces/{space_key}/retire` | `202`; removes the space and its field |
+| GET | `/embedding/reindex-runs/{run_id}` | the run's progress |
+| POST | `/embedding/reindex-runs/{run_id}/cancel` | abandon the build; `404 embedding_run_not_found` |
+
+The search routes take `space` and `fuse`, and echo the `space` they ranked in; an item reports
+`embedding_states` per space.
+
+## Near-duplicates
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/near_duplicates/status` | `NearDupStatus`: per level (`image`, `item`) the current run, whether the groups are stale and why (`pending`, `rebuild_required`, `no_run`), and the active profile |
+| POST | `/near_duplicates/runs` | `NearDupRunRequest` (`level`, `mode` `full` or `incremental`); `202` `{job_id, kind}` |
+| GET | `/near_duplicates/runs` | runs, newest first; query `level`, `limit` |
+| GET | `/near_duplicates/runs/{run_id}` | one run: space, algorithm version, profile revision, parameters, members scored, group counts |
+| GET | `/near_duplicates/groups` | groups; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit` |
+| GET | `/near_duplicates/groups/{group_id}` | one group with its members and representative |
+| POST | `/near_duplicates/decisions` | `same` or `different` for a pair; `201` |
+| DELETE | `/near_duplicates/decisions/{decision_id}` | `204` |
+
+`409 near_dup_stale` (with `detail.code`) answers a freeze or an export when a holdout is already
+frozen and the groups are stale; before the first freeze an export is never refused, and the first
+freeze needs a current item-level run. The freeze response counts `moved_by_near_dup`. Both exports
+take `collapse_near_duplicates` (keep one representative per group).
+
+## Profiles
+
+Revisioned documents like the prompt packs, each with list, `active`, get, put (create or new
+revision), delete and `activate`: `/curation/serving_profiles` (deployment-wide),
+`/cluster_profiles`, `/near_dup_profiles` and `/assist_loop_presets` (per project). The ingest and
+open-vocabulary profiles add `clone`, `revisions`, `revisions/{revision}` and `active/rollback`.
 
 ## VLM labeling and the auto-label pipeline
 
@@ -1493,9 +1531,6 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
 - The VLM labeling routes honor the lock rule: an item whose class is locked
   is never overwritten. A project with no classes is `409 no_classes`. A call
   over 64 ids is `400`.
-- A reply that resolves to a registry class also sets `cluster_id = class_id`
-  and clears `cluster_subid`, unless the item is excluded. Undo restores the
-  placement.
 - A crop the VLM gave no usable verdict for is omitted from a batch
   response, or left untouched by a single-crop call. It is never written as a
   reject.
@@ -1515,15 +1550,15 @@ can fuse. The default pool is fresh and class-bucketed unvalidated items.
   `finished_at`, `error`, `result`, `args`, backend and VRAM telemetry,
   `stage_durations`, `eta_seconds`, `elapsed_seconds`. The newest 50 jobs are
   kept. A start while a job runs is `409`.
-- `?cluster_id=` on `/pipeline/auto_label[/start]` scopes the whole job to one
+- `?cluster_uid=` on `/pipeline/auto_label[/start]` scopes the whole job to one
   cluster: it runs only the VLM stage over every unvalidated, non-holdout,
   non-excluded member, does no re-clustering or auto-promote and applies no
-  cap. A sampled, per-sub-cluster or per-selection run is an assist run.
+  cap. A sampled or per-selection run is an assist run.
 
 ## Assist runs
 
 One request shape sends a scope to the VLM: a crop, a selection of crops, a
-cluster, one sub-cluster or an item filter. The run writes the VLM's suggestions
+cluster or an item filter. The run writes the VLM's suggestions
 and never a label: a class goes through the same guarded writer as the
 auto-label VLM stage (a human- or import-locked, validated or holdout item keeps
 its class), and the answers, including a locked item's, are kept in the item's
@@ -1532,7 +1567,7 @@ its class), and the answers, including a locked item's, are kept in the item's
 | Method | Path | Body | Response |
 |---|---|---|---|
 | POST | `/assist/runs` | `AssistRunRequest` | `AssistRunState`; `dry_run` (the default) plans and writes nothing |
-| GET | `/assist/runs` | `cluster_id`, `cluster_subid`, `limit` (1 to 100, default 20) | `{runs: AssistRunState[]}`, newest first: the runs whose target or context names that (sub-)cluster; all runs without `cluster_id` |
+| GET | `/assist/runs` | `cluster_uid`, `limit` (1 to 100, default 20) | `{runs: AssistRunState[]}`, newest first: the runs whose target or context names that cluster; all runs without `cluster_uid` |
 | GET | `/assist/runs/{run_id}` | | `AssistRunState`; `404 not_found` for an unknown id |
 | POST | `/assist/runs/{run_id}/cancel` | | `AssistRunState`; the run stops after its current chunk |
 | POST | `/assist/runs/{run_id}/apply` | `AssistApplyRequest` | `AssistApplyResponse` |
@@ -1541,7 +1576,7 @@ its class), and the answers, including a locked item's, are kept in the item's
 
 | Field | Meaning |
 |---|---|
-| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_id, cluster_subid?}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
+| `target` | exactly one kind. `{kind: "crops", crop_ids: [1..5000], context?: {cluster_uid}}` is a single crop (one id) or a user selection. `{kind: "boxes", boxes: [{crop_id, box_id}, 1..1000]}` is chosen boxes (a single box is one pair); it takes `verify` and `attributes` only. `{kind: "cluster", cluster_id, cluster_subid?}` is a cluster or one sub-cluster by the stored ids. `{kind: "filter", filter}` is a non-empty item filter |
 | `sample` | what the VLM sees. `mode`: `all` (every visible member; a `crops` target must use it) or `representative` (a seeded sample). `size` (1 to 256) overrides the default of `max(8, min(64, ceil(2*sqrt(n))))`; `seed` (default 0); `stratify_by`: `auto` (by `cluster_subid` when the scope has more than one), `cluster_subid` or `none` |
 | `actions` | a non-empty subset of `classify`, `attributes` and `verify`. With `classify` and `attributes`, and a pack that declares item attributes, one `assist` call answers both. `attributes` on a `boxes` target reports the pack's `box` attributes for each box close-up. `verify` (crops and boxes targets) has the VLM judge each stored box that is still open to a machine verdict (`proposed` or `accepted`, never a human- or import-owned box) and writes the verdict onto the box; a box the VLM gave no usable answer for is left for a retry. Order inside a run: `verify`, then `classify` / `attributes` |
 | `vlm`, `prompt_pack`, `acknowledge_external` | the endpoint and pack for this run only (`name` or `name@revision`); omitted, the project's active endpoint and effective default pack. The run pins both |
@@ -1580,9 +1615,9 @@ counted by name and not votes for a class) and `attribute_summary` (per key the 
 10 values with counts). The gate passes with at least 3 answers and `agreement >=
 min_agreement`; a locked item's answer counts as a vote, its class is never written.
 A run with a cluster target, or a `crops` target with a `context`, keeps the members
-of that (sub-)cluster, and every read carries `scope_now`: `count` (members now),
+of that cluster, and every read carries `scope_now`: `count` (members now),
 `overlap`, `jaccard` and `changed`. The assist layer reads only the stored
-`cluster_id` and `cluster_subid` and the member ids, so a re-refine shows as a changed
+`cluster_uid` and the member ids, so activating a new partition shows as a changed
 scope and never as a silently different proposal.
 
 `POST /assist/runs/{run_id}/apply` (`AssistApplyRequest`: `class_name`,
@@ -1621,8 +1656,8 @@ sample of the members the lock rule leaves free, asks the VLM, and when the answ
 cluster is homogeneous (a one-sided exact bound, not "3 of 3 agree") it writes the top class
 to the cluster's other free members. A cluster that fails is split by embedding and each
 part is tried again, down to `max_depth`; what is still unlabeled is left for review with its
-vote distribution. It runs in the `curation-assist-loop-worker` service, survives API
-restarts, and is resumable and reversible. Propagated labels are a **machine** kind
+vote distribution. Its record is in PostgreSQL and it runs as a job in the `curation-assist-loop-worker` service in time slices, survives API
+restarts, and is pausable, resumable and reversible. Propagated labels are a **machine** kind
 (`class_source: "assist_propagated"`, not validated): they are not locked against later
 fixes and stay out of the training export until reviewed. The loop never overwrites a
 human-, import-validated, validated, excluded or holdout item (the lock rule), and never
@@ -1635,6 +1670,8 @@ writes a cluster field.
 | GET | `/assist/loops/{loop_id}` | | `AssistLoopState`; `404 not_found` for an unknown id |
 | GET | `/assist/loops/{loop_id}/nodes` | `level`, `decision`, `after`, `limit` (1 to 500, default 100) | `{nodes: LoopNode[], next_after}` by level then path |
 | GET | `/assist/loops/{loop_id}/nodes/{node_path}/members` | `after`, `limit` (1 to 5000, default 500) | `{crop_ids, next_after}` in id order |
+| POST | `/assist/loops/{loop_id}/pause` | | `AssistLoopState`; the loop yields at the next slice boundary (`pausing`, then `paused`) |
+| PATCH | `/assist/loops/{loop_id}/budget` | `AssistLoopBudgetEdit` (`limits[]`) | `AssistLoopState`; raises or lowers live budget limits |
 | POST | `/assist/loops/{loop_id}/cancel` | | `AssistLoopState`; the loop stops after the requests in flight, what it wrote stays |
 | POST | `/assist/loops/{loop_id}/resume` | | `AssistLoopState` (`queued`); for an `interrupted`, `paused` or `cancelled` loop, or a `failed` one with `stop_reason` `vlm_failed` |
 | POST | `/assist/loops/{loop_id}/rollback` | `{node_paths: string[] \| null, dry_run: true}` | `{dry_run, matched, restored, kept_changed, conflicts}` |
@@ -1643,7 +1680,7 @@ writes a cluster field.
 
 ```json
 {
-  "scope": {"cluster_ids": null, "min_root_size": 40},
+  "scope": {"cluster_uids": null, "min_root_size": 40},
   "vlm": null, "prompt_pack": null, "acknowledge_external": false,
   "seed": 0,
   "gate": {"theta": 0.9, "alpha": 0.05, "max_dissent": 1},
@@ -1656,8 +1693,7 @@ writes a cluster field.
 }
 ```
 
-- `scope.cluster_ids` null means every candidate cluster (id 10000 and up); named ids are used
-  whatever their kind. Clusters under `min_root_size` members are left alone.
+- `scope.cluster_uids` null means every cluster of the serving item partition; named uids are used. Clusters under `min_root_size` members are left alone.
 - `gate.theta` (0.7 to 0.99) is the homogeneity to show, `alpha` (0.001 to 0.1) the chance of
   passing a cluster below it, `max_dissent` (0 to 3) the sampled answers allowed to disagree.
   A cluster of 300 free members needs 32 clean answers at the defaults (49 with one dissent);
@@ -1705,7 +1741,7 @@ writes a cluster field.
 - `audit`: `status` (`off`, `pending`, `ok`, `fail`, `budget_exhausted`), `sampled`, `agreed`,
   `agreement`, `lower_bound`, `crops_spent`.
 
-`LoopNode`: `path` (`r<cluster_id>`, then `.<index>` per level), `level`, `parent`, `n`
+`LoopNode`: `path` (`r<display number of the cluster>`, then `.<index>` per level), `level`, `parent`, `n`
 (free members at the snapshot), `sampled`, `answered`, `decision` (`pass`, `split`,
 `review_leaf`, `review_small`, `stale`, `unvisited`; null while open), `reason`, `reason_message` (a sentence for `reason`; null when it has none), `class_name`
 (the top voted class), `agree`, `bound` (the exact lower bound on homogeneity),

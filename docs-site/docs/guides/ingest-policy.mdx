@@ -65,10 +65,9 @@ the mode (a dataset import under `none` still embeds its labeled items).
 means:
 
 - ingest and the `embed` scope place no newly embedded item into a cluster;
-- `curation-cluster-refresh` skips the project;
-- the auto-label worker's idle centroid retrain skips the project.
+- the cluster refresh tick skips the project.
 
-Clustering you ask for (`/clusters/*`, an auto-label job you start) always runs. With
+Clustering you ask for (`POST .../clusters/runs`, an auto-label job you start) always runs. With
 `embedding.mode=none` and `clustering.automatic=false` the project is detection only:
 see [Pipeline modes](./pipeline-modes.mdx#a-detection-only).
 

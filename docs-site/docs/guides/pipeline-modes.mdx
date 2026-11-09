@@ -17,7 +17,7 @@ is whatever `API_PORT` says in `.env`.
 | Mode | What runs | How you select it | What you cannot turn off today |
 |---|---|---|---|
 | [(a) Detection only](#a-detection-only) | Core stack. Ingest runs the item detector and stores boxes. | Ingest policy `embedding.mode=none` and `clustering.automatic=false`. | Nothing: no vector of any kind, no cluster placement, no VLM. |
-| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | A cluster-refresh retrain stalls on an audit-gate 409. (issue #280) |
+| [(b) Detection, embedding, clustering](#b-detection-embedding-and-clustering) | Core stack and the `curation` workers. Every detection embedded. | The default. | Nothing: the refresh is a beat tick and starts a run without a gate. |
 | [(c) VLM-assisted labeling of a large batch](#c-vlm-assisted-labeling-of-a-large-batch) | Mode (b) plus a VLM. | `vlm` profile or a remote endpoint, **project activation**, VLM policy. | Nothing: a project calls no VLM until it activates one. |
 | [Selective VLM](#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing) | Mode (b), then the VLM for one cluster, batch or filter. | The recipe below. | Nothing runs the VLM on its own. |
 | [(d) Iterative cluster-sampled labeling](#d-iterative-cluster-sampled-auto-labeling) | Mode (b), a VLM and the `curation-assist-loop-worker`. | `POST .../assist/loops`; see [Auto-label loop](./auto-label-loop.mdx). | The VLM budget (`max_vlm_crops`) is required. |
@@ -39,8 +39,8 @@ project. Treat those as code-verified, not field-tested.
 | VLM activation | `POST /curation/projects/{project}/vlm/endpoints/{name}/activate` and `.../vlm/endpoints/deactivate` | Which VLM a project calls. A new project starts with none (`off`). |
 | VLM policy | `GET` and `PUT /curation/projects/{project}/vlm/policy` | `scope` (`all`, `uncertain`, `representatives`, `off`), `per_cluster`, `max_crops_per_day`, `sample_frac`. See [VLM selection](./vlm-selection.mdx#scope-and-budget). |
 | Region profile and prompt pack | config store | What the detection worker's cascade does per item. See [Region profiles](./region-profiles.mdx). |
-| `OP_CLUSTER_REFRESH_*` | `.env`, read by `curation-cluster-refresh` | Interval, growth threshold, deferral, retry backoff and the retrain job of the refresh daemon. See mode (b), step 3. |
-| `OP_IVF_RETRAIN_CHECK_S` | `.env`, read by `curation-auto-label-worker` | `0` disables that worker's idle centroid retrain for every project. A project turns it (and the refresh daemon) off with `clustering.automatic=false`. |
+| `OP_CLUSTER_REFRESH_INTERVAL_S` | `.env`, read by `jobs-beat` | How often the refresh tick runs (`0` removes it). The growth threshold, deferral and backoff are the `refresh` rule of the project's cluster profile. See mode (b), step 3. |
+| Cluster profile | `GET`/`PUT /curation/projects/{project}/cluster_profiles/{name}` | The clustering method, its parameters, CPU or GPU, the refresh rule and whether a finished partition is served at once. |
 | `OP_REGION_EMBED_ENABLED` | `.env` | `false` skips the per-box region embeddings. |
 | VLM CLI | `./openprocessor vlm list\|status\|use\|apply\|probe\|key set` | Switch the in-compose VLM model. |
 
@@ -191,72 +191,29 @@ way on its first start. Every project created after that starts `off`.
   caption="Settings, Models: a project with its VLM off (public sample project)"
 />
 
-### 3. What the cluster-refresh daemon does
+### 3. What the cluster refresh does
 
-`curation-cluster-refresh` (`scripts/curation/cluster_refresh_daemon.py`) polls every
-project's item count. When a project has grown by the threshold since its last refresh
-it does two things in order:
-
-1. Runs auto-promote for the project.
-2. Queues the auto-label job for the retrain (`POST .../pipeline/auto_label/start` with
-   no VLM stage), which the auto-label worker runs.
-
-It waits for ingest to go quiet first, up to a deferral limit, and retries a failed
-retrain after a backoff. Set its behavior in `.env` (the service reads `.env`, so no
-compose change is needed) and recreate it with `./openprocessor restart
-curation-cluster-refresh`. A command-line flag overrides the variable:
-
-| Variable | Flag | Default |
-|---|---|---|
-| `OP_CLUSTER_REFRESH_INTERVAL_S` | `--interval-seconds` | 120 |
-| `OP_CLUSTER_REFRESH_GROWTH_THRESHOLD` | `--growth-threshold` | 200 new items |
-| `OP_CLUSTER_REFRESH_MAX_DEFERRAL_S` | `--max-deferral-seconds` | 1800 |
-| `OP_CLUSTER_REFRESH_RETRY_BACKOFF_S` | `--retry-backoff-seconds` | 600 |
-| `OP_CLUSTER_REFRESH_AUTO_LABEL` | `--auto-label` / `--no-auto-label` | true (queue the retrain). `false` runs auto_promote only. |
-| | `--project` | every active project |
-| | `--once` | one pass, then exit |
+The beat scheduler queues `op.periodic.cluster_refresh` every
+`OP_CLUSTER_REFRESH_INTERVAL_S` seconds (default 120; `0` removes the tick). For each
+active project it reads the project's active item `cluster_profile` and its `refresh` rule,
+and starts a clustering run (`cluster_run`, on the `cluster` queue) when the project has grown
+by `growth_threshold` items (default 200) since the last run. It waits for ingest to go quiet
+first, up to `max_deferral_s` (default 1800), retries a failed run after `retry_backoff_s`
+(default 600), holds while an auto-label loop is live, and queues nothing unless a
+`cluster-worker` has reported in within the last minute. The run writes a new partition; whether
+it is served at once or waits for you is the profile's `activation` (`human` by default: review
+the partition, then `PUT .../clusters/activation`). Change the rule by saving a new revision of
+the cluster profile (`PUT /curation/projects/{project}/cluster_profiles/{name}`), not an
+environment variable.
 
 **Per project off switch.** A project whose ingest policy has `clustering.automatic`
-false is skipped by this daemon entirely, by ingest-time placement and by the auto-label
-worker's idle retrain (mode (a), step 2). It is read at each poll, so the change applies
-without a restart. Explicit clustering (`/clusters/*`, an auto-label job you start)
-always runs.
-To change a flag, replace the service `command` in `docker-compose.local.yml`, which
-`./openprocessor` and `make` load after the stock files. The merged result was checked
-with `docker compose config`:
+false is skipped by the refresh and by ingest-time placement. It is read at each tick, so the
+change applies without a restart. Explicit clustering (`POST .../clusters/runs`, an
+auto-label job you start) always runs.
 
-```yaml
-# docker-compose.local.yml
-services:
-  curation-cluster-refresh:
-    command:
-      - python
-      - scripts/curation/cluster_refresh_daemon.py
-      - --api=http://api:8000
-      - --opensearch=http://opensearch:9200
-      - --growth-threshold=1000
-```
+Neither the refresh nor a run calls the VLM unless the project activated one and a job asks
+for it.
 
-```bash
-./openprocessor curation up curation-cluster-refresh
-```
-
-The second trigger lives in the auto-label worker. While idle it checks each project
-every `OP_IVF_RETRAIN_CHECK_S` seconds (default 1800). It retrains the centroids when the
-pool has grown to `OP_IVF_RETRAIN_GROWTH` times (default 1.5) the trained size and at
-least `OP_IVF_RETRAIN_MIN_INTERVAL_S` seconds (default 86400) have passed. Neither
-trigger runs the VLM unless the project activated one and the retrain job asks for it
-(the daemon's job has no VLM stage).
-
-### 4. Known issue: the audit gate stops the retrain
-
-`auto_promote` is gated on the [accuracy audit](../operations/curation-workflow.mdx#5-label-vlm-suggestions-and-review-queues).
-When a class it would promote has too few audited crops or too low a detector
-precision, the route answers `409 audit_required` or `409 audit_precision_low`. The
-daemon treats any HTTP error as a failure: it logs `auto_promote failed`, returns, and
-does not queue the retrain. The project's clusters then stop refreshing on every poll
-until the audit passes. Run the audit for that project, or switch the daemon to
-`--no-auto-label` and queue retrains yourself. (issue #280)
 
 ## (c) VLM-assisted labeling of a large batch
 
@@ -430,25 +387,24 @@ curl -s $API/pipeline/auto_label/status      # status "completed"; stages.vlm.sk
 curl -s "$API/clusters?limit=20"
 ```
 
-On 162 crops the pass made one cluster (`10000`). Split it into sub-clusters:
+The pass makes a partition of the 162 crops. Start a run with another profile when the
+clusters are too coarse (a cluster that mixes things is split by saving a finer
+`cluster_profile` and running `POST $API/clusters/runs`, then activating the new partition):
 
 ```bash
-# ran
-curl -s -X POST "$API/clusters/refine/10000?distance_threshold=0.6"
-```
-
-```text
-{"cluster_id":10000,"n_items":162,"n_subclusters":10,...,"action":"refined"}
+# not run
+curl -s -X POST "$API/clusters/runs" -H 'content-type: application/json' \
+  -d '{"target":"item"}'
 ```
 
 **4. Name a cluster by hand.** Create the class, then label the members of a
-sub-cluster.
+cluster.
 
 ```bash
 # ran
 curl -s -X POST $API/classes -H 'content-type: application/json' \
   -d '{"name":"spoiler","group":"car_part"}'
-curl -s "$API/crops?cluster_id=10000&cluster_subid=10000b&limit=200"   # the ids of sub-cluster 10000b
+curl -s "$API/crops?cluster_uid=<cluster uid>&limit=200"   # the ids of one cluster
 curl -s -X PUT $API/crops/batch_label -H 'content-type: application/json' \
   -d '{"crop_ids":["050ad3a2...","05ad8ec2..."],"class_id":0,"label_source":"human"}'
 ```
@@ -468,7 +424,7 @@ An assist run plans first (`dry_run` is the default) and writes nothing:
 ```bash
 # not run  (the refusal is code-verified by tests/curation/test_assist_run_classify.py)
 curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
-  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"]}'
+  -d '{"target":{"kind":"cluster","cluster_uid":"<cluster uid>"},"actions":["classify"]}'
 ```
 
 ```text
@@ -484,32 +440,32 @@ curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
 curl -s "$API/assist/runs/RUN_ID"
 ```
 
-The run sends the members of cluster `10000` that are not in the frozen holdout and not
+The run sends the members of the cluster that are not in the frozen holdout and not
 ignored, including the 28 you named: they are sent for a suggestion, and their class is
 never written (`locked_suggest_only` in the result). Other ways to pick "one thing", all
 `# not run` and all taking `vlm=<name>`:
 
 | Scope | Request |
 |---|---|
-| One cluster, one sub-cluster, a sample of either | `POST $API/assist/runs` with `target` `{"kind":"cluster","cluster_id":10000,"cluster_subid":"10000b"}` and `sample` `{"mode":"representative"}` |
+| One cluster, or a sample of it | `POST $API/assist/runs` with `target` `{"kind":"cluster","cluster_uid":"<cluster uid>"}` and `sample` `{"mode":"representative"}` |
 | Chosen crops, or one crop | `POST $API/assist/runs` with `target` `{"kind":"crops","crop_ids":[...]}` |
 | A class, a confidence band or a size band | `POST $API/pipeline/auto_label/start?run_vlm=true&vlm=env&class_id=3&conf_max=0.5` (the same item filter as the crop list: `class_name`, `exclude_class_name`, `conf_min`, `conf_max`, `min_area`, `max_area`, `max_rank`, `origin`, `embedding_state`, `review_status`) |
 | A budget | add `max_vlm_crops=200` to any `auto_label/start` |
 | Only representatives | `vlm_scope=representatives` on `auto_label/start`, or the project's [VLM policy](./vlm-selection.mdx#scope-and-budget) |
 
-A run over a cluster or sub-cluster returns a proposal: the class most sampled answers
+A run over a cluster returns a proposal: the class most sampled answers
 agree on, the vote distribution, the new-class slugs the VLM proposed and a summary of
 the attributes the pack declares. Read it from the run, and apply it only on purpose:
 
 ```bash
 # not run  (code-verified by tests/curation/test_assist_proposal.py)
-curl -s "$API/assist/runs?cluster_id=10000&cluster_subid=10000b"
+curl -s "$API/assist/runs?cluster_uid=<cluster uid>"
 curl -s -X POST "$API/assist/runs/RUN_ID/apply" -H 'content-type: application/json' \
   -d '{"class_name":"spoiler","dry_run":true}'
 ```
 
 `dry_run` counts the members that would be labelled and the locked ones left alone; send
-`"dry_run": false` to label them as a human would. After a re-refine the run's
+`"dry_run": false` to label them as a human would. After a new partition is activated the run's
 `scope_now.changed` is true, and apply refuses with `scope_changed` until you run again
 (or pass `allow_changed_scope`).
 
@@ -558,7 +514,7 @@ The single steps it is built from can still be run by hand:
 
 <Screenshot
   name="cropwright/cluster-detail-1600.png"
-  alt="A cluster page with its member crops and sub-clusters"
+  alt="A cluster page with its member crops"
   caption="A cluster page (public sample project)"
 />
 

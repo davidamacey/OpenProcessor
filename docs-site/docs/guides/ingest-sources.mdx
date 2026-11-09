@@ -360,9 +360,9 @@ volume.
 
 | Piece | Where |
 |---|---|
-| Source definitions, queue, state | The shared jobs volume, under `OP_BULK_INGEST_DIR`, per project |
-| Dispatcher | Inside each `api` worker; `OP_INGEST_DISPATCH_S` seconds per tick, `0` turns every trigger off |
-| Fetch and ingest | The `api` container; a run posts its batches to the API's own address (`OP_API_LOOPBACK_URL`) so they spread over all workers |
+| Source definitions, queue, state | PostgreSQL rows (`ingest_sources`, `ingest_source_files`), per project |
+| Dispatcher | A beat tick (`jobs-beat`, run by `periodic-worker`); `OP_INGEST_DISPATCH_S` seconds per tick, `0` turns every trigger off |
+| Fetch and ingest | A `jobs-worker` job (`bulk_ingest_run`, `source_poll`); a run posts its batches to the API's own address (`OP_API_LOOPBACK_URL`) so they spread over all workers |
 | Credentials | The `api` container's environment or a file mounted into it |
 
 ## Limits

@@ -227,6 +227,19 @@ strips it. The Map page's basemap is drawn by the browser from `OP_MAP_TILE_URL`
 (OpenStreetMap by default), so each tile request tells that server which area is
 on screen; a self-hosted tile server keeps locations on your network.
 
+## Control plane: PostgreSQL, Valkey and Flower
+
+PostgreSQL and Valkey publish no port and sit on the internal compose network only; both require
+a password (files under `secrets/`, mode 600, never environment values). Task messages are JSON
+only, never pickle. Whoever can reach the broker can enqueue work for the workers, and whoever
+reaches the database holds the projects' data, so these two services must stay internal: do not
+map their ports, and do not add a service to their network that you do not trust. Back up
+`secrets/` with the same care as the data. Flower (the `monitoring` profile) answers on
+`OP_BIND_ADDRESS` with a login from `secrets/flower/`; bind it to loopback unless you need it on
+the network. Row-level security in PostgreSQL keeps one project's transaction from reading
+another's rows; like the OpenSearch guard it protects against a bug in the application, not
+against a caller of the API.
+
 ## Monitoring profile and the container runtime socket
 
 The opt-in `monitoring` profile mounts the container runtime socket

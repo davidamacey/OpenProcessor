@@ -166,7 +166,7 @@ cancelled job. It re-checks every source and the preview hash, so a source
 that changed since the preview ends in `preview_stale`, and a new combine
 is needed. The target must still be `building`.
 
-Jobs live under `OP_COMBINE_JOBS_DIR`, in chunks of `OP_COMBINE_PAGE_SIZE`.
+A combine is a job (a row in PostgreSQL) that works in chunks of `OP_COMBINE_PAGE_SIZE`.
 
 ## Errors
 

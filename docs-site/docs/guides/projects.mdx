@@ -36,12 +36,10 @@ access that would reach another project's indexes.
 | Resource | Location |
 |---|---|
 | Indexes | `<OP_PROJECT_INDEX_PREFIX><slug>__<role>` (default prefix `op_prj_`) |
-| Class registry | the `class_registry` document in the project's settings index (a 0.6.x `<OP_PROJECTS_DATA_ROOT>/<slug>/class_registry.json` is loaded by the 0.7.0 upgrade) |
+| Class registry, config documents, settings, jobs | PostgreSQL rows carrying the project id (a 0.6.x `<OP_PROJECTS_DATA_ROOT>/<slug>/class_registry.json` is loaded by the 0.7.0 upgrade) |
 | Exports | `<OP_PROJECTS_DATA_ROOT>/<slug>/exports/` |
 | Bake-off eval sets | `<OP_PROJECTS_DATA_ROOT>/<slug>/bakeoff_eval/` |
-| Uploads, bake-off jobs, per-project state | `<OP_STATE_DIR>/projects/<slug>/` |
-| Training jobs | `<OP_TRAIN_JOBS_DIR>/projects/<slug>/` |
-| Auto-label state | `<OP_AUTO_LABEL_STATE_DIR>/projects/<slug>/` |
+| Uploads | `<OP_STATE_DIR>/projects/<slug>/uploads/` |
 | MLflow experiment | `openprocessor-<slug>` |
 | Promoted model prefix | `<slug>__` (the `default` project uses no prefix) |
 

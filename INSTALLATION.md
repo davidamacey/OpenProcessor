@@ -167,6 +167,66 @@ another machine. Anything that needs local inference (ingest detection, embeddin
 exports, training) answers 503, and the API reports `degraded`. The default
 install requires a GPU and builds the full stack for the tiers you pick.
 
+### The control plane: PostgreSQL, Valkey and the workers
+
+Since 0.7.0 the stack has a control plane. Every service requires PostgreSQL, Valkey and
+OpenSearch, and `/ready` answers 503 naming the one that is down.
+
+| Service | What it does |
+|---|---|
+| `postgres` | PostgreSQL 18: projects, classes, configs, jobs, events, spaces, partitions. Internal only (no published port) |
+| `valkey` | The Celery broker and event wake-ups. Internal only, password required |
+| `db-migrate` | One-shot: applies the Alembic revisions and migrates the OpenSearch indexes; the API and the workers wait for it and exit at another schema revision |
+| `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | Celery workers and the beat scheduler (one beat replica) |
+| `cluster-worker` and the stream and auto-label workers | profile `curation` |
+| `flower` | Celery monitor on port 4613 (profile `monitoring`, bound to `OP_BIND_ADDRESS`) |
+
+**Secrets.** The installer creates `secrets/postgres/` (`super_password`, `owner_password`,
+`app_password`), `secrets/valkey/` and `secrets/flower/` as the installing user, mode 600 in 700
+directories, and never rotates an existing file. Each service mounts only the files it needs:
+the application password goes to the API and the workers, the owner password to `db-migrate` and
+the backup task, the superuser password to PostgreSQL. A password is a file, never an
+environment value. Back up `secrets/` together with the PostgreSQL volume: a restore needs both.
+
+**Connections.** PostgreSQL runs with `max_connections` from `OP_PG_MAX_CONNECTIONS` (default
+400). The deployment's total is every API process (`API_WORKERS * OP_API_REPLICAS`, each taking
+its share of `OP_DB_API_CONNECTIONS_TOTAL`, see [API worker count](#api-worker-count)) plus every
+Celery child process of every worker replica plus the beat and the migrate step. Size the
+setting above that sum; when raising it is not wanted, add the PgBouncer overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.pgbouncer.yml up -d
+```
+
+It puts PgBouncer in transaction mode in front of every pooled connection
+(`OP_DB_POOLER=pgbouncer`); the beat lock and `db-migrate` keep a direct connection because
+session advisory locks need a session.
+
+**Backup and restore.** `./openprocessor db backup [--out DIR]` writes a `pg_dump` custom-format
+dump to `OP_DB_BACKUP_DIR` (default `./backups/postgres`; point it at a disk other than the
+PostgreSQL volume's). `OP_DB_BACKUP_INTERVAL_H` makes the periodic worker take one on a schedule.
+`./openprocessor db restore <file> [--yes]` stops the apps, replaces the database, applies any
+newer migrations (a dump from an older schema is upgraded), clears the event table (its cursors
+belong to the old transaction counter) and restarts the stack; `./openprocessor db verify` compares the database with OpenSearch and storage (class drift,
+missing indexes) and should be run after any restore. The recovery point is the last dump; there
+is no point-in-time recovery in 0.7.0. OpenSearch is not in the dump: restore it from your own snapshots, and read what `db verify`
+reports when the two disagree.
+
+**Several hosts.** Job state, events and claims are in PostgreSQL and Valkey, so API and worker
+replicas can run on more than one host against one control plane. They need a shared POSIX volume
+for the state directory, the crop cache, exports and `data/projects`. The GPU-arbiter overlay is
+single-host (it needs the local Docker socket).
+
+**Upgrades are stop-the-world in 0.7.0:** old and new processes never run together, and
+`./openprocessor upgrade` stops everything first. A later release is planned to write its migrations as
+expand-then-contract so that a rolling upgrade becomes possible. A PostgreSQL major version moves only
+with a release, through `db backup` and `db restore`.
+
+**Things to know.** Messages for a queue whose profile never started stay in Valkey after the
+reaper fails their job; start the profile (`./openprocessor curation up`) and run the job again. The OpenSearch k-NN warm-up is lost
+when OpenSearch restarts, so the first query afterwards pays it. A user of the GPU-arbiter overlay
+must re-apply it: the Docker socket is now mounted only into `gpu-arbiter-worker`.
+
 ### OpenSearch heap sizing
 
 The installer sets `OPENSEARCH_HEAP` in `.env` to half of host RAM (2 to 30 GB) and never overwrites a value
@@ -367,8 +427,8 @@ Measured scaling is in [docs/PERFORMANCE.md](docs/PERFORMANCE.md#multi-gpu-pe-en
 
 ---
 
-A multi-host deployment is not supported. Job leases compare wall-clock times of one host; on
-several hosts the lease TTL (120 s) would have to exceed the clock skew.
+See [The control plane](#the-control-plane-postgresql-valkey-and-the-workers) for running more
+than one host.
 
 ## Install from source
 
@@ -522,6 +582,11 @@ classes, configurations and jobs created after the upgrade are not carried back)
 upgrade (`git pull`, `make up`) from 0.6.0 runs the same step with
 `python -m scripts.db.upgrade_from_060` (see its header); `./openprocessor db verify` reports the
 database against OpenSearch and storage afterwards.
+
+**Downgrade.** There is no downgrade of the schema. `--rollback` restores the 0.6.0 control data
+from the bundle the upgrade took and starts the 0.6.0 images; whatever was written to PostgreSQL
+after the upgrade is lost. Take `./openprocessor db backup` before an upgrade you may want to undo
+within the 0.7.x line.
 
 What each step does, the backups it makes, the 0.6.x image-split note and the data backup are in
 [Upgrade, repair and back up](docs-site/docs/operations/upgrade-and-backup.mdx). The flags are in the

@@ -25,8 +25,9 @@ They are marked `# not run` unless a run produced the output.
 1. **Ingest** with the VLM off. A project calls no VLM until it activates one,
    or until a run names one. See [Pipeline modes](./pipeline-modes.mdx).
 2. **Cluster.** `POST $API/pipeline/auto_label/start?train_clusters=true`. If
-   a cluster mixes things, split it with `POST $API/clusters/refine/{id}`; the
-   sub-clusters are listed with `GET $API/crops?cluster_id=10000&cluster_subid=10000b`.
+   a cluster mixes things, run a finer cluster profile (`POST $API/clusters/runs`) and
+   activate the new partition; a cluster's members are listed with
+   `GET $API/crops?cluster_uid=<cluster uid>`.
 3. **Name some clusters by hand.** Label a few clusters or sub-clusters in
    Cropwright or with `PUT $API/crops/batch_label`. Those labels are
    human-validated: no automated writer overwrites them.

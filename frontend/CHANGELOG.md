@@ -18,6 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semantic search takes an embedding space and can fuse the other ready spaces; the result line names the space searched.
 - A holdout freeze or training export refused with 409 `near_dup_stale` shows the stale levels with an "Update near-duplicate groups" button; the freeze result reports items pulled in as near-duplicates, and the item panel shows the near-duplicate group.
 - Ingest policy page (`/settings/ingest-policy`): an "Ingest profiles" list (`GET /ingest_profiles`) marks the active profile and activates another (`POST /ingest_profiles/{name}/activate`). A refused activation shows the served message and each served issue (`detector_model_not_ready`, `detector_model_unusable`, `triton_unreachable`) verbatim; "Activate anyway" appears only when the served report says `force_allowed`. A successful activation re-reads the active-profile card; a failing follow-up read is reported as that, never as a refused activation. A 404 or any 409 refusal re-reads the stale list, and only the newest list read is kept. Each button is named for its profile ("Activate yolo-large"), a refusal is an alert that takes focus, warnings are announced through a status region, focus lands on the newly active row, and the in-flight button stays focusable with `aria-disabled` (#440).
+- Search by image (#402): a "Search by image" control on `/clusters` takes a dropped or chosen picture, optionally with a region dragged on its preview, and lists the crops nearest to it through `POST /search/image`. A Crops / Regions switch next to the search box applies to text, "More like this" and picture search; with Regions each result names the region that matched (`region b2`, marked stale when its vector predates a move of the box).
+- "More like this": a crop card action (cluster and search grids) and a link in the review pane open `/clusters?similar_to=<crop id>`, which lists the crops nearest to that crop through `GET /search/similar`. A crop with no vector shows the served refusal; the control is absent when semantic search is not served. The axe check covers the results page, the cluster page action and the review link.
+- Label operations page (`/label-ops`): the project's recorded bulk labels and moves from `GET /label_ops` (newest first, Load older pages through the served `next_after` to the end of the kept history), a detail dialog with the served fields and last undo pass, and undo as a served dry run first (restored, kept, conflicts) with Confirm as a separate step. Served refusals show verbatim; empty and error states have Retry. nginx gives `label_ops` routes a 600 s read timeout.
+- Thumbnail tiles and the review crop pane show a "Source not mounted" or "Image file missing" state with the served source root alias and message when the backend answers `source_missing`, instead of only dimming the tile.
+- Optional HTTP basic auth in the nginx container (`OP_CROPWRIGHT_BASIC_AUTH`, htpasswd file mounted read-only; `/nginx-health` stays open). The entrypoint-sandbox tests now map the new `auth.d` directory like `gateway.d`.
+- Auto-label loop panel on `/clusters`: a served dry run (clusters, eligible items, root-level cost, budget fit) before a start, then live status, VLM and audit budget meters, per-level counts, totals, the second-opinion result (or that it was off), cancel and resume, the node table with votes and member crops, and a two-step rollback (served dry run, then confirm), whole or per node. The panel is absent when the backend does not serve `/assist/loops`. It has no pause button and no event log because the API serves neither. The axe check covers its plan, finished and live states.
+- Cluster list: the sort and filters are the server's. The toolbar renders the served sort options and flag vocabulary and filters by dominant class, detector class, size range, validation state, flags and needs review; the choice goes out as query parameters, lives in the URL and in session storage, and "Clear filters" resets it. Cards show the detector's top class with its share and mean confidence, the validation state, the review count (per-tab counts as the tooltip) and the flags (served label, served description as tooltip). A truncated list says so; load and error states have a Retry.
+- Cluster page: facet chips from the served facets (detector class, validation, review tab, detector-confidence band, each with the served count; label-source options carry their count) that send the matching crop-list parameter, and a sort by detector confidence. The panel folds on a narrow screen.
+- An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
+- Capture-date filter: "Taken from" and "Taken to" in the shared item filter (review, clusters and the Map page) send `taken_from` and `taken_to`; the URL, the filter chip and "clear" carry them, and the review tabs show the inputs only when the tab serves the filter.
+- The pre-commit hooks run prettier, eslint (staged files) and knip (the whole project) on `frontend/`, and the Playwright e2e and docs-screenshot Python is linted by ruff.
+
+### Changed
+
+- Clusters have no sub-clusters, core cut line, purity or kind on the wire, so the cluster detail view and cards no longer show them; excluded items stay in their cluster; labeling an item no longer moves it to another cluster.
+- Auto-label no longer takes the clustering parameters (`train_clusters`, `recluster_unvalidated`, `gate_*`, `n_clusters`); clustering has its own run panel.
+- Settings save (`PUT /settings`): sends the `revision` read from `GET /settings` as `expected_revision`, adopts the new revision from the response, and on a 409 `revision_conflict` re-reads the record before reporting that nothing was saved.
+- The label-operation dialog no longer shows the "members not recorded" notice: every operation records its members, so `members_known` is gone from the wire and the UI. Label operations may have the kinds `assist_loop_propagate` and `assist_loop_review`, and their ids are UUIDs.
+- Dev dependency bumps within their ranges (the closed Dependabot group #474, regenerated with `npm update`): vite 8.3.6, vitest 5.1.0, eslint 10.14.0, eslint-plugin-svelte 3.24.0, globals 17.14.0, knip 6.44.1, svelte-check 4.7.8, tailwindcss and `@tailwindcss/vite` 4.3.4. TypeScript stays on 6.0 and jsdom on 30.x.
+- Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).
+- Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
+- The cluster list no longer sorts or narrows on the client and no longer fetches thumbnails one request per card: the first screen is one list request that also carries its thumbnails, and each further window is one more. The "Unlabeled only" toggle is gone (use the validation and dominant-class filters). Readers of `label_purity` moved to `label_agreement`.
+
+### Removed
+
+- The dedup threshold of the exports and the methods entries, the region cluster, refine and status calls, and the cluster refine call.
+- The classes page "Sync to OpenSearch" button and its client call: the class registry is stored in PostgreSQL and the route is gone.
 
 ### Fixed
 
@@ -28,47 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The scores, projection, probe, diverse-selection and combine pollers keep following a queued, paused or cancelling job, and read `completed_with_errors` as done and `interrupted` as failed (a queued job used to read as finished).
 - The single-class export's near-duplicate checkbox did nothing; both exports now send `collapse_near_duplicates`.
 - `/projects` at phone width: the table becomes stacked rows (counts under the project, actions below) instead of needing sideways scrolling to reach Embedded and the Open/Edit/Archive buttons. The count labels are real text ("Images 0"), not CSS-generated content that read as "Images0".
-
 - Ingest policy page: with no active ingest profile the card now says ingest uses the deployment's default detector (naming it from `GET /ingest/config`) instead of claiming ingest is refused (#411).
 - Search by image popover on `/clusters` opens under its button at phone width instead of pinned to the top of the viewport over the header.
 - The live e2e tier (`npm run test:live`) accepts basic-auth credentials through `OP_CROPWRIGHT_LIVE_USER` and `OP_CROPWRIGHT_LIVE_PASSWORD_FILE`.
 - Auto-label loop: the budget stop now says clusters it could not cover were left not visited, and each not-visited cluster row states which budget could not cover it, with the sentence the backend serves in `reason_message` (#411).
 - Auto-label loop run view: a loop that stopped because every VLM call of a node failed shows the served `vlm_failed` reason and error, and offers Resume for that case only (other failed loops stay non-resumable) (#286).
-
-### Changed
-
-- Clusters have no sub-clusters, core cut line, purity or kind on the wire, so the cluster detail view and cards no longer show them; excluded items stay in their cluster; labeling an item no longer moves it to another cluster.
-- Auto-label no longer takes the clustering parameters (`train_clusters`, `recluster_unvalidated`, `gate_*`, `n_clusters`); clustering has its own run panel.
-- Settings save (`PUT /settings`): sends the `revision` read from `GET /settings` as `expected_revision`, adopts the new revision from the response, and on a 409 `revision_conflict` re-reads the record before reporting that nothing was saved.
-- The label-operation dialog no longer shows the "members not recorded" notice: every operation records its members, so `members_known` is gone from the wire and the UI. Label operations may have the kinds `assist_loop_propagate` and `assist_loop_review`, and their ids are UUIDs.
-- Dev dependency bumps within their ranges (the closed Dependabot group #474, regenerated with `npm update`): vite 8.3.6, vitest 5.1.0, eslint 10.14.0, eslint-plugin-svelte 3.24.0, globals 17.14.0, knip 6.44.1, svelte-check 4.7.8, tailwindcss and `@tailwindcss/vite` 4.3.4. TypeScript stays on 6.0 and jsdom on 30.x.
-- Dev dependency bumps (dependabot #433, re-applied by hand): `@sveltejs/adapter-static` 4.0.1, `@sveltejs/kit` 3.1.1, `@types/node` 26.6.6, `knip` 6.44.0; the `node` and `nginx-unprivileged` image digests (#423).
-
-- Ingest policy page (`/settings/ingest-policy`): the per-project "Detector override" section is removed, because the backend no longer serves `IngestPolicy.detector` (#366). The page shows the project's active ingest profile read-only (`GET /ingest_profiles/active`) with a pointer to the ingest-profile docs; the detector is now chosen by activating an ingest profile through the API. `ConfigAxis` gains `ingest_profile`, and the detector contract tests are pinned to the new `IngestPolicy` shapes.
-
-### Removed
-
-- The dedup threshold of the exports and the methods entries, the region cluster, refine and status calls, and the cluster refine call.
-- The classes page "Sync to OpenSearch" button and its client call: the class registry is stored in PostgreSQL and the route is gone.
-
-### Added
-
-- Search by image (#402): a "Search by image" control on `/clusters` takes a dropped or chosen picture, optionally with a region dragged on its preview, and lists the crops nearest to it through `POST /search/image`. A Crops / Regions switch next to the search box applies to text, "More like this" and picture search; with Regions each result names the region that matched (`region b2`, marked stale when its vector predates a move of the box).
-- "More like this": a crop card action (cluster and search grids) and a link in the review pane open `/clusters?similar_to=<crop id>`, which lists the crops nearest to that crop through `GET /search/similar`. A crop with no vector shows the served refusal; the control is absent when semantic search is not served. The axe check covers the results page, the cluster page action and the review link.
-- Label operations page (`/label-ops`): the project's recorded bulk labels and moves from `GET /label_ops` (newest first, Load older pages through the served `next_after` to the end of the kept history), a detail dialog with the served fields and last undo pass, and undo as a served dry run first (restored, kept, conflicts) with Confirm as a separate step. Served refusals show verbatim; empty and error states have Retry. nginx gives `label_ops` routes a 600 s read timeout.
-- Thumbnail tiles and the review crop pane show a "Source not mounted" or "Image file missing" state with the served source root alias and message when the backend answers `source_missing`, instead of only dimming the tile.
-- Optional HTTP basic auth in the nginx container (`OP_CROPWRIGHT_BASIC_AUTH`, htpasswd file mounted read-only; `/nginx-health` stays open). The entrypoint-sandbox tests now map the new `auth.d` directory like `gateway.d`.
-- Auto-label loop panel on `/clusters`: a served dry run (clusters, eligible items, root-level cost, budget fit) before a start, then live status, VLM and audit budget meters, per-level counts, totals, the second-opinion result (or that it was off), cancel and resume, the node table with votes and member crops, and a two-step rollback (served dry run, then confirm), whole or per node. The panel is absent when the backend does not serve `/assist/loops`. It has no pause button and no event log because the API serves neither. The axe check covers its plan, finished and live states.
-- Cluster list: the sort and filters are the server's. The toolbar renders the served sort options and flag vocabulary and filters by dominant class, detector class, size range, validation state, flags and needs review; the choice goes out as query parameters, lives in the URL and in session storage, and "Clear filters" resets it. Cards show the detector's top class with its share and mean confidence, the validation state, the review count (per-tab counts as the tooltip) and the flags (served label, served description as tooltip). A truncated list says so; load and error states have a Retry.
-- Cluster page: facet chips from the served facets (detector class, validation, review tab, detector-confidence band, each with the served count; label-source options carry their count) that send the matching crop-list parameter, and a sort by detector confidence. The panel folds on a narrow screen.
-- An axe-core accessibility check in the stubbed e2e suite (`e2e/stubbed/test_a11y_axe.py`) on projects, clusters, cluster detail, review, classes, settings, prompt packs and open-vocab sets; it fails on any violation.
-
-### Changed
-
-- The cluster list no longer sorts or narrows on the client and no longer fetches thumbnails one request per card: the first screen is one list request that also carries its thumbnails, and each further window is one more. The "Unlabeled only" toggle is gone (use the validation and dominant-class filters). Readers of `label_purity` moved to `label_agreement`.
-
-### Fixed
-
 - The assist-run dialog and the auto-label loop panel kept Start enabled for a moment after the form changed, while the shown dry run still answered the old settings. Start now waits until the dry run for the current settings has arrived.
 - An unknown URL shows a not-found page instead of the "Something went wrong / Reload" prompt.
 - A thumbnail the server cannot serve shows a dimmed empty tile instead of spilling its alt text across the cluster grid.

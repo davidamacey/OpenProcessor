@@ -5,19 +5,23 @@ title: Workers and heartbeats
 
 # Workers and heartbeats
 
-The synchronous curation API (browse, label, cluster, export) works with no
-workers at all. The workers keep datasets moving without a person driving
-every step. They run the same `openprocessor` image as the API with a
-different entrypoint, so none of them needs an image rebuild.
+The synchronous curation API (browse, label, export) works with no workers
+at all. The workers keep datasets moving without a person driving every
+step, and they run every job: a long operation is a row in PostgreSQL that a
+Celery worker picks up from Valkey. They run the same `openprocessor` image
+as the API with a different entrypoint, so none of them needs an image
+rebuild.
 
 **One set of workers serves every project.** A worker is not bound to one
-project: each cycle it lists the active projects, skips paused ones, and
-binds each project only around that project's own work, so a project's
-queries and writes only ever touch its own indexes. `--project <slug>`
-narrows a worker to one project. The detection worker splits each fetch
-between projects round-robin (equal quota, leftover capacity to projects
-that filled theirs), caps each project's in-flight items so no project
-starves the others, and backs idle projects off from 5 s to 60 s.
+project: it reads the project from the job (or, for the stream workers,
+lists the active projects each cycle, skips paused ones, and binds each
+project only around that project's own work), so a project's queries and
+writes only ever touch its own indexes and rows. The detection worker splits
+each fetch between projects round-robin (equal quota, leftover capacity to
+projects that filled theirs), caps each project's in-flight items so no
+project starves the others, and backs idle projects off from 5 s to 60 s.
+Several replicas of a stream worker share the projects: each claims whole
+projects with a lease in PostgreSQL.
 
 ```bash
 ./openprocessor curation up                    # or: make curation-up
@@ -26,24 +30,44 @@ make curation-logs                             # follow all worker logs
 make curation-down
 ```
 
-## The workers
+## The always-on workers
+
+These start with the core stack, because the API's own job routes need them.
+
+| Service | Queue | What it does |
+|---|---|---|
+| `jobs-worker` | `jobs` | Runs most jobs: label operations, dataset import, bulk ingest, reprocess, scores, promote, combine, project create and delete, embedding builds, near-duplicate runs. Concurrency `OP_JOBS_CONCURRENCY` (default 4); replicas `OP_JOBS_REPLICAS` |
+| `periodic-worker` | `periodic` | Runs the scheduled ticks and the reaper |
+| `open-vocab-worker` | `open_vocab` | The open-vocabulary sweep |
+| `jobs-beat` | | The beat scheduler: one replica. It queues the reaper (every 30 s), the ingest dispatcher, the open-vocabulary sweep, the serving inventory, the near-duplicate rescore, the cluster refresh, the optional database backup and the GPU arbiter tick |
+
+The **reaper** recovers a job whose worker died (it becomes `interrupted`, and
+resumes by itself when the job kind allows), fails the jobs of a queue whose
+worker profile never started, and prunes old events and finished jobs.
+
+## The curation profile
 
 | Service | Entrypoint | What it does |
 |---|---|---|
 | `curation-detection-worker` | `python -m scripts.curation.worker --continuous` | Pulls `pending_detection` / `pending_verification` items and runs each project's active region profile's cascade: detector, optional segmenter leg, VLM verification, per-box text reading. Idles for a project with no active profile. Follows a project's config at quiesce points: a newly activated profile, prompt pack or VLM endpoint takes effect once the queues drain. |
-| `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks each project's active VLM for class suggestions on unvalidated items that have a `pe_embedding`, on its own schedule. |
-| `curation-auto-label-worker` | `scripts.curation.auto_label_worker` | Claims jobs queued by `POST /curation/projects/{project}/pipeline/auto_label/start` from the shared `/jobs` volume and runs them one at a time across projects, oldest first: clustering, and VLM labeling only when the job says `run_vlm=true`. Can also trigger a centroid retrain when a project's pool has grown. |
-| `curation-assist-loop-worker` | `python -m scripts.curation.assist_loop_worker` | Claims loops queued by `POST /curation/projects/{project}/assist/loops` from the shared `/jobs` volume (`OP_ASSIST_LOOP_JOBS_DIR`) and runs them one at a time across projects, oldest first, with the project bound. It builds its own VLM labelers, so it needs the source-image, `./data` and `./secrets/vlm` mounts that `curation-auto-label-worker` has. A loop it was running when it died reads `interrupted` until resumed. While a loop is live the cluster retrain is held. See [Auto-label loop](../guides/auto-label-loop.mdx). |
-| `curation-cluster-refresh` | `scripts/curation/cluster_refresh_daemon.py` | Polls each project's items index (every 120 s by default). Once a project has grown by 200 items it runs auto-promote for that project, then queues the auto-label job (no VLM stage) as the centroid retrain. The retrain is on by default (`--no-auto-label` turns it off). The flags are command-line only; see [Pipeline modes](../guides/pipeline-modes.mdx#3-what-the-cluster-refresh-daemon-does). |
-| `curation-evaluator` | its own image | Watches each project's `bakeoff_jobs` directory and runs model comparisons. It has no restart policy and its own `evaluator` profile, so `--profile curation up -d` and `./openprocessor curation up` do not start it. Start it on purpose with `./openprocessor curation up curation-evaluator` or `docker compose run --rm curation-evaluator`. It needs the NVIDIA runtime and the card named by `EVALUATOR_GPU_ID`. |
+| `curation-vlm-worker` | `python -m scripts.curation.vlm_worker --continuous` | Continuously asks each project's active VLM for class suggestions on unvalidated items that have a vector in the primary item space, on its own schedule. |
+| `curation-auto-label-worker` | queue `autolabel` | Runs the jobs queued by `POST /curation/projects/{project}/pipeline/auto_label/start`, one at a time: embedding of missing vectors, and VLM labeling only when the job says `run_vlm=true`. |
+| `curation-assist-loop-worker` | queue `assist_loop` | Runs auto-label loops queued by `POST /curation/projects/{project}/assist/loops`, in time slices, with the project bound. It builds its own VLM labelers, so it needs the source-image, `./data` and `./secrets/vlm` mounts that `curation-auto-label-worker` has. A loop it was running when it died reads `interrupted` until resumed. While a loop is live the cluster refresh is held. See [Auto-label loop](../guides/auto-label-loop.mdx). |
+| `cluster-worker` | queue `cluster` | Runs clustering runs and the periodic cluster refresh, one task per child process so its memory returns to the system. |
 
-`api`, `curation-detection-worker`, `curation-auto-label-worker` and
-`curation-assist-loop-worker` must
-mount the **same** source directory at the same container path
-(`OP_SOURCE_ROOT_HOST` → `/data/source`, read-only). If a worker lacks it,
-ingest succeeds but that worker's reads fail with `detection_failed` /
-`image_unavailable`. After changing `OP_SOURCE_ROOT_HOST`, recreate all
-four with `./openprocessor start`. Details: [Basic configuration](../configuration/basic.mdx) and
+The bake-off evaluator (`curation-evaluator`, queue `gpu_eval`), the trainer
+(`curation-trainer`, `gpu_train`) and the model-export worker
+(`model-export-worker`, `gpu_export`) have their own profiles and need a GPU
+of their own; `openprocessor curation up curation-evaluator` starts the
+evaluator on purpose.
+
+`api`, `curation-detection-worker`, `curation-auto-label-worker`,
+`curation-assist-loop-worker` and `jobs-worker` must mount the **same**
+source directory at the same container path (`OP_SOURCE_ROOT_HOST` →
+`/data/source`, read-only). If a worker lacks it, ingest succeeds but that
+worker's reads fail with `detection_failed` / `image_unavailable`. After
+changing `OP_SOURCE_ROOT_HOST`, recreate them with `./openprocessor start`.
+Details: [Basic configuration](../configuration/basic.mdx) and
 [Ingest a large folder](../guides/ingest-large-folder.mdx).
 
 ## Which worker needs what
@@ -52,8 +76,8 @@ four with `./openprocessor start`. Details: [Basic configuration](../configurati
 |---|---|---|---|
 | `curation-detection-worker` | Yes (`depends_on: triton-server`), for the region detector | Only if the region profile uses VLM verification | No |
 | `curation-vlm-worker` | No | Yes. It idles when the project has no VLM. | No |
-| `curation-auto-label-worker` | Only for `embed_missing=true` jobs, which call the PE encoder on `triton-server` (no compose dependency) | Only for jobs with `run_vlm=true` | No |
-| `curation-cluster-refresh` | No | No | No |
+| `curation-auto-label-worker` | Only for `embed_missing=true` jobs, which call the PE encoder on `triton-server` | Only for jobs with `run_vlm=true` | No |
+| `cluster-worker` | No | No | No (the opt-in `docker-compose.gpu-clustering.yml` gives one to `curation-auto-label-worker`) |
 | `curation-evaluator` | No | No | Yes (`EVALUATOR_GPU_ID`) |
 
 The detection worker verifies **regions** (it sends numbered overlays to the VLM). The
@@ -63,15 +87,14 @@ whose VLM is off does neither VLM step.
 ## Which workers to run
 
 Not every mode needs every worker. [Pipeline modes](../guides/pipeline-modes.mdx) says
-which to start, and how to stop the two clustering triggers (the cluster-refresh daemon
-and the auto-label worker's idle centroid retrain). Turn both off for one project with
-the ingest policy field `clustering.automatic=false`, or for all projects with
-`OP_IVF_RETRAIN_CHECK_S=0` and by not running the daemon.
+which to start, and how to stop automatic clustering: turn it off for one project with
+the ingest policy field `clustering.automatic=false`, or for all projects by setting the
+cluster refresh interval (`OP_CLUSTER_REFRESH_INTERVAL_S`) to `0`.
 
 ## Heartbeats instead of `pgrep`
 
-A process can look alive to `pgrep` while its event loop is deadlocked.
-Every worker therefore runs a heartbeat task next to its real work
+A process can look alive to `pgrep` while its event loop is deadlocked. The two
+stream workers therefore run a heartbeat task next to their real work
 (`src/services/curation/worker_liveness.py`) that writes
 `{ts, pid, tasks}` to `$OP_HEARTBEAT_DIR/<name>.json` on a fixed interval,
 including while idle. `tasks` is a liveness map of the worker's own
@@ -85,54 +108,40 @@ python /app/src/services/curation/worker_liveness.py check detection_worker --ma
 ```
 
 exiting `0` (healthy) or `1` (unhealthy) and printing the reason. The
-names are `detection_worker`, `vlm_worker`, `auto_label_worker` and
-`cluster_refresh`. `OP_HEARTBEAT_DIR` defaults to a
-container-local path, so no volume is needed.
+names are `detection_worker` and `vlm_worker`. `OP_HEARTBEAT_DIR` defaults to a
+container-local path, so no volume is needed. The Celery workers are checked by
+asking their own pool (`scripts/healthcheck/celery_pool_healthcheck.py <queue>`),
+and the beat by the age of its schedule file.
 
 `docker compose ps` shows the result as `healthy` / `unhealthy`; a worker
-that is `unhealthy` is stuck, not merely idle.
-
-The trainer has a separate heartbeat, `.trainer_capabilities.json` on the
-shared `/jobs` volume, which the API reads for training preflight (see
-[Health and stall reasons](./health-and-stalls.mdx#training-reachability)).
+that is `unhealthy` is stuck, not merely idle. `GET /ready` names the database,
+the queue or the disk when one of them is down. Flower (`flower`, monitoring
+profile, port 4613) shows the queues and the tasks.
 
 ## Pausing
 
-There are two independent pauses.
+There are two independent pauses, both stored in PostgreSQL so every worker
+reads the same state.
 
 - **Per project.** `POST /curation/projects/{project}/pause` makes every
-  worker skip that project's work (the flag is
-  `<project state dir>/pipeline_paused.flag`); `POST .../resume` clears it
+  worker skip that project's work; `POST .../resume` clears it
   and `GET .../pause` reports `paused` and `paused_by`. Other projects keep
-  running.
-- **Global.** The VLM worker idles while its pause sentinel file exists
-  (`OP_PAUSE_SENTINEL` / `OP_WORKER_PAUSE_SENTINEL`, default
-  `/var/lib/openprocessor/vlm_worker/pause.sentinel`). The GPU arbiter
-  creates it before a single-GPU training run so the worker doesn't compete
-  with the trainer, and `openprocessor vlm use` creates it while it swaps
-  the model. For a multi-GPU claim the arbiter stops configured containers
-  instead (`OP_GPU_ARBITER_CONTAINERS`). You can create and remove the file
-  by hand to pause and resume everything without stopping the container.
+  running. A job that is already running yields at its next slice boundary.
+- **Global, for the VLM.** The VLM workers idle while the deployment's
+  training pause is set. The GPU arbiter sets it before a single-GPU training
+  run so the worker doesn't compete with the trainer, and
+  `openprocessor vlm use` sets it while it swaps the model. For a multi-GPU
+  claim the arbiter stops configured containers instead
+  (`OP_GPU_ARBITER_CONTAINERS`, `docker-compose.gpu-arbiter.yml`). Without
+  the arbiter overlay the VLM workers are not paused during a run.
 
-## Multi-process state
+## Where job state lives
 
 `api` runs many uvicorn worker processes, and any of them can answer
-a given request. Every piece of job state that must look the same from
-all of them lives in files on the shared `/jobs` volume, not in process
-memory:
-
-| Job | Directory (default) |
-|---|---|
-| Training | `/jobs` (`OP_TRAIN_JOBS_DIR`), nested per project |
-| Auto-label | `/jobs/auto_label`, nested per project |
-| Probe | `/jobs/probe` |
-| Scores | `/jobs/scores` |
-| Diverse selection | `/jobs/select` |
-| Visualization | `/jobs/viz` |
-| Region drain streak | `/jobs/region_drain` |
-| Reprocess | `/jobs/reprocess` |
-| Dataset import | `/jobs/imports` |
-| Combine | `/jobs/combine` |
+a given request. Job state is never in process memory or on a volume: a job is
+a row in PostgreSQL (`GET /curation/projects/{project}/jobs` lists them), and
+its messages travel through Valkey. Training run outputs sit under
+`OP_TRAIN_RUNS_ROOT` on the shared state volume, but their status is in the `jobs` table.
 
 Events are rows in the PostgreSQL `events` table, announced by a Valkey
 wake-up, so a client on `GET /curation/events` sees events published by
@@ -146,4 +155,5 @@ only its own, and `GET /curation/events` delivers the global ones.
 The detection worker serves its own Prometheus `/metrics` on
 `OP_REGION_WORKER_METRICS_PORT`. Stage concurrency is set by
 `OP_REGION_WORKER_VLM_CONCURRENCY` and
-`OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY`.
+`OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY`. The job gauges (`op_jobs{kind,status}`,
+`op_jobs_oldest_queued_seconds`, `op_jobs_failed_total`) are in the Prometheus metrics too.

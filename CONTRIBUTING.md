@@ -54,7 +54,7 @@ a plain `pytest tests/` never touches Docker or the network.
 | Tier | Marker | Needs | Run |
 |---|---|---|---|
 | Docker-free (the default) | none | nothing | the commands above |
-| `db` | `db` | a PostgreSQL: Docker (testcontainers) or `OP_TEST_DATABASE_URL`; no GPU | `make test-db` |
+| `db` | `db` | a PostgreSQL: Docker (testcontainers) or `OP_TEST_DATABASE_URL`; no GPU | `make test-db`, or the two commands below against a server you already have |
 | `live` | `live` | the `docker/test/` harness | `-m live`, see below |
 
 A test under `tests/db/`, or one that uses the `pg` fixture, must carry `pytest.mark.db`
@@ -72,8 +72,16 @@ their own, because the cursor waits for the oldest open transaction of the whole
 that uses the `pg_events` fixture carries the `events_server` marker. Under xdist each worker
 starts its own container for them; with a server you already have, set
 `OP_TEST_EVENTS_DATABASE_URL` as above and run them in one process, apart from the rest of the
-tier: `-m events_server -p no:xdist`, and `-m "db and not events_server" -n 2` for the rest. A
-parallel run that includes them against that one server stops with an error saying so.
+tier. Against a server you already have the db tier is therefore **two commands**:
+
+```bash
+.venv/bin/python -m pytest tests/ -q --no-cov -m "db and not events_server" -n 2
+OP_TEST_EVENTS_DATABASE_URL=postgresql://op_super:<password>@host:5432/postgres \
+  .venv/bin/python -m pytest tests/ -q --no-cov -m events_server -p no:xdist
+```
+
+A parallel run that includes the `events_server` tests against that one server stops with an
+error saying so. `make test-db` (testcontainers, one container per worker) needs no split.
 
 Migrations keep **one Alembic head**. When two branches each add a revision, the second to merge
 rebases its migration onto the new head (it changes its `down_revision`) instead of adding a
@@ -241,13 +249,17 @@ Never add a line to hide a new finding; fix it.
 | `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400) is a guide, not a target. A file in the 640-700 band is split by concern when you touch it, never by collapsing lines and never to dodge the number. A file that is one cohesive concern may exceed it with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at merge; existing baselines otherwise only shrink |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
-| `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock` or `filelock` guarding cross-process state: claim it with an OpenSearch job lease (`src/clients/job_lease.py`) |
+| `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock`, `filelock` or `portalocker` anywhere under `src`, `scripts`, `export` or `docker`, and no baseline: claim cross-process state with the fenced claim of a `jobs` row (`src/db/repos/jobs.py`) or a Postgres advisory lock (`src/config/advisory_locks.py`) |
+| `check_noqa_ratchet.py` | the number of `# noqa` lines per Python file may not grow; `baselines/noqa.txt` holds today's count per file and only shrinks |
 | `check_process_state.py` | no new `asyncio.create_task` / `loop.create_task` in `src/routers`, `src/services` or `src/app`, no new module-level `asyncio`/`threading` lock, semaphore or event, and no new module-level mutable `dict`/`set`/`list` in `src`: the API is stateless across workers. An entry in `baselines/process_state.txt` needs a reason that says why the use is correct per process (revision-checked cache, TTL, local throttle, process handle); see [Per-process state](docs/ARCHITECTURE.md#per-process-state) |
 | `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
 | `check_cited_paths.py` | a comment or docstring that cites a `docs/`, `scripts/` or similar file cites one that exists |
 | `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |
-| `check_mypy_tests.py` | `tests/` is type-checked by the mypy hook; test modules that still have errors sit in the `ignore_errors` block of `pyproject.toml` and in `baselines/mypy_tests.txt`, which only shrink. Fix a module, then delete it from both |
+| `check_mypy_tests.py` | `tests/` is type-checked by the mypy hook (`disallow_untyped_defs` on the `tests.*` override); test modules that still have errors sit in the `ignore_errors` block of `pyproject.toml` and in `baselines/mypy_tests.txt`, which only shrink. Fix a module, then delete it from both |
 | `check_naming_leaks.py` | no private product or domain names in the tracked tree |
+| `frontend-prettier`, `frontend-eslint` | staged files under `frontend/` pass the app's own prettier and eslint (through `frontend/node_modules`; run `npm ci` in `frontend/` first, a missing install fails the hook instead of passing). svelte-check and vitest stay in CI and the gate |
+| ruff on `frontend/**/*.py` | the Playwright e2e suite and the docs-screenshot scripts are linted and formatted by the same ruff hooks as `src/`, with a short `per-file-ignores` block for test idioms (`pyproject.toml`) |
+| `frontend-knip` | no unused file, export or dependency in `frontend/` (whole-project, so it takes no file names; it runs `svelte-kit sync` first because the config extends the generated tsconfig) |
 | ruff `TID251` | `src/` reads the environment only through `src/config/env.py` (`env_str`, `env_int`, `env_float`, `env_bool`, `env_path`); a malformed value raises naming the variable |
 | `noqa-needs-reason` | every `# noqa: CODE` ends with `  # <why>` |
 
