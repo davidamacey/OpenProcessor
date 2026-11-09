@@ -27,37 +27,20 @@ export function unknownStrategyDetail(e: unknown): UnknownStrategyDetail | null 
   };
 }
 
-// -- Auto-label (recluster) job ------------------------------------------
-// Wraps POST {API_PREFIX}/pipeline/auto_label/{start,status,cancel}. The pipeline
-// re-runs prototype assignment → cluster_id normalize → AHC residuals → auto-
-// promote → VLM sweep, fixing prototype drift and stale cluster_id on
-// labeled crops. Hours at HDD scale; the panel polls status while it runs.
+// -- Auto-label job ------------------------------------------------------
+// Wraps POST {API_PREFIX}/pipeline/auto_label/{start,status,pause,resume,cancel}.
+// The run is a queued job (202): embed the items without a vector (opt-in), sweep
+// the unvalidated crops with the VLM, finalize. Clustering is its own run
+// (`POST /clusters/runs`). The panel polls the status while it is live.
 
 export interface AutoLabelStartParams {
-  train_clusters?: boolean;
-  promote_min_purity?: number;
-  promote_min_members?: number;
   vlm_batch_size?: number;
   vlm_concurrency?: number;
   max_vlm_crops?: number;
   classifier_confidence_skip_vlm?: number;
-  /** When true, broaden the residual AHC pool to include items already
-   *  in candidate clusters so smaller candidates can merge into bigger
-   *  ones. Default false — only fresh / class-bucketed items are
-   *  re-clustered. */
-  recluster_unvalidated?: boolean;
   /** v0.4.0: embed the items that have no vector as the run's first stage.
    *  Sent only when ticked. */
   embed_missing?: boolean;
-  // -- Cluster scope (primary-subject gate) ------------------------------
-  /** Train + assign only crops with crop_rank_in_image <= this (1 = largest,
-   *  2 = largest + 2nd). Smaller crops are parked. Needs full rank/blur
-   *  backfill; the run blocks otherwise. */
-  gate_max_rank?: number | null;
-  /** Train + assign only crops with blur_lap_ratio >= this. */
-  gate_min_blur_ratio?: number | null;
-  /** IVF fixed centroid count (default 512). Sweep down with the gate on. */
-  n_clusters?: number | null;
   // -- VLM-assisted scoping (2026-09-20 contract, this plan §1.3) --------
   /**
    * Scope the run to a single class instead of the whole pool — "just
@@ -104,32 +87,51 @@ export interface AutoLabelStartParams {
   run_vlm?: boolean;
 }
 
-export type AutoLabelStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
+export const AUTO_LABEL_STATUSES = [
+  'idle',
+  'queued',
+  'running',
+  'paused',
+  'cancelling',
+  'completed',
+  'completed_with_errors',
+  'failed',
+  'cancelled',
+  'interrupted',
+] as const;
+export type AutoLabelStatus = (typeof AUTO_LABEL_STATUSES)[number];
+
+/** The server works on the run (or is stopping it): poll until it leaves these. */
+export const AUTO_LABEL_LIVE_STATUSES: readonly AutoLabelStatus[] = [
+  'queued',
+  'running',
+  'cancelling',
+];
 
 export interface AutoLabelJobState {
   job_id: string;
   status: AutoLabelStatus;
+  pipeline: string;
   stage: string;
   processed: number;
   total: number;
   started_at: number;
   finished_at: number;
   error: string | null;
+  error_detail: string | null;
   result: Record<string, unknown>;
   args: Record<string, unknown>;
   eta_seconds: number | null;
   elapsed_seconds: number;
-  // GPU clustering telemetry (optional — older worker versions omit).
-  // `backend` is 'gpu' when cluster_residuals' UMAP ran on cuML;
-  // 'cpu' for sklearn fallback. `backend_detail` is a human-readable
-  // chip ("gpu (cuml 26.4 · A6000 GPU 0 · 9824/49152 MB free · nn_descent)"
-  // or "cpu (sklearn 1.4 · umap-learn 0.5)").
-  backend?: 'gpu' | 'cpu' | null;
-  backend_detail?: string | null;
-  free_vram_mb?: number | null;
-  peak_vram_mb?: number | null;
-  stage_durations?: Record<string, number>;
+  queue_age_seconds: number | null;
+  queue_max_age_seconds: number;
+  /** Why a paused run is paused (e.g. the project or the VLM endpoint). */
+  pause_reason?: string | null;
+  stage_durations: Record<string, number>;
 }
+
+/** `pause` and `resume` answer the state plus whether the run is `done`. */
+export type AutoLabelActionResponse = AutoLabelJobState & { done: boolean };
 
 export function startAutoLabel(
   params: AutoLabelStartParams = {},
@@ -157,6 +159,24 @@ export function cancelAutoLabel(
 ): Promise<AutoLabelJobState & { cancelled: boolean }> {
   return apiFetch<AutoLabelJobState & { cancelled: boolean }>(
     `${scoped()}/pipeline/auto_label/cancel`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Pause the run at its next checkpoint (409 when there is nothing to pause). */
+export function pauseAutoLabel(signal?: AbortSignal): Promise<AutoLabelActionResponse> {
+  return apiFetch<AutoLabelActionResponse>(
+    `${scoped()}/pipeline/auto_label/pause`,
+    { method: 'POST' },
+    signal,
+  );
+}
+
+/** Queue a paused run again (409 when it is not paused). */
+export function resumeAutoLabel(signal?: AbortSignal): Promise<AutoLabelActionResponse> {
+  return apiFetch<AutoLabelActionResponse>(
+    `${scoped()}/pipeline/auto_label/resume`,
     { method: 'POST' },
     signal,
   );

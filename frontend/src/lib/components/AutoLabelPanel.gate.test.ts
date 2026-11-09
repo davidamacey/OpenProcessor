@@ -41,7 +41,7 @@ describe('AutoLabelPanel gate prop', () => {
     instance = mount(AutoLabelPanel, { target, props: {} });
     flushSync();
     const btn = [...target.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Recluster now'),
+      b.textContent?.includes('Auto-label now'),
     );
     expect(btn).toBeTruthy();
     expect(btn?.disabled).toBe(false);
@@ -54,7 +54,7 @@ describe('AutoLabelPanel gate prop', () => {
     });
     flushSync();
     const btn = [...target.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Recluster now'),
+      b.textContent?.includes('Auto-label now'),
     );
     expect(btn?.disabled).toBe(true);
     expect(target.textContent).toContain('Finish or cancel the upload first');

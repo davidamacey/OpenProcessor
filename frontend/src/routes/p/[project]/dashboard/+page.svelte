@@ -30,6 +30,7 @@
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
+  import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
@@ -170,6 +171,7 @@
     </button>
   </section>
 
+  <ClusterRunPanel />
   <AutoLabelPanel />
 
   <DatasetStats />

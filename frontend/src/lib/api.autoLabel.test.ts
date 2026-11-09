@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
-import { startAutoLabel } from '$lib/api_autoLabel';
+import { pauseAutoLabel, resumeAutoLabel, startAutoLabel } from '$lib/api_autoLabel';
 
 /**
  * Scoped VLM-assisted labeling (2026-09-20 contract — confirmed live
@@ -41,7 +41,7 @@ describe('startAutoLabel', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await startAutoLabel({ train_clusters: true, vlm_concurrency: 16 });
+    await startAutoLabel({ vlm_concurrency: 16 });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('class_id');
@@ -123,9 +123,51 @@ describe('startAutoLabel', () => {
     const fetchMock = vi.fn().mockResolvedValue(jobResponse());
     vi.stubGlobal('fetch', fetchMock);
 
-    await startAutoLabel({ train_clusters: true, vlm_concurrency: 16 });
+    await startAutoLabel({ vlm_concurrency: 16 });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('run_vlm');
+  });
+
+  it('start sends none of the retired clustering params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jobResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    await startAutoLabel({ vlm_concurrency: 16, max_vlm_crops: 0 });
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    for (const gone of [
+      'train_clusters',
+      'clustering_method',
+      'promote_',
+      'recluster_unvalidated',
+      'reassign_only',
+      'run_auto_promote',
+      'gate_',
+      'n_clusters',
+    ]) {
+      expect(url).not.toContain(gone);
+    }
+  });
+
+  it('pause and resume POST to their own routes', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(jobResponse()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await pauseAutoLabel();
+    await resumeAutoLabel();
+
+    const calls = fetchMock.mock.calls.map((c) => [
+      c[0] as string,
+      (c[1] as RequestInit).method,
+    ]);
+    expect(calls[0]).toEqual([
+      expect.stringContaining('/pipeline/auto_label/pause'),
+      'POST',
+    ]);
+    expect(calls[1]).toEqual([
+      expect.stringContaining('/pipeline/auto_label/resume'),
+      'POST',
+    ]);
   });
 });
