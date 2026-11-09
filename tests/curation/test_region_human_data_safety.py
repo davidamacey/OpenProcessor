@@ -46,9 +46,9 @@ async def test_reverify_keeps_cluster_text_and_provenance_and_files_no_human_cha
     seeded = _seed_via_real_put_route()
     (b3,) = [b for b in seeded[F.boxes] if b['box_id'] == 'b3']
     b3.update(
-        cluster_id=5,
-        cluster_subid='5a',
-        cluster_distance=0.12,
+        cluster_uid='uid-5',
+        cluster_state='assigned',
+        cluster_score=0.88,
         detector_version=None,
         text='DNV20',
         text_source='human',
@@ -67,7 +67,11 @@ async def test_reverify_keeps_cluster_text_and_provenance_and_files_no_human_cha
     doc = fake_os.live['c1']
     box = next(b for b in doc[F.boxes] if b['box_id'] == 'b3')
     assert box['state'] == 'accepted'
-    assert (box['cluster_id'], box['cluster_subid'], box['cluster_distance']) == (5, '5a', 0.12)
+    assert (box['cluster_uid'], box['cluster_state'], box['cluster_score']) == (
+        'uid-5',
+        'assigned',
+        0.88,
+    )
     assert box['detector_version'] is None
     assert box['text'] == 'DNV20'
     assert box['text_source'] == 'human'

@@ -18,7 +18,7 @@ CROP_SORT_FIELDS: dict[str, str] = {
     'crop_rank_in_image': 'integer',
     'crop_area_norm': 'float',
     'blur_lap_ratio': 'float',
-    'cluster_distance': 'float',
+    'cluster_score': 'float',
     'mistakenness_score': 'float',
     'uniqueness_score': 'float',
 }

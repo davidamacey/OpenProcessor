@@ -82,9 +82,6 @@ export interface ItemWire {
   needs_new_class: boolean;
   needs_new_class_note: string | null;
   cluster: ClusterRef | null;
-  cluster_distance: number | null;
-  cluster_similarity: number | null;
-  cluster_is_core: boolean | null;
   class_excluded: boolean;
   excluded_reason: string | null;
   excluded_at: string | null;
@@ -207,9 +204,6 @@ export const ITEM_WIRE_KEYS = [
   'needs_new_class',
   'needs_new_class_note',
   'cluster',
-  'cluster_distance',
-  'cluster_similarity',
-  'cluster_is_core',
   'class_excluded',
   'excluded_reason',
   'excluded_at',

@@ -24,7 +24,7 @@ async def test_the_filter_lists_only_flagged_items(world: World) -> None:
         if not d.get('combine_conflict') and not d['class_validated']
     )
     other = dict(next(unvalidated))
-    other.update(crop_id='outlier', cluster_distance=0.9)
+    other.update(crop_id='outlier', cluster_score=0.1)
     world.items('combined')['outlier'] = other
 
     async def queue(filters: ReviewFilters) -> list[dict]:

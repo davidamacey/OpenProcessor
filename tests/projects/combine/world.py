@@ -249,6 +249,10 @@ class World:
             'updated_at': NOW,
             'cluster_id': 7,
             'cluster_subid': '7a',
+            'cluster_partition_id': '11111111-1111-1111-1111-111111111111',
+            'cluster_uid': '22222222-2222-2222-2222-222222222222',
+            'cluster_state': 'assigned',
+            'cluster_score': 0.9,
             'class_id_history': [{'class_id': 99, 'at': NOW}],
             'label_op_id': 'lop_20260101T000000000000_abcdef',
         }

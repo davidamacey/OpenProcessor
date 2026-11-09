@@ -4438,11 +4438,6 @@
             "title": "Class Name",
             "type": "string"
           },
-          "cluster_size": {
-            "default": 0,
-            "title": "Cluster Size",
-            "type": "integer"
-          },
           "deprecated": {
             "default": false,
             "title": "Deprecated",
@@ -14072,39 +14067,6 @@
                 "type": "null"
               }
             ]
-          },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
           },
           "combine_conflict": {
             "default": false,
@@ -25451,39 +25413,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -29391,39 +29320,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -31022,39 +30918,6 @@
               }
             ]
           },
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Distance"
-          },
-          "cluster_is_core": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Is Core"
-          },
-          "cluster_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Similarity"
-          },
           "combine_conflict": {
             "default": false,
             "title": "Combine Conflict",
@@ -32427,18 +32290,19 @@
         "type": "object"
       },
       "SelectDiverseScope": {
-        "description": "Which crops the selection draws from. Every field optional;\ncombining ``cluster_id`` + ``review_tab`` + ``filters`` intersects\nthem (AND), matching ``GET /curation/crops``'s own filter-combination style.",
+        "description": "Which crops the selection draws from. Every field optional;\ncombining ``cluster_uid`` + ``review_tab`` + ``filters`` intersects\nthem (AND), matching ``GET /curation/crops``'s own filter-combination style.",
         "properties": {
-          "cluster_id": {
+          "cluster_uid": {
             "anyOf": [
               {
-                "type": "integer"
+                "format": "uuid",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Cluster Id"
+            "title": "Cluster Uid"
           },
           "filters": {
             "anyOf": [
@@ -42348,7 +42212,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -42361,7 +42225,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },

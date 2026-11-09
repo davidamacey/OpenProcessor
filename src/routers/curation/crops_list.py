@@ -47,7 +47,7 @@ async def list_crops(
             description=(
                 "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
                 'updated_at, created_at, confidence, '
-                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_distance, '
+                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, '
                 'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
             )
         ),

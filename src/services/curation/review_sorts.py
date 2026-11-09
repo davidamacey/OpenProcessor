@@ -141,20 +141,18 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             label='Representativeness',
             clause=[
                 {
-                    'cluster_distance': {
-                        'order': 'asc',
+                    'cluster_score': {
+                        'order': 'desc',
                         'missing': '_last',
                         'unmapped_type': 'double',
                     }
                 }
             ],
-            requires_field='cluster_distance',
+            requires_field='cluster_score',
             status='stable',
             description=(
-                'Closest to the IVF cluster centroid first — proximity '
-                'to centroid, i.e. FiftyOne compute_representativeness renamed and '
-                'exposed. Zero new math: same cluster_distance field atypicality '
-                'uses, just ascending instead of descending.'
+                'Closest to its cluster centroid first: the served cluster_score (cosine to the '
+                'centroid of the serving partition), highest first.'
             ),
         ),
         ReviewSort(
@@ -162,18 +160,18 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             label='Atypicality (outlier-first)',
             clause=[
                 {
-                    'cluster_distance': {
-                        'order': 'desc',
+                    'cluster_score': {
+                        'order': 'asc',
                         'missing': '_last',
                         'unmapped_type': 'double',
                     }
                 }
             ],
-            requires_field='cluster_distance',
+            requires_field='cluster_score',
             status='stable',
             description=(
-                "Farthest from the IVF cluster centroid first — today's outliers "
-                "tab and the 'all' tab's ordering, unchanged, just named."
+                'Farthest from its cluster centroid first: the served cluster_score, lowest first. '
+                "The outliers tab and the 'all' tab's ordering."
             ),
         ),
         ReviewSort(

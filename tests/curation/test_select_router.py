@@ -19,6 +19,7 @@ it directly without a router.
 
 from __future__ import annotations
 
+import uuid
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
@@ -84,11 +85,12 @@ def test_scope_query_always_excludes_test_holdout() -> None:
     assert {'term': {'test_holdout': True}} in q['bool']['must_not']
 
 
-def test_scope_query_cluster_id_filter() -> None:
+def test_scope_query_cluster_uid_filter() -> None:
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(cluster_id=10173), 'pe_embedding')
-    assert {'term': {'cluster_id': 10173}} in q['bool']['must']
+    uid = uuid.uuid4()
+    q = _build_scope_query(SelectDiverseScope(cluster_uid=uid), 'pe_embedding')
+    assert {'term': {'cluster_uid': str(uid)}} in q['bool']['must']
 
 
 def test_scope_query_generic_filters_scalar_and_list() -> None:
@@ -106,10 +108,10 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
 
     q = _build_scope_query(SelectDiverseScope(review_tab='outliers'), 'pe_embedding')
     # review_queries.build_tab_query's 'outliers' tab adds the
-    # cluster_distance clause verbatim (outlier_flagged -- never
+    # cluster_score clause verbatim (outlier_flagged -- never
     # written anywhere -- was deleted, so this is no longer wrapped in a
     # should).
-    assert {'range': {'cluster_distance': {'gte': 0.35}}} in q['bool']['must']
+    assert {'range': {'cluster_score': {'lte': 0.65}}} in q['bool']['must']
 
 
 def test_scope_query_unknown_review_tab_raises_http_400() -> None:
@@ -389,7 +391,8 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
     select_app_client.fake_os.clear_scroll = AsyncMock(return_value=None)
 
     r = select_app_client.post(
-        '/curation/projects/default/select/diverse', json={'k': 3, 'scope': {'cluster_id': 42}}
+        '/curation/projects/default/select/diverse',
+        json={'k': 3, 'scope': {'cluster_uid': str(uuid.uuid4())}},
     )
     assert r.status_code == 200
     body = r.json()
@@ -494,9 +497,9 @@ def test_selection_overlay_never_mutates_opensearch() -> None:
 
 
 def test_selection_overlay_query_filters_never_write(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``cluster_id`` legitimately appears as a *read*-side query filter
-    (``SelectDiverseScope.cluster_id`` -> ``{'term': {'cluster_id': ...}}``,
-    same as GET /curation/crops's own existing cluster_id filter) — that's fine.
+    """``cluster_uid`` legitimately appears as a *read*-side query filter
+    (``SelectDiverseScope.cluster_uid`` -> ``{'term': {'cluster_uid': ...}}``,
+    same as GET /curation/crops's own cluster_uid filter) — that's fine.
     What must never happen is any of those field names appearing on the
     *write* side of a bulk/update doc body. Combined with
     ``test_selection_overlay_never_mutates_opensearch`` (which proves
@@ -505,8 +508,8 @@ def test_selection_overlay_query_filters_never_write(monkeypatch: pytest.MonkeyP
     field -- forbidden or otherwise -- is ever written."""
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
 
-    q = _build_scope_query(SelectDiverseScope(cluster_id=42), 'pe_embedding')
-    # cluster_id is allowed to appear inside a {'term': {...}} *query*
+    q = _build_scope_query(SelectDiverseScope(cluster_uid=uuid.uuid4()), 'pe_embedding')
+    # cluster_uid is allowed to appear inside a {'term': {...}} *query*
     # clause (read-side scoping) -- assert it never appears as a `doc`/
     # write body key, which this query-builder never produces at all.
     assert 'doc' not in q

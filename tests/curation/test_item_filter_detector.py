@@ -98,8 +98,8 @@ def fake(monkeypatch: pytest.MonkeyPatch) -> QueryFakeOpenSearch:
         _item('c3', detector_confidence=0.2, detector_class_name='bus'),
         _item('c4', detector_confidence=0.1, detector_class_name='traffic_light'),
         _item('c5', detector_class_name=None, detector_confidence=None),
-        _item('c6', cluster_distance=0.6, detector_confidence=0.7),
-        _item('c7', test_holdout=True, detector_confidence=0.7, cluster_distance=0.6),
+        _item('c6', cluster_score=0.4, detector_confidence=0.7),
+        _item('c7', test_holdout=True, detector_confidence=0.7, cluster_score=0.4),
     ]
     return QueryFakeOpenSearch({ITEMS: {d['crop_id']: d for d in docs}})
 

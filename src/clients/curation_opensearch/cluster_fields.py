@@ -1,6 +1,6 @@
-"""The cluster fields of the ``items`` body: the served cluster of the serving partition, its
-distance and the suggestion. An existing index keeps the retired integer fields until it is
-recreated (OpenSearch cannot drop a mapped field); nothing reads or writes them.
+"""The cluster fields of the ``items`` body: the served cluster of the serving partition. An
+existing index keeps the retired integer fields until it is recreated (OpenSearch cannot drop a
+mapped field); nothing reads or writes them.
 """
 
 from __future__ import annotations
@@ -27,12 +27,6 @@ CLUSTER_PARTITION_MAPPING: dict[str, Any] = {
     'cluster_score': {'type': 'float'},
     'cluster_margin': {'type': 'float'},
     'cluster_assigned_by': {'type': 'keyword'},
-}
-
-CLUSTER_ITEM_MAPPING: dict[str, Any] = {
-    **CLUSTER_PARTITION_MAPPING,
-    'cluster_distance': {'type': 'float'},
-    'cluster_auto_suggest': {'type': 'keyword'},
 }
 
 

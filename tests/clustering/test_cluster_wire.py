@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from src.clients.curation_opensearch.bodies_core import _region_boxes_mapping
-from src.clients.curation_opensearch.cluster_fields import (
-    CLUSTER_ITEM_MAPPING,
-    CLUSTER_PARTITION_MAPPING,
-)
+from src.clients.curation_opensearch.bodies_core import _items_body, _region_boxes_mapping
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.domain.region_boxes import RegionBox
 from src.services.curation.wire import cluster_object
 
@@ -35,7 +32,8 @@ def test_the_cluster_object_nests_the_served_fields() -> None:
 
 
 def test_the_mapping_carries_the_same_fields_on_items_and_boxes() -> None:
-    assert set(CLUSTER_PARTITION_MAPPING) <= set(CLUSTER_ITEM_MAPPING)
+    items = _items_body()['mappings']['properties']
+    assert set(CLUSTER_PARTITION_MAPPING) <= set(items)
     element = _region_boxes_mapping()['region_boxes']['properties']
     assert set(CLUSTER_PARTITION_MAPPING) <= set(element)
 

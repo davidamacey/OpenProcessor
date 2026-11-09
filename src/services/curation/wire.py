@@ -30,7 +30,6 @@ from src.services.curation.class_sources import (
     vlm_suggestion,
     vlm_suggestion_dismissed,
 )
-from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN, cluster_similarity
 
 
 if TYPE_CHECKING:
@@ -244,8 +243,6 @@ def serialize_item(
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
-    distance = src.get('cluster_distance')
-    similarity = cluster_similarity(distance)
     label_conf, label_conf_source = class_confidence(src)
     probe_pred_class = src.get('probe_pred_class')
     probe_disagreement = src.get('probe_disagreement')
@@ -305,10 +302,6 @@ def serialize_item(
         # Why the item has no vector (null = written before the field existed).
         'embedding_state': src.get('embedding_state'),
         'cluster': cluster_object(src),
-        # Null when measured against a cluster the item has since left.
-        'cluster_distance': distance,
-        'cluster_similarity': similarity,
-        'cluster_is_core': None if similarity is None else similarity >= CORE_SIMILARITY_MIN,
         'class_excluded': bool(src.get('class_excluded', False)),
         'excluded_reason': src.get('excluded_reason'),
         'excluded_at': src.get('excluded_at'),

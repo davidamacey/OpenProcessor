@@ -203,39 +203,22 @@ def test_classes_list_serves_trainable_minus_holdout_and_excluded(
     assert rows[2]['trainable_gap'] == T.HARD_MIN_CROPS_PER_CLASS - (10 - 5)
 
 
-def test_classes_by_cluster_agg_is_filtered_to_class_kind_ids(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """/classes' by_cluster agg must be wrapped in a filter restricted
-    to class-kind cluster ids (< RESIDUAL_CLUSTER_ID_OFFSET) before
-    terms-aggregating, so candidate/residual ids can't pollute class
-    cluster_size counts or crowd real class buckets out of the size-1000
-    cap. The response-side unwrap (aggs.by_cluster.classes.buckets) must
-    match the new nested agg shape."""
-    from src.services.curation.cluster_ids import RESIDUAL_CLUSTER_ID_OFFSET
-
+def test_classes_has_no_cluster_aggregation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The class list counts items by class; the integer cluster ids it once bucketed
+    (cluster_size) are gone."""
     resp = {
         'aggregations': {
             'by_class': {'buckets': [{'key': 1, 'doc_count': 5, 'validated': {'doc_count': 5}}]},
-            'by_cluster': {
-                'doc_count': 5,
-                'classes': {'buckets': [{'key': 1, 'doc_count': 5}]},
-            },
         }
     }
     client, fake = _client_with_fake(monkeypatch, resp)
     r = client.get('/curation/projects/default/classes')
     assert r.status_code == 200, r.text
 
-    body = fake.search.call_args.kwargs['body']
-    by_cluster = body['aggs']['by_cluster']
-    assert by_cluster['filter'] == {
-        'range': {'cluster_id': {'gte': 0, 'lt': RESIDUAL_CLUSTER_ID_OFFSET}}
-    }
-    assert by_cluster['aggs']['classes']['terms']['field'] == 'cluster_id'
-
+    assert 'by_cluster' not in fake.search.call_args.kwargs['body']['aggs']
     rows = {c['class_id']: c for c in r.json()['classes']}
-    assert rows[1]['cluster_size'] == 5
+    assert rows[1]['sample_count'] == 5
+    assert 'cluster_size' not in rows[1]
 
 
 def test_holdout_stats_flags_deficient_classes(monkeypatch: pytest.MonkeyPatch) -> None:

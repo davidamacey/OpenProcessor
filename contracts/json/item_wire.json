@@ -48,9 +48,6 @@
     "needs_new_class",
     "needs_new_class_note",
     "cluster",
-    "cluster_distance",
-    "cluster_similarity",
-    "cluster_is_core",
     "class_excluded",
     "excluded_reason",
     "excluded_at",
@@ -693,42 +690,6 @@
           }
         ],
         "default": null
-      },
-      "cluster_distance": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Distance"
-      },
-      "cluster_is_core": {
-        "anyOf": [
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Is Core"
-      },
-      "cluster_similarity": {
-        "anyOf": [
-          {
-            "type": "number"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "default": null,
-        "title": "Cluster Similarity"
       },
       "combine_conflict": {
         "default": false,

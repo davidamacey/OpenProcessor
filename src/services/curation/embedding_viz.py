@@ -10,8 +10,7 @@ Non-negotiable design rules:
    lives at ``umap_viz_state.joblib``
    (disk) and the ``op_umap_viz_state`` index — deliberately distinct
    names, never imported by/from ``embedding_reduce.py`` / ``umap_state.py`` /
-   ``routers/curation/umap.py`` / ``clustering/orchestrator.py`` /
-   ``clustering/methods/``.
+   ``routers/curation/umap.py``.
 2. **Never fits on a request path.** ``fit_projection`` (the only
    function importing ``umap`` / calling ``.fit_transform``) is reachable
    solely from :func:`run_projection_job`, queued only by

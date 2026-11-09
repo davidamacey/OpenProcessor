@@ -51,7 +51,7 @@ def _docs() -> list[dict[str, Any]]:
         _item('a03', detector_confidence=0.5, detector_class_name='bus', vlm_confidence='low'),
         _item('a04', detector_confidence=0.55, detector_class_name='bus'),
         _item('a05', detector_confidence=1.0, class_validated=True, class_source='human'),
-        _item('a06', detector_confidence=0.95, cluster_distance=0.5),
+        _item('a06', detector_confidence=0.95, cluster_score=0.5),
         _item('a07', detector_class_name=None, detector_confidence=None),
         _item('a08', class_name=None, class_id=None, class_source='vlm_unmatched'),
         _item('hold', test_holdout=True, detector_class_name='holdout_only'),

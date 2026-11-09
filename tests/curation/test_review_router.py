@@ -34,11 +34,11 @@ ALL_TABS = (
 )
 
 LEGACY_SORT_CLAUSE = {
-    'all': [{'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
+    'all': [{'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'mismatches': [{'updated_at': {'order': 'desc'}}],
     'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
     'outliers': [
-        {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
+        {'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
     'uncertainty': [
         {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
@@ -142,12 +142,12 @@ def test_sort_default_literal_matches_absent(tab: str, app_client: TestClient) -
 
 def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> None:
     """mismatches' legacy default is 'recent'; explicitly asking for
-    'atypicality' should apply cluster_distance desc instead."""
+    'atypicality' should apply cluster_score asc instead."""
     r = app_client.get('/curation/projects/default/review/mismatches?sort=atypicality')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
-        {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+        {'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}},
         TIEBREAK,
     ]
     assert r.json()['sort_applied'] == 'atypicality'

@@ -112,6 +112,8 @@ async def test_two_sources_combine_into_one_project(world: World) -> None:
         assert doc['import_ids'] == [run.job_id]
         assert doc['origin_project'] in ('cars-a', 'cars-b')
         assert 'cluster_id' not in doc
+        # the source project's partition does not exist in the target
+        assert not {k for k in doc if k.startswith('cluster_')}
         assert 'class_id_history' not in doc  # snapshots of source numbering
         assert 'label_op_id' not in doc  # a source project's operation means nothing here
     # Class identity: B's "sedan" and "lorry" arrive as car and truck.

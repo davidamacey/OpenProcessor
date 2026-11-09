@@ -6,11 +6,8 @@ src/clients/opensearch/indexes.py	4
 src/clients/opensearch/ingest.py	2
 src/clients/opensearch/search.py	1
 src/routers/clusters.py	12
-src/routers/curation/classes.py	4
-src/routers/curation/select.py	4
 src/schemas/query.py	1
 src/services/classes/projection_sync.py	2
-src/services/curation/cluster_ids.py	8
 src/services/curation/raw_label_clusters.py	7
 src/services/curation/review_terms.py	1
 src/services/image_admin.py	2

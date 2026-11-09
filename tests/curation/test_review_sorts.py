@@ -18,11 +18,11 @@ from src.services.curation import review_sorts
 # this registry existed (read directly off the pre-refactor router source —
 # see git history for the earlier router version). Any change here must be deliberate.
 LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
-    'all': [{'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}],
+    'all': [{'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}],
     'mismatches': [{'updated_at': {'order': 'desc'}}],
     'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
     'outliers': [
-        {'cluster_distance': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
+        {'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
     'uncertainty': [
         {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
@@ -115,12 +115,12 @@ async def test_stable_sorts_resolve_to_their_own_clause(sort_id: str) -> None:
 
 def test_representativeness_is_atypicality_flipped() -> None:
     """representativeness's acceptance bar IS this exact
-    equality (asc vs desc on the same field), not new math."""
+    equality (desc vs asc on the same field), not new math."""
     registry = review_sorts.get_review_sorts()
-    rep = registry['representativeness'].clause[0]['cluster_distance']
-    atyp = registry['atypicality'].clause[0]['cluster_distance']
-    assert rep['order'] == 'asc'
-    assert atyp['order'] == 'desc'
+    rep = registry['representativeness'].clause[0]['cluster_score']
+    atyp = registry['atypicality'].clause[0]['cluster_score']
+    assert rep['order'] == 'desc'
+    assert atyp['order'] == 'asc'
     assert {k: v for k, v in rep.items() if k != 'order'} == {
         k: v for k, v in atyp.items() if k != 'order'
     }
@@ -206,7 +206,7 @@ async def test_mistakenness_experimental_when_enabled_not_shadow(
 
 def test_no_sort_clause_ever_references_cluster_id_fields() -> None:
     """Hard constraint: sorting must never touch
-    cluster *assignment* fields. cluster_distance (a metric, not an id) is
+    cluster *assignment* fields. cluster_score (a metric, not an id) is
     fine; cluster_id/cluster_subid must never appear in any sort clause."""
     forbidden = {'cluster_id', 'cluster_subid'}
     assert review_sorts.get_review_sorts()

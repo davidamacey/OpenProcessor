@@ -34,7 +34,7 @@ _QUALIFYING: dict[str, dict[str, Any]] = {
     'all': {'class_source': 'vlm_unmatched'},
     'mismatches': {'class_source': 'vlm_unmatched'},
     'vlm_low_conf': {'class_source': 'vlm', 'vlm_confidence': 'low', 'confidence': 0.3},
-    'outliers': {'cluster_distance': 0.6},
+    'outliers': {'cluster_score': 0.4},
     'uncertainty': {'probe_pred_entropy': 1.5},
     'regions': {
         F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}]

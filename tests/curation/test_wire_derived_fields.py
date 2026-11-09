@@ -1,8 +1,7 @@
 """Derived and pass-through item keys every endpoint serves.
 
 The frontend used to fabricate these per page (``proposed_class_*``
-outside ``/review``), recompute them (cluster kind from the id, similarity
-from ``cluster_distance``) or read legacy storage names (``source``).
+outside ``/review``), recompute them (cluster kind from the id) or read legacy storage names (``source``).
 They now come from the one item serializer, so every item endpoint
 (``/crops``, ``/crops/{id}``, ``/review``, ``/regions``, search, undo,
 discard) carries them.
@@ -10,12 +9,13 @@ discard) carries them.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pytest
-
-from src.services.curation.cluster_ids import CORE_SIMILARITY_MIN
 from src.services.curation.wire import ITEM_WIRE_KEYS, REVIEW_EXTRA_KEYS, serialize_item
+
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _item(**doc: Any) -> dict[str, Any]:
@@ -65,16 +65,10 @@ def test_the_retired_integer_cluster_keys_are_not_served() -> None:
     )
 
 
-def test_cluster_similarity_and_core_flag() -> None:
-    near = _item(cluster_distance=0.2)
-    assert near['cluster_similarity'] == pytest.approx(0.8)
-    assert near['cluster_is_core'] is (CORE_SIMILARITY_MIN <= 0.8)
-    far = _item(cluster_distance=1.5)
-    assert far['cluster_similarity'] == 0.0
-    assert far['cluster_is_core'] is False
-    none = _item()
-    assert none['cluster_similarity'] is None
-    assert none['cluster_is_core'] is None
+def test_the_centroid_distance_family_is_not_served() -> None:
+    item = _item(cluster_distance=0.2)
+    assert not {'cluster_distance', 'cluster_similarity', 'cluster_is_core'} & item.keys()
+    assert not {'cluster_distance', 'cluster_similarity', 'cluster_is_core'} & ITEM_WIRE_KEYS
 
 
 # ------------------------------------------------------------ pass-through keys

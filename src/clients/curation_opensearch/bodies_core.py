@@ -14,10 +14,7 @@ from src.clients.curation_opensearch.base import (
     default_knn_spec,
     knn_field_body,
 )
-from src.clients.curation_opensearch.cluster_fields import (
-    CLUSTER_ITEM_MAPPING,
-    CLUSTER_PARTITION_MAPPING,
-)
+from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
@@ -317,7 +314,7 @@ def _items_body() -> dict[str, Any]:
                 'vlm_label_cluster_name': {'type': 'keyword'},
                 'vlm_label_cluster_distance': {'type': 'float'},
                 'confidence': {'type': 'float'},
-                **CLUSTER_ITEM_MAPPING,
+                **CLUSTER_PARTITION_MAPPING,
                 **ITEMS_EXTRA_MAPPING,
                 # Primary-subject ranking + blur quality (computed at ingest,
                 # backfilled for legacy items). crop_rank_in_image=1 is the
@@ -398,7 +395,7 @@ def _items_body() -> dict[str, Any]:
                 # Curation-scoring overlay fields. Written ONLY by the
                 # dedicated scoring job (src/services/curation/item_scores/);
                 # never by the production clustering pipeline. No overlay
-                # ever writes cluster_id / cluster_subid / cluster_distance.
+                # ever writes a cluster_* field.
                 'uniqueness_score': {'type': 'float'},
                 'uniqueness_method': {'type': 'keyword'},
                 'uniqueness_version': {'type': 'keyword'},

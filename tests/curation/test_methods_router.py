@@ -431,7 +431,7 @@ def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
     ``requires_field`` — now carries a ``field_coverage`` key.
     Before this fix, ``/curation/methods`` never emitted the key at all."""
     app_client.fake_os.search = _fake_field_counts(  # type: ignore[attr-defined]
-        total=347_837, per_field={'cluster_distance': 124_921, 'crop_area_norm': 347_837}
+        total=347_837, per_field={'cluster_score': 124_921, 'crop_area_norm': 347_837}
     )
 
     r = app_client.get('/curation/projects/default/methods')
@@ -442,7 +442,7 @@ def test_methods_emits_field_coverage_per_entry(app_client: TestClient) -> None:
         assert 'field_coverage' in entry, entry
 
     by_id = {s['id']: s for s in body['strategies'] if s['axis'] == 'sort'}
-    assert by_id['representativeness']['requires_field'] == 'cluster_distance'
+    assert by_id['representativeness']['requires_field'] == 'cluster_score'
     assert by_id['representativeness']['field_coverage'] == 124_921
     assert by_id['representativeness']['field_coverage_total'] == 347_837
     assert by_id['atypicality']['field_coverage'] == 124_921

@@ -8,6 +8,7 @@ OpenSearch.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi import HTTPException
@@ -34,10 +35,10 @@ from src.services.embedding_spaces.resolve import embedding_space
 
 class SelectDiverseScope(BaseModel):
     """Which crops the selection draws from. Every field optional;
-    combining ``cluster_id`` + ``review_tab`` + ``filters`` intersects
+    combining ``cluster_uid`` + ``review_tab`` + ``filters`` intersects
     them (AND), matching ``GET /curation/crops``'s own filter-combination style."""
 
-    cluster_id: int | None = None
+    cluster_uid: uuid.UUID | None = None
     review_tab: str | None = Field(
         default=None,
         description='A GET /curation/review/{tab} tab id — reuses its match logic verbatim.',
@@ -68,8 +69,8 @@ def _build_scope_query(scope: SelectDiverseScope, embedding_field: str) -> dict[
     must: list[dict[str, Any]] = [embedded_clause(embedding_field)]
     must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
 
-    if scope.cluster_id is not None:
-        must.append({'term': {'cluster_id': scope.cluster_id}})
+    if scope.cluster_uid is not None:
+        must.append({'term': {'cluster_uid': str(scope.cluster_uid)}})
 
     if scope.review_tab:
         # Reuses the exact tab match logic GET /curation/review/{tab} uses — no
