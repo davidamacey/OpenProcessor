@@ -15,12 +15,21 @@
 
   let { ctl, onclose }: Props = $props();
 
-  const vlm = ctl.loop?.budget?.vlm;
-  const wall = ctl.loop?.budget?.max_wall_s ?? null;
+  const vlm = $derived(ctl.loop?.budget?.vlm);
+  const wall = $derived(ctl.loop?.budget?.max_wall_s ?? null);
 
-  let crops = $state<number | null>(vlm?.max_crops ?? null);
-  let requests = $state<number | null>(vlm?.max_requests ?? null);
-  let wallS = $state<number | null>(wall);
+  // `undefined` = the person has not touched the field; the shown value is then the
+  // loop's current one and it is not sent.
+  let editedCrops = $state<number | null | undefined>(undefined);
+  let editedRequests = $state<number | null | undefined>(undefined);
+  let editedWall = $state<number | null | undefined>(undefined);
+  const crops = $derived(
+    editedCrops === undefined ? (vlm?.max_crops ?? null) : editedCrops,
+  );
+  const requests = $derived(
+    editedRequests === undefined ? (vlm?.max_requests ?? null) : editedRequests,
+  );
+  const wallS = $derived(editedWall === undefined ? wall : editedWall);
 
   async function save(): Promise<void> {
     const limits: LoopBudgetLimit[] = [];
@@ -47,7 +56,7 @@
         type="number"
         min="1"
         class="input"
-        bind:value={crops}
+        bind:value={() => crops, (v) => (editedCrops = v)}
         data-testid="loop-budget-crops"
       />
     </label>
@@ -57,7 +66,7 @@
         type="number"
         min="1"
         class="input"
-        bind:value={requests}
+        bind:value={() => requests, (v) => (editedRequests = v)}
         data-testid="loop-budget-requests"
       />
     </label>
@@ -67,7 +76,7 @@
         type="number"
         min="1"
         class="input"
-        bind:value={wallS}
+        bind:value={() => wallS, (v) => (editedWall = v)}
         data-testid="loop-budget-wall"
       />
     </label>
