@@ -79,6 +79,10 @@ RETIRED_ENV: dict[str, str] = {
     'OP_COMBINE_JOBS_DIR': f'{_REMOVED} a combine is a row in jobs; there is no job directory',
     # A dataset import is a dataset_imports row and a jobs row, its ledger rows in the database.
     'OP_DATASET_IMPORTS_DIR': f'{_REMOVED} an import is rows in PostgreSQL, not a directory',
+    # The trainer is a gpu_train queue consumer; the API asks the broker, not the Docker socket.
+    'OP_GPU_ARBITER_TRAINER_CONTAINER': (
+        f'{_REMOVED} the API finds the trainer as a consumer of the gpu_train queue'
+    ),
 }
 
 

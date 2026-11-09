@@ -14,8 +14,8 @@ from src.services.training.augmentation_presets import (
 )
 from src.services.training.gpu_arbiter_policy import containers_to_stop
 from src.services.training.job_models import Profile
-from src.services.training.preflight_checks import read_trainer_gpu_order
 from src.services.training.profiles import get_class_subset_presets, get_profiles
+from src.services.training.trainer_reachability import read_trainer_gpu_order
 
 
 router = APIRouter()
@@ -140,7 +140,7 @@ async def list_train_gpu_options() -> TrainGpuOptionsResponse:
     deployment's GPU topology. Unrestricted installs (no
     ``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.
 
-    When the trainer's published ``gpu_order`` (see ``read_trainer_gpu_order``)
+    When the trainer's recorded card list (see ``read_trainer_gpu_order``)
     is known and non-empty, the option list is intersected with it -- a
     trainer physically attached to only host GPU 2 must not offer GPU 0 as
     selectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a
@@ -150,7 +150,7 @@ async def list_train_gpu_options() -> TrainGpuOptionsResponse:
 
     arbiter_cfg = get_gpu_arbiter_config()
     allowed_ids = sorted(arbiter_cfg.allowed_gpu_ids)
-    trainer_gpu_order = read_trainer_gpu_order()
+    trainer_gpu_order = await read_trainer_gpu_order()
     if trainer_gpu_order:
         allowed_ids = (
             [i for i in allowed_ids if i in trainer_gpu_order]

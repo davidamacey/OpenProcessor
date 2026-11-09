@@ -5,8 +5,8 @@
 (``fcntl.flock``/``lockf``, the ``exclusive_start_lock`` / ``exclusive_file_lock`` helpers, the
 ``filelock`` and ``portalocker`` packages) does not survive a second host, tells a dead holder
 from a live one only by luck, and blocks a worker's thread. The cross-process claim is an
-OpenSearch job lease (``src/clients/job_lease.py``) or a create-only generation claim
-(``docker/trainer/job_claim.py``).
+OpenSearch job lease (``src/clients/job_lease.py``) or the fenced claim of a ``jobs`` row
+(``src/db/repos/jobs.py``).
 
 Counts, per tracked ``.py`` file under ``src scripts export docker``, the calls of those
 functions and the imports of those packages (read with ``ast``, so a docstring that names one

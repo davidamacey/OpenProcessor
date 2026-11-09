@@ -4,44 +4,26 @@ container hostname.
 
 from __future__ import annotations
 
-import json
-import os
-from pathlib import Path
+import datetime as dt
+import uuid
+from typing import Any
 
 import pytest
 
-from src.services.training import job_files, job_manifest, job_wire, jobs as train_jobs
+from src.db.repos.training_runs import RunRow
+from src.services.training import job_manifest, job_wire
+from src.services.training.run_wire import to_status
 
 
 class _FakeCurationConfig:
-    def __init__(
-        self,
-        mlflow_public_url: str | None = None,
-        api_prefix: str = '/curation',
-        train_jobs_dir: Path | None = None,
-    ) -> None:
+    def __init__(self, mlflow_public_url: str | None = None, api_prefix: str = '/curation') -> None:
         self.mlflow_public_url = mlflow_public_url
         self.mlflow_port = 0  # no request-derived URL in these tests
         self.api_prefix = api_prefix
-        # _resolve_jobs_dir() reads this; these tests only care about
-        # mlflow_public_url/api_prefix, so default to the same
-        # OP_TRAIN_JOBS_DIR/projects/default the ``jobs_dir`` fixture
-        # resolves to (default is an ordinary project -- P1: no
-        # special-casing).
-        # _resolve_jobs_dir() reads this (projects_plan.md §5.3); these
-        # tests only care about mlflow_public_url/api_prefix. Default
-        # nests /projects/default under OP_TRAIN_JOBS_DIR (P1R §6.1/D-A:
-        # project_jobs_dir() always nests, default included).
-        self.train_jobs_dir = train_jobs_dir or (
-            Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs')) / 'projects' / 'default'
-        )
 
 
 def _patch_cfg(monkeypatch: pytest.MonkeyPatch, cfg: _FakeCurationConfig) -> None:
-    # train_jobs reads the jobs dir through its own import; the MLflow URL
-    # goes through resource_links.service_url, which imports from src.config.
-    monkeypatch.setattr(train_jobs, 'get_curation_config', lambda: cfg)
-    monkeypatch.setattr(job_files, 'get_curation_config', lambda: cfg)
+    # The MLflow URL goes through resource_links.service_url, which imports from src.config.
     monkeypatch.setattr('src.config.get_curation_config', lambda: cfg)
 
 
@@ -73,116 +55,108 @@ def test_public_mlflow_url_never_leaks_the_internal_host(monkeypatch: pytest.Mon
     assert url != 'http://curation-mlflow:5000/#/experiments/7/runs/abc123'
 
 
-@pytest.mark.asyncio
-async def test_read_status_rewrites_mlflow_url_and_confusion_matrix(
-    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
-    (jobs_dir / 'realmlf.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'realmlf',
-                'state': 'finished',
-                'mlflow_run_id': 'run-42',
-                'mlflow_experiment_id': '3',
-                'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/3/runs/run-42',
-                'eval': {
-                    'map50': 0.62,
-                    'split': 'test',
-                    'confusion_matrix_path': '/var/lib/openprocessor/training_runs/realmlf/'
-                    'confusion_matrix.png',
-                },
-            }
-        )
+def _row(manifest: dict[str, Any] | None = None, **progress_counters: Any) -> RunRow:
+    return RunRow(
+        job_id=uuid.UUID('00000000-0000-0000-0000-000000000001'),
+        project_id=uuid.uuid4(),
+        spec={},
+        class_names=[],
+        family='yolo26',
+        base_model='yolo26n',
+        artifact_prefix='projects/default/training/x',
+        manifest=manifest,
+        mlflow_run_id=None,
+        gpu_uuids=[],
+        status='completed',
+        params={},
+        progress={'counters': progress_counters},
+        error_code=None,
+        error_message=None,
+        created_at=dt.datetime.now(dt.UTC),
+        started_at=None,
+        finished_at=dt.datetime.now(dt.UTC),
+        heartbeat_at=None,
     )
 
-    status = await train_jobs.read_status('realmlf')
 
-    assert status is not None
+def test_the_status_rewrites_mlflow_url_and_confusion_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
+    row = _row(
+        mlflow_run_id='run-42',
+        mlflow_experiment_id='3',
+        eval={
+            'map50': 0.62,
+            'split': 'test',
+            'confusion_matrix_path': '/var/lib/openprocessor/training_runs/x/confusion_matrix.png',
+        },
+    )
+
+    status = to_status(row)
+
     assert status.mlflow_run_url == 'https://mlflow.example.com/#/experiments/3/runs/run-42'
     assert status.eval is not None
     assert 'confusion_matrix_path' not in status.eval  # the fs path never reaches the wire
     assert (
         status.eval['confusion_matrix_url']
-        == '/curation/projects/default/train/artifacts/realmlf/confusion_matrix.png'
+        == f'/curation/projects/default/train/artifacts/{row.job_id}/confusion_matrix.png'
     )
     assert status.eval['map50'] == 0.62  # untouched
 
 
-@pytest.mark.asyncio
-async def test_read_status_serves_null_mlflow_url_when_public_base_unset(
-    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
+def test_the_status_serves_null_mlflow_url_when_public_base_unset(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
-    (jobs_dir / 'nourl.status.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'nourl',
-                'state': 'finished',
-                'mlflow_run_id': 'run-1',
-                'mlflow_experiment_id': '1',
-                'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/1/runs/run-1',
-            }
-        )
-    )
 
-    status = await train_jobs.read_status('nourl')
+    status = to_status(_row(mlflow_run_id='run-1', mlflow_experiment_id='1'))
 
-    assert status is not None
     assert status.mlflow_run_url is None
     assert status.mlflow_run_id == 'run-1'  # kept even though the URL is null
 
 
-@pytest.mark.asyncio
-async def test_read_status_confusion_matrix_url_null_when_absent(
-    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_confusion_matrix_url_is_null_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url=None))
-    (jobs_dir / 'noeval.status.json').write_text(
-        json.dumps(
-            {'job_id': 'noeval', 'state': 'finished', 'eval': {'map50': 0.5, 'split': 'val'}}
-        )
-    )
 
-    status = await train_jobs.read_status('noeval')
+    status = to_status(_row(eval={'map50': 0.5, 'split': 'val'}))
 
-    assert status is not None
     assert status.eval is not None
     assert status.eval['confusion_matrix_url'] is None
 
 
 @pytest.mark.asyncio
-async def test_read_manifest_rewrites_eval_and_mlflow_url(
-    jobs_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_read_manifest_rewrites_eval_and_mlflow_url(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_cfg(monkeypatch, _FakeCurationConfig(mlflow_public_url='https://mlflow.example.com'))
-    (jobs_dir / 'manifjob.manifest.json').write_text(
-        json.dumps(
-            {
-                'job_id': 'manifjob',
-                'results': {
-                    'final_state': 'finished',
-                    'mlflow_run_id': 'run-9',
-                    'mlflow_experiment_id': '2',
-                    'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/2/runs/run-9',
-                    'eval': {
-                        'map50': 0.7,
-                        'split': 'test',
-                        'confusion_matrix_path': '/var/lib/openprocessor/training_runs/'
-                        'manifjob/confusion_matrix.png',
-                    },
-                },
-            }
-        )
-    )
+    manifest = {
+        'job_id': 'manifjob',
+        'results': {
+            'final_state': 'finished',
+            'mlflow_run_id': 'run-9',
+            'mlflow_experiment_id': '2',
+            'mlflow_run_url': 'http://curation-mlflow:5000/#/experiments/2/runs/run-9',
+            'eval': {
+                'map50': 0.7,
+                'split': 'test',
+                'confusion_matrix_path': '/var/lib/openprocessor/training_runs/'
+                'manifjob/confusion_matrix.png',
+            },
+        },
+    }
+    row = _row(manifest)
 
-    manifest = await job_manifest.read_manifest('manifjob')
+    async def run(_job_id: str) -> RunRow:
+        return row
 
-    assert manifest is not None
-    results = manifest['results']
+    monkeypatch.setattr(job_manifest, '_run', run)
+
+    served = await job_manifest.read_manifest(str(row.job_id))
+
+    assert served is not None
+    results = served['results']
     assert results['mlflow_run_url'] == 'https://mlflow.example.com/#/experiments/2/runs/run-9'
     assert 'confusion_matrix_path' not in results['eval']
     assert (
         results['eval']['confusion_matrix_url']
-        == '/curation/projects/default/train/artifacts/manifjob/confusion_matrix.png'
+        == f'/curation/projects/default/train/artifacts/{row.job_id}/confusion_matrix.png'
     )

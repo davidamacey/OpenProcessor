@@ -20,13 +20,10 @@ with, so:
 - ``containers=()`` means *nothing to stop/start* — GPU-arbiter container
   coordination becomes a no-op rather than an error when unconfigured
   (see ``tests/curation/test_gpu_arbiter_config.py``).
-- ``trainer_container=None`` means *skip the reachability probe* — a
-  generic install may not run a separate trainer container at all.
 
 Every field is settable from the environment via
 :meth:`GpuArbiterConfig.from_env` (``OP_GPU_ALLOWED_IDS``,
-``OP_GPU_ARBITER_CONTAINERS``, ``OP_GPU_ARBITER_TRAINER_CONTAINER``,
-``OP_BAKEOFF_JOBS_DIR``, ``OP_GPU_LABELS``, ``OP_TRAIN_DEFAULT_GPUS``),
+``OP_GPU_ARBITER_CONTAINERS``, ``OP_BAKEOFF_JOBS_DIR``, ``OP_GPU_LABELS``, ``OP_TRAIN_DEFAULT_GPUS``),
 which is what :func:`get_gpu_arbiter_config` builds the process-wide
 default from — so a deployment pins its GPU policy in its env file, not
 in code.
@@ -165,7 +162,6 @@ class GpuArbiterConfig:
     allowed_gpu_ids: frozenset[int] = field(default_factory=frozenset)
     containers: tuple[str, ...] = ()
     container_gpus: tuple[tuple[str, frozenset[int] | None], ...] = ()
-    trainer_container: str | None = None
     bakeoff_jobs_dir: str = field(default_factory=_default_bakeoff_jobs_dir)
     gpu_labels: dict[int, str] = field(default_factory=dict)
     default_train_gpus: str | None = None
@@ -186,8 +182,6 @@ class GpuArbiterConfig:
           entries keep the original behavior (stopped only when a claim
           spans more than one GPU). Restarted (in the same order) when the
           run releases the GPUs. Unset/empty = nothing to coordinate.
-        - ``OP_GPU_ARBITER_TRAINER_CONTAINER`` — trainer container name to
-          probe for reachability. Unset/empty = skip the probe.
         - ``OP_BAKEOFF_JOBS_DIR`` — the bake-off job-queue directory the
           reconcile loop watches and the bake-off router writes job files
           into (the router reads this field, so the two cannot drift
@@ -236,7 +230,6 @@ class GpuArbiterConfig:
             ids.add(gpu_id)
         container_gpus = _parse_container_gpus(env_str('OP_GPU_ARBITER_CONTAINERS', ''))
         containers = tuple(name for name, _ in container_gpus)
-        trainer = env_str('OP_GPU_ARBITER_TRAINER_CONTAINER') or None
         jobs_dir = env_str('OP_BAKEOFF_JOBS_DIR') or _default_bakeoff_jobs_dir()
         gpu_labels = _parse_gpu_labels(env_str('OP_GPU_LABELS', ''))
         default_train_gpus = env_str('OP_TRAIN_DEFAULT_GPUS') or None
@@ -245,7 +238,6 @@ class GpuArbiterConfig:
             allowed_gpu_ids=frozenset(ids),
             containers=containers,
             container_gpus=container_gpus,
-            trainer_container=trainer,
             bakeoff_jobs_dir=jobs_dir,
             gpu_labels=gpu_labels,
             default_train_gpus=default_train_gpus,

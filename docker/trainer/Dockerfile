@@ -1,12 +1,13 @@
 # =============================================================================
-# Curation trainer -- YOLO training service for the API's job-file protocol.
+# Curation trainer -- YOLO training worker: the consumer of the `gpu_train` queue.
 # =============================================================================
-# Watches the shared jobs volume for *.job.json files and runs each through
-# Ultralytics. The API half of the protocol lives in
-# src/services/training/jobs.py; this image implements the trainer half
-# (docker/trainer/trainer.py). Nothing domain-specific is baked in -- the
-# dataset, class subset, hyperparameters and augmentation all arrive in
-# job.json, and deployment paths arrive as OP_* env vars (env.template).
+# A Celery worker (one pool child per run, `--max-tasks-per-child=1`, so GPU memory is released
+# when a run ends) that runs the `train` job kind through Ultralytics. The API half is
+# src/services/training/jobs.py; this image carries the job runtime (src/tasks/runtime) and the
+# database layer (src/db, src/config, src/domain) and no web or OpenSearch code. Nothing
+# domain-specific is baked in -- the dataset, class subset, hyperparameters and augmentation all
+# arrive in the run's spec (training_runs.spec), and deployment paths and the queue and database
+# URLs arrive as OP_* env vars (env.template).
 #
 # Multi-stage + slim base + non-root, matching this repo's other images
 # (./Dockerfile, which holds the api, export and evaluator targets). Torch comes from the PyTorch
@@ -16,13 +17,13 @@
 # granted by compose (`deploy.resources.reservations.devices`).
 #
 # Runtime mounts (docker-compose.yml, profile `training`):
-#   /jobs                                -> job + status + manifest files
 #   /var/lib/openprocessor/training_runs -> Ultralytics run outputs
+#   the projects data root               -> run logs and artifacts (storage root `projects`)
 #   the export root                      -> frozen dataset exports (read-only)
 #
 # IMPORTANT: the runs dir must be mounted at the SAME absolute path in this
 # container and in api. The trainer records `checkpoint_path` verbatim in
-# status.json, and promote resolves that exact string from the API container.
+# the run's progress and manifest, and promote resolves that exact string from the API container.
 #
 # Build:
 #   docker compose --profile training build curation-trainer
@@ -35,13 +36,15 @@ FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512
 
 WORKDIR /build
 
-# git is needed to install Ultralytics from a pinned commit.
+# git is needed to install Ultralytics from a pinned commit; libpq-dev is what the C build of
+# psycopg (psycopg[c], like the api image) compiles against.
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
     git \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # PyTorch CUDA wheel index. Override for a different CUDA minor
@@ -72,18 +75,17 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
 FROM python:3.12-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
 
 LABEL org.opencontainers.image.title="OpenProcessor Curation Trainer" \
-      org.opencontainers.image.description="YOLO training service driven by the curation job-file protocol" \
+      org.opencontainers.image.description="YOLO training worker for the gpu_train job queue" \
       org.opencontainers.image.vendor="OpenProcessor" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/davidamacey/OpenProcessor"
 
-# Runtime-only system packages: cv2/Pillow image libs, curl+jq for probes,
-# procps for the healthcheck's pgrep.
+# Runtime-only system packages: cv2/Pillow image libs, curl+jq for probes, libpq5 for psycopg.
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
     jq \
-    procps \
+    libpq5 \
     libgl1 \
     libglib2.0-0t64 \
     libgomp1 \
@@ -101,9 +103,9 @@ RUN rm -rf /usr/local/lib/python3.12/site-packages/pip \
 # images so bind-mounted volumes keep consistent ownership on the host.
 RUN groupadd -r appuser \
     && useradd -r -g appuser -G video -u 1000 -m -s /bin/bash appuser \
-    && mkdir -p /app /jobs /var/lib/openprocessor/training_runs \
+    && mkdir -p /app /var/lib/openprocessor/training_runs \
                 /home/appuser/.cache/torch /home/appuser/.config/Ultralytics \
-    && chown -R appuser:appuser /app /jobs /var/lib/openprocessor /home/appuser
+    && chown -R appuser:appuser /app /var/lib/openprocessor /home/appuser
 
 WORKDIR /app
 
@@ -115,24 +117,33 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONPATH=/app \
     TORCH_HOME=/home/appuser/.cache/torch \
     YOLO_CONFIG_DIR=/home/appuser/.config/Ultralytics \
-    OP_TRAIN_JOBS_DIR=/jobs \
     OP_TRAIN_RUNS_ROOT=/var/lib/openprocessor/training_runs
 
-# Flat module layout: /app is on PYTHONPATH, so `python -m trainer` resolves
-# trainer.py and its siblings as top-level modules.
+# Flat module layout: /app is on PYTHONPATH, so `celery -A celery_tasks:app` resolves
+# celery_tasks.py and its siblings as top-level modules.
 COPY --chown=appuser:appuser docker/trainer/*.py ./
+# The job runtime and what it imports; no web, OpenSearch or service code
+# (tests/trainer/test_runtime_import_minimal.py). `src` is a namespace package: no top __init__.
+COPY --chown=appuser:appuser src/tasks/__init__.py ./src/tasks/__init__.py
+COPY --chown=appuser:appuser src/tasks/runtime/ ./src/tasks/runtime/
+COPY --chown=appuser:appuser src/clients/__init__.py ./src/clients/__init__.py
+COPY --chown=appuser:appuser src/clients/storage/ ./src/clients/storage/
+COPY --chown=appuser:appuser src/db/ ./src/db/
+COPY --chown=appuser:appuser src/config/ ./src/config/
+COPY --chown=appuser:appuser src/domain/ ./src/domain/
+COPY --chown=appuser:appuser src/utils/ ./src/utils/
 # The augmentation preset catalog is shared with the API (which validates and
 # serves it); copied flat so augment.py imports it as a top-level module.
 COPY --chown=appuser:appuser src/services/training/augmentation_presets.py ./augmentation_presets.py
 
 USER appuser
 
-# The watcher is healthy while it is running and can see the jobs volume.
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD ["sh", "-c", "test -d \"$OP_TRAIN_JOBS_DIR\" && pgrep -f trainer.py > /dev/null || exit 1"]
+# Healthy while the worker answers a control ping on its own node name.
+HEALTHCHECK --interval=60s --timeout=15s --start-period=60s --retries=3 \
+    CMD ["sh", "-c", "celery -A celery_tasks:app inspect ping --timeout 10 -d \"celery@$(hostname)\" > /dev/null || exit 1"]
 
-ENTRYPOINT ["python", "-m", "trainer"]
-CMD ["--watch", "/jobs"]
+# Concurrency 1 and a fresh child per run: a run holds the card and releases its memory on exit.
+ENTRYPOINT ["celery", "-A", "celery_tasks:app", "worker", "-Q", "gpu_train", "--pool=prefork", "--concurrency=1", "--max-tasks-per-child=1"]
 
 # Build identity, last so a new commit rewrites only metadata and never a dependency layer.
 # Read by job_manifest.build_lineage() as code_versions.trainer_sha (preferred over the API's

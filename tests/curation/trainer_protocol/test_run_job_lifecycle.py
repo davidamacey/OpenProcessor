@@ -1,9 +1,9 @@
-"""End-to-end ``run_job`` against a stub Ultralytics, cancel, failure and the watcher."""
+"""``run_training`` against a stub Ultralytics: finish, class remap, cancel and failure."""
 
 from __future__ import annotations
 
-import asyncio
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,8 +15,8 @@ import trainer
 import trainer_callbacks
 import trainer_kwargs
 
-from curation.trainer_protocol._helpers import _write_job
-from src.services.training import job_manifest, jobs as train_jobs
+from curation.trainer_protocol._helpers import make_spec
+from src.services.training import lineage
 from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 
 
@@ -88,8 +88,7 @@ def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
     comparison metric silently doesn't match what Triton actually serves.
     ``.val()`` has no ``end2end=`` kwarg; the real toggle is the loaded
     model's own ``.end2end`` property."""
-    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
     state = job_status.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
@@ -156,8 +155,7 @@ def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
     """A model with no one2one branch (not end2end-capable) must be left
     alone -- forcing end2end=True on it would break inference, since it
     has no one-to-one head to switch to."""
-    job_id = _write_job(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
+    spec = make_spec(dataset_export_dir=str(export_dir), model_size='n', profile='probe')
     state = job_status.StatusState(
         job_id=spec.job_id, campaign_id=spec.campaign_id, state='running'
     )
@@ -199,50 +197,57 @@ def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
     assert 'head' not in state.eval
 
 
+def _run(spec: Any) -> tuple[job_status.StatusState, dict[str, Any] | None]:
+    """``run_training`` as the handler drives it, then the manifest it stores."""
+    from dataset_prep import read_class_remap
+    from job_manifest import build_manifest
+
+    state = job_status.StatusState(job_id=spec.job_id, state='starting')
+    try:
+        trainer.run_training(spec, state)
+        return state, build_manifest(spec, state, class_remap=read_class_remap(spec))
+    finally:
+        shutil.rmtree(spec.tmp_root, ignore_errors=True)
+
+
 @pytest.mark.integration
-def test_run_job_drives_a_whole_export_run_to_finished(
+def test_a_whole_export_run_reaches_finished(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
 ) -> None:
-    job_id = _write_job(
+    spec = make_spec(
         dataset_export_dir=str(export_dir),
         model_size='n',
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 7},
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    trainer.run_job(spec)
+    state, manifest = _run(spec)
 
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'finished', status.error
-    assert status.checkpoint_path is not None
-    assert status.checkpoint_path.endswith('weights/best.pt')
+    assert state.state == 'finished', state.error
+    assert state.checkpoint_path is not None
+    assert state.checkpoint_path.endswith('weights/best.pt')
     # The stub's val() returns None (no test-split pass), so eval falls
     # back to the training-time validation numbers -- split must say 'val',
     # never silently look like a test-split result.
-    assert status.eval == {
+    assert state.eval == {
         'map50': 0.77,
         'map50_95': 0.44,
         'split': 'val',
         'val_last': {'map50': 0.77, 'map50_95': 0.44},
-        'confusion_matrix_url': None,
     }
-    assert status.class_remap_copy_failed is False  # type: ignore[attr-defined]
+    assert state.class_remap_copy_failed is False
     # ONNX sibling is what promote actually copies into the Triton repo.
-    assert Path(status.checkpoint_path).with_suffix('.onnx').is_file()
+    assert Path(state.checkpoint_path).with_suffix('.onnx').is_file()
 
-    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     # The export fixture's manifest.json only sets frozen_test_sha -- no
     # dataset_sha key, and dataset_sha is never computed (it's the export's
     # own claim), so it stays None.
     assert manifest['lineage']['dataset_sha'] is None
     assert manifest['lineage']['frozen_test_sha'] == 'sha-frozen-test'
-    # Whole-export runs now carry a class_remap too (the promote-labels
-    # fix): the export fixture's class_registry.json maps registry ids
-    # 5/9/12 -> dense ids 0/1/2, so a full-class run's manifest must
-    # capture that translation, not None.
+    # Whole-export runs carry a class_remap too (the promote-labels fix): the export fixture's
+    # class_registry.json maps registry ids 5/9/12 -> dense ids 0/1/2, so a full-class run's
+    # manifest must capture that translation, not None.
     assert manifest['lineage']['class_remap'] is not None
     assert manifest['lineage']['class_remap']['original_to_new'] == {'5': 0, '9': 1, '12': 2}
     assert manifest['lineage']['class_remap']['names'] == ['widget', 'serial_plate', 'gadget']
@@ -256,7 +261,7 @@ def test_run_job_drives_a_whole_export_run_to_finished(
     # for the promoted model must be keyed by the registry id each dense
     # id actually maps to -- not identity.
     remap = resolve_class_remap(
-        job_id=job_id, checkpoint_path=Path(status.checkpoint_path), manifest=manifest
+        job_id=spec.job_id, checkpoint_path=Path(state.checkpoint_path), manifest=manifest
     )
     assert remap.source == 'manifest'
     full_registry = {5: 'widget', 9: 'serial_plate', 12: 'gadget'}
@@ -270,22 +275,15 @@ def test_run_job_drives_a_whole_export_run_to_finished(
 
 
 @pytest.mark.integration
-def test_normal_run_manifest_has_no_null_lineage(
+def test_a_normal_run_manifest_has_no_null_lineage(
     jobs_dir: Path,
     export_dir: Path,
     stub_ultralytics: type[_StubYOLO],
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A run submitted against a full export manifest, with a build sha and
-    a reachable docker client, must not leave any lineage/code_versions
-    field null -- a null here silently degrades a run's reproducibility
-    envelope with no visible signal. ``trainer_image_id`` is the one field
-    that legitimately stays null when the API has no docker socket; here
-    the socket is faked reachable so it, too, must be non-null."""
-    from src.config import GpuArbiterConfig
-    from src.services.training import lineage
-
+    """A run started against a full export manifest, with a build sha on both sides, must not
+    leave any lineage/code_versions field null -- a null here silently degrades a run's
+    reproducibility envelope with no visible signal."""
     (export_dir / 'manifest.json').write_text(
         json.dumps(
             {
@@ -297,138 +295,115 @@ def test_normal_run_manifest_has_no_null_lineage(
         )
     )
     monkeypatch.setenv('OP_BUILD_SHA', 'apisha-x')
-
-    class _FakeImage:
-        id = 'sha256:trainerimg'
-        labels = {'org.opencontainers.image.revision': 'trainerrev-x'}
-
-    class _FakeContainer:
-        image = _FakeImage()
-
-    class _FakeContainers:
-        def get(self, _name: str) -> _FakeContainer:
-            return _FakeContainer()
-
-    class _FakeDockerClient:
-        containers = _FakeContainers()
-
-    monkeypatch.setattr(
-        lineage,
-        'get_gpu_arbiter_config',
-        lambda: GpuArbiterConfig(trainer_container='curation-trainer'),
-    )
-    monkeypatch.setattr(lineage, '_docker_client', _FakeDockerClient)
-
-    job_id = _write_job(
+    identity = lineage.read_export_identity(export_dir)
+    stored = {
+        'dataset_sha': identity.dataset_sha,
+        'frozen_test_sha': identity.frozen_test_sha,
+        'test_label_sha': identity.test_label_sha,
+        'api_sha': lineage.api_sha(),
+        'registry_sha': 'registry-sha-x',
+    }
+    spec = make_spec(
         dataset_export_dir=str(export_dir),
         model_size='n',
         profile='probe',
         hyperparameters={'epochs': 1, 'batch': 2, 'optimizer': 'MuSGD', 'seed': 3},
+        **stored,
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    trainer.run_job(spec)
+    _state, manifest = _run(spec)
 
-    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     for key in ('dataset_sha', 'frozen_test_sha', 'test_label_sha', 'registry_sha'):
         assert manifest['lineage'][key] is not None, key
-    for key in ('api_sha', 'trainer_sha', 'trainer_image_id'):
+    for key in ('api_sha', 'trainer_sha'):
         assert manifest['code_versions'][key] is not None, key
 
 
 @pytest.mark.integration
-def test_run_job_propagates_class_remap_for_a_subset_run(
+def test_a_subset_run_records_its_class_remap_in_both_promote_sources(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
     """Both promote-side sources must be populated by a finished subset run."""
-    job_id = _write_job(
+    spec = make_spec(
         dataset_export_dir=str(export_dir),
         model_size='n',
         include_classes=[12, 5],
         hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'},
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    trainer.run_job(spec)
+    state, manifest = _run(spec)
 
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'finished', status.error
-    assert status.class_remap_copy_failed is False  # type: ignore[attr-defined]
-    checkpoint = Path(status.checkpoint_path or '')
-    manifest = asyncio.run(job_manifest.read_manifest(job_id))
+    assert state.state == 'finished', state.error
+    assert state.class_remap_copy_failed is False
+    checkpoint = Path(state.checkpoint_path or '')
     assert manifest is not None
 
     # (a) manifest lineage -- survives tmp cleanup.
     from_manifest = resolve_class_remap(
-        job_id=job_id, checkpoint_path=checkpoint, manifest=manifest
+        job_id=spec.job_id, checkpoint_path=checkpoint, manifest=manifest
     )
     assert from_manifest.source == 'manifest'
     assert from_manifest.mapping == {12: 0, 5: 1}
 
     # (b) weights dir -- the second, on-disk source.
-    from_weights = resolve_class_remap(job_id=job_id, checkpoint_path=checkpoint, manifest=None)
+    from_weights = resolve_class_remap(
+        job_id=spec.job_id, checkpoint_path=checkpoint, manifest=None
+    )
     assert from_weights.source == 'weights_dir'
     assert from_weights.mapping == {12: 0, 5: 1}
 
 
 @pytest.mark.integration
-def test_run_job_honors_the_cancel_sentinel(
+def test_a_cancel_raised_out_of_the_epoch_callback_ends_the_run_cancelled(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
-    job_id = _write_job(
+    spec = make_spec(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 5, 'optimizer': 'MuSGD'}
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    asyncio.run(train_jobs.write_cancel(job_id))
     # The real cancel path raises out of the on_train_epoch_end callback.
     stub_ultralytics.raise_on_train = trainer_callbacks.CancelRequestedError('cancelled')
 
-    trainer.run_job(spec)
+    state, _manifest = _run(spec)
 
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'cancelled'
-    assert status.error == 'cancelled by user'
+    assert state.state == 'cancelled'
+    assert state.error == 'cancelled by user'
     assert not spec.tmp_root.exists()
 
 
 @pytest.mark.integration
-def test_run_job_records_a_training_failure_in_status_and_log(
-    jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO]
+def test_the_epoch_callback_raises_once_a_cancel_is_requested(
+    jobs_dir: Path, export_dir: Path
 ) -> None:
-    """A non-OOM error must surface, not retry-loop and not vanish."""
-    job_id = _write_job(
-        dataset_export_dir=str(export_dir), hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'}
-    )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
-    stub_ultralytics.raise_on_train = RuntimeError('dataset is corrupt')
+    spec = make_spec(dataset_export_dir=str(export_dir))
+    state = job_status.StatusState(job_id=spec.job_id)
+    _start, end_of_epoch, _fit = trainer_callbacks._make_ultralytics_callbacks(spec, state, 5)
 
-    trainer.run_job(spec)
-
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'failed'
-    assert 'dataset is corrupt' in (status.error or '')
-    assert any('FAILED' in line for line in asyncio.run(train_jobs.tail_run_log(job_id, 200)))
-
-    manifest = asyncio.run(job_manifest.read_manifest(job_id))
-    assert manifest is not None
-    assert manifest['results']['final_state'] == 'failed'
+    end_of_epoch(None)  # not cancelled: the epoch ends normally
+    state.cancel_requested.set()
+    with pytest.raises(trainer_callbacks.CancelRequestedError):
+        end_of_epoch(None)
 
 
 @pytest.mark.integration
-def test_watcher_processes_the_oldest_pending_job(
+def test_a_training_failure_propagates_and_its_manifest_says_failed(
     jobs_dir: Path, export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
-    job_id = _write_job(
+    """A non-OOM error must surface to the handler (which fails the job), not retry-loop and
+    not vanish."""
+    spec = make_spec(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 1, 'optimizer': 'MuSGD'}
     )
+    stub_ultralytics.raise_on_train = RuntimeError('dataset is corrupt')
+    state = job_status.StatusState(job_id=spec.job_id, state='starting')
 
-    assert trainer.process_one(jobs_dir) is True
-    assert trainer.process_one(jobs_dir) is False  # nothing left pending
+    with pytest.raises(RuntimeError, match='dataset is corrupt'):
+        trainer.run_training(spec, state)
+    state.state = 'failed'  # what the handler records for an exception
+    from job_manifest import build_manifest
 
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'finished', status.error
+    manifest = build_manifest(spec, state)
+    shutil.rmtree(spec.tmp_root, ignore_errors=True)
+
+    assert manifest is not None
+    assert manifest['results']['final_state'] == 'failed'

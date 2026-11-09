@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from curation._promote_start_fake import install as install_start_fake, run_job
@@ -151,25 +152,22 @@ def test_promote_endpoint_job_not_ready_422_is_structured_and_force_disallowed(
 
 
 def test_manifest_endpoint_returns_404_when_absent(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/train/manifest/no-such-job')
+    r = app_client.get(f'/curation/projects/default/train/manifest/{uuid.uuid4()}')
     assert r.status_code == 404
 
 
 def test_manifest_endpoint_returns_payload_when_present(
-    app_client: TestClient, tmp_path: Any, project_export_root: Path
+    app_client: TestClient, train_fake: Any, project_export_root: Path
 ) -> None:
-    """The labeler reads the manifest verbatim; we return whatever JSON is on disk."""
-    job_id = '20260509-test-job'
-    payload = {
+    """The labeler reads the manifest verbatim; we return what the run stored."""
+    job_id = str(uuid.uuid4())
+    train_fake.manifests[job_id] = {
         'kind': 'train',
         'job_id': job_id,
         'lineage': {'export_dir': str(project_export_root / 'x'), 'include_classes': [12, 81]},
         'results': {'eval': {'map50': 0.91}},
         'promoted_to': None,
     }
-    import json
-
-    (tmp_path / 'projects' / 'default' / f'{job_id}.manifest.json').write_text(json.dumps(payload))
 
     r = app_client.get(f'/curation/projects/default/train/manifest/{job_id}')
     assert r.status_code == 200, r.text

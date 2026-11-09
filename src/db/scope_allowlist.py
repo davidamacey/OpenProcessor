@@ -22,6 +22,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.services.classes',  # slug to project id before a project-scoped class registry read
     'src.services.upgrade',  # the 0.6.0 control-data step
     'src.services.training.model_registry',  # who owns, shares and serves a Triton model name crosses projects
+    'src.services.training.trainer_reachability',  # reads worker_capabilities and gpu_devices, which belong to no project
     'src.services.config_store',  # resolves a slug to its id; deployment-wide endpoints and profiles
     'scripts.db',  # migration runner and db verify
     'scripts.opensearch',  # the one-shot index migrate reads the projects table

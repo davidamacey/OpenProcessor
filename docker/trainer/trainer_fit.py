@@ -80,7 +80,7 @@ def _train_with_oom_backoff(
         try:
             model.train(**train_kwargs)
         except CancelRequestedError:
-            print('[trainer] training cancelled via .cancel sentinel')
+            print('[trainer] training cancelled at an epoch boundary')
             with state.lock:
                 state.state = 'cancelled'
                 state.error = 'cancelled by user'

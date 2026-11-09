@@ -80,12 +80,10 @@ verdict lands in OpenSearch under the documented field names.
 
 ## The fake trainer
 
-`fake_trainer.sh` implements the trainer side of the file protocol in
-`src/services/training/jobs.py`: it watches the shared jobs directory for
-`<job_id>.job.json`, walks the run through `queued → running → finished`
-(three fake epochs, one per poll), honours a `<job_id>.cancel` sentinel, and
-writes `<job_id>.run.log` plus `<job_id>.manifest.json`. It never touches a
-GPU or loads a model.
+`fake_trainer.py` is a real `gpu_train` queue consumer (the production worker shape from
+`src/tasks/runtime`) whose fit is three fake epochs: it claims the `train` job, reports progress
+per epoch, honours a cancel request at the next epoch boundary, and stores a run log under the run's
+artifact prefix and a manifest in `training_runs`. It never touches a GPU or loads a model.
 
 ## Explicitly NOT verifiable here (needs a GPU / Triton)
 

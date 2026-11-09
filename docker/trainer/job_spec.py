@@ -1,12 +1,10 @@
-"""Job-file schema: constants, the :class:`JobSpec` dataclass and ``job.json`` validation.
+"""Run spec: constants, the :class:`JobSpec` dataclass and validation of ``training_runs.spec``.
 
-The API-side half lives in :mod:`src.services.training.jobs`; the constants here mirror it. See
-:mod:`job_protocol` for the overall file protocol.
+The API-side half lives in :mod:`src.services.training.jobs`; the constants here mirror it.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -23,16 +21,10 @@ logger = get_logger('trainer.job_spec')
 # Constants + environment
 # ---------------------------------------------------------------------------
 
-CANCEL_FILENAME_SUFFIX = '.cancel'
-
 # Mirrors src.services.training.jobs -- keep both in sync.
 VALID_FAMILIES = {'yolo26'}
 VALID_SIZES = {'n', 's', 'm', 'l', 'x'}
 VALID_PROFILES = {'probe', 'nano', 'small', 'medium', 'large', 'xlarge', 'custom'}
-
-# Shared job directory. Same default + env var as the API side
-# (``src.services.training.job_files._resolve_jobs_dir``).
-DEFAULT_JOBS_DIR = Path(os.environ.get('OP_TRAIN_JOBS_DIR', '/jobs'))
 
 # Scratch root for per-job subset/augmentation rewrites. Inside the container
 # this is the image's own tmpfs, not a shared host /tmp, and every job writes
@@ -51,7 +43,7 @@ DEFAULT_INPUT_SIZE = 640
 
 @dataclass
 class JobSpec:
-    """Parsed + validated ``job.json``.
+    """A run's ``training_runs.spec``, validated.
 
     Field-for-field a subset of :class:`src.services.training.job_models.TrainJobSpec`
     -- unknown keys are tolerated (kept in :attr:`raw`) so an API that grows a
@@ -59,7 +51,6 @@ class JobSpec:
     """
 
     job_id: str
-    job_path: Path
     model_family: str
     model_size: str
     profile: str
@@ -94,20 +85,9 @@ class JobSpec:
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def status_path(self) -> Path:
-        return self.job_path.parent / f'{self.job_id}.status.json'
-
-    @property
     def run_log_path(self) -> Path:
-        return self.job_path.parent / f'{self.job_id}.run.log'
-
-    @property
-    def manifest_path(self) -> Path:
-        return self.job_path.parent / f'{self.job_id}.manifest.json'
-
-    @property
-    def cancel_path(self) -> Path:
-        return self.job_path.parent / f'{self.job_id}{CANCEL_FILENAME_SUFFIX}'
+        """Scratch copy of the run log; the handler publishes it to the run's artifact prefix."""
+        return self.tmp_root / 'run.log'
 
     @property
     def tmp_root(self) -> Path:
@@ -134,32 +114,13 @@ def _utcnow_iso() -> str:
     return datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    with path.open('r', encoding='utf-8') as fh:
-        loaded = json.load(fh)
-    if not isinstance(loaded, dict):
-        msg = f'{path} is not a JSON object'
-        raise ValueError(msg)
-    return loaded
-
-
-def _status_path_for(job_path: Path) -> Path:
-    """Sibling ``<job_id>.status.json`` for a ``<job_id>.job.json`` path."""
-    return job_path.parent / f'{job_path.name[: -len(".job.json")]}.status.json'
-
-
-def _job_id_from_path(job_path: Path) -> str:
-    return job_path.name[: -len('.job.json')]
-
-
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
 
 class JobValidationError(ValueError):
-    """Base class for job-file rejections that carry a stable error code
-    (written to ``status.json`` as ``error_code`` by :func:`reject_job`)."""
+    """Base class for spec rejections that carry a stable error code."""
 
     code: str = 'validation_failed'
 
@@ -174,19 +135,15 @@ class ExportOutsideProjectError(JobValidationError):
     code = 'export_outside_project'
 
 
-def parse_and_validate_job(job_path: Path) -> JobSpec:
-    """Read ``job.json`` and reject obviously-broken submissions.
+def parse_and_validate_spec(job_id: str, raw: dict[str, Any]) -> JobSpec:
+    """Validate a run's stored spec and reject obviously-broken submissions.
 
     Most preflight checks (free disk, class counts, ...) live in the API's
     ``POST {api_prefix}/train/preflight``. The trainer only re-checks the few
-    constraints that protect the training loop itself, so a hand-written or
-    stale job file can't wedge the watcher.
+    constraints that protect the training loop itself.
     """
-    raw = _read_json(job_path)
-
-    job_id = str(raw.get('job_id') or '')
     if not job_id:
-        msg = "job.json missing 'job_id'"
+        msg = 'a run needs a job id'
         raise ValueError(msg)
 
     family = raw.get('model_family') or 'yolo26'
@@ -206,7 +163,7 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
 
     export_dir_raw = raw.get('dataset_export_dir')
     if not export_dir_raw:
-        msg = "job.json missing 'dataset_export_dir'"
+        msg = "run spec missing 'dataset_export_dir'"
         raise ValueError(msg)
     export_dir = Path(export_dir_raw)
     if not export_dir.is_dir():
@@ -237,7 +194,7 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
     hyperparameters = dict(raw.get('hyperparameters') or {})
     # YOLO26 + optimizer=auto silently trades MuSGD for AdamW on short runs
     # (Ultralytics issue #23696). The API rejects it too; re-checked here in
-    # case a job file was written by hand.
+    # case a spec was stored by another client.
     if family == 'yolo26' and str(hyperparameters.get('optimizer', '')).lower() == 'auto':
         msg = (
             "optimizer='auto' is rejected for YOLO26 (Ultralytics issue #23696); "
@@ -256,7 +213,6 @@ def parse_and_validate_job(job_path: Path) -> JobSpec:
 
     return JobSpec(
         job_id=job_id,
-        job_path=job_path,
         model_family=family,
         model_size=size,
         profile=profile,

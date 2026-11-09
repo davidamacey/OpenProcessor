@@ -1,155 +1,101 @@
-"""Trainer container reachability probe used by ``/train/preflight``.
+"""Is a trainer there? A live ``gpu_train`` consumer and the capabilities its worker recorded.
 
-Split out of :mod:`src.services.training.gpu_arbiter` (the 700-LOC ratchet)
--- this stays a satellite of the arbiter: it borrows ``_docker_client``/
-``_container_status_sync`` from :mod:`src.services.training.gpu_arbiter_docker` for the optional docker-confirmation
-path, but its primary signal (the trainer's heartbeat file) never touches
-docker at all.
+``/train/preflight`` and ``/train/start`` ask this before queueing, so a run is not left
+``queued`` for days when no trainer was ever started. The consumer is found with
+``inspect().active_queues()`` (Celery docs, "Inspecting workers",
+https://docs.celeryq.dev/en/stable/userguide/workers.html#inspecting-workers, timeout 1 s). The
+capabilities are the ``worker_capabilities`` row the worker wrote at start (the cards it sees, as
+UUIDs) joined with ``gpu_devices`` for the host card numbers the API reasons in.
 
-Without this probe, submitting a job writes ``job.json`` and sits in
-``queued`` forever with no error if the trainer was never started;
-``/train/preflight``/``/train/start`` call :func:`probe_trainer_reachable`
-to surface that instead.
-
-Regression this module fixes: the original implementation only had a
-docker-socket-based check, which reported ``block`` whenever the API
-container had no socket mounted -- the *stock* deployment (no
-``docker-compose.gpu-arbiter.yml`` overlay) -- even with a perfectly
-healthy trainer, so preflight/`/start` 422'd unconditionally on every
-stock install. The primary signal is now the trainer's own heartbeat file
-(:data:`TRAINER_CAPABILITIES_FILENAME`, refreshed every ~30s by the
-trainer's watch loop, see ``docker/trainer/gpu_select.py``
-``HEARTBEAT_INTERVAL_S``), which needs no docker socket. "Can't tell"
-(missing/stale heartbeat, no docker socket either) is now at most
-``warn``, never ``block``.
+A worker row has no heartbeat while the worker idles (the pool child that wrote it exits after
+each run), so "fresh" means the row belongs to a host that has a live consumer now, not that its
+timestamp is young.
 """
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime
+import asyncio
 from typing import Any
 
-from src.config import get_gpu_arbiter_config
-from src.services.training.gpu_arbiter_docker import _container_status_sync, _docker_client
+import redis
+from kombu.exceptions import KombuError
+from sqlalchemy import select
+
+from src.clients import task_queue
+from src.config.env import env_str
+from src.config.queue import TaskQueues
+from src.db.models.jobs import GpuDevice, WorkerCapability
+from src.db.session import async_session_factory, deployment_tx
+from src.domain.gpu_order import host_id_at, parse_order
 
 
-# Filename the trainer's watch loop refreshes every HEARTBEAT_INTERVAL_S
-# (docker/trainer/gpu_select.py) via write_trainer_capabilities(), next to
-# job.json in the shared /jobs volume. Duplicated (not imported) from
-# src/services/training/preflight_checks.py's own TRAINER_CAPABILITIES_FILENAME and
-# the trainer image's copy -- same reasoning as those two: the trainer
-# ships as its own image with no src/ dependency, so there is nothing to
-# share an import with. tests/curation/trainer_protocol/
-# conformance-tests all copies against the literal name.
-TRAINER_CAPABILITIES_FILENAME = '.trainer_capabilities.json'
-
-# The trainer's watch loop rewrites this file every ~30s while idle
-# (docker/trainer/gpu_select.py HEARTBEAT_INTERVAL_S). A generous multiple of
-# that cadence tells "trainer alive but a slow poll tick" apart from
-# "trainer container is actually gone" without needing the docker socket
-# at all.
-TRAINER_HEARTBEAT_STALE_SECONDS = 120.0
+INSPECT_TIMEOUT_S = 1.0
+BROKER_ERRORS = (task_queue.QueueUnavailable, KombuError, redis.RedisError, OSError)
 
 
-def _read_trainer_capabilities_file() -> dict[str, Any] | None:
-    from src.services.training.job_files import trainer_root_dir
-
-    # Trainer-global: written once at the volume root, not per project.
-    path = trainer_root_dir() / TRAINER_CAPABILITIES_FILENAME
-    try:
-        typed: dict[str, Any] | None = json.loads(path.read_text(encoding='utf-8'))
-        return typed
-    except (OSError, ValueError):
-        return None
+def _inspect_active_queues() -> dict[str, list[dict[str, Any]]] | None:
+    app = task_queue.producer_app()
+    return app.control.inspect(timeout=INSPECT_TIMEOUT_S).active_queues()  # type: ignore[no-any-return]
 
 
-def _trainer_heartbeat_age_seconds(caps: dict[str, Any]) -> float | None:
-    written_at = caps.get('written_at')
-    if not isinstance(written_at, str):
-        return None
-    try:
-        written = datetime.fromisoformat(written_at)
-    except ValueError:
-        return None
-    if written.tzinfo is None:
-        written = written.replace(tzinfo=UTC)
-    return (datetime.now(UTC) - written).total_seconds()
+async def consumer_hosts(queue: str = TaskQueues.GPU_TRAIN) -> set[str]:
+    """Host names of the workers consuming ``queue``; raises on a broker failure."""
+    replies = await asyncio.to_thread(_inspect_active_queues)
+    hosts: set[str] = set()
+    for node, queues in (replies or {}).items():
+        if any(q.get('name') == queue for q in queues):
+            hosts.add(node.partition('@')[2] or node)
+    return hosts
 
 
-async def probe_trainer_reachable(
-    *,
-    container_name: str | None = None,
-) -> tuple[str, str]:
-    """Check whether the configured trainer container is up and reachable.
+async def _capabilities(queue: str) -> list[WorkerCapability]:
+    async with async_session_factory()() as session, deployment_tx(session, 'trainer capabilities'):
+        found = await session.execute(
+            select(WorkerCapability).where(WorkerCapability.queue == queue)
+        )
+        return list(found.scalars())
 
-    ``container_name`` defaults to ``GpuArbiterConfig.trainer_container``.
-    Unset (generic-install default, no sibling container to probe) ->
-    ``('ok', ...)`` rather than treating "not configured" as a failure.
 
-    Returns ``(severity, detail)`` with ``severity`` one of ``'ok'``,
-    ``'warn'``, ``'block'``.
+async def read_trainer_gpu_order(queue: str = TaskQueues.GPU_TRAIN) -> list[int] | None:
+    """Host card numbers the live trainer sees, or ``None`` when unknown (no live consumer, no
+    capabilities row for its host, or the broker cannot be asked).
 
-    The **primary** signal is the trainer's heartbeat file
-    (:data:`TRAINER_CAPABILITIES_FILENAME`, refreshed every ~30s by the
-    trainer's watch loop) -- reading a file on the shared ``/jobs`` volume
-    needs no docker socket, so this works on a stock install with no
-    ``docker-compose.gpu-arbiter.yml`` overlay. A fresh heartbeat is
-    ``'ok'``.
-
-    A missing or stale heartbeat (older trainer image, container
-    mid-restart, or genuinely down) is at most ``'warn'`` -- "can't tell"
-    must never block ``/train/start``.
-
-    The docker SDK/socket path (only present when the gpu-arbiter overlay
-    mounts it) is used purely as an **optional, confirming** secondary
-    check, and only consulted once the heartbeat itself is missing/stale:
-    if docker is reachable and confirms the container is absent/stopped,
-    that upgrades the warn to a definitive ``'block'``; if docker can't
-    see it either (or isn't mounted), it stays ``'warn'``.
+    A worker records the cards as it numbers them inside its container; ``OP_TRAIN_GPU_ORDER``
+    (the same value the trainer container gets) maps those positions to host numbers.
     """
-    name = (
-        container_name if container_name is not None else get_gpu_arbiter_config().trainer_container
-    )
-    if not name:
-        return 'ok', 'no trainer container configured -- reachability probe not applicable'
-
-    caps = _read_trainer_capabilities_file()
-    age = _trainer_heartbeat_age_seconds(caps) if caps is not None else None
-    if age is not None and age <= TRAINER_HEARTBEAT_STALE_SECONDS:
-        return 'ok', f'{name!r} heartbeat fresh ({age:.0f}s ago)'
-
-    if age is not None:
-        heartbeat_detail = f'heartbeat stale ({age:.0f}s ago)'
-    elif caps is not None:
-        heartbeat_detail = 'heartbeat file present but unparseable'
-    else:
-        heartbeat_detail = (
-            f'no heartbeat file yet ({TRAINER_CAPABILITIES_FILENAME}) -- '
-            'trainer container may not have started'
-        )
-
-    client = _docker_client()
-    if client is None:
-        return 'warn', f'{name!r}: {heartbeat_detail}; cannot verify further (no docker socket)'
     try:
-        import asyncio
-
-        state = await asyncio.to_thread(_container_status_sync, client, name)
-    except Exception as exc:
-        return 'warn', f'{name!r}: {heartbeat_detail}; docker probe also failed: {exc}'
-    if state is None:
-        return 'block', f'{name!r} container does not exist ({heartbeat_detail})'
-    if state != 'running':
-        return (
-            'block',
-            f'{name!r} container status={state!r}, expected running ({heartbeat_detail})',
+        hosts = await consumer_hosts(queue)
+    except BROKER_ERRORS:
+        return None
+    rows = [r for r in await _capabilities(queue) if r.host in hosts]
+    uuids = sorted({u for r in rows for u in r.capabilities.get('gpu_uuids') or []})
+    if not rows:
+        return None
+    async with async_session_factory()() as session, deployment_tx(session, 'trainer gpu order'):
+        found = await session.execute(
+            select(GpuDevice.nvml_index).where(GpuDevice.gpu_uuid.in_(uuids))
         )
-    return 'ok', f'{name!r} is running (docker-confirmed; {heartbeat_detail})'
+        positions = list(found.scalars())
+    order = parse_order(env_str('OP_TRAIN_GPU_ORDER'))
+    return sorted(host_id_at(order, position) for position in positions)
 
 
-__all__ = [
-    'TRAINER_CAPABILITIES_FILENAME',
-    'TRAINER_HEARTBEAT_STALE_SECONDS',
-    'probe_trainer_reachable',
-]
+async def probe_trainer_reachable() -> tuple[str, str]:
+    """``(severity, detail)`` with severity ``ok``, ``warn`` or ``block``.
+
+    No consumer on ``gpu_train`` blocks: the run would wait the whole queue-wait limit. A broker
+    that cannot be asked, or a consumer whose capabilities row is missing, only warns.
+    """
+    try:
+        hosts = await consumer_hosts()
+    except BROKER_ERRORS as exc:
+        return 'warn', f'cannot ask the broker for the trainer ({exc}); not verified'
+    if not hosts:
+        return 'block', 'trainer not running: no worker consumes the gpu_train queue'
+    rows = [r for r in await _capabilities(TaskQueues.GPU_TRAIN) if r.host in hosts]
+    if not rows:
+        return 'warn', f'trainer on {sorted(hosts)} consumes gpu_train but recorded no capabilities'
+    return 'ok', f'trainer available on {sorted(hosts)}'
+
+
+__all__ = ['consumer_hosts', 'probe_trainer_reachable', 'read_trainer_gpu_order']

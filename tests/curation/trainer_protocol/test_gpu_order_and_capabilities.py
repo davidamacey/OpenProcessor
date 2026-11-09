@@ -1,18 +1,12 @@
-"""GPU device resolution, the trainer capabilities file and NVML telemetry host ids."""
+"""GPU device resolution and NVML telemetry host ids."""
 
 from __future__ import annotations
 
-import json
 import sys
-from typing import TYPE_CHECKING, Any
 
 import gpu_select
 import job_status
 import pytest
-
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_gpu_ids_pass_through_when_no_order_is_configured(
@@ -48,102 +42,8 @@ def test_unattached_gpu_request_fails_instead_of_mis_scheduling(
 
 
 # =============================================================================
-# Trainer capabilities file (the API's preflight reads this)
+# NVML telemetry reports host ids
 # =============================================================================
-
-
-def test_write_trainer_capabilities_publishes_env_gpu_order(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '0,2')
-    monkeypatch.setenv('OP_BUILD_SHA', 'abc1234')
-    jobs_dir = tmp_path / 'jobs'
-
-    gpu_select.write_trainer_capabilities(jobs_dir)
-
-    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
-    assert payload['gpu_order'] == [0, 2]
-    assert payload['build_sha'] == 'abc1234'
-    assert 'written_at' in payload
-    assert 'visible_count' in payload
-
-
-def test_write_trainer_capabilities_empty_order_is_unrestricted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv('OP_TRAIN_GPU_ORDER', raising=False)
-    jobs_dir = tmp_path / 'jobs'
-
-    gpu_select.write_trainer_capabilities(jobs_dir)
-
-    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
-    assert payload['gpu_order'] == []
-
-
-def test_write_trainer_capabilities_survives_cuda_probe_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A missing/broken torch install (in the probe subprocess) must not
-    crash trainer startup -- the file still gets written with
-    visible_count=None."""
-    import subprocess
-
-    def _boom(*args: Any, **kwargs: Any) -> Any:
-        raise subprocess.CalledProcessError(1, args[0] if args else 'probe')
-
-    monkeypatch.setattr(subprocess, 'run', _boom)
-    jobs_dir = tmp_path / 'jobs'
-
-    gpu_select.write_trainer_capabilities(jobs_dir)
-
-    payload = json.loads((jobs_dir / gpu_select.TRAINER_CAPABILITIES_FILENAME).read_text())
-    assert payload['visible_count'] is None
-
-
-class TestCudaProbeIsolation:
-    """The idle daemon process must never itself call into CUDA."""
-
-    def test_probe_runs_in_a_subprocess_not_in_process(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Patching this process's own `import torch` must NOT affect the
-        probe's result -- it must go through subprocess.run, which spawns
-        a fresh Python interpreter unaffected by this process's sys.modules
-        or builtins."""
-        import builtins
-
-        real_import = builtins.__import__
-
-        def _boom(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name == 'torch':
-                msg = 'this process must never import torch for the probe'
-                raise AssertionError(msg)
-            return real_import(name, *args, **kwargs)
-
-        monkeypatch.setattr(builtins, '__import__', _boom)
-
-        # The real subprocess (a fresh interpreter) is unaffected by the
-        # patch above; if this venv has torch installed the probe returns
-        # a real int, otherwise None -- either way, no AssertionError.
-        result = gpu_select._probe_cuda_device_count()
-        assert result is None or isinstance(result, int)
-
-    def test_probe_uses_a_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """A hung probe subprocess must not hang trainer startup forever."""
-        import subprocess
-
-        captured: dict[str, Any] = {}
-
-        def _fake_run(*args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            raise subprocess.TimeoutExpired(cmd='probe', timeout=kwargs.get('timeout', 0))
-
-        monkeypatch.setattr(subprocess, 'run', _fake_run)
-
-        result = gpu_select._probe_cuda_device_count()
-
-        assert result is None
-        assert captured.get('timeout') is not None
 
 
 def test_gpu_telemetry_reports_host_index_through_gpu_order(

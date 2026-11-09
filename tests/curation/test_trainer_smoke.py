@@ -1,9 +1,9 @@
 """End-to-end smoke test: a *real* Ultralytics training run through the trainer.
 
-the ``trainer_protocol`` tests stub Ultralytics out, which proves the file
-protocol but not that the trainer can actually drive a training loop. This
-module runs the genuine thing -- ``trainer.run_job`` -> ``ultralytics`` ->
-``best.pt`` -> ``results.csv`` -> ``status.json`` -> ``manifest.json`` -- on a
+the ``trainer_protocol`` tests stub Ultralytics out, which proves the trainer's
+orchestration but not that it can actually drive a training loop. This
+module runs the genuine thing -- ``trainer.run_training`` -> ``ultralytics`` ->
+``best.pt`` -> ``results.csv`` -> the run state and manifest -- on a
 synthetic four-image dataset, one epoch, CPU only.
 
 It is **opt-in**: set ``OP_TRAINER_SMOKE=1`` to enable. It needs
@@ -18,16 +18,13 @@ YAML, not a pretrained checkpoint), and writes only under ``tmp_path``.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
-
-from src.services.training import job_manifest, jobs as train_jobs
-from src.services.training.job_models import TrainJobSpec
 
 
 TRAINER_DIR = Path(__file__).resolve().parents[2] / 'docker' / 'trainer'
@@ -91,12 +88,14 @@ def test_a_real_training_run_completes_end_to_end(
     pytest.importorskip('cv2')
 
     import job_spec
+    import job_status
     import trainer
     import trainer_kwargs
+    from dataset_prep import read_class_remap
+    from job_manifest import build_manifest
 
-    jobs_dir = tmp_path / 'jobs'
-    jobs_dir.mkdir()
-    monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(jobs_dir))
+    from curation.trainer_protocol._helpers import make_spec
+
     monkeypatch.setattr(trainer_kwargs, 'RUNS_ROOT', str(tmp_path / 'runs'))
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'scratch')
     # Keep Ultralytics' settings/cache inside tmp_path.
@@ -108,50 +107,47 @@ def test_a_real_training_run_completes_end_to_end(
 
     export = _build_synthetic_export(tmp_path / 'export')
 
-    job_id = asyncio.run(
-        train_jobs.write_job(
-            TrainJobSpec(
-                dataset_export_dir=str(export),
-                model_size='n',
-                profile='probe',
-                hyperparameters={
-                    'model': SMOKE_ARCH,
-                    'epochs': 1,
-                    'batch': 2,
-                    'imgsz': IMG_SIZE,
-                    # MuSGD is the pipeline default but may not exist in every
-                    # installed Ultralytics; SGD always does and the optimizer
-                    # choice is irrelevant to what this test proves.
-                    'optimizer': 'SGD',
-                    'device': 'cpu',
-                    'workers': 0,
-                    'plots': False,
-                    'val': True,
-                    'verbose': False,
-                    'seed': 11,
-                },
-            )
-        )
+    spec = make_spec(
+        dataset_export_dir=str(export),
+        model_size='n',
+        profile='probe',
+        hyperparameters={
+            'model': SMOKE_ARCH,
+            'epochs': 1,
+            'batch': 2,
+            'imgsz': IMG_SIZE,
+            # MuSGD is the pipeline default but may not exist in every
+            # installed Ultralytics; SGD always does and the optimizer
+            # choice is irrelevant to what this test proves.
+            'optimizer': 'SGD',
+            'device': 'cpu',
+            'workers': 0,
+            'plots': False,
+            'val': True,
+            'verbose': False,
+            'seed': 11,
+        },
     )
-    spec = job_spec.parse_and_validate_job(jobs_dir / f'{job_id}.job.json')
 
-    trainer.run_job(spec)
+    state = job_status.StatusState(job_id=spec.job_id, state='starting')
+    try:
+        trainer.run_training(spec, state)
+        manifest = build_manifest(spec, state, class_remap=read_class_remap(spec))
+    finally:
+        shutil.rmtree(spec.tmp_root, ignore_errors=True)
 
-    status = asyncio.run(train_jobs.read_status(job_id))
-    assert status is not None
-    assert status.state == 'finished', status.error
-    assert status.checkpoint_path is not None
-    best_pt = Path(status.checkpoint_path)
+    assert state.state == 'finished', state.error
+    assert state.checkpoint_path is not None
+    best_pt = Path(state.checkpoint_path)
     assert best_pt.is_file(), 'Ultralytics produced no best.pt'
     assert best_pt.stat().st_size > 0
     # promote copies this ONNX into the Triton model repo; without it a
     # finished run is unservable.
     assert best_pt.with_suffix('.onnx').is_file(), 'ONNX export did not run'
     # results.csv -> eval block is what the runs list and promote gate read.
-    assert status.eval is not None
-    assert 'map50' in status.eval
+    assert state.eval is not None
+    assert 'map50' in state.eval
 
-    manifest = asyncio.run(job_manifest.read_manifest(job_id))
     assert manifest is not None
     assert manifest['results']['final_state'] == 'finished'
     assert manifest['results']['checkpoint_sha256']

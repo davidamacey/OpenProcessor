@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -44,6 +45,11 @@ def fake_opensearch() -> AsyncMock:
     )
     fake.count = AsyncMock(return_value={'count': 0})
     return fake
+
+
+@pytest.fixture
+def run_fakes(monkeypatch: pytest.MonkeyPatch) -> Any:
+    return install_run_fakes(monkeypatch)
 
 
 @pytest.fixture
@@ -102,7 +108,7 @@ def _mock_promote(
 
 
 def test_full_class_promote_uses_class_remap_over_a_registry_gap(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    run_fakes: Any, app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """This must FAIL on pre-fix code: the trainer never wrote a full-class
     ``class_remap.json``, so ``resolve_class_remap`` always returned
@@ -128,9 +134,7 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
             }
         )
     )
-    (tmp_path / f'{job_id}.job.json').write_text(
-        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
-    )
+    run_fakes.specs[job_id] = {'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'}
 
     monkeypatch.setattr(
         'src.services.curation.registry_access.get_class_registry', _gapped_registry
@@ -164,14 +168,12 @@ def test_full_class_promote_uses_class_remap_over_a_registry_gap(
 
 
 def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    run_fakes: Any, app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Older run: no class_remap.json anywhere. The identity map cannot be
     proven correct against a gapped registry -- refuse unless forced."""
     job_id = 'gap-no-remap-job'
-    (tmp_path / f'{job_id}.job.json').write_text(
-        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
-    )
+    run_fakes.specs[job_id] = {'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'}
     monkeypatch.setattr(
         'src.services.curation.registry_access.get_class_registry', _gapped_registry
     )
@@ -207,15 +209,13 @@ def test_full_class_promote_without_remap_refuses_when_registry_has_a_gap(
 
 
 def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    run_fakes: Any, app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Older run, no class_remap.json, but the pinned/live registry is
     provably gap-free (ids 0..N-1) -- the identity map IS correct here, so
     no force is required."""
     job_id = 'contiguous-no-remap-job'
-    (tmp_path / f'{job_id}.job.json').write_text(
-        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/contiguous'})
-    )
+    run_fakes.specs[job_id] = {'job_id': job_id, 'dataset_export_dir': '/data/exports/contiguous'}
 
     class _Entry:
         def __init__(self, class_id: int, class_name: str) -> None:
@@ -261,13 +261,11 @@ def test_full_class_promote_without_remap_allowed_when_registry_is_contiguous(
 
 
 def test_promote_force_is_accepted_as_a_query_parameter_too(
-    app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    run_fakes: Any, app_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#128: ``?force=true`` (as on train/start) bypasses the gate like the body field."""
     job_id = 'gap-query-force-job'
-    (tmp_path / f'{job_id}.job.json').write_text(
-        json.dumps({'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'})
-    )
+    run_fakes.specs[job_id] = {'job_id': job_id, 'dataset_export_dir': '/data/exports/gap'}
     monkeypatch.setattr(
         'src.services.curation.registry_access.get_class_registry', _gapped_registry
     )

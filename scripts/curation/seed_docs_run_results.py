@@ -1,6 +1,6 @@
 """Give one finished harness training run illustrative evaluation results.
 
-The harness trainer (``docker/test/fake_trainer.sh``) walks a run to
+The harness trainer (``docker/test/fake_trainer.py``) walks a run to
 ``finished`` and writes a bare manifest. The docs screenshot of a run's
 results needs a per-class table and a confusion matrix, so this fills them in
 on the run's status file and writes the matrix as ``confusion_matrix.png``

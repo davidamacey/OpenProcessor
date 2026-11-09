@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
-from src.routers._errors import server_error
 from src.services.training import job_campaigns, jobs as train_jobs, promote_job
 from src.services.training.job_models import TrainJobStatus
 
@@ -19,14 +18,11 @@ router = APIRouter()
 
 @router.get('/status', response_model=TrainJobStatus | None)
 async def latest_status() -> TrainJobStatus | None:
-    """Return the active or most-recent run's ``status.json``.
+    """Return the running run, else the oldest queued one, else the most recent run.
 
     Returns ``null`` (HTTP 200) if there are no runs yet.
     """
-    try:
-        return await train_jobs.get_active_job()
-    except RuntimeError as exc:
-        raise server_error(500, 'training status unavailable', exc) from exc
+    return await train_jobs.get_active_job()
 
 
 @router.get('/status/{job_id}', response_model=TrainJobStatus)
@@ -34,9 +30,9 @@ async def status_by_id(
     job_id: Annotated[str, PathParam(description='Training job_id')],
     session: DbSessionDep,
 ) -> TrainJobStatus:
-    """Return the ``status.json`` for a specific run.
+    """Return one run's status.
 
-    404 if no spec or status exists for that id.
+    404 if the project has no run with that id.
     """
     try:
         result = await train_jobs.read_status(job_id)
@@ -60,11 +56,7 @@ async def list_runs_endpoint(
 ) -> RunsListResponse:
     """Paginated past-runs list (newest first)."""
     items = await train_jobs.list_runs(limit=limit, offset=offset)
-    # ``list_runs`` is page-bounded; for total we re-query a larger chunk.
-    # The labeler's infinite-scroll only needs ``len(items)`` to know if
-    # there's more — we report that via the ``total`` field.
-    deeper = await train_jobs.list_runs(limit=limit + offset + 1, offset=0)
-    return RunsListResponse(items=items, total=len(deeper))
+    return RunsListResponse(items=items, total=await train_jobs.count_runs())
 
 
 class LogTailResponse(BaseModel):
@@ -94,11 +86,13 @@ class CancelResponse(BaseModel):
 async def cancel_run(
     job_id: Annotated[str, PathParam(description='Training job_id')],
 ) -> CancelResponse:
-    """Drop the cancel sentinel; trainer picks it up between epochs."""
+    """Cancel the run: at once while queued, at the next epoch boundary while running."""
     try:
-        await train_jobs.write_cancel(job_id)
+        found = await train_jobs.cancel_run(job_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not found:
+        raise HTTPException(status_code=404, detail=f'job_id not found: {job_id}')
     return CancelResponse(cancelled=True, job_id=job_id)
 
 

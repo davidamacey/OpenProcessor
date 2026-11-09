@@ -5,7 +5,7 @@ docker/trainer/incumbent_compare.py	2	ratchet: may only go down
 docker/trainer/job_manifest.py	2	ratchet: may only go down
 docker/trainer/job_status.py	3	ratchet: may only go down
 docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
-docker/trainer/trainer.py	3	ratchet: may only go down
+docker/trainer/trainer.py	1	ratchet: may only go down
 docker/trainer/trainer_callbacks.py	3	ratchet: may only go down
 docker/trainer/trainer_eval.py	1	ratchet: may only go down
 docker/trainer/trainer_fit.py	2	ratchet: may only go down
@@ -192,12 +192,10 @@ src/services/projects/mlflow_cleanup.py	1	triage every return-empty handler in P
 src/services/projects/registry.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/projects/stats.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/gpu_arbiter_docker.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/jobs.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/lineage.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
+src/services/training/lineage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/preflight_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/promote_gate.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/promote_run.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/training/trainer_reachability.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/training/triton_reload.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/triton_control.py	5	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/visual_search/batch_documents.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

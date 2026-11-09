@@ -39,28 +39,6 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
         raise
 
 
-def atomic_create_bytes(path: Path, data: bytes) -> None:
-    """Create ``path`` with ``data`` only if it does not exist, whole or not at all.
-
-    The content is written to a private temp file first and then hard-linked to ``path``:
-    ``os.link`` fails with ``FileExistsError`` when ``path`` exists (create-only, unlike
-    ``replace``) and a reader never sees a partly written file (unlike opening ``path``
-    with ``O_EXCL`` and writing into it).
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f'.{path.name}.', suffix='.tmp')
-    try:
-        os.fchmod(fd, 0o644)
-        with os.fdopen(fd, 'wb') as f:
-            f.write(data)
-            f.flush()
-            os.fsync(f.fileno())
-        os.link(tmp_name, path)
-    finally:
-        with contextlib.suppress(OSError):
-            Path(tmp_name).unlink()
-
-
 def atomic_write_json(
     path: Path, obj: Any, *, default: Callable[[Any], Any] | None = str, **dumps_kwargs: Any
 ) -> None:

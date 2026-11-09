@@ -10,10 +10,7 @@ Two things a run manifest needs to stay reproducible and comparable:
    content respectively, and an export written before this wave lacks them
    in its manifest -- so they are computed from disk when missing, meaning
    every *new* run records them even against an old export.
-2. **Which code built the images that ran it** (:func:`stamp_code_versions`)
-   -- the API's own build sha, plus the trainer container's image id and
-   baked-in revision label, read over the docker socket when one is
-   configured and reachable.
+2. **Which API build submitted it** (:func:`api_sha`).
 
 Both are best-effort: a failure anywhere here must never block a training
 submission, so every failure path returns ``None`` fields rather than
@@ -27,10 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.config import get_gpu_arbiter_config
 from src.core.logging import get_logger
 from src.services.curation.export_support import _code_sha, frozen_test_sha_of, label_content_sha
-from src.services.training.gpu_arbiter_docker import _docker_client
 
 
 logger = get_logger(__name__)
@@ -84,43 +79,15 @@ def read_export_identity(export_dir: str | Path) -> ExportIdentity:
     )
 
 
-def stamp_code_versions() -> dict[str, str | None]:
-    """Best-effort code provenance stamped at submit time.
+def api_sha() -> str | None:
+    """This API process's build identity; ``None`` when it cannot be determined.
 
-    ``api_sha`` is this API process's own build identity (``_code_sha()``,
-    ``'unknown'`` mapped to ``None`` since "we couldn't determine it" should
-    read as absent, not as the literal string ``'unknown'`` in every run's
-    lineage). ``trainer_image_id`` / ``trainer_image_revision`` come from
-    the docker socket, when :class:`~src.config.gpu_arbiter.GpuArbiterConfig`
-    names a trainer container and the socket is reachable -- any failure
-    (no socket, container not running, unconfigured) logs at info and
-    leaves both ``None`` rather than raising.
+    ``_code_sha()`` answers ``'unknown'`` for "could not tell", which would read as a real value
+    in every run's lineage, so it maps to absent. The trainer stamps its own image revision from
+    its environment when it writes the manifest.
     """
-    api_sha = _code_sha()
-    result: dict[str, str | None] = {
-        'api_sha': None if api_sha == 'unknown' else api_sha,
-        'trainer_image_id': None,
-        'trainer_image_revision': None,
-    }
-
-    container_name = get_gpu_arbiter_config().trainer_container
-    if not container_name:
-        return result
-
-    client = _docker_client()
-    if client is None:
-        return result
-
-    try:
-        container = client.containers.get(container_name)
-        image = container.image
-        result['trainer_image_id'] = image.id
-        result['trainer_image_revision'] = (image.labels or {}).get(
-            'org.opencontainers.image.revision'
-        ) or None
-    except Exception as exc:
-        logger.info('lineage_trainer_image_lookup_failed', container=container_name, error=str(exc))
-    return result
+    sha = _code_sha()
+    return None if sha == 'unknown' else sha
 
 
-__all__ = ['ExportIdentity', 'read_export_identity', 'stamp_code_versions']
+__all__ = ['ExportIdentity', 'api_sha', 'read_export_identity']

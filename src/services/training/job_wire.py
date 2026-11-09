@@ -13,26 +13,6 @@ if TYPE_CHECKING:
     from src.services.training.job_models import TrainJobStatus
 
 
-# GET {api_prefix}/train/artifacts/{job_id}/{name} -- exact basenames only
-# (no path traversal is even expressible: no ``/`` is a valid character in
-# any of these). Metrics/plots only -- deliberately excludes Ultralytics'
-# ``train_batch*.jpg``/``val_batch*.jpg`` (actual training/validation
-# images, not aggregate metrics) and ``labels.jpg`` (a dataset-content
-# visualization), any of which could leak imagery a deployment doesn't want
-# served over this route.
-RUN_ARTIFACT_WHITELIST = frozenset(
-    {
-        'confusion_matrix.png',
-        'confusion_matrix_normalized.png',
-        'results.png',
-        'results.csv',
-        'BoxF1_curve.png',
-        'BoxP_curve.png',
-        'BoxPR_curve.png',
-        'BoxR_curve.png',
-    }
-)
-
 _ARTIFACT_MEDIA_TYPES = {
     '.png': 'image/png',
     '.csv': 'text/csv',

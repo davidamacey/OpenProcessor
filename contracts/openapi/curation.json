@@ -33729,17 +33729,6 @@
             "title": "Is Last In Campaign",
             "type": "boolean"
           },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
           "mlflow_experiment": {
             "anyOf": [
               {
@@ -33857,17 +33846,6 @@
             ],
             "title": "Stop When"
           },
-          "submitted_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted At"
-          },
           "submitted_by": {
             "default": "labeler-ui",
             "title": "Submitted By",
@@ -33883,28 +33861,6 @@
               }
             ],
             "title": "Test Label Sha"
-          },
-          "trainer_image_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trainer Image Id"
-          },
-          "trainer_image_revision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Trainer Image Revision"
           }
         },
         "title": "TrainJobSpec",
@@ -33912,7 +33868,7 @@
       },
       "TrainJobStatus": {
         "additionalProperties": true,
-        "description": "``status.json`` shape.\n\nEvery field except ``job_id`` and ``state`` is nullable so the trainer\ncan write partial updates while the run is still spinning up.",
+        "description": "A run's status: its job row joined with its run row (``run_wire.to_status``).\n\nEvery field except ``job_id`` and ``state`` is nullable: a queued run has no epoch yet.",
         "properties": {
           "best_checkpoint_metric": {
             "anyOf": [
@@ -61085,12 +61041,12 @@
             }
           },
           {
-            "description": "Whitelisted artifact filename (see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+            "description": "Whitelisted artifact filename (see src.domain.training_keys.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
             "in": "path",
             "name": "name",
             "required": true,
             "schema": {
-              "description": "Whitelisted artifact filename (see src.services.training.job_wire.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
+              "description": "Whitelisted artifact filename (see src.domain.training_keys.RUN_ARTIFACT_WHITELIST), e.g. confusion_matrix.png",
               "title": "Name",
               "type": "string"
             }
@@ -61171,7 +61127,7 @@
     },
     "/curation/projects/{project}/train/cancel/{job_id}": {
       "post": {
-        "description": "Drop the cancel sentinel; trainer picks it up between epochs.",
+        "description": "Cancel the run: at once while queued, at the next epoch boundary while running.",
         "operationId": "cancel_run_curation_projects__project__train_cancel__job_id__post",
         "parameters": [
           {
@@ -61279,7 +61235,7 @@
     },
     "/curation/projects/{project}/train/gpus": {
       "get": {
-        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.\n\nWhen the trainer's published ``gpu_order`` (see ``read_trainer_gpu_order``)\nis known and non-empty, the option list is intersected with it -- a\ntrainer physically attached to only host GPU 2 must not offer GPU 0 as\nselectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a\nphysical-attachment fact) says otherwise.",
+        "description": "Serve the training GPU picker: values, labels, and stop advisories.\n\nBackend owns these decisions -- the frontend must never hardcode a\ndeployment's GPU topology. Unrestricted installs (no\n``OP_GPU_ALLOWED_IDS``) get exactly one option: the resolved default.\n\nWhen the trainer's recorded card list (see ``read_trainer_gpu_order``)\nis known and non-empty, the option list is intersected with it -- a\ntrainer physically attached to only host GPU 2 must not offer GPU 0 as\nselectable, even if ``OP_GPU_ALLOWED_IDS`` (a policy allowlist, not a\nphysical-attachment fact) says otherwise.",
         "operationId": "list_train_gpu_options_curation_projects__project__train_gpus_get",
         "parameters": [
           {
@@ -61388,7 +61344,7 @@
     },
     "/curation/projects/{project}/train/manifest/{job_id}": {
       "get": {
-        "description": "Return the run's ``manifest.json`` (lineage envelope).\n\n404 if the manifest doesn't exist yet — older runs that finished\nbefore the manifest writer landed simply lack one.",
+        "description": "Return the run's manifest (lineage envelope).\n\n404 if the manifest doesn't exist yet — older runs that finished\nbefore the manifest writer landed simply lack one.",
         "operationId": "get_manifest_curation_projects__project__train_manifest__job_id__get",
         "parameters": [
           {
@@ -61833,7 +61789,7 @@
     },
     "/curation/projects/{project}/train/start": {
       "post": {
-        "description": "Validate, run preflight, and write ``job.json``.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``; 422 for an unknown augmentation preset and 422\n``empty_val_split`` (empty validation split) even with ``force``. The trainer picks up the file\nout-of-band.",
+        "description": "Validate, run preflight, and queue the run as a ``train`` job.\n\nReturns 422 with the full preflight report if any check is blocking\nand ``force=False``; 422 for an unknown augmentation preset and 422\n``empty_val_split`` (empty validation split) even with ``force``. The trainer consumes the\n``gpu_train`` queue.",
         "operationId": "start_train_curation_projects__project__train_start_post",
         "parameters": [
           {
@@ -61963,7 +61919,7 @@
     },
     "/curation/projects/{project}/train/status": {
       "get": {
-        "description": "Return the active or most-recent run's ``status.json``.\n\nReturns ``null`` (HTTP 200) if there are no runs yet.",
+        "description": "Return the running run, else the oldest queued one, else the most recent run.\n\nReturns ``null`` (HTTP 200) if there are no runs yet.",
         "operationId": "latest_status_curation_projects__project__train_status_get",
         "parameters": [
           {
@@ -62014,7 +61970,7 @@
     },
     "/curation/projects/{project}/train/status/{job_id}": {
       "get": {
-        "description": "Return the ``status.json`` for a specific run.\n\n404 if no spec or status exists for that id.",
+        "description": "Return one run's status.\n\n404 if the project has no run with that id.",
         "operationId": "status_by_id_curation_projects__project__train_status__job_id__get",
         "parameters": [
           {

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from _project_paths import default_train_jobs_dir
+from _train_run_fakes import install_run_fakes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -15,13 +16,13 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
+def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Any]:
     """Point every bake-off / training dir at tmp_path and stub the GPU arbiter."""
     from src.routers.curation import bakeoff
     from src.services.curation import bakeoff_resolve, eval_datasets
     from src.services.training import gpu_arbiter_docker
 
-    dirs = {
+    dirs: dict[str, Any] = {
         'exports': tmp_path / 'exports',
         'external': tmp_path / 'bakeoff_eval',
         'train_jobs_root': tmp_path / 'train_jobs',
@@ -44,6 +45,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> dict[str, Path]:
     monkeypatch.setenv('OP_TRAIN_JOBS_DIR', str(dirs['train_jobs_root']))
     for key in [k for k in __import__('os').environ if k.startswith('OP_BAKEOFF_PROFILE')]:
         monkeypatch.delenv(key)
+    dirs['run_fakes'] = install_run_fakes(monkeypatch)
     eval_datasets.clear_cache()
 
     class _Action:

@@ -46,8 +46,20 @@ albumentations>=2.0,<3
 # bump this only in lockstep with the server image.
 mlflow>=3.17,<4
 
-# GPU telemetry published on status.json's `gpu` block.
+# GPU telemetry published in the run's progress (`gpu` counters).
 pynvml>=11.5
 
 # Structured logs, matching the API's logging style.
 structlog>=24.1
+
+# The job runtime and the database layer (src/tasks/runtime, src/db): the same pins as the api image
+# (requirements.txt). psycopg[c] is built from source in the builder stage (libpq-dev) and runs on
+# libpq5.
+pydantic==2.14.3
+pydantic-settings==2.16.2
+SQLAlchemy[asyncio]==2.1.8
+psycopg[c]==3.3.8
+celery[redis]==5.7.0
+kombu==5.7.0
+billiard==4.3.2
+redis==8.1.0

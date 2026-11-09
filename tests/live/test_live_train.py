@@ -1,15 +1,14 @@
 """Live cohort-(d) scenarios: the training control surface.
 
-The API's entire protocol with a trainer is a shared-volume file protocol
-(``src/services/training/jobs.py``). These tests drive it against the fake
-trainer in ``docker/test/fake_trainer.sh`` and assert on the actual files
-that appear in the shared jobs directory.
+A run is a ``train`` job on the ``gpu_train`` queue (``src/services/training/jobs.py``). These
+tests drive it against the fake trainer in ``docker/test/fake_trainer.py`` (a real queue consumer
+with a fake fit) and assert through the API only.
 
 Two safety properties are asserted explicitly here, because they are the
 reason this harness can run on a machine full of other people's
 containers:
 
-* ``POST /train/preflight`` must be side-effect free — no job file at all.
+* ``POST /train/preflight`` must be side-effect free — it queues no run.
 * ``POST /train/start`` must not stop or start any container. The GPU
   arbiter is a no-op in this repo and the harness never mounts the docker
   socket; a ``docker ps`` snapshot taken either side of the call proves it.
@@ -17,32 +16,17 @@ containers:
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
 
-from .conftest import JOBS_DIR, docker_ps_snapshot, wait_for_state, wait_until
+from .conftest import docker_ps_snapshot, wait_for_state
 
 
 pytestmark = pytest.mark.live
 
 # Container-side path of the dataset the API hands the trainer.
 CONTAINER_EXPORT_CURRENT = '/verify-data/projects/default/exports/current'
-
-
-# The API and the trainer exchange a project's runs in its own directory.
-PROJECT_JOBS_DIR = JOBS_DIR / 'projects' / 'default'
-
-
-def _job_files(job_id: str) -> dict[str, Any]:
-    return {
-        'job': PROJECT_JOBS_DIR / f'{job_id}.job.json',
-        'status': PROJECT_JOBS_DIR / f'{job_id}.status.json',
-        'cancel': PROJECT_JOBS_DIR / f'{job_id}.cancel',
-        'log': PROJECT_JOBS_DIR / f'{job_id}.run.log',
-        'manifest': PROJECT_JOBS_DIR / f'{job_id}.manifest.json',
-    }
 
 
 @pytest.fixture(scope='module')
@@ -62,8 +46,14 @@ def _spec(**overrides: Any) -> dict[str, Any]:
     return spec
 
 
-def test_preflight_reports_checks_and_writes_no_job_file(api_client: Any) -> None:
-    before = sorted(p.name for p in PROJECT_JOBS_DIR.glob('*.job.json'))
+def _run_ids(api_client: Any) -> set[str]:
+    runs = api_client.get('/train/runs', params={'limit': 500})
+    assert runs.status_code == 200, runs.text
+    return {item['job_id'] for item in runs.json()['items']}
+
+
+def test_preflight_reports_checks_and_queues_no_run(api_client: Any) -> None:
+    before = _run_ids(api_client)
 
     resp = api_client.post('/train/preflight', json=_spec())
     assert resp.status_code == 200, resp.text
@@ -72,11 +62,10 @@ def test_preflight_reports_checks_and_writes_no_job_file(api_client: Any) -> Non
     assert report['checks'], report
     assert {c['severity'] for c in report['checks']} <= {'ok', 'warn', 'block', 'unknown'}
 
-    after = sorted(p.name for p in PROJECT_JOBS_DIR.glob('*.job.json'))
-    assert after == before, 'preflight must be side-effect free'
+    assert _run_ids(api_client) == before, 'preflight must be side-effect free'
 
 
-def test_start_writes_a_job_file_and_stops_no_container(
+def test_start_queues_a_run_and_stops_no_container(
     api_client: Any, run_state: dict[str, Any]
 ) -> None:
     containers_before = docker_ps_snapshot()
@@ -92,17 +81,12 @@ def test_start_writes_a_job_file_and_stops_no_container(
         'arbiter must be a no-op and the docker socket is not mounted'
     )
 
-    paths = _job_files(job_id)
-    job_file = wait_until(lambda: paths['job'].is_file() and paths['job'], timeout=30)
-    assert job_file, f'no {job_id}.job.json appeared in {PROJECT_JOBS_DIR}'
-    payload = json.loads(paths['job'].read_text())
-    assert payload['job_id'] == job_id
-    assert payload['dataset_export_dir'] == CONTAINER_EXPORT_CURRENT
-    assert payload['model_size'] == 'n'
-    # Lineage the API pins at submit time so a later class rename cannot
-    # silently relabel a promoted model.
-    assert payload['registry_sha']
-    assert payload['registry_snapshot_path']
+    status = api_client.get(f'/train/status/{job_id}')
+    assert status.status_code == 200, status.text
+    assert status.json()['job_id'] == job_id
+    job = api_client.get(f'/jobs/{job_id}')
+    assert job.status_code == 200, job.text
+    assert job.json()['kind'] == 'train'
 
     run_state['job_id'] = job_id
 
@@ -112,7 +96,6 @@ def test_fake_trainer_drives_the_run_to_finished(
 ) -> None:
     job_id = run_state.get('job_id')
     assert job_id, 'the start scenario must run first'
-    paths = _job_files(job_id)
 
     state = wait_for_state(
         lambda: api_client.get(f'/train/status/{job_id}').json(),
@@ -126,9 +109,6 @@ def test_fake_trainer_drives_the_run_to_finished(
     # The trainer's own best.pt row is served as-is: the (test-split) eval
     # block is never presented as best_checkpoint_metric.
     assert state['best_checkpoint_metric'] is None
-
-    assert paths['status'].is_file()
-    assert paths['manifest'].is_file()
 
     latest = api_client.get('/train/status')
     assert latest.status_code == 200, latest.text
@@ -151,16 +131,14 @@ def test_manifest_is_served_for_a_finished_run(api_client: Any, run_state: dict[
     assert resp.json()['job_id'] == job_id
 
 
-def test_cancel_drops_the_sentinel_and_the_trainer_honours_it(api_client: Any) -> None:
+def test_cancel_stops_the_run_at_an_epoch_boundary(api_client: Any) -> None:
     started = api_client.post('/train/start', params={'force': True}, json=_spec(model_size='s'))
     assert started.status_code == 201, started.text
     job_id = started.json()['job_id']
-    paths = _job_files(job_id)
 
     resp = api_client.post(f'/train/cancel/{job_id}')
     assert resp.status_code == 200, resp.text
     assert resp.json() == {'cancelled': True, 'job_id': job_id}
-    assert paths['cancel'].is_file(), 'the cancel sentinel was not written'
 
     state = wait_for_state(
         lambda: api_client.get(f'/train/status/{job_id}').json(),
@@ -171,7 +149,7 @@ def test_cancel_drops_the_sentinel_and_the_trainer_honours_it(api_client: Any) -
 
 
 def test_unknown_job_id_is_a_404(api_client: Any) -> None:
-    resp = api_client.get('/train/status/2026-01-01T00-00-00_nosuchrun')
+    resp = api_client.get('/train/status/00000000-0000-4000-8000-000000000000')
     assert resp.status_code == 404, resp.text
 
 
@@ -191,16 +169,14 @@ def test_campaign_submit_then_cancel_campaign(api_client: Any) -> None:
     assert len(body['job_ids']) == 2
 
     for job_id in body['job_ids']:
-        assert _job_files(job_id)['job'].is_file(), job_id
-        payload = json.loads(_job_files(job_id)['job'].read_text())
-        assert payload['campaign_id'] == campaign_id
+        status = api_client.get(f'/train/status/{job_id}').json()
+        assert status['campaign_id'] == campaign_id
 
     resp = api_client.post(f'/train/cancel_campaign/{campaign_id}')
     assert resp.status_code == 200, resp.text
     assert resp.json()['cancelled'] >= 1, resp.text
     # A run the fake trainer already drove to a terminal state is skipped by
-    # design, so at least one — not necessarily every — sentinel appears.
-    assert any(_job_files(job_id)['cancel'].is_file() for job_id in body['job_ids'])
+    # design, so at least one — not necessarily every — run is cancelled.
 
 
 def test_profiles_and_presets_are_served(api_client: Any) -> None:
