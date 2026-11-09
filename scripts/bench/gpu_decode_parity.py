@@ -43,14 +43,15 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm  # noqa: E402  # import follows the sys.path setup above
+from scripts.bench.detector_capture import decode_row, fused_detections  # noqa: E402  # import follows the sys.path setup above
 from src.config.settings import TritonModelConfig  # noqa: E402  # import follows the sys.path setup above
 
 
 DetRow = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+Dets = tuple[np.ndarray, np.ndarray, np.ndarray]
 ARMS = ('cpu', 'cpu_b1', 'dec', 'gpu')
 DET_MODEL = TritonModelConfig.YOLO_MODEL
 PE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
-DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
 
 
 class Engines:
@@ -68,13 +69,11 @@ class Engines:
         )
         return [res.as_numpy(o) for o in outputs]
 
-    def detect(self, chws: list[np.ndarray]) -> list[DetRow]:
-        rows: list[DetRow] = []
+    def detect(self, chws: list[np.ndarray]) -> list[Dets]:
+        rows: list[Dets] = []
         for i in range(0, len(chws), 16):
-            outs = self._infer(DET_MODEL, np.stack(chws[i : i + 16]), DET_OUTPUTS)
-            rows.extend(
-                (outs[0][j], outs[1][j], outs[2][j], outs[3][j]) for j in range(len(outs[0]))
-            )
+            (fused,) = self._infer(DET_MODEL, np.stack(chws[i : i + 16]), ('output0',))
+            rows.extend(fused_detections(fused[j]) for j in range(len(fused)))
         return rows
 
     def embed(self, squares_hwc: list[np.ndarray]) -> np.ndarray:
@@ -120,12 +119,10 @@ def _gpu_decode(data: bytes) -> Any:
 
 
 def _dets(
-    row: DetRow,
+    row: Dets,
     scale: float,
     pad: tuple[float, float],
 ) -> list[list[float]]:
-    from scripts.bench.detector_capture import decode_row
-
     return decode_row(*row, scale, pad)
 
 

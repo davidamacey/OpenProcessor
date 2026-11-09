@@ -213,7 +213,7 @@ def resolve_incumbent_model_name(http_url: str = TRITON_HTTP_URL) -> str | None:
         resp = requests.post(f'{http_url}/v2/repository/index', timeout=5)
         resp.raise_for_status()
         loaded = {entry.get('name') for entry in resp.json() if entry.get('state') == 'READY'}
-    except Exception as exc:  # any transport failure means "no incumbent"
+    except (requests.RequestException, ValueError) as exc:  # a failed probe means "no incumbent"
         log.warning('compare: triton repository probe failed: %s', exc)
         return None
     for cand in candidates:
@@ -294,8 +294,8 @@ def run_incumbent_inference(
     Returns per-image detections as ``[(x1, y1, x2, y2, score, class_id), ...]``
     in the *original* image's pixel space. Uses Triton's HTTP v2 ``infer``
     endpoint with a JSON envelope so the trainer image doesn't need
-    ``tritonclient``. Assumes the end-to-end NMS output signature
-    (``num_dets``/``det_boxes``/``det_scores``/``det_classes``) this repo's
+    ``tritonclient``. Reads the fused ``output0`` tensor (``[1, 300, 6]`` rows
+    ``x1, y1, x2, y2, score, class`` in letterbox pixels, zero-padded) this repo's
     promote path emits.
     """
     try:
@@ -338,37 +338,31 @@ def run_incumbent_inference(
                         'data': chw.flatten().tolist(),
                     }
                 ],
-                'outputs': [
-                    {'name': 'num_dets'},
-                    {'name': 'det_boxes'},
-                    {'name': 'det_scores'},
-                    {'name': 'det_classes'},
-                ],
+                'outputs': [{'name': 'output0'}],
             }
             resp = requests.post(url, json=payload, timeout=30)
             resp.raise_for_status()
             outputs_by_name = {o['name']: o for o in resp.json().get('outputs', [])}
-            num_dets = int(outputs_by_name['num_dets']['data'][0])
-            boxes_flat = outputs_by_name['det_boxes']['data']
-            scores = outputs_by_name['det_scores']['data']
-            classes = outputs_by_name['det_classes']['data']
-            dets: list[Detection] = []
-            for i in range(num_dets):
-                bx = boxes_flat[i * 4 : (i + 1) * 4]
-                if len(bx) != 4:
-                    continue
-                dets.append(
-                    (
-                        (bx[0] - pad_w) / scale,
-                        (bx[1] - pad_h) / scale,
-                        (bx[2] - pad_w) / scale,
-                        (bx[3] - pad_h) / scale,
-                        float(scores[i]),
-                        int(classes[i]),
-                    )
+            rows = np.asarray(outputs_by_name['output0']['data'], dtype=np.float64).reshape(-1, 6)
+            dets: list[Detection] = [
+                (
+                    (row[0] - pad_w) / scale,
+                    (row[1] - pad_h) / scale,
+                    (row[2] - pad_w) / scale,
+                    (row[3] - pad_h) / scale,
+                    float(row[4]),
+                    int(row[5]),
                 )
+                for row in rows
+                if row[4] > 0.0
+            ]
             out.append(dets)
-        except Exception as exc:  # one bad image must not abort the sweep
+        except (
+            requests.RequestException,
+            KeyError,
+            ValueError,
+            OSError,
+        ) as exc:  # one bad image must not abort the sweep
             log.warning('compare: incumbent infer failed for %s: %s', img_path, exc)
             out.append([])
     return out

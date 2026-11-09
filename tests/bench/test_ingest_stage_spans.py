@@ -102,12 +102,7 @@ def test_detector_request_build_is_timed() -> None:
 
     class _Result:
         def as_numpy(self, name: str) -> np.ndarray:
-            return {
-                'num_dets': np.zeros((1, 1), dtype=np.int32),
-                'det_boxes': np.zeros((1, 1, 4), dtype=np.float32),
-                'det_scores': np.zeros((1, 1), dtype=np.float32),
-                'det_classes': np.zeros((1, 1), dtype=np.float32),
-            }[name]
+            return {'output0': np.zeros((1, 1, 6), dtype=np.float32)}[name]
 
     class _Pool:
         async def get_model_input_datatype(self, _model):

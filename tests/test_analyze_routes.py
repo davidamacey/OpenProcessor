@@ -39,7 +39,6 @@ def _yolo_result(num_dets: int = 3) -> dict[str, Any]:
         'scores': np.array([0.9, 0.1, 0.5], dtype=np.float32)[:num_dets],
         'classes': np.array([0, 1, 2])[:num_dets],
         'orig_shape': (IMG_H, IMG_W),
-        'input_size': 640,
         'image_embedding': np.array([3.0, 4.0]),
     }
 

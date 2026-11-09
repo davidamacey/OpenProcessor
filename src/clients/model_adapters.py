@@ -1,34 +1,36 @@
-"""
-Detection output adapters — serve YOLO11 end2end and YOLO26 side by side.
+"""Detection output adapter: the one fused contract every served detector speaks.
 
-Two detector output contracts exist in the Triton model repository:
+A served detector has exactly one output tensor shaped ``(batch, 300, 6)``: rows of
+``[x1, y1, x2, y2, score, class]`` in letterboxed input pixels, zero-padded past the last
+real detection (every family, YOLO11 through YOLO26, exports to it; see
+:mod:`src.domain.model_families`). The adapter is resolved from **Triton model metadata**
+(output names/shapes), not from the model's name, and a model that does not match fails
+closed: an engine that predates the fused contract has to be exported again.
 
-- **End2End NMS** (YOLO11 exported with the EfficientNMS_TRT plugin):
-  four tensors — ``num_dets [1]``, ``det_boxes [300,4]``,
-  ``det_scores [300]``, ``det_classes [300]``.
-- **Fused NMS-free** (YOLO26 native export, or ultralytics ``nms=True``
-  exports): one tensor shaped ``(batch, max_det, 6)`` of
-  ``[x1, y1, x2, y2, score, class]`` rows, zero-padded past the last
-  real detection.
-
-The adapter for a model is resolved from **Triton model metadata** (output
-names/shapes), not from the model's name — so any conforming engine works
-regardless of naming convention. Both adapters normalize to the same
-result dict consumed by the rest of the pipeline:
+The adapter normalizes to the result dict consumed by the rest of the pipeline:
 ``{'num_dets', 'boxes', 'scores', 'classes', 'box_frame'}`` per image.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
-from src.utils.affine import BoxFrame
+from src.domain.model_families import MAX_DET
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from src.utils.affine import BoxFrame
 
 logger = logging.getLogger(__name__)
 
-END2END_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+#: The tensor a fused detector serves: ``[batch, MAX_DET, 6]`` rows of ``x1, y1, x2, y2, score,
+#: class`` in letterboxed input pixels. The export writes this name into the model config.
+FUSED_OUTPUT = 'output0'
 
 
 class DetectionAdapter(Protocol):
@@ -40,34 +42,6 @@ class DetectionAdapter(Protocol):
     def parse(self, response: Any, batch_size: int) -> list[dict[str, Any]]:
         """Return one ``{'num_dets','boxes','scores','classes','box_frame'}`` per image."""
         ...
-
-
-class End2EndNMSAdapter:
-    """EfficientNMS_TRT contract: num_dets/det_boxes/det_scores/det_classes."""
-
-    requested_outputs: tuple[str, ...] = END2END_OUTPUTS
-    # The export patch sets normalize_boxes=True, so the plugin emits [0,1] boxes.
-    box_frame: BoxFrame = 'normalized'
-
-    def parse(self, response: Any, batch_size: int) -> list[dict[str, Any]]:
-        num_dets_batch = response.as_numpy('num_dets')
-        boxes_batch = response.as_numpy('det_boxes')
-        scores_batch = response.as_numpy('det_scores')
-        classes_batch = response.as_numpy('det_classes')
-
-        results = []
-        for i in range(batch_size):
-            num_dets = int(num_dets_batch[i][0])
-            results.append(
-                {
-                    'num_dets': num_dets,
-                    'boxes': boxes_batch[i][:num_dets],
-                    'scores': scores_batch[i][:num_dets],
-                    'classes': classes_batch[i][:num_dets],
-                    'box_frame': self.box_frame,
-                }
-            )
-        return results
 
 
 class FusedDetAdapter:
@@ -103,6 +77,15 @@ class FusedDetAdapter:
         return results
 
 
+def is_fused_shape(shape: Sequence[int]) -> bool:
+    """Whether a declared output shape is the fused ``[..., MAX_DET, 6]`` detection tensor.
+
+    The batch axis is optional (a model config with ``max_batch_size`` omits it) and ``-1``
+    marks a dynamic dim; the detection rows are always the last two axes.
+    """
+    return [int(d) for d in shape][-2:] == [MAX_DET, 6]
+
+
 def resolve_adapter(metadata: Any) -> DetectionAdapter:
     """Pick the adapter for a model from its Triton metadata.
 
@@ -111,26 +94,19 @@ def resolve_adapter(metadata: Any) -> DetectionAdapter:
             entry in ``metadata.outputs`` exposes ``name`` and ``shape``.
 
     Raises:
-        ValueError: when the output signature matches neither contract.
+        ValueError: ``unsupported_detector_contract`` when the model's outputs are not the
+            single ``[..., 300, 6]`` tensor; the message names the export command.
     """
     outputs = list(metadata.outputs)
-    names = {o.name for o in outputs}
-
-    if set(END2END_OUTPUTS) <= names:
-        logger.info('Detection adapter: End2EndNMS (%s)', sorted(names))
-        return End2EndNMSAdapter()
-
-    if len(outputs) == 1:
+    if len(outputs) == 1 and is_fused_shape(outputs[0].shape):
         out = outputs[0]
-        dims = list(out.shape)
-        # Shape may or may not include the dynamic batch axis (-1) depending
-        # on the model config; the detection row is always the LAST axis.
-        if dims and dims[-1] == 6:
-            logger.info('Detection adapter: FusedDet (output=%s, shape=%s)', out.name, dims)
-            return FusedDetAdapter(out.name)
+        logger.info('Detection adapter: FusedDet (output=%s, shape=%s)', out.name, list(out.shape))
+        return FusedDetAdapter(out.name)
 
+    described = [(o.name, [int(d) for d in o.shape]) for o in outputs]
     raise ValueError(
-        f'Model outputs {sorted(names)} match neither the end2end NMS contract '
-        f'{END2END_OUTPUTS} nor the fused single-tensor (…, 6) contract. '
-        'Is this a detection model?'
+        f'unsupported_detector_contract: model outputs {described} are not the single '
+        f'[..., {MAX_DET}, 6] detection tensor. Export the model again with '
+        '`./openprocessor export` (or POST /models/{model_name}/export) to get the fused '
+        'contract.'
     )

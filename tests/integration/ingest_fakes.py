@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from fastapi.testclient import TestClient
+from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
 
 
@@ -25,6 +26,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     import pytest
+
+
+#: The default primary profile's network input size.
+_NET = 640
 
 
 def jpeg_bytes(seed: int) -> bytes:
@@ -43,8 +48,8 @@ class FakeInferResult:
         return self._outputs[name]
 
 
-class FakeTritonPool:
-    """One detection per image, normalized box [0.1,0.1,0.5,0.5], class 0.
+class FakeTritonPool(GpuDecodeAbsent):
+    """One detection per image, box (0.1, 0.1, 0.5, 0.5) of the network input, class 0.
 
     Replies with one row per *requested* image so the batched ingest path
     (``ingest_batch`` stacks N images into one call) is exercised end to
@@ -61,14 +66,7 @@ class FakeTritonPool:
         batch = int(inputs[0].shape()[0])
         self.batch_sizes.append(batch)
         return FakeInferResult(
-            {
-                'num_dets': np.full((batch, 1), 1, dtype=np.int32),
-                'det_boxes': np.tile(
-                    np.array([[[0.1, 0.1, 0.5, 0.5]]], dtype=np.float32), (batch, 1, 1)
-                ),
-                'det_scores': np.full((batch, 1), 0.95, dtype=np.float32),
-                'det_classes': np.zeros((batch, 1), dtype=np.float32),
-            }
+            {'output0': fused_tensor([(0.1, 0.1, 0.5, 0.5, 0.95, 0)], net=_NET, batch=batch)}
         )
 
 

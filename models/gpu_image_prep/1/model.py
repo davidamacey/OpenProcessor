@@ -69,7 +69,9 @@ from prep_kernels import PrepKernels
 from stage_metrics import StageClock, StageMetrics
 
 
-DET_OUTPUTS = ('num_dets', 'det_boxes', 'det_scores', 'det_classes')
+# The detector's single fused tensor ``[batch, 300, 6]``: ``x1, y1, x2, y2, score, class`` in
+# letterboxed input pixels, zero-padded past the last detection.
+DET_OUTPUT = 'output0'
 MIB = 1024 * 1024
 logger = logging.getLogger('gpu_image_prep')
 
@@ -276,12 +278,13 @@ class TritonPythonModel:
             dst = canvas[0, :, lb.top : lb.top + lb.new_h, lb.left : lb.left + lb.new_w]
             self.kernels.resample_into(im.frame, (0, 0, w, h), (lb.new_w, lb.new_h), dst)
         with clock.stage('detect'):
-            num, boxes, scores, classes = self._bls(self.det_model, canvas, DET_OUTPUTS)
-            im.num = int(num[0][0])
-            im.boxes = boxes[0][: im.num].astype(np.float32).reshape(-1, 4)
-            im.scores = scores[0][: im.num].astype(np.float32)
-            im.classes = classes[0][: im.num].astype(np.int32)
-            im.rects = [crop_rect(undo_letterbox(tuple(b), self.net, lb), w, h) for b in im.boxes]
+            (fused,) = self._bls(self.det_model, canvas, (DET_OUTPUT,))
+            rows = fused[0][fused[0][:, 4] > 0.0]
+            im.num = int(rows.shape[0])
+            im.boxes = rows[:, :4].astype(np.float32)
+            im.scores = rows[:, 4].astype(np.float32)
+            im.classes = rows[:, 5].astype(np.int32)
+            im.rects = [crop_rect(undo_letterbox(tuple(b), lb), w, h) for b in im.boxes]
 
     def _embed(self, im: _Image, clock: StageClock) -> np.ndarray:
         """PE vectors of the whole-frame square and, when asked, of every detection's square."""
@@ -319,7 +322,7 @@ class TritonPythonModel:
     def _blur_sums(self, im: _Image) -> np.ndarray:
         """``[1 + detections, 3]`` (pixels, sum, sum of squares): the frame, then each box."""
         w, h = im.size
-        clamped = [blur_rect(undo_letterbox(tuple(b), self.net, im.lb), w, h) for b in im.boxes]
+        clamped = [blur_rect(undo_letterbox(tuple(b), im.lb), w, h) for b in im.boxes]
         rects = [(0, 0, w, h)] + [r for r in clamped if r is not None]
         sums = iter(cp.asnumpy(self.kernels.lap_sums(im.frame, rects)))
         rows = [(w * h, *next(sums))]

@@ -29,8 +29,8 @@ class TritonModelConfig:
     # Object Detection — default detector for endpoints that don't pass an
     # explicit model_name. Override via YOLO_MODEL env to switch families
     # (e.g. YOLO_MODEL=yolo26_small_trt); the output-format adapter is
-    # resolved per model from Triton metadata, so both YOLO11 end2end and
-    # YOLO26 fused engines work interchangeably.
+    # resolved per model from Triton metadata; every family serves the fused
+    # [300, 6] tensor, so any exported engine works interchangeably.
     YOLO_MODEL = env_str('YOLO_MODEL', 'yolov11_small_trt_end2end')
 
     # Face Detection/Recognition (SCRFD + Umeyama alignment + ArcFace)

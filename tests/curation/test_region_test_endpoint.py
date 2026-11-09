@@ -262,8 +262,8 @@ def test_verify_runs_the_combined_call_and_the_verdicts_decide_the_boxes(stack, 
 
 
 class _DetectorPool:
-    """A Triton pool whose ``wheel_det`` answers the given anchors
-    (``[cx, cy, w, h, conf]`` in the 640 letterbox frame)."""
+    """A Triton pool whose ``wheel_det`` answers the given detections as the fused ``[300, 6]``
+    tensor (``[cx, cy, w, h, conf]`` in the 640 letterbox frame, written as ``xyxy`` rows)."""
 
     def __init__(self, anchors: list[list[float]]) -> None:
         self.anchors = anchors
@@ -273,7 +273,7 @@ class _DetectorPool:
         return 'UINT8'
 
     async def get_model_output_shape(self, model_name: str, output_name: str) -> tuple[int, ...]:  # noqa: ARG002
-        return (-1, 5, -1)
+        return (-1, 300, 6)
 
     async def infer(
         self,
@@ -284,7 +284,9 @@ class _DetectorPool:
         import numpy as np
 
         self.calls.append(model_name)
-        raw = np.array([self.anchors], dtype=np.float32).transpose(0, 2, 1)
+        raw = np.zeros((1, 300, 6), dtype=np.float32)
+        for i, (cx, cy, w, h, conf) in enumerate(self.anchors):
+            raw[0, i] = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2, conf, 0)
 
         class Result:
             @staticmethod

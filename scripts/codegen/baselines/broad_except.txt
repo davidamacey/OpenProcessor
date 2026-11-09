@@ -1,7 +1,6 @@
 docker/segmenter/sam3_backend.py	1	ratchet: may only go down
 docker/trainer/augment.py	2	ratchet: may only go down
 docker/trainer/campaign.py	2	ratchet: may only go down
-docker/trainer/incumbent_compare.py	2	ratchet: may only go down
 docker/trainer/job_manifest.py	2	ratchet: may only go down
 docker/trainer/job_status.py	3	ratchet: may only go down
 docker/trainer/mlflow_callbacks.py	9	ratchet: may only go down
@@ -20,7 +19,7 @@ export/scrfd_triton.py	1	ratchet: may only go down
 models/gpu_image_prep/1/model.py	2	ratchet: may only go down
 models/ocr_pipeline/1/model.py	1	ratchet: may only go down
 scripts/bench/gpu_decode_bench.py	2	ratchet: may only go down
-scripts/bench/gpu_decode_parity.py	1	ratchet: may only go down
+scripts/bench/gpu_decode_parity.py	1	bench harness boundary: any GPU decoder failure is recorded as a fallback row and the image continues on the CPU frame
 scripts/bench/ingest_write_path.py	1	ratchet: may only go down
 scripts/bench/vectordb/orchestrate.py	1	ratchet: may only go down
 scripts/curation/_vlm_activity.py	1	ratchet: may only go down
@@ -62,7 +61,6 @@ src/clients/triton_pool_core.py	4	triage every return-empty handler in PR 3; rat
 src/app/factory.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/app/lifespan.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/analyze.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/analyze_pipeline.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/_models_vlm.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/config_vocabulary.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/routers/curation/crop_context.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -87,7 +85,6 @@ src/services/visual_search/clustering_persist.py	1	triage every return-empty han
 src/services/config_store/activation_view.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/open_vocab_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/pack_validation.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/config_store/profile_dependency_checks.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/store.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/config_store/store_poll.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/autolabel/embed_stage.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
@@ -118,7 +115,6 @@ src/services/curation/image_serving.py	2	triage every return-empty handler in PR
 src/services/curation/index_bootstrap.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_batch.py	1	triage every return-empty handler in PR 3; ratchet: may only go down
-src/services/curation/ingest_gpu_decode.py	3	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_index.py	4	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_items.py	2	triage every return-empty handler in PR 3; ratchet: may only go down
 src/services/curation/ingest_writer.py	1	triage every return-empty handler in PR 3; ratchet: may only go down

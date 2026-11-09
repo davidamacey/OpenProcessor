@@ -55,10 +55,9 @@ def _client(
 def test_single_and_batch_use_the_model_input_size(monkeypatch: pytest.MonkeyPatch) -> None:
     client, sent, meta_calls = _client(320, monkeypatch)
     img = np.zeros((480, 600, 3), dtype=np.uint8)
-    result = client.infer_yolo_end2end(img, 'm')
+    client.infer_yolo_end2end(img, 'm')
     client.infer_yolo_end2end_batch([img, img], 'm')
     assert sent == [(1, 3, 320, 320), (2, 3, 320, 320)]
-    assert result['input_size'] == 320
     assert meta_calls == ['m']  # cached after the first read
 
 
@@ -99,6 +98,5 @@ def test_the_ingest_clip_path_letterboxes_to_the_detector_size(
         return _Resp()
 
     monkeypatch.setattr(client, '_infer_with_retry', infer)
-    result = client.infer_yolo_clip_cpu(buf.getvalue())
+    client.infer_yolo_clip_cpu(buf.getvalue())
     assert sent[0] == (1, 3, 320, 320)
-    assert result['input_size'] == 320

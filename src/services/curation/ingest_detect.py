@@ -13,8 +13,9 @@ taxonomy or input size is hardcoded.
 
 Two detectors are supported:
 
-* **Primary** — an *end2end* export whose Triton response is already
-  NMS'd (``num_dets`` / ``det_boxes`` / ``det_scores`` / ``det_classes``).
+* **Primary** — a fused export whose single ``output0`` tensor
+  (``[batch, 300, 6]``, NMS already applied in the engine, letterbox pixels) is read through
+  :class:`~src.clients.model_adapters.FusedDetAdapter`. Every family serves it.
 * **Secondary** (optional) — a raw-output ensemble/backbone detector
   whose single ``output0`` tensor needs client-side NMS
   (:func:`~src.services.detection.ensemble_nms.apply_ensemble_nms`).
@@ -35,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.clients.model_adapters import END2END_OUTPUTS
+from src.clients.model_adapters import FUSED_OUTPUT, FusedDetAdapter
 from src.clients.triton_pool_core import images_input
 from src.config.ingest_profiles import model_class_name, proposer_label
 from src.core.logging import get_logger
@@ -61,6 +62,8 @@ if TYPE_CHECKING:
 SECONDARY_IOU_MATCH = 0.3
 
 RAW_OUTPUT = 'output0'
+
+_FUSED = FusedDetAdapter(FUSED_OUTPUT)
 
 logger = get_logger(__name__)
 
@@ -102,17 +105,15 @@ class WholeImageDetector:
         return await run_cpu(images_input, pixels, datatype, nbytes=pixels.nbytes)
 
     # ------------------------------------------------------------------
-    # Primary (end2end) detector
+    # Primary (fused) detector
     # ------------------------------------------------------------------
 
     async def run_primary(self, img: Image.Image) -> list[DetectedItem]:
-        """Run the primary end2end detector over one full image.
+        """Run the primary fused detector over one full image.
 
-        Contract: the model returns already-NMS'd detections as
-        ``num_dets`` / ``det_boxes`` (normalized ``[0, 1]`` of the network
-        input) / ``det_scores`` / ``det_classes`` — the same Ultralytics
-        TensorRT end2end export shape this repo's own ``/detect`` endpoint
-        serves from.
+        Contract: the model returns one ``[300, 6]`` tensor of already-NMS'd rows
+        ``x1, y1, x2, y2, score, class`` in letterboxed network-input pixels, the same tensor
+        this repo's own ``/detect`` endpoint serves from.
         """
         from tritonclient.grpc import InferRequestedOutput
 
@@ -124,16 +125,11 @@ class WholeImageDetector:
             nbytes=_rgb_bytes(img),
         )
         inp = await self._images(self.profile.detector_model, chw)
-        outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
+        outs = [InferRequestedOutput(FUSED_OUTPUT)]
         result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
+        found = _FUSED.parse(result, 1)[0]
         return self.decode_primary_row(
-            result.as_numpy('num_dets')[0],
-            result.as_numpy('det_boxes')[0],
-            result.as_numpy('det_scores')[0],
-            result.as_numpy('det_classes')[0],
-            scale,
-            pad,
-            self.profile.input_size,
+            found['boxes'], found['scores'], found['classes'], scale, pad
         )
 
     async def run_primary_batch(self, imgs: list[Image.Image]) -> list[list[DetectedItem]]:
@@ -149,13 +145,12 @@ class WholeImageDetector:
             return []
         from tritonclient.grpc import InferRequestedOutput
 
-        net_size = self.profile.input_size
         letterboxed = await asyncio.gather(
             *(
                 run_cpu(
                     letterbox_to_square,
                     img,
-                    target=net_size,
+                    target=self.profile.input_size,
                     fill=self.profile.letterbox_fill,
                     nbytes=_rgb_bytes(img),
                 )
@@ -168,44 +163,31 @@ class WholeImageDetector:
         tensors = [chw[0] for chw, _scale, _pad in letterboxed]
         full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
 
-        outs = [InferRequestedOutput(name) for name in END2END_OUTPUTS]
-        # Per-chunk rows are collected individually rather than
-        # concatenated: max_dets can differ between chunks (the end2end
-        # export pads to the largest detection count in the request),
-        # which would make np.concatenate raise.
-        rows: dict[str, list[np.ndarray]] = {name: [] for name in END2END_OUTPUTS}
+        outs = [InferRequestedOutput(FUSED_OUTPUT)]
+        found: list[dict[str, Any]] = []
         step = max(1, self.profile.batch_limit)
         for start in range(0, full_batch.shape[0], step):
             chunk = full_batch[start : start + step]
             inp = await self._images(self.profile.detector_model, chunk)
             result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
-            for name in END2END_OUTPUTS:
-                rows[name].extend(result.as_numpy(name))
+            found.extend(_FUSED.parse(result, chunk.shape[0]))
 
         return [
-            self.decode_primary_row(
-                rows['num_dets'][i],
-                rows['det_boxes'][i],
-                rows['det_scores'][i],
-                rows['det_classes'][i],
-                scales[i],
-                pads[i],
-                net_size,
-            )
-            for i in range(len(imgs))
+            self.decode_primary_row(f['boxes'], f['scores'], f['classes'], scales[i], pads[i])
+            for i, f in enumerate(found)
         ]
 
     def decode_primary_row(
         self,
-        num_dets_row: np.ndarray,
-        boxes_row: np.ndarray,
-        scores_row: np.ndarray,
-        classes_row: np.ndarray,
+        boxes: np.ndarray,
+        scores: np.ndarray,
+        classes: np.ndarray,
         scale: float,
         pad: tuple[float, float],
-        net_size: int,
     ) -> list[DetectedItem]:
-        """Decode one image's end2end detector output row into items.
+        """Decode one image's detections (``boxes`` in letterboxed network-input pixels, one
+        row per real detection, as :class:`~src.clients.model_adapters.FusedDetAdapter`
+        returns them) into items.
 
         A detection below ``profile.confidence_floor`` stays an unlabeled
         proposal: its class fields are left unset but the proposed name
@@ -216,26 +198,13 @@ class WholeImageDetector:
         the active one named like the model's output (never the output index); a model name
         with no such class stays an unlabeled ``{name}_low_conf`` proposal.
         """
-        num_dets = int(num_dets_row[0])
         floor = self.profile.confidence_floor
         by_name = registry_name_index(self.registry) if self.profile.assigns_class else {}
 
         out: list[DetectedItem] = []
-        for box, score, cls in zip(
-            boxes_row[:num_dets],
-            scores_row[:num_dets],
-            classes_row[:num_dets],
-            strict=False,
-        ):
+        for box, score, cls in zip(boxes, scores, classes, strict=True):
             full = undo_letterbox(
-                (
-                    float(box[0]) * net_size,
-                    float(box[1]) * net_size,
-                    float(box[2]) * net_size,
-                    float(box[3]) * net_size,
-                ),
-                scale,
-                pad,
+                (float(box[0]), float(box[1]), float(box[2]), float(box[3])), scale, pad
             )
             cls_id = int(cls)
             conf = float(score)

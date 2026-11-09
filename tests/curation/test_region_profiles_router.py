@@ -134,6 +134,40 @@ def test_full_lifecycle(app_client: TestClient) -> None:
     assert r.status_code == 404
 
 
+def _declare_head(monkeypatch: pytest.MonkeyPatch, dims: list[str]) -> None:
+    from src.services.triton_control import TritonControlService
+
+    async def config(_self: object, _model: str) -> dict[str, object]:
+        return {'output': [{'name': 'output0', 'dims': dims}]}
+
+    monkeypatch.setattr(TritonControlService, 'get_model_config', config)
+
+
+def test_saving_a_profile_on_a_raw_head_model_is_a_422_naming_the_head(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _declare_head(monkeypatch, ['5', '8400'])
+
+    r = app_client.post(PREFIX, json={'name': 'raw_head', 'body': _body()})
+
+    assert r.status_code == 422, r.text
+    (issue,) = r.json()['detail']['report']['errors']
+    assert issue['code'] == 'detector_model_unusable'
+    assert '[5, 8400]' in issue['message']
+    assert 'export' in issue['message']
+    assert app_client.get(f'{PREFIX}/raw_head').status_code == 404
+
+
+def test_saving_a_profile_on_a_fused_head_model_is_created(
+    app_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _declare_head(monkeypatch, ['300', '6'])
+
+    r = app_client.post(PREFIX, json={'name': 'fused_head', 'body': _body()})
+
+    assert r.status_code == 201, r.text
+
+
 def test_activate_then_rollback(app_client: TestClient) -> None:
     app_client.post(PREFIX, json={'name': 'p1', 'body': _body()})
     app_client.post(PREFIX, json={'name': 'p2', 'body': _body()})

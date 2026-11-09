@@ -14,7 +14,10 @@ from _region_profile_fixture import (
 
 from curation.cascade_detect_helpers import _make_jpeg, _make_mock_pool, _make_raw_output
 from src.services.detection.cascade_detect.candidate import RegionCandidate
-from src.services.detection.cascade_detect.region_detector import RegionDetector
+from src.services.detection.cascade_detect.region_detector import (
+    RegionDetector,
+    RegionHeadUnsupportedError,
+)
 from src.services.detection.cascade_detect.sanity import crop_norm_to_source_norm
 
 
@@ -79,7 +82,7 @@ class TestRegionDetectorSingle:
 
     @pytest.mark.asyncio
     async def test_detect_empty_bytes_returns_none(self) -> None:
-        pool = _make_mock_pool(np.zeros((1, 5, 10), dtype=np.float32))
+        pool = _make_mock_pool(np.zeros((1, 300, 6), dtype=np.float32))
         detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         assert await detector.detect(b'') is None
@@ -194,25 +197,41 @@ def test_reference_profile_secondary_shape_groups_empty_by_default() -> None:
     assert REFERENCE_LICENSE_PLATE_PROFILE.secondary_shape_groups == frozenset()
 
 
-class TestDeclaredHeadSelectsDecoder:
+class TestDeclaredHeadIsFusedOnly:
+    @pytest.mark.parametrize('declared', [(-1, 5, -1), (1, 5, 8400), (-1, 6, -1), (-1, 300, 5)])
     @pytest.mark.asyncio
-    async def test_unrecognised_declared_output_yields_nothing(self) -> None:
+    async def test_a_declared_raw_head_fails_closed_naming_the_export_command(
+        self, declared: tuple[int, ...]
+    ) -> None:
         raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
         pool = _make_mock_pool(raw)
-        pool.get_model_output_shape.return_value = (-1, 6, -1)
+        pool.get_model_output_shape.return_value = declared
         detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
-        assert await detector.detect(_make_jpeg()) is None
-        assert await detector.detect_multi(_make_jpeg()) == []
+        for call in (detector.detect, detector.detect_multi):
+            with pytest.raises(RegionHeadUnsupportedError, match='export') as err:
+                await call(_make_jpeg())
+            assert str(list(declared)) in str(err.value)
         pool.infer.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_end2end_declared_output_decodes_xyxy_rows(self) -> None:
+    async def test_a_declared_raw_head_is_not_swallowed_by_the_batch_path(self) -> None:
+        raw = _make_raw_output(cx_norm=0.5, cy_norm=0.5, w_norm=0.1, h_norm=0.05, score=0.85)
+        pool = _make_mock_pool(raw)
+        pool.get_model_output_shape.return_value = (-1, 5, 8400)
+        detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
+
+        with pytest.raises(RegionHeadUnsupportedError):
+            await detector.detect_batch_multi([_make_jpeg(), _make_jpeg()])
+
+    @pytest.mark.parametrize('declared', [(-1, 300, 6), (300, 6)])
+    @pytest.mark.asyncio
+    async def test_the_fused_head_decodes_xyxy_rows(self, declared: tuple[int, ...]) -> None:
         size = NEUTRAL_REGION_PROFILE.input_size
         raw = np.zeros((1, 300, 6), dtype=np.float32)
         raw[0, 0] = (0.25 * size, 0.25 * size, 0.75 * size, 0.75 * size, 0.9, 0)
         pool = _make_mock_pool(raw)
-        pool.get_model_output_shape.return_value = (-1, 300, 6)
+        pool.get_model_output_shape.return_value = declared
         detector = RegionDetector(pool, NEUTRAL_REGION_PROFILE)
 
         got = await detector.detect_multi(_make_jpeg())

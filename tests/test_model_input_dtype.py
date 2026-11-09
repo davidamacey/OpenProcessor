@@ -164,10 +164,6 @@ class _IngestPool:
         self.inputs.extend(inputs)
         n = inputs[0].shape()[0]
         outputs = {
-            'num_dets': np.zeros((n, 1), dtype=np.int32),
-            'det_boxes': np.zeros((n, 3, 4), dtype=np.float32),
-            'det_scores': np.zeros((n, 3), dtype=np.float16),
-            'det_classes': np.zeros((n, 3), dtype=np.int32),
             'output0': np.zeros((n, 10, 6), dtype=np.float32),
         }
         return SimpleNamespace(as_numpy=lambda name: outputs[name])

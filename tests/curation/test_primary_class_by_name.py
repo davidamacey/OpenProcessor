@@ -30,13 +30,11 @@ def labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
 
 def _decode(detector: WholeImageDetector, model_idx: int, score: float = 0.99) -> DetectedItem:
     (item,) = detector.decode_primary_row(
-        np.array([1]),
-        np.array([[0.1, 0.1, 0.5, 0.5]], dtype=np.float32),
+        np.array([[64.0, 64.0, 320.0, 320.0]], dtype=np.float32),
         np.array([score], dtype=np.float32),
         np.array([model_idx], dtype=np.float32),
         1.0,
         (0.0, 0.0),
-        640,
     )
     return item
 
