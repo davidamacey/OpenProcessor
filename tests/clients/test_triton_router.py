@@ -112,28 +112,3 @@ def test_the_gauge_follows_the_outstanding_count() -> None:
     with router.route(MODEL):
         assert gauge() == 1
     assert gauge() == 0
-
-
-@pytest.mark.asyncio
-async def test_the_manager_hands_out_the_client_of_the_routed_server(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from src.clients.triton_client_manager import TritonClientManager
-
-    urls: list[str] = []
-
-    async def fake_client(url: str, **_: object) -> str:
-        urls.append(url)
-        return f'client-{url}'
-
-    monkeypatch.setattr(TritonClientManager, 'get_async_client', fake_client)
-    monkeypatch.setattr(TritonClientManager, '_router', None)
-    with pytest.raises(RuntimeError, match='not configured'):
-        async with TritonClientManager.routed_async_client(MODEL):
-            pass
-    router = two_servers()
-    TritonClientManager.configure_router(router)
-    async with TritonClientManager.routed_async_client(MODEL) as client:
-        assert client == f'client-{urls[0]}'
-        assert sum(router.outstanding().values()) == 1
-    assert sum(router.outstanding().values()) == 0

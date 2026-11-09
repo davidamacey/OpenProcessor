@@ -60,6 +60,15 @@ class TritonRouter:
         router._ready = None
         return router
 
+    def urls(self) -> list[str]:
+        """The gRPC address of every server, in profile order."""
+        return list(self._servers.values())
+
+    @property
+    def follows_reports(self) -> bool:
+        """False for the single default server, which is always eligible and needs no reports."""
+        return self._ready is not None
+
     def update_ready(self, ready: Mapping[str, Iterable[str]]) -> None:
         """Replace the per-server ready models (from ``serving_reports``); unknown servers are ignored."""
         self._ready = {server: frozenset(ready.get(server, ())) for server in self._servers}

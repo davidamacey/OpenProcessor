@@ -60,12 +60,16 @@ async def _start_pools(settings: Settings) -> None:
     )
     logger.info('executor_initialized', workers=threads, type='ThreadPoolExecutor')
 
-    # High-throughput async Triton pool: one gRPC channel is one TCP connection.
+    # High-throughput async Triton pool: one gRPC channel is one TCP connection. The router
+    # follows the active serving profile; with none it is the single configured server.
+    from src.services.serving_router import build_router
+
     AppResources.async_triton_pool = AsyncTritonPool(
         url=settings.triton_url,
         pool_size=channels,
         max_concurrent=inflight,
         verbose=False,
+        router=await build_router(settings.triton_url),
     )
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=channels, max_concurrent=inflight)
@@ -112,8 +116,12 @@ async def _start_background_tasks() -> None:
 
     # Config store poll task: fans out per active project, not `default`.
     from src.services.config_store import startup_bootstrap_config_store_safe
+    from src.services.serving_router import refresh_tick
 
-    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
+    pool = AppResources.async_triton_pool
+    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe(
+        on_tick=refresh_tick(pool.router) if pool is not None else None
+    )
 
 
 async def _start_event_listener() -> None:

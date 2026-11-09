@@ -59,15 +59,22 @@ class WorkerIngest:
         from src.services.curation.ingest_detector import refreshed_ingest_profiles
         from src.services.curation.ingest_policy_store import get_ingest_policy
         from src.services.curation.location_policy_store import get_location_policy
+        from src.services.serving_router import build_router, refresh_ready
 
         if self._pool is None:
+            url = get_settings().triton_url
             self._pool = AsyncTritonPool(
-                url=get_settings().triton_url, pool_size=4, max_concurrent=64, verbose=False
+                url=url,
+                pool_size=4,
+                max_concurrent=64,
+                verbose=False,
+                router=await build_router(url),
             )
             await self._pool.initialize()
             self._executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix='job-ingest-')
             AppResources.async_triton_pool = self._pool
             AppResources.shared_executor = self._executor
+        await refresh_ready(self._pool.router)
         profiles = await refreshed_ingest_profiles()
         if not profiles.primary.detector_model:
             raise RuntimeError(

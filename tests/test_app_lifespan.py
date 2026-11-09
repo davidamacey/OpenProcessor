@@ -17,6 +17,7 @@ from fastapi import FastAPI
 
 from src.app import lifespan as lifespan_module
 from src.app.resources import AppResources
+from src.clients.triton_router import TritonRouter
 
 
 class World:
@@ -40,6 +41,10 @@ def _async_step(world: World, name: str, result: Any = None):
 
 async def _fake_lease_client() -> object:
     return object()
+
+
+async def _single_router(url: str) -> TritonRouter:
+    return TritonRouter.single(url)
 
 
 def _sync_step(world: World, name: str, result: Any = None):
@@ -66,6 +71,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:  # type: ignore[misc]
     class FakePool:
         def __init__(self, **kwargs: Any) -> None:
             w.events.append(f'pool_created:{kwargs["pool_size"]}x{kwargs["max_concurrent"]}')
+            self.router = kwargs['router']
 
         async def initialize(self) -> None:
             w.step('pool_initialize')
@@ -123,6 +129,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:  # type: ignore[misc]
             'startup_bootstrap_config_store_safe',
             _async_step(w, 'config_store_bootstrap'),
         ),
+        ('src.services.serving_router', 'build_router', _single_router),
         ('src.services.events.listener', 'start_listener', _async_step(w, 'event_listener_start')),
         ('src.services.events.listener', 'stop_listener', _async_step(w, 'event_listener_stop')),
         (

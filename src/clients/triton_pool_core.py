@@ -26,6 +26,7 @@ import tritonclient.grpc.aio as grpcclient_aio
 from tritonclient.utils import InferenceServerException
 
 from src.clients.model_residency import ensure_loaded
+from src.clients.triton_router import TritonRouter
 from src.utils.retry import is_retryable_error
 from src.utils.stage_timing import stage_timer
 
@@ -180,6 +181,7 @@ class AsyncTritonPool:
         pool_size: int = 4,
         max_concurrent: int = 64,
         verbose: bool = False,
+        router: TritonRouter | None = None,
     ):
         """
         Initialize the async Triton connection pool.
@@ -189,20 +191,36 @@ class AsyncTritonPool:
             pool_size: Number of gRPC channels to create
             max_concurrent: Maximum concurrent requests (backpressure)
             verbose: Enable verbose Triton client logging
+            router: Picks the server of each call; ``pool_size`` channels are opened to every
+                server it knows. None is the single server at ``url``, as before routing.
         """
         self.url = url
+        self.router = router or TritonRouter.single(url)
         self.pool_size = pool_size
         self.max_concurrent = max_concurrent
         self.verbose = verbose
 
-        self._clients: list[grpcclient_aio.InferenceServerClient] = []
+        self._servers: dict[str, list[grpcclient_aio.InferenceServerClient]] = {}
+        self._indexes: dict[str, int] = {}
         self._semaphore: asyncio.Semaphore | None = None
-        self._index = 0
         self._lock: asyncio.Lock | None = None
         self._initialized = False
         self._stats = PoolStats()
         self._input_datatypes: dict[tuple[str, str], tuple[float, str]] = {}
         self._output_shapes: dict[tuple[str, str], tuple[float, tuple[int, ...]]] = {}
+
+    @property
+    def _clients(self) -> list[grpcclient_aio.InferenceServerClient]:
+        """The channels to the pool's own ``url`` (the default server)."""
+        return self._servers.setdefault(self.url, [])
+
+    @_clients.setter
+    def _clients(self, clients: list[grpcclient_aio.InferenceServerClient]) -> None:
+        self._servers[self.url] = clients
+
+    def _first_server(self) -> grpcclient_aio.InferenceServerClient:
+        """One channel to the first server: liveness, readiness and load go there."""
+        return self._servers[self.router.urls()[0]][0]
 
     async def initialize(self) -> None:
         """
@@ -218,20 +236,23 @@ class AsyncTritonPool:
         self._semaphore = asyncio.Semaphore(self.max_concurrent)
         self._lock = asyncio.Lock()
 
-        for i in range(self.pool_size):
-            # CRITICAL: Different user-agent forces separate TCP connections
-            channel_args = [
-                *GRPC_CHANNEL_OPTIONS,
-                ('grpc.primary_user_agent', f'triton-pool-{i}'),
-            ]
+        for server_url in self.router.urls():
+            self._servers[server_url] = []
+            self._indexes[server_url] = 0
+            for i in range(self.pool_size):
+                # CRITICAL: Different user-agent forces separate TCP connections
+                channel_args = [
+                    *GRPC_CHANNEL_OPTIONS,
+                    ('grpc.primary_user_agent', f'triton-pool-{i}'),
+                ]
 
-            client = grpcclient_aio.InferenceServerClient(
-                url=self.url,
-                verbose=self.verbose,
-                channel_args=channel_args,
-            )
-            self._clients.append(client)
-            self._stats.requests_per_channel[i] = 0
+                client = grpcclient_aio.InferenceServerClient(
+                    url=server_url,
+                    verbose=self.verbose,
+                    channel_args=channel_args,
+                )
+                self._servers[server_url].append(client)
+                self._stats.requests_per_channel[self._channel_key(server_url, i)] = 0
 
         self._initialized = True
         logger.info(
@@ -239,15 +260,24 @@ class AsyncTritonPool:
             f'max_concurrent={self.max_concurrent}, url={self.url}'
         )
 
-    async def _get_client_index(self) -> int:
-        """Round-robin client selection."""
+    def _channel_key(self, server_url: str, index: int) -> int | str:
+        return index if server_url == self.url else f'{server_url}/{index}'
+
+    async def _get_client_index(self, server_url: str | None = None) -> int:
+        """Round-robin client selection among one server's channels."""
         if not self._initialized or self._lock is None:
             msg = 'AsyncTritonPool not initialized - call initialize() first'
             raise RuntimeError(msg)
+        server_url = server_url or self.url
         async with self._lock:
-            idx = self._index
-            self._index = (self._index + 1) % self.pool_size
+            idx = self._indexes.get(server_url, 0)
+            self._indexes[server_url] = (idx + 1) % self.pool_size
             return idx
+
+    async def _next_client(self, model_name: str) -> grpcclient_aio.InferenceServerClient:
+        """A channel to the server the router picks for ``model_name`` (metadata reads)."""
+        with self.router.route(model_name) as route:
+            return self._servers[route.url][await self._get_client_index(route.url)]
 
     async def infer(
         self,
@@ -276,10 +306,25 @@ class AsyncTritonPool:
         if not self._initialized or self._semaphore is None:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
 
-        await ensure_loaded(self._clients[0], model_name)
+        with self.router.route(model_name) as route:
+            return await self._infer_on(
+                route.url, self._semaphore, model_name, inputs, outputs, timeout, retries
+            )
+
+    async def _infer_on(
+        self,
+        server_url: str,
+        semaphore: asyncio.Semaphore,
+        model_name: str,
+        inputs: list,
+        outputs: list,
+        timeout: float,
+        retries: int,
+    ) -> Any:
+        await ensure_loaded(self._servers[server_url][0], model_name)
 
         # Acquire semaphore (backpressure)
-        await self._semaphore.acquire()
+        await semaphore.acquire()
 
         # Track active requests
         self._stats.active_requests += 1
@@ -295,9 +340,9 @@ class AsyncTritonPool:
             for attempt in range(retries + 1):
                 try:
                     # Get client via round-robin
-                    client_idx = await self._get_client_index()
-                    client = self._clients[client_idx]
-                    self._stats.requests_per_channel[client_idx] += 1
+                    client_idx = await self._get_client_index(server_url)
+                    client = self._servers[server_url][client_idx]
+                    self._stats.requests_per_channel[self._channel_key(server_url, client_idx)] += 1
 
                     # Execute inference
                     result = await client.infer(
@@ -332,7 +377,7 @@ class AsyncTritonPool:
 
         finally:
             self._stats.active_requests -= 1
-            self._semaphore.release()
+            semaphore.release()
 
     async def stream_one(self, model_name: str, inputs: list, timeout: float = 120.0) -> Any:
         """One request to a decoupled model (gRPC bidirectional stream), its one final response.
@@ -347,13 +392,14 @@ class AsyncTritonPool:
         async def _requests() -> Any:
             yield {'model_name': model_name, 'inputs': inputs}
 
-        async with self._semaphore:
-            client = self._clients[await self._get_client_index()]
-            responses = client.stream_infer(_requests(), stream_timeout=timeout)
-            async for result, error in responses:
-                if error is not None:
-                    raise error
-                return result
+        with self.router.route(model_name) as route:
+            async with self._semaphore:
+                client = self._servers[route.url][await self._get_client_index(route.url)]
+                responses = client.stream_infer(_requests(), stream_timeout=timeout)
+                async for result, error in responses:
+                    if error is not None:
+                        raise error
+                    return result
         msg = f'{model_name}: stream closed without a response'
         raise RuntimeError(msg)
 
@@ -361,7 +407,7 @@ class AsyncTritonPool:
         """The string ``parameters`` of a model's Triton configuration."""
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        client = self._clients[await self._get_client_index()]
+        client = await self._next_client(model_name)
         await ensure_loaded(client, model_name)
         config = await client.get_model_config(model_name, as_json=True, client_timeout=timeout)
         params = config.get('config', {}).get('parameters', {})
@@ -396,7 +442,7 @@ class AsyncTritonPool:
             return cached[1]
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        client = self._clients[await self._get_client_index()]
+        client = await self._next_client(model_name)
         await ensure_loaded(client, model_name)
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         for tensor in metadata.get('inputs', []):
@@ -420,7 +466,7 @@ class AsyncTritonPool:
             return cached[1]
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        client = self._clients[await self._get_client_index()]
+        client = await self._next_client(model_name)
         await ensure_loaded(client, model_name)
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         for tensor in metadata.get('outputs', []):
@@ -434,7 +480,7 @@ class AsyncTritonPool:
     async def _metadata_names(self, model_name: str, key: str, timeout: float) -> list[str]:
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        client = self._clients[await self._get_client_index()]
+        client = await self._next_client(model_name)
         await ensure_loaded(client, model_name)
         metadata = await client.get_model_metadata(model_name, as_json=True, client_timeout=timeout)
         return [str(t.get('name', '')) for t in metadata.get(key, [])]
@@ -462,7 +508,7 @@ class AsyncTritonPool:
 
         try:
             # Check first client (they all connect to same server)
-            return bool(await self._clients[0].is_server_live())
+            return bool(await self._first_server().is_server_live())
         except (InferenceServerException, OSError) as e:
             logger.error(f'Health check failed: {e}')
             return False
@@ -474,7 +520,7 @@ class AsyncTritonPool:
         if not self._initialized:
             return False
         try:
-            return bool(await self._clients[0].is_model_ready(model_name))
+            return bool(await self._first_server().is_model_ready(model_name))
         except (InferenceServerException, OSError) as e:
             logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
             return False
@@ -483,20 +529,21 @@ class AsyncTritonPool:
         """Ask the server (explicit model control) to load ``model_name``; raises on failure."""
         if not self._initialized:
             raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        await self._clients[0].load_model(model_name)
+        await self._first_server().load_model(model_name)
 
     async def close(self) -> None:
         """Close all client connections."""
         if not self._initialized:
             return
 
-        for i, client in enumerate(self._clients):
-            try:
-                await client.close()
-                logger.debug(f'Closed pool client {i}')
-            except Exception as e:
-                logger.warning(f'Error closing pool client {i}: {e}')
+        for server_url, clients in self._servers.items():
+            for i, client in enumerate(clients):
+                try:
+                    await client.close()
+                    logger.debug(f'Closed pool client {server_url}/{i}')
+                except Exception as e:
+                    logger.warning(f'Error closing pool client {server_url}/{i}: {e}')
 
-        self._clients.clear()
+        self._servers.clear()
         self._initialized = False
         logger.info(f'AsyncTritonPool closed (final stats: {self.get_stats()})')
