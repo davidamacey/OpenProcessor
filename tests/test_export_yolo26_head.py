@@ -1,8 +1,8 @@
 """The YOLO26 export selects the NMS-free head and refuses any other (issue 447).
 
 Documented argument: ``nms=False`` ("selects the NMS-free head when available",
-https://docs.ultralytics.com/modes/export/). The synthetic-graph tests run offline; the
-``families`` test exports the official ``yolo26n.pt`` with the production function.
+https://docs.ultralytics.com/modes/export/). The synthetic-graph tests run offline; the official-weights rows are in
+``tests/export/test_family_matrix.py``.
 """
 
 from __future__ import annotations
@@ -72,27 +72,3 @@ def test_inspect_still_refuses_several_outputs(export_yolo26: ModuleType, tmp_pa
     many = _write_onnx(tmp_path / 'many.onnx', ['batch', 300, 6], outputs=2)
     with pytest.raises(RuntimeError, match='single fused output'):
         export_yolo26.inspect_fused_output(many)
-
-
-@pytest.mark.families
-def test_official_yolo26n_exports_the_nms_free_head(
-    export_yolo26: ModuleType, op_weights, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    from ultralytics import YOLO
-
-    monkeypatch.setattr(export_yolo26, 'EXPORT_DIR', tmp_path)
-    model = YOLO(str(op_weights('yolo26n.pt')))
-    onnx_path = export_yolo26.export_fused_onnx(model, {'triton_name': 'yolo26_t', 'max_batch': 2})
-
-    assert export_yolo26.inspect_fused_output(onnx_path) == ('output0', [300, 6])
-    assert 'TopK' in {n.op_type for n in onnx.load(str(onnx_path)).graph.node}
-
-
-@pytest.mark.families
-def test_a_raw_head_export_is_refused(export_yolo26: ModuleType, op_weights, tmp_path: Path):
-    from ultralytics import YOLO
-
-    model = YOLO(str(op_weights('yolo26n.pt')))
-    raw = Path(model.export(format='onnx', imgsz=640, dynamic=True, device='cpu', nms=None))
-    with pytest.raises(RuntimeError, match='raw one-to-many head'):
-        export_yolo26.inspect_fused_output(raw)
