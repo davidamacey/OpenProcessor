@@ -35,7 +35,9 @@ TASK_FAMILIES = (
     'region_text',
 )
 # The lane that fills a module adds it here; the rest stay empty until their lane lands.
-FILLED_RESEARCH_MODULES = frozenset({'clustering', 'near_dup', 'source_backfill', 'b2_embedding'})
+FILLED_RESEARCH_MODULES = frozenset(
+    {'clustering', 'near_dup', 'near_dup_core', 'source_backfill', 'b2_embedding'}
+)
 RESEARCH_TASK_MODULES = TASK_FAMILIES[-6:]
 RESEARCH_CONFIG_MODULES = (
     'clustering',
