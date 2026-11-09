@@ -153,7 +153,6 @@ tests/bench/test_parity_capture.py	1	suppressions recorded when the ratchet land
 tests/bench/test_run_baseline.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/clustering/_fake_opensearch.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/config_store/test_research_kinds.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/config_store/test_settings_occ.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/conftest.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/activation/test_start_job_omitted_pack_and_ivf_path.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/assist_queue.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
@@ -180,7 +179,7 @@ tests/curation/jobs_a/test_scores_selection_viz_jobs.py	1	suppressions recorded 
 tests/curation/occ_fakes.py	8	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/query_fakes.py	6	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/region_cascade_helpers.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
-tests/curation/reprocess_fixtures.py	5	suppressions recorded when the ratchet landed; fix or justify, then lower
+tests/curation/reprocess_fixtures.py	4	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/segmenter_service/test_segmenter_client_server_contract.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_activation_registers_region_class.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 tests/curation/test_assist_loop_enqueue.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower

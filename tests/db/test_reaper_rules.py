@@ -294,7 +294,8 @@ def test_rule_e_waits_while_the_group_is_busy(env, broker, sync_kinds) -> None:
     assert sql(env, 'SELECT job_id FROM search_projection_tasks WHERE id = %s', task) == [(None,)]
 
 
-def test_rule_e_does_nothing_for_a_kind_nobody_registered(env, broker) -> None:
+def test_rule_e_does_nothing_for_a_kind_nobody_registered(env, broker, monkeypatch) -> None:
+    monkeypatch.delitem(KINDS, 'class_projection_sync')  # the real family registers it
     project = make_project(env)
     task = projection_task(env, project)
     reaper(broker).tick()

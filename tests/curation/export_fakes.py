@@ -85,7 +85,8 @@ FIELDS = RegionFields()
 def generic_service(
     tmp_path: Path, docs: list[dict[str, Any]], names: list[str]
 ) -> GenericYoloExportService:
-    cfg = CurationConfig(export_root=tmp_path / 'exports')
+    # no keep-last prune: it reads the pins (training runs, bake-offs) from PostgreSQL
+    cfg = CurationConfig(export_root=tmp_path / 'exports', export_keep_last=0)
     registry = make_registry(tmp_path / 'registry', names)
     return GenericYoloExportService(FakeOpenSearch(docs), config=cfg, registry=registry)
 
@@ -100,6 +101,7 @@ def single_class_service(
 ) -> SingleClassExportService:
     cfg = CurationConfig(
         export_root=tmp_path / 'exports',
+        export_keep_last=0,  # a prune reads its pins from PostgreSQL
         source_root=source_root or (tmp_path / 'images'),
     )
     return SingleClassExportService(

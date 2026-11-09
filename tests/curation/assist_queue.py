@@ -49,12 +49,20 @@ def assist_queue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[list[threading.Thread]]:
     from _records_world import make_project_row
+    from fixtures.job_rows import seed_default_spaces
 
     from src.config.project_context import bind_project, current_project
     from src.domain import job_timing
+    from src.services.embedding_spaces import resolve
     from src.tasks import jobs_a_support
 
-    project = make_project_row(job_env, f'default-{uuid.uuid4().hex[:8]}')
+    # The bound project's row, under its own slug: the item space is read from the database by
+    # slug, while the in-memory config store keys the activation by the same slug.
+    with psycopg.connect(job_env.conninfo('super'), autocommit=True) as conn:
+        conn.execute('TRUNCATE project_slugs, projects CASCADE')
+    resolve.clear_cache()
+    project = make_project_row(job_env, current_project().record.slug)
+    seed_default_spaces(job_env, project)
     monkeypatch.setattr(current_project().record, 'id', project, raising=False)
     monkeypatch.setattr(job_timing, 'HEARTBEAT_TICK_S', 0.05)
 

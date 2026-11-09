@@ -20,6 +20,7 @@ import copy
 from typing import Any
 
 import pytest
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.clients.curation_opensearch.ensure_overlay_fields import inner_result_window
 from src.clients.curation_opensearch.lifecycle import INDEX_BODIES, curation_index_names
@@ -256,8 +257,7 @@ async def test_an_unreadable_marker_falls_back_to_the_full_bootstrap() -> None:
     cluster = _Cluster()
 
     async def down(**_kw: Any) -> Any:
-        msg = 'connection reset'
-        raise ConnectionError(msg)
+        raise OpenSearchConnectionError('N/A', 'connection reset', OSError('reset'))
 
     cluster.indices.get = down  # type: ignore[method-assign]
 

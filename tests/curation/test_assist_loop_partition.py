@@ -190,6 +190,7 @@ async def test_root_of_names_the_cluster_each_item_is_in_now(
     loop_env: LoopEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     world = _world(monkeypatch)
+    world.serve(loop_env)  # serving stamps every item with its cluster; move one after that
     world.doc('b-truck-0002')['cluster_uid'] = str(uuid.uuid4())
     async with _reader(world, loop_env) as reader:
         got = await reader.root_of(

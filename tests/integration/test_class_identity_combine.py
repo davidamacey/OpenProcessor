@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+from fixtures.job_rows import seed_default_spaces
 from projects.combine.world import World, run_job
 
 from integration.test_class_identity_e2e import (
@@ -73,8 +74,8 @@ async def test_class_identity_holds_through_a_combine(
         p: [r.model_dump(exclude_none=True) for r in rows]
         for p, rows in preview.suggested_mapping.items()
     })  # fmt: skip
-    store, _target = await run_job(world, request)
-    assert store.job.read()['status'] == 'completed'
+    run, _target = await run_job(world, request)
+    assert run.status == 'completed'
 
     names_by_id = {cid: name for name, cid in world.registry_ids('combined').items()}
     assert set(names_by_id.values()) == {'car', 'truck', 'bus'}  # one class per name
@@ -95,9 +96,12 @@ async def test_class_identity_holds_through_a_combine(
             items_index=world.items_index('combined'), images_index=world.images_index('combined')
         ),
     )
+    # The exporter resolves the vector field of the bound project's item space (db tier: the
+    # real registry), so the combined project needs its default spaces and must be bound.
+    seed_default_spaces(pg_registry, world.records['combined'].id)
     with bind_project(world.records['combined']):
         registry = get_class_registry()
-    export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)
+        export_dir, dense_mapping = await step_real_export(h, registry, tmp_path)
     assert_exported_labels_match_fixture_geometry(export_dir, expected)
 
     dense_names = [''] * len(dense_mapping)

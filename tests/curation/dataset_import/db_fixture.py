@@ -10,12 +10,10 @@ from _records_world import world
 @pytest.fixture
 def import_database(request: pytest.FixtureRequest) -> None:
     """The migrated database with the bound project's row and the harness's handle on it."""
-    from fixtures.job_rows import seed_default_spaces
-
     from curation.dataset_import import harness
 
     pg = request.getfixturevalue('pg_env')
-    seed_default_spaces(pg, request.getfixturevalue('world'))
+    request.getfixturevalue('world')  # the bound project's row, with its default spaces
     harness.PG = pg
 
 

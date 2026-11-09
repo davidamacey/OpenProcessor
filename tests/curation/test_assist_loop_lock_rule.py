@@ -12,7 +12,16 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from curation.assist_loop_fakes import BOXES, ITEMS, FakeVlm, World, WorldRoots, drive, make_world
+from curation.assist_loop_fakes import (
+    BOXES,
+    ITEMS,
+    FakeVlm,
+    World,
+    WorldRoots,
+    drive,
+    make_world,
+    run_bound,
+)
 from src.domain.loop_stats import required_sample
 from src.domain.loop_tree import child_sample, root_path
 from src.services.curation.assist_loop.propagate import propagate_node
@@ -66,6 +75,9 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
 def test_no_locked_validated_holdout_or_excluded_item_is_ever_written(
     world: World, loop_env: LoopEnv
 ) -> None:
+    world.serve(
+        loop_env
+    )  # stamps the items with their partition: the snapshot is of the served world
     before = copy.deepcopy(world.os.docs(ITEMS))
     vlm = FakeVlm(world.truth)
 
@@ -148,7 +160,7 @@ def test_an_unlocked_change_after_the_snapshot_is_not_overwritten(
     assert world.doc(target)['class_source'] != 'assist_propagated'
 
 
-def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None:
+def test_a_human_write_landing_between_read_and_write_wins(world: World, loop_env: LoopEnv) -> None:
     """The OCC write re-reads after a conflict and finds the item locked."""
     ids = [f'free-car-{i:04d}' for i in range(10)]
     tokens = {cid: class_state_token(world.doc(cid)) for cid in ids}
@@ -171,15 +183,18 @@ def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None
     )
 
     result = asyncio.run(
-        propagate_node(
-            world.os,
-            WorldRoots(world),
-            root_key=root_path(ROOT),
-            eligible=ids,
-            answers={},
-            tokens=tokens,
-            label=label,
-            job_id=uuid.uuid4(),
+        run_bound(
+            loop_env,
+            propagate_node(
+                world.os,
+                WorldRoots(world),
+                root_key=root_path(ROOT),
+                eligible=ids,
+                answers={},
+                tokens=tokens,
+                label=label,
+                job_id=uuid.uuid4(),
+            ),
         )
     )
 
@@ -190,7 +205,7 @@ def test_a_human_write_landing_between_read_and_write_wins(world: World) -> None
 
 
 def test_propagation_writes_the_machine_kind_with_the_run_in_its_provenance(
-    world: World,
+    world: World, loop_env: LoopEnv
 ) -> None:
     ids = ['suggested_import', 'vlm_labeled', 'free-car-0000']
     tokens = {cid: class_state_token(world.doc(cid)) for cid in ids}
@@ -199,15 +214,18 @@ def test_propagation_writes_the_machine_kind_with_the_run_in_its_provenance(
     )
 
     result = asyncio.run(
-        propagate_node(
-            world.os,
-            WorldRoots(world),
-            root_key=root_path(ROOT),
-            eligible=ids,
-            answers={},
-            tokens=tokens,
-            label=label,
-            job_id=uuid.uuid4(),
+        run_bound(
+            loop_env,
+            propagate_node(
+                world.os,
+                WorldRoots(world),
+                root_key=root_path(ROOT),
+                eligible=ids,
+                answers={},
+                tokens=tokens,
+                label=label,
+                job_id=uuid.uuid4(),
+            ),
         )
     )
 
