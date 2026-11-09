@@ -280,7 +280,7 @@ def analyze_single_image(
     global_embedding, embedding_norm = _global_embedding(yolo_clip_result, include_embedding)
 
     faces = []
-    if faces_result.get('status') != 'error' and faces_result.get('num_faces', 0) > 0:
+    if faces_result.get('num_faces', 0) > 0:
         faces = faces_from_result(faces_result, include_face_embeddings)
 
     return AnalyzeResponse(

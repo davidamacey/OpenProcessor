@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import pytest
 
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.ingest_single import IngestSingleMixin
-
-
-if TYPE_CHECKING:
-    import pytest
+from src.utils.upstream_errors import UpstreamError
 
 
 def _faces(n: int, landmarks: int) -> dict[str, Any]:
@@ -93,17 +92,19 @@ def _inference_service(monkeypatch: pytest.MonkeyPatch, faces: dict[str, Any]) -
     return svc
 
 
-def test_detect_faces_reports_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detect_faces_refuses_the_response_with_the_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     svc = _inference_service(monkeypatch, _faces(2, 1))
-    out = svc.detect_faces(b'x')
-    assert out['status'] == 'error'
-    assert out['error'].startswith('face_landmarks_length_mismatch')
-    assert out['faces'] == []
+    with pytest.raises(UpstreamError) as caught:
+        svc.detect_faces(b'x')
+    assert caught.value.reason.startswith('face_landmarks_length_mismatch')
 
 
-def test_recognize_faces_reports_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_recognize_faces_refuses_the_response_with_the_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     svc = _inference_service(monkeypatch, _faces(2, 1))
-    out = svc.recognize_faces(b'x')
-    assert out['status'] == 'error'
-    assert out['error'].startswith('face_landmarks_length_mismatch')
-    assert out['faces'] == []
+    with pytest.raises(UpstreamError) as caught:
+        svc.recognize_faces(b'x')
+    assert caught.value.reason.startswith('face_landmarks_length_mismatch')

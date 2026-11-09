@@ -272,15 +272,6 @@ def test_single_a_failed_ocr_is_reported_not_hidden(
     assert _post(client, jpeg).json()['ocr_error'] == 'OCR failed'
 
 
-def test_single_a_failed_face_stage_yields_no_faces(
-    client: TestClient, jpeg: bytes, backends: Backends
-) -> None:
-    backends.faces.result = {'status': 'error', 'num_faces': 2, 'faces': _faces_result()['faces']}
-    body = _post(client, jpeg).json()
-    assert body['faces'] == []
-    assert body['num_faces'] == 0
-
-
 def test_single_unknown_image_size_omits_image(
     client: TestClient, jpeg: bytes, backends: Backends
 ) -> None:
