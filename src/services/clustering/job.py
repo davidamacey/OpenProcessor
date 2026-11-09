@@ -41,9 +41,10 @@ def scope_key(target: str, level: str, embedding_field: str) -> str:
 
 
 async def load_profile(
-    session: AsyncSession, project: uuid.UUID, target: str
+    session: AsyncSession, project: uuid.UUID, target: str, embedding_field: str
 ) -> tuple[ClusterProfileBody, tuple[uuid.UUID, int] | None]:
-    """The project's active profile for ``target`` with its (document, revision) pin, else the defaults."""
+    """The project's active profile for ``target`` with its (document, revision) pin, else the
+    defaults on the space ``embedding_field`` names."""
     ref = await config_activations.get_activation(session, project, TARGET_AXES[target])
     if ref is not None and ref.state == 'active' and ref.name is not None:
         doc = await config_repo.get_config(
@@ -55,7 +56,7 @@ async def load_profile(
         )
         if doc is not None:
             return ClusterProfileBody.model_validate(doc.body), (doc.id, doc.revision)
-    return ClusterProfileBody.model_validate(default_profile_body(target)), None
+    return ClusterProfileBody.model_validate(default_profile_body(target, embedding_field)), None
 
 
 async def start_run(
@@ -126,7 +127,7 @@ async def cluster_run(ctx: JobContext) -> dict[str, Any]:
         space = await embedding_space(_SPACE_TARGET[target])
         await ctx.progress(0, None, 'profile')
         async with ctx.session() as session:
-            profile, pin = await load_profile(session, ctx.project_id, target)
+            profile, pin = await load_profile(session, ctx.project_id, target, space.vector_field)
             current = await activation_service.get_activation(
                 session,
                 project=ctx.project_id,

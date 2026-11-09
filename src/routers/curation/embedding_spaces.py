@@ -9,8 +9,7 @@ stable ``{"error": code, "message": ...}`` body.
 from __future__ import annotations
 
 import uuid  # noqa: TC003 - FastAPI resolves the path parameter type
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import Depends, Header, Query
 
@@ -18,8 +17,7 @@ from src.config.curation_accessors import images_index, items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep  # noqa: TC001 - FastAPI resolves the dependency
 from src.core.dependencies import get_curation_opensearch
-from src.core.exceptions import RequestRejectedError
-from src.domain.embedding_spaces import EmbeddingSpaceError, Target
+from src.domain.embedding_spaces import Target
 from src.routers.curation._common import router
 from src.routers.curation._embedding_space_models import (
     EmbeddingBuildRequest,
@@ -34,6 +32,7 @@ from src.routers.curation._embedding_space_models import (
     EmbeddingSpaceStartResponse,
     EmbeddingSpaceView,
 )
+from src.routers.curation._space_refusals import space_refusals
 from src.routers.curation.projects import global_router
 from src.services.embedding_spaces import flip, spaces, start, views
 from src.services.embedding_spaces.capacity import OpenSearchCapacity, SpaceCapacity
@@ -43,9 +42,6 @@ from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIn
 from src.services.jobs.service import rejection
 
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
 IdempotencyKey = Annotated[
     str | None,
     Header(
@@ -54,15 +50,6 @@ IdempotencyKey = Annotated[
 ]
 TargetQuery = Annotated[Target, Query(description='The target of the space (item, box, frame).')]
 REQUESTER = 'api'
-
-
-@asynccontextmanager
-async def _refusals() -> AsyncIterator[None]:
-    """A registry refusal is answered with its own status and stable code."""
-    try:
-        yield
-    except EmbeddingSpaceError as exc:
-        raise RequestRejectedError(exc.status, {'error': exc.code, 'message': exc.detail}) from exc
 
 
 async def _capacity() -> SpaceCapacity:
@@ -153,7 +140,7 @@ async def register_embedding_space(
 ) -> EmbeddingSpaceStartResponse:
     """Register a candidate space and start its build. 409 `embedding_space_exists`, 422
     `embedding_model_unavailable`, 409 `embedding_insufficient_storage` when the data path is short."""
-    async with _refusals():
+    async with space_refusals():
         result = await start.register_and_build(
             session,
             current_project_id(),
@@ -184,7 +171,7 @@ async def build_embedding_space(
 ) -> EmbeddingSpaceStartResponse:
     """Re-start a failed or cancelled build, or backfill documents a ready space lacks. 409
     `job_busy` while another job works on the space."""
-    async with _refusals():
+    async with space_refusals():
         result = await start.build_again(
             session,
             current_project_id(),
@@ -209,7 +196,7 @@ async def promote_embedding_space(
 ) -> EmbeddingPromoteResponse:
     """The fenced flip. 409 `embedding_space_not_ready` or `embedding_evaluation_missing`."""
     project = current_project_id()
-    async with _refusals():
+    async with space_refusals():
         result = await flip.promote(
             session, project, target=target, key=space_key, force=body.force
         )
@@ -233,7 +220,7 @@ async def retire_embedding_space(
     space_key: str, target: TargetQuery, session: DbSessionDep
 ) -> EmbeddingSpaceStartResponse:
     """Retire an optional space and queue its `clear` run. The primary cannot be retired."""
-    async with _refusals():
+    async with space_refusals():
         result = await start.retire_and_clear(
             session, current_project_id(), target=target, key=space_key, requested_by=REQUESTER
         )
@@ -269,7 +256,7 @@ async def cancel_embedding_reindex_run(
     ] = False,
 ) -> EmbeddingRunCancelResponse:
     """Cancel a run. Without `abandon` the space stays `building` (re-startable as a backfill)."""
-    async with _refusals():
+    async with space_refusals():
         done = await start.cancel_run(
             session, current_project_id(), run_id, abandon=abandon, requested_by=REQUESTER
         )

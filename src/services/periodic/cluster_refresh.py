@@ -194,7 +194,7 @@ async def _refresh(project: TickProject, now: float, settle_s: int) -> None:
         return
     space = await embedding_space(Target.ITEM)
     async with async_session_factory()() as session, project_tx(session, project.id):
-        profile, _pin = await load_profile(session, project.id, TARGET)
+        profile, _pin = await load_profile(session, project.id, TARGET, space.vector_field)
     state = await load_refresh_state()
     sched = _clock(state)
     count, unfinished, recent = await _pool_facts(space.vector_field, settle_s)

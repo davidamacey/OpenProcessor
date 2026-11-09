@@ -82,7 +82,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
             w.step('opensearch_close')
 
     class FakeEncoder:
-        text_backend = 'fake'
+        text_model = 'fake'
 
         def __init__(self, triton_pool: Any) -> None:
             w.events.append('pe_encoder_created')
@@ -90,6 +90,9 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
 
         def warm_text_encoder(self) -> None:
             w.step('pe_encoder_warm')
+
+        def prime_text_backend(self) -> None:
+            return None
 
     async def fake_ops_refresh_loop() -> None:
         w.step('ops_metrics_loop')

@@ -123,19 +123,19 @@ async def _start_event_listener() -> None:
 
 
 def _warm_pe_encoder(app: FastAPI) -> None:
-    # Best-effort: warm the PE-Core text encoder for GET /curation/search/text
-    # (ONNX Runtime when OP_PE_TEXT_ONNX_PATH exists, else Triton's
-    # pe_text_encoder if ready, else PyTorch — see src/clients/pe_encoder.py).
-    # Non-fatal if nothing can load — the search endpoint surfaces a 503 in
-    # that case rather than the whole service failing to start.
+    # Best-effort: bind the PE-Core text encoder for GET /curation/search/text to Triton's
+    # pe_text_encoder (src/clients/pe_encoder.py). Non-fatal when it is not ready yet: the
+    # search endpoint retries the probe and answers 503 naming the model until it is.
+    from tritonclient.utils import InferenceServerException
+
     from src.clients.pe_encoder import PEEncoder
 
     app.state.pe_encoder = PEEncoder(triton_pool=AppResources.async_triton_pool)
     try:
         app.state.pe_encoder.warm_text_encoder()
         app.state.pe_encoder.prime_text_backend()
-        logger.info('pe_text_encoder_warmed', backend=app.state.pe_encoder.text_backend)
-    except Exception as exc:
+        logger.info('pe_text_encoder_warmed', model=app.state.pe_encoder.text_model)
+    except (RuntimeError, InferenceServerException) as exc:
         logger.warning('pe_text_encoder_warm_skipped', error=str(exc))
 
 

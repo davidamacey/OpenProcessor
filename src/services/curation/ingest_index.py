@@ -38,6 +38,7 @@ from src.services.detection.geometry import (
     crop_id as _crop_id,
     crop_rect,
 )
+from src.services.embedding_spaces.readers import frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
@@ -337,6 +338,7 @@ async def index_items(
         whole_frame_embedding = await _whole_frame_vector(service, ctx)
         with stage_timer('doc_build'):
             image_doc = build_image_doc(
+                vector_field=await frame_vector_field(),
                 image_id=ctx.image_id,
                 image_path=image_path,
                 source=ctx.source,
@@ -386,6 +388,7 @@ async def index_items(
     else:
         box_vars = [None] * len(items)
     crop_docs: list[dict[str, Any]] = []
+    write_fields = await item_write_fields()
     for idx, item in enumerate(items):
         bn = bnorms[idx]
         cid = cids[idx]
@@ -394,6 +397,8 @@ async def index_items(
 
         with stage_timer('doc_build'):
             doc = build_item_doc(
+                vector_field=write_fields.vector_field,
+                state_field=write_fields.state_field,
                 crop_id=cid,
                 image_id=ctx.image_id,
                 image_path=image_path,

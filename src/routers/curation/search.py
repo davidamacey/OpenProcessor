@@ -17,12 +17,14 @@ from typing import Annotated, Any
 from fastapi import HTTPException, Query, Request, Response
 
 from src.config.env import env_bool
+from src.config.settings import TritonModelConfig
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
+from src.routers.curation._space_refusals import space_refusals
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
@@ -86,6 +88,25 @@ async def search_text(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> Response:
     """Semantic kNN search over the items index's ``pe_embedding`` field.
 
@@ -108,14 +129,13 @@ async def search_text(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     pe_encoder = _get_pe_encoder(request)
-    if pe_encoder is None or not getattr(pe_encoder, 'text_ready', False):
+    if pe_encoder is None or not pe_encoder.ensure_text_ready():
+        model = TritonModelConfig.PE_TEXT_MODEL if pe_encoder is None else pe_encoder.text_model
         raise HTTPException(
             status_code=503,
             detail=(
-                'PE text encoder not ready (still warming, or no backend could load: '
-                'no OP_PE_TEXT_ONNX_PATH file, no ready Triton pe_text_encoder, and '
-                'perception_models/torch or the checkpoint unavailable) — see '
-                'GET /health/pe_text'
+                f"semantic search needs Triton's text model '{model}' and it is not ready: "
+                'install it with ./openprocessor models install and check GET /health/pe_text'
             ),
         )
 
@@ -134,25 +154,28 @@ async def search_text(
             executor = None
 
         try:
-            result = await semantic_search.semantic_text_search(
-                opensearch=opensearch,
-                pe_encoder=pe_encoder,
-                executor=executor,
-                query=q,
-                page=page,
-                page_size=page_size,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                tab=tab,
-                date_from=date_from,
-                date_to=date_to,
-                item_filter=item_filter,
-                min_blur_ratio=min_blur_ratio,
-                hide_near_duplicates=hide_near_duplicates,
-                min_score=min_score,
-                include_test=include_test,
-                target=target,
-            )
-        except HTTPException:
+            async with space_refusals():
+                result = await semantic_search.semantic_text_search(
+                    opensearch=opensearch,
+                    pe_encoder=pe_encoder,
+                    executor=executor,
+                    query=q,
+                    page=page,
+                    page_size=page_size,
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    tab=tab,
+                    date_from=date_from,
+                    date_to=date_to,
+                    item_filter=item_filter,
+                    min_blur_ratio=min_blur_ratio,
+                    hide_near_duplicates=hide_near_duplicates,
+                    min_score=min_score,
+                    include_test=include_test,
+                    target=target,
+                    space_key=space,
+                    fuse=fuse or [],
+                )
+        except (HTTPException, RequestRejectedError):
             raise
         except Exception as exc:
             logger.exception('semantic_search_failed')
@@ -207,6 +230,25 @@ async def search_similar(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> Response:
     """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
 
@@ -227,24 +269,27 @@ async def search_similar(
 
     with bind_search_timer('similar') as timer:
         try:
-            result = await semantic_search.semantic_similar_search(
-                opensearch=opensearch,
-                crop_id=crop_id,
-                box_id=box_id,
-                target=target,
-                exclude_self=exclude_self,
-                page=page,
-                page_size=page_size,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                tab=tab,
-                date_from=date_from,
-                date_to=date_to,
-                item_filter=item_filter,
-                min_blur_ratio=min_blur_ratio,
-                hide_near_duplicates=hide_near_duplicates,
-                min_score=min_score,
-                include_test=include_test,
-            )
+            async with space_refusals():
+                result = await semantic_search.semantic_similar_search(
+                    opensearch=opensearch,
+                    crop_id=crop_id,
+                    box_id=box_id,
+                    target=target,
+                    exclude_self=exclude_self,
+                    page=page,
+                    page_size=page_size,
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    tab=tab,
+                    date_from=date_from,
+                    date_to=date_to,
+                    item_filter=item_filter,
+                    min_blur_ratio=min_blur_ratio,
+                    hide_near_duplicates=hide_near_duplicates,
+                    min_score=min_score,
+                    include_test=include_test,
+                    space_key=space,
+                    fuse=fuse or [],
+                )
         except (HTTPException, RequestRejectedError):
             raise
         except Exception as exc:

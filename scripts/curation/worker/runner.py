@@ -110,7 +110,7 @@ async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
             logger.warning(
                 'region_embed_disabled_model_not_ready',
                 model=PE_IMAGE_MODEL,
-                detail='region_box_embeddings will not be written this run',
+                detail='box vectors will not be written this run',
             )
     return region_embed_pe
 

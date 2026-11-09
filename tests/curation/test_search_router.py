@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -22,6 +23,8 @@ PE_DIM = 1024
 def _fake_pe_encoder(ready: bool = True) -> MagicMock:
     enc = MagicMock()
     enc.text_ready = ready
+    enc.ensure_text_ready = MagicMock(return_value=ready)
+    enc.text_model = 'pe_text_encoder'
     vec = np.zeros((1, PE_DIM), dtype=np.float32)
     vec[0, 0] = 1.0
     enc.encode_text = MagicMock(return_value=vec)
@@ -29,7 +32,7 @@ def _fake_pe_encoder(ready: bool = True) -> MagicMock:
 
 
 def _fake_opensearch(hits: list[dict] | None = None) -> AsyncMock:
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = AsyncMock(
         return_value={'hits': {'hits': hits or [], 'total': {'value': len(hits or [])}}}
     )
@@ -97,12 +100,12 @@ def test_search_text_explicit_off_still_returns_400(
 
 
 def test_search_text_encoder_not_ready_returns_503(app_client: TestClient):
-    app_client.fake_encoder.text_ready = False
+    app_client.fake_encoder.ensure_text_ready.return_value = False
     resp = app_client.get(
         '/curation/projects/default/search/text', params={'q': 'white pickup truck'}
     )
     assert resp.status_code == 503
-    assert 'pe_text' in resp.json()['detail']
+    assert "text model 'pe_text_encoder'" in resp.json()['detail']
 
 
 def test_search_text_happy_path(app_client: TestClient):
@@ -199,6 +202,8 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
         'page': 1,
         'page_size': 30,
         'unembedded_in_scope': 0,
+        'space': 'pe_core_l14_336_v1',
+        'fuse': [],
     }
 
 
@@ -261,7 +266,15 @@ def test_search_similar_happy_path(app_client: TestClient):
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert set(body) == {
+        'items',
+        'total',
+        'page',
+        'page_size',
+        'unembedded_in_scope',
+        'space',
+        'fuse',
+    }
     assert body['items'][0]['semantic_score'] == 0.9
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [_NEIGHBOR], 'total': {'value': 1}}}

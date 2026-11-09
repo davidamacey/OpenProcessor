@@ -58,6 +58,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.config.region_state import RegionStatus  # noqa: E402 - needs the sys.path fix above
 from src.db.engine import run_with_engine  # noqa: E402  # import follows the sys.path setup above
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD  # noqa: E402  # import follows the sys.path setup above
 from src.services.curation.region_class import ensure_region_class  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.guard import make_script_opensearch  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402 - needs the sys.path fix above
@@ -348,7 +349,7 @@ def _build_items(
                     'probe_disagreement': global_index % 11 == 0,
                     'probe_model_version': 'seed-probe-v1',
                     'probe_scored_at': now.isoformat(),
-                    'pe_embedding': _round_vec(vectors[local_idx]),
+                    LEGACY_ITEM_VECTOR_FIELD: _round_vec(vectors[local_idx]),
                     'created_at': (now - timedelta(minutes=global_index)).isoformat(),
                     'updated_at': (now - timedelta(minutes=global_index)).isoformat(),
                 }

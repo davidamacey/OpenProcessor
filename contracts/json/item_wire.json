@@ -4,6 +4,7 @@
       "reason"
     ],
     "search": [
+      "score_space",
       "semantic_score"
     ],
     "training_candidate": [

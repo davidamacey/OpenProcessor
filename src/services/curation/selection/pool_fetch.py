@@ -30,12 +30,11 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-EMBEDDING_FIELD = 'pe_embedding'
 _SCROLL_PAGE = 2000
 
 
 def l2_normalize(x: np.ndarray) -> np.ndarray:
-    """Defensive re-normalization — ``pe_embedding`` is stored unit-norm,
+    """Defensive re-normalization — the stored vector is unit-norm,
     but ``compute_uniqueness``/``compute_outlier_order`` both re-normalize
     before using dot products as cosine similarity, so this mirrors that
     same "be safe" convention rather than trusting storage invariants."""
@@ -51,7 +50,7 @@ async def fetch_pool_embeddings(
     query: dict[str, Any],
     *,
     cap: int,
-    embedding_field: str = EMBEDDING_FIELD,
+    embedding_field: str,
 ) -> tuple[list[str], np.ndarray, bool]:
     """Scroll ``query``'s matches, collecting ``crop_id`` + ``embedding_field``.
 
@@ -101,4 +100,4 @@ async def fetch_pool_embeddings(
     return ids, np.asarray(vecs, dtype=np.float32), False
 
 
-__all__ = ['EMBEDDING_FIELD', 'fetch_pool_embeddings', 'l2_normalize']
+__all__ = ['fetch_pool_embeddings', 'l2_normalize']

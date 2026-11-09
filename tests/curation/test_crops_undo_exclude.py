@@ -63,6 +63,8 @@ pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
 def _ingest_doc(crop_id: str, **item_kw: Any) -> dict[str, Any]:
     item = DetectedItem(bbox_pixel=(10.0, 10.0, 50.0, 50.0), score=0.42, **item_kw)
     return build_item_doc(
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         crop_id=crop_id,
         image_id=f'img-{crop_id}',
         image_path=f'/data/{crop_id}.jpg',

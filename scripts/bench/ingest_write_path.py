@@ -39,10 +39,13 @@ if str(_REPO_ROOT) not in sys.path:
 
 # ruff: noqa: E402
 from scripts.bench.baseline_report import percentile
+from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.suite_probes import cgroup_cpu_s
 from src.config import get_curation_config
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.services.curation.ingest_writer import IngestWriter
-from src.services.curation.semantic_search import _build_filter, build_knn_query
+from src.services.curation.semantic_search import _build_filter
+from src.services.curation.semantic_search_run import build_knn_query
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project
 
@@ -55,7 +58,7 @@ ARMS: dict[str, dict[str, Any]] = {
     'coalesced_bulk500': {'max_docs': 500},
     'coalesced_nolinger': {'linger_s': 0.0},
 }
-VECTORS = ('pe_embedding', 'embedding')
+VECTORS = (LEGACY_ITEM_VECTOR_FIELD, 'embedding')
 
 
 def load_images(client: httpx.Client, url: str, items_idx: str, images_idx: str) -> list[dict]:
@@ -126,7 +129,8 @@ async def run_arm(
     failures = 0
     exact_real = docs_total = 0
     knn_lat: list[float] = []
-    query_vectors = [it['pe_embedding'] for s in sources[:200] for it in s['items'][:1]]
+    query_vectors = [it[LEGACY_ITEM_VECTOR_FIELD] for s in sources[:200] for it in s['items'][:1]]
+    item_space = legacy_item_space()
     flt = _build_filter(
         tab=None,
         cluster_uid=None,
@@ -173,7 +177,16 @@ async def run_arm(
             started = time.perf_counter()
             await client.search(
                 index=cfg.items_index,
-                body={'size': 10, 'query': build_knn_query(vec, k=10, filter_clause=flt)},
+                body={
+                    'size': 10,
+                    'query': build_knn_query(
+                        vec,
+                        vector_space_key=item_space.space_key,
+                        space=item_space,
+                        k=10,
+                        filter_clause=flt,
+                    ),
+                },
             )
             knn_lat.append(time.perf_counter() - started)
             await asyncio.sleep(1 / args.qps)

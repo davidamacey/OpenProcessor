@@ -54,6 +54,10 @@ class ReviewLocateResponse(BaseModel):
 
 class SearchItemDoc(ItemDoc):
     semantic_score: float | None = Field(description='Raw kNN similarity of the item to the query.')
+    score_space: str | None = Field(
+        default=None,
+        description='The space key `semantic_score` was measured in (the first space that found it).',
+    )
     matched_box_id: str | None = Field(
         default=None,
         description='`target=box` only: the box of this item whose vector matched best.',
@@ -74,6 +78,10 @@ class SearchTextResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    space: str = Field(description='The space key searched (the target primary unless named).')
+    fuse: list[str] = Field(
+        default_factory=list, description='The space keys fused in by reciprocal rank fusion.'
+    )
     unembedded_in_scope: int = Field(
         description=(
             'In-scope items the search cannot see because they have no vector: '

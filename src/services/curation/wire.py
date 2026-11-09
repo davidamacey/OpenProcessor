@@ -461,7 +461,7 @@ REVIEW_EXTRA_KEYS = frozenset({'reason'})
 # and ``row_key``, its always-present list-unique key.
 REGION_ROW_EXTRA_KEYS = frozenset({'region_box_id', 'row_key'})
 TRAINING_CANDIDATE_EXTRA_KEYS = REGION_ROW_EXTRA_KEYS | {'selection_reason'}
-SEARCH_EXTRA_KEYS = frozenset({'semantic_score'})
+SEARCH_EXTRA_KEYS = frozenset({'semantic_score', 'score_space'})
 
 
 def region_event_payload(

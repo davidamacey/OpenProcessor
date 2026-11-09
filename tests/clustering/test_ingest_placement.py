@@ -63,6 +63,8 @@ async def test_an_embedded_item_gets_its_cluster_fields_in_the_doc(
     assert item.placement.state == 'assigned'
     assert bare.placement is None
     doc = build_item_doc(
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         crop_id='a',
         image_id='i',
         image_path='p',

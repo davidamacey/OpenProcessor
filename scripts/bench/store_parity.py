@@ -3,7 +3,7 @@
 Two projects ingested from the same images on the same stack, one per engine (for example
 faiss with ``ef_construction`` 512 and Lucene with 128). For each project the script reads the
 stored item vectors, then runs the product's own query builder
-(:func:`~src.services.curation.semantic_search.build_knn_query` with the review-default filter,
+(:func:`~src.services.curation.semantic_search_run.build_knn_query` with the review-default filter,
 and the class and cluster filters a reviewer adds) against the live index for queries drawn
 from the project's items, and compares the engine's top-k with exact cosine top-k computed from
 the same stored vectors. It also reports the overlap of the two engines' top-k lists on the
@@ -32,11 +32,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.parity_metrics import adjusted_rand_index, normalized_mutual_info, purity
-from src.services.curation.semantic_search import _build_filter, build_knn_query
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
+from src.services.curation.semantic_search import _build_filter
+from src.services.curation.semantic_search_run import build_knn_query
 
 
-VECTOR = 'pe_embedding'
+VECTOR = LEGACY_ITEM_VECTOR_FIELD
 SOURCE = ['crop_id', 'image_path', 'bbox_norm', 'detector_class_name', 'cluster_id', VECTOR]
 
 
@@ -99,7 +102,10 @@ def review_default_filter(extra: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def ann_topk(
     client: httpx.Client, url: str, index: str, vec: list[float], flt: list[dict[str, Any]], k: int
 ) -> list[tuple[str, float]]:
-    query = build_knn_query(vec, k=k + 1, filter_clause=flt)
+    space = legacy_item_space()
+    query = build_knn_query(
+        vec, vector_space_key=space.space_key, space=space, k=k + 1, filter_clause=flt
+    )
     body = {'size': k + 1, 'query': query, '_source': ['crop_id']}
     hits = client.post(f'{url}/{index}/_search', json=body).raise_for_status().json()['hits']
     return [(h['_source']['crop_id'], h['_score']) for h in hits['hits']]

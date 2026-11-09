@@ -18,6 +18,7 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._page_models import SearchImageResponse
+from src.routers.curation._space_refusals import space_refusals
 from src.routers.curation.search import _get_pe_encoder, _semantic_search_enabled
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
@@ -68,6 +69,25 @@ async def search_image(
         None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
     ),
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """kNN over the PE vectors using the encoded picture as the query.
 
@@ -95,25 +115,28 @@ async def search_image(
             raise rejection(413, 'upload_too_large', f'picture exceeds {cap} bytes')
 
     try:
-        return await semantic_search_image.semantic_image_search(
-            opensearch=opensearch,
-            pe_encoder=_get_pe_encoder(request),
-            data=data,
-            image_id=image_id,
-            box=semantic_search_image.parse_box(box),
-            page=page,
-            page_size=page_size,
-            target=target,
-            cluster_uid=None if cluster_uid is None else str(cluster_uid),
-            tab=tab,
-            date_from=date_from,
-            date_to=date_to,
-            item_filter=item_filter,
-            min_blur_ratio=min_blur_ratio,
-            hide_near_duplicates=hide_near_duplicates,
-            min_score=min_score,
-            include_test=include_test,
-        )
+        async with space_refusals():
+            return await semantic_search_image.semantic_image_search(
+                opensearch=opensearch,
+                pe_encoder=_get_pe_encoder(request),
+                data=data,
+                image_id=image_id,
+                box=semantic_search_image.parse_box(box),
+                page=page,
+                page_size=page_size,
+                target=target,
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                tab=tab,
+                date_from=date_from,
+                date_to=date_to,
+                item_filter=item_filter,
+                min_blur_ratio=min_blur_ratio,
+                hide_near_duplicates=hide_near_duplicates,
+                min_score=min_score,
+                include_test=include_test,
+                space_key=space,
+                fuse=fuse or [],
+            )
     except (HTTPException, RequestRejectedError):
         raise
     except Exception as exc:

@@ -23,6 +23,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 # ruff: noqa: E402
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.domain.embedding_state import embedded_clause
 
 
@@ -36,8 +37,8 @@ def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
             'size': page,
             'pit': {'id': pit['pit_id'], 'keep_alive': '5m'},
             'sort': [{'_shard_doc': 'asc'}],
-            'query': embedded_clause(),
-            '_source': ['pe_embedding', 'cluster_id'],
+            'query': embedded_clause(LEGACY_ITEM_VECTOR_FIELD),
+            '_source': [LEGACY_ITEM_VECTOR_FIELD, 'cluster_id'],
             'track_total_hits': False,
         }
         try:
@@ -47,7 +48,7 @@ def export(url: str, index: str, page: int = 500) -> dict[str, np.ndarray]:
                     break
                 for h in hits:
                     ids.append(h['_id'])
-                    vecs.append(h['_source']['pe_embedding'])
+                    vecs.append(h['_source'][LEGACY_ITEM_VECTOR_FIELD])
                     cid = h['_source'].get('cluster_id')
                     clusters.append(-1 if cid is None else int(cid))
                 body['search_after'] = hits[-1]['sort']

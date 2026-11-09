@@ -370,9 +370,8 @@ async def health() -> JSONResponse:
 def pe_text_health(request: Request) -> JSONResponse:
     """PE-Core text encoder status (backs ``GET /curation/search/text``).
 
-    200 with the active backend (``onnx`` / ``triton`` / ``torch``) once
-    warmed; 503 while cold or when no backend could load. Local to this
-    process — does not probe Triton.
+    200 once the Triton text model is bound; 503 while cold or when the model was not ready.
+    Local to this process; does not probe Triton.
     """
     encoder = getattr(request.app.state, 'pe_encoder', None)
     if encoder is None:

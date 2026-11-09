@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 
 from src.config.region_fields import get_region_fields
 from src.services.curation import semantic_search
@@ -68,10 +69,11 @@ def test_item_filter_state_uses_the_shared_state_clause() -> None:
 
 @pytest.mark.asyncio
 async def test_semantic_search_reports_items_it_could_not_search() -> None:
-    os_fake = AsyncMock()
+    os_fake = install_msearch(AsyncMock())
     os_fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
     os_fake.count = AsyncMock(return_value={'count': 4})
     encoder = AsyncMock()
+    encoder.text_model = 'pe_text_encoder'
     encoder.encode_text = lambda texts: np.zeros((len(texts), 3), dtype=np.float32)
 
     out = await semantic_search.semantic_text_search(

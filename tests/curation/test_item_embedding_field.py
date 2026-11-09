@@ -24,6 +24,8 @@ def _fresh_unlabeled_doc() -> dict[str, Any]:
         pe_embedding=[0.1] * 8,
     )
     return build_item_doc(
+        vector_field='pe_embedding',
+        state_field='embedding_state',
         crop_id='c1',
         image_id='i1',
         image_path='/data/a.jpg',
@@ -66,4 +68,4 @@ def test_fresh_unlabeled_item_is_in_vlm_worker_cohort() -> None:
 def test_pipeline_vlm_sweep_fetches_the_item_embedding() -> None:
     from src.services.curation import auto_label_run
 
-    assert ITEM_EMBEDDING_FIELD in auto_label_run.VLM_SWEEP_SOURCE_FIELDS
+    assert ITEM_EMBEDDING_FIELD in auto_label_run.vlm_sweep_source_fields(ITEM_EMBEDDING_FIELD)

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from scripts.bench.parity_store import CaptureError
 from scripts.bench.suite_ingest import run_cluster_job
 from scripts.bench.suite_probes import label_batch_and_wait
-from src.config.curation import ITEM_EMBEDDING_FIELD
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 
 
 if TYPE_CHECKING:
@@ -128,7 +128,7 @@ def mget_vectors(
     os_url: str,
     index: str,
     ids: Sequence[str],
-    field: str = ITEM_EMBEDDING_FIELD,
+    field: str = LEGACY_ITEM_VECTOR_FIELD,
 ) -> dict[str, list[float]]:
     """``{doc id: vector}`` read by id from one index; documents without a vector are absent."""
     out: dict[str, list[float]] = {}

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -58,7 +59,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'true')
     monkeypatch.setattr(accessors, '_default_curation_config', None)
 
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = AsyncMock(return_value={'hits': {'hits': [_HIT], 'total': {'value': 1}}})
     fake_os.count = AsyncMock(return_value={'count': 4})
     fake_os.get = AsyncMock(return_value={'found': False})
@@ -97,7 +98,15 @@ def test_happy_path_encodes_once_as_a_crop_and_returns_the_text_shape(client):
     resp = _post(client, _image())
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert set(body) == {
+        'items',
+        'total',
+        'page',
+        'page_size',
+        'unembedded_in_scope',
+        'space',
+        'fuse',
+    }
     assert body['items'][0]['semantic_score'] == 0.9
     assert body['unembedded_in_scope'] == 4
     client.encoder.embed_crops.assert_awaited_once()
