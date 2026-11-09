@@ -237,6 +237,7 @@ Never add a line to hide a new finding; fix it.
 | `check_process_ids.py` | no wave, round or work-package ids, and no history names, in comments, docstrings or file names |
 | `check_cited_paths.py` | a comment or docstring that cites a `docs/`, `scripts/` or similar file cites one that exists |
 | `check_vulture.py` | no unused code; a reviewed false positive goes in `vulture_whitelist.py` with a reason |
+| `check_mypy_tests.py` | `tests/` is type-checked by the mypy hook; test modules that still have errors sit in the `ignore_errors` block of `pyproject.toml` and in `baselines/mypy_tests.txt`, which only shrink. Fix a module, then delete it from both |
 | `check_naming_leaks.py` | no private product or domain names in the tracked tree |
 | ruff `TID251` | `src/` reads the environment only through `src/config/env.py` (`env_str`, `env_int`, `env_float`, `env_bool`, `env_path`); a malformed value raises naming the variable |
 | `noqa-needs-reason` | every `# noqa: CODE` ends with `  # <why>` |

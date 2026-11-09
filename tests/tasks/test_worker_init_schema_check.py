@@ -6,6 +6,7 @@ handlers raise ``SystemExit`` (a ``BaseException``): https://docs.celeryq.dev/en
 
 from __future__ import annotations
 
+import importlib
 import inspect
 
 import pytest
@@ -17,9 +18,10 @@ from src.tasks import app as tasks_app
 
 def _gpu_handlers() -> list:
     # tests/tasks/conftest.py disarms the GPU inventory the app build arms
-    from export import export_tasks
     from scripts.curation.bakeoff import bakeoff_tasks
 
+    # export/ is on mypy_path under its bare module names, so a static `from export import` would be a second name for the same file
+    export_tasks = importlib.import_module('export.export_tasks')
     return [export_tasks._on_worker_init, bakeoff_tasks._on_worker_init]
 
 
