@@ -35,6 +35,9 @@ from src.services.training.preflight_scan import scan_export_labels
 pytestmark = pytest.mark.integration
 
 
+pytest_plugins = ['_records_world']
+
+
 class _FakeOpenSearch:
     def __init__(self, docs: list[dict[str, Any]]) -> None:
         self._docs = docs
@@ -51,11 +54,12 @@ class _FakeOpenSearch:
         return None
 
 
+# the export's retention prune and item space are read from PostgreSQL
 @pytest.mark.db
+@pytest.mark.usefixtures('world')
 @pytest.mark.asyncio
 async def test_include_classes_filter_actually_applies_to_a_real_export(
     tmp_path,
-    pg_registry,  # the export's retention prune reads PostgreSQL
 ):
     reg = InMemoryRegistry()
     car_id = reg.add('car')
