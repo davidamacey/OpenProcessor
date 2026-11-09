@@ -11,7 +11,6 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from src.config.project_context import current_project_id
-from src.db.session import async_session_factory
 from src.services.jobs import service as jobs, status as job_status
 from src.services.jobs.service import rejection
 
@@ -134,12 +133,6 @@ async def _active_id(session: AsyncSession) -> uuid.UUID | None:
         limit=1,
     )
     return uuid.UUID(page.items[0].id) if page.items else None
-
-
-async def is_busy() -> bool:
-    """Whether the bound project has an auto-label job queued, running, paused or cancelling."""
-    async with async_session_factory()() as session:
-        return await _active_id(session) is not None
 
 
 async def cancel(session: AsyncSession, *, requested_by: str) -> bool:

@@ -7,21 +7,37 @@ was accepted. ``extra='forbid'`` everywhere: a misspelt option is a 422, never i
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LoopScope(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    cluster_ids: list[int] | None = Field(
+    cluster_uids: list[str] | None = Field(
         default=None,
-        description='Clusters to work on; null = every candidate cluster of the project.',
+        description=(
+            'Clusters (their `cluster_uid`) of the serving partition to work on; '
+            'null = every cluster of it.'
+        ),
     )
     min_root_size: int = Field(
         default=40, ge=1, description='Smaller clusters are left alone (no root).'
     )
+
+    @field_validator('cluster_uids')
+    @classmethod
+    def _uids_are_uuids(cls, uids: list[str] | None) -> list[str] | None:
+        """Canonical lower-case uuid text, so the stored request matches the index's keywords."""
+        if uids is None:
+            return None
+        try:
+            return [str(uuid.UUID(u)) for u in uids]
+        except ValueError as exc:
+            msg = f'cluster_uids must be cluster uuids: {exc}'
+            raise ValueError(msg) from exc
 
 
 class LoopGate(BaseModel):
@@ -329,7 +345,9 @@ LoopDecision = Literal['pass', 'split', 'review_leaf', 'review_small', 'stale', 
 
 
 class LoopNode(BaseModel):
-    path: str = Field(description='r<cluster_id>, then .<child index> per level.')
+    path: str = Field(
+        description='r<display_no> (the cluster card number), then .<child index> per level.'
+    )
     level: int
     parent: str | None
     n: int = Field(description='Eligible members at the snapshot.')

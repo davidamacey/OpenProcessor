@@ -50,7 +50,7 @@ class LoopRecord:
         token: int,
         snapshots: SnapshotStore,
     ) -> None:
-        self._sessions = sessions
+        self.sessions = sessions
         self.run = run
         self.run_id = run.id
         self.job_id = run.job_id
@@ -63,7 +63,7 @@ class LoopRecord:
         return str(self.run_id)
 
     async def _do[T](self, fn: Callable[[Session], T]) -> T:
-        async with self._sessions() as session:
+        async with self.sessions() as session:
             return await session.run_sync(fn)
 
     async def _fenced[T](self, fn: Callable[[Session, uuid.UUID, int], T]) -> T:

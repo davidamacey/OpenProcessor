@@ -1,55 +1,63 @@
 """Clusters moving under the loop: a node whose members drifted out of its root by more than
 10 % turns ``stale`` and writes nothing; below that, the moved members are skipped. The
-loop's own sampled items moving (the normalizer placing VLM-labeled items in their class
-cluster) is not drift.
+loop's own sampled items are not drift: a class write leaves an item in its cluster.
 """
 
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from curation.assist_loop_fakes import ITEMS, FakeVlm, World, decisions, drive, make_world
-from src.services.curation.assist_loop.partition import ClusterFieldPartition
 
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from curation.assist_loop_fakes import LoopEnv
+    from src.services.curation.assist_loop.partition import (
+        PartitionReader,
+        PartitionScope,
+        RootRef,
+        RootSize,
+    )
 
 pytestmark = [pytest.mark.db, pytest.mark.usefixtures('readable_crops')]
 
-MOVED_TO = 99999
 
+class RetrainingReader:
+    """Just before a node's drift check, a re-projection moves ``share`` of the candidates of
+    the named roots (by display number) to a cluster the pinned partition does not have."""
 
-class RetrainingReader(ClusterFieldPartition):
-    """Just before a node's drift check, a retrain moves ``share`` of the candidates of
-    the named roots elsewhere, and the normalizer moves every VLM-labeled item into its
-    class cluster."""
-
-    def __init__(self, world: World, shares: dict[int, float]) -> None:
-        super().__init__(world.os)  # type: ignore[arg-type]
+    def __init__(self, real: PartitionReader, world: World, shares: dict[int, float]) -> None:
+        self.real = real
         self.world = world
         self.shares = shares
         self.moved: set[str] = set()
 
+    async def pin(self) -> uuid.UUID:
+        return await self.real.pin()
+
+    async def survey(self, scope: PartitionScope) -> list[RootSize]:
+        return await self.real.survey(scope)
+
+    async def snapshots(self, scope: PartitionScope) -> list[RootRef]:
+        return await self.real.snapshots(scope)
+
     async def root_of(self, ids: Sequence[str]) -> dict[str, str]:
         docs = self.world.os.docs(ITEMS)
-        for doc in docs.values():
-            if doc.get('class_source') == 'vlm':
-                doc['cluster_id'] = doc['class_id']
         by_root: dict[int, list[str]] = {}
         for crop_id in sorted(ids):
-            by_root.setdefault(docs[crop_id]['cluster_id'], []).append(crop_id)
+            by_root.setdefault(self.world.number_of[crop_id], []).append(crop_id)
         for root, members in by_root.items():
             share = self.shares.get(root, 0.0)
             for crop_id in members[: int(len(members) * share)]:
-                docs[crop_id]['cluster_id'] = MOVED_TO
+                docs[crop_id]['cluster_uid'] = str(uuid.uuid4())
                 self.moved.add(crop_id)
-        return await super().root_of(ids)
+        return await self.real.root_of(ids)
 
 
 @pytest.fixture
@@ -60,16 +68,21 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
     return w
 
 
-def _run(world: World, loop_env: LoopEnv, reader: RetrainingReader) -> Any:
-    return asyncio.run(drive(world, loop_env, FakeVlm(world.truth), reader=reader, max_depth=0))
+def _run(world: World, loop_env: LoopEnv, shares: dict[int, float]) -> tuple[Any, RetrainingReader]:
+    wrapped: list[RetrainingReader] = []
+
+    def wrap(real: PartitionReader) -> RetrainingReader:
+        wrapped.append(RetrainingReader(real, world, shares))
+        return wrapped[0]
+
+    run = asyncio.run(drive(world, loop_env, FakeVlm(world.truth), wrap_reader=wrap, max_depth=0))
+    return run, wrapped[0]
 
 
 def test_a_node_over_the_drift_limit_turns_stale_and_writes_nothing(
     world: World, loop_env: LoopEnv
 ) -> None:
-    reader = RetrainingReader(world, {10001: 0.2})
-
-    run = _run(world, loop_env, reader)
+    run, _ = _run(world, loop_env, {10001: 0.2})
 
     assert decisions(run.record)['r10001'] == 'stale'
     for crop_id, doc in world.os.docs(ITEMS).items():
@@ -80,9 +93,7 @@ def test_a_node_over_the_drift_limit_turns_stale_and_writes_nothing(
 def test_below_the_limit_the_node_passes_and_moved_members_are_never_written(
     world: World, loop_env: LoopEnv
 ) -> None:
-    reader = RetrainingReader(world, {10002: 0.05})
-
-    run = _run(world, loop_env, reader)
+    run, reader = _run(world, loop_env, {10002: 0.05})
 
     assert decisions(run.record)['r10002'] == 'pass'
     assert reader.moved
@@ -96,12 +107,12 @@ def test_below_the_limit_the_node_passes_and_moved_members_are_never_written(
     assert len(written) > 100
 
 
-def test_the_loops_own_sampled_items_moving_is_not_drift(world: World, loop_env: LoopEnv) -> None:
-    reader = RetrainingReader(world, {})
-
-    run = _run(world, loop_env, reader)
+def test_the_loops_own_sampled_items_are_not_drift(world: World, loop_env: LoopEnv) -> None:
+    run, _ = _run(world, loop_env, {})
 
     assert decisions(run.record) == {'r10001': 'pass', 'r10002': 'pass'}
     sampled = [c for c, d in world.os.docs(ITEMS).items() if d.get('class_source') == 'vlm']
-    assert sampled, 'the VLM-labeled sample was moved to its class cluster'
-    assert all(world.doc(c)['cluster_id'] != 10001 for c in sampled if c.startswith('a-'))
+    assert sampled, 'the VLM labeled a sample'
+    assert all(
+        world.doc(c)['cluster_uid'] == str(world.uids[10001]) for c in sampled if c.startswith('a-')
+    )

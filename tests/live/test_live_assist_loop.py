@@ -32,7 +32,7 @@ pytestmark = pytest.mark.live
 PROJECT = f'looplive{uuid.uuid4().hex[:6]}'
 PREFIX = f'{API_PREFIX}/projects/{PROJECT}'
 ITEMS = f'verify_prj_{PROJECT}__items'
-ROOTS = [10000, 10001, 10002]
+COHORTS = ['cnd10000', 'cnd10001', 'cnd10002']
 TERMINAL = ('completed', 'cancelled', 'failed', 'interrupted', 'paused')
 ITEM_FIELDS = [
     'class_id',
@@ -41,14 +41,16 @@ ITEM_FIELDS = [
     'class_validated',
     'class_detector_version',
     'test_holdout',
-    'cluster_id',
+    'cluster_uid',
+    'cluster_partition_id',
+    'cluster_state',
     'pe_embedding',
 ]
 
 
-def _request(**over: Any) -> dict[str, Any]:
+def _request(loop_project: dict[str, Any], **over: Any) -> dict[str, Any]:
     body: dict[str, Any] = {
-        'scope': {'cluster_ids': ROOTS, 'min_root_size': 15},
+        'scope': {'cluster_uids': loop_project['root_uids'], 'min_root_size': 15},
         'budget': {'max_vlm_crops': 400},
         'recursion': {'max_depth': 1, 'branching': 2, 'min_node_size': 8},
         'seed': 7,
@@ -71,8 +73,53 @@ def _docs(opensearch: Any, query: dict[str, Any], size: int = 500) -> dict[str, 
 
 
 def _roots(opensearch: Any) -> dict[str, dict[str, Any]]:
-    """Every item seeded into the three candidate clusters, wherever a label moved it since."""
+    """Every item seeded into the three candidate cohorts."""
     return _docs(opensearch, {'prefix': {'crop_id': 'cnd1000'}})
+
+
+def _serve_partition(api: Any, opensearch: Any) -> list[str]:
+    """Cluster the project's items, serve the partition and return the uid of the cluster each
+    seeded candidate cohort mostly landed in."""
+    run = api.post(f'{PREFIX}/clusters/runs', json={'target': 'item'})
+    assert run.status_code == 202, run.text
+
+    def ready() -> dict[str, Any] | None:
+        listed = api.get(f'{PREFIX}/clusters/partitions', params={'target': 'item'}).json()
+        found = [p for p in listed['partitions'] if p['status'] in ('ready', 'failed')]
+        return found[0] if found else None
+
+    partition = wait_until(ready, timeout=300)
+    assert partition is not None, 'no partition was recorded'
+    assert partition['status'] == 'ready', partition
+    if not partition['serving']:
+        activated = api.put(
+            f'{PREFIX}/clusters/activation',
+            json={
+                'partition_id': partition['id'],
+                'expected_serving_partition_id': None,
+                'expected_revision': None,
+            },
+        )
+        assert activated.status_code == 202, activated.text
+
+    def projected() -> bool:
+        docs = _docs(opensearch, {'prefix': {'crop_id': 'cnd1000'}})
+        return bool(docs) and all(
+            d.get('cluster_partition_id') == partition['id'] for d in docs.values()
+        )
+
+    assert wait_until(projected, timeout=300), 'the partition was not projected onto the items'
+    uids: list[str] = []
+    for cohort in COHORTS:
+        found = _docs(opensearch, {'prefix': {'crop_id': cohort}})
+        counts: dict[str, int] = {}
+        for doc in found.values():
+            if doc.get('cluster_state') == 'assigned':
+                counts[doc['cluster_uid']] = counts.get(doc['cluster_uid'], 0) + 1
+        assert counts, f'no member of {cohort} was assigned to a cluster'
+        uids.append(max(counts, key=lambda uid: counts[uid]))
+    assert len(set(uids)) == len(COHORTS), uids
+    return uids
 
 
 @pytest.fixture(scope='module')
@@ -110,11 +157,16 @@ def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[
         json={'revision': 1, 'force': True, 'acknowledge_external': True},
     )
     assert active.status_code == 200, active.text
+    root_uids = _serve_partition(api, opensearch)
     classes = api.get(f'{PREFIX}/classes').json()
     person_class = next(c['class_id'] for c in classes['classes'] if c['class_name'] == 'box')
 
-    ids = sorted(_docs(opensearch, {'term': {'cluster_id': 10000}}))
-    assert len(ids) == 30
+    ids = sorted(
+        crop_id
+        for crop_id, doc in _docs(opensearch, {'prefix': {'crop_id': COHORTS[0]}}).items()
+        if doc['cluster_uid'] == root_uids[0]
+    )
+    assert len(ids) >= 15, ids
     humans = ids[:7]
     for crop_id in humans[:4]:
         r = api.put(
@@ -132,15 +184,10 @@ def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[
             json={'class_id': person_class, 'label_source': 'human'},
         )
         assert r.status_code == 200, r.text
-    # A label moves an item to its class cluster. Put the seven back so they are members of
-    # the root (locked members the loop must read past but never write).
-    for crop_id in humans:
-        moved = opensearch.post(f'/{ITEMS}/_update/{crop_id}', json={'doc': {'cluster_id': 10000}})
-        assert moved.status_code == 200, moved.text
     before = _roots(opensearch)
     held = [i for i in humans if before[i].get('test_holdout')]
     assert 1 <= len(held) <= 4, held
-    yield {'humans': humans, 'held': held, 'before': before}
+    yield {'humans': humans, 'held': held, 'before': before, 'root_uids': root_uids}
     deleted = api.delete(f'{API_PREFIX}/projects/{PROJECT}', params={'confirm': PROJECT})
     assert deleted.status_code == 202, deleted.text
     wait_until(
@@ -205,14 +252,15 @@ def _assert_locked_items_untouched(
 def test_a_dry_run_sizes_the_loop_and_writes_nothing(
     api: Any, opensearch: Any, loop_project: dict[str, Any], fake_vlm: Any
 ) -> None:
-    resp = api.post(f'{PREFIX}/assist/loops', json=_request(dry_run=True))
+    resp = api.post(f'{PREFIX}/assist/loops', json=_request(loop_project, dry_run=True))
     assert resp.status_code == 200, resp.text
     state = resp.json()
     assert state['status'] == 'dry_run'
     assert state['loop_id'] is None
     assert state['plan']['roots'] == 3
-    # 30 + 20 + 15 members, minus the seven a person labeled.
-    assert state['plan']['eligible_items'] == 58, state['plan']
+    # The members of the three clusters, minus the seven a person labeled (and what another
+    # cluster of the run took from the cohorts).
+    assert 0 < state['plan']['eligible_items'] <= 58, state['plan']
     assert state['plan']['fits_budget'] is True
     assert api.get(f'{PREFIX}/assist/loops').json() == {'loops': []}
     assert _roots(opensearch) == loop_project['before']
@@ -223,12 +271,12 @@ def test_a_loop_propagates_within_budget_leaves_locks_alone_and_rolls_back(
     api: Any, opensearch: Any, loop_project: dict[str, Any], fake_vlm: Any
 ) -> None:
     fake_vlm.post('/__reset')
-    start = api.post(f'{PREFIX}/assist/loops', json=_request())
+    start = api.post(f'{PREFIX}/assist/loops', json=_request(loop_project))
     assert start.status_code == 200, start.text
     loop_id = start.json()['loop_id']
     assert loop_id
     # One loop per project: a second start names the live one.
-    again = api.post(f'{PREFIX}/assist/loops', json=_request())
+    again = api.post(f'{PREFIX}/assist/loops', json=_request(loop_project))
     assert again.status_code == 409, again.text
 
     state = _wait_terminal(api, loop_id)
@@ -253,9 +301,15 @@ def test_a_loop_propagates_within_budget_leaves_locks_alone_and_rolls_back(
         n['path']: n['decision']
         for n in api.get(f'{PREFIX}/assist/loops/{loop_id}/nodes').json()['nodes']
     }
-    assert summary == {f'r{c}': 'pass' for c in ROOTS}, summary
-    first = api.get(f'{PREFIX}/assist/loops/{loop_id}/nodes/r10000/members').json()['crop_ids']
-    assert set(loop_project['humans']) <= set(first), 'members list every member, locked included'
+    assert len(summary) == 3, summary
+    assert set(summary.values()) == {'pass'}, summary
+    holders = [
+        path
+        for path in summary
+        if set(loop_project['humans'])
+        <= set(api.get(f'{PREFIX}/assist/loops/{loop_id}/nodes/{path}/members').json()['crop_ids'])
+    ]
+    assert len(holders) == 1, 'members list every member, locked included'
 
     # The audit is off, said in the record rather than left blank.
     assert state['pinned']['audit_vlm'] is None
@@ -303,7 +357,7 @@ def test_a_cluster_that_fails_the_gate_is_split_then_left_for_review(
     fake_vlm.post('/__reset')
     fake_vlm.post('/__control', json={'class_cycle': ['box', 'box', 'box', 'envelope']})
     before = _roots(opensearch)
-    start = api.post(f'{PREFIX}/assist/loops', json=_request(seed=11))
+    start = api.post(f'{PREFIX}/assist/loops', json=_request(loop_project, seed=11))
     assert start.status_code == 200, start.text
     loop_id = start.json()['loop_id']
     state = _wait_terminal(api, loop_id)
@@ -315,7 +369,7 @@ def test_a_cluster_that_fails_the_gate_is_split_then_left_for_review(
     assert 'split' in decisions, decisions
     assert decisions & {'review_leaf', 'review_small'}, decisions
     roots = {n['path']: n['decision'] for n in nodes if n['level'] == 0}
-    assert set(roots) == {f'r{c}' for c in ROOTS}
+    assert len(roots) == 3, roots
     assert 'pass' not in roots.values(), roots
     assert state['totals']['clusters_left_for_review'] > 0
     assert state['totals']['items_left_for_review'] > 0
@@ -336,7 +390,7 @@ def test_the_budget_is_a_hard_cap(
     fake_vlm.post('/__reset')
     start = api.post(
         f'{PREFIX}/assist/loops',
-        json=_request(seed=13, budget={'max_vlm_crops': 40}),
+        json=_request(loop_project, seed=13, budget={'max_vlm_crops': 40}),
     )
     assert start.status_code == 200, start.text
     state = _wait_terminal(api, start.json()['loop_id'])

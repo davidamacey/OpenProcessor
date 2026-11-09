@@ -1,8 +1,9 @@
 """Node paths, seeded child sampling and the best-first order of the auto-label
 loop's partition tree: pure, stdlib only.
 
-A path names a node: ``r10042`` is the root cluster 10042, ``r10042.2`` its
-third child, ``r10042.2.0`` that child's first child."""
+A path names a node: ``r12`` is the root cluster with display number 12 in the loop's pinned
+partition, ``r12.2`` its third child, ``r12.2.0`` that child's first child. The display number
+is the one the cluster cards show; it names a root only within one partition, which the run pins."""
 
 from __future__ import annotations
 
@@ -15,8 +16,8 @@ from dataclasses import dataclass
 _PATH = re.compile(r'r(\d+)((?:\.\d+)*)')
 
 
-def root_path(cluster_id: int) -> str:
-    return f'r{cluster_id}'
+def root_path(display_no: int) -> str:
+    return f'r{display_no}'
 
 
 def child_path(parent: str, index: int) -> str:
@@ -28,7 +29,7 @@ def child_path(parent: str, index: int) -> str:
 
 
 def parse_path(path: str) -> tuple[int, tuple[int, ...]]:
-    """``(root cluster id, child indices)``; anything but the grammar is refused."""
+    """``(root display number, child indices)``; anything but the grammar is refused."""
     match = _PATH.fullmatch(path)
     if match is None:
         msg = f'not a node path: {path!r}'

@@ -30,6 +30,7 @@ from src.clients.storage.roots import RootedStore
 from src.config.curation_accessors import base_curation_config
 from src.db import session as db
 from src.db.repos import assist_loop as budget_repo, assist_loop_record as rows
+from src.domain.loop_tree import root_path
 from src.services.curation.assist.slot_write import RunMeta
 from src.services.curation.assist_loop.audit import AuditJudge, Auditor, AuditParams
 from src.services.curation.assist_loop.budget import BudgetLimits, LoopBudget
@@ -43,11 +44,7 @@ from src.services.curation.assist_loop.driver import (
 )
 from src.services.curation.assist_loop.evaluate import VlmAsker
 from src.services.curation.assist_loop.node_step import RunControl
-from src.services.curation.assist_loop.partition import (
-    ClusterFieldPartition,
-    PartitionScope,
-    RootReader,
-)
+from src.services.curation.assist_loop.partition import PartitionReader, PartitionScope, RootReader
 from src.services.curation.assist_loop.record import LoopRecord
 from src.services.curation.assist_loop.snapshots import SnapshotStore
 from src.services.curation.class_write_guard import ClassWriteGuard
@@ -64,7 +61,7 @@ if TYPE_CHECKING:
     from fixtures.postgres import PgDatabase
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'db'))
-from _research_seed import make_loop_run, make_project
+from _research_seed import make_identity, make_loop_run, make_partition, make_project
 
 
 ITEMS = base_curation_config().items_index
@@ -171,13 +168,24 @@ class FakeVlm:
 
 @dataclass
 class World:
-    """Items in candidate clusters, each with a true class and an embedding near its class."""
+    """Items in candidate clusters, each with a true class and an embedding near its class.
+
+    A cluster is named by its display number (what a node path ``r<number>`` carries). The
+    world serves its clusters as a partition of a project with :meth:`serve`, which stamps the
+    partition fields on the items the way the projection does.
+    """
 
     registry: InMemoryRegistry
     os: QueryFakeOpenSearch = field(default_factory=lambda: QueryFakeOpenSearch({ITEMS: {}}))
     truth: dict[str, str] = field(default_factory=dict)
+    number_of: dict[str, int] = field(default_factory=dict)
+    """Display number of each crop's cluster."""
+    uids: dict[int, uuid.UUID] = field(default_factory=dict)
+    """Cluster uid of each display number, set when the world is served."""
+    served: dict[uuid.UUID, uuid.UUID] = field(default_factory=dict)
+    """Partition id the world serves, per project."""
 
-    def add_item(self, crop_id: str, cluster_id: int, truth: str, **fields: Any) -> None:
+    def add_item(self, crop_id: str, cluster: int, truth: str, **fields: Any) -> None:
         axis = CLASSES.index(truth)
         rng = np.random.default_rng(int(unit('emb', crop_id) * 2**31))
         vector = np.zeros(8)
@@ -188,8 +196,6 @@ class World:
             'image_id': f'img-{crop_id}',
             'image_path': '/data/frame.jpg',
             'bbox_norm': [0.1, 0.1, 0.9, 0.9],
-            'cluster_id': cluster_id,
-            'cluster_subid': None,
             'class_id': None,
             'class_name': None,
             'class_source': 'item_proposal',
@@ -202,15 +208,81 @@ class World:
         doc.update(fields)
         self.os.docs(ITEMS)[crop_id] = doc
         self.truth[crop_id] = truth
+        self.number_of[crop_id] = cluster
 
-    def add_cluster(self, cluster_id: int, mix: Mapping[str, int], *, prefix: str) -> list[str]:
+    def add_cluster(self, cluster: int, mix: Mapping[str, int], *, prefix: str) -> list[str]:
         ids = []
         for cls, count in mix.items():
             for i in range(count):
                 crop_id = f'{prefix}-{cls}-{i:04d}'
-                self.add_item(crop_id, cluster_id, cls)
+                self.add_item(crop_id, cluster, cls)
                 ids.append(crop_id)
         return ids
+
+    def serve(self, env: LoopEnv) -> uuid.UUID:
+        """Record the world's clusters as the ready, serving partition of ``env``'s project and
+        stamp the items with it (once per project). Display numbers are the world's own."""
+        if env.project in self.served:
+            return self.served[env.project]
+        numbers = sorted(set(self.number_of.values()))
+        with psycopg.connect(env.pg.conninfo('super'), autocommit=True) as conn:
+            partition = make_partition(conn, env.project)
+            for number in numbers:
+                uid = make_identity(conn, env.project)
+                self.uids[number] = uid
+                conn.execute(
+                    'INSERT INTO partition_clusters (partition_id, cluster_uid, display_no, '
+                    "transition, size) VALUES (%s, %s, %s, 'new', %s)",
+                    (
+                        partition,
+                        uid,
+                        number,
+                        sum(1 for n in self.number_of.values() if n == number),
+                    ),
+                )
+            with conn.cursor() as cur:
+                cur.executemany(
+                    'INSERT INTO cluster_memberships (partition_id, item_key, cluster_uid, state) '
+                    'VALUES (%s, %s, %s, %s)',
+                    [
+                        (
+                            partition,
+                            key,
+                            self.uids[n],
+                            self.doc(key).get('cluster_state', 'assigned'),
+                        )
+                        for key, n in self.number_of.items()
+                    ],
+                )
+            conn.execute(
+                "UPDATE cluster_partitions SET status = 'ready' WHERE id = %s", (partition,)
+            )
+            conn.execute(
+                'INSERT INTO cluster_activations (project_id, target, level, embedding_field, '
+                "serving_partition_id, pending_partition_id, updated_by) VALUES (%s, 'item', "
+                "'class', 'f', %s, %s, 'test')",
+                (env.project, partition, partition),
+            )
+        for key, number in self.number_of.items():
+            self.os.docs(ITEMS)[key].update(
+                cluster_partition_id=str(partition),
+                cluster_uid=str(self.uids[number]),
+                cluster_state=self.doc(key).get('cluster_state', 'assigned'),
+                cluster_assigned_by='run',
+            )
+        self.served[env.project] = partition
+        return partition
+
+    def reader(self, env: LoopEnv, record: LoopRecord) -> PartitionReader:
+        """The loop's real reader over this world, bound to the partition the run pinned (none
+        yet on a first slice, which pins the serving one)."""
+        self.serve(env)
+        return PartitionReader.for_run(
+            self.os,  # type: ignore[arg-type]
+            record.sessions,
+            project=env.project,
+            pinned=record.run.pinned,
+        )
 
     def snapshot(self) -> dict[str, dict[str, Any]]:
         return copy.deepcopy(self.os.docs(ITEMS))
@@ -224,6 +296,16 @@ class World:
 
     def class_id(self, name: str) -> int:
         return next(c.class_id for c in self.registry.load().classes if c.class_name == name)
+
+
+class WorldRoots:
+    """``root_of`` over the world's own cluster assignment, for tests of propagation alone."""
+
+    def __init__(self, world: World) -> None:
+        self.world = world
+
+    async def root_of(self, ids: Any) -> dict[str, str]:
+        return {i: root_path(self.world.number_of[i]) for i in ids if i in self.world.number_of}
 
 
 def make_world(monkeypatch: pytest.MonkeyPatch) -> World:
@@ -363,7 +445,7 @@ async def build_deps(
     budget: LoopBudget,
     *,
     vlm_concurrency: int = 4,
-    reader: RootReader | None = None,
+    reader: RootReader,
     audit: AuditParams | None = None,
     judge: FakeVlm | None = None,
 ) -> LoopDeps:
@@ -379,7 +461,7 @@ async def build_deps(
     )
     deps = LoopDeps(
         opensearch=world.os,  # type: ignore[arg-type]
-        reader=reader or ClusterFieldPartition(world.os),  # type: ignore[arg-type]
+        reader=reader,
         asker=VlmAsker(
             world.os,  # type: ignore[arg-type]
             ctx,
@@ -416,7 +498,7 @@ async def drive(
     vlm_concurrency: int = 4,
     scope: PartitionScope | None = None,
     clock: Callable[[], float] | None = None,
-    reader: RootReader | None = None,
+    wrap_reader: Callable[[PartitionReader], RootReader] | None = None,
     audit: AuditParams | None = None,
     judge: FakeVlm | None = None,
     audit_max_crops: int = 500,
@@ -456,6 +538,7 @@ async def drive(
             arm(record)
         budget = LoopBudget(record, **({'clock': clock} if clock else {}))
         await budget.start_slice()
+        real = world.reader(env, record)
         deps = await build_deps(
             world,
             vlm,
@@ -463,7 +546,7 @@ async def drive(
             record,
             budget,
             vlm_concurrency=vlm_concurrency,
-            reader=reader,
+            reader=wrap_reader(real) if wrap_reader else real,
             audit=audit,
             judge=judge,
         )
@@ -478,7 +561,7 @@ async def drive(
             lp,
             deps,
             budget,
-            scope or PartitionScope(cluster_ids=None, min_root_size=40),
+            scope or PartitionScope(cluster_uids=None, min_root_size=40),
             control,
         )
         outcome = await schedule(loop_run)
@@ -531,88 +614,6 @@ def propagated_ids(record: LoopRecord) -> dict[str, list[str]]:
         for path, node in record.tree.nodes.items()
         if node.propagated is not None
     }
-
-
-class Killed(BaseException):
-    """The process died: nothing after this point reaches the tables or the item store."""
-
-
-class KillSwitch:
-    """Kills the loop at the ``occurrence``-th call of the record method ``event`` (``when`` it
-    is made: just ``before`` or just ``after`` its rows are committed). From then on every
-    write to the tables and the item store raises :class:`Killed`, like a dead process."""
-
-    WRITES = (
-        'admit',
-        'select',
-        'record_answers',
-        'forget_failed',
-        'decide',
-        'gate_pass',
-        'begin_propagate',
-        'finish_propagate',
-        'split',
-        'record_audit_chunk',
-        'set_audit',
-        'save_counts',
-        'pin_roots',
-    )
-
-    def __init__(self, event: str, occurrence: int, when: str = 'after') -> None:
-        self.event = event
-        self.occurrence = occurrence
-        self.when = when
-        self.seen = 0
-        self.tripped = False
-
-    def _check(self) -> None:
-        if self.tripped:
-            raise Killed
-
-    def _count(self, kind: str, when: str) -> None:
-        if kind == self.event and self.when == when:
-            self.seen += 1
-            if self.seen == self.occurrence:
-                self.tripped = True
-                raise Killed
-
-    def arm_record(self, record: LoopRecord) -> None:
-        for name in self.WRITES:
-            real = getattr(record, name)
-
-            def wrapped(*a: Any, _real: Any = real, _name: str = name, **kw: Any) -> Any:
-                async def run() -> Any:
-                    self._check()
-                    self._count(_name, 'before')
-                    out = await _real(*a, **kw)
-                    self._count(_name, 'after')
-                    return out
-
-                return run()
-
-            setattr(record, name, wrapped)
-
-    def arm_os(self, os_fake: QueryFakeOpenSearch) -> None:
-        real_bulk = os_fake.bulk
-        real_update = os_fake.update
-
-        async def bulk(**kw: Any) -> dict[str, Any]:
-            self._check()
-            return await real_bulk(**kw)
-
-        async def update(**kw: Any) -> dict[str, Any]:
-            self._check()
-            return await real_update(**kw)
-
-        os_fake.bulk = bulk  # type: ignore[method-assign]
-        os_fake.update = update  # type: ignore[method-assign]
-        self._restore = (os_fake, real_bulk, real_update)
-
-    def disarm(self) -> None:
-        """The process restarts: the item store accepts writes again."""
-        os_fake, real_bulk, real_update = self._restore
-        os_fake.bulk = real_bulk  # type: ignore[method-assign]
-        os_fake.update = real_update  # type: ignore[method-assign]
 
 
 def without_times(value: Any) -> Any:
