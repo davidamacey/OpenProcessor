@@ -36,6 +36,7 @@ from src.routers.curation._embedding_space_models import (
 from src.routers.curation.projects import global_router
 from src.services.embedding_spaces import flip, spaces, start, views
 from src.services.embedding_spaces.capacity import OpenSearchCapacity, SpaceCapacity
+from src.services.embedding_spaces.dependents import queue_dependents
 from src.services.embedding_spaces.reindex import ReindexMode
 from src.services.jobs.service import rejection
 
@@ -201,6 +202,7 @@ async def promote_embedding_space(
         result = await flip.promote(
             session, project, target=target, key=space_key, force=body.force
         )
+    await queue_dependents(session, project, result.primary, requested_by=REQUESTER)
     rows = [result.primary] + ([result.previous] if result.previous else [])
     shown = [_view(f) for f in await views.with_models(session, project, rows)]
     return EmbeddingPromoteResponse(
