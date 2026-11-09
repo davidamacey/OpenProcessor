@@ -100,6 +100,8 @@ def leak_env(
     monkeypatch.setattr(task_queue, 'mark_queued', lambda *_a, **_k: None)
     monkeypatch.setattr(task_queue, 'clear_queued', lambda *_a, **_k: None)
     monkeypatch.setattr('src.services.jobs.service.wake', lambda *_a, **_k: None)
+    # The preflight asks the broker which workers consume gpu_train; the sweep has none.
+    monkeypatch.setattr('src.services.training.trainer_reachability._inspect_active_queues', dict)
     # `ensure_fresh` skips the config read while the snapshot is under a
     # second old, so how many `configs` operations a route issues would
     # depend on how fast the previous route ran, and the sweep compares

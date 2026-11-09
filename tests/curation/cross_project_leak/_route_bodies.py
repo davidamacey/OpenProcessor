@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from integration.ingest_fakes import jpeg_bytes
@@ -57,6 +58,11 @@ def route_params(slug: str) -> dict[str, str]:
         'node_path': 'r10000',
         'source_id': 'src_unknown00',
         'op_id': 'lop_20260101T000000000000_abcdef',
+        # Postgres-backed ids are uuids: a well-formed one that no project owns (a 404, not a 422)
+        **{
+            name: str(uuid.uuid5(uuid.NAMESPACE_DNS, f'{slug}-{name}'))
+            for name in ('partition_id', 'group_id', 'decision_id')
+        },
     }
 
 
@@ -74,6 +80,20 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
     force = {'force': 'true'}
     return {
         ('POST', '/bakeoff/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('POST', '/clusters/runs'): {'json': {'target': 'item'}},
+        ('PUT', '/clusters/activation'): {
+            'json': {
+                'target': 'item',
+                'partition_id': route_params(slug)['partition_id'],
+            }
+        },
+        ('PATCH', '/assist/loops/{loop_id}/budget'): {
+            'json': {'limits': [{'pool': 'vlm', 'unit': 'crops', 'limit_value': 5}]}
+        },
+        ('POST', '/near_duplicates/runs'): {'json': {'level': 'item'}},
+        ('POST', '/near_duplicates/decisions'): {
+            'json': {'level': 'item', 'a_id': item, 'b_id': proposal, 'decision': 'same'}
+        },
         ('PUT', '/crops/{crop_id}/label'): {'json': {'class_id': 1}},
         ('PUT', '/crops/batch_label'): {'json': {'crop_ids': [proposal], 'class_id': 1}},
         ('POST', '/crops/move'): {'json': {'crop_ids': [proposal], 'cluster_id': 1}},
@@ -126,7 +146,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/ingest/upload'): {
             'files': [('images', (f'{slug}-up.jpg', jpeg_bytes(len(slug)), 'image/jpeg'))],
         },
-        ('POST', '/probe/run'): {'json': {'job_id': f'{slug}-job-0001'}},
+        ('POST', '/probe/run'): {'json': {'job_id': route_params(slug)['partition_id']}},
         ('POST', '/datasets/preview'): {'json': {'source': {'path': source}}},
         ('POST', '/datasets/imports'): {'json': {'source': {'path': source}}},
         ('POST', '/datasets/imports/{import_id}/cancel'): {},
