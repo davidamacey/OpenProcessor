@@ -51,7 +51,7 @@ def test_settings_pack_gate_matches_activate_route(app_client, monkeypatch):
 def test_settings_profile_gate_matches_activate_route(app_client, monkeypatch, ready):
     from src.config import DetectionProfile
     from src.services.detection import profile_registry
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _repo():
         return [{'name': 'wheel_detector', 'state': 'READY', 'version': '1'}] if ready else []

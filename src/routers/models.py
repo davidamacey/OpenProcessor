@@ -27,7 +27,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from src.routers import models_export, models_lifecycle
 from src.routers._errors import server_error
 from src.schemas.model_admin import TestInferenceResponse
-from src.services.triton_control import TritonControlService
+from src.services.models.triton_control import TritonControlService
 
 
 logger = logging.getLogger(__name__)

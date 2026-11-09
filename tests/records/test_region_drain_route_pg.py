@@ -100,7 +100,7 @@ def test_region_drain_surfaces_stall_reason_when_a_dependency_is_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from src.config import DetectionProfile
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
         'src.services.detection.profile_registry.region_profile_or_neutral',

@@ -187,7 +187,9 @@ def test_models_roster_skips_region_models_when_unconfigured(
     region_env: pytest.MonkeyPatch,
 ) -> None:
     from src.routers.curation.models import _core_models
-    from src.services.model_unload_guard import region_protected_models as _region_protected_models
+    from src.services.models.model_unload_guard import (
+        region_protected_models as _region_protected_models,
+    )
 
     names = {name for name, *_ in _core_models()}
     assert REFERENCE_REGION_DETECTOR_MODEL not in names

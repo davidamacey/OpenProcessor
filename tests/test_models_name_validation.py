@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from src.routers import models as models_router, models_lifecycle
-from src.services.model_repository import inside_repository
+from src.services.models.model_repository import inside_repository
 
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         return {}
 
     monkeypatch.setattr(
-        'src.services.model_unload_guard.ingest_models_by_project', _no_other_projects
+        'src.services.models.model_unload_guard.ingest_models_by_project', _no_other_projects
     )
     return tmp_path / 'repo'
 

@@ -14,7 +14,7 @@ from fixtures.job_rows import sql
 
 from src.core.exceptions import RequestRejectedError
 from src.db.session import async_session_factory
-from src.services import model_export_jobs as jobs
+from src.services.models import model_export_jobs as jobs
 
 
 INFO = {'num_classes': 2, 'class_names': ['car', 'bus'], 'head_kind': 'nms'}
@@ -129,7 +129,7 @@ def _pt() -> dict[str, tuple[str, bytes, str]]:
 def test_upload_without_a_gpu_export_consumer_is_a_503_naming_the_service(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from src.services import model_export
+    from src.services.models import model_export
 
     monkeypatch.setattr(jobs, '_consumer_listens', lambda: False)
     monkeypatch.setattr(model_export, 'PYTORCH_MODELS_DIR', tmp_path / 'pytorch_models')

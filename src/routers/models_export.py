@@ -9,7 +9,7 @@ Model upload and export routes.
 The engine build runs in the model-export worker (the export image), not in the API: these
 routes start a ``model_export`` job for it and answer 503 when no worker consumes the
 ``gpu_export`` queue, 409 while the same model is being built. See
-``src.services.model_export_jobs``.
+``src.services.models.model_export_jobs``.
 """
 
 import uuid
@@ -22,7 +22,7 @@ from src.core.disk_space import DISK_GUARD
 from src.db.session import async_session_factory
 from src.schemas.model_admin import ExportRequest
 from src.schemas.models import ExportFormat, ExportStatus, ExportTaskResponse, ExportTaskStatus
-from src.services.model_export import (
+from src.services.models.model_export import (
     PYTORCH_MODELS_DIR,
     ExportWorkerUnavailableError,
     check_triton_name,
@@ -30,7 +30,7 @@ from src.services.model_export import (
     stage_uploaded_file,
     validate_pytorch_model,
 )
-from src.services.model_export_jobs import (
+from src.services.models.model_export_jobs import (
     ensure_not_building,
     get_export_task,
     list_export_tasks,

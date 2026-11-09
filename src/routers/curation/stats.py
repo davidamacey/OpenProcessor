@@ -418,7 +418,7 @@ async def dataset_stats(
         check_region_dependencies,
         stall_reason as _region_stall_reason,
     )
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     region_deps = await check_region_dependencies(
         session, TritonControlService().get_repository_index, profile

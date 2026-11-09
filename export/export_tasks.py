@@ -3,7 +3,7 @@
     celery -A export.export_tasks worker -Q gpu_export -c 1 --max-tasks-per-child=1
 
 ``POST /models/upload`` and ``POST /models/{name}/export`` start a ``model_export`` job
-(``src/services/model_export_jobs.py``). This handler runs the export script as a subprocess,
+(``src/services/models/model_export_jobs.py``). This handler runs the export script as a subprocess,
 records each engine it builds in ``model_engines`` with its contracts and measured cost
 (``export/engine_facts.py``), and loads the engines into Triton when asked. The phases are the
 job's ``progress.stage`` (``validating``, ``exporting``, ``loading``); a cancel is honoured between
@@ -34,7 +34,7 @@ from celery.signals import worker_init
 from src.config.retired_env import reject_retired_env
 from src.config.settings import get_settings
 from src.db.repos import engine_builds
-from src.services.triton_control import TritonControlService
+from src.services.models.triton_control import TritonControlService
 from src.tasks.runtime.gpu_app import make_app
 from src.tasks.runtime.log_context import install_log_context
 from src.tasks.runtime.register import register_job

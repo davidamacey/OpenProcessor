@@ -50,7 +50,7 @@ tests under `tests/training/` and `tests/trainer/`.
 
 ## Lane 5B `b2/gpu-export`: model upload and export become `gpu_export` jobs
 
-**Owns:** `src/services/model_export.py`; `export/export_worker.py` (the watch loop, the
+**Owns:** `src/services/models/model_export.py`; `export/export_worker.py` (the watch loop, the
 `queue/`/`claimed/` rename claim, `reconcile_claimed`, the heartbeats: all deleted) and new
 `export/celery_tasks.py`; the root `Dockerfile` (the `export` and `evaluator` targets: Celery and the
 runtime package; the `api` target already has them from stage 1); the model routers, named one by one: `src/routers/models_export.py` (`POST /models/upload`,
@@ -115,7 +115,7 @@ lanes' "orphaned field" notes are all resolved.
 ## Lane 5D `b2/promote-models`: promotion and the model registry
 
 **Owns:** `src/services/training/{promote_job,promote_json,triton_promote,model_classes}.py`,
-`src/services/model_repository.py`, `src/routers/curation/train/promote.py`, the model-sharing route
+`src/services/models/model_repository.py`, `src/routers/curation/train/promote.py`, the model-sharing route
 `src/routers/curation/_models_sharing.py` and its mount comment in `src/routers/curation/models.py`, new `src/db/repos/models.py`, `src/tasks/promote.py`,
 `src/config/job_kinds/promote.py`, `src/config/task_routes/promote.py`, tests under `tests/promote/`.
 

@@ -19,7 +19,7 @@ ALLOWED = {
     'src/config/ingest_profiles.py',
     'src/services/curation/ingest_detector.py',
     # Global routes call it with no project bound: it guards the env models.
-    'src/services/model_unload_guard.py',
+    'src/services/models/model_unload_guard.py',
 }
 RESOLVER_CONSUMERS = [
     'src/services/curation/ingest_service_factory.py',

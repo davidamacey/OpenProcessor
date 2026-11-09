@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from fixtures.job_rows import sql
 
 from src.routers import models_export
-from src.services import model_export, model_export_jobs
+from src.services.models import model_export, model_export_jobs
 
 
 if TYPE_CHECKING:

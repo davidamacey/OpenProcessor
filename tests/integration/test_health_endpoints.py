@@ -236,7 +236,7 @@ def _stub_face_counts(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _triton_index_without_face_models(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services import triton_control
+    from src.services.models import triton_control
 
     names = [
         'yolov11_small_trt_end2end',
@@ -287,7 +287,7 @@ def test_ready_ignores_face_models_and_reports_stored_data_when_faces_off(
 def test_ready_is_not_ready_when_the_repository_index_is_unreachable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services import triton_control
+    from src.services.models import triton_control
     from src.utils.upstream_errors import UpstreamError
 
     monkeypatch.delenv('OP_REQUIRED_MODELS', raising=False)

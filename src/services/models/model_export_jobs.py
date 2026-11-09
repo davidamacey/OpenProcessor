@@ -20,7 +20,7 @@ from src.db.repos.jobs_listing import JobFilter, get_one, list_page
 from src.db.session import async_session_factory, deployment_tx
 from src.schemas.models import ExportStatus, ExportTaskStatus
 from src.services.jobs.service import StartResult, rejection, start_job
-from src.services.model_export import ExportWorkerUnavailableError, StagedUpload
+from src.services.models.model_export import ExportWorkerUnavailableError, StagedUpload
 
 
 if TYPE_CHECKING:

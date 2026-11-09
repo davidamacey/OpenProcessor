@@ -88,7 +88,7 @@ src/services/curation/worker_liveness.py	1	heartbeat loop boundary: one failed w
 src/services/detection/segmenter_gate.py	1	caller-supplied visibility probe: any failure means unknown so the segmenter call runs (an error is not a no), logged
 src/services/face_identity/person_management.py	4	service boundary: a failed OpenSearch operation is returned as status=error with the message and the persons routes pass it to the client
 src/services/labeling/vlm_factory.py	1	cleanup: a failing close of a retired labeler client is logged and must not mask the caller
-src/services/model_export.py	1	validation boundary: loading a checkpoint can raise anything (pickle, torch, ultralytics); returned as an invalid-model result with the message
+src/services/models/model_export.py	1	validation boundary: loading a checkpoint can raise anything (pickle, torch, ultralytics); returned as an invalid-model result with the message
 src/services/projects/bootstrap.py	3	startup boundary: a failed region-class seed or registry bootstrap is logged and retried with backoff
 src/services/projects/combine/execute.py	1	cleanup that must not mask the original error: a failed settle after a failed combine is logged
 src/services/projects/delete.py	2	fail closed: an unreadable model-user list blocks the delete as config_store_unavailable; a failed index delete is logged and the index listed in failed

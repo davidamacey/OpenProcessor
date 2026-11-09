@@ -345,7 +345,7 @@ def test_stats_dataset_surfaces_region_stall_reason(
 ) -> None:
     from src.config import DetectionProfile
     from src.routers.curation import _raw_opensearch_dep
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
         'src.routers.curation.stats.region_profile_or_neutral',

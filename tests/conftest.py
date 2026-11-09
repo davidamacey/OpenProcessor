@@ -411,7 +411,7 @@ def _detector_config_is_usable(monkeypatch: pytest.MonkeyPatch) -> None:
     """Profile validation reads a loaded detector's output names from Triton (#362); no test
     reaches a real server, and a stubbed repository lists usable detectors. A test of the
     unusable case passes ``get_model_config`` to ``validate_profile``."""
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _config(_self: object, _model: str) -> dict[str, object]:
         return {'output': [{'name': 'output0'}]}
@@ -541,7 +541,7 @@ def no_other_projects(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _none() -> dict[str, frozenset[str]]:
         return {}
 
-    monkeypatch.setattr('src.services.model_unload_guard.ingest_models_by_project', _none)
+    monkeypatch.setattr('src.services.models.model_unload_guard.ingest_models_by_project', _none)
 
 
 @pytest.fixture

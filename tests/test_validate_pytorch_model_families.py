@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 import torch
 
-from src.services.model_export import validate_pytorch_model
+from src.services.models.model_export import validate_pytorch_model
 
 
 if TYPE_CHECKING:
