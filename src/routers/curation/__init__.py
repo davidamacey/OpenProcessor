@@ -36,6 +36,7 @@ import src.routers.curation.crop_context
 import src.routers.curation.datasets
 import src.routers.curation.detections
 import src.routers.curation.edit_undo
+import src.routers.curation.embedding_spaces
 import src.routers.curation.events
 import src.routers.curation.export
 import src.routers.curation.export_single_class

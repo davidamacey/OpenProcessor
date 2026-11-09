@@ -1,6 +1,10 @@
-"""Task routes of the `b2_embedding` research family; filled by the lane that owns it."""
+"""Task routes of the `b2_embedding` research family."""
 
 from __future__ import annotations
 
+from src.config.queue import TaskQueues
 
-ROUTES: dict[str, str] = {}
+
+ROUTES: dict[str, str] = {
+    'op.jobs.embedding_reindex': TaskQueues.JOBS,
+}
