@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -58,7 +59,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('OP_SEMANTIC_SEARCH_ENABLED', 'true')
     monkeypatch.setattr(accessors, '_default_curation_config', None)
 
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = AsyncMock(return_value={'hits': {'hits': [_HIT], 'total': {'value': 1}}})
     fake_os.count = AsyncMock(return_value={'count': 4})
     fake_os.get = AsyncMock(return_value={'found': False})

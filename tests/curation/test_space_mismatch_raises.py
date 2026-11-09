@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 from _embedding_registry_fake import default_space, new_space
+from _msearch_fake import install_msearch
 
 from src.domain.embedding_spaces import EmbeddingSpaceMismatch, Target
 from src.schemas.curation.search_target import SearchTarget
@@ -74,7 +75,7 @@ def test_the_default_space_keeps_the_zero_six_field_names() -> None:
 
 
 def _opensearch() -> AsyncMock:
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
     fake.search = AsyncMock(return_value={'hits': {'hits': [], 'total': {'value': 0}}})
     fake.count = AsyncMock(return_value={'count': 0})
     return fake

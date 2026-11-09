@@ -238,6 +238,43 @@ def _filter_for(
     )
 
 
+def _count_body(
+    filter_clause: list[dict[str, Any]], unsearchable: dict[str, Any]
+) -> dict[str, Any]:
+    """The in-scope items a space cannot search: a size-0 search with an exact total (``_msearch``
+    has no ``_count``)."""
+    return {
+        'size': 0,
+        'track_total_hits': True,
+        'query': {'bool': {'filter': [*filter_clause, unsearchable]}},
+    }
+
+
+def _total(response: dict[str, Any]) -> int:
+    return int(((response.get('hits') or {}).get('total') or {}).get('value', 0))
+
+
+async def _msearch(
+    opensearch: Any, index: str, bodies: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """One ``_msearch`` for ``bodies`` against ``index``; any failed entry fails the call
+    (OpenSearch answers 200 with a per-entry ``error``).
+
+    OpenSearch multi-search: https://docs.opensearch.org/latest/api-reference/multi-search/"""
+    payload: list[dict[str, Any]] = []
+    for body in bodies:
+        payload.extend(({'index': index}, body))
+    with search_span('knn_page'):
+        resp = await opensearch.msearch(body=payload)
+    responses: list[dict[str, Any]] = resp.get('responses') or []
+    if len(responses) != len(bodies):
+        raise RuntimeError(f'_msearch answered {len(responses)} of {len(bodies)} searches')
+    for entry in responses:
+        if entry.get('error'):
+            raise RuntimeError(f'_msearch entry failed: {entry["error"]}')
+    return responses
+
+
 async def search_space(target: SearchTarget) -> ResolvedSpace:
     """The bound project's primary space for what ``target`` ranks."""
     return await embedding_space(_REGISTRY_TARGET[target])
@@ -304,24 +341,14 @@ async def _knn_page(
         # old client-side hit filtering without changing semantics.
         body['min_score'] = min_score
 
-    # The unembedded count shares only the filter with the kNN search, so the two run together:
-    # on a filtered query the count is a full filter pass (4-8 ms at 91k items) and used to be
-    # paid on top of the search (#384).
-    # kNN only sees items with a vector, so "no results" must not read as "no
-    # matches": say how many in-scope items it could not search.
-    async def _knn() -> Any:
-        with search_span('knn'):
-            return await opensearch.search(index=cfg.items_index, body=body)
-
-    async def _unembedded_count() -> Any:
-        with search_span('unembedded_count'):
-            return await opensearch.count(
-                index=cfg.items_index,
-                body={'query': {'bool': {'filter': [*filter_clause, unsearchable]}}},
-            )
-
-    with search_span('knn_page'):
-        resp, unembedded = await asyncio.gather(_knn(), _unembedded_count())
+    # The unembedded count shares only the filter with the kNN search, so the two travel in one
+    # `_msearch` round trip: on a filtered query the count is a full filter pass (4-8 ms at 91k
+    # items) and used to be paid on top of the search (#384). kNN only sees items with a vector,
+    # so "no results" must not read as "no matches": say how many in-scope items it could not
+    # search.
+    resp, unembedded = await _msearch(
+        opensearch, cfg.items_index, [body, _count_body(filter_clause, unsearchable)]
+    )
     search_annotate('os_took_ms', int(resp.get('took') or 0))
     hits = (resp.get('hits') or {}).get('hits') or []
     total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
@@ -342,7 +369,7 @@ async def _knn_page(
         'total': total,
         'page': page,
         'page_size': page_size,
-        'unembedded_in_scope': int((unembedded or {}).get('count', 0)),
+        'unembedded_in_scope': _total(unembedded),
     }
 
 

@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 from _embedding_registry_fake import default_space
+from _msearch_fake import install_msearch
 
 from src.config.region_fields import get_region_fields
 from src.core.exceptions import RequestRejectedError
@@ -47,7 +48,7 @@ def _hit(crop_id: str, offsets: list[int], *, score=0.8, boxes=None, entries=Non
 
 
 def _fake_os(hits: list[dict], *, source_hits: list[dict] | None = None, unembedded=0):
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
 
     async def _search(*, index: str, body: dict) -> dict:
         if 'ids' in body.get('query', {}):

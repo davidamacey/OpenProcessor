@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
@@ -56,7 +57,7 @@ def _client(
         await asyncio.sleep(count_s)
         return {'count': 0}
 
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = _search
     fake_os.count = _count
     app = FastAPI()
@@ -81,15 +82,15 @@ def test_helpers_are_noops_without_a_timer():
     search_annotate('encode_cache_hit', 1)
 
 
-def test_header_reports_overlap_not_sum(monkeypatch: pytest.MonkeyPatch):
+def test_header_reports_the_one_msearch_round_trip(monkeypatch: pytest.MonkeyPatch):
     client = _client(monkeypatch, search_s=0.05, count_s=0.03)
     resp = client.get('/curation/projects/default/search/text', params={'q': 'truck'})
     assert resp.status_code == 200
     stages = _parse(resp.headers['Server-Timing'])
-    assert stages['knn'] >= 50
-    assert stages['unembedded_count'] >= 30
-    # knn and the count run together: the page span is the longer one, not their sum
-    assert stages['knn_page'] < 80
+    # the kNN page and the count are one `_msearch` call: one span covers both
+    assert stages['knn_page'] >= 50
+    assert 'knn' not in stages
+    assert 'unembedded_count' not in stages
     assert stages['os_took_ms'] == 7
     assert {'encode', 'filter_build', 'hydrate'} <= stages.keys()
     assert set(stages) - {'os_took_ms', 'encode_cache_hit'} <= set(SEARCH_STAGES)
@@ -104,7 +105,7 @@ def test_header_absent_on_error(monkeypatch: pytest.MonkeyPatch):
 
 def test_histogram_observed_per_stage(monkeypatch: pytest.MonkeyPatch):
     def count() -> float:
-        labels = {'route': 'text', 'stage': 'knn'}
+        labels = {'route': 'text', 'stage': 'knn_page'}
         return REGISTRY.get_sample_value('op_search_stage_seconds_count', labels) or 0.0
 
     before = count()

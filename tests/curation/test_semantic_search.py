@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 from _embedding_registry_fake import default_space
+from _msearch_fake import install_msearch
 
 from src.config import CurationConfig
 from src.core.exceptions import RequestRejectedError
@@ -37,7 +38,7 @@ def _fake_encoder() -> MagicMock:
 
 
 def _fake_os(hits: list[dict]) -> AsyncMock:
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
     fake.search = AsyncMock(return_value={'hits': {'hits': hits, 'total': {'value': len(hits)}}})
     fake.count = AsyncMock(return_value={'count': 0})
     return fake
@@ -50,7 +51,7 @@ def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
     then from/size the same way OpenSearch would, so tests exercise the
     real request shape instead of asserting against a stub that ignores
     the body."""
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
 
     async def _search(*, index: str, body: dict) -> dict:
         pool = candidates
@@ -432,37 +433,6 @@ async def test_semantic_text_search_excludes_embedding_fields_from_source():
 
 
 @pytest.mark.asyncio
-async def test_semantic_text_search_runs_search_and_unembedded_count_together():
-    """The count must not wait for the kNN search (#384): each call blocks until the
-    other has started, so a sequential implementation times out."""
-    search_started = asyncio.Event()
-    count_started = asyncio.Event()
-    fake_os = _fake_os([])
-
-    async def _search(*, index: str, body: dict) -> dict:
-        search_started.set()
-        await asyncio.wait_for(count_started.wait(), timeout=2)
-        return {'hits': {'hits': [], 'total': {'value': 0}}}
-
-    async def _count(*, index: str, body: dict) -> dict:
-        count_started.set()
-        await asyncio.wait_for(search_started.wait(), timeout=2)
-        return {'count': 7}
-
-    fake_os.search = AsyncMock(side_effect=_search)
-    fake_os.count = AsyncMock(side_effect=_count)
-    result = await semantic_search.semantic_text_search(
-        opensearch=fake_os,
-        pe_encoder=_fake_encoder(),
-        executor=None,
-        query='q',
-        page=1,
-        page_size=10,
-    )
-    assert result['unembedded_in_scope'] == 7
-
-
-@pytest.mark.asyncio
 async def test_semantic_text_search_class_filter_is_the_knn_filter_and_the_count_scope():
     """The class filter reaches the kNN `filter` clause and the count with the same
     clauses; the count adds only the not-embedded clause."""
@@ -506,7 +476,7 @@ def _fake_os_similar(
     if source_hits is None:
         source_hits = [{'_id': 'c1', '_source': {'pe_embedding': STORED_VECTOR}}]
     knn_hits = knn_hits or []
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
 
     async def _search(*, index: str, body: dict) -> dict:
         if 'ids' in body.get('query', {}):
@@ -614,7 +584,7 @@ async def test_similar_crop_without_vector_is_409():
 @pytest.mark.asyncio
 async def test_similar_reads_only_the_bound_project_index():
     cfg = CurationConfig(items_index='op_a__items')
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
     seen: list[str] = []
 
     async def _search(*, index: str, body: dict) -> dict:

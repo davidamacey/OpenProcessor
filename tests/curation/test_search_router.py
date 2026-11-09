@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -31,7 +32,7 @@ def _fake_pe_encoder(ready: bool = True) -> MagicMock:
 
 
 def _fake_opensearch(hits: list[dict] | None = None) -> AsyncMock:
-    fake_os = AsyncMock()
+    fake_os = install_msearch(AsyncMock())
     fake_os.search = AsyncMock(
         return_value={'hits': {'hits': hits or [], 'total': {'value': len(hits or [])}}}
     )
