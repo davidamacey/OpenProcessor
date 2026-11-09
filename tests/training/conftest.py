@@ -16,7 +16,7 @@ from fixtures.job_rows import make_project, sql
 
 from src.clients.storage.roots import RootedStore
 from src.config import project_context
-from src.services.training import job_manifest, jobs, lineage
+from src.services.training import job_manifest, jobs, lineage, run_retention
 
 
 if TYPE_CHECKING:
@@ -53,6 +53,7 @@ def run_env(pg, job_env, producer, wakes, monkeypatch, tmp_path: Path) -> Iterat
     )
     monkeypatch.setattr(jobs, 'run_store', lambda: store)
     monkeypatch.setattr(job_manifest, 'run_store', lambda: store)
+    monkeypatch.setattr(run_retention, 'run_store', lambda: store)  # imported by name
     monkeypatch.setattr(
         jobs,
         'get_curation_config',
