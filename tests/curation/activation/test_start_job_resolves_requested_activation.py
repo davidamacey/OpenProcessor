@@ -149,6 +149,17 @@ def test_start_job_runs_what_the_request_resolved(app_client, monkeypatch, query
     assert stamp == f'my_pack@{want_rev}'
 
 
+class _NoVlmRunOpenSearch:
+    """The calls a ``run_vlm=False`` run makes: the health snapshot's aggregation search and
+    the remaining-work count."""
+
+    async def search(self, **_kw: Any) -> dict[str, Any]:
+        return {}
+
+    async def count(self, **_kw: Any) -> dict[str, Any]:
+        return {'count': 0}
+
+
 def _start_args(c, monkeypatch, query):
     from src.services.curation.autolabel import service as auto_label_job
 
@@ -181,7 +192,7 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     empty and nothing on the job path refreshes it once
     prompt_pack_resolved=True skips resolve_run_prompt_pack.
 
-    Uses ``object()`` (not a fresh, unrelated fake) as the job's
+    Uses a minimal fake (not a fresh, unrelated store) as the job's
     ``opensearch`` client -- this is the one piece of state that IS
     shared with a real cross-process worker (the same OpenSearch
     cluster); a genuinely different, empty backing store would never be
@@ -197,7 +208,7 @@ def test_worker_process_with_cold_store_serves_requested_pack(app_client, monkey
     args = _start_args(c, monkeypatch, query)
     reset_config_stores()  # a different process: cold store
     args['run_vlm'] = False
-    summary = asyncio.run(run_auto_label(opensearch=object(), **args))
+    summary = asyncio.run(run_auto_label(opensearch=_NoVlmRunOpenSearch(), **args))
     print('store loaded after job stages:', get_config_store().current.loaded_at)
     # Exactly what `run_auto_label`'s VLM stage does: `prompt_pack_omitted`, not the
     # echoed `summary['prompt_pack']`, decides whether the labeler resolves against
