@@ -25,7 +25,6 @@ from playwright.sync_api import expect
 
 import copy
 import json
-import re
 
 from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item

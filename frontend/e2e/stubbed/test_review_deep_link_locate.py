@@ -38,7 +38,6 @@ from __future__ import annotations
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 
-import re
 import threading
 from urllib.parse import parse_qs, urlparse
 
