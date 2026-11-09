@@ -54,6 +54,7 @@ def test_prune_plans_the_bound_projects_own_out_dir(
 
     monkeypatch.setattr(prune_training_runs, 'plan_bakeoff_out_prune', _plan_out)
     monkeypatch.setattr(prune_training_runs, 'plan_run_prune', lambda **_kw: [])
+    monkeypatch.setattr(prune_training_runs, 'collect_active_bakeoff_run_ids', set)
 
     async def _no_promotions(_slug: str) -> list[Any]:
         return []
@@ -66,7 +67,9 @@ def test_prune_plans_the_bound_projects_own_out_dir(
     assert seen == [record.resources.bakeoff_jobs_dir / 'out']
 
 
-def test_export_prune_after_write_pins_the_projects_own_training_job(tmp_path: Path) -> None:
+def test_export_prune_after_write_pins_the_projects_own_training_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A training job queued in the project's own ``train_jobs_dir`` pins
     its export: the post-export prune must read the project's job dirs,
     not a flat env root no job is ever written to."""
@@ -74,7 +77,10 @@ def test_export_prune_after_write_pins_the_projects_own_training_job(tmp_path: P
     from types import SimpleNamespace
 
     from src.config import get_curation_config
+    from src.services.curation import export_retention
     from src.services.curation.export_retention import prune_exports_after_write
+
+    monkeypatch.setattr(export_retention, 'active_bakeoff_specs', list)
 
     record = new_project_record('alpha', base_curation_config())
     record = replace(

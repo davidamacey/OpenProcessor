@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.services.training.bakeoff_pins import active_bakeoff_specs
 
 
 if TYPE_CHECKING:
@@ -62,7 +63,6 @@ def collect_export_pins(
     *,
     export_root: Path,
     jobs_dir: Path,
-    bakeoff_jobs_dir: Path,
 ) -> set[Path]:
     """Every export directory that must never be pruned.
 
@@ -75,8 +75,9 @@ def collect_export_pins(
     * every ``<jobs_dir>/*.manifest.json``'s ``lineage.export_dir`` (a
       finished run's export, which may differ from its job spec's if the
       export was re-pointed after submission);
-    * every dataset ``path`` in ``<bakeoff_jobs_dir>/*.job.json`` (a
-      queued/running bake-off's eval datasets).
+    * every dataset ``path`` (and the quantize calibration dataset) in the params of an
+      active ``bakeoff`` job, read from PostgreSQL; a database error propagates so a prune
+      never proceeds without its pins.
     """
     pins: set[Path] = set()
 
@@ -101,15 +102,15 @@ def collect_export_pins(
                 if resolved is not None:
                     pins.add(resolved)
 
-    if bakeoff_jobs_dir.is_dir():
-        for bjob_file in bakeoff_jobs_dir.glob('*.job.json'):
-            datasets = _read_json(bjob_file).get('datasets') or []
-            for ds in datasets:
-                path = ds.get('path') if isinstance(ds, dict) else None
-                if path:
-                    resolved = _resolve_or_none(path)
-                    if resolved is not None:
-                        pins.add(resolved)
+    for spec in active_bakeoff_specs():
+        paths = [ds.get('path') for ds in spec.get('datasets') or [] if isinstance(ds, dict)]
+        quantize = spec.get('quantize')
+        if isinstance(quantize, dict):
+            paths.append(quantize.get('calib_dataset'))
+        for path in paths:
+            resolved = _resolve_or_none(path) if path else None
+            if resolved is not None:
+                pins.add(resolved)
 
     return pins
 
@@ -168,18 +169,13 @@ def prune_exports_after_write(config: CurationConfig) -> None:
     """Synchronous keep-last prune, called after a successful export
     (``GenericYoloExportService.export_dataset``, via ``asyncio.to_thread``).
 
-    Pins come from the bound project's own ``train_jobs_dir`` /
-    ``bakeoff_jobs_dir`` -- the only dirs its jobs are written to. A
+    Pins come from the bound project's ``train_jobs_dir`` and the active bake-offs in PostgreSQL. A
     no-op when ``export_keep_last <= 0``.
     """
     keep_last = config.export_keep_last
     if keep_last <= 0:
         return
-    jobs_dir = Path(config.train_jobs_dir)
-    bakeoff_jobs_dir = Path(config.bakeoff_jobs_dir)
-    pins = collect_export_pins(
-        export_root=config.export_root, jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir
-    )
+    pins = collect_export_pins(export_root=config.export_root, jobs_dir=Path(config.train_jobs_dir))
     plan = plan_export_prune(config.export_root, keep_last, pins)
     if not plan:
         return

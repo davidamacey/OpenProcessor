@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from src.services.curation import export_retention
 from src.services.curation.export_retention import (
     apply_export_prune,
     collect_export_pins,
@@ -19,6 +20,8 @@ from src.services.curation.export_retention import (
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 def _make_export_dir(root: Path, name: str) -> Path:
@@ -83,7 +86,9 @@ class TestPlanExportPrune:
 
 
 class TestCollectExportPins:
-    def test_collects_job_manifest_and_bakeoff_dataset_pins(self, tmp_path: Path) -> None:
+    def test_collects_job_manifest_and_bakeoff_dataset_pins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         export_root = tmp_path / 'exports'
         export_root.mkdir()
         job_export = _make_export_dir(export_root, '20260101T000000Z')
@@ -97,30 +102,28 @@ class TestCollectExportPins:
             json.dumps({'lineage': {'export_dir': str(run_export)}})
         )
 
-        bakeoff_jobs_dir = tmp_path / 'bakeoff_jobs'
-        bakeoff_jobs_dir.mkdir()
-        (bakeoff_jobs_dir / 'b1.job.json').write_text(
-            json.dumps({'datasets': [{'path': str(bakeoff_export)}]})
+        monkeypatch.setattr(
+            export_retention,
+            'active_bakeoff_specs',
+            lambda: [{'datasets': [{'path': str(bakeoff_export)}]}],
         )
 
-        pins = collect_export_pins(
-            export_root=export_root, jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir
-        )
+        pins = collect_export_pins(export_root=export_root, jobs_dir=jobs_dir)
         assert job_export.resolve() in pins
         assert run_export.resolve() in pins
         assert bakeoff_export.resolve() in pins
 
-    def test_missing_dirs_and_malformed_json_are_skipped(self, tmp_path: Path) -> None:
+    def test_missing_dirs_and_malformed_json_are_skipped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(export_retention, 'active_bakeoff_specs', list)
         export_root = tmp_path / 'exports'
         export_root.mkdir()
         jobs_dir = tmp_path / 'jobs'
         jobs_dir.mkdir()
         (jobs_dir / 'bad.job.json').write_text('{not json')
-        bakeoff_jobs_dir = tmp_path / 'missing_bakeoff_jobs'
 
-        pins = collect_export_pins(
-            export_root=export_root, jobs_dir=jobs_dir, bakeoff_jobs_dir=bakeoff_jobs_dir
-        )
+        pins = collect_export_pins(export_root=export_root, jobs_dir=jobs_dir)
         assert pins == set()
 
 

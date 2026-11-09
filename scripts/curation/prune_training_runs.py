@@ -53,6 +53,7 @@ from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
     apply_run_prune,
     bakeoff_out_dir,
+    collect_active_bakeoff_run_ids,
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
@@ -76,7 +77,7 @@ def _run_one_project(args: argparse.Namespace) -> int:
     run_plan = plan_run_prune(
         jobs_dir=jobs_dir,
         promoted_job_ids=promoted,
-        bakeoff_jobs_dir=bakeoff_jobs_dir,
+        bakeoff_run_ids=collect_active_bakeoff_run_ids(),
         keep_last=args.keep_last,
     )
     out_plan = plan_bakeoff_out_prune(out_dir, args.bakeoff_out_keep_last)
