@@ -57,3 +57,29 @@ def test_an_axis_that_is_off_or_never_activated_serves_an_empty_ref_for_vlm(axis
 
     assert runtime.vlm is not None
     assert runtime.vlm.name is None
+
+
+@pytest.mark.asyncio
+async def test_a_runtime_report_read_failure_is_not_an_empty_applied_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from src.services.config_store import activation_view
+
+    async def _fresh() -> None:
+        return None
+
+    async def _down(**_k: object) -> None:
+        raise RuntimeError('database down')
+
+    async def _no_detail(_axis: str) -> None:
+        return None
+
+    store = SimpleNamespace(ensure_fresh=_fresh, current=_snapshot(1))
+    monkeypatch.setattr(activation_view, 'get_config_store', lambda: store)
+    monkeypatch.setattr(activation_view.documents, 'get_activation_detail', _no_detail)
+    monkeypatch.setattr(activation_view.documents, 'live_runtime_reports', _down)
+
+    with pytest.raises(RuntimeError):
+        await activation_view.build_active_config_response(axis='detection_profile')

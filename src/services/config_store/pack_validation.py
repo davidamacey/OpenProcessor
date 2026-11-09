@@ -444,7 +444,7 @@ def _check_vocabulary(
         from src.services.labeling.vlm_prompts import prompt_text_examples
 
         examples = sorted(prompt_text_examples(pack))
-    except Exception:  # pragma: no cover - defensive; malformed draft
+    except (TypeError, ValueError, KeyError):  # malformed draft: other checks report it
         examples = []
     if examples:
         issues.append(

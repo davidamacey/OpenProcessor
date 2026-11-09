@@ -98,10 +98,7 @@ async def build_active_config_response(*, axis: Axis) -> ActiveConfigResponse:
     # No worker applies the open-vocabulary or ingest-profile axes: a run reads
     # the activation when it starts, so there is nothing to lag behind.
     if axis not in ('open_vocab', 'ingest_profile'):
-        try:
-            reports = await documents.live_runtime_reports(process='detection_worker')
-        except Exception:  # pragma: no cover - defensive; applied[] degrades to empty
-            reports = []
+        reports = await documents.live_runtime_reports(process='detection_worker')
 
     return ActiveConfigResponse(
         axis=axis,
