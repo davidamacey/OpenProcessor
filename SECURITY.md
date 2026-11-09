@@ -199,8 +199,8 @@ Recognized text (OCR lines, region text, registration plates) is ordinary,
 searchable label data. Any caller that can reach the API can read and search
 it. Curation projects keep it in their own indexes and project delete removes
 it. The core `/search/ocr` index is deployment-wide and outside project
-isolation; empty it with `python -m scripts.purge_ocr_data --dry-run` (counts)
-and `--yes` (delete), run inside the `api` container. It writes a counts-only
+isolation; empty it with `./openprocessor ocr purge --dry-run` (counts)
+and `--yes` (delete). It writes a counts-only
 row to the `privacy_purges` table. There is no purge route, because the
 API has no authentication. Parse-failure logs of the labelers record reply
 lengths, never reply text.

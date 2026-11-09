@@ -452,6 +452,10 @@ main() {
             load_cli_core_lib
             cmd_faces "$@"
             ;;
+        ocr)
+            load_cli_core_lib
+            cmd_ocr "$@"
+            ;;
         db)
             load_cli_db_lib
             cmd_db "$@"
