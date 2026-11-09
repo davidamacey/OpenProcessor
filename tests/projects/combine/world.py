@@ -378,6 +378,7 @@ async def run_job(
     cancel_after: int | None = None,
     lease_lost: bool = False,
     reraise: bool = False,
+    location_policy: str = 'store',
 ) -> tuple[Run, ProjectRecord]:
     """Preview, plan and run the job body exactly as a worker does after ``start`` created the
     target (the lifecycle writes and the queueing are not part of the body). ``resume``: the
@@ -422,6 +423,7 @@ async def run_job(
             target=target,
             settle=settle,
             enqueue_pending=enqueue,
+            location_policy=location_policy,
         )
     except Exception as exc:
         if reraise:

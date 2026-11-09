@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from src.clients.curation_opensearch.capture_fields import block_within_policy
 from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.domain.embedding_state import DEFERRED
 from src.services.detection.geometry import crop_id as make_crop_id
@@ -200,6 +201,7 @@ def transform_image(
     now: str,
     spaces: SpaceCopy,
     negative_for: list[str] | None,
+    location_policy: str,
 ) -> dict[str, Any]:
     """A target images doc: the source's, re-keyed, with its provenance.
     ``negative_for`` is the reviewed-negative class list already mapped to
@@ -207,6 +209,9 @@ def transform_image(
     doc = copy.deepcopy(image_doc)
     for name in ('import_ids', 'negative_for'):
         doc.pop(name, None)
+    if isinstance(doc.get('capture'), dict):
+        # Capture is copied as it is, except for a position the target's policy does not keep.
+        doc['capture'] = block_within_policy(doc['capture'], location_policy)
     _carry_frame_vector(doc, spaces.frame)
     doc.update(
         image_id=target_image_id,

@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
+from src.config.project_context import bind_project
 from src.db.models.datasets import CombineRun
+from src.services.curation.location_policy_store import get_location_policy
 from src.services.projects import lifecycle
 from src.services.projects.combine.execute import load_plan, run_combine
 from src.services.projects.registry import get_project_registry
@@ -61,6 +63,11 @@ def _enqueue_for(ctx: JobContext) -> Callable[[str, list[str]], Awaitable[None]]
     return enqueue
 
 
+async def _location_policy_of(target: ProjectRecord) -> str:
+    with bind_project(target):
+        return await get_location_policy()
+
+
 async def run_combine_job(ctx: JobContext, client: Any) -> dict[str, Any] | None:
     async with ctx.session() as session:
         document = (
@@ -81,4 +88,5 @@ async def run_combine_job(ctx: JobContext, client: Any) -> dict[str, Any] | None
         target=target,
         settle=_settle_for(client, target),
         enqueue_pending=_enqueue_for(ctx),
+        location_policy=await _location_policy_of(target),
     )

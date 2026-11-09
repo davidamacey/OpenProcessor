@@ -15,9 +15,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.core.logging import get_logger
+from src.domain.location_policy import COARSE_DECIMALS, LOCATION_POLICIES
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from opensearchpy import AsyncOpenSearch
 
     from src.domain.capture_metadata import CaptureMetadata
@@ -104,6 +107,28 @@ def capture_image_block(meta: CaptureMetadata) -> dict[str, Any]:
     return block
 
 
+def block_within_policy(block: Mapping[str, Any], policy: str) -> dict[str, Any]:
+    """A stored `capture` block as ``policy`` lets it be kept: the same rule as
+    ``apply_location_policy`` on a document that was already built (a combine copying images from
+    another project, whose own policy may keep more)."""
+    out = dict(block)
+    if policy == 'store' or 'location' not in out:
+        return out
+    if policy not in LOCATION_POLICIES:
+        msg = f'location_policy must be one of {LOCATION_POLICIES}, not {policy!r}'
+        raise ValueError(msg)
+    location = out.pop('location')
+    for name in LOCATION_FIELDS:
+        out.pop(name, None)
+    if policy == 'store_coarse':
+        lat = round(float(location['lat']), COARSE_DECIMALS)
+        lon = round(float(location['lon']), COARSE_DECIMALS)
+        if lat != 0 or lon != 0:
+            out['location'] = {'lat': lat, 'lon': lon}
+            out['location_precision'] = 'coarse'
+    return out
+
+
 def capture_item_fields(meta: CaptureMetadata) -> dict[str, Any]:
     """The two capture-time copies an item document carries (never a coordinate)."""
     fields = {
@@ -135,6 +160,7 @@ __all__ = [
     'CAPTURE_IMAGE_MAPPING',
     'CAPTURE_ITEM_MAPPING',
     'LOCATION_FIELDS',
+    'block_within_policy',
     'capture_image_block',
     'capture_item_fields',
     'ensure_capture_fields',
