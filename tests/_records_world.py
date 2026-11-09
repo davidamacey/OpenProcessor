@@ -43,10 +43,17 @@ def world(
     Services called from the test use the bound engine, the app driven through ``TestClient`` the
     API engine double.
     """
+    from fixtures.job_rows import seed_default_spaces
+
     from src.config.project_context import current_project
+    from src.services.embedding_spaces import resolve
 
     slug = f'default-{uuid.uuid4().hex[:8]}'
     project = make_project_row(pg_env, slug)
+    # code that resolves a vector field (the item filter, stats, export) reads the project's
+    # default spaces from the database by slug and fails closed without them
+    seed_default_spaces(pg_env, project)
+    resolve.clear_cache()
     record = current_project().record
     monkeypatch.setattr(record, 'id', project, raising=False)
     # bound_project_id() resolves the record's slug through the projects table
