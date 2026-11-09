@@ -16,6 +16,7 @@ from PIL import Image
 from tritonclient.utils import InferenceServerException
 
 from src.utils.retry import RetryExhaustedError
+from src.utils.upstream_errors import UpstreamError
 
 
 IMG_W, IMG_H = 200, 100
@@ -74,9 +75,12 @@ class FakeFaces:
     def __init__(self, result: dict[str, Any]) -> None:
         self.result = result
         self.confidences: list[float] = []
+        self.error: Exception | None = None
 
     def detect_faces(self, _image_bytes: bytes, confidence: float = 0.5) -> dict[str, Any]:
         self.confidences.append(confidence)
+        if self.error is not None:
+            raise self.error
         return self.result
 
 
@@ -270,6 +274,33 @@ def test_single_a_failed_ocr_is_reported_not_hidden(
     assert body['ocr_error'] == 'ocr model down'
     backends.ocr.result = {'status': 'error'}
     assert _post(client, jpeg).json()['ocr_error'] == 'OCR failed'
+
+
+def test_single_a_failed_face_stage_is_reported_and_keeps_the_other_stages(
+    client: TestClient, jpeg: bytes, backends: Backends
+) -> None:
+    backends.faces.error = UpstreamError('triton', 'face_inference_failed')
+    body = _post(client, jpeg).json()
+    assert body['faces_error'] == 'face_inference_failed'
+    assert body['faces'] == []
+    assert body['num_faces'] == 0
+    assert body['num_detections'] > 0
+    assert body['ocr'] is not None
+
+
+def test_single_a_face_stage_that_ran_has_no_faces_error(
+    client: TestClient, jpeg: bytes, backends: Backends
+) -> None:
+    assert _post(client, jpeg).json()['faces_error'] is None
+
+
+def test_batch_a_failed_face_stage_lists_the_image_as_failed(
+    client: TestClient, jpeg: bytes, backends: Backends
+) -> None:
+    backends.faces.error = UpstreamError('triton', 'face_inference_failed')
+    body = _batch(client, jpeg).json()
+    assert body['status'] == 'all_failed'
+    assert body['failures'][0]['error'] == 'triton: face_inference_failed'
 
 
 def test_single_unknown_image_size_omits_image(
