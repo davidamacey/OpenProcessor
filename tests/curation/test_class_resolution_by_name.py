@@ -88,7 +88,7 @@ def test_an_already_classed_or_labeled_item_is_left_alone() -> None:
 
 def test_the_resolved_source_is_recognised_as_a_classifier_label_the_vlm_skips() -> None:
     assert is_classifier_class_source('item_model')
-    query = vlm_selection_query(class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8)
+    query = vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
     skipped = [
         c
         for c in query['bool']['must_not']
@@ -134,7 +134,7 @@ async def test_ingest_resolves_by_name_only_when_the_project_asks(tmp_path: Any)
         'widget',
         'item_model',
     )
-    assert widget['cluster_id'] == 7  # a class-labeled item sits in its class cluster
+    assert 'cluster_id' not in widget  # a class label places nothing in a cluster
     assert widget['class_validated'] is False  # a machine label, never a human one
     assert 'class_id' not in gadget
     assert gadget['class_source'] == 'item_proposal'

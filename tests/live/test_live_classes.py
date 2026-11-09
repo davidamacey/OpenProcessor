@@ -41,7 +41,6 @@ def test_registry_lists_the_seeded_classes_with_live_counts(api_client: Any) -> 
     # Counts come from a live aggregation over the items index, not from
     # the registry file's stored sample_count.
     assert classes[0]['sample_count'] > 0
-    assert classes[0]['cluster_size'] > 0
 
 
 def test_create_class_appends_to_the_registry(api_client: Any) -> None:
@@ -82,7 +81,7 @@ def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
 def test_settings_put_then_get_round_trips(api_client: Any) -> None:
     methods = api_client.get('/methods')
     methods.raise_for_status()
-    settable = {'cluster', 'sort', 'detection_profile', 'prompt_pack'}
+    settable = {'sort', 'detection_profile', 'prompt_pack'}
     by_axis: dict[str, list[str]] = {}
     for entry in methods.json()['strategies']:
         by_axis.setdefault(entry['axis'], []).append(entry['id'])
@@ -185,7 +184,7 @@ def test_merge_success_relabels_items(api_client: Any, opensearch: Any) -> None:
     assert sample['class_source'] == 'class_merge'
     # A merged crop must not keep a stale human-validated flag.
     assert sample['class_validated'] is False
-    assert sample['cluster_id'] == MERGE_TARGET_CLASS_ID
+    assert 'cluster_id' not in sample
     assert sample['class_id_history'][-1]['writer'] == 'class_merge'
 
 

@@ -7,6 +7,7 @@ The clause comes from ``embedding_state`` only; a second hand-written
 from __future__ import annotations
 
 import re
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from src.config.curation import ITEM_EMBEDDING_FIELD
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CLUSTER = uuid.uuid5(uuid.NAMESPACE_URL, 'embedding-state-cluster')
 
 
 def _proposal(crop_id: str, *, vector: bool) -> dict[str, Any]:
@@ -25,7 +27,7 @@ def _proposal(crop_id: str, *, vector: bool) -> dict[str, Any]:
         'class_source': 'item_proposal',
         'class_validated': False,
         'test_holdout': False,
-        'cluster_id': 7,
+        'cluster_uid': str(CLUSTER),
         'confidence': 0.9,
     }
     if vector:
@@ -50,13 +52,15 @@ def _vlm_worker() -> dict[str, Any]:
 def _vlm_sweep() -> dict[str, Any]:
     from src.services.curation.autolabel.selection import vlm_selection_query
 
-    return vlm_selection_query(class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.8)
+    return vlm_selection_query(class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8)
 
 
 def _vlm_cluster_scope() -> dict[str, Any]:
     from src.services.curation.autolabel.selection import vlm_selection_query
 
-    return vlm_selection_query(class_id=None, cluster_id=7, classifier_confidence_skip_vlm=0.8)
+    return vlm_selection_query(
+        class_id=None, cluster_uid=CLUSTER, classifier_confidence_skip_vlm=0.8
+    )
 
 
 def _review_all() -> dict[str, Any]:

@@ -69,8 +69,7 @@ _MERGE_SCRIPT = {
     'lang': 'painless',
     'source': (
         'ctx._source.class_id = params.target_id; ctx._source.class_name = params.name; '
-        "ctx._source.class_source = 'class_merge'; ctx._source.cluster_id = params.target_id; "
-        'ctx._source.cluster_subid = null; ctx._source.updated_at = params.now'
+        "ctx._source.class_source = 'class_merge'; ctx._source.updated_at = params.now"
     ),
 }
 
@@ -155,8 +154,6 @@ def _merge_crop_merger(
         'class_id': target_id,
         'class_name': target_name,
         'class_source': 'class_merge',
-        'cluster_id': target_id,
-        'cluster_subid': None,
         'label_source': 'class_merge',
     }
 

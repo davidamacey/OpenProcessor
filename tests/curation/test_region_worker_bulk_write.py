@@ -86,15 +86,14 @@ class TestBulkWrite:
     @pytest.mark.asyncio
     async def test_vlm_unmatched_write_clears_the_prior_class(self) -> None:
         """IT-2: a vlm_unmatched write must not keep the class_id/class_name
-        the VLM's answer just contradicted -- and must reset a class-range
-        cluster_id so the residual pass re-clusters the item."""
+        the VLM's answer just contradicted, and must leave the served cluster alone."""
         F = get_region_fields()
         current_doc = {
             F.status: 'pending',
             'class_id': 5,
             'class_name': 'foo',
             'class_source': 'coco_yolo11_model',
-            'cluster_id': 5,
+            'cluster_uid': 'uid-5',
         }
         a = _make_task(crop_id='a', status='pending')
         a.class_token = class_state_token(current_doc)
@@ -124,20 +123,19 @@ class TestBulkWrite:
         assert doc['class_id'] is None
         assert doc['class_name'] is None
         assert doc['class_detector'] is None
-        assert doc['cluster_id'] == -1
-        assert doc['cluster_subid'] is None
+        assert not {k for k in doc if k.startswith('cluster_')}
 
     @pytest.mark.asyncio
-    async def test_vlm_unmatched_write_leaves_a_candidate_cluster_alone(self) -> None:
-        """A candidate (residual) cluster isn't a class-cluster fact --
-        clearing the class must not touch it."""
+    async def test_vlm_unmatched_write_leaves_a_review_band_cluster_alone(self) -> None:
+        """A cluster placement isn't a class fact -- clearing the class must not touch it."""
         F = get_region_fields()
         current_doc = {
             F.status: 'pending',
             'class_id': 5,
             'class_name': 'foo',
             'class_source': 'coco_yolo11_model',
-            'cluster_id': 10042,
+            'cluster_uid': 'uid-42',
+            'cluster_state': 'review',
         }
         a = _make_task(crop_id='a', status='pending')
         a.class_token = class_state_token(current_doc)
@@ -163,8 +161,7 @@ class TestBulkWrite:
         await _bulk_update(opensearch, [a])
         doc = captured['a']
         assert doc['class_id'] is None
-        assert 'cluster_id' not in doc
-        assert 'cluster_subid' not in doc
+        assert not {k for k in doc if k.startswith('cluster_')}
 
     @pytest.mark.asyncio
     async def test_vlm_unmatched_write_never_clears_a_validated_item(self) -> None:
@@ -175,7 +172,7 @@ class TestBulkWrite:
             'class_name': 'foo',
             'class_source': 'human',
             'class_validated': True,
-            'cluster_id': 5,
+            'cluster_uid': 'uid-5',
         }
         a = _make_task(crop_id='a', status='pending')
         a.class_token = class_state_token(current_doc)
