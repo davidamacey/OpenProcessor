@@ -21,8 +21,8 @@ if TYPE_CHECKING:
 
     from curation.label_ops_env import OpsEnv
 
-pytest_plugins = ['_records_world', 'curation.jobs_a.autoqueue']
-pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world')]
+pytest_plugins = ['_records_world', 'curation.jobs_a.optin_queue']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('world', 'fake_queue')]
 
 COUNT_KEYS = (
     'restored',

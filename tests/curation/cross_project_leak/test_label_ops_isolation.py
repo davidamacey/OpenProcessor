@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from curation.cross_project_leak._transport import LeakEnv
 
 
-pytest_plugins = ['curation.jobs_a.autoqueue']
-pytestmark = pytest.mark.db
+pytest_plugins = ['curation.jobs_a.optin_queue']
+pytestmark = [pytest.mark.db, pytest.mark.usefixtures('fake_queue')]
 
 
 def _stored_op_ids(leak_env: LeakEnv, slug: str) -> list[str]:
