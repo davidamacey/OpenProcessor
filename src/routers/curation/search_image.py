@@ -24,6 +24,7 @@ from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search_image
 from src.services.curation.item_filter import item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.rejections import rejection
 
 
@@ -101,7 +102,9 @@ async def search_image(
             detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
         )
     try:
-        item_filter_clauses(item_filter)  # a malformed band is the caller's 400, not an outage
+        item_filter_clauses(
+            item_filter, embedding=await item_write_fields()
+        )  # a malformed band is the caller's 400, not an outage
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

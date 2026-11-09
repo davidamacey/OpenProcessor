@@ -61,7 +61,7 @@ def _region_profile(reads_text: bool | None, display_name: str | None = None) ->
 
 def _query_result(tab: str, **kwargs: Any) -> Any:
     try:
-        must, must_not, reason = build_tab_query(tab, **kwargs)
+        must, must_not, reason = build_tab_query(tab, vector_field='pe_embedding', **kwargs)
     except RequestRejectedError as exc:
         return {'rejected': [exc.status_code, exc.detail]}
     return {'must': must, 'must_not': must_not, 'reason': reason}
@@ -118,7 +118,7 @@ def test_the_golden_distinguishes_a_changed_clause() -> None:
     golden = json.loads(GOLDEN.read_text(encoding='utf-8'))
     key = 'text|outliers|test=False|text=None|rank=None|status=None'
     must, must_not, reason = build_tab_query(
-        'outliers', include_test=False, text=None, max_rank=None
+        'outliers', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
     )
     assert golden[key] == _digest({'must': must, 'must_not': must_not, 'reason': reason})
     mutated = {'must': must, 'must_not': must_not[:-1], 'reason': reason}

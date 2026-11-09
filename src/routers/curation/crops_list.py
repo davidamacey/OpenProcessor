@@ -28,7 +28,7 @@ from src.services.curation.crop_listing import (
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -158,8 +158,10 @@ async def list_crops(
     if limit is not None:
         page_size = limit
     guard_page_depth(page, page_size)
+    embedding = await item_write_fields()
     try:
         listing = build_crop_list_query(
+            embedding=embedding,
             sort=sort,
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={

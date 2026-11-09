@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from src.domain.embedding_state import embedded_clause
 from src.services.curation.vlm_policy import VlmPolicy
 from src.services.curation.vlm_scope import ScopeCache, daily_budget_remaining, vlm_scope_clauses
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ def _build_pending_query(
     classifier_skip_conf: float,
     exclude_ids: list[str] | None = None,
     *,
+    vector_field: str,
     policy: VlmPolicy | None = None,
     representative_ids: Collection[str] | None = None,
 ) -> dict:
@@ -127,7 +129,7 @@ def _build_pending_query(
     must_not.extend(scope.must_not)
     return {
         'bool': {
-            'filter': [embedded_clause(), *scope.filter],
+            'filter': [embedded_clause(vector_field), *scope.filter],
             'must_not': must_not,
         },
     }
@@ -187,6 +189,7 @@ async def fetch_pending_ids(
         'query': _build_pending_query(
             classifier_skip_conf,
             exclude_ids=exclude_ids,
+            vector_field=await item_vector_field(),
             policy=policy,
             representative_ids=reps,
         ),

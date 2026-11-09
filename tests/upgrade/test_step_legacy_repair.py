@@ -75,7 +75,7 @@ async def test_the_backfill_targets_only_vectored_items_without_a_state() -> Non
     assert await legacy_repair.backfill_embedded_state(_ctx(client), 'items') == 7
     [call] = client.calls
     assert call['index'] == 'items'
-    assert call['body']['query'] == legacy_embedded_clause()
+    assert call['body']['query'] == legacy_embedded_clause('pe_embedding', 'embedding_state')
     assert "'embedded'" in call['body']['script']['source']
     assert call['conflicts'] == 'proceed'
     assert call['wait_for_completion'] is False

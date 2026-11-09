@@ -16,6 +16,7 @@ from src.domain.embedding_state import not_embedded_clause
 from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.detections_summary import suggested_embed_request
 from src.services.curation.item_filter import ItemFilter
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 # Tabs whose own selection requires a probe-scored item
@@ -41,7 +42,10 @@ async def _field_has_any_value(opensearch: Any, field: str) -> bool:
 
 
 async def _count_unembedded(opensearch: Any) -> int:
-    resp = await opensearch.count(index=_items_index(), body={'query': not_embedded_clause()})
+    vector_field = await item_vector_field()
+    resp = await opensearch.count(
+        index=_items_index(), body={'query': not_embedded_clause(vector_field)}
+    )
     return int(resp.get('count', 0))
 
 

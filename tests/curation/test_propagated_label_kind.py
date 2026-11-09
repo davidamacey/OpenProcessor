@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.query_fakes import matches
 from scripts.curation.vlm_pending import _build_pending_query
@@ -101,8 +102,10 @@ def test_it_counts_as_confident_so_the_normalizer_and_residual_pool_leave_it() -
 
 def test_it_is_not_exportable_until_a_human_validates_it() -> None:
     item = {**_vlm_item(), **class_label_update(_vlm_item(), _label())}
-    assert not matches(item, validated_export_query())
-    assert matches({**item, 'class_validated': True}, validated_export_query())
+    assert not matches(item, validated_export_query(embedding=DEFAULT_WRITE_FIELDS))
+    assert matches(
+        {**item, 'class_validated': True}, validated_export_query(embedding=DEFAULT_WRITE_FIELDS)
+    )
 
 
 def test_the_automatic_vlm_paths_do_not_relabel_it() -> None:
@@ -114,9 +117,13 @@ def test_the_automatic_vlm_paths_do_not_relabel_it() -> None:
     }
     plain = {**item, 'class_source': 'unlabeled_proposal'}
     sweep = vlm_selection_query(
-        class_id=None, cluster_id=None, classifier_confidence_skip_vlm=0.9, now=None
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_id=None,
+        classifier_confidence_skip_vlm=0.9,
+        now=None,
     )
-    worker = _build_pending_query(0.9)
+    worker = _build_pending_query(0.9, vector_field='pe_embedding')
     for query in (sweep, worker):
         assert matches(plain, query), 'control: an unlabeled item is selected'
         assert not matches(item, query)

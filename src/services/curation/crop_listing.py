@@ -16,6 +16,8 @@ from src.services.embedding_spaces.readers import vector_source_excludes
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from src.services.embedding_spaces.readers import WriteFields
+
 MAX_IDS = 500
 
 
@@ -31,6 +33,7 @@ class CropListQuery:
 
 def build_crop_list_query(
     *,
+    embedding: WriteFields,
     sort: str | None,
     item_filter_params: dict[str, Any],
     route_params: dict[str, Any],
@@ -50,7 +53,7 @@ def build_crop_list_query(
     # Every clause is a pure predicate (term/exists/range/must_not), none
     # scores, so all of it lives in filter context, not must.
     filt = [
-        *item_filter_clauses(flt),
+        *item_filter_clauses(flt, embedding=embedding),
         *visibility_clauses(
             include_test=include_test,
             include_excluded=include_excluded or 'excluded' in flt.review_status,

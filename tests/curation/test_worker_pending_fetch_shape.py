@@ -35,7 +35,7 @@ def _count_term_clauses_on_field(query: Any, field: str) -> int:
 
 
 def test_vlm_worker_class_source_exclusions_are_one_terms_clause() -> None:
-    query = vlm_pending._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
     must_not = query['bool']['must_not']
     # No separate `term` clauses on class_source left.
     assert _count_term_clauses_on_field(must_not, 'class_source') == 0
@@ -55,13 +55,15 @@ def test_vlm_worker_class_source_exclusions_are_one_terms_clause() -> None:
 
 
 def test_vlm_worker_build_pending_query_pushes_exclude_ids_server_side() -> None:
-    query = vlm_pending._build_pending_query(0.8, exclude_ids=['a', 'b'])
+    query = vlm_pending._build_pending_query(
+        0.8, exclude_ids=['a', 'b'], vector_field='pe_embedding'
+    )
     must_not = query['bool']['must_not']
     assert {'ids': {'values': ['a', 'b']}} in must_not
 
 
 def test_vlm_worker_build_pending_query_omits_ids_clause_when_no_exclusions() -> None:
-    query = vlm_pending._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
     must_not = query['bool']['must_not']
     assert not any('ids' in c for c in must_not)
 

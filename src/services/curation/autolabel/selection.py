@@ -38,11 +38,14 @@ from src.services.curation.vlm_scope import (
     representative_ids as resolve_representative_ids,
     vlm_scope_clauses,
 )
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
     import uuid
     from collections.abc import Collection
+
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 logger = get_logger(__name__)
@@ -52,6 +55,7 @@ COMBINED_RECENT_WINDOW = timedelta(hours=24)
 
 def vlm_selection_query(
     *,
+    embedding: WriteFields,
     class_id: int | None,
     cluster_uid: uuid.UUID | None,
     classifier_confidence_skip_vlm: float,
@@ -64,8 +68,8 @@ def vlm_selection_query(
     narrows the global sweep only; a ``cluster_uid`` run ignores it."""
     # Only embedded items reach the VLM (the working set), same as the worker.
     filters: list[dict[str, Any]] = [
-        embedded_clause(),
-        *item_filter_clauses(item_filter or ItemFilter()),
+        embedded_clause(embedding.vector_field),
+        *item_filter_clauses(item_filter or ItemFilter(), embedding=embedding),
     ]
     if class_id is not None:
         filters.append({'term': {'class_id': class_id}})
@@ -130,8 +134,10 @@ async def resolve_vlm_selection(
     nothing. A ``cluster_uid`` run is an explicit request: no policy, no budget.
     """
     cap = max_vlm_crops if max_vlm_crops > 0 else None
+    embedding = await item_write_fields()
     if cluster_uid is not None:
         query = vlm_selection_query(
+            embedding=embedding,
             class_id=class_id,
             cluster_uid=cluster_uid,
             classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
@@ -148,6 +154,7 @@ async def resolve_vlm_selection(
         else None
     )
     query = vlm_selection_query(
+        embedding=embedding,
         class_id=class_id,
         cluster_uid=None,
         classifier_confidence_skip_vlm=classifier_confidence_skip_vlm,
@@ -168,7 +175,11 @@ async def resolve_vlm_selection(
 
 
 def unvalidated_count_query(
-    *, class_id: int | None, cluster_uid: uuid.UUID | None, item_filter: ItemFilter | None = None
+    *,
+    embedding: WriteFields,
+    class_id: int | None,
+    cluster_uid: uuid.UUID | None,
+    item_filter: ItemFilter | None = None,
 ) -> dict[str, Any]:
     """Unvalidated items left in the run's scope (the dashboard's count)."""
     filters: list[dict[str, Any]] = []
@@ -176,7 +187,7 @@ def unvalidated_count_query(
         filters.append({'term': {'class_id': class_id}})
     if cluster_uid is not None:
         filters.append({'term': {'cluster_uid': str(cluster_uid)}})
-    filters.extend(item_filter_clauses(item_filter or ItemFilter()))
+    filters.extend(item_filter_clauses(item_filter or ItemFilter(), embedding=embedding))
     bool_q: dict[str, Any] = {'must_not': [{'term': {'class_validated': True}}]}
     if filters:
         bool_q['filter'] = filters
@@ -199,7 +210,10 @@ async def count_unvalidated_remaining(
 ) -> int:
     """Dashboard count of unvalidated items left in scope; ``-1`` when unavailable."""
     query = unvalidated_count_query(
-        class_id=class_id, cluster_uid=cluster_uid, item_filter=item_filter
+        embedding=await item_write_fields(),
+        class_id=class_id,
+        cluster_uid=cluster_uid,
+        item_filter=item_filter,
     )
     try:
         return int((await opensearch.count(index=index, body={'query': query})).get('count', 0))
@@ -217,8 +231,9 @@ async def explain_empty_vlm_selection(
     """Why the VLM stage selected nothing, so an empty run is never a silent
     ``0/0``: no items in scope, none embedded yet (the VLM only sees embedded
     items), or every unvalidated one excluded by the sweep rules."""
+    embedding = await item_write_fields()
     scope = unvalidated_count_query(
-        class_id=class_id, cluster_uid=cluster_uid, item_filter=item_filter
+        embedding=embedding, class_id=class_id, cluster_uid=cluster_uid, item_filter=item_filter
     )
     try:
         unvalidated = int(
@@ -227,7 +242,10 @@ async def explain_empty_vlm_selection(
         embedded_q = {
             'bool': {
                 **scope['bool'],
-                'filter': [*scope['bool'].get('filter', []), embedded_clause()],
+                'filter': [
+                    *scope['bool'].get('filter', []),
+                    embedded_clause(embedding.vector_field),
+                ],
             }
         }
         embedded = int(

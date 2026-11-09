@@ -33,12 +33,14 @@ from src.services.curation.reprocess_targets import (
     selector_clauses,
 )
 from src.services.detection.profile_registry import get_active_region_profile
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.reprocess_models import RegionMode, ReprocessFilter
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 def _target_for(mode: RegionMode) -> RegionStatus:
@@ -47,7 +49,9 @@ def _target_for(mode: RegionMode) -> RegionStatus:
     )
 
 
-def region_selections(f: ReprocessFilter, mode: RegionMode) -> list[RequeueSelection]:
+def region_selections(
+    f: ReprocessFilter, mode: RegionMode, embedding: WriteFields
+) -> list[RequeueSelection]:
     """One :class:`RequeueSelection` per source status the filter names.
 
     Raises :class:`ReprocessTargetsError` for a region filter that names no
@@ -83,7 +87,7 @@ def region_selections(f: ReprocessFilter, mode: RegionMode) -> list[RequeueSelec
         raise ReprocessTargetsError('a detected set cannot be re-verified; use redetect')
     if detected and not f.include_detected:
         raise ReprocessTargetsError('detected is only selectable with include_detected')
-    extra = tuple(selector_clauses(f))
+    extra = tuple(selector_clauses(f, embedding))
     # An item with no status is only ever seeded when its class is one of the
     # active profile's parent classes, so only those can be queued.
     active = get_active_region_profile()
@@ -111,7 +115,7 @@ async def plan_region_filter(
     cfg = get_curation_config()
     result = ReprocessScopeResult(scope='region')
     rows: dict[tuple[str, str], int] = {}
-    for sel in region_selections(f, mode):
+    for sel in region_selections(f, mode, await item_write_fields()):
         with_locked = await requeue_breakdown(opensearch, sel, config=cfg, include_locked=True)
         unlocked = await requeue_breakdown(opensearch, sel, config=cfg)
         result.selected += int(with_locked['total'])
@@ -132,7 +136,7 @@ async def apply_region_filter(
     opensearch: AsyncOpenSearch, f: ReprocessFilter, mode: RegionMode
 ) -> int:
     queued = 0
-    for sel in region_selections(f, mode):
+    for sel in region_selections(f, mode, await item_write_fields()):
         totals = await apply_requeue(
             opensearch, sel, clear_detection=mode == 'redetect', config=get_curation_config()
         )

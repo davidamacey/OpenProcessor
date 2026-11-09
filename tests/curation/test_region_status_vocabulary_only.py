@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from scripts.curation.worker.cascade import _build_pending_query
 from src.config import get_region_fields
@@ -43,7 +44,7 @@ def test_the_worker_pending_query_names_only_current_statuses() -> None:
 
 
 def test_the_queue_depth_aggregations_name_only_current_statuses() -> None:
-    segment, label = _status_terms(ops_metrics_refresh._agg_body())
+    segment, label = _status_terms(ops_metrics_refresh._agg_body(embedding=DEFAULT_WRITE_FIELDS))
     assert segment == {RegionStatus.PENDING_DETECTION.value}
     assert label == {RegionStatus.PENDING_VERIFICATION.value}
 

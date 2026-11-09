@@ -1,20 +1,19 @@
 """Whether an item has an embedding vector, and why not when it does not.
 
-``embedding_state`` (a keyword on the items index) records the REASON an item
-has no ``pe_embedding``; the authoritative test for "has a vector" is always
-the ``exists`` query below. A document written before the field existed has no
-state (unknown), not ``embedded``.
+The state (a keyword on the items index, one field per embedding space) records the REASON an
+item has no vector in that space; the authoritative test for "has a vector" is always the
+``exists`` query below. A document written before the field existed has no state (unknown), not
+``embedded``.
 
-Every consumer that needs "embedded" or "not embedded" builds its clause here;
-nothing else names an ``exists`` clause on the item embedding field
-(``tests/curation/test_embedding_state_consumers.py`` pins that).
+Every consumer that needs "embedded" or "not embedded" builds its clause here, from the vector
+and state fields the registry names for the space it reads
+(``src.services.embedding_spaces.readers``); nothing else names an ``exists`` clause on an item
+vector field (``tests/curation/test_embedding_state_consumers.py`` pins that).
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
-
-from src.config.curation import ITEM_EMBEDDING_FIELD
 
 
 EMBEDDED = 'embedded'
@@ -29,46 +28,46 @@ FAILED = 'failed'
 EmbeddingState = Literal['embedded', 'not_selected', 'deferred', 'failed']
 
 
-def embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
-    """Items that have the vector ``field`` (default: the item embedding)."""
-    return {'exists': {'field': field}}
+def embedded_clause(vector_field: str) -> dict[str, Any]:
+    """Items that have the vector ``vector_field``."""
+    return {'exists': {'field': vector_field}}
 
 
-def state_clause(state: str) -> dict[str, Any]:
-    """Items whose recorded ``embedding_state`` is ``state``.
+def state_clause(state: str, state_field: str) -> dict[str, Any]:
+    """Items whose recorded state (in ``state_field``) is ``state``.
 
     ``match_phrase`` answers identically on a keyword mapping and on the
     dynamic ``text`` mapping an index created before the field was mapped
     carries (a ``term`` or a terms aggregation would 400 or miss on those).
     """
-    return {'match_phrase': {'embedding_state': state}}
+    return {'match_phrase': {state_field: state}}
 
 
-def not_embedded_clause(field: str = ITEM_EMBEDDING_FIELD) -> dict[str, Any]:
-    """Items without the vector ``field``."""
-    return {'bool': {'must_not': [embedded_clause(field)]}}
+def not_embedded_clause(vector_field: str) -> dict[str, Any]:
+    """Items without the vector ``vector_field``."""
+    return {'bool': {'must_not': [embedded_clause(vector_field)]}}
 
 
-def legacy_embedded_clause() -> dict[str, Any]:
-    """Items that have the vector but were written before ``embedding_state``
+def legacy_embedded_clause(vector_field: str, state_field: str) -> dict[str, Any]:
+    """Items that have the vector but were written before the state field
     existed: embedded by the authoritative test, with no recorded state."""
     return {
         'bool': {
-            'must': [embedded_clause()],
-            'must_not': [{'exists': {'field': 'embedding_state'}}],
+            'must': [embedded_clause(vector_field)],
+            'must_not': [{'exists': {'field': state_field}}],
         }
     }
 
 
-def legacy_embedded_backfill_body() -> dict[str, Any]:
+def legacy_embedded_backfill_body(vector_field: str, state_field: str) -> dict[str, Any]:
     """The ``update_by_query`` body that records ``embedded`` on every legacy item that has its
     vector, so the stored state, the wire item, the stats breakdown and the filter agree (the
     vector is excluded from item reads, so the wire cannot derive it)."""
     return {
-        'query': legacy_embedded_clause(),
+        'query': legacy_embedded_clause(vector_field, state_field),
         'script': {
             'lang': 'painless',
-            'source': f"ctx._source.embedding_state = '{EMBEDDED}'",
+            'source': f"ctx._source.{state_field} = '{EMBEDDED}'",
         },
     }
 

@@ -41,6 +41,7 @@ from src.services.curation.semantic_search_run import (
     resolve_search_spaces,
     run_search,
 )
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.embedding_spaces.resolve import embedding_space
 from src.services.rejections import rejection
 from src.utils.search_timing import search_span
@@ -48,6 +49,8 @@ from src.utils.search_timing import search_span
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 logger = get_logger(__name__)
@@ -61,6 +64,7 @@ class SemanticSearchDisabledError(RuntimeError):
 
 def _build_filter(
     *,
+    embedding: WriteFields,
     tab: str | None,
     cluster_uid: str | None,
     date_from: str | None,
@@ -83,7 +87,11 @@ def _build_filter(
 
     if tab:
         tab_must, tab_must_not, _reason = review_queries.build_tab_query(
-            tab, include_test=include_test, text=None, max_rank=max_rank
+            tab,
+            include_test=include_test,
+            text=None,
+            max_rank=max_rank,
+            vector_field=embedding.vector_field,
         )
         filters.extend(tab_must)
         must_not.extend(tab_must_not)
@@ -100,7 +108,7 @@ def _build_filter(
         if max_rank is not None:
             filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
 
-    filters.extend(item_filter_clauses(item_filter or ItemFilter()))
+    filters.extend(item_filter_clauses(item_filter or ItemFilter(), embedding=embedding))
     if cluster_uid is not None:
         filters.append({'term': {'cluster_uid': cluster_uid}})
 
@@ -148,6 +156,7 @@ def _build_filter(
 
 def _filter_for(
     *,
+    embedding: WriteFields,
     item_filter: ItemFilter | None,
     tab: str | None,
     cluster_uid: str | None,
@@ -161,6 +170,7 @@ def _filter_for(
     """The kNN ``filter`` clause both search routes share (one place, so they cannot drift)."""
     item_filter = item_filter or ItemFilter()
     return _build_filter(
+        embedding=embedding,
         item_filter=item_filter.model_copy(update={'max_rank': None}),
         tab=tab,
         cluster_uid=cluster_uid,
@@ -263,6 +273,7 @@ async def semantic_text_search(
 
     with search_span('filter_build'):
         filter_clause = _filter_for(
+            embedding=await item_write_fields(),
             item_filter=item_filter,
             tab=tab,
             cluster_uid=cluster_uid,
@@ -374,6 +385,7 @@ async def semantic_similar_search(
     skip_box = None
     with search_span('filter_build'):
         filter_clause = _filter_for(
+            embedding=await item_write_fields(),
             item_filter=item_filter,
             tab=tab,
             cluster_uid=cluster_uid,

@@ -103,6 +103,7 @@ from src.services.curation.export_writers import (
     write_registry_snapshot,
 )
 from src.services.curation.holdout import compute_holdout_sha
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
@@ -249,7 +250,9 @@ class GenericYoloExportService:
             raise ValueError(msg)
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        rows, skipped_items = await self._load_rows(validated_export_query(item_filter))
+        rows, skipped_items = await self._load_rows(
+            validated_export_query(await item_write_fields(), item_filter)
+        )
         registry_file = await self.registry.snapshot()
         rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)
 

@@ -29,7 +29,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.db.engine import run_with_engine  # noqa: E402  # import follows the sys.path setup above
-from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD  # noqa: E402  # import follows the sys.path setup above
+from src.domain.embedding_spaces import LEGACY_ITEM_STATE_FIELD, LEGACY_ITEM_VECTOR_FIELD  # noqa: E402  # import follows the sys.path setup above
 from src.domain.embedding_state import not_embedded_clause  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.guard import make_script_opensearch  # noqa: E402  # import follows the sys.path setup above
 from src.services.projects.script_binding import add_project_argument, bind_script_project  # noqa: E402  # import follows the sys.path setup above
@@ -64,7 +64,7 @@ def vector_for(class_name: str, crop_id: str, dim: int) -> list[float]:
 def pending_query() -> dict[str, Any]:
     return {
         'size': CHUNK,
-        'query': not_embedded_clause(),
+        'query': not_embedded_clause(LEGACY_ITEM_VECTOR_FIELD),
         '_source': ['class_name'],
     }
 
@@ -94,7 +94,7 @@ async def _seed(args: argparse.Namespace) -> int:
                             LEGACY_ITEM_VECTOR_FIELD: vector_for(
                                 name, hit['_id'], cfg.encoder_embedding_dim
                             ),
-                            'embedding_state': 'embedded',
+                            LEGACY_ITEM_STATE_FIELD: 'embedded',
                         }
                     }
                 )

@@ -36,7 +36,7 @@ from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
 from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
@@ -215,7 +215,7 @@ async def list_regions(
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
     try:
-        filt.extend(item_filter_clauses(item_filter))
+        filt.extend(item_filter_clauses(item_filter, embedding=await item_write_fields()))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if verified is not None:

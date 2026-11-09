@@ -69,7 +69,11 @@ def test_low_confidence_cutoff_is_the_review_band() -> None:
     from src.services.curation import review_queries
 
     must, _mn, _r = review_queries.build_tab_query(
-        'primary_low_conf', include_test=False, text=None, max_rank=None
+        'primary_low_conf',
+        vector_field='pe_embedding',
+        include_test=False,
+        text=None,
+        max_rank=None,
     )
     assert f"'lt': {LOW_CONFIDENCE_MAX}" in str(must)
 

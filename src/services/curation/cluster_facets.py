@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.cluster_cards import CLUSTER_REVIEW_TABS, review_aggs
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ def _bin_edges() -> list[tuple[float, float | None]]:
     return [(lo, hi) for lo, hi in zip(edges, [*edges[1:], None], strict=True)]
 
 
-def facets_body(cluster_uid: str) -> dict[str, Any]:
+def facets_body(cluster_uid: str, vector_field: str) -> dict[str, Any]:
     ranges = [
         {k: v for k, v in (('from', lo), ('to', hi)) if v is not None} for lo, hi in _bin_edges()
     ]
@@ -59,7 +60,7 @@ def facets_body(cluster_uid: str) -> dict[str, Any]:
             'detector_confidence_missing': {
                 'filter': {'bool': {'must_not': {'exists': {'field': 'detector_confidence'}}}}
             },
-            **review_aggs(),
+            **review_aggs(vector_field),
         },
     }
 
@@ -100,8 +101,9 @@ def facets_from_response(cluster_uid: str, resp: dict[str, Any]) -> ClusterFacet
 
 
 async def cluster_facets(opensearch: Any, cluster_uid: str) -> ClusterFacets:
+    body = facets_body(cluster_uid, await item_vector_field())
     try:
-        resp = await opensearch.search(index=items_index(), body=facets_body(cluster_uid))
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise RequestRejectedError(500, f'cluster facets query failed: {exc}') from exc
     return facets_from_response(cluster_uid, resp)

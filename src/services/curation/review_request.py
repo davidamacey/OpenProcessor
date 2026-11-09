@@ -19,6 +19,7 @@ from typing import Any
 from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
@@ -71,12 +72,14 @@ async def build_review_request(
 ) -> ReviewRequest:
     """Raises ``RequestRejectedError(400)`` for an unknown tab, ``ValueError`` for
     a bad sort id or confidence band."""
+    embedding = await item_write_fields()
     must, must_not, reason = review_queries.build_tab_query(
         tab,
         include_test=filters.include_test,
         text=filters.text,
         max_rank=filters.max_rank,
         region_status=filters.region_status,
+        vector_field=embedding.vector_field,
     )
     if filters.min_blur_ratio is not None:
         must.append(_null_safe_floor('blur_lap_ratio', filters.min_blur_ratio))
@@ -107,7 +110,7 @@ async def build_review_request(
         must.append({'term': {'import_ids': filters.import_id}})
     if filters.dataset_split and 'dataset_split' in honoured:
         must.append({'term': {'dataset_split': filters.dataset_split}})
-    must.extend(item_filter_clauses(filters.item))
+    must.extend(item_filter_clauses(filters.item, embedding=embedding))
     clause, applied, fallback = await review_sorts.build_sort(
         sort_id, tab=tab, opensearch=opensearch
     )

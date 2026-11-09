@@ -19,6 +19,7 @@ from src.domain.region_boxes import read_boxes
 from src.services.curation.region_box_embeddings import embeddable, missing_boxes
 from src.services.curation.reprocess_embed import ALL_PARTS, EmbedTarget, target_has_work
 from src.services.curation.reprocess_targets import items_by_terms, scan_items
+from src.services.embedding_spaces.readers import item_vector_field
 
 
 if TYPE_CHECKING:
@@ -56,12 +57,13 @@ async def ids_without_vector(opensearch: AsyncOpenSearch, crop_ids: list[str]) -
     authoritative ``exists`` test, not the recorded state)."""
     missing: set[str] = set()
     index = get_curation_config().items_index
+    vector_field = await item_vector_field()
     for start in range(0, len(crop_ids), _ID_CHUNK):
         query = {
             'bool': {
                 'filter': [
                     {'terms': {'crop_id': crop_ids[start : start + _ID_CHUNK]}},
-                    not_embedded_clause(),
+                    not_embedded_clause(vector_field),
                 ]
             }
         }

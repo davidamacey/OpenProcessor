@@ -27,22 +27,10 @@ ALLOWED: dict[str, str] = {
     'src/clients/curation_opensearch/bodies_core.py': 'mapping builder: index creation',
     'src/clients/curation_opensearch/ensure_fields.py': 'mapping builder: additive field repair',
     'src/config/region_fields.py': 'the storage name of the nested box vectors (RegionFields)',
-    'scripts/db/': 'builders of the 0.6.0 fixture indexes',
-    'scripts/codegen/': 'the guards themselves',
-}
-
-
-# Readers that still name a vector field. A ratchet like the baselines of scripts/codegen: the
-# list only shrinks (``test_pending_entries_still_offend`` fails for a file that was converted),
-# and a new offender fails the first test.
-PENDING: dict[str, str] = {
-    'src/config/__init__.py': 'exports ITEM_EMBEDDING_FIELD until the last reader is converted',
-    'src/config/curation.py': 'defines ITEM_EMBEDDING_FIELD',
-    'src/domain/embedding_state.py': 'the clause helpers default to the constant',
-    'src/services/curation/review_tab_clauses.py': 'the all tab: build_tab_query takes the field',
-    'src/services/curation/strategy_builders.py': 'the requires_field descriptor of semantic search',
     'scripts/bench/export_project_embeddings.py': 'standalone httpx harness over a 0.6.0 export',
     'scripts/bench/replicate_items.py': 'standalone httpx harness over a 0.6.0 export',
+    'scripts/db/': 'builders of the 0.6.0 fixture indexes',
+    'scripts/codegen/': 'the guards themselves',
 }
 
 
@@ -93,15 +81,10 @@ def _offences(path: Path) -> list[str]:
 
 
 def test_no_new_reader_names_a_vector_field() -> None:
-    offenders = [h for rel, hits in _scan().items() if rel not in PENDING for h in hits]
+    offenders = [h for hits in _scan().values() for h in hits]
     assert offenders == [], (
         'readers must resolve their field with embedding_space():\n' + '\n'.join(offenders)
     )
-
-
-def test_pending_entries_still_offend() -> None:
-    converted = sorted(set(PENDING) - set(_scan()))
-    assert converted == [], f'converted: delete from PENDING: {converted}'
 
 
 def test_allowed_prefixes_exist() -> None:

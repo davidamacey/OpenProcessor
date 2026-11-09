@@ -51,7 +51,7 @@ def test_build_pending_query_resolves_src_import_under_module_invocation() -> No
     """
     code = (
         'from scripts.curation.vlm_pending import _build_pending_query;'
-        'q = _build_pending_query(0.80);'
+        'q = _build_pending_query(0.80, vector_field="pe_embedding");'
         'assert isinstance(q, dict) and "bool" in q, q'
     )
     result = subprocess.run(
@@ -80,7 +80,7 @@ def test_bare_script_invocation_reproduces_the_original_bug() -> None:
         "spec = importlib.util.spec_from_file_location('vlm_worker', sys.argv[2]);"
         'mod = importlib.util.module_from_spec(spec);'
         'spec.loader.exec_module(mod);'
-        'mod._build_pending_query(0.80)'
+        'mod._build_pending_query(0.80, vector_field="pe_embedding")'
     )
     script_dir = str(REPO_ROOT / 'scripts' / 'curation')
     script_path = str(REPO_ROOT / 'scripts' / 'curation' / 'vlm_worker.py')

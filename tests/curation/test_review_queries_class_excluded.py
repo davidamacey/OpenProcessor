@@ -21,7 +21,9 @@ _CLASS_EXCLUDED_CLAUSE = {'term': {'class_excluded': True}}
 
 @pytest.mark.parametrize('tab', KNOWN_TABS)
 def test_every_tab_excludes_class_excluded_items(tab: str) -> None:
-    _must, must_not, _reason = build_tab_query(tab, include_test=False, text=None, max_rank=None)
+    _must, must_not, _reason = build_tab_query(
+        tab, vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+    )
     assert _CLASS_EXCLUDED_CLAUSE in must_not, (
         f'tab {tab!r} must_not is missing the class_excluded guard: {must_not}'
     )
@@ -29,7 +31,7 @@ def test_every_tab_excludes_class_excluded_items(tab: str) -> None:
 
 def test_excluded_outlier_item_disappears_from_the_outliers_tab() -> None:
     must, must_not, _reason = build_tab_query(
-        'outliers', include_test=False, text=None, max_rank=None
+        'outliers', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
     )
     query = {'bool': {'must': must, 'must_not': must_not}}
 

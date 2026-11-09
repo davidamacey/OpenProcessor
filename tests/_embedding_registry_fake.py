@@ -17,6 +17,7 @@ from src.domain.embedding_spaces import (
     space_key,
 )
 from src.services.embedding_spaces import resolve
+from src.services.embedding_spaces.readers import WriteFields
 
 
 if TYPE_CHECKING:
@@ -110,3 +111,9 @@ class EmbeddingRegistryFake:
         monkeypatch.setattr(resolve, '_load', load)
         monkeypatch.setattr(resolve, '_current_epoch', epoch)
         return self
+
+
+DEFAULT_WRITE_FIELDS = WriteFields(
+    legacy_names(Target.ITEM).vector_field, legacy_names(Target.ITEM).state_field or ''
+)
+"""The vector and state fields of a project on the 0.6.0 default item space."""

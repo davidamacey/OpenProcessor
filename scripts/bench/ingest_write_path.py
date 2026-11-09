@@ -42,10 +42,11 @@ from scripts.bench.baseline_report import percentile
 from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.suite_probes import cgroup_cpu_s
 from src.config import get_curation_config
-from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
+from src.domain.embedding_spaces import LEGACY_ITEM_STATE_FIELD, LEGACY_ITEM_VECTOR_FIELD
 from src.services.curation.ingest_writer import IngestWriter
 from src.services.curation.semantic_search import _build_filter
 from src.services.curation.semantic_search_run import build_knn_query
+from src.services.embedding_spaces.readers import WriteFields
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project
 
@@ -132,6 +133,7 @@ async def run_arm(
     query_vectors = [it[LEGACY_ITEM_VECTOR_FIELD] for s in sources[:200] for it in s['items'][:1]]
     item_space = legacy_item_space()
     flt = _build_filter(
+        embedding=WriteFields(LEGACY_ITEM_VECTOR_FIELD, LEGACY_ITEM_STATE_FIELD),
         tab=None,
         cluster_uid=None,
         date_from=None,

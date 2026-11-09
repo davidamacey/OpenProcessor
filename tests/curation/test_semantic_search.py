@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
-from _embedding_registry_fake import default_space
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS, default_space
 from _msearch_fake import install_msearch
 
 from src.config import CurationConfig
@@ -75,6 +75,7 @@ def _fake_os_paged(candidates: list[dict]) -> AsyncMock:
 
 def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid=None,
         date_from=None,
@@ -95,6 +96,7 @@ def test_build_filter_default_excludes_validated_and_dismissed_and_holdout():
 
 def test_build_filter_include_test_keeps_holdout_crops():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid=None,
         date_from=None,
@@ -111,6 +113,7 @@ def test_build_filter_include_test_keeps_holdout_crops():
 
 def test_build_filter_cluster_uid():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid='6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
         date_from=None,
@@ -125,6 +128,7 @@ def test_build_filter_cluster_uid():
 
 def test_build_filter_date_range():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid=None,
         date_from='2026-01-01',
@@ -139,6 +143,7 @@ def test_build_filter_date_range():
 
 def test_build_filter_reuses_tab_query():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab='uncertainty',
         cluster_uid=None,
         date_from=None,
@@ -158,6 +163,7 @@ def test_build_filter_unknown_tab_raises_400():
 
     with pytest.raises(RequestRejectedError):
         semantic_search._build_filter(
+            embedding=DEFAULT_WRITE_FIELDS,
             tab='not_a_real_tab',
             cluster_uid=None,
             date_from=None,
@@ -171,6 +177,7 @@ def test_build_filter_unknown_tab_raises_400():
 
 def test_build_filter_hide_near_duplicates():
     filt = semantic_search._build_filter(
+        embedding=DEFAULT_WRITE_FIELDS,
         tab=None,
         cluster_uid=None,
         date_from=None,
@@ -457,7 +464,9 @@ async def test_semantic_text_search_class_filter_is_the_knn_filter_and_the_count
     assert {tuple(c['term']) for c in name_should} == {('class_name',), ('proposal_name',)}
     assert all(next(iter(c['term'].values()))['value'] == 'car' for c in name_should)
     count_body = fake_os.count.await_args.kwargs['body']
-    assert count_body == {'query': {'bool': {'filter': [*clauses, not_embedded_clause()]}}}
+    assert count_body == {
+        'query': {'bool': {'filter': [*clauses, not_embedded_clause('pe_embedding')]}}
+    }
 
 
 # =============================================================================

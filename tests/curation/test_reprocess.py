@@ -8,6 +8,7 @@ import copy
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from pydantic import ValidationError
 
 from curation.reprocess_fixtures import (
@@ -79,7 +80,7 @@ def _result(resp: Any, scope: str) -> Any:
 )
 def test_malformed_targets_are_rejected(targets: ReprocessTargets) -> None:
     with pytest.raises(ReprocessTargetsError):
-        validate_targets(targets)
+        validate_targets(targets, embedding=DEFAULT_WRITE_FIELDS)
 
 
 def test_request_models_forbid_unknown_keys() -> None:

@@ -7,9 +7,10 @@ subject-size limit that
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import Any
 
-from src.config.curation import ITEM_EMBEDDING_FIELD, PROBE_ENTROPY_REVIEW_MIN
+from src.config.curation import PROBE_ENTROPY_REVIEW_MIN
 from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.config.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
@@ -30,10 +31,6 @@ from src.services.curation.review_filter_specs import (
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import EmptyClassReason
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 OUTLIER_SCORE_MAX = 0.65
@@ -77,6 +74,9 @@ def region_text_clause(field: str, text: str) -> dict[str, Any]:
 _Clauses = list[dict[str, Any]]
 # (must, must_not, reason) of one tab, before the shared subject-size limit.
 _TabQuery = tuple[_Clauses, _Clauses, str]
+# A tab builder: ``include_test`` and the vector field of the primary item space (only the
+# ``all`` tab reads it).
+TabBuilder = Callable[[bool, str | None], _TabQuery]
 
 
 def _holdout_guard(include_test: bool) -> _Clauses:
@@ -98,7 +98,10 @@ def _default_must_not(include_test: bool) -> _Clauses:
     return [*must_not, *_holdout_guard(include_test)]
 
 
-def _all_tab(include_test: bool) -> _TabQuery:
+def _all_tab(include_test: bool, vector_field: str | None) -> _TabQuery:
+    if vector_field is None:
+        msg = "the 'all' review tab needs the vector field of the primary item space"
+        raise ValueError(msg)
     # Unified review queue — every crop a human should look at, with the
     # most-uncertain ones first. Avoids the "click through 4 tabs"
     # workflow: just keep scrolling. Each item still carries a `reason`
@@ -126,7 +129,7 @@ def _all_tab(include_test: bool) -> _TabQuery:
                     {
                         'bool': {
                             'must_not': [{'exists': {'field': 'class_id'}}],
-                            'filter': [embedded_clause(ITEM_EMBEDDING_FIELD)],
+                            'filter': [embedded_clause(vector_field)],
                         }
                     },
                 ],
@@ -450,18 +453,27 @@ def _imported_tab(include_test: bool) -> _TabQuery:
     return must, must_not, 'imported label: spot check'
 
 
-# Tabs whose query depends on ``include_test`` alone; ``regions`` also reads
-# ``text`` and ``region_status``.
-SIMPLE_TABS: dict[str, Callable[[bool], _TabQuery]] = {
+# Every tab but ``regions`` (which also reads ``text`` and ``region_status``); only ``all`` reads
+# the vector field.
+def _alone(build: Callable[[bool], _TabQuery]) -> TabBuilder:
+    """A tab that depends on ``include_test`` alone."""
+
+    def tab(include_test: bool, _vector_field: str | None) -> _TabQuery:
+        return build(include_test)
+
+    return tab
+
+
+SIMPLE_TABS: dict[str, TabBuilder] = {
     'all': _all_tab,
-    'mismatches': _mismatches_tab,
-    'vlm_low_conf': _vlm_low_conf_tab,
-    'detector_disagreements': _detector_disagreements_tab,
-    'outliers': _outliers_tab,
-    'uncertainty': _uncertainty_tab,
-    'model_disagreements': _model_disagreements_tab,
-    'primary_low_conf': _primary_low_conf_tab,
-    'classifier_blind_spots': _classifier_blind_spots_tab,
-    'new_class_proposals': _new_class_proposals_tab,
-    'imported': _imported_tab,
+    'mismatches': _alone(_mismatches_tab),
+    'vlm_low_conf': _alone(_vlm_low_conf_tab),
+    'detector_disagreements': _alone(_detector_disagreements_tab),
+    'outliers': _alone(_outliers_tab),
+    'uncertainty': _alone(_uncertainty_tab),
+    'model_disagreements': _alone(_model_disagreements_tab),
+    'primary_low_conf': _alone(_primary_low_conf_tab),
+    'classifier_blind_spots': _alone(_classifier_blind_spots_tab),
+    'new_class_proposals': _alone(_new_class_proposals_tab),
+    'imported': _alone(_imported_tab),
 }

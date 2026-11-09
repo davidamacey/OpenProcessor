@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _class_registry_fake import InMemoryRegistry
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from PIL import Image
 
 from curation.query_fakes import QueryFakeOpenSearch
@@ -394,13 +395,20 @@ async def test_selectors_skip_items_with_a_recent_empty_answer() -> None:
         d['pe_embedding'] = [0.0]
     fake = QueryFakeOpenSearch({ITEMS: docs})
 
-    worker = await fake.search(index=ITEMS, body={'size': 50, 'query': _build_pending_query(0.8)})
+    worker = await fake.search(
+        index=ITEMS,
+        body={'size': 50, 'query': _build_pending_query(0.8, vector_field='pe_embedding')},
+    )
     sweep = await fake.search(
         index=ITEMS,
         body={
             'size': 50,
             'query': vlm_selection_query(
-                class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, now=now
+                embedding=DEFAULT_WRITE_FIELDS,
+                class_id=None,
+                cluster_uid=None,
+                classifier_confidence_skip_vlm=0.8,
+                now=now,
             ),
         },
     )
@@ -412,7 +420,9 @@ async def test_selectors_skip_items_with_a_recent_empty_answer() -> None:
 def test_all_review_tab_surfaces_empty_answers() -> None:
     from src.services.curation.review_queries import build_tab_query
 
-    must, _must_not, _reason = build_tab_query('all', include_test=False, text=None, max_rank=None)
+    must, _must_not, _reason = build_tab_query(
+        'all', vector_field='pe_embedding', include_test=False, text=None, max_rank=None
+    )
     should = must[0]['bool']['should']
     assert {'exists': {'field': REASON}} in should
 

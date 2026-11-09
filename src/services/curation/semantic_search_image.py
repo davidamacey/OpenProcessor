@@ -29,6 +29,7 @@ from src.services.curation.image_decode import ImageDecodeError, decode_image
 from src.services.curation.semantic_search import _filter_for
 from src.services.curation.semantic_search_run import QueryVector, resolve_search_spaces, run_search
 from src.services.detection.geometry import crop_rect
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.rejections import rejection
 from src.utils.cpu_pool import run_cpu
 
@@ -187,6 +188,7 @@ async def semantic_image_search(
         return QueryVector(vectors[0].tolist(), space.space_key)
 
     filter_clause = _filter_for(
+        embedding=await item_write_fields(),
         item_filter=item_filter,
         tab=tab,
         cluster_uid=cluster_uid,

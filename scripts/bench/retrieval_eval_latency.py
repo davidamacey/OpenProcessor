@@ -24,6 +24,7 @@ import httpx
 
 from scripts.bench.retrieval_eval_metrics import latency_summary
 from scripts.curation._project_worker_utils import curation_api_prefix
+from src.domain.embedding_spaces import LEGACY_ITEM_VECTOR_FIELD
 from src.domain.embedding_state import embedded_clause
 
 
@@ -110,7 +111,7 @@ def opensearch_facts(os_url: str, index: str) -> dict[str, Any]:
             json={
                 'size': 0,
                 'track_total_hits': True,
-                'query': embedded_clause(),
+                'query': embedded_clause(LEGACY_ITEM_VECTOR_FIELD),
                 'aggs': {'c': {'terms': {'field': CLASS_FIELD, 'size': 200}}},
             },
         ).json()

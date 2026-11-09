@@ -83,7 +83,9 @@ def _label(fake: _Fake, crop_ids: list[str]) -> None:
 
 
 async def _pending(fake: _Fake, reps: set[str], policy: VlmPolicy) -> list[str]:
-    query = _build_pending_query(0.8, policy=policy, representative_ids=reps)
+    query = _build_pending_query(
+        0.8, vector_field='pe_embedding', policy=policy, representative_ids=reps
+    )
     resp = await fake.search(index=ITEMS, body={'size': 1000, 'query': query})
     return sorted(h['_id'] for h in resp['hits']['hits'])
 

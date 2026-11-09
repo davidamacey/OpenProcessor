@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from curation.query_fakes import matches
-from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.domain.embedding_state import EMBEDDED, FAILED, embedded_clause, not_embedded_clause
 from src.routers.curation._item_models import ItemDoc
 from src.services.curation.item_doc import DetectedItem, build_item_doc
@@ -31,12 +30,12 @@ def _doc(item: DetectedItem) -> dict:
 
 
 def test_clauses_partition_the_items() -> None:
-    with_vec = {ITEM_EMBEDDING_FIELD: [0.1]}
+    with_vec = {'pe_embedding': [0.1]}
     without = {'crop_id': 'x'}
-    assert matches(with_vec, embedded_clause())
-    assert not matches(without, embedded_clause())
-    assert matches(without, not_embedded_clause())
-    assert not matches(with_vec, not_embedded_clause())
+    assert matches(with_vec, embedded_clause('pe_embedding'))
+    assert not matches(without, embedded_clause('pe_embedding'))
+    assert matches(without, not_embedded_clause('pe_embedding'))
+    assert not matches(with_vec, not_embedded_clause('pe_embedding'))
 
 
 def test_clauses_take_another_field() -> None:

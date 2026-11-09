@@ -20,6 +20,7 @@ from src.services.curation.cluster_cards import (
 )
 from src.services.curation.cluster_facets import cluster_facets
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 @router.get('/clusters', response_model=None, responses={200: {'model': ClusterListResponse}})
@@ -74,7 +75,7 @@ async def list_clusters(
             min_blur_ratio=min_blur_ratio,
             class_source=class_source,
         )
-        item_filter_clauses(gate)
+        item_filter_clauses(gate, embedding=await item_write_fields())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return await list_cluster_cards(

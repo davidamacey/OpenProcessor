@@ -106,7 +106,7 @@ def test_build_pending_query_omits_classifier_gate_when_sources_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr('src.domain.ingest_class_sources.classifier_class_sources', set)
-    query = vlm_pending._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
     assert not _has_terms_clause_with_empty_list(query)
     # No "classifier already confident" bool clause at all when the
     # source set is empty -- distinguishable from the non-empty case
@@ -125,7 +125,7 @@ def test_build_pending_query_keeps_classifier_gate_when_sources_present(
         'src.domain.ingest_class_sources.classifier_class_sources',
         lambda: {'classifier'},
     )
-    query = vlm_pending._build_pending_query(0.8)
+    query = vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
     must_not = query['bool']['must_not']
     assert any(
         'bool' in c and {'terms': {'class_source': ['classifier']}} in c['bool'].get('filter', [])
@@ -138,8 +138,8 @@ def test_build_pending_query_warns_once_when_sources_empty(
 ) -> None:
     monkeypatch.setattr('src.domain.ingest_class_sources.classifier_class_sources', set)
     monkeypatch.setattr(vlm_pending, '_classifier_sources_empty_warned', False)
-    vlm_pending._build_pending_query(0.8)
-    vlm_pending._build_pending_query(0.8)
+    vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
+    vlm_pending._build_pending_query(0.8, vector_field='pe_embedding')
     out = capsys.readouterr().out
     assert out.count('classifier_class_sources() is empty') == 1
 

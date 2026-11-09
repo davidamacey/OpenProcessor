@@ -143,7 +143,7 @@ def test_region_review_tab_keeps_auto_confirmed_regions() -> None:
     """The region tab excludes only human-validated regions, so an
     auto-confirmed (unvalidated) region is in the human queue."""
     _must, must_not, _reason = build_tab_query(
-        'regions', include_test=True, text=None, max_rank=None
+        'regions', vector_field='pe_embedding', include_test=True, text=None, max_rank=None
     )
     assert {'term': {F.validated: True}} in must_not
     assert not any(F.auto_confirmed in str(clause) for clause in must_not)

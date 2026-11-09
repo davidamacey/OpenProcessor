@@ -2,7 +2,7 @@
 
 Both queues gate on "the item has an embedding". The gate once named a field
 (``embedding``) that the items index never carries -- items store their
-encoder vector in ``ITEM_EMBEDDING_FIELD`` -- so every fresh item silently
+encoder vector in ``pe_embedding`` -- so every fresh item silently
 fell out of ``/review/all`` and the VLM worker's cohort.
 """
 
@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 from curation.query_fakes import matches
-from src.config.curation import ITEM_EMBEDDING_FIELD
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 
 
@@ -48,24 +47,26 @@ def _bool(must: list[dict[str, Any]], must_not: list[dict[str, Any]]) -> dict[st
 
 def test_item_doc_writes_the_item_embedding_field() -> None:
     doc = _fresh_unlabeled_doc()
-    assert ITEM_EMBEDDING_FIELD in doc
+    assert 'pe_embedding' in doc
     assert 'class_id' not in doc or doc['class_id'] is None
 
 
 def test_fresh_unlabeled_item_is_in_review_all_tab() -> None:
     from src.services.curation.review_queries import build_tab_query
 
-    must, must_not, _ = build_tab_query('all', include_test=True, text=None, max_rank=None)
+    must, must_not, _ = build_tab_query(
+        'all', vector_field='pe_embedding', include_test=True, text=None, max_rank=None
+    )
     assert matches(_fresh_unlabeled_doc(), _bool(must, must_not))
 
 
 def test_fresh_unlabeled_item_is_in_vlm_worker_cohort() -> None:
     from scripts.curation.vlm_pending import _build_pending_query
 
-    assert matches(_fresh_unlabeled_doc(), _build_pending_query(0.8))
+    assert matches(_fresh_unlabeled_doc(), _build_pending_query(0.8, vector_field='pe_embedding'))
 
 
 def test_pipeline_vlm_sweep_fetches_the_item_embedding() -> None:
     from src.services.curation import auto_label_run
 
-    assert ITEM_EMBEDDING_FIELD in auto_label_run.vlm_sweep_source_fields(ITEM_EMBEDDING_FIELD)
+    assert 'pe_embedding' in auto_label_run.vlm_sweep_source_fields('pe_embedding')

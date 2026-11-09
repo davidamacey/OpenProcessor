@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.query_fakes import QueryFakeOpenSearch, SettingsFakeOpenSearch
 from scripts.curation.vlm_pending import _build_pending_query
@@ -147,12 +148,15 @@ ALL = {'c1a', 'c1b', 'c1c', 'c2a', 'c2b', 'u1', 'u2', 'noconf'}
 @pytest.mark.asyncio
 async def test_default_policy_is_all_and_changes_nothing() -> None:
     fake = _fake()
-    assert await _ids(fake, _build_pending_query(0.8)) == ALL
+    assert await _ids(fake, _build_pending_query(0.8, vector_field='pe_embedding')) == ALL
     assert (
         await _ids(
             fake,
             vlm_selection_query(
-                class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8
+                embedding=DEFAULT_WRITE_FIELDS,
+                class_id=None,
+                cluster_uid=None,
+                classifier_confidence_skip_vlm=0.8,
             ),
         )
         == ALL
@@ -163,9 +167,16 @@ async def test_default_policy_is_all_and_changes_nothing() -> None:
 async def test_off_selects_nothing_through_both_selectors() -> None:
     fake = _fake()
     policy = _policy(scope='off')
-    assert await _ids(fake, _build_pending_query(0.8, policy=policy)) == set()
+    assert (
+        await _ids(fake, _build_pending_query(0.8, vector_field='pe_embedding', policy=policy))
+        == set()
+    )
     sweep = vlm_selection_query(
-        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+        policy=policy,
     )
     assert await _ids(fake, sweep) == set()
 
@@ -175,9 +186,16 @@ async def test_uncertain_keeps_low_or_missing_detector_confidence_only() -> None
     fake = _fake()
     policy = _policy(scope='uncertain', conf_max=0.8)
     expected = {'c1b', 'u2', 'noconf'}
-    assert await _ids(fake, _build_pending_query(0.8, policy=policy)) == expected
+    assert (
+        await _ids(fake, _build_pending_query(0.8, vector_field='pe_embedding', policy=policy))
+        == expected
+    )
     sweep = vlm_selection_query(
-        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+        policy=policy,
     )
     assert await _ids(fake, sweep) == expected
 
@@ -190,8 +208,11 @@ async def test_representatives_are_the_k_nearest_per_cluster_plus_unassigned() -
     assert reps == {'human', 'c1a', 'c2a', 'c2b'}
     policy = _policy(scope='representatives', per_cluster=2)
     expected = {'c1a', 'c2a', 'c2b', 'u1', 'u2', 'noconf'}  # c1b/c1c rank behind the human crop
-    worker = _build_pending_query(0.8, policy=policy, representative_ids=reps)
+    worker = _build_pending_query(
+        0.8, vector_field='pe_embedding', policy=policy, representative_ids=reps
+    )
     sweep = vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
         class_id=None,
         cluster_uid=None,
         classifier_confidence_skip_vlm=0.8,
@@ -213,10 +234,16 @@ async def test_human_validated_and_excluded_are_never_selected(scope: str) -> No
     fake = _fake()
     policy = _policy(scope=scope)
     reps = await representative_ids(fake, per_cluster=10)
-    worker = await _ids(fake, _build_pending_query(0.8, policy=policy, representative_ids=reps))
+    worker = await _ids(
+        fake,
+        _build_pending_query(
+            0.8, vector_field='pe_embedding', policy=policy, representative_ids=reps
+        ),
+    )
     sweep = await _ids(
         fake,
         vlm_selection_query(
+            embedding=DEFAULT_WRITE_FIELDS,
             class_id=None,
             cluster_uid=None,
             classifier_confidence_skip_vlm=0.8,
@@ -230,9 +257,13 @@ async def test_human_validated_and_excluded_are_never_selected(scope: str) -> No
 def test_worker_and_sweep_share_one_scope_function() -> None:
     policy = _policy(scope='uncertain', conf_max=0.6, sample_frac=0.5)
     clauses = vlm_scope_clauses(policy, representative_ids=None)
-    worker = _build_pending_query(0.8, policy=policy)
+    worker = _build_pending_query(0.8, vector_field='pe_embedding', policy=policy)
     sweep = vlm_selection_query(
-        class_id=None, cluster_uid=None, classifier_confidence_skip_vlm=0.8, policy=policy
+        embedding=DEFAULT_WRITE_FIELDS,
+        class_id=None,
+        cluster_uid=None,
+        classifier_confidence_skip_vlm=0.8,
+        policy=policy,
     )
     for clause in (*clauses.filter, *clauses.must_not):
         assert clause in worker['bool']['filter'] + worker['bool']['must_not']
@@ -255,6 +286,7 @@ def test_sample_frac_below_one_adds_a_stable_per_crop_hash_filter() -> None:
 async def test_cluster_scope_run_ignores_the_policy() -> None:
     fake = _fake()
     query = vlm_selection_query(
+        embedding=DEFAULT_WRITE_FIELDS,
         class_id=None,
         cluster_uid=CL1,
         classifier_confidence_skip_vlm=0.8,

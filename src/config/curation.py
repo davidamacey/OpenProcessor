@@ -37,12 +37,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-# Items-index field holding the per-item encoder embedding
-# (``CurationConfig.encoder_embedding_dim`` wide). Queues that gate on "the
-# item has been embedded" must use this name -- the items index has no
-# generic ``embedding`` field.
-ITEM_EMBEDDING_FIELD = 'pe_embedding'
-
 # Minimum active-learning probe entropy (nats) for the 'all' review
 # tab's catch-all clause. Before this, the tab matched on `exists
 # probe_pred_entropy`, which after one probe run matches almost every

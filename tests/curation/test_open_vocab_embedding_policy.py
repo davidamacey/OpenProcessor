@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.open_vocab_fixtures import (
     FakeSegmenter,
@@ -96,6 +97,12 @@ def test_origin_sam3_means_the_item_carries_a_prompt_set() -> None:
     from curation.query_fakes import matches
     from src.services.curation.item_filter import item_filter_clauses
 
-    query = {'bool': {'filter': item_filter_clauses(ItemFilter(origin=['sam3']))}}
+    query = {
+        'bool': {
+            'filter': item_filter_clauses(
+                ItemFilter(origin=['sam3']), embedding=DEFAULT_WRITE_FIELDS
+            )
+        }
+    }
     assert matches({'open_vocab_set': 'street'}, query)
     assert not matches({'proposal_name': 'car'}, query)

@@ -96,7 +96,7 @@ def _sort_strategies(default_id: str | None) -> list[dict[str, Any]]:
     return entries
 
 
-def _overlay_strategies() -> list[dict[str, Any]]:
+def _overlay_strategies(vector_field: str) -> list[dict[str, Any]]:
     """Phase 4 ``selection/`` overlays.
     One entry today: ``diverse`` (k-center-greedy). Status tracks
     ``OP_SELECT_DIVERSE_ENABLED`` the same live-read pattern
@@ -120,11 +120,11 @@ def _overlay_strategies() -> list[dict[str, Any]]:
             'select_max_k': DIVERSE_SELECT_MAX_K,
         },
         *_viz_projection_strategy(),
-        *_semantic_search_strategy(),
+        *_semantic_search_strategy(vector_field),
     ]
 
 
-def _semantic_search_strategy() -> list[dict[str, Any]]:
+def _semantic_search_strategy(vector_field: str) -> list[dict[str, Any]]:
     """Semantic-search overlay — PE-Core text-to-image kNN search.
     Same "flag on -> experimental, flag off -> disabled, never stable
     without a full validation gate" shape ``diverse`` uses above: no
@@ -140,7 +140,7 @@ def _semantic_search_strategy() -> list[dict[str, Any]]:
             'label': 'Semantic Text Search (PE-Core)',
             'status': 'experimental' if _semantic_search_enabled() else 'disabled',
             'default': False,
-            'requires_field': 'pe_embedding',
+            'requires_field': vector_field,
             'writes': [],
         }
     ]

@@ -29,6 +29,7 @@ from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
 from src.services.curation.item_filter import item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.search_timing import bind_search_timer
 
 
@@ -124,7 +125,9 @@ async def search_text(
         )
 
     try:
-        item_filter_clauses(item_filter)  # a malformed band is the caller's 400, not an outage
+        item_filter_clauses(
+            item_filter, embedding=await item_write_fields()
+        )  # a malformed band is the caller's 400, not an outage
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -263,7 +266,9 @@ async def search_similar(
         )
 
     try:
-        item_filter_clauses(item_filter)  # a malformed band is the caller's 400, not an outage
+        item_filter_clauses(
+            item_filter, embedding=await item_write_fields()
+        )  # a malformed band is the caller's 400, not an outage
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -23,6 +23,7 @@ from src.services.curation.reprocess_models import (
     ReprocessTargets,
 )
 from src.services.curation.reprocess_targets import selector_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
@@ -88,13 +89,14 @@ async def _suggest_reprocess(
     selector = ReprocessFilter(
         profile_not=profile.name, profile_revision_below=revision, include_detected=True
     )
+    embedding = await item_write_fields()
     stale = await opensearch.count(
         index=index,
         body={
             'query': {
                 'bool': {
                     'filter': [
-                        *selector_clauses(selector, fields),
+                        *selector_clauses(selector, embedding, fields),
                         {
                             'terms': {
                                 fields.status: [

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
@@ -108,7 +109,10 @@ def test_golden_covers_every_filter_field() -> None:
 @pytest.mark.parametrize('name', sorted(CASES))
 def test_clauses_match_golden(name: str) -> None:
     golden = json.loads(GOLDEN.read_text())
-    assert item_filter_clauses(ItemFilter(**CASES[name])) == golden[name]
+    assert (
+        item_filter_clauses(ItemFilter(**CASES[name]), embedding=DEFAULT_WRITE_FIELDS)
+        == golden[name]
+    )
 
 
 def test_golden_file_has_exactly_the_cases() -> None:
@@ -124,9 +128,9 @@ def test_golden_file_has_exactly_the_cases() -> None:
 )
 def test_malformed_filter_raises(kwargs: dict[str, Any], message: str) -> None:
     with pytest.raises(ValueError, match=f'^{re.escape(message)}$'):
-        item_filter_clauses(ItemFilter(**kwargs))
+        item_filter_clauses(ItemFilter(**kwargs), embedding=DEFAULT_WRITE_FIELDS)
 
 
 def test_conf_band_inverted_raises() -> None:
     with pytest.raises(ValueError, match='conf_min'):
-        item_filter_clauses(ItemFilter(conf_min=0.9, conf_max=0.1))
+        item_filter_clauses(ItemFilter(conf_min=0.9, conf_max=0.1), embedding=DEFAULT_WRITE_FIELDS)
