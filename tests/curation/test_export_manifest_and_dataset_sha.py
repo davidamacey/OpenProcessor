@@ -213,13 +213,13 @@ async def test_export_is_rederivable_from_recorded_seed(tmp_path):
                 out[f'{split}/{f.name}'] = f.read_bytes()
         return out
 
-    cfg1 = CurationConfig(export_root=tmp_path / 'run1')
+    cfg1 = CurationConfig(export_root=tmp_path / 'run1', export_keep_last=0)
     registry1 = make_registry(tmp_path / 'reg1', ['car', 'truck'])
     service1 = GenericYoloExportService(FakeOpenSearch(docs), config=cfg1, registry=registry1)
     result1 = await service1.export_dataset(seed=123, copy_images=False)
     manifest1 = json.loads(Path(result1.manifest_path).read_text())
 
-    cfg2 = CurationConfig(export_root=tmp_path / 'run2')
+    cfg2 = CurationConfig(export_root=tmp_path / 'run2', export_keep_last=0)
     registry2 = make_registry(tmp_path / 'reg2', ['car', 'truck'])
     service2 = GenericYoloExportService(FakeOpenSearch(docs), config=cfg2, registry=registry2)
     result2 = await service2.export_dataset(seed=manifest1['seed'], copy_images=False)
@@ -349,13 +349,13 @@ async def test_dataset_sha_differs_for_a_class_rename_with_byte_identical_labels
     ]
     registry = make_registry(tmp_path / 'registry', ['car'])
 
-    cfg_a = CurationConfig(export_root=tmp_path / 'a')
+    cfg_a = CurationConfig(export_root=tmp_path / 'a', export_keep_last=0)
     service_a = GenericYoloExportService(FakeOpenSearch(docs), config=cfg_a, registry=registry)
     result_a = await service_a.export_dataset(seed=1, copy_images=False)
 
     registry.rename_class(0, 'automobile')
 
-    cfg_b = CurationConfig(export_root=tmp_path / 'b')
+    cfg_b = CurationConfig(export_root=tmp_path / 'b', export_keep_last=0)
     service_b = GenericYoloExportService(FakeOpenSearch(docs), config=cfg_b, registry=registry)
     result_b = await service_b.export_dataset(seed=1, copy_images=False)
 
