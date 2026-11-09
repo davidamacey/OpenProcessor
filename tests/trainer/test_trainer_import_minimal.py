@@ -80,3 +80,34 @@ def test_inside_the_image_psycopg_is_the_c_build() -> None:
         timeout=60,
     )
     assert result.stdout.strip() == 'c'
+
+
+_SCHEMA_PROBE = """
+import sys
+sys.path[:0] = [sys.argv[1], sys.argv[2]]
+import celery_tasks
+from celery.signals import worker_init
+from src.db import schema_check
+
+def stale():
+    raise SystemExit('schema revision is not the code head')
+
+schema_check.require_current_schema = stale
+try:
+    worker_init.send(sender=None)
+except SystemExit as exc:
+    print('refused:' + str(exc))
+else:
+    print('served')
+"""
+
+
+def test_a_stale_schema_stops_the_worker_at_init() -> None:
+    result = subprocess.run(
+        [sys.executable, '-I', '-c', _SCHEMA_PROBE, str(REPO_ROOT), str(TRAINER)],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    assert result.stdout.strip() == 'refused:schema revision is not the code head'
