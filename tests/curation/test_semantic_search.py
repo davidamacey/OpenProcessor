@@ -20,7 +20,7 @@ from _msearch_fake import install_msearch
 from src.config import CurationConfig
 from src.core.exceptions import RequestRejectedError
 from src.domain.embedding_spaces import Target
-from src.services.curation import semantic_search
+from src.services.curation import semantic_search, semantic_search_run
 from src.services.curation.item_filter import ItemFilter
 
 
@@ -198,7 +198,7 @@ def test_build_filter_hide_near_duplicates():
 
 def test_build_knn_query_shape():
     vec = [0.1] * PE_DIM
-    q = semantic_search.build_knn_query(
+    q = semantic_search_run.build_knn_query(
         vec,
         vector_space_key=SPACE.space_key,
         space=SPACE,
@@ -218,7 +218,7 @@ def test_build_knn_query_shape():
 
 def test_build_knn_query_no_filter_omits_filter_key():
     vec = [0.1] * PE_DIM
-    q = semantic_search.build_knn_query(
+    q = semantic_search_run.build_knn_query(
         vec, vector_space_key=SPACE.space_key, space=SPACE, k=10, filter_clause=[]
     )
     assert 'filter' not in q['knn']['pe_embedding']
@@ -245,6 +245,8 @@ async def test_semantic_text_search_empty_query_short_circuits():
         'page': 1,
         'page_size': 30,
         'unembedded_in_scope': 0,
+        'space': 'pe_core_l14_336_v1',
+        'fuse': [],
     }
 
 

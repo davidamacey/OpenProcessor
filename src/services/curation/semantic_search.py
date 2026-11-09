@@ -7,8 +7,11 @@ behind the searched space (:class:`src.clients.pe_encoder.PEEncoder`, Triton onl
 the resulting doc ids into the same response shape ``review.review_queue`` uses.
 
 Every search runs against one *space* of the bound project's registry: the target's primary
-space. The kNN query takes the space and the space key of the query vector and refuses a
-mismatch (``EmbeddingSpaceMismatch``).
+space unless ``space`` names another live one. ``fuse`` adds more spaces and merges the
+per-space rankings by reciprocal rank fusion (RRF); an item keeps the cosine ``semantic_score``
+of the first space that found it, and ``score_space`` names that space. The kNN query takes the
+space and the space key of the query vector and refuses a mismatch (``EmbeddingSpaceMismatch``).
+The kNN page of every space and the unembedded count go out as one ``_msearch`` round trip.
 
 Gated end-to-end by ``OP_SEMANTIC_SEARCH_ENABLED`` (default on since #371, read with
 ``env_bool``); see ``search.py`` for the disabled-flag 400 response.
@@ -21,66 +24,33 @@ configured index name picks up the change for free.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config import CurationConfig, get_curation_config
-from src.config.project_context import project_api_base, run_in_executor_bound
+from src.config.project_context import run_in_executor_bound
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
-from src.domain.embedding_spaces import (
-    EmbeddingSpaceError,
-    ResolvedSpace,
-    Target,
-    require_query_space,
-)
-from src.domain.embedding_state import not_embedded_clause
+from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace, Target
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import review_queries
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
-from src.services.curation.semantic_search_box import (
-    attach_match,
-    box_k,
-    box_source_excludes,
-    box_space_source_includes,
-    build_box_knn_query,
-    no_box_vectors_clause,
-    stored_box_entries,
+from src.services.curation.semantic_search_box import box_space_source_includes, stored_box_entries
+from src.services.curation.semantic_search_run import (
+    QueryVector,
+    VectorFor,
+    resolve_search_spaces,
+    run_search,
 )
-from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.resolve import embedding_space
 from src.services.rejections import rejection
-from src.utils.search_timing import search_annotate, search_span
+from src.utils.search_timing import search_span
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 logger = get_logger(__name__)
-
-# How many nearest neighbors to over-fetch from the knn clause before
-# paginating in Python. OpenSearch's `knn` query returns at most `k` hits
-# total (not "per shard, then merged further") once filtered, so k must
-# cover through the end of the requested page.
-_MAX_K = 2000
-
-_REGISTRY_TARGET = {SearchTarget.ITEM: Target.ITEM, SearchTarget.BOX: Target.BOX}
-
-
-@dataclass(frozen=True)
-class QueryVector:
-    """A query vector and the key of the space it was made in (an encoder's model, or the
-    space a stored vector was read from)."""
-
-    values: list[float]
-    space_key: str
-
-
-VectorFor = Callable[[ResolvedSpace], Awaitable[QueryVector]]
-
-
-def _source_excludes(fields: RegionFields) -> list[str]:
-    """Never ship raw embedding vectors or class_id_history (this
-    is a paginated list endpoint; history is undo-only)."""
-    return item_list_source_excludes(fields)
 
 
 class SemanticSearchDisabledError(RuntimeError):
@@ -176,41 +146,6 @@ def _build_filter(
     return filters
 
 
-def build_knn_query(
-    vector: list[float],
-    *,
-    vector_space_key: str,
-    space: ResolvedSpace,
-    k: int,
-    filter_clause: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Build the OpenSearch ``knn`` query body clause over ``space``'s vector field.
-
-    ``vector_space_key`` is the space the query vector was made in; a vector of another space
-    is refused (``EmbeddingSpaceMismatch``). ``filter_clause`` is wrapped in a single
-    ``bool.filter`` — the k-NN plugin accepts an arbitrary query DSL clause here (pre/post-filter
-    depending on the engine's efficient-filtering support); this module doesn't second-guess
-    that, it just hands the composed filter through.
-    """
-    require_query_space(space, vector_space_key)
-    knn: dict[str, Any] = {'vector': vector, 'k': k}
-    if filter_clause:
-        knn['filter'] = {'bool': {'filter': filter_clause}}
-    return {'knn': {space.vector_field: knn}}
-
-
-def _hydrate_item(hit: dict[str, Any], fields: RegionFields, api_prefix: str) -> dict[str, Any]:
-    """Project one OpenSearch hit onto the shared wire item (same keys as
-    ``/crops`` and ``/review``) plus a ``semantic_score`` (the raw kNN
-    cosine-similarity ``_score``) so the UI can render a relevance chip.
-    """
-    item = serialize_item(
-        hit.get('_source') or {}, hit.get('_id', ''), storage=fields, api_prefix=api_prefix
-    )
-    item['semantic_score'] = hit.get('_score')
-    return item
-
-
 def _filter_for(
     *,
     item_filter: ItemFilter | None,
@@ -236,141 +171,6 @@ def _filter_for(
         hide_near_duplicates=hide_near_duplicates,
         include_test=include_test,
     )
-
-
-def _count_body(
-    filter_clause: list[dict[str, Any]], unsearchable: dict[str, Any]
-) -> dict[str, Any]:
-    """The in-scope items a space cannot search: a size-0 search with an exact total (``_msearch``
-    has no ``_count``)."""
-    return {
-        'size': 0,
-        'track_total_hits': True,
-        'query': {'bool': {'filter': [*filter_clause, unsearchable]}},
-    }
-
-
-def _total(response: dict[str, Any]) -> int:
-    return int(((response.get('hits') or {}).get('total') or {}).get('value', 0))
-
-
-async def _msearch(
-    opensearch: Any, index: str, bodies: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """One ``_msearch`` for ``bodies`` against ``index``; any failed entry fails the call
-    (OpenSearch answers 200 with a per-entry ``error``).
-
-    OpenSearch multi-search: https://docs.opensearch.org/latest/api-reference/multi-search/"""
-    payload: list[dict[str, Any]] = []
-    for body in bodies:
-        payload.extend(({'index': index}, body))
-    with search_span('knn_page'):
-        resp = await opensearch.msearch(body=payload)
-    responses: list[dict[str, Any]] = resp.get('responses') or []
-    if len(responses) != len(bodies):
-        raise RuntimeError(f'_msearch answered {len(responses)} of {len(bodies)} searches')
-    for entry in responses:
-        if entry.get('error'):
-            raise RuntimeError(f'_msearch entry failed: {entry["error"]}')
-    return responses
-
-
-async def search_space(target: SearchTarget) -> ResolvedSpace:
-    """The bound project's primary space for what ``target`` ranks."""
-    return await embedding_space(_REGISTRY_TARGET[target])
-
-
-async def _knn_page(
-    *,
-    opensearch: Any,
-    vector: QueryVector,
-    space: ResolvedSpace,
-    filter_clause: list[dict[str, Any]],
-    page: int,
-    page_size: int,
-    min_score: float | None,
-    cfg: CurationConfig,
-    fields: RegionFields,
-    target: SearchTarget = SearchTarget.ITEM,
-    skip_box: tuple[str, str] | None = None,
-) -> dict[str, Any]:
-    """Run one filtered kNN page for ``vector`` over ``space`` and hydrate it into the wire page.
-
-    ``target=box`` ranks the per-box vectors instead; the page is still one card per item, each
-    with the box that matched best. ``skip_box`` is the query's own ``(crop_id, box_id)``."""
-    # `k` is the ANN candidate depth (how many nearest neighbors the
-    # kNN plugin considers) — it must cover through the end of the
-    # requested page, so it stays `page * page_size` (capped at _MAX_K).
-    # `from`/`size` are a *separate* concern: which slice of those k
-    # candidates the response actually carries; OpenSearch slices server-side,
-    # so only `page_size` hits cross the wire.
-    excludes = _source_excludes(fields)
-    match target:
-        case SearchTarget.ITEM:
-            knn_query = build_knn_query(
-                vector.values,
-                vector_space_key=vector.space_key,
-                space=space,
-                k=min(_MAX_K, page * page_size),
-                filter_clause=filter_clause,
-            )
-            unsearchable = not_embedded_clause(space.vector_field)
-        case SearchTarget.BOX:
-            knn_query = build_box_knn_query(
-                vector.values,
-                vector_space_key=vector.space_key,
-                space=space,
-                k=box_k(page, page_size, max_k=_MAX_K),
-                filter_clause=filter_clause,
-                inner_size=2 if skip_box else 1,
-            )
-            excludes = box_source_excludes(excludes, space)
-            unsearchable = no_box_vectors_clause(space)
-        case _:
-            raise ValueError(f'unknown search target: {target!r}')
-
-    body: dict[str, Any] = {
-        'size': page_size,
-        'from': (page - 1) * page_size,
-        'query': knn_query,
-        '_source': {'excludes': excludes},
-    }
-    if min_score is not None:
-        # Top-level min_score is a generic post-scoring filter — applies
-        # the same way regardless of query type, so this replaces the
-        # old client-side hit filtering without changing semantics.
-        body['min_score'] = min_score
-
-    # The unembedded count shares only the filter with the kNN search, so the two travel in one
-    # `_msearch` round trip: on a filtered query the count is a full filter pass (4-8 ms at 91k
-    # items) and used to be paid on top of the search (#384). kNN only sees items with a vector,
-    # so "no results" must not read as "no matches": say how many in-scope items it could not
-    # search.
-    resp, unembedded = await _msearch(
-        opensearch, cfg.items_index, [body, _count_body(filter_clause, unsearchable)]
-    )
-    search_annotate('os_took_ms', int(resp.get('took') or 0))
-    hits = (resp.get('hits') or {}).get('hits') or []
-    total = int(((resp.get('hits') or {}).get('total') or {}).get('value', len(hits)))
-
-    items: list[dict[str, Any]] = []
-    with search_span('hydrate'):
-        for hit in hits:
-            item = _hydrate_item(hit, fields, project_api_base())
-            if target is SearchTarget.BOX and not attach_match(
-                item, hit, fields, space, skip=skip_box
-            ):
-                total = max(0, total - 1)
-                continue
-            items.append(item)
-
-    return {
-        'items': items,
-        'total': total,
-        'page': page,
-        'page_size': page_size,
-        'unembedded_in_scope': _total(unembedded),
-    }
 
 
 def _stored_box_vector(
@@ -435,16 +235,21 @@ async def semantic_text_search(
     include_test: bool = False,
     item_filter: ItemFilter | None = None,
     target: SearchTarget = SearchTarget.ITEM,
+    space_key: str | None = None,
+    fuse: Sequence[str] = (),
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
 ) -> dict[str, Any]:
-    """Run one semantic text search and return ``{items, total, page, page_size}``.
+    """Run one semantic text search and return ``{items, total, page, page_size, space, fuse}``.
 
     ``pe_encoder.encode_text`` is a blocking call (a synchronous Triton gRPC request) — it is
     **never** invoked inline on the event loop; the caller-supplied ``executor`` (the app's
     shared ``ThreadPoolExecutor``, same one every other CPU-bound curation path uses) runs it
     via ``loop.run_in_executor``.
     """
+    cfg = config or get_curation_config()
+    region_fields = fields or get_region_fields()
+    spaces = await resolve_search_spaces(target, space_key, fuse)
     if not query or not query.strip():
         return {
             'items': [],
@@ -452,12 +257,9 @@ async def semantic_text_search(
             'page': page,
             'page_size': page_size,
             'unembedded_in_scope': 0,
+            'space': spaces[0].space_key,
+            'fuse': [s.space_key for s in spaces[1:]],
         }
-
-    cfg = config or get_curation_config()
-    region_fields = fields or get_region_fields()
-    space = await search_space(target)
-    vector = await _text_vector_for(pe_encoder, executor, query)(space)
 
     with search_span('filter_build'):
         filter_clause = _filter_for(
@@ -471,10 +273,10 @@ async def semantic_text_search(
             hide_near_duplicates=hide_near_duplicates,
             include_test=include_test,
         )
-    return await _knn_page(
+    return await run_search(
         opensearch=opensearch,
-        vector=vector,
-        space=space,
+        spaces=spaces,
+        vector_for=_text_vector_for(pe_encoder, executor, query),
         filter_clause=filter_clause,
         page=page,
         page_size=page_size,
@@ -510,32 +312,38 @@ async def semantic_similar_search(
     min_score: float | None = None,
     include_test: bool = False,
     item_filter: ItemFilter | None = None,
+    space_key: str | None = None,
+    fuse: Sequence[str] = (),
     config: CurationConfig | None = None,
     fields: RegionFields | None = None,
 ) -> dict[str, Any]:
     """Rank items by similarity to the stored vector of ``crop_id`` (same page and filters
     as :func:`semantic_text_search`; nothing is encoded).
 
-    With ``box_id`` the query vector is that box's stored vector instead of the crop's. Refuses
-    404 ``not_found`` for a crop the bound project's items index lacks (``box_not_found`` for
-    a box it lacks) and 409 ``crop_not_embedded`` (``box_not_embedded``) for one without a
-    vector, so a missing source never reads as "no neighbours".
+    With ``box_id`` the query vector is that box's stored vector instead of the crop's. The
+    vector of each searched space is the one stored under that space's key. Refuses 404
+    ``not_found`` for a crop the bound project's items index lacks (``box_not_found`` for a box
+    it lacks) and 409 ``crop_not_embedded`` (``box_not_embedded``) for one without a vector in a
+    searched space, so a missing source never reads as "no neighbours".
 
     ``exclude_self`` drops the source crop; with ``box_id`` on ``target=box`` it drops only the
     source box, so the crop's other boxes can still match.
     """
     cfg = config or get_curation_config()
     region_fields = fields or get_region_fields()
-    space = await search_space(target)
-    source_space = await _source_space(box_id, space)
-    includes = [
-        f'{region_fields.boxes}.box_id',
-        *(
-            box_space_source_includes(source_space)
-            if box_id is not None
-            else [source_space.vector_field, source_space.state_field or source_space.vector_field]
-        ),
-    ]
+    spaces = await resolve_search_spaces(target, space_key, fuse)
+    sources = {s.space_key: await _source_space(box_id, s) for s in spaces}
+    includes = [f'{region_fields.boxes}.box_id']
+    for source_space in sources.values():
+        if box_id is None:
+            includes.extend(
+                [
+                    source_space.vector_field,
+                    *([source_space.state_field] if source_space.state_field else []),
+                ]
+            )
+        else:
+            includes.extend(box_space_source_includes(source_space))
 
     with search_span('source_vector'):
         resp = await opensearch.search(
@@ -550,17 +358,20 @@ async def semantic_similar_search(
     if not hits:
         raise rejection(404, 'not_found', f"no crop '{crop_id}' in this project")
     source = hits[0].get('_source') or {}
-    if box_id is not None:
-        values = _stored_box_vector(source, box_id, crop_id, region_fields, source_space)
-    else:
-        stored = source.get(source_space.vector_field)
-        if not isinstance(stored, list) or not stored:
-            state = source.get(source_space.state_field or '') or 'unknown'
-            raise rejection(409, 'crop_not_embedded', f'crop {crop_id} has no vector ({state})')
-        values = stored
-    vector = QueryVector(values, source_space.space_key)
-    skip_box = None
 
+    async def vector_for(space: ResolvedSpace) -> QueryVector:
+        source_space = sources[space.space_key]
+        if box_id is not None:
+            values = _stored_box_vector(source, box_id, crop_id, region_fields, source_space)
+        else:
+            stored = source.get(source_space.vector_field)
+            if not isinstance(stored, list) or not stored:
+                state = source.get(source_space.state_field or '') or 'unknown'
+                raise rejection(409, 'crop_not_embedded', f'crop {crop_id} has no vector ({state})')
+            values = stored
+        return QueryVector(values, source_space.space_key)
+
+    skip_box = None
     with search_span('filter_build'):
         filter_clause = _filter_for(
             item_filter=item_filter,
@@ -578,10 +389,10 @@ async def semantic_similar_search(
             skip_box = (crop_id, box_id)
         else:
             filter_clause.append({'bool': {'must_not': [{'ids': {'values': [crop_id]}}]}})
-    return await _knn_page(
+    return await run_search(
         opensearch=opensearch,
-        vector=vector,
-        space=space,
+        spaces=spaces,
+        vector_for=vector_for,
         filter_clause=filter_clause,
         page=page,
         page_size=page_size,
@@ -593,12 +404,4 @@ async def semantic_similar_search(
     )
 
 
-__all__ = [
-    'QueryVector',
-    'SemanticSearchDisabledError',
-    'build_knn_query',
-    'no_box_vectors_clause',
-    'search_space',
-    'semantic_similar_search',
-    'semantic_text_search',
-]
+__all__ = ['SemanticSearchDisabledError', 'semantic_similar_search', 'semantic_text_search']

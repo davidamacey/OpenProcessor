@@ -15,9 +15,9 @@ from _msearch_fake import install_msearch
 
 from src.domain.embedding_spaces import EmbeddingSpaceMismatch, Target
 from src.schemas.curation.search_target import SearchTarget
-from src.services.curation import semantic_search
-from src.services.curation.semantic_search import QueryVector
+from src.services.curation import semantic_search, semantic_search_run
 from src.services.curation.semantic_search_box import build_box_knn_query
+from src.services.curation.semantic_search_run import QueryVector
 
 
 ITEM = default_space(Target.ITEM)
@@ -28,7 +28,7 @@ OTHER_BOX = new_space(Target.BOX, 'mobileclip2_s2', text_model='pe_text_encoder'
 
 def test_an_item_query_of_another_space_raises() -> None:
     with pytest.raises(EmbeddingSpaceMismatch, match='mobileclip2_s2_v1'):
-        semantic_search.build_knn_query(
+        semantic_search_run.build_knn_query(
             [0.1], vector_space_key=OTHER_ITEM.space_key, space=ITEM, k=5, filter_clause=[]
         )
 
@@ -41,7 +41,7 @@ def test_a_box_query_of_another_space_raises() -> None:
 
 
 def test_a_matching_item_query_searches_the_field_of_the_space() -> None:
-    query = semantic_search.build_knn_query(
+    query = semantic_search_run.build_knn_query(
         [0.1],
         vector_space_key=OTHER_ITEM.space_key,
         space=OTHER_ITEM,
@@ -64,7 +64,7 @@ def test_a_matching_box_query_searches_the_nested_field_of_the_space() -> None:
 
 
 def test_the_default_space_keeps_the_zero_six_field_names() -> None:
-    query = semantic_search.build_knn_query(
+    query = semantic_search_run.build_knn_query(
         [0.1], vector_space_key=ITEM.space_key, space=ITEM, k=5, filter_clause=[]
     )
     assert list(query['knn']) == ['pe_embedding']

@@ -98,7 +98,15 @@ def test_happy_path_encodes_once_as_a_crop_and_returns_the_text_shape(client):
     resp = _post(client, _image())
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert set(body) == {
+        'items',
+        'total',
+        'page',
+        'page_size',
+        'unembedded_in_scope',
+        'space',
+        'fuse',
+    }
     assert body['items'][0]['semantic_score'] == 0.9
     assert body['unembedded_in_scope'] == 4
     client.encoder.embed_crops.assert_awaited_once()

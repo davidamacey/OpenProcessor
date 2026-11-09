@@ -43,7 +43,8 @@ from scripts.bench.legacy_space import legacy_item_space
 from scripts.bench.suite_probes import cgroup_cpu_s
 from src.config import get_curation_config
 from src.services.curation.ingest_writer import IngestWriter
-from src.services.curation.semantic_search import _build_filter, build_knn_query
+from src.services.curation.semantic_search import _build_filter
+from src.services.curation.semantic_search_run import build_knn_query
 from src.services.projects.guard import make_script_opensearch
 from src.services.projects.script_binding import abind_script_project
 

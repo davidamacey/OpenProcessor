@@ -13,16 +13,18 @@ from dataclasses import fields as dataclass_fields
 from typing import Any
 
 import pytest
+from _embedding_registry_fake import default_space
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.config import region_fields as region_fields_mod
 from src.config.project_context import project_api_base
 from src.config.region_fields import RegionFields
+from src.domain.embedding_spaces import Target
 from src.domain.region_boxes import RegionBox, boxes_write_fields
 from src.routers.curation import _common
 from src.routers.curation._common import ItemDoc
-from src.services.curation import index_bootstrap, semantic_search, wire
+from src.services.curation import index_bootstrap, semantic_search_run, wire
 from src.services.curation.region_rows import INNER_HITS_NAME
 from src.services.curation.wire import (
     ITEM_WIRE_KEYS,
@@ -203,7 +205,9 @@ def test_semantic_search_item_matches(monkeypatch: pytest.MonkeyPatch) -> None:
     storage = RegionFields()
     hit = {'_id': 'crop-1', '_source': _stored_doc(storage), '_score': 0.77}
     # Served URLs are canonical and scoped (the bound project's base).
-    item = semantic_search._hydrate_item(hit, storage, project_api_base())
+    item = semantic_search_run.hydrate_item(
+        hit, storage, project_api_base(), default_space(Target.ITEM)
+    )
     assert set(item) == ITEM_WIRE_KEYS | SEARCH_EXTRA_KEYS
     assert item['semantic_score'] == 0.77
     with _client(monkeypatch, storage) as client:

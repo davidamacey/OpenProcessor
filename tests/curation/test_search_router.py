@@ -202,6 +202,8 @@ def test_search_text_no_hits_returns_empty(app_client: TestClient):
         'page': 1,
         'page_size': 30,
         'unembedded_in_scope': 0,
+        'space': 'pe_core_l14_336_v1',
+        'fuse': [],
     }
 
 
@@ -264,7 +266,15 @@ def test_search_similar_happy_path(app_client: TestClient):
     resp = app_client.get(SIMILAR, params={'crop_id': 'src'})
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {'items', 'total', 'page', 'page_size', 'unembedded_in_scope'}
+    assert set(body) == {
+        'items',
+        'total',
+        'page',
+        'page_size',
+        'unembedded_in_scope',
+        'space',
+        'fuse',
+    }
     assert body['items'][0]['semantic_score'] == 0.9
     app_client.fake_os.search = AsyncMock(
         return_value={'hits': {'hits': [_NEIGHBOR], 'total': {'value': 1}}}

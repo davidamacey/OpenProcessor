@@ -14,6 +14,7 @@ from src.core.exceptions import RequestRejectedError
 from src.domain.embedding_spaces import Target
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
+from src.services.curation.semantic_search_box import no_box_vectors_clause
 
 
 F = get_region_fields()
@@ -171,7 +172,7 @@ async def test_box_target_counts_items_without_any_box_vector():
     out = await _text(fake, target=SearchTarget.BOX)
     assert out['unembedded_in_scope'] == 3
     clauses = fake.count.call_args.kwargs['body']['query']['bool']['filter']
-    assert semantic_search.no_box_vectors_clause(default_space(Target.BOX)) in clauses
+    assert no_box_vectors_clause(default_space(Target.BOX)) in clauses
 
 
 # --- /search/similar with box_id ---------------------------------------------------------------

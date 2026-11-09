@@ -319,6 +319,7 @@ export const REVIEW_EXTRA_KEYS = [
   'reason',
 ] as const;
 export const SEARCH_EXTRA_KEYS = [
+  'score_space',
   'semantic_score',
 ] as const;
 export const TRAINING_CANDIDATE_EXTRA_KEYS = [

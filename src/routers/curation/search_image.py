@@ -69,6 +69,25 @@ async def search_image(
         None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
     ),
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """kNN over the PE vectors using the encoded picture as the query.
 
@@ -115,6 +134,8 @@ async def search_image(
                 hide_near_duplicates=hide_near_duplicates,
                 min_score=min_score,
                 include_test=include_test,
+                space_key=space,
+                fuse=fuse or [],
             )
     except (HTTPException, RequestRejectedError):
         raise

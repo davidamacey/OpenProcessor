@@ -88,6 +88,25 @@ async def search_text(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> Response:
     """Semantic kNN search over the items index's ``pe_embedding`` field.
 
@@ -153,6 +172,8 @@ async def search_text(
                     min_score=min_score,
                     include_test=include_test,
                     target=target,
+                    space_key=space,
+                    fuse=fuse or [],
                 )
         except (HTTPException, RequestRejectedError):
             raise
@@ -209,6 +230,25 @@ async def search_similar(
         ),
     ] = SearchTarget.ITEM,
     include_test: bool = False,
+    space: Annotated[
+        str | None,
+        Query(
+            description=(
+                "The space to search (a live space key of the target); default the target's "
+                'primary. Echoed in the response as `space`.'
+            )
+        ),
+    ] = None,
+    fuse: Annotated[
+        list[str] | None,
+        Query(
+            description=(
+                'More live space keys to search; the per-space rankings are merged by reciprocal '
+                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
+                'found it and names it in `score_space`.'
+            )
+        ),
+    ] = None,
 ) -> Response:
     """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
 
@@ -247,6 +287,8 @@ async def search_similar(
                     hide_near_duplicates=hide_near_duplicates,
                     min_score=min_score,
                     include_test=include_test,
+                    space_key=space,
+                    fuse=fuse or [],
                 )
         except (HTTPException, RequestRejectedError):
             raise

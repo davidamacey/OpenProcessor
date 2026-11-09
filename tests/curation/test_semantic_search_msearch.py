@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 import pytest
 
+from src.config import get_curation_config
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
 
@@ -66,7 +67,7 @@ async def test_the_request_pairs_a_header_per_body_and_counts_with_a_size_zero_s
     await _text(fake)
     payload = fake.msearch.await_args.kwargs['body']
     headers, bodies = payload[::2], payload[1::2]
-    assert [h['index'] for h in headers] == [semantic_search.get_curation_config().items_index] * 2
+    assert [h['index'] for h in headers] == [get_curation_config().items_index] * 2
     knn, count = bodies
     assert list(knn['query']) == ['knn']
     assert knn['size'] == 10
