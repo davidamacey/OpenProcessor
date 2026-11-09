@@ -173,3 +173,21 @@ async def test_a_pending_image_without_a_vector_stays_pending_and_does_not_spin(
     assert (drained.runs, drained.missing_vectors) == (1, 1)
     assert _pending(pg, ghost) == [(ghost, 'added')]
     sql(pg, 'DELETE FROM near_dup_pending WHERE member_id = %s', ghost)
+
+
+async def test_a_pending_image_missing_past_the_max_age_is_dropped_and_reported(
+    pg, bound_async_engine, opensearch, ids
+) -> None:
+    stale, fresh = ids('stale-ghost'), ids('fresh-ghost')
+    await core_pending.record_pending([stale, fresh], 'added')
+    sql(
+        pg,
+        "UPDATE near_dup_pending SET enqueued_at = now() - interval '3 days' WHERE member_id = %s",
+        stale,
+    )
+
+    drained = await _drain(pg, opensearch)
+
+    assert drained.expired == (stale,)
+    assert _pending(pg, stale.split('-')[0]) == [(fresh, 'added')]
+    sql(pg, 'DELETE FROM near_dup_pending WHERE member_id = %s', fresh)
