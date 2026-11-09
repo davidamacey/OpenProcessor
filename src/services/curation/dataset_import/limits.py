@@ -38,12 +38,6 @@ def reprocess_sync_max() -> int:
     return env_int('OP_REPROCESS_SYNC_MAX', 20, minimum=1)
 
 
-def open_vocab_sweep_interval_s() -> int:
-    """Seconds between the periodic starts of the ``open_vocab_drain`` job, which takes the
-    images left ``pending`` by the ingest-time open-vocabulary pass; ``0`` turns the sweep off."""
-    return env_int('OP_OPEN_VOCAB_SWEEP_S', 120, minimum=0)
-
-
 def open_vocab_concurrency() -> int:
     """Images of the full-image SAM 3 pass in flight at once (each fans out
     one segmenter call per target, so calls in flight <= this x targets)."""

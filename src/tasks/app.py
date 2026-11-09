@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from celery.signals import beat_init, worker_init
+from celery.signals import beat_init, worker_init, worker_process_shutdown
 
 from src.config.retired_env import reject_retired_env
-from src.tasks import queue_hooks
+from src.tasks import beat_lock, queue_hooks
 from src.tasks.beat_schedule import apply_schedule
 from src.tasks.runtime.gpu_app import build_app, install_worker_signals
 from src.tasks.runtime.log_context import install_log_context
+from src.utils.metrics_processes import forget_process
 
 
 TASK_MODULES = (
@@ -62,3 +63,12 @@ def _on_worker_init(**_: Any) -> None:
 def _on_beat_init(**_: Any) -> None:
     reject_retired_env()
     _require_current_schema()
+
+
+beat_init.connect(beat_lock.hold_single_beat, weak=False)
+
+
+@worker_process_shutdown.connect(weak=False)
+def _on_worker_process_shutdown(pid: int, **_: Any) -> None:
+    """A pool child is leaving (``--max-tasks-per-child`` or a stop): drop its live-gauge files."""
+    forget_process(pid)

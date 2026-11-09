@@ -114,18 +114,13 @@ _.crop_key  # src/domain/storage_keys.py, the crop-cache key; its first caller i
 # Landed ahead of their consumers (B2 stage 1, lane 1B): the advisory-lock classes are first used
 # by the periodic task bodies and the beat/migrate runners of later lanes, and QUEUE_PROFILE by
 # the consumer-from-compose test. Delete each entry in the change that adds its production caller.
-_.BEAT  # src/config/advisory_locks.py, session lock of the single beat (stage 6)
-_.INGEST_DISPATCH  # src/config/advisory_locks.py, periodic ingest dispatcher body (stage 4)
-_.OPEN_VOCAB_SWEEP  # src/config/advisory_locks.py, periodic open-vocabulary sweep (stage 4)
-_.CACHE_PRUNE  # src/config/advisory_locks.py, periodic cache prune (stage 6)
 _.GPU_ARBITER  # src/config/advisory_locks.py, periodic arbiter tick (stage 6)
 _.CLUSTER_REFRESH  # src/config/advisory_locks.py, periodic clustering refresh (stage 6)
 _.REAPER  # src/config/advisory_locks.py, the reaper tick (stage 3)
-_.NEAR_DUP_RESCORE  # src/config/advisory_locks.py, periodic near-duplicate rescore (stage 4)
-_.open_vocab_sweep_interval_s  # src/services/curation/dataset_import/limits.py, interval of the periodic open_vocab_drain start (stage 6 beat)
 _.QUEUE_PROFILE  # src/config/queue.py, queue -> compose profile table the consumers-from-compose test reads
 _._on_worker_init  # src/tasks/app.py, connected to Celery's worker_init signal by decorator
 _._on_beat_init  # src/tasks/app.py, connected to Celery's beat_init signal by decorator
+_._on_worker_process_shutdown  # src/tasks/app.py, connected to Celery's worker_process_shutdown signal by decorator
 _.make_app  # src/tasks/runtime/gpu_app.py, called by the trainer, export and evaluator images (stage 5)
 _.mark_queued  # src/clients/task_queue.py, called by start_job in the job service (stage 3)
 _.clear_queued  # src/clients/task_queue.py, called by the job claim and the reaper (stage 3)
@@ -209,7 +204,5 @@ _.UNITS  # src/domain/assist_loop_budget.py
 _.should_retrain_centroids  # src/services/curation/clustering/retrain_policy.py, the IVF policy; it goes with the IVF method (lane 4F), the auto-label worker that called it is deleted
 _.__qualname__  # src/tasks/runtime/register.py, Celery names the task by it
 
-# Scheduled by 6A (every 15 min); remove this line when beat_schedule names it.
-_.vlm_batch_staging_sweep  # src/tasks/trigger.py, op.periodic.vlm_batch_staging_sweep
 _.registry_sha  # src/services/training/jobs.py, stored in training_runs.spec and read by the trainer
 _.tb  # src/utils/stage_timing.py, the __exit__ signature

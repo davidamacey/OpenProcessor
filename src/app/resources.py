@@ -15,7 +15,6 @@ class AppResources:
     project_registry_poll_task: asyncio.Task[None] | None = None
     ops_metrics_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
-    curation_background_jobs: list[asyncio.Task[None]] = []
     event_bus_started: bool = False
 
 

@@ -4,14 +4,13 @@
 ``api`` runs many uvicorn workers and worker containers on one shared volume. A file lock
 (``fcntl.flock``/``lockf``, the ``exclusive_start_lock`` / ``exclusive_file_lock`` helpers, the
 ``filelock`` and ``portalocker`` packages) does not survive a second host, tells a dead holder
-from a live one only by luck, and blocks a worker's thread. The cross-process claim is an
-OpenSearch job lease (``src/clients/job_lease.py``) or the fenced claim of a ``jobs`` row
-(``src/db/repos/jobs.py``).
+from a live one only by luck, and blocks a worker's thread. The cross-process claim is the fenced
+claim of a ``jobs`` row (``src/db/repos/jobs.py``) or a Postgres advisory lock
+(``src/config/advisory_locks.py``).
 
 Counts, per tracked ``.py`` file under ``src scripts export docker``, the calls of those
 functions and the imports of those packages (read with ``ast``, so a docstring that names one
-does not count). Today's uses live in ``baselines/file_locks.txt``
-(``path<TAB>uses<TAB>reason``) and can only shrink (see ``_baseline.py``).
+does not count). Any use fails: there is no baseline.
 """
 
 from __future__ import annotations
@@ -23,12 +22,7 @@ import sys
 from pathlib import Path
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import _baseline
-
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BASELINE_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'file_locks.txt'
 
 SCOPE = ('src/', 'scripts/', 'export/', 'docker/')
 LOCK_HELPERS = frozenset({'exclusive_start_lock', 'exclusive_file_lock'})
@@ -82,23 +76,16 @@ def scan(repo_root: Path, files: list[str] | None = None) -> tuple[dict[str, int
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', type=Path, default=BASELINE_PATH)
-    parser.add_argument('--tighten', action='store_true', help='Lower baseline values, drop stale.')
     parser.add_argument('--root', type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
 
     found, broken = scan(args.root)
-    baseline = _baseline.load(args.baseline)
     errors = [f'{rel}: cannot be parsed, so its lock uses are unchecked' for rel in broken]
-    errors += _baseline.compare(found, baseline, unit='file-lock use(s)')
-    if args.tighten:
-        changed = _baseline.tighten(args.baseline, found, baseline)
-        sys.stderr.write(f'tightened {changed} baseline line(s)\n')
-        errors = [e for e in errors if 'new violation' in e or 'grew past' in e or 'parsed' in e]
+    errors += [f'{rel}: {uses} file-lock use(s)' for rel, uses in sorted(found.items())]
     if errors:
         sys.stderr.write(
-            'ERROR: file lock found. Cross-process state is claimed with an OpenSearch job lease '
-            '(src/clients/job_lease.py) or a create-only claim file, never a file lock.\n'
+            'ERROR: file lock found. Cross-process state is claimed with the fenced claim of a '
+            'jobs row or a Postgres advisory lock, never a file lock.\n'
         )
         for e in errors:
             sys.stderr.write(f'  {e}\n')

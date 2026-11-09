@@ -1,4 +1,4 @@
-"""check_file_locks.py: no file lock guards cross-process state."""
+"""check_file_locks.py: no file lock guards cross-process state, and there is no baseline."""
 
 from __future__ import annotations
 
@@ -9,14 +9,11 @@ import pytest
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
-
     from conftest import ScratchRepo
 
 
-def run(repo: ScratchRepo, baseline: Path, *extra: str) -> int:
-    return guard.main(['--root', str(repo.root), '--baseline', str(baseline), *extra])
+def run(repo: ScratchRepo) -> int:
+    return guard.main(['--root', str(repo.root)])
 
 
 @pytest.mark.parametrize(
@@ -33,11 +30,9 @@ def run(repo: ScratchRepo, baseline: Path, *extra: str) -> int:
         ('src/a.py', 'from portalocker import Lock\n'),
     ],
 )
-def test_a_new_file_lock_fails(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path], path: str, source: str
-) -> None:
+def test_a_planted_file_lock_fails(scratch_repo: ScratchRepo, path: str, source: str) -> None:
     scratch_repo.write(path, source)
-    assert run(scratch_repo, baseline_file('')) == 1
+    assert run(scratch_repo) == 1
 
 
 @pytest.mark.parametrize(
@@ -51,27 +46,19 @@ def test_a_new_file_lock_fails(
     ],
 )
 def test_a_mention_or_an_out_of_scope_file_passes(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path], path: str, source: str
+    scratch_repo: ScratchRepo, path: str, source: str
 ) -> None:
     scratch_repo.write(path, source)
-    assert run(scratch_repo, baseline_file('')) == 0
+    assert run(scratch_repo) == 0
 
 
-def test_a_baselined_file_may_not_gain_a_use(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
-    scratch_repo.write('src/a.py', 'import fcntl\nfcntl.flock(1, 2)\nfcntl.flock(1, 8)\n')
-    assert run(scratch_repo, baseline_file('src/a.py\t1\tB4: moves to a stream\n')) == 1
+def test_an_unparsable_file_is_not_waved_through(scratch_repo: ScratchRepo) -> None:
+    scratch_repo.write('src/a.py', 'def broken(:\n')
+    assert run(scratch_repo) == 1
 
 
-def test_a_baselined_use_passes_and_a_removed_one_must_leave_the_baseline(
-    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
-) -> None:
-    scratch_repo.write('src/a.py', 'import fcntl\nfcntl.flock(1, 2)\n')
-    baseline = baseline_file('src/a.py\t1\tB4: moves to a stream\n')
-    assert run(scratch_repo, baseline) == 0
-    scratch_repo.write('src/a.py', 'x = 1\n')
-    assert run(scratch_repo, baseline) == 1  # stale entry
+def test_the_baseline_file_is_gone() -> None:
+    assert not (guard.REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'file_locks.txt').exists()
 
 
 def test_the_real_tree_passes() -> None:

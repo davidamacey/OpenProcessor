@@ -10,6 +10,7 @@ from src.config import CurationConfig, DetectionProfile
 from src.config.env import EnvError
 from src.services.curation import strategy_flags
 from src.services.curation.dataset_import import limits
+from src.tasks.beat_schedule import build_schedule
 
 
 @pytest.mark.parametrize(
@@ -17,7 +18,7 @@ from src.services.curation.dataset_import import limits
     [
         ('OP_DATASET_IMPORT_CHUNK', 'abc', limits.import_chunk_size),
         ('OP_DATASET_IMPORT_CHUNK', '0', limits.import_chunk_size),
-        ('OP_OPEN_VOCAB_SWEEP_S', '-1', limits.open_vocab_sweep_interval_s),
+        ('OP_OPEN_VOCAB_SWEEP_S', '-1', build_schedule),
         ('OP_SCORES_ENABLED', 'ture', strategy_flags._scores_enabled),
     ],
 )

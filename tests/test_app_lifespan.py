@@ -24,7 +24,6 @@ class World:
     def __init__(self) -> None:
         self.events: list[str] = []
         self.fail: set[str] = set()
-        self.reload_log_events: list[str] = []
         self.arbiter_calls = 0
 
     def step(self, name: str) -> None:
@@ -99,13 +98,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         w.step('arbiter_reconcile')
         return SimpleNamespace(action='noop', detail='stub')
 
-    async def fake_reload(*, log_event: str) -> None:
-        w.reload_log_events.append(log_event)
-        w.step(f'reload:{log_event}')
-
-    async def fake_stop_jobs(jobs: list[Any]) -> None:
-        w.events.append(f'stop_background_jobs:{jobs}')
-
     async def fake_ops_refresh_loop() -> None:
         w.step('ops_metrics_loop')
         await _forever()
@@ -150,14 +142,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> World:
         ),
         ('src.config', 'get_gpu_arbiter_config', fake_get_arbiter_config),
         ('src.services.training.gpu_arbiter', 'reconcile_on_startup', fake_reconcile_on_startup),
-        ('src.services.training.triton_reload', 'reload_promoted_models_best_effort', fake_reload),
         ('src.clients.pe_encoder', 'PEEncoder', FakeEncoder),
-        (
-            'src.services.curation.background_jobs',
-            'start_background_jobs',
-            _sync_step(w, 'start_background_jobs', ['job-a']),
-        ),
-        ('src.services.curation.background_jobs', 'stop_background_jobs', fake_stop_jobs),
         (
             'src.services.projects.bootstrap',
             'shutdown_project_registry',
@@ -205,13 +190,10 @@ EXPECTED_STARTUP = [
     'event_listener_start',
     'arbiter_config',
     'arbiter_reconcile',
-    'reload:promoted_models_reload_on_startup',
     'pe_encoder_created',
     'pe_encoder_warm',
-    'start_background_jobs',
 ]
 EXPECTED_SHUTDOWN = [
-    "stop_background_jobs:['job-a']",
     'project_registry_shutdown',
     'config_store_shutdown',
     'event_listener_stop',
@@ -236,7 +218,6 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
         seen['pool'] = AppResources.async_triton_pool
         seen['arbiter'] = AppResources.arbiter_task
         seen['ops'] = AppResources.ops_metrics_task
-        seen['jobs'] = AppResources.curation_background_jobs
         seen['bus'] = AppResources.event_bus_started
         await asyncio.sleep(0)
 
@@ -248,14 +229,12 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
     assert seen['pool'] is not None
     assert seen['arbiter'] is not None
     assert seen['ops'] is not None
-    assert seen['jobs'] == ['job-a']
     assert seen['bus'] is True
     assert app.state.pe_encoder.triton_pool is seen['pool']
     assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
     # shutdown clears the tasks and flags but keeps the pool and executor references
     assert AppResources.ops_metrics_task is None
     assert AppResources.arbiter_task is None
-    assert AppResources.curation_background_jobs == []
     assert AppResources.project_registry_poll_task is None
     assert AppResources.config_store_poll_task is None
     assert AppResources.event_bus_started is False
@@ -271,7 +250,7 @@ def test_a_failing_event_listener_start_is_skipped_and_its_stop_is_not_attempted
     _run_lifespan()
     assert 'event_listener_start' in world.events
     assert 'event_listener_stop' not in world.events
-    assert 'start_background_jobs' in world.events
+    assert 'pe_encoder_warm' in world.events
 
 
 def test_a_failing_event_listener_stop_does_not_stop_the_rest_of_shutdown(world: World) -> None:
@@ -281,7 +260,7 @@ def test_a_failing_event_listener_stop_does_not_stop_the_rest_of_shutdown(world:
     assert tail == EXPECTED_SHUTDOWN
 
 
-def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_reload(world: World) -> None:
+def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_rest_of_startup(world: World) -> None:
     world.fail = {'arbiter_reconcile'}
     seen: dict[str, Any] = {}
 
@@ -290,7 +269,6 @@ def test_a_failing_arbiter_setup_skips_the_loop_but_not_the_reload(world: World)
 
     _run_lifespan(body)
     assert seen['arbiter'] is None
-    assert world.reload_log_events == ['promoted_models_reload_on_startup']
     assert 'pe_encoder_warm' in world.events
 
 
@@ -298,7 +276,7 @@ def test_a_failing_pe_encoder_warmup_does_not_block_startup(world: World) -> Non
     world.fail = {'pe_encoder_warm'}
     app = _run_lifespan()
     assert app.state.pe_encoder is not None
-    assert 'start_background_jobs' in world.events
+    assert 'pe_encoder_warm' in world.events
 
 
 @pytest.mark.parametrize('failing', ['pool_close', 'triton_clients_close', 'opensearch_close'])
@@ -333,19 +311,6 @@ def test_a_failing_background_stop_does_not_skip_the_rest(world: World, failing:
     assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
 
 
-def test_a_failing_background_job_stop_does_not_skip_the_rest(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    async def boom(_jobs: list[Any]) -> None:
-        world.events.append('stop_background_jobs:boom')
-        raise RuntimeError('jobs stuck')
-
-    monkeypatch.setattr('src.services.curation.background_jobs.stop_background_jobs', boom)
-    _run_lifespan()
-    tail = _normalized(world.events)[len(EXPECTED_STARTUP) :]
-    assert tail == ['stop_background_jobs:boom', *EXPECTED_SHUTDOWN[1:]]
-
-
 def test_startup_failures_before_serving_propagate(world: World) -> None:
     world.fail = {'region_profile'}
     with pytest.raises(RuntimeError, match='region_profile failed'):
@@ -375,9 +340,6 @@ def test_the_arbiter_loop_reconciles_on_a_timer_and_survives_a_failing_tick(
 
     _run_lifespan(body)
     assert calls['n'] >= 4
-    # one reload at startup, one per tick (the failing tick still reloads)
-    assert world.reload_log_events[0] == 'promoted_models_reload_on_startup'
-    assert world.reload_log_events.count('promoted_models_reload_tick') >= 3
 
 
 def _app_with_nested_routers() -> FastAPI:
@@ -437,7 +399,7 @@ def test_a_failing_route_warmup_never_blocks_startup(
 
     async def _drive() -> None:
         async with lifespan_module.lifespan(app):
-            seen['up'] = 'start_background_jobs' in world.events
+            seen['up'] = 'pe_encoder_warm' in world.events
 
     asyncio.run(_drive())
     assert seen['up'] is True
