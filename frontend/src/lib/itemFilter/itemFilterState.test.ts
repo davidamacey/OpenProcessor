@@ -138,4 +138,24 @@ describe('ItemFilterState', () => {
     expect(s.classNames).toEqual(['a', 'c']);
     expect(s.excludeClassNames).toEqual(['b']);
   });
+
+  it('carries the capture days in query, body, URL and one clearable chip', () => {
+    const s = new ItemFilterState();
+    s.setValue('taken_from', '2024-03-05');
+    s.setValue('taken_to', '2024-03-06');
+    expect(s.isEmpty).toBe(false);
+    expect(s.toQuery()).toEqual({ taken_from: '2024-03-05', taken_to: '2024-03-06' });
+    expect(s.toBody()).toEqual({ taken_from: '2024-03-05', taken_to: '2024-03-06' });
+    const params = new URLSearchParams();
+    s.toUrl(params);
+    const back = new ItemFilterState();
+    back.fromUrl(params);
+    expect(back.takenFrom).toBe('2024-03-05');
+    expect(back.takenTo).toBe('2024-03-06');
+    expect(s.toQuery((p) => p !== 'taken_from')).toEqual({ taken_to: '2024-03-06' });
+    const chips = s.chips();
+    expect(chips).toHaveLength(1);
+    chips[0].clear();
+    expect(s.isEmpty).toBe(true);
+  });
 });

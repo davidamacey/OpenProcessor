@@ -65,6 +65,25 @@ describe('ItemFilterBar', () => {
     expect(has('source_prompt')).toBe(false);
   });
 
+  it('draws the capture days in More filters, writes them to the state, and hides them when the route does not honour them', () => {
+    const state = new ItemFilterState();
+    instance = mount(ItemFilterBar, { target, props: { state } });
+    flushSync();
+    const input = q('[data-testid="served-filter-taken_from"] input') as HTMLInputElement;
+    input.value = '2024-03-05';
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    expect(state.takenFrom).toBe('2024-03-05');
+    unmount(instance);
+    instance = mount(ItemFilterBar, {
+      target,
+      props: { state, visible: (p: string) => !p.startsWith('taken_') },
+    });
+    flushSync();
+    expect(has('taken_from')).toBe(false);
+    expect(has('taken_to')).toBe(false);
+  });
+
   it('only the class control is inline; the rest sit in a More filters disclosure that opens when one is active', () => {
     const state = new ItemFilterState();
     instance = mount(ItemFilterBar, { target, props: { state } });

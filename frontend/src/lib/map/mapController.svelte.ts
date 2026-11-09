@@ -42,10 +42,8 @@ export class MapController {
   cellsError = $state<string | null>(null);
   loadingCells = $state(false);
 
-  /** The shared item filter and the capture days; the same names the lists take. */
+  /** The shared item filter, capture days included; the same names the lists take. */
   readonly filter = new ItemFilterState();
-  takenFrom = $state('');
-  takenTo = $state('');
 
   /** The cell whose photos are listed in the side panel. */
   openTile = $state<MapTileImages | null>(null);
@@ -61,10 +59,7 @@ export class MapController {
 
   /** The filter as the query parameters every map route takes. */
   query(): ItemFilterQuery {
-    const q = this.filter.toQuery(withoutOpenVocab);
-    if (this.takenFrom) q.taken_from = this.takenFrom;
-    if (this.takenTo) q.taken_to = this.takenTo;
-    return q;
+    return this.filter.toQuery(withoutOpenVocab);
   }
 
   async loadMeta(signal?: AbortSignal): Promise<void> {
@@ -135,8 +130,6 @@ export class MapController {
   /** The same, as the `ItemFilter` body the selection actions send. */
   listBody() {
     const body = this.filter.toBody();
-    if (this.takenFrom) body.taken_from = this.takenFrom;
-    if (this.takenTo) body.taken_to = this.takenTo;
     body.image_ids = this.openTile?.image_ids ?? [];
     return body;
   }

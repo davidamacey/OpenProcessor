@@ -55,7 +55,7 @@ describe('MapController', () => {
     const d = deps();
     const ctl = new MapController(d);
     ctl.filter.setValue('class_name', ['class_a']);
-    ctl.takenFrom = '2024-03-05';
+    ctl.filter.takenFrom = '2024-03-05';
     await ctl.loadCells({ zoom: 6, bbox: '7,46,9,48' });
     expect(d.cells).toHaveBeenCalledWith(
       { zoom: 6, bbox: '7,46,9,48' },
@@ -93,7 +93,7 @@ describe('MapController', () => {
     const ctl = new MapController(d);
     await ctl.loadCells({ zoom: 5, bbox: '1,2,3,4' });
     await ctl.openCell('9/1/1');
-    ctl.takenTo = '2024-03-06';
+    ctl.filter.takenTo = '2024-03-06';
     await ctl.refresh();
     expect(ctl.openTile).toBeNull();
     expect(d.cells).toHaveBeenCalledTimes(2);
@@ -110,7 +110,7 @@ describe('MapController', () => {
 
   it("narrows the list to the open cell's photos, in both filter spellings", async () => {
     const ctl = new MapController(deps());
-    ctl.takenFrom = '2024-03-05';
+    ctl.filter.takenFrom = '2024-03-05';
     await ctl.openCell('9/267/179');
     expect(ctl.listQuery()).toEqual({ taken_from: '2024-03-05', image_id: ['a', 'b'] });
     expect(ctl.listBody()).toEqual({ taken_from: '2024-03-05', image_ids: ['a', 'b'] });

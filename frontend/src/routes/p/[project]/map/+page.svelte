@@ -82,24 +82,6 @@
     </section>
   {:else if ctl.meta}
     <div class="flex flex-wrap items-end gap-3 text-xs" data-testid="map-filters">
-      <label class="flex flex-col gap-1 text-zinc-400"
-        >Taken from
-        <input
-          type="date"
-          class="input"
-          bind:value={ctl.takenFrom}
-          data-testid="map-taken-from"
-        />
-      </label>
-      <label class="flex flex-col gap-1 text-zinc-400"
-        >Taken to
-        <input
-          type="date"
-          class="input"
-          bind:value={ctl.takenTo}
-          data-testid="map-taken-to"
-        />
-      </label>
       <ItemFilterBar
         state={ctl.filter}
         visible={withoutOpenVocab}
