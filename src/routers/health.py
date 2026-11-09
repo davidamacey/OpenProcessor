@@ -32,8 +32,8 @@ from src.core import disk_space
 from src.core.metrics import render_metrics
 from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
-from src.services.model_readiness import models_not_ready, required_model_names
-from src.services.triton_control import TritonControlService
+from src.services.models.model_readiness import models_not_ready, required_model_names
+from src.services.models.triton_control import TritonControlService
 from src.utils.upstream_errors import UpstreamError
 
 

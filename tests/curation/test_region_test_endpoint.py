@@ -302,7 +302,7 @@ class _DetectorPool:
 def detector(stack: Any, car: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> Any:
     """``wheel_det`` is READY in Triton and in the profile."""
     import src.app.resources as resources_module
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def repo_index(_self: Any) -> list[dict[str, Any]]:
         return [{'name': 'wheel_det', 'state': 'READY', 'version': '1'}]

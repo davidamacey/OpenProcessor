@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.services.model_export import check_triton_name
+from src.services.models.model_export import check_triton_name
 
 
 if TYPE_CHECKING:

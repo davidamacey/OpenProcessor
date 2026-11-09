@@ -128,7 +128,7 @@ def test_segment_with_the_region_stage_paused_is_refused(world: Any) -> None:
 def test_segment_with_a_profile_that_has_no_segmenter_prompt_is_refused(
     world: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _repo() -> list[dict[str, str]]:
         return [{'name': 'wheel_det', 'state': 'READY', 'version': '1'}]

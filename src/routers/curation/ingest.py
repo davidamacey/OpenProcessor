@@ -406,7 +406,7 @@ async def ingest_region_drain(
     )
     from src.services.curation.region_drain import observe_drain
     from src.services.detection.profile_registry import region_profile_or_neutral
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     fields = get_region_fields()
     body = {

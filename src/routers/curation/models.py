@@ -37,7 +37,7 @@ from src.services.detection.segmenter_health import (
     build_segmenter_entry,
     build_standalone_segmenter_entry,
 )
-from src.services.model_unload_guard import (
+from src.services.models.model_unload_guard import (
     UnloadRefusedError,
     check_unload,
     core_pipeline_models,
@@ -228,7 +228,7 @@ async def models_status(
             'endpoint': triton_http,
             # Unload guard flags — same source of truth the
             # DELETE /models/{name} endpoint enforces (see
-            # src/services/model_unload_guard.py).
+            # src/services/models/model_unload_guard.py).
             'is_region_protected': is_region_protected_model(name, used_elsewhere=used_elsewhere),
             'requires_force_to_unload': name in core_pipeline_models(),
             'job_id': job_id,
@@ -320,7 +320,7 @@ async def models_status(
 # on-disk model repo) but in reverse, with guardrails a promote doesn't
 # need: unloading the wrong model breaks live serving instantly, where a
 # bad promote at worst fails to load. (The guard lives in
-# src/services/model_unload_guard.py; `models_status` surfaces the same
+# src/services/models/model_unload_guard.py; `models_status` surfaces the same
 # flags per-model so the UI doesn't have to re-derive them.)
 
 

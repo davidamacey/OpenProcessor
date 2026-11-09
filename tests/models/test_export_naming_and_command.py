@@ -9,7 +9,7 @@ import export_worker
 import pytest
 from fastapi.testclient import TestClient
 
-from src.services import model_export, model_export_jobs
+from src.services.models import model_export, model_export_jobs
 
 
 if TYPE_CHECKING:

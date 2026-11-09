@@ -47,7 +47,7 @@ def app_client(monkeypatch):
 
 @pytest.fixture
 def ready_state(monkeypatch):
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     state = {'ready': {'wheel_detector', 'other_detector'}}
 

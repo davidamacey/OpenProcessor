@@ -7,7 +7,7 @@ import pytest
 
 from curation.conftest import SCOPED
 from curation.test_profile_validation import _body
-from src.services.triton_control import TritonControlService
+from src.services.models.triton_control import TritonControlService
 
 
 @pytest.fixture(autouse=True)

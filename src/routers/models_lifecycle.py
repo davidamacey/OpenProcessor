@@ -23,18 +23,18 @@ from src.schemas.models import (
     ModelListResponse,
     ModelLoadResponse,
 )
-from src.services.model_export import PYTORCH_MODELS_DIR
-from src.services.model_export_jobs import list_export_tasks
-from src.services.model_repository import (
+from src.services.models.model_export import PYTORCH_MODELS_DIR
+from src.services.models.model_export_jobs import list_export_tasks
+from src.services.models.model_repository import (
     checked_model_name,
     inside_repository,
     promoted_owner,
     resolve_load_dir,
     resolve_model_dirs,
 )
-from src.services.model_unload_guard import UnloadRefusedError, check_unload
+from src.services.models.model_unload_guard import UnloadRefusedError, check_unload
+from src.services.models.triton_control import TritonControlService
 from src.services.training.triton_repo import set_explicitly_unloaded
-from src.services.triton_control import TritonControlService
 
 
 logger = logging.getLogger(__name__)

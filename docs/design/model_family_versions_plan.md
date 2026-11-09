@@ -69,7 +69,7 @@ Why, from the runs in section 3:
 | Area | File | What it does | Ultralytics |
 |---|---|---|---|
 | API runtime | `requirements.txt`, `requirements-test.txt` | `ultralytics>=8.4.174,<8.5`; image resolves 8.4.197 | 8.4.197 in `openprocessor:0.7.0-rc5` |
-| Upload validation | `src/services/model_export.py::validate_pytorch_model` | `torch_safe_load(safe_only=True)`, refuses when `_SafeLoad.SUPPORTED` is false; routes on `model.end2end` | 8.4.197 |
+| Upload validation | `src/services/models/model_export.py::validate_pytorch_model` | `torch_safe_load(safe_only=True)`, refuses when `_SafeLoad.SUPPORTED` is false; routes on `model.end2end` | 8.4.197 |
 | YOLO26 export | `export/export_yolo26.py` | `model.export(format='onnx', dynamic=True, batch=max_batch, device='cpu', simplify=True)`, no `nms` argument; then ModelOpt FP16 (`ultralytics.utils.export.engine.modelopt_quantize_onnx`), uint8 input prefix, TRT build | main env 8.4.197 |
 | YOLO11 export | `export/export_models.py`, `export/yolo_formats.py` | re-execs into `/opt/venv-y11`; `Exporter` + patched `export_onnx_trt` with `topk_all=300, iou_thres=0.7, conf_thres=0.25, class_agnostic=True, normalize_boxes=True, opset=17` | 8.3.253 (`requirements-export-y11.txt`) |
 | Vendored patch | `src/ultralytics_patches/` | levipereira fork extract: `TRT::EfficientNMS_TRT` ops in ONNX, 4 outputs | targets 8.3 |
@@ -430,7 +430,7 @@ Step 7 Stage A needs 6.2 steps 1-3 for the patched engine. Steps 4-6 (Stage B) n
   raw-head ONNX to `inspect_fused_output` and expects a refusal (must fail before the fix).
 
 **Step 2 — family detection by capability (C2).**
-- `src/services/model_export.py::validate_pytorch_model`: replace `'end2end': getattr(model,
+- `src/services/models/model_export.py::validate_pytorch_model`: replace `'end2end': getattr(model,
   'end2end')` with a `head_kind` of `one2one` / `nms` from `hasattr(model.model[-1],
   'one2one_cv2')`, and record `ultralytics_version` from the checkpoint (`ckpt['version']`).
 - `export/export_worker.py::build_command`, `engines_to_load`: route on `head_kind`.

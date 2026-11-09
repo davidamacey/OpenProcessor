@@ -33,7 +33,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         return {}
 
     monkeypatch.setattr(
-        'src.services.model_unload_guard.ingest_models_by_project', _no_other_projects
+        'src.services.models.model_unload_guard.ingest_models_by_project', _no_other_projects
     )
     app = FastAPI()
     app.include_router(models_router.router)

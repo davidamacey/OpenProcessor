@@ -204,8 +204,8 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
         discover_foreign_shared_models,
         listing_fields,
     )
+    from src.services.models.triton_control import TritonControlService
     from src.services.training.promoted_models import discover_promoted_models
-    from src.services.triton_control import TritonControlService
 
     registry = await bound_registry()
     repo = await TritonControlService().get_repository_index()
@@ -337,7 +337,7 @@ async def _build_vlm() -> VlmBlock:
 
 async def _build_ocr() -> OcrBlock:
     from src.config.settings import TritonModelConfig
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     repo = await TritonControlService().get_repository_index()
     state_by_name = {e['name']: e for e in repo if 'name' in e}

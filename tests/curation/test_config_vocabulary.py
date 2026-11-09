@@ -30,7 +30,7 @@ def _reset_caches():
 @pytest.fixture
 def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     async def _fake_repo_index() -> list[dict]:
         return [

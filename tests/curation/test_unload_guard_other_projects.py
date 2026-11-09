@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 
 from src.app.factory import create_app
 from src.core.dependencies import get_curation_opensearch
-from src.services import model_unload_guard
-from src.services.model_unload_guard import (
+from src.services.models import model_unload_guard
+from src.services.models.model_unload_guard import (
     UnloadRefusedError,
     check_unload,
     is_region_protected_model,

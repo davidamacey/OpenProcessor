@@ -27,7 +27,7 @@ DEPLOYMENT_TX_MODULES: tuple[str, ...] = (
     'src.services.training.trainer_reachability',  # reads worker_capabilities and gpu_devices, which belong to no project
     'src.services.training.bakeoff_pins',  # retention pins what any project's queued bake-off still scores
     'src.services.config_store',  # resolves a slug to its id; deployment-wide endpoints and profiles
-    'src.services.model_export_jobs',  # deployment-wide export jobs (no project) and the models they build
+    'src.services.models.model_export_jobs',  # deployment-wide export jobs (no project) and the models they build
     'scripts.db',  # migration runner and db verify
     'scripts.opensearch',  # the one-shot index migrate reads the projects table
     'scripts.admin',  # admin command-line tools

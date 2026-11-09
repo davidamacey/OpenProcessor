@@ -176,7 +176,7 @@ def app_client_config_store(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
         TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()

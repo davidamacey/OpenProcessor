@@ -112,7 +112,7 @@ Inference runs on Triton, but the API process is not a thin client:
 | `onnxruntime-gpu` | PE text ONNX backend, probe models | stays |
 | `faiss-gpu-cu12`, `scikit-learn`, `umap-learn`, `hdbscan` | clustering | stays (cuML is not installed; GPU clustering is probed at runtime) |
 | `cupy` | optional GPU clustering memory probe | stays; must be declared explicitly if `nvidia-modelopt` leaves the runtime |
-| `tensorrt-cu13` (4.3 GB) | **only** `export/*` and `src/services/model_export.py`, which spawns `export/export_models.py` / `export_yolo26.py` as a subprocess for `POST /models/{name}/export` | export-only |
+| `tensorrt-cu13` (4.3 GB) | **only** `export/*` and `src/services/models/model_export.py`, which spawns `export/export_models.py` / `export_yolo26.py` as a subprocess for `POST /models/{name}/export` | export-only |
 | `nvidia-modelopt[onnx]`, `onnx-graphsurgeon`, `onnxsim`, `onnxslim`, `onnxscript`, `polygraphy` | export scripts | export-only |
 | `/opt/venv-y11` (7.1 GB) | re-exec target of `export/export_models.py` for YOLO11 EfficientNMS | export-only |
 
@@ -218,7 +218,7 @@ of the download win and changes no behaviour.
 Verification for Phase A (every changed image, local-only tags such as
 `openprocessor:slim-test`, plain `docker run --rm`, no compose):
 - `python -c` imports of `src.main`, `src.clients.pe_encoder`,
-  `src.services.model_export`, `scripts.curation.bakeoff.bakeoff_runner`,
+  `src.services.models.model_export`, `scripts.curation.bakeoff.bakeoff_runner`,
   `docker/trainer` `trainer`, segmenter `main`;
 - `/opt/venv-y11/bin/python -c 'import ultralytics, torch, tensorrt,
   onnxruntime, modelopt.onnx; print(ultralytics.__version__)'` → `8.3.253`;

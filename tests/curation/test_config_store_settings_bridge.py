@@ -106,7 +106,7 @@ def test_put_detection_profile_off_and_on(
     async def _fake_repo_index() -> list[dict]:
         return [{'name': 'wheel_detector', 'state': 'READY', 'version': '1'}]
 
-    from src.services.triton_control import TritonControlService
+    from src.services.models.triton_control import TritonControlService
 
     monkeypatch.setattr(
         TritonControlService, 'get_repository_index', lambda _self: _fake_repo_index()

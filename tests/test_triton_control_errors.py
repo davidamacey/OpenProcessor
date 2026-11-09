@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
-from src.services.triton_control import TritonControlService
+from src.services.models.triton_control import TritonControlService
 from src.utils.upstream_errors import UpstreamError
 
 
