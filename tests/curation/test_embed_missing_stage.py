@@ -11,7 +11,6 @@ import pytest
 from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from curation.reprocess_fixtures import FakePE, docs, item, jpeg_bytes, make_fake, servable_root
-from curation.test_auto_label_selection import client, job_dir, packs  # noqa: F401 - fixtures
 from src.services.curation.autolabel.embed_stage import run_embed_missing_stage, stage_request
 from src.services.curation.autolabel.progress import STAGES
 from src.services.curation.autolabel.selection import unvalidated_count_query, vlm_selection_query

@@ -30,6 +30,7 @@ pytest_plugins = [
     'config_store.memory_settings',
     'config_store.memory_config',
     'curation.crops_fixtures',
+    'curation.auto_label_fixtures',
 ]
 
 
