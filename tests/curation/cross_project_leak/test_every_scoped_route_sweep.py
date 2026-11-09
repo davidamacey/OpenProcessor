@@ -58,6 +58,7 @@ from curation.cross_project_leak._route_tables import (
     STREAMING_ROUTES,
     UNBOUND_BY_DESIGN,
     UNSEEDED_WRITES,
+    UUID_JOB_ID,
 )
 from curation.cross_project_leak._seeders import NAME_FOR, PREPARE
 
@@ -97,6 +98,8 @@ def _fill(path: str, slug: str, key: tuple[str, str] | None = None) -> str:
         params['crop_id'] = f'{slug}-{CROP_FOR[key]}'
     if key in NAME_FOR:
         params['name'] = NAME_FOR[key]
+    if key in UUID_JOB_ID:
+        params['job_id'] = route_params(slug)['partition_id']
 
     def _sub(match: re.Match[str]) -> str:
         name = match.group(1)
@@ -279,6 +282,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
 
     monkeypatch.setattr('src.routers.curation.select.embedding_space', item_space)
     monkeypatch.setattr('src.services.curation.embedding_viz_read.embedding_space', item_space)
+    monkeypatch.setattr('src.routers.curation.cluster_partitions.embedding_space', item_space)
     app = leak_env.app
     routes = _scoped_routes(app)
     assert len(routes) > 100, f'expected the full scoped surface, got {len(routes)} routes'

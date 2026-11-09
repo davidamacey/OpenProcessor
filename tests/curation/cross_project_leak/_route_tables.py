@@ -8,7 +8,11 @@ from curation.cross_project_leak._constants import SCOPED
 # Routes whose data is rows in PostgreSQL, not documents in an OpenSearch index: this sweep watches
 # OpenSearch accesses and files, so it cannot see them. Their isolation is row-level security,
 # proven in the database tier (tests/db/test_row_level_security.py, tests/config_store/).
-POSTGRES_BACKED_PREFIXES: tuple[str, ...] = ('/cluster_profiles', '/assist_loop_presets')
+POSTGRES_BACKED_PREFIXES: tuple[str, ...] = (
+    '/cluster_profiles',
+    '/assist_loop_presets',
+    '/near_dup_profiles',
+)
 
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must
@@ -95,10 +99,6 @@ NO_WRITE: dict[tuple[str, str], str] = {
         'test_assist_proposal)'
     ),
     ('POST', '/train/reload_promoted'): 'asks Triton to load promoted models; stores nothing',
-    (
-        'POST',
-        '/vlm/verify_region_batch',
-    ): "returns the VLM's verdicts to the caller; stores nothing",
     (
         'POST',
         '/vlm/region_visible_batch',
@@ -216,7 +216,59 @@ _CONFIG_STORE_ROUTES: tuple[tuple[str, str], ...] = (
     ('POST', '/vlm/endpoints/{name}/activate'),
     ('POST', '/vlm/endpoints/deactivate'),
 )
+_JOB_ROWS_IN_POSTGRES = (
+    'the route queues, cancels or pauses a job, which is a row in the PostgreSQL jobs table, not '
+    'a document in an OpenSearch index; its project scope is proven by tests/jobs and the '
+    'row-level security tests, and the job itself writes later in a worker'
+)
+_NEAR_DUP_ROWS_IN_POSTGRES = (
+    'near-duplicate runs, groups and decisions are rows in PostgreSQL keyed by project_id; '
+    'isolation is proven by tests/db/test_near_dup_schema.py and the row-level security tests'
+)
+_NO_SUCH_ROW = (
+    'the sweep has no such row (404); the route reads and writes PostgreSQL, which this '
+    'OpenSearch sweep cannot see (row-level security tests)'
+)
+_NO_TRAINER = (
+    'refused before any write: the sweep has no live gpu_train consumer (409), the same answer '
+    'a project without a trainer gets'
+)
 UNSEEDED_WRITES: dict[tuple[str, str], str] = {
+    **dict.fromkeys(
+        (
+            ('POST', '/near_duplicates/runs'),
+            ('POST', '/source_backfill/runs'),
+            ('POST', '/pipeline/auto_label/start'),
+            ('POST', '/pipeline/auto_label/cancel'),
+            ('POST', '/pipeline/auto_label/pause'),
+            ('POST', '/pipeline/auto_label/resume'),
+            ('POST', '/scores/compute'),
+            ('POST', '/scores/cancel'),
+            ('POST', '/select/diverse'),
+            ('POST', '/select/cancel'),
+            ('POST', '/viz/projection/rebuild'),
+            ('POST', '/viz/projection/cancel'),
+            ('POST', '/vlm/label_batch'),
+            ('POST', '/crops/move'),
+            ('PUT', '/crops/batch_label'),
+            ('POST', '/probe/run'),
+            ('POST', '/probe/cancel'),
+            ('POST', '/clusters/runs'),
+            ('POST', '/train/cancel/{job_id}'),
+            ('POST', '/train/cancel_campaign/{campaign_id}'),
+        ),
+        _JOB_ROWS_IN_POSTGRES,
+    ),
+    ('POST', '/near_duplicates/decisions'): _NEAR_DUP_ROWS_IN_POSTGRES,
+    ('DELETE', '/near_duplicates/decisions/{decision_id}'): _NO_SUCH_ROW,
+    ('PUT', '/clusters/activation'): _NO_SUCH_ROW,
+    ('POST', '/assist/loops/{loop_id}/pause'): _NO_SUCH_ROW,
+    ('PATCH', '/assist/loops/{loop_id}/budget'): _NO_SUCH_ROW,
+    ('POST', '/train/start'): _NO_TRAINER,
+    ('POST', '/train/start_campaign'): _NO_TRAINER,
+    ('PUT', '/models/{model_name}/sharing'): (
+        'writes the model registry row in PostgreSQL, which this OpenSearch sweep cannot see'
+    ),
     **dict.fromkeys(_CONFIG_STORE_ROUTES, _CONFIG_STORE_IN_POSTGRES),
     ('POST', '/pause'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
     ('POST', '/resume'): 'writes projects.paused_at in Postgres; tests/projects/test_pause_pg.py',
@@ -255,3 +307,8 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
 # Long-lived SSE streams: the per-project delivery they serve is proven by
 # the event checks below and tests/events/test_listener_fanout.py.
 STREAMING_ROUTES: frozenset[str] = frozenset({f'{SCOPED}/events', f'{SCOPED}/pipeline/events'})
+
+# Routes whose ``{job_id}`` is parsed as a uuid (a job row), so the sweep's marker id would be a 400.
+UUID_JOB_ID: frozenset[tuple[str, str]] = frozenset(
+    {('POST', '/train/promote/{job_id}'), ('POST', '/train/cancel/{job_id}')}
+)

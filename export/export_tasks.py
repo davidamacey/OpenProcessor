@@ -73,14 +73,10 @@ def _on_worker_init(**_: Any) -> None:
     Celery logs an ``Exception`` raised by a signal receiver and carries on, so the refusal is
     a ``SystemExit`` (https://docs.celeryq.dev/en/stable/userguide/signals.html).
     """
-    reject_retired_env()
     from src.db import schema_check
 
-    try:
-        schema_check.wait_for_dependencies({'database': schema_check.database_probe})
-        schema_check.check_control_plane()
-    except (schema_check.DependencyUnavailableError, schema_check.SchemaNotCurrentError) as exc:
-        raise SystemExit(str(exc)) from exc
+    reject_retired_env()
+    schema_check.require_current_schema()
 
 
 def _phase_of(line: str) -> tuple[float, str] | None:

@@ -187,6 +187,21 @@ def check_control_plane() -> None:
         )
 
 
+def require_current_schema() -> None:
+    """Exit unless the database answers and is at this image's head (a worker's start gate).
+
+    Unlike the API, a worker, beat or GPU consumer never runs on a database it cannot reach or on
+    another revision. Celery logs an ``Exception`` raised by a signal receiver and carries on, so
+    the refusal is a ``SystemExit``
+    (https://docs.celeryq.dev/en/stable/userguide/signals.html).
+    """
+    try:
+        wait_for_dependencies({'database': database_probe})
+        check_control_plane()
+    except (DependencyUnavailableError, SchemaNotCurrentError) as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 __all__ = [
     'DEPENDENCY_WAIT_BUDGET_S',
     'Clock',
@@ -196,5 +211,6 @@ __all__ = [
     'UpgradeIncompleteError',
     'check_control_plane',
     'database_probe',
+    'require_current_schema',
     'wait_for_dependencies',
 ]

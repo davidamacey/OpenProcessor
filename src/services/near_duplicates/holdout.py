@@ -16,6 +16,7 @@ from src.core.exceptions import RequestRejectedError
 from src.db.repos import near_dup as repo
 from src.db.repos.near_dup_holdout import Move, record_moves, stamp_freeze
 from src.db.repos.records import current_holdout_freeze
+from src.db.session import project_tx
 from src.services.events.publish import apublish
 from src.services.near_duplicates import status as near_dup_status
 from src.utils.timeutil import now_iso
@@ -103,12 +104,9 @@ async def record_closure(
     )
 
 
-async def require_fresh(session: AsyncSession, project_id: uuid.UUID) -> None:
-    """Refuse (409 ``near_dup_stale``) while a level has no current run, needs a rebuild or has
-    pending rows: a freeze or a training export on stale groups would split near-duplicates across
-    the holdout. The body names each stale level so the status route can say which job to start."""
+async def _stale_levels(session: AsyncSession, project_id: uuid.UUID) -> list[dict[str, object]]:
     current = await near_dup_status.status(session, project_id)
-    stale = [
+    return [
         {
             'level': lv.level,
             'stale_reasons': list(lv.stale_reasons),
@@ -117,10 +115,48 @@ async def require_fresh(session: AsyncSession, project_id: uuid.UUID) -> None:
         for lv in current.levels
         if lv.stale_reasons
     ]
+
+
+def _refuse(levels: list[dict[str, object]]) -> RequestRejectedError:
+    return RequestRejectedError(
+        status_code=409, detail={'code': 'near_dup_stale', 'levels': levels}
+    )
+
+
+async def _has_freeze(session: AsyncSession, project_id: uuid.UUID) -> bool:
+    async with project_tx(session, project_id):
+        return await current_holdout_freeze(session, project_id) is not None
+
+
+async def require_fresh_when_frozen(session: AsyncSession, project_id: uuid.UUID) -> None:
+    """Refuse (409 ``near_dup_stale``) a training export while the groups are stale, but only
+    once a holdout is frozen (owner decision 2026-11-08): before any freeze there is no holdout
+    for a near-duplicate to leak across, so an export is never refused for this. The body names
+    each stale level so the status route can say which job to start."""
+    if not await _has_freeze(session, project_id):
+        return
+    stale = await _stale_levels(session, project_id)
     if stale:
-        raise RequestRejectedError(
-            status_code=409, detail={'code': 'near_dup_stale', 'levels': stale}
-        )
+        raise _refuse(stale)
+
+
+async def require_freezable(session: AsyncSession, project_id: uuid.UUID) -> None:
+    """Refuse (409 ``near_dup_stale``) a freeze that would split near-duplicates across it.
+
+    A re-freeze is refused while any level is stale. The first freeze pulls the near-duplicates
+    of its cohort in from the current item-level run, so it is refused only when there is no
+    current item-level run at all.
+    """
+    if await _has_freeze(session, project_id):
+        stale = await _stale_levels(session, project_id)
+    else:
+        stale = [
+            lv
+            for lv in await _stale_levels(session, project_id)
+            if lv['level'] == 'item' and lv['stale_reasons'] == ['no_run']
+        ]
+    if stale:
+        raise _refuse(stale)
 
 
 MGET_CHUNK = 500

@@ -6,6 +6,8 @@ handlers raise ``SystemExit`` (a ``BaseException``): https://docs.celeryq.dev/en
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from src.db import schema_check
@@ -13,13 +15,22 @@ from src.db.schema_check import DependencyUnavailableError, SchemaNotCurrentErro
 from src.tasks import app as tasks_app
 
 
-HANDLERS = [tasks_app._on_worker_init, tasks_app._on_beat_init]
+def _gpu_handlers() -> list:
+    # tests/tasks/conftest.py disarms the GPU inventory the app build arms
+    from export import export_tasks
+    from scripts.curation.bakeoff import bakeoff_tasks
+
+    return [export_tasks._on_worker_init, bakeoff_tasks._on_worker_init]
+
+
+HANDLERS = [tasks_app._on_worker_init, tasks_app._on_beat_init, *_gpu_handlers()]
 
 
 @pytest.fixture(autouse=True)
 def calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     calls: list[str] = []
-    monkeypatch.setattr(tasks_app, 'reject_retired_env', lambda: None)
+    for module in (tasks_app, *(inspect.getmodule(h) for h in HANDLERS[2:])):
+        monkeypatch.setattr(module, 'reject_retired_env', lambda: None)
     monkeypatch.setattr(
         schema_check, 'wait_for_dependencies', lambda _probes, **_: calls.append('wait')
     )
@@ -54,3 +65,13 @@ def test_an_unreachable_database_exits(handler, monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(SystemExit) as exit_info:
         handler()
     assert 'dependency_unavailable: database' in str(exit_info.value.code)
+
+
+@pytest.mark.parametrize('handler', HANDLERS)
+def test_every_entry_point_uses_the_one_shared_check(
+    handler, calls: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One helper holds the wait-then-check-then-exit sequence; no entry point carries a copy."""
+    monkeypatch.setattr(schema_check, 'require_current_schema', lambda: calls.append('shared'))
+    handler()
+    assert calls == ['shared']
