@@ -51,7 +51,10 @@ async def test_prune_removes_only_old_terminal_runs_and_their_rows(run_env) -> N
     plan = plan_run_prune(runs, promoted_job_ids=set(), bakeoff_run_ids=set(), keep_last=1)
     assert plan == [middle, oldest]
 
-    assert await asyncio.to_thread(apply_run_prune, plan) == {'removed_runs': 2}
+    assert await asyncio.to_thread(apply_run_prune, plan) == {
+        'removed_runs': 2,
+        'failed': [],
+    }
     assert [job_id for job_id, _ in await asyncio.to_thread(list_runs)] == [newest]
     assert sql(run_env.pg, 'SELECT count(*) FROM jobs WHERE id = ANY(%s)', [middle, oldest]) == [
         (0,)
@@ -68,3 +71,46 @@ async def test_a_runs_export_is_pinned_from_its_spec_and_its_manifest(run_env) -
 
     pinned = await asyncio.to_thread(export_retention._run_export_dirs)
     assert pinned == {'/exports/queued', '/exports/original', '/exports/repointed'}
+
+
+def _blob(run_env, job_id: uuid.UUID) -> str:
+    [(prefix,)] = sql(
+        run_env.pg, 'SELECT artifact_prefix FROM training_runs WHERE job_id = %s', job_id
+    )
+    key = f'{prefix}/results.csv'
+    run_env.store.write_atomic(key, b'x')
+    return key
+
+
+@pytest.mark.asyncio
+async def test_prune_deletes_blobs_and_mlflow_run_before_rows(run_env, monkeypatch) -> None:
+    job = await _start('/exports/blobs')
+    _complete(run_env.pg, job)
+    sql(run_env.pg, "UPDATE training_runs SET mlflow_run_id = 'mlf-1' WHERE job_id = %s", job)
+    key = _blob(run_env, job)
+    deleted: list[str] = []
+    monkeypatch.setattr('src.services.training.run_retention._delete_mlflow_run', deleted.append)
+
+    result = await asyncio.to_thread(apply_run_prune, [job])
+
+    assert result == {'removed_runs': 1, 'failed': []}
+    assert not run_env.store.exists(key)
+    assert deleted == ['mlf-1']
+
+
+@pytest.mark.asyncio
+async def test_prune_keeps_the_row_when_mlflow_fails(run_env, monkeypatch) -> None:
+    job = await _start('/exports/fail')
+    _complete(run_env.pg, job)
+    sql(run_env.pg, "UPDATE training_runs SET mlflow_run_id = 'mlf-2' WHERE job_id = %s", job)
+
+    def boom(_run_id: str) -> None:
+        raise RuntimeError('tracking server down')
+
+    monkeypatch.setattr('src.services.training.run_retention._delete_mlflow_run', boom)
+
+    result = await asyncio.to_thread(apply_run_prune, [job])
+
+    assert result['removed_runs'] == 0
+    assert [f['job_id'] for f in result['failed']] == [str(job)]
+    assert sql(run_env.pg, 'SELECT count(*) FROM training_runs WHERE job_id = %s', job) == [(1,)]
