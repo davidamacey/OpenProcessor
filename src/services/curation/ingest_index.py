@@ -13,7 +13,6 @@ exactly the code a detected one is.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -41,6 +40,7 @@ from src.services.detection.geometry import (
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu
 from src.utils.stage_timing import stage_timer
+from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
@@ -216,8 +216,8 @@ async def _cache_crops(
     lost the images-doc ``create`` leaves no crops behind; a reader that comes first
     re-crops from the source, as on any cache miss."""
     project_dir = project_crop_cache_dir(service.config.crop_cache_dir)
-    await asyncio.gather(
-        *(
+    await run_all(
+        [
             run_cpu(
                 write_crop_cache,
                 cid,
@@ -226,7 +226,7 @@ async def _cache_crops(
                 nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
             )
             for cid, crop in zip(cids, crops, strict=True)
-        )
+        ]
     )
 
 

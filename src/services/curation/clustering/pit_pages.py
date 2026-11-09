@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
-from src.services.curation.clustering.slice_group import run_slices
+from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
@@ -106,7 +106,7 @@ async def iter_pages(
 
     async def run() -> None:
         try:
-            await run_slices([produce(i) for i in range(n_slices)])
+            await run_all([produce(i) for i in range(n_slices)])
         finally:
             await queue.put(None)
 

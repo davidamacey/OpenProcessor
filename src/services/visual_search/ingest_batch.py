@@ -9,6 +9,7 @@ from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
+from src.utils.task_group import run_settled
 
 
 if TYPE_CHECKING:
@@ -307,17 +308,16 @@ class IngestBatchMixin:
         to_process: list[tuple[bytes, str, str | None]],
     ) -> int:
         """Step 5c: index every image's OCR output in parallel; returns how many indexed."""
-        import asyncio
-
-        ocr_tasks = [
-            self._index_ocr_result(
-                inference_results[i],
-                to_process[i][1],
-                to_process[i][2] or to_process[i][1],
-            )
-            for i in range(len(inference_results))
-        ]
-        ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
+        ocr_results = await run_settled(
+            [
+                self._index_ocr_result(
+                    inference_results[i],
+                    to_process[i][1],
+                    to_process[i][2] or to_process[i][1],
+                )
+                for i in range(len(inference_results))
+            ]
+        )
         return sum(1 for r in ocr_results if r is True)
 
     async def _near_duplicates(

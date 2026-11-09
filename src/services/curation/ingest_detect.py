@@ -29,7 +29,6 @@ calls would, so a caller cannot tell which path produced a result.
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +44,7 @@ from src.services.curation.item_doc import DetectedItem
 from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square, undo_letterbox
 from src.utils.class_names import normalize_class_name
 from src.utils.cpu_pool import run_cpu
+from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
@@ -150,8 +150,8 @@ class WholeImageDetector:
         from tritonclient.grpc import InferRequestedOutput
 
         net_size = self.profile.input_size
-        letterboxed = await asyncio.gather(
-            *(
+        letterboxed = await run_all(
+            [
                 run_cpu(
                     letterbox_to_square,
                     img,
@@ -160,7 +160,7 @@ class WholeImageDetector:
                     nbytes=_rgb_bytes(img),
                 )
                 for img in imgs
-            )
+            ]
         )
         # ``letterbox_to_square`` returns (1, 3, S, S); strip the leading dim.
         scales = [scale for _chw, scale, _pad in letterboxed]
@@ -323,8 +323,8 @@ class WholeImageDetector:
         assert profile is not None
         outs = self._secondary_outputs()
 
-        letterboxed = await asyncio.gather(
-            *(
+        letterboxed = await run_all(
+            [
                 run_cpu(
                     letterbox_to_square,
                     img,
@@ -333,7 +333,7 @@ class WholeImageDetector:
                     nbytes=_rgb_bytes(img),
                 )
                 for img in imgs
-            )
+            ]
         )
         tensors = [chw[0] for chw, _scale, _pad in letterboxed]
         full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
