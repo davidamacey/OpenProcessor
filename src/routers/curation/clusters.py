@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+import uuid  # noqa: TC003 - FastAPI resolves the path and query types at runtime
+from typing import Any
 
 from fastapi import HTTPException, Query
 
@@ -40,20 +41,11 @@ async def list_clusters(
         le=10000,
         description='Clusters the aggregation returns; `truncated` says when it was cut here.',
     ),
-    kind: Literal['class', 'candidate', 'all'] = Query('all'),
-    cluster_id: int | None = Query(
+    cluster_uid: uuid.UUID | None = Query(
         None,
-        description=(
-            'Filter to exactly this cluster_id. Distinct from a class: '
-            'cluster_id == class_id is only an invariant for "class" '
-            'clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a "candidate" '
-            'cluster (id >= that offset) has no matching class_id at all, '
-            'so class_id can never be used to look one up by its own '
-            'identity. This is the correct filter for "fetch one cluster '
-            'card by id" regardless of kind.'
-        ),
+        description='Return only the card of this cluster (its identity in the served partition).',
     ),
-    # Primary-subject grid filters: every card stat (size, reps, purity)
+    # Primary-subject grid filters: every card stat (size, reps)
     # reflects only crops passing these.
     min_blur_ratio: float | None = Query(None, ge=0.0),
     class_source: str | None = Query(None),
@@ -77,13 +69,10 @@ async def list_clusters(
 ) -> ClusterListResponse:
     """Authoritative per-cluster card list for the labeler.
 
-    One OpenSearch aggregation yields every card input (size, validation,
-    dominant class, label agreement, geometry purity, detector agreement and
-    confidence, per-tab review counts, sub-clusters); the server then applies
-    the filters and the ``sort`` and sets the quality ``flags``. A candidate
-    cluster only gets a ``dominant_class_name`` when a unique top class has at
-    least ``CANDIDATE_DOMINANT_MIN_COUNT`` members and
-    ``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones. ``truncated`` is
+    One OpenSearch aggregation over the served partition's ``cluster_uid`` yields every card
+    input (size, validation, dominant class, label agreement, detector agreement and
+    confidence, per-tab review counts); the server then applies the filters and the
+    ``sort`` and sets the quality ``flags``. ``truncated`` is
     true when the aggregation returned ``max_clusters`` buckets: the list may
     then be incomplete. Frozen test-holdout and excluded items are never counted.
     """
@@ -102,8 +91,7 @@ async def list_clusters(
             item_filter=gate,
             per_cluster=per_cluster,
             max_clusters=max_clusters,
-            kind=kind,
-            cluster_id=cluster_id,
+            cluster_uid=str(cluster_uid) if cluster_uid is not None else None,
             offset=offset,
             limit=limit,
             sort=sort,
@@ -119,16 +107,18 @@ async def list_clusters(
 
 
 @router.get(
-    '/clusters/{cluster_id}/facets',
+    '/clusters/{cluster_uid}/facets',
     response_model=None,
     responses={200: {'model': ClusterFacets}},
 )
-async def cluster_facets_endpoint(cluster_id: int, opensearch: OpenSearchDep) -> ClusterFacets:
+async def cluster_facets_endpoint(
+    cluster_uid: uuid.UUID, opensearch: OpenSearchDep
+) -> ClusterFacets:
     """Counts of one cluster's members by detector class, class source, validation,
     review tab and detector confidence, for filter chips. Each count is the ``total`` of
     the filtered ``GET /crops`` call named in :class:`ClusterFacets`. A cluster with no
     members answers zeros."""
-    return await cluster_facets(opensearch, cluster_id)
+    return await cluster_facets(opensearch, str(cluster_uid))
 
 
 _REPRESENTATIVES_MAX_CLUSTERS = 1000
@@ -153,10 +143,10 @@ async def cluster_representatives(
 ) -> dict[str, Any]:
     """Return up to ``per_cluster`` representative crop_ids per cluster, one page.
 
-    The cluster id list still comes from one cheap ``terms``
+    The cluster uid list still comes from one cheap ``terms``
     aggregation (no sub-agg), but representatives are fetched via one
     ``_msearch`` covering only the ``[offset, offset+max_clusters)`` page
-    of cluster ids (ordered by member count desc) — not via a
+    of cluster uids (ordered by member count desc) — not via a
     ``top_hits`` sub-agg that would decompress stored ``_source`` for
     every representative across every bucket. Only clusters in that page
     appear as keys in the response; call again with a larger ``offset``
@@ -180,7 +170,7 @@ async def cluster_representatives(
         'aggs': {
             'clusters': {
                 'terms': {
-                    'field': 'cluster_id',
+                    'field': 'cluster_uid',
                     'size': offset + max_clusters,
                     'order': {'_count': 'desc'},
                 },
@@ -193,12 +183,10 @@ async def cluster_representatives(
         raise server_error(500, 'representatives query failed', exc) from exc
 
     buckets = resp.get('aggregations', {}).get('clusters', {}).get('buckets', [])
-    page_cluster_ids: list[int] = [int(b['key']) for b in buckets[offset : offset + max_clusters]]
+    page_cluster_uids: list[str] = [str(b['key']) for b in buckets[offset : offset + max_clusters]]
 
-    reps = await fetch_representatives(opensearch, page_cluster_ids, per_cluster)
-    out: dict[str, Any] = {
-        str(cid): card_reps for cid, card_reps in zip(page_cluster_ids, reps, strict=True)
-    }
+    reps = await fetch_representatives(opensearch, page_cluster_uids, per_cluster)
+    out: dict[str, Any] = dict(zip(page_cluster_uids, reps, strict=True))
 
     return {
         'clusters': out,

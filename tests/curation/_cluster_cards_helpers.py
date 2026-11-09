@@ -12,6 +12,11 @@ from src.services.curation.cluster_cards import (
 )
 
 
+def uid(n: int) -> str:
+    """A fixed cluster identity for test cluster ``n``."""
+    return f'00000000-0000-7000-8000-{n:012d}'
+
+
 def bucket(
     cid: int,
     size: int,
@@ -24,16 +29,15 @@ def bucket(
     review: dict[str, int] | None = None,
     updated: str | None = None,
 ) -> dict[str, Any]:
-    """One ``cluster_id`` terms bucket as OpenSearch returns it."""
+    """One ``cluster_uid`` terms bucket (cluster ``cid``, see :func:`uid`) as OpenSearch returns it."""
     classes = classes if classes is not None else [('van', size)]
     detector = detector or []
     out: dict[str, Any] = {
-        'key': cid,
+        'key': uid(cid),
         'doc_count': size,
         'top_class': {'buckets': [{'key': k, 'doc_count': n} for k, n in classes[:3]]},
         'labelled': {'doc_count': sum(n for _k, n in classes) if labelled is None else labelled},
         'validated': {'doc_count': validated},
-        'subclusters': {'value': 0},
         'latest_update': {'value_as_string': updated} if updated else {},
         'detector_top': {
             'buckets': [{'key': k, 'doc_count': n} for k, n in detector[:1]],
@@ -66,9 +70,9 @@ def os_returning(*buckets: dict[str, Any]) -> AsyncMock:
     return client
 
 
-async def cards_by_id(*buckets: dict[str, Any], **over: Any) -> dict[int, dict[str, Any]]:
+async def cards_by_id(*buckets: dict[str, Any], **over: Any) -> dict[str, dict[str, Any]]:
     resp = await list_cards(os_returning(*buckets), **over)
-    return {c['cluster_id']: c for c in resp['items']}
+    return {c['cluster_uid']: c for c in resp['items']}
 
 
 def curation_client(fake: Any, monkeypatch: Any) -> Any:
@@ -88,4 +92,12 @@ def curation_client(fake: Any, monkeypatch: Any) -> Any:
     return TestClient(app)
 
 
-__all__ = ['bucket', 'cards_by_id', 'curation_client', 'list_cards', 'os_returning', 'params']
+__all__ = [
+    'bucket',
+    'cards_by_id',
+    'curation_client',
+    'list_cards',
+    'os_returning',
+    'params',
+    'uid',
+]

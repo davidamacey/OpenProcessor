@@ -34,7 +34,7 @@ def _bin_edges() -> list[tuple[float, float | None]]:
     return [(lo, hi) for lo, hi in zip(edges, [*edges[1:], None], strict=True)]
 
 
-def facets_body(cluster_id: int) -> dict[str, Any]:
+def facets_body(cluster_uid: str) -> dict[str, Any]:
     ranges = [
         {k: v for k, v in (('from', lo), ('to', hi)) if v is not None} for lo, hi in _bin_edges()
     ]
@@ -43,7 +43,7 @@ def facets_body(cluster_id: int) -> dict[str, Any]:
         'track_total_hits': True,
         'query': {
             'bool': {
-                'filter': [{'term': {'cluster_id': cluster_id}}],
+                'filter': [{'term': {'cluster_uid': cluster_uid}}],
                 # A reviewer's members: the frozen holdout and human-ignored items are not shown.
                 'must_not': [{'term': {'class_excluded': True}}, {'term': {'test_holdout': True}}],
             }
@@ -68,7 +68,7 @@ def _counts(agg: dict[str, Any]) -> list[FacetCount]:
     return [{'value': str(b['key']), 'count': int(b['doc_count'])} for b in agg.get('buckets', [])]
 
 
-def facets_from_response(cluster_id: int, resp: dict[str, Any]) -> ClusterFacets:
+def facets_from_response(cluster_uid: str, resp: dict[str, Any]) -> ClusterFacets:
     aggs = resp.get('aggregations', {})
     review = aggs.get('review', {}).get('buckets', {})
     found = aggs.get('detector_confidence', {}).get('buckets', [])
@@ -81,7 +81,7 @@ def facets_from_response(cluster_id: int, resp: dict[str, Any]) -> ClusterFacets
         for i, (lo, hi) in enumerate(_bin_edges())
     ]
     return {
-        'cluster_id': cluster_id,
+        'cluster_uid': cluster_uid,
         'total': int(resp.get('hits', {}).get('total', {}).get('value', 0)),
         'detector_classes': _counts(aggs.get('detector_classes', {})),
         'class_sources': _counts(aggs.get('class_sources', {})),
@@ -99,9 +99,9 @@ def facets_from_response(cluster_id: int, resp: dict[str, Any]) -> ClusterFacets
     }
 
 
-async def cluster_facets(opensearch: Any, cluster_id: int) -> ClusterFacets:
+async def cluster_facets(opensearch: Any, cluster_uid: str) -> ClusterFacets:
     try:
-        resp = await opensearch.search(index=items_index(), body=facets_body(cluster_id))
+        resp = await opensearch.search(index=items_index(), body=facets_body(cluster_uid))
     except Exception as exc:
         raise RequestRejectedError(500, f'cluster facets query failed: {exc}') from exc
-    return facets_from_response(cluster_id, resp)
+    return facets_from_response(cluster_uid, resp)

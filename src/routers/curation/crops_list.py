@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
@@ -52,6 +53,11 @@ async def list_crops(
         ),
     ] = None,
     cluster_id: int | None = None,
+    cluster_uid: Annotated[
+        uuid.UUID | None,
+        UnsetIfEmpty,
+        Query(description='Members of this cluster of the served partition.'),
+    ] = None,
     cluster_subid: Annotated[
         str | None,
         UnsetIfEmpty,
@@ -164,6 +170,7 @@ async def list_crops(
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
                 'cluster_id': cluster_id,
+                'cluster_uid': None if cluster_uid is None else str(cluster_uid),
                 'cluster_subid': cluster_subid,
                 'label_source': label_source,
                 'class_source': class_source,

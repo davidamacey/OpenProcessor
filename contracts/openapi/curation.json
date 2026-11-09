@@ -5065,17 +5065,8 @@
       },
       "ClusterCard": {
         "properties": {
-          "cluster_id": {
-            "title": "Cluster Id",
-            "type": "integer"
-          },
-          "cluster_kind": {
-            "enum": [
-              "class",
-              "candidate",
-              "unassigned"
-            ],
-            "title": "Cluster Kind",
+          "cluster_uid": {
+            "title": "Cluster Uid",
             "type": "string"
           },
           "detector_conf_mean": {
@@ -5112,17 +5103,6 @@
             ],
             "description": "That class as a share of the members that have a detector class.",
             "title": "Detector Top Share"
-          },
-          "dominant_class_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dominant Class Id"
           },
           "dominant_class_name": {
             "anyOf": [
@@ -5178,54 +5158,10 @@
             ],
             "title": "Labelled Share"
           },
-          "n_subclusters": {
-            "title": "N Subclusters",
-            "type": "integer"
-          },
           "needs_review_count": {
             "description": "review_counts['all']: the review queue sort key.",
             "title": "Needs Review Count",
             "type": "integer"
-          },
-          "promotable": {
-            "title": "Promotable",
-            "type": "boolean"
-          },
-          "purity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Share of measured members whose nearest centroid is their own cluster.",
-            "title": "Purity"
-          },
-          "purity_basis": {
-            "title": "Purity Basis",
-            "type": "string"
-          },
-          "purity_n": {
-            "title": "Purity N",
-            "type": "integer"
-          },
-          "purity_tier": {
-            "anyOf": [
-              {
-                "enum": [
-                  "pure",
-                  "mixed",
-                  "noisy"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Purity Tier"
           },
           "representatives": {
             "items": {
@@ -5245,13 +5181,6 @@
           "size": {
             "title": "Size",
             "type": "integer"
-          },
-          "subcluster_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Subcluster Ids",
-            "type": "array"
           },
           "updated_at": {
             "anyOf": [
@@ -5279,24 +5208,15 @@
           }
         },
         "required": [
-          "cluster_id",
-          "cluster_kind",
+          "cluster_uid",
           "size",
           "validated_count",
           "labelled_count",
-          "dominant_class_id",
           "dominant_class_name",
           "dominant_count",
-          "purity",
-          "purity_n",
-          "purity_basis",
-          "purity_tier",
           "label_agreement",
           "labelled_share",
-          "promotable",
           "is_unlabeled",
-          "n_subclusters",
-          "subcluster_ids",
           "updated_at",
           "representatives",
           "detector_top_class",
@@ -5320,9 +5240,9 @@
             "title": "Class Sources",
             "type": "array"
           },
-          "cluster_id": {
-            "title": "Cluster Id",
-            "type": "integer"
+          "cluster_uid": {
+            "title": "Cluster Uid",
+            "type": "string"
           },
           "detector_classes": {
             "description": "Top 20 by count.",
@@ -5362,7 +5282,7 @@
           }
         },
         "required": [
-          "cluster_id",
+          "cluster_uid",
           "total",
           "detector_classes",
           "class_sources",
@@ -5399,14 +5319,6 @@
       },
       "ClusterListResponse": {
         "properties": {
-          "cluster_id_offset": {
-            "title": "Cluster Id Offset",
-            "type": "integer"
-          },
-          "core_similarity_min": {
-            "title": "Core Similarity Min",
-            "type": "number"
-          },
           "flag_vocabulary": {
             "items": {
               "$ref": "#/components/schemas/ClusterFlag"
@@ -5420,9 +5332,6 @@
             },
             "title": "Items",
             "type": "array"
-          },
-          "purity_thresholds": {
-            "$ref": "#/components/schemas/PurityThresholds"
           },
           "representatives_limit": {
             "title": "Representatives Limit",
@@ -5449,14 +5358,6 @@
             "title": "Total",
             "type": "integer"
           },
-          "total_candidate_clusters": {
-            "title": "Total Candidate Clusters",
-            "type": "integer"
-          },
-          "total_class_clusters": {
-            "title": "Total Class Clusters",
-            "type": "integer"
-          },
           "truncated": {
             "description": "The aggregation returned max_clusters buckets, so the list may be incomplete: raise max_clusters or narrow the filters.",
             "title": "Truncated",
@@ -5466,11 +5367,6 @@
         "required": [
           "items",
           "total",
-          "total_class_clusters",
-          "total_candidate_clusters",
-          "cluster_id_offset",
-          "purity_thresholds",
-          "core_similarity_min",
           "representatives_offset",
           "representatives_limit",
           "sort",
@@ -5724,7 +5620,7 @@
             ],
             "title": "Class Name"
           },
-          "cluster_distance": {
+          "cluster_score": {
             "anyOf": [
               {
                 "type": "number"
@@ -5733,18 +5629,8 @@
                 "type": "null"
               }
             ],
-            "title": "Cluster Distance"
-          },
-          "cluster_subid": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cluster Subid"
+            "description": "Similarity to the cluster; higher is closer.",
+            "title": "Cluster Score"
           },
           "crop_id": {
             "title": "Crop Id",
@@ -5753,9 +5639,8 @@
         },
         "required": [
           "crop_id",
-          "cluster_distance",
-          "class_name",
-          "cluster_subid"
+          "cluster_score",
+          "class_name"
         ],
         "title": "ClusterRepresentative",
         "type": "object"
@@ -15414,6 +15299,18 @@
             ],
             "title": "Cluster Subid"
           },
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
+          },
           "conf_max": {
             "anyOf": [
               {
@@ -24231,34 +24128,6 @@
         "title": "Proposal",
         "type": "object"
       },
-      "PurityThresholds": {
-        "properties": {
-          "mixed_min": {
-            "title": "Mixed Min",
-            "type": "number"
-          },
-          "promote_min_labelled_share": {
-            "title": "Promote Min Labelled Share",
-            "type": "number"
-          },
-          "promote_min_members": {
-            "title": "Promote Min Members",
-            "type": "integer"
-          },
-          "pure_min": {
-            "title": "Pure Min",
-            "type": "number"
-          }
-        },
-        "required": [
-          "pure_min",
-          "mixed_min",
-          "promote_min_members",
-          "promote_min_labelled_share"
-        ],
-        "title": "PurityThresholds",
-        "type": "object"
-      },
       "QuantizeRequest": {
         "additionalProperties": false,
         "description": "Export a run to ONNX variants and score them in the same job.",
@@ -28122,6 +27991,18 @@
               }
             ],
             "title": "Cluster Subid"
+          },
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
           },
           "conf_max": {
             "anyOf": [
@@ -41878,7 +41759,7 @@
     },
     "/curation/projects/{project}/clusters": {
       "get": {
-        "description": "Authoritative per-cluster card list for the labeler.\n\nOne OpenSearch aggregation yields every card input (size, validation,\ndominant class, label agreement, geometry purity, detector agreement and\nconfidence, per-tab review counts, sub-clusters); the server then applies\nthe filters and the ``sort`` and sets the quality ``flags``. A candidate\ncluster only gets a ``dominant_class_name`` when a unique top class has at\nleast ``CANDIDATE_DOMINANT_MIN_COUNT`` members and\n``CANDIDATE_DOMINANT_MIN_SHARE`` of the labelled ones. ``truncated`` is\ntrue when the aggregation returned ``max_clusters`` buckets: the list may\nthen be incomplete. Frozen test-holdout and excluded items are never counted.",
+        "description": "Authoritative per-cluster card list for the labeler.\n\nOne OpenSearch aggregation over the served partition's ``cluster_uid`` yields every card\ninput (size, validation, dominant class, label agreement, detector agreement and\nconfidence, per-tab review counts); the server then applies the filters and the\n``sort`` and sets the quality ``flags``. ``truncated`` is\ntrue when the aggregation returned ``max_clusters`` buckets: the list may\nthen be incomplete. Frozen test-holdout and excluded items are never counted.",
         "operationId": "list_clusters_curation_projects__project__clusters_get",
         "parameters": [
           {
@@ -41919,36 +41800,22 @@
             }
           },
           {
+            "description": "Return only the card of this cluster (its identity in the served partition).",
             "in": "query",
-            "name": "kind",
-            "required": false,
-            "schema": {
-              "default": "all",
-              "enum": [
-                "class",
-                "candidate",
-                "all"
-              ],
-              "title": "Kind",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Filter to exactly this cluster_id. Distinct from a class: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
-            "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Filter to exactly this cluster_id. Distinct from a class: cluster_id == class_id is only an invariant for \"class\" clusters (id < RESIDUAL_CLUSTER_ID_OFFSET) — a \"candidate\" cluster (id >= that offset) has no matching class_id at all, so class_id can never be used to look one up by its own identity. This is the correct filter for \"fetch one cluster card by id\" regardless of kind.",
-              "title": "Cluster Id"
+              "description": "Return only the card of this cluster (its identity in the served partition).",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -41997,8 +41864,6 @@
                 "size_desc",
                 "size_asc",
                 "label_agreement_asc",
-                "purity_asc",
-                "purity_desc",
                 "detector_conf_asc",
                 "unvalidated_desc",
                 "updated_desc",
@@ -42880,7 +42745,7 @@
     },
     "/curation/projects/{project}/clusters/representatives": {
       "get": {
-        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nThe cluster id list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster ids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
+        "description": "Return up to ``per_cluster`` representative crop_ids per cluster, one page.\n\nThe cluster uid list still comes from one cheap ``terms``\naggregation (no sub-agg), but representatives are fetched via one\n``_msearch`` covering only the ``[offset, offset+max_clusters)`` page\nof cluster uids (ordered by member count desc) — not via a\n``top_hits`` sub-agg that would decompress stored ``_source`` for\nevery representative across every bucket. Only clusters in that page\nappear as keys in the response; call again with a larger ``offset``\nfor the next page.\n\nWhen ``class_id`` is set, the outer query filters to crops with that\nclass so the agg only returns clusters that contain at least one\nmember of the class — driving the labeler's class-sidebar filter.",
         "operationId": "cluster_representatives_curation_projects__project__clusters_representatives_get",
         "parameters": [
           {
@@ -43034,18 +42899,19 @@
         ]
       }
     },
-    "/curation/projects/{project}/clusters/{cluster_id}/facets": {
+    "/curation/projects/{project}/clusters/{cluster_uid}/facets": {
       "get": {
         "description": "Counts of one cluster's members by detector class, class source, validation,\nreview tab and detector confidence, for filter chips. Each count is the ``total`` of\nthe filtered ``GET /crops`` call named in :class:`ClusterFacets`. A cluster with no\nmembers answers zeros.",
-        "operationId": "cluster_facets_endpoint_curation_projects__project__clusters__cluster_id__facets_get",
+        "operationId": "cluster_facets_endpoint_curation_projects__project__clusters__cluster_uid__facets_get",
         "parameters": [
           {
             "in": "path",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": true,
             "schema": {
-              "title": "Cluster Id",
-              "type": "integer"
+              "format": "uuid",
+              "title": "Cluster Uid",
+              "type": "string"
             }
           },
           {
@@ -43227,6 +43093,25 @@
                 }
               ],
               "title": "Cluster Id"
+            }
+          },
+          {
+            "description": "Members of this cluster of the served partition.",
+            "in": "query",
+            "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of this cluster of the served partition.",
+              "title": "Cluster Uid"
             }
           },
           {

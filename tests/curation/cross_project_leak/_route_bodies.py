@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from integration.ingest_fakes import jpeg_bytes
 
+from curation.cross_project_leak._constants import cluster_uid
 from curation.cross_project_leak._seeded_files import _source_root
 from curation.cross_project_leak._seeders import (
     _VLM_ACTIVE,
@@ -41,6 +42,7 @@ def route_params(slug: str) -> dict[str, str]:
         'image_id': f'{slug}-img-0001',
         'class_id': '2',
         'cluster_id': '1',
+        'cluster_uid': cluster_uid(slug),
         'job_id': f'{slug}-job-0001',
         'promote_id': f'{slug}-no-such-promote',
         'campaign_id': f'{slug}-campaign-0001',

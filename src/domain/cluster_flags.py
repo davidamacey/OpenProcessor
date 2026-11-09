@@ -42,22 +42,12 @@ FLAG_VOCABULARY: tuple[FlagDef, ...] = (
         ),
     },
     {
-        'id': 'low_geometry_purity',
-        'label': 'Low geometry purity',
-        'description': 'Many members sit closer to another cluster centroid than to their own.',
-    },
-    {
         'id': 'label_disagreement',
         'label': 'Label disagreement',
         'description': (
             f'The labelled members name different classes: the top class covers under '
             f'{LABEL_AGREEMENT_MIN:.0%} (at least {LABEL_DISAGREEMENT_MIN_LABELLED} labelled).'
         ),
-    },
-    {
-        'id': 'promotable',
-        'label': 'Promotable',
-        'description': 'A candidate cluster that clears the auto-promote gate.',
     },
     {
         'id': 'needs_review',
@@ -83,10 +73,8 @@ def card_flags(
     *,
     size: int,
     detector_top_share: float | None,
-    purity_tier: str | None,
     label_agreement: float | None,
     labelled_count: int,
-    promotable: bool,
     needs_review_count: int,
     validation_state: ValidationState,
 ) -> list[str]:
@@ -97,13 +85,11 @@ def card_flags(
             and size >= MIXED_DETECTOR_MIN_MEMBERS
             and detector_top_share < MIXED_DETECTOR_SHARE_MAX
         ),
-        'low_geometry_purity': purity_tier == 'noisy',
         'label_disagreement': (
             label_agreement is not None
             and labelled_count >= LABEL_DISAGREEMENT_MIN_LABELLED
             and label_agreement < LABEL_AGREEMENT_MIN
         ),
-        'promotable': promotable,
         'needs_review': needs_review_count > 0,
         'unvalidated': validation_state == 'none',
     }

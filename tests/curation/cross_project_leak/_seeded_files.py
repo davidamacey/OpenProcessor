@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from integration.ingest_fakes import jpeg_bytes
 
-from curation.cross_project_leak._constants import CLASS_NAMES, EMBED_DIM
+from curation.cross_project_leak._constants import CLASS_NAMES, EMBED_DIM, cluster_uid
 
 
 if TYPE_CHECKING:
@@ -59,6 +59,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             'bbox': [0.1, 0.1, 0.5, 0.5],
             'bbox_norm': [0.1, 0.1, 0.5, 0.5],
             'cluster_id': 1,
+            'cluster_uid': cluster_uid(slug),
             'pe_embedding': _vec(n),
             'region_embedding': _vec(n),
             **fields,
@@ -116,6 +117,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
                 class_source=next(iter(sorted(classifier_class_sources()))),
                 class_validated=False,
                 cluster_id=10001,
+                cluster_uid=cluster_uid(slug, 2),
             )
             for n in range(7, 11)
         ),
@@ -128,7 +130,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             },
         ),
         # the residual pool must clear the clustering floor (32) for the UMAP refit to run
-        *(crop(n, **unlabeled, cluster_id=None) for n in range(12, 48)),
+        *(crop(n, **unlabeled, cluster_id=None, cluster_uid=None) for n in range(12, 48)),
     ]
     labeled_image = f'{slug}-img-0002'
     return {
