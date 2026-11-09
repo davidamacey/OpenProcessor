@@ -33,15 +33,10 @@ EXPORT_DIR = Path(__file__).resolve().parents[1] / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
 
-# export_models exits at import when the pinned ultralytics<8.4 toolchain is missing;
-# SystemExit would abort the whole session, so turn it into a module skip.
-try:
-    import export_models
-    import yolo_export_report
-    import yolo_triton_config
-    import yolo_trt_build
-except SystemExit as exc:
-    pytest.skip(str(exc), allow_module_level=True)
+import export_models  # noqa: E402  # follows the importorskip and the sys.path setup
+import yolo_export_report  # noqa: E402  # follows the importorskip and the sys.path setup
+import yolo_triton_config  # noqa: E402  # follows the importorskip and the sys.path setup
+import yolo_trt_build  # noqa: E402  # follows the importorskip and the sys.path setup
 
 
 class TestMissingPtFileSurfacesARealError:
@@ -122,8 +117,8 @@ class TestAnyExportFailed:
 
 
 class TestCudaVisibleDevicesRepairBeforeTrtBuild:
-    """/opt/venv-y11's CPU-only torch means the ONNX-export
-    step always runs Ultralytics with device='cpu', which sets
+    """The ONNX-export step always runs Ultralytics with device='cpu'
+    (yolo_export_settings.DEVICE), which sets
     CUDA_VISIBLE_DEVICES=-1 as a side effect -- in the same process, this
     then blinds the TensorRT builder created right after it
     ("CUDA initialization failure with error: 100"), even though the

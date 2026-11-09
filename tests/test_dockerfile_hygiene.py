@@ -168,7 +168,29 @@ def test_export_target_carries_the_toolchain_and_the_seed() -> None:
     assert '--from=builder-export' in stage
     assert 'export/' in stage
     assert 'models/' in stage
-    assert '/opt/venv-y11' in stage
+
+
+@pytest.mark.parametrize('rel', _dockerfiles())
+def test_no_image_builds_a_second_python_environment(rel: str) -> None:
+    """One Ultralytics version means one environment: the YOLO11 export runs in the main one."""
+    text = (REPO_ROOT / rel).read_text(encoding='utf-8')
+    assert 'venv-y11' not in text
+    assert not re.search(r'python3?(\.\d+)? -m venv', text), 'a second environment is built'
+
+
+def test_the_export_code_reads_no_second_toolchain_variable() -> None:
+    banned = ('YOLO11_EXPORT_PYTHON', '_Y11_REEXEC', 'venv-y11', 'execv')
+    hits = {
+        f'{path.name}: {word}'
+        for path in sorted((REPO_ROOT / 'export').glob('*.py'))
+        for word in banned
+        if word in path.read_text(encoding='utf-8')
+    }
+    assert not hits, sorted(hits)
+
+
+def test_the_second_environment_requirements_file_is_gone() -> None:
+    assert not (REPO_ROOT / 'requirements-export-y11.txt').exists()
 
 
 def test_evaluator_target_takes_only_the_evaluator_delta() -> None:

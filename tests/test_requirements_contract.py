@@ -116,7 +116,6 @@ def test_tensorrt_pin_matches_the_triton_image_everywhere() -> None:
     triton = (ROOT / 'Dockerfile.triton').read_text(encoding='utf-8')
     (version,) = re.findall(r'^ARG TRT_VERSION=(\S+)', triton, re.M)
     assert _pinned_trt('requirements-export.txt') == version
-    assert _pinned_trt('requirements-export-y11.txt') == version
 
 
 # ---------------------------------------------------------------------------

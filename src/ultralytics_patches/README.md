@@ -32,12 +32,10 @@ Original implementation by Levi Pereira for YOLOv7/v8/v9 with TensorRT Efficient
 
 ## Scope
 
-The patch targets the Ultralytics **8.3.x** exporter API. Ultralytics 8.4 changed the end2end
-property and breaks it, so it runs only in the export image's isolated venv (`/opt/venv-y11`,
-`ultralytics==8.3.253`, from `requirements-export-y11.txt`). `export/export_models.py`
-re-execs into that venv and refuses to run on 8.4. YOLO26 does not use the patch: it
-exports natively NMS-free through `export/export_yolo26.py`. The repository pins
-`ultralytics==8.4.197` for everything else.
+The patch runs in the export image's main environment, on the one Ultralytics release the repository
+pins (`requirements.txt`; see `tests/test_requirements_contract.py`). `export/export_models.py`
+applies it for the YOLO11 family. YOLO26 does not use the patch: it exports natively NMS-free
+through `export/export_yolo26.py`.
 
 ## Usage
 
@@ -220,7 +218,7 @@ print('✅ Export successful')
 
 ## Version Compatibility
 
-- **Ultralytics:** 8.3.x only (validated on 8.3.253; not 8.4)
+- **Ultralytics:** the one release pinned in `requirements.txt` (the CPU trace gives the four-output EfficientNMS graph on 8.4.208; the engine is judged at the B3 GPU gate)
 - **PyTorch:** ≥1.13.0
 - **ONNX:** ≥1.12.0
 - **TensorRT:** ≥8.5.0 (8.6+ for class-agnostic NMS)
