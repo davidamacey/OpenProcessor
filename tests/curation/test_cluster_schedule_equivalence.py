@@ -6,7 +6,7 @@ from __future__ import annotations
 import inspect
 
 
-RUN_PARAMS = ('class_id', 'cluster_id', 'run_vlm')
+RUN_PARAMS = ('class_id', 'cluster_uid', 'run_vlm')
 
 
 def test_job_route_and_sync_route_share_run_defaults() -> None:

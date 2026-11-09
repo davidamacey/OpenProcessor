@@ -11,7 +11,7 @@ RUN_VLM_DESC = (
 
 VLM_SCOPE_DESC = (
     "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, "
-    'representatives or off. Unset uses the stored policy. Ignored with cluster_id, an '
+    'representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an '
     'explicit request that no policy limits.'
 )
 
@@ -27,8 +27,8 @@ CLASS_ID_DESC = (
     'item selection). Unset runs the full unvalidated cohort.'
 )
 
-CLUSTER_ID_DESC = (
-    'Scope the run to one cluster: every unvalidated, non-holdout, non-excluded '
+CLUSTER_UID_DESC = (
+    'Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded '
     "member is VLM-labeled (the global sweep's cost skips do not apply) and every "
     'write stays on those members. For a sampled, per-cluster or per-sub-cluster run use '
     'POST /assist/runs.'

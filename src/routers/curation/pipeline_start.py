@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import uuid  # noqa: TC003 - FastAPI resolves the query type at runtime
 from typing import Annotated, Any
 
 from fastapi import Query
@@ -14,7 +15,7 @@ from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
     CLASS_ID_DESC as _CLASS_ID_DESC,
-    CLUSTER_ID_DESC as _CLUSTER_ID_DESC,
+    CLUSTER_UID_DESC as _CLUSTER_UID_DESC,
     PROMPT_PACK_DESC as _PROMPT_PACK_DESC,
     RUN_VLM_DESC as _RUN_VLM_DESC,
     VLM_ATTRIBUTES_DESC,
@@ -41,7 +42,7 @@ from src.services.rejections import rejection
 _EMBED_MISSING_DESC = (
     'Embed the in-scope items that were stored without a vector (not_selected, deferred or '
     'failed) before the other stages, so they are labeled too. Scoped by class_id, '
-    'cluster_id and the item filter.'
+    'cluster_uid and the item filter.'
 )
 
 
@@ -61,7 +62,7 @@ async def pipeline_auto_label_start(
     classifier_confidence_skip_vlm: Annotated[float, Query(ge=0.0, le=1.0)] = 0.80,
     run_vlm: Annotated[bool, Query(description=_RUN_VLM_DESC)] = False,
     class_id: Annotated[int | None, Query(description=_CLASS_ID_DESC)] = None,
-    cluster_id: Annotated[int | None, Query(description=_CLUSTER_ID_DESC)] = None,
+    cluster_uid: Annotated[uuid.UUID | None, Query(description=_CLUSTER_UID_DESC)] = None,
     detection_profile: Annotated[str | None, Query(include_in_schema=False)] = None,
     prompt_pack: Annotated[str | None, Query(description=_PROMPT_PACK_DESC)] = None,
     vlm: Annotated[str | None, Query(description=VLM_DESC)] = None,
@@ -125,7 +126,7 @@ async def pipeline_auto_label_start(
         'classifier_confidence_skip_vlm': classifier_confidence_skip_vlm,
         'run_vlm': run_vlm,
         'class_id': class_id,
-        'cluster_id': cluster_id,
+        'cluster_uid': None if cluster_uid is None else str(cluster_uid),
         'item_filter': item_filter.model_dump(mode='json', exclude_defaults=True),
         'embed_missing': embed_missing,
         'vlm_scope': vlm_scope,

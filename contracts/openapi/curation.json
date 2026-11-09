@@ -51981,21 +51981,22 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
-              "title": "Cluster Id"
+              "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -52047,7 +52048,7 @@
             }
           },
           {
-            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
             "in": "query",
             "name": "vlm_scope",
             "required": false,
@@ -52066,7 +52067,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
               "title": "Vlm Scope"
             }
           },
@@ -52335,21 +52336,22 @@
             }
           },
           {
-            "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+            "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
             "in": "query",
-            "name": "cluster_id",
+            "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "format": "uuid",
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Scope the run to one cluster: every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
-              "title": "Cluster Id"
+              "description": "Scope the run to one cluster of the serving partition (its cluster_uid): every unvalidated, non-holdout, non-excluded member is VLM-labeled (the global sweep's cost skips do not apply) and every write stays on those members. For a sampled, per-cluster or per-sub-cluster run use POST /assist/runs.",
+              "title": "Cluster Uid"
             }
           },
           {
@@ -52401,19 +52403,19 @@
             }
           },
           {
-            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
+            "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_uid and the item filter.",
             "in": "query",
             "name": "embed_missing",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_id and the item filter.",
+              "description": "Embed the in-scope items that were stored without a vector (not_selected, deferred or failed) before the other stages, so they are labeled too. Scoped by class_id, cluster_uid and the item filter.",
               "title": "Embed Missing",
               "type": "boolean"
             }
           },
           {
-            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+            "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
             "in": "query",
             "name": "vlm_scope",
             "required": false,
@@ -52432,7 +52434,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_id, an explicit request that no policy limits.",
+              "description": "Override the project's VLM scope policy (GET /vlm/policy) for this run: all, uncertain, representatives or off. Unset uses the stored policy. Ignored with cluster_uid, an explicit request that no policy limits.",
               "title": "Vlm Scope"
             }
           },
