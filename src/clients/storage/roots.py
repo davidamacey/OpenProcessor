@@ -39,7 +39,7 @@ class RootedStore:
         if not parsed.parts:
             raise ValueError(f'storage key names a root, not an object: {key!r}')
         parts = parsed.parts
-        if parsed.root == 'bakeoff_results' and len(parts) > 1:
+        if parsed.root == 'bakeoff_results' and parts:
             parts = (parts[0], *BAKEOFF_RESULTS_LAYOUT, *parts[1:])
         if (
             parsed.root == 'models'
@@ -70,7 +70,13 @@ class RootedStore:
         prefix = prefix.removesuffix('/')
         store, rel = self._route(prefix)
         root = parse_key(prefix).root
-        return [make_key(root, *k.split('/')) for k in store.list_prefix(rel)]
+        found = [k.split('/') for k in store.list_prefix(rel)]
+        if root == 'bakeoff_results':
+            n = len(BAKEOFF_RESULTS_LAYOUT)
+            found = [[k[0], *k[n + 1 :]] for k in found]
+        elif root == 'models' and store is self._pytorch_models:
+            found = [[PYTORCH_MODELS_PART, *k] for k in found]
+        return [make_key(root, *k) for k in found]
 
     def delete_prefix(self, prefix: str) -> int:
         """Remove everything under ``prefix`` (``projects/<slug>/`` takes every area of a project)."""
