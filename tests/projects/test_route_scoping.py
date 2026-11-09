@@ -63,6 +63,9 @@ GLOBAL_ROUTES = frozenset(
         ('PUT', f'{API}/vlm/endpoints/{{name}}'),
         ('DELETE', f'{API}/vlm/endpoints/{{name}}'),
         ('POST', f'{API}/vlm/endpoints/{{name}}/probe'),
+        # the embedding model catalog is deployment-wide (ES-B); the spaces built from
+        # it are scoped under the project.
+        ('GET', f'{API}/embedding/models'),
         ('GET', f'{API}/serving_profiles'),
         ('GET', f'{API}/serving_profiles/active'),
         ('GET', f'{API}/serving_profiles/{{name}}'),
