@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import BaseModel
 
+from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
 from src.routers.curation._common import (
     OpenSearchDep,
@@ -63,16 +64,16 @@ def _pixel_size_from_header(image_path: str) -> tuple[int, int] | None:
     (unservable path, missing file, corrupt image) rather than raising —
     this is a best-effort fill-in, not a hard dependency of the route.
     """
+    from PIL import Image
+
+    from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
+
     try:
-        from PIL import Image
-
-        from src.services.curation.image_serving import resolve_crop_root, resolve_safe_path
-
         root = resolve_crop_root(image_path)
         safe_path = resolve_safe_path(image_path, root)
         with Image.open(safe_path) as img:
             return img.size
-    except Exception as exc:
+    except (RequestRejectedError, OSError, ValueError, Image.DecompressionBombError) as exc:
         logger.debug('crop_context_pixel_size_failed', image_path=image_path, error=str(exc))
         return None
 

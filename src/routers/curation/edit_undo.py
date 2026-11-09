@@ -20,6 +20,7 @@ import asyncio
 from typing import Any
 
 from fastapi import HTTPException
+from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
@@ -138,7 +139,7 @@ async def undo_crop_regions(
             return 'conflicts'
         except HTTPException:
             return 'not_found'
-        except Exception as exc:
+        except OpenSearchException as exc:
             logger.warning('undo_region_failed', crop_id=crop_id, error=str(exc))
             return 'conflicts'
         return 'undone'

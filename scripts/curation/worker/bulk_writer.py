@@ -12,6 +12,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 import httpx
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
@@ -324,7 +325,7 @@ async def _write_box_embeddings(opensearch: AsyncOpenSearch, tasks: list[_ItemTa
         return
     try:
         await write_box_embeddings(opensearch, index=items_index(), by_crop=by_crop)
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('region_box_embeddings_write_failed', error=str(exc), n=len(by_crop))
 
 

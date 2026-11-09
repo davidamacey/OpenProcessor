@@ -94,10 +94,10 @@ async def _resolve_one(
         try:
             doc = await opensearch.get(index=items_index(), id=crop_id)
             current_source = (doc.get('_source') or {}).get('class_source')
-        except Exception:
+        except OpenSearchException:
             current_source = None
         return 'conflict', {'crop_id': crop_id, 'current_source': current_source}
-    except Exception as exc:
+    except OpenSearchException as exc:
         logger.warning('resolve_new_class_update_failed', crop_id=crop_id, error=str(exc))
         return 'conflict', {'crop_id': crop_id, 'current_source': None}
 

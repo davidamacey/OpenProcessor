@@ -31,6 +31,7 @@ from typing import Any
 
 import httpx
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -169,7 +170,7 @@ async def run_arm(
                 guards=GUARDS,
             )
             failures += bool(res.refused)
-        except Exception:
+        except OpenSearchException:
             failures += 1
         latencies.append(time.perf_counter() - started)
 
