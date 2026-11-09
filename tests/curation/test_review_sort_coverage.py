@@ -16,6 +16,7 @@ import pytest
 from config_store.memory_settings import install, revision_aware
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import OpenSearchException
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
@@ -108,8 +109,8 @@ async def test_unknown_coverage_never_triggers_a_fallback() -> None:
     from src.services.curation import review_sorts
 
     class _Broken:
-        async def count(self, **_kw: Any) -> dict[str, Any]:
-            raise RuntimeError('down')
+        async def search(self, **_kw: Any) -> dict[str, Any]:
+            raise OpenSearchException('down')
 
     _clause, applied, reason = await review_sorts.build_sort(
         None, tab='uncertainty', opensearch=_Broken()
