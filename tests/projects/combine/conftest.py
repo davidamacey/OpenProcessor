@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from families_b.support import queue_env, worker_app
+from families_b.support import worker_app
 from fixtures.job_fixtures import FakeProducer, job_env, kinds, producer, wakes
 
 from src.services.projects import lifecycle
@@ -16,7 +16,6 @@ __all__ = [
     'job_env',
     'kinds',
     'producer',
-    'queue_env',
     'wakes',
     'worker_app',
     'world',

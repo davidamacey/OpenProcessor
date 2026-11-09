@@ -1,7 +1,7 @@
 """Fixtures of the family-B tests: the job fixtures, and the real routes over a database."""
 
 import pytest
-from families_b.support import app, client, queue_env, worker_app
+from families_b.support import app, client, worker_app
 from fixtures.job_fixtures import (
     FakeProducer,
     FakeQueueHooks,
@@ -21,7 +21,6 @@ __all__ = [
     'job_env',
     'kinds',
     'producer',
-    'queue_env',
     'queue_hooks',
     'wakes',
     'worker_app',

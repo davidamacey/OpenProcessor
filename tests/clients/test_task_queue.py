@@ -17,14 +17,6 @@ if TYPE_CHECKING:
     from celery import Celery
 
 
-@pytest.fixture
-def queue_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    password = tmp_path / 'queue_password'
-    password.write_text('test-password\n')
-    monkeypatch.setenv('OP_QUEUE_URL', 'redis://valkey:6379/0')
-    monkeypatch.setenv('OP_QUEUE_PASSWORD_FILE', str(password))
-
-
 def _memory_producer(monkeypatch: pytest.MonkeyPatch) -> Celery:
     """The real producer configuration with the in-memory broker substituted for Redis."""
     app = task_queue._build_producer('memory://')
