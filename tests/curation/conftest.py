@@ -136,6 +136,16 @@ def vlm_api(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> VlmApi:
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
 
+    # A reachable Triton with an empty repository: an unreachable one is a typed UpstreamError
+    # (an outage is not an empty repository), and the vocabulary routes now let it through.
+    async def empty_repository_index(_self: Any) -> list[dict[str, Any]]:
+        return []
+
+    monkeypatch.setattr(
+        'src.services.models.triton_control.TritonControlService.get_repository_index',
+        empty_repository_index,
+    )
+
     app = FastAPI()
     mount_curation(
         app,
