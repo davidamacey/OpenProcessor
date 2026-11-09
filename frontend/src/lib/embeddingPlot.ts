@@ -1,6 +1,6 @@
 /**
  * Pure geometry/color helpers for `EmbeddingPlot.svelte` (curation-
- * strategy plan Phase 5, docs/curation-strategy-plan-2026-09.md §2.7/§5.6).
+ * strategy plan Phase 5, curation strategy plan §2.7/§5.6).
  *
  * Kept out of the component (mirrors the
  * `pager.svelte.ts` split — logic that doesn't need Svelte reactivity

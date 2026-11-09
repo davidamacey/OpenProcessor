@@ -1,6 +1,6 @@
 /**
  * Pure config resolution for `/ingest`
- * (docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2).
+ * (Ingest UI plan §A.2).
  *
  * Every backend limit comes from the served `IngestConfig`
  * (`GET {API_PREFIX}/ingest/config`). `resolveIngestConfig` is the single

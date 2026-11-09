@@ -1,6 +1,6 @@
 /**
  * One prompt pack's editor state (any_domain_plan.md §3.3, §3.5, §7.2,
- * §7.6 items 1 and 4; docs/design/w3-pack-editor-ui-plan-2026-09-27.md §3):
+ * §7.6 items 1 and 4; w3 pack editor UI plan §3):
  * the pack binding of the shared `ConfigEditor` (draft, served live
  * validation, Save with `expected_revision` and its conflict paths,
  * revisions and restore, the `config.changed` wake-up).

@@ -1,6 +1,6 @@
 /**
  * The combine-projects wizard's state (projects_plan.md §6, §8 "Combine
- * wizard"; docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md §4.3).
+ * wizard"; w9/w10 UI plan §4.3).
  *
  * Holds only what the operator chose (sources in priority order, the
  * target, explicit mapping rows, touched options) and what the server

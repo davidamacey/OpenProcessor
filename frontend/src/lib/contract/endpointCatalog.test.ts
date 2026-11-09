@@ -452,7 +452,7 @@ function findOperation(
   };
 }
 
-/** Per-track wrapper modules (docs/design/w9-p4-w5-w10-ui-plan-2026-10-01.md);
+/** Per-track wrapper modules (w9/w10 UI plan);
  *  each must exist and sit in the scanner lists its track needs. */
 const TRACK_WRAPPER_FILES = new Set<string>([
   'lib/api_vlm.ts',

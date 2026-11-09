@@ -1,6 +1,6 @@
 /**
  * CI ratchet for the domain-neutral directive
- * (docs/design/domain-neutral-audit-2026-09-24.md §7.2, §8): Cropwright must
+ * (domain-neutral audit §7.2, §8): Cropwright must
  * work for any data domain, so nothing under `src/` — code, UI strings,
  * comments — names one domain (license plates, vehicles). Comments count
  * too: the scan reads raw source text. (Deployment-specific names and

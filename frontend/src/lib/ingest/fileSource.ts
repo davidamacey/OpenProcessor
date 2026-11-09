@@ -1,7 +1,7 @@
 /**
  * Turns a file-picker `FileList` or a drag-drop `DataTransferItemList`
  * into the flat `IngestFile[]` the rest of `$lib/ingest` works with.
- * docs/design/ingest-ui-and-acceptance-plan-2026-09-24.md §A.2.
+ * Ingest UI plan §A.2.
  */
 
 export interface IngestFile {
