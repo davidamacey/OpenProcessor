@@ -13,7 +13,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-def _load_script() -> ModuleType:
+def _load_script(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     repo_root = Path(__file__).resolve().parents[2]
     script_path = repo_root / 'scripts' / 'curation' / 'backfill_scores.py'
     spec = importlib.util.spec_from_file_location('curation_backfill_scores_cli_test', script_path)
@@ -30,11 +30,16 @@ def _load_script() -> ModuleType:
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+
+    async def without_engine(awaitable: Any, _name: str, **_: Any) -> Any:
+        return await awaitable  # the CLI wiring under test needs no database engine
+
+    monkeypatch.setattr(module, 'run_with_engine', without_engine)
     return module
 
 
 def test_backfill_defaults_to_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     captured: dict[str, object] = {}
 
     async def fake_async_main(args):
@@ -52,7 +57,7 @@ def test_backfill_defaults_to_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_backfill_apply_flag_disables_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     captured: dict[str, object] = {}
 
     async def fake_async_main(args):

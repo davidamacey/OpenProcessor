@@ -223,18 +223,23 @@ def test_prefix_is_validated():
 # --------------------------------------------------------------------------- CLI
 
 
-def _load_script() -> ModuleType:
+def _load_script(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     path = REPO_ROOT / 'scripts' / 'curation' / 'reclassify_after_registry_growth.py'
     spec = importlib.util.spec_from_file_location('curation_reclassify_cli_test', path)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+
+    async def without_engine(awaitable: Any, _name: str, **_: Any) -> Any:
+        return await awaitable  # the in-memory OpenSearch fake needs no database engine
+
+    monkeypatch.setattr(module, 'run_with_engine', without_engine)
     return module
 
 
 def test_cli_defaults_to_dry_run_with_vlm_prefix(monkeypatch):
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     captured: dict[str, Any] = {}
 
     async def fake_async_main(args):
@@ -249,7 +254,7 @@ def test_cli_defaults_to_dry_run_with_vlm_prefix(monkeypatch):
 
 
 def test_cli_apply_runs_every_prefix(monkeypatch, registry):
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     fake = _fake()
     fake.docs(ITEMS)['u7']['alt_raw_label'] = 'widget'
     monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(fake))
@@ -274,14 +279,14 @@ def test_cli_apply_runs_every_prefix(monkeypatch, registry):
 
 
 def test_cli_refuses_empty_registry(monkeypatch):
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     monkeypatch.setattr(mod, 'make_script_opensearch', lambda *_a, **_kw: _Closable(_fake()))
     monkeypatch.setattr(sys, 'argv', ['x', '--apply'])
     assert mod.main() == 2
 
 
 def test_cli_start_after_requires_single_prefix(monkeypatch):
-    mod = _load_script()
+    mod = _load_script(monkeypatch)
     monkeypatch.setattr(
         sys,
         'argv',
