@@ -35,6 +35,9 @@ import type {
   ProjectSummary,
   ProjectWarning,
 } from '$lib/types_projects';
+import { getDeploymentJob } from '$lib/api_jobs';
+import { followJob } from '$lib/jobs/followJob';
+import { jobPhase } from '$lib/jobs/jobPhase';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
@@ -169,6 +172,25 @@ export function createProjectsAdmin() {
     }
   }
 
+  /** A create answers 202 with the `building` project: follow its job, then
+   *  re-read. A failed build is shown with the job's reason; the project
+   *  stays `failed` until it is deleted. */
+  async function followCreate(jobId: string, p: ProjectSummary): Promise<void> {
+    try {
+      const job = await followJob(jobId, { read: getDeploymentJob });
+      if (jobPhase(job.status) === 'completed') {
+        toastWarnings((job.result?.warnings as ProjectWarning[] | undefined) ?? []);
+      } else {
+        toastStore.error(
+          `Creating "${p.display_name}" failed: ${job.error_message ?? job.status}. Delete it to free the slug.`,
+        );
+      }
+    } catch {
+      // The job could not be read; the list poll below still shows the served status.
+    }
+    await Promise.all([load(), projectsStore.refresh()]);
+  }
+
   return {
     get list() {
       return list;
@@ -210,8 +232,15 @@ export function createProjectsAdmin() {
       includeArchived = v;
       await load();
     },
-    create(body: CreateProjectRequest): Promise<ActionResult> {
-      return run(() => createProject(body));
+    async create(body: CreateProjectRequest): Promise<ActionResult> {
+      try {
+        const res = await createProject(body);
+        const project = await afterWrite(res);
+        if (res.job_id) void followCreate(res.job_id, project);
+        return { ok: true, project };
+      } catch (e) {
+        return failure(e);
+      }
     },
     /** Sends only the fields that changed, with the served revision. */
     edit(

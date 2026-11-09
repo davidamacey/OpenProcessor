@@ -66,7 +66,7 @@
     });
     busy = false;
     if (res.ok) {
-      toastStore.success(`Created project "${res.project.display_name}".`);
+      toastStore.success(`Creating project "${res.project.display_name}"...`);
       onclose();
     } else {
       errorText = res.message;

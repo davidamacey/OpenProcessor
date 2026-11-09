@@ -85,7 +85,7 @@ describe('create', () => {
                 { code: 'shard_budget_high', message: 'served: near the shard budget' },
               ],
             },
-            201,
+            202,
           )
         : undefined,
     );
@@ -112,6 +112,32 @@ describe('create', () => {
       `${API_PREFIX}/projects`,
       `${API_PREFIX}/projects`,
     ]);
+  });
+
+  it('follows the create job and shows the served reason when the build fails', async () => {
+    const building = testProject({ slug: 'beta', status: 'building' });
+    serve((url, init) => {
+      if (init.method === 'POST')
+        return json({ project: building, job_id: 'job-1' }, 202);
+      if (url.endsWith('/jobs/job-1'))
+        return json({
+          id: 'job-1',
+          kind: 'project_create',
+          status: 'failed',
+          error_message: 'opensearch is down',
+        });
+      return undefined;
+    });
+    const res = await createProjectsAdmin().create({
+      slug: 'beta',
+      display_name: 'Beta',
+    });
+    expect(res).toMatchObject({ ok: true, project: { status: 'building' } });
+    await vi.waitFor(() =>
+      expect(toastStore.toasts.some((t) => t.text.includes('opensearch is down'))).toBe(
+        true,
+      ),
+    );
   });
 
   it('lists every keymap action the clone axis dropped, from the served keymap_clone_conflicts', async () => {

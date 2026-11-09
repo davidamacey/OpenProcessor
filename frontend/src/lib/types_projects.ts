@@ -131,11 +131,11 @@ export interface KeymapCloneConflict {
   class_name: string;
 }
 
-/** Every lifecycle mutation (create 201, PATCH, archive, unarchive,
+/** Every lifecycle mutation (create 202, PATCH, archive, unarchive,
  *  clone_settings, and a real delete's 202) answers this envelope. */
 export interface ProjectLifecycleResponse {
   project: ProjectSummary;
-  /** The queued job doing the lifecycle work (delete is a 202), when there is one. */
+  /** The queued job doing the lifecycle work (create and delete are 202), when there is one. */
   job_id?: string | null;
   warnings?: ProjectWarning[];
   keymap_clone_conflicts?: KeymapCloneConflict[];

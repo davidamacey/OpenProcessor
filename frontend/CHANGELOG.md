@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Creating a project follows the `project_create` job: `POST /projects` answers 202 with the project in `building`; the list shows `building` until the job ends, a failed build shows the served reason, and the project stays `failed` until it is deleted (#439).
 - Backend v0.7.0 wire: clusters are addressed by `cluster_uid` (a string) everywhere; items carry a nested `cluster` reference and `embedding_states` per embedding space; label operations, crop moves, dataset uploads, cluster runs and partition activation answer 202 and are followed through `GET /jobs/{id}`; undo of a bulk label or move goes through the label operation (`POST /label_ops/{op_id}/undo`).
 - Cluster run panel on the dashboard and the ingest hand-off: the serving partition, "Cluster items", and "Activate" for a ready pending partition.
 - Auto-label runs the `embed_missing`, `vlm` and `finalize` stages with pause, resume and cancel, and shows the queued, paused and cancelling states.
