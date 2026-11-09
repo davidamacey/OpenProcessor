@@ -173,6 +173,24 @@ The installer sets `OPENSEARCH_HEAP` in `.env` to half of host RAM (2 to 30 GB) 
 you set. The table, the shard budget and the kernel setting are in
 [Memory, disk and storage](docs-site/docs/deployment/sizing-and-storage.mdx#opensearch-heap-and-shards).
 
+### API worker count
+
+`API_WORKERS` in `.env` is the one knob. Compose passes it to the `api` service as `WEB_CONCURRENCY`, which uvicorn
+reads for its worker count ([uvicorn settings](https://www.uvicorn.org/settings/)); the image itself runs one worker
+when `WEB_CONCURRENCY` is unset. The installer writes `min(nproc, 32)` once, keeps a value you set, and adds it on
+`upgrade` when missing; without it compose falls back to 8.
+
+Each process takes an equal share of three deployment totals, so more workers do not mean more connections:
+
+| Total | Per process |
+|---|---|
+| `OP_DB_API_CONNECTIONS_TOTAL` (128) | `max(1, total // (API_WORKERS * OP_API_REPLICAS))` database connections |
+| 2048 executor threads | `max(4, 2048 // API_WORKERS)` threads (64 at 32 workers) |
+| 128 Triton gRPC channels, 2048 in-flight calls | `max(1, 128 // API_WORKERS)` channels, `max(8, 2048 // API_WORKERS)` in flight (4 and 64 at 32 workers) |
+
+With several replicas set `API_WORKERS=1` and raise `OP_API_REPLICAS`: jobs, events and claims live in PostgreSQL and
+Valkey, so a replica needs nothing else. The uvicorn `--limit-concurrency=512` stays a per-process limit.
+
 ### Curation quick-config
 
 `env.template` has a "Curation quick-config" block with every key the

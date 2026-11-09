@@ -2828,9 +2828,7 @@ YAML
     done
     [[ "$OP_WITH_MONITORING" == 1 ]] && profiles+=(monitoring)
     env_set COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]:-}")"
-    local heap
-    heap="$(opensearch_heap_for_host)" || die "could not read host memory from ${OP_MEMINFO_PATH:-/proc/meminfo} to size the OpenSearch heap"
-    env_set_default OPENSEARCH_HEAP "$heap"
+    host_sizing_defaults || die "could not read host memory or the CPU count to size OPENSEARCH_HEAP and API_WORKERS"
     env_set_default OP_SOURCE_ROOT_HOST ./data
     # The API's /models/status sam3 row and the segmenter leg read this (#113).
     _has_tier segmenter && env_set_default OP_SEGMENTER_URL http://segmenter:8000

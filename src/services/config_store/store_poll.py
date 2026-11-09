@@ -4,13 +4,17 @@ that bootstrap and stop it."""
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.config.database import DatabaseConfigError
 from src.core.logging import get_logger
 from src.services.config_store.documents import config_poll_interval_s
+
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 logger = get_logger(__name__)
@@ -48,13 +52,17 @@ async def poll_config_epochs(known: dict[str, int | None]) -> dict[str, int | No
     return {key: epoch for key, epoch in current.items() if known.get(key) != epoch}
 
 
-async def _poll_all_active_projects(interval: float) -> None:
+async def _poll_all_active_projects(
+    interval: float, on_tick: Callable[[], Awaitable[None]] | None = None
+) -> None:
     """Refresh the store of every project whose epoch moved, and the deployment-wide one.
 
     An activation made through uvicorn worker A is visible in worker B within one tick. Cheap:
     one indexed read of ``projects`` and one of the global counter per tick; a store reloads only
     when its own epoch moved. A store whose refresh fails (it marks itself ``stale``) is retried
-    on the next tick, and one project's failure never stops the others.
+    on the next tick, and one project's failure never stops the others. ``on_tick`` rides the same
+    loop for another per-process refresh (the Triton router's ready rows); its failure is logged
+    and retried on the next tick.
     """
     from src.services.config_store.global_store import get_global_config_store
     from src.services.config_store.store import config_store_for
@@ -79,14 +87,21 @@ async def _poll_all_active_projects(interval: float) -> None:
                 continue
             if not snapshot.stale:
                 known[key] = epoch
+        if on_tick is not None:
+            try:
+                await on_tick()
+            except (SQLAlchemyError, DatabaseConfigError) as exc:
+                logger.warning('config_poll_tick_failed', error=str(exc))
         await asyncio.sleep(interval)
 
 
-async def startup_bootstrap_config_store_safe() -> Any:
+async def startup_bootstrap_config_store_safe(
+    on_tick: Callable[[], Awaitable[None]] | None = None,
+) -> Any:
     """``src.main``'s lifespan hook: return the background poll task the caller owns
     cancelling at shutdown. Never raises: an unreachable database is logged by the loop and the
     next tick retries, so every worker polls once the database is up."""
-    return asyncio.create_task(_poll_all_active_projects(config_poll_interval_s()))
+    return asyncio.create_task(_poll_all_active_projects(config_poll_interval_s(), on_tick))
 
 
 async def shutdown_config_store_poll(task: Any | None) -> None:

@@ -1,0 +1,52 @@
+# path (kind)	uses	reason: why the use is correct per process (see check_process_state.py)
+src/app/lifespan.py (create_task)	1	the per-process ops-metrics refresh loop; each worker reports its own metrics (multiprocess dir)
+src/clients/curation_opensearch/ensure_overlay_fields.py (module container)	1	per-process memo of an index setting; the value is re-read from the index on a miss
+src/config/task_routes/region_text.py (module container)	1	import-time route table, filled once when the module loads and never mutated afterwards
+src/db/engine.py (module container)	1	the per-process engine registry; a SQLAlchemy engine and its pool are process-local by design
+src/db/engine.py (module lock)	1	the per-process engine registry; a SQLAlchemy engine and its pool are process-local by design
+src/routers/curation/ingest_bulk_preview.py (create_task)	1	a disconnect watcher scoped to one request, cancelled in its finally
+src/routers/curation/pipeline_events.py (create_task)	1	per-process stats cache with an expiry and an in-flight dedup; a stale answer is bounded by the TTL, a task per miss only coalesces local callers
+src/routers/curation/pipeline_events.py (module container)	3	per-process stats cache with an expiry and an in-flight dedup; a stale answer is bounded by the TTL, a task per miss only coalesces local callers
+src/routers/curation/regions_fp.py (module container)	1	per-process cache with a 60 s TTL; a read-only suspected-false-positive summary
+src/services/classes/registry.py (module container)	2	per-process registry cache validated against the stored revision before use
+src/services/clustering/assign.py (module container)	1	per-process bounded LRU of prototype sets keyed by id; prototypes are immutable per revision
+src/services/config_store/bound_project.py (module container)	1	per-process memo of slug to project id; ids never change once created
+src/services/config_store/global_store.py (module container)	1	per-process handle to the deployment-wide config store; the revisions live in PostgreSQL and every read checks them
+src/services/config_store/global_store.py (module lock)	1	per-process handle to the deployment-wide config store; the revisions live in PostgreSQL and every read checks them
+src/services/config_store/store.py (module container)	1	per-process config-store handles with a revision check on read; the lock only guards handle creation in this process
+src/services/config_store/store.py (module lock)	1	per-process config-store handles with a revision check on read; the lock only guards handle creation in this process
+src/services/config_store/store_poll.py (create_task)	1	per-process poll loop that refreshes this process cache from the stored revision
+src/services/curation/assist_loop/driver.py (create_task)	2	the assist-loop worker container drives its own runs; the tasks are kept in a dict and awaited, not spawned for a request
+src/services/curation/bulk_ingest/object_fetch.py (module container)	2	per-process fetch gates and semaphores that cap this process concurrency; a local throttle by definition
+src/services/curation/bulk_ingest/object_store.py (module container)	1	per-process object-store client handles keyed by event loop; connection pools are process-local
+src/services/curation/clustering/pit_pages.py (create_task)	1	a page prefetcher scoped to one async generator, cancelled in its finally
+src/services/curation/config_test_limits.py (module container)	1	per-process counter of concurrent config-test calls; a local throttle, not a shared quota
+src/services/curation/eval_datasets.py (module container)	1	per-process cache keyed by the dataset revision tuple
+src/services/curation/field_coverage.py (module container)	1	per-process cache with a TTL; coverage is advisory
+src/services/curation/index_bootstrap.py (module container)	1	per-process memo that an index exists; ensure-index is idempotent so a second process repeats it harmlessly
+src/services/curation/ingest_gpu_decode.py (module container)	1	per-process memo of a capability probe for this process GPU context
+src/services/curation/ingest_writer.py (create_task)	3	one writer per request or run: the drain and flush tasks are owned by the writer and awaited in close()
+src/services/curation/ingest_writer.py (module container)	1	one writer per request or run: the drain and flush tasks are owned by the writer and awaited in close()
+src/services/curation/reprocess_images.py (create_task)	2	tasks owned by one running reprocess job and awaited before it returns (read-ahead and in-flight set)
+src/services/detection/profile_registry.py (module container)	1	per-process copy of the detection profiles resolved from env at first use; env is identical for every process of a deployment
+src/services/detection/profile_registry.py (module lock)	1	per-process copy of the detection profiles resolved from env at first use; env is identical for every process of a deployment
+src/services/detection/segmenter_latency.py (module container)	1	per-process moving average of segmenter latency used only to size local waits
+src/services/embedding_spaces/resolve.py (module container)	2	per-process cache of resolved spaces, invalidated by the polled space epoch
+src/services/events/listener.py (create_task)	2	the per-process event listener (catch-up and pubsub loops); every worker must hear every event
+src/services/labeling/vlm_factory.py (create_task)	1	per-process labeler cache and close tasks; labelers hold local HTTP clients, the precheck memo has a TTL
+src/services/labeling/vlm_factory.py (module container)	3	per-process labeler cache and close tasks; labelers hold local HTTP clients, the precheck memo has a TTL
+src/services/labeling/vlm_prompt_resolution.py (module container)	1	per-process prompt-pack file cache validated by file mtime
+src/services/labeling/vlm_url_policy.py (module container)	1	per-process DNS locality memo with a TTL
+src/services/projects/bootstrap.py (create_task)	2	per-process registry poll and retry loops; each process refreshes its own registry cache
+src/services/projects/stats.py (module container)	1	per-process disk-usage cache with a TTL; advisory numbers
+src/services/training/preflight_scan.py (module container)	1	per-process scan cache keyed by the export revision
+src/tasks/queue_liveness.py (module lock)	1	the worker process own liveness thread stop flag
+src/tasks/runtime/event_wakeup.py (module container)	1	per-process Valkey client handles keyed by pid; a client must not cross a fork
+src/tasks/worker_metrics.py (module lock)	1	one-shot flag that the worker metrics server is started in this process
+src/utils/cache.py (module lock)	1	guards lazy creation of the per-process tokenizer
+src/utils/class_names.py (module container)	1	per-process class-name cache validated by the registry revision; the lock guards this process cache only
+src/utils/class_names.py (module lock)	1	per-process class-name cache validated by the registry revision; the lock guards this process cache only
+src/utils/cpu_pool.py (module container)	2	per-process CPU thread pool and in-flight gate; pools are sized per process from totals (src/config/api_pools.py)
+src/utils/cpu_pool.py (module lock)	1	per-process CPU thread pool and in-flight gate; pools are sized per process from totals (src/config/api_pools.py)
+src/utils/file_read.py (module container)	1	per-process file-read thread pool; sized per process
+src/utils/file_read.py (module lock)	1	per-process file-read thread pool; sized per process

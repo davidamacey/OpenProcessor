@@ -3944,6 +3944,25 @@ the endpoint check: [Ingest load profile and GPU memory](../docs-site/docs/opera
 `docs/benchmarks/v070/spf/`. Host load was 13 to 35 during these rows. The public set A/B rows above were not re-run for this change.
 
 
+## API worker count (0.7.0, pending)
+
+`API_WORKERS` (uvicorn `WEB_CONCURRENCY`) is the one knob; the database, thread and Triton pools are split per
+process from deployment totals ([INSTALLATION](../INSTALLATION.md#api-worker-count)). The rows below are filled in the
+first GPU window after B4, on the B3 engine, public data only (COCO / Open Images), GPU 0, an isolated compose project,
+host load recorded. The 32-worker baseline is retaken first because the 0.6.0 numbers came from another engine. This
+validates the knob; it is not the release baseline.
+
+| API_WORKERS | Replicas | Ingest img/s (4 batches at once) | Search p50 / p99 ms (32 clients) | 503 `database_busy` | Pool wait p50 / p99 ms | API RSS GB | Host load |
+|---|---|---|---|---|---|---|---|
+| 32 (retaken baseline) | 1 | | | | | | |
+| installer default, `min(nproc, 32)` | 1 | | | | | | |
+| 16 | 1 | | | | | | |
+| 8 (compose fallback) | 1 | | | | | | |
+| 4 | 1 | | | | | | |
+| 1 | 2 | | | | | | |
+
+Pool wait is the histogram `op_db_pool_wait_seconds` (p50 and p99 from its buckets); 503s are `database_busy` log lines. Only a disputed point is repeated. Confirmed default: _pending_.
+
 ## Benchmarking
 
 The tools are listed in [benchmarks/README.md](../benchmarks/README.md): the Go ingest benchmarks,

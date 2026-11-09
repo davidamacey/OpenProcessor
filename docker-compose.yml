@@ -192,9 +192,10 @@ services:
       # API, not whichever worker answered. The directory is a tmpfs (see
       # `tmpfs:` below), so it is empty on every container start.
       - PROMETHEUS_MULTIPROC_DIR=/run/op-prom-multiproc
-      # uvicorn reads WEB_CONCURRENCY for its worker count (https://www.uvicorn.org/settings/);
-      # it equals --workers below, and the database pool size is derived from it.
-      - WEB_CONCURRENCY=32
+      # The one worker-count knob: uvicorn's --workers defaults to $WEB_CONCURRENCY
+      # (https://www.uvicorn.org/settings/); the database, thread and Triton pool shares per
+      # process are derived from the same value. The installer writes API_WORKERS from nproc.
+      - WEB_CONCURRENCY=${API_WORKERS:-8}
       # glibc malloc: keep freed memory instead of returning it to the kernel and faulting it
       # back in. Ingest allocates and frees tens of megabytes of pixel data per image (a
       # 1.35 MB PE crop, a 52 MB decoded photo, 14 MB of Triton tensors), and with the pixel
@@ -246,12 +247,7 @@ services:
       - src.main:app
       - --host=0.0.0.0
       - --port=8000
-      # ===================================================================
-      # Worker Configuration (Performance Tuning)
-      # Production: 64 workers for dual-GPU throughput
-      # Benchmark: 4 workers to match TRT instance count for fair comparison
-      # ===================================================================
-      - --workers=32  # Increased for higher face pipeline throughput
+      # Worker count: WEB_CONCURRENCY above (API_WORKERS), not a flag.
       - --limit-max-requests=10000       # Recycle workers every 10k requests (prevents memory leaks)
       - --limit-max-requests-jitter=1000 # Stagger recycles so the workers do not all restart together
       # ===================================================================

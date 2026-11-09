@@ -14,6 +14,7 @@ from src.app import startup_gate
 from src.app.resources import AppResources
 from src.clients.triton_pool_core import AsyncTritonPool
 from src.config import Settings, get_settings
+from src.config.api_pools import executor_threads, triton_channels, triton_inflight
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.db.engine import dispose_engines
@@ -47,22 +48,31 @@ def _preflight() -> None:
 
 async def _start_pools(settings: Settings) -> None:
     """The shared CPU executor and the high-throughput async Triton pool."""
+    # Sizes are this process's share of the deployment totals (src/config/api_pools.py).
+    threads = executor_threads()
+    channels = triton_channels()
+    inflight = triton_inflight()
+
     # Shared ThreadPoolExecutor for CPU-bound tasks (JPEG decode, resize).
     AppResources.shared_executor = ThreadPoolExecutor(
-        max_workers=64,
+        max_workers=threads,
         thread_name_prefix='ingest-worker-',
     )
-    logger.info('executor_initialized', workers=64, type='ThreadPoolExecutor')
+    logger.info('executor_initialized', workers=threads, type='ThreadPoolExecutor')
 
-    # High-throughput async Triton pool: 4 gRPC channels = 4 TCP connections.
+    # High-throughput async Triton pool: one gRPC channel is one TCP connection. The router
+    # follows the active serving profile; with none it is the single configured server.
+    from src.services.serving_router import build_router
+
     AppResources.async_triton_pool = AsyncTritonPool(
         url=settings.triton_url,
-        pool_size=4,
-        max_concurrent=64,
+        pool_size=channels,
+        max_concurrent=inflight,
         verbose=False,
+        router=await build_router(settings.triton_url),
     )
     await AppResources.async_triton_pool.initialize()
-    logger.info('triton_pool_initialized', channels=4, max_concurrent=64)
+    logger.info('triton_pool_initialized', channels=channels, max_concurrent=inflight)
 
 
 async def _report_stored_face_data() -> None:
@@ -106,8 +116,12 @@ async def _start_background_tasks() -> None:
 
     # Config store poll task: fans out per active project, not `default`.
     from src.services.config_store import startup_bootstrap_config_store_safe
+    from src.services.serving_router import refresh_tick
 
-    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe()
+    pool = AppResources.async_triton_pool
+    AppResources.config_store_poll_task = await startup_bootstrap_config_store_safe(
+        on_tick=refresh_tick(pool.router) if pool is not None else None
+    )
 
 
 async def _start_event_listener() -> None:
