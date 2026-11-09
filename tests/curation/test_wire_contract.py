@@ -16,6 +16,7 @@ import pytest
 from _embedding_registry_fake import DEFAULT_STATE_FIELDS, default_space
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from opensearchpy.exceptions import NotFoundError
 
 from src.config import region_fields as region_fields_mod
 from src.config.project_context import project_api_base
@@ -115,7 +116,7 @@ class _FakeItemsOS:
 
     async def get(self, *, index: str, id: str, **_kw: Any) -> dict[str, Any]:  # noqa: A002, ARG002
         if id != self.doc['crop_id']:
-            raise KeyError(id)
+            raise NotFoundError(404, 'not_found', {})
         return {**self._hit(), 'found': True}
 
     async def mget(self, *, body: dict[str, Any], **_: Any) -> dict[str, Any]:  # noqa: ARG002

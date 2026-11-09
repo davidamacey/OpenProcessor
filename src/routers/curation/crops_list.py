@@ -18,6 +18,7 @@ from src.routers.curation._common import (
 )
 from src.routers.curation._item_filter_params import ItemFilterQuery  # noqa: TC001 - FastAPI
 from src.routers.curation._review_params import UnsetIfEmpty
+from src.services.curation.capture_wire import image_capture
 from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page
 from src.services.curation.crop_listing import (
@@ -256,4 +257,7 @@ async def get_crop(
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
     src = (resp.get('_source') or {}) if isinstance(resp, dict) else {}
-    return serialize_item(src, crop_id, state_fields=await item_state_fields())
+    item = serialize_item(src, crop_id, state_fields=await item_state_fields())
+    if (capture := await image_capture(opensearch, str(src.get('image_id') or ''))) is not None:
+        item['capture'] = capture
+    return item

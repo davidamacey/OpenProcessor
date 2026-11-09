@@ -77,9 +77,11 @@ async def open_ingest_runtime() -> IngestRuntime:
 
 
 async def _import_service(opensearch: Any, runtime: IngestRuntime, *, need_detector: bool) -> Any:
+    from src.services.curation.capture_read import read_capture
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detector import refreshed_ingest_profiles
     from src.services.curation.ingest_policy_store import get_ingest_policy
+    from src.services.curation.location_policy_store import get_location_policy
 
     profile = (await refreshed_ingest_profiles()).primary
     if need_detector and not profile.detector_model:
@@ -91,6 +93,8 @@ async def _import_service(opensearch: Any, runtime: IngestRuntime, *, need_detec
         profile=profile,
         pe_encoder=runtime.pe_encoder,
         policy=await get_ingest_policy(),
+        capture_reader=read_capture,
+        location_policy=get_location_policy,
     )
 
 

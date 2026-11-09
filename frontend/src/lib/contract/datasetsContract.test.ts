@@ -396,6 +396,7 @@ const CASES: [string, string[]][] = [
       detector_conf_min: true,
       embedding_state: true,
       exclude_class_names: true,
+      image_ids: true,
       import_id: true,
       include_detected: true,
       item_text: true,
@@ -423,6 +424,8 @@ const CASES: [string, string[]][] = [
       review_tab: true,
       source: true,
       source_prompt: true,
+      taken_from: true,
+      taken_to: true,
     } satisfies Record<keyof T.ReprocessFilter, true>),
   ],
   [

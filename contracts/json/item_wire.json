@@ -131,7 +131,8 @@
     "combine_conflict_origins",
     "combine_merged_origins",
     "item_text_lines",
-    "assist"
+    "assist",
+    "capture"
   ],
   "json_schema": {
     "$defs": {
@@ -391,6 +392,181 @@
         "title": "ItemAssistWire",
         "type": "object"
       },
+      "ItemCapture": {
+        "description": "When and with what the photo was taken; never a coordinate. A list row carries the two\ntimes only (the rest null); `GET /crops/{id}` carries all of it. `taken_local` is wall-clock\ntime without a zone; `taken_utc` is set only when the offset is known.",
+        "properties": {
+          "camera_make": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Camera Make"
+          },
+          "camera_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Camera Model"
+          },
+          "exif_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Exif Status"
+          },
+          "focal_length_35mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Focal Length 35Mm"
+          },
+          "focal_length_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Focal Length Mm"
+          },
+          "has_location": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Has Location"
+          },
+          "lens_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lens Model"
+          },
+          "offset_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Offset Minutes"
+          },
+          "offset_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Offset Source"
+          },
+          "orientation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Orientation"
+          },
+          "taken_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Taken Local"
+          },
+          "taken_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Taken Utc"
+          },
+          "time_precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Precision"
+          },
+          "time_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Source"
+          }
+        },
+        "title": "ItemCapture",
+        "type": "object"
+      },
       "ItemTextLine": {
         "description": "One OCR text line on the item crop (``box_norm`` in the item-crop\nframe; ``rel_height`` = line height / crop height).",
         "properties": {
@@ -571,6 +747,17 @@
         ],
         "default": null,
         "title": "Blur Lap Ratio"
+      },
+      "capture": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ItemCapture"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       },
       "class_confidence": {
         "anyOf": [

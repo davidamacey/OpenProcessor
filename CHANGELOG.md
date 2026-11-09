@@ -11,6 +11,14 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Added
+
+- Capture metadata at ingest: capture time (EXIF `DateTimeOriginal` with offset and sub-second, the GPS UTC delta as a fallback), camera make, model and lens, orientation and the GPS fix are read with ExifTool through one long-lived `-stay_open` process per worker and stored on the image; items carry the two capture times only. The `libimage-exiftool-perl` package is in the API image and `pyexiftool` 0.5.6 is a dependency. A missing tag leaves the field empty; an ExifTool outage stores `exif_status` `unknown` and no coordinates.
+- `GET /crops` and every route taking the shared item filter accept `taken_from` and `taken_to` (inclusive ISO days) and `image_id`; the item wire has a `capture` object (no coordinates).
+- `GET` / `PUT /curation/projects/{project}/location_policy` (`drop`, `store_coarse`, `store`); a change that keeps less starts the `location_purge` step of `source_backfill`. `POST /source_backfill/runs` takes an optional `steps` list (`content`, `capture`, `location_purge`); the capture step fills images ingested before this release.
+- A `drop` project's exports strip the GPS tags from the copied image files losslessly; a combine keeps a copied position only as far as the target project's policy allows.
+- `GET /map`, `GET /map/cells` (GeoJSON grid cells from an OpenSearch `geotile_grid`) and `GET /map/images` for the Cropwright Map page; `OP_MAP_TILE_URL` and `OP_MAP_TILE_ATTRIBUTION` set the basemap tiles the browser draws (OpenStreetMap by default).
+
 ### Security
 
 - Limit what the labelers record in logs (#468): parse-failure logs carry reply lengths and error types, not reply text.

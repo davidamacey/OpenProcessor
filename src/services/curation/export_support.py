@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.clients.exiftool_client import ExifToolError, get_exiftool_client
 from src.config.env import env_optional_str
 from src.core.logging import get_logger
 from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
@@ -382,6 +383,7 @@ def _copy_or_resize_one(
     resize_mode: str | None,
     target_size: int,
     crop_norm: tuple[float, float, float, float] | None = None,
+    strip_gps: bool = False,
 ) -> tuple[str, bool, str | None]:
     """Worker-process body for the image copy/resize stage.
 
@@ -394,11 +396,19 @@ def _copy_or_resize_one(
     the single-class exporter's ``item_crop`` image mode. It forces a
     decode even when ``resize_mode`` is ``None``, since a byte copy
     obviously can't crop.
+
+    ``strip_gps`` (a ``drop`` project's export) makes the byte copy a lossless ExifTool write
+    without the GPS tags; a failed strip fails that image, it never falls back to a plain copy.
+    A re-encoded image (resize or crop) carries no EXIF at all, so it needs no strip.
     """
     try:
         Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
         if resize_mode is None and crop_norm is None:
-            shutil.copyfile(src_path, dest_path)
+            if strip_gps:
+                Path(dest_path).unlink(missing_ok=True)
+                get_exiftool_client().strip_gps(src_path, dest_path)
+            else:
+                shutil.copyfile(src_path, dest_path)
             return dest_path, True, None
         from PIL import Image
 
@@ -416,6 +426,9 @@ def _copy_or_resize_one(
             rgb.save(dest_path, format='JPEG', quality=90)
         return dest_path, True, None
     except IMAGE_DECODE_ERRORS as exc:
+        return dest_path, False, str(exc)
+    except ExifToolError as exc:
+        Path(dest_path).unlink(missing_ok=True)
         return dest_path, False, str(exc)
 
 

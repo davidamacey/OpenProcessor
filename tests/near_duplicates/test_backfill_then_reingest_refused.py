@@ -47,6 +47,7 @@ class _Ctx:
         self.project_slug = 'default'
         self.job_id = 'job'
         self.resume_from = resume_from
+        self.params: dict[str, Any] = {'steps': ['content']}
         self._client = client
         self._slice_due = slice_due
         self._paused = paused

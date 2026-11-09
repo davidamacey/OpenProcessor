@@ -198,9 +198,11 @@ async def copy_export_images(
     resize_mode: Literal['aspect'] | None,
     image_size: int,
     max_workers: int,
+    strip_gps: bool = False,
 ) -> dict[str, Any]:
     """Copy (optionally aspect-resize) every ``(src, dest)`` pair in a
-    process pool; returns the ``image_copy`` manifest block."""
+    process pool; returns the ``image_copy`` manifest block. ``strip_gps`` removes the GPS tags
+    from byte copies (the project's ``drop`` location policy)."""
     if not jobs:
         return {'attempted': 0, 'copied': 0, 'failed': 0, 'errors': []}
     loop = asyncio.get_running_loop()
@@ -210,7 +212,7 @@ async def copy_export_images(
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
         futures = [
             run_in_executor_bound(
-                loop, pool, _copy_or_resize_one, src, dest, resize_mode, image_size
+                loop, pool, _copy_or_resize_one, src, dest, resize_mode, image_size, None, strip_gps
             )
             for src, dest in jobs
         ]

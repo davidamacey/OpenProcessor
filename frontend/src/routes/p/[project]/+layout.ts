@@ -1,5 +1,6 @@
 import { regionRuleWarnings } from '$lib/annotations/registeredSlots';
 import { loadKeymap } from '$stores/keymap.svelte';
+import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
 import { projectPauseStore } from '$stores/projectPause.svelte';
 import { loadRegionProfile } from '$stores/regionProfile.svelte';
 import { projectsStore, type ProjectResolution } from '$stores/projects.svelte';
@@ -30,6 +31,8 @@ export const load: LayoutLoad = async ({
   // The switcher's "paused" chip. Not awaited: it never blocks render,
   // and a failed read just leaves the chip absent.
   void projectPauseStore.load(resolution.project);
+  // The Map nav link: shown only when the project has a served map.
+  void mapAvailabilityStore.load(resolution.project.slug);
 
   // The served region profile (`{prefix}/health.region_profile`) and the
   // served keymap are per project. This is after the prefix moved and

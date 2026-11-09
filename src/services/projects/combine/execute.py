@@ -147,9 +147,11 @@ async def run_combine(
     target: ProjectRecord,
     settle: Callable[[bool], Awaitable[None]],
     enqueue_pending: PendingEnqueue,
+    location_policy: str,
 ) -> dict[str, Any] | None:
     """Run (or resume) one combine; the result is ``{report, next_steps}``.
 
+    ``location_policy`` is the target's: a copied image keeps a position only as far as it allows.
     ``settle(ok)`` moves the target out of ``building`` and runs before the job ends. A failure
     settles the target as failed and re-raises, so the wrapper records the job as ``failed``
     with the error; a cancelled run settles it failed as well (cancel is terminal) and returns
@@ -173,6 +175,7 @@ async def run_combine(
             duplicates=plan.duplicates,
             originals=plan.originals,
             enqueue_pending=enqueue_pending,
+            location_policy=location_policy,
         )
         cancelled, counts = await _copy_all(ctx, copy_ctx, plan)
         if cancelled:

@@ -23,6 +23,7 @@ from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export import GenericYoloExportService, resolve_current_export_dir
 from src.services.curation.export_models import REGISTRY_ARTIFACT_CONTENT_TYPES
 from src.services.curation.export_readiness import NothingToExportError, export_blocking_reasons
+from src.services.curation.location_policy_store import get_location_policy
 from src.services.near_duplicates.collapse import NoCurrentRunError
 
 
@@ -66,7 +67,7 @@ async def export_yolo(
     from pathlib import Path as _Path
 
     export_dir = _Path(payload.export_dir) if payload.export_dir else None
-    service = GenericYoloExportService(opensearch)
+    service = GenericYoloExportService(opensearch, location_policy=get_location_policy)
     try:
         result = await service.export_dataset(
             export_dir=export_dir,

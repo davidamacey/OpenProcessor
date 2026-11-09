@@ -59,6 +59,8 @@ import src.routers.curation.ingest_upload
 import src.routers.curation.jobs
 import src.routers.curation.keymap
 import src.routers.curation.label_ops
+import src.routers.curation.location_policy
+import src.routers.curation.map
 import src.routers.curation.methods
 import src.routers.curation.models
 import src.routers.curation.near_duplicates

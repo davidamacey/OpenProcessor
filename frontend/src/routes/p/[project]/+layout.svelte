@@ -27,6 +27,7 @@
   import { classSourcesStore } from '$stores/classSources.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapAvailability, loadKeymap } from '$stores/keymap.svelte';
+  import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
   import { subscribeConfigEvents } from '$lib/sse';
   import { projectsStore } from '$stores/projects.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
@@ -404,6 +405,13 @@
           class={navLinkClass('label-ops')}
           aria-current={navCurrent('label-ops')}>Label ops</a
         >
+        {#if mapAvailabilityStore.availableFor(slug)}
+          <a
+            href={resolve(projectHref('/map'))}
+            class={navLinkClass('map')}
+            aria-current={navCurrent('map')}>Map</a
+          >
+        {/if}
         <a
           href={resolve(projectHref('/settings'))}
           class={navLinkClass('settings')}

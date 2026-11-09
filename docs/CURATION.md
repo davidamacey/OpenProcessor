@@ -302,6 +302,73 @@ per-box vectors and returns the item with the box that matched (`matched_box_id`
 schedules the cluster retrain, and when:
 [Workers](../docs-site/docs/operations/workers.mdx).
 
+## Capture time and location
+
+Ingest reads each new photo's capture metadata with [ExifTool](https://exiftool.org/) (the
+`libimage-exiftool-perl` package in the API image), through one long-lived `exiftool -stay_open`
+process per worker process ([PyExifTool](https://sylikc.github.io/pyexiftool/)); it is never started
+per image, every read has a timeout, and the process is restarted after a failure. What is kept:
+
+- the capture time: `DateTimeOriginal` (else `CreateDate`) with `SubSecTimeOriginal`, as a wall-clock
+  time without a zone (`capture.taken_local`), and as UTC (`capture.taken_utc`) when the offset is
+  known, from `OffsetTimeOriginal` or from the GPS UTC time rounded to 15 minutes. The file's
+  modification time (`ModifyDate`) is never capture time;
+- camera make, model and lens, focal length, orientation;
+- the GPS fix: signed decimal latitude and longitude, altitude, accuracy and heading. (0, 0), a
+  coordinate out of range and a fix flagged void are no location.
+
+A missing or damaged tag leaves that field empty and never fails an ingest. If ExifTool itself is
+unavailable the image is ingested with `capture.exif_status` `unknown` and no coordinates, the failure
+is logged, and the capture step of the source backfill reads it again later.
+
+The images index holds the whole `capture` object; each item carries only the two times
+(`capture_taken_local`, `capture_taken_utc`). **No coordinate is ever copied to an item, a label, a
+manifest, a training file, a VLM request or a log.** The item wire has a `capture` object without
+a position (`has_location` says a fix was in the file); `GET /crops/{crop_id}` adds the camera details.
+`GET /crops` (and every route that takes the shared item filter) accepts `taken_from` and `taken_to`,
+inclusive ISO days, matched on the UTC capture time and, where the offset is unknown, on the wall-clock
+time read as UTC (floating time, so a photo near midnight may land on the neighbouring day).
+
+### Location policy
+
+`GET` / `PUT /curation/projects/{project}/location_policy` set what a project keeps of a photo's
+position (default `store`; a project upgraded from 0.6.0 starts at `drop`):
+
+| Policy | Stored | Served |
+|---|---|---|
+| `store` | the fix as read | the Map page |
+| `store_coarse` | latitude and longitude rounded to 0.01 degree (about 1 km), no altitude or heading | the Map page, cells no finer than about 1 km |
+| `drop` | no coordinate | nothing; the Map page is absent |
+
+A change to a policy that keeps less (or the same again) starts the `source_backfill` job with its
+`location_purge` step alone and answers its `purge_job_id`; the step removes or rounds every stored
+coordinate in bounded passes and records counts only. If a source backfill is already running the
+change is saved and the call answers `409 job_busy`; start the purge with `POST
+/source_backfill/runs` and `{"steps": ["location_purge"]}` when it ends. Loosening a policy restores
+nothing: a cleared coordinate is read again only by re-ingesting the file. A `drop` project's exports
+strip the GPS tags from the copied image files losslessly (ExifTool); the stored originals keep their
+bytes. `store` and `store_coarse` projects export the files as they are, embedded GPS included. A
+combine keeps a copied photo's position only as far as the target project's policy allows.
+
+`POST /source_backfill/runs` takes an optional `{"steps": [...]}` from `content` (the exact-content
+key), `capture` (reads the capture of images that have none, the upgrade path) and `location_purge`.
+
+### Map
+
+The Cropwright Map page shows where the photos were taken when the project has stored positions and
+its policy serves them (`GET /map` is `available`). The server aggregates positions in OpenSearch
+(`geotile_grid` over a `geo_point`, a marker at each cell's centroid, at most 5000 cells per response),
+so a large project never ships its points: `GET /map/cells` answers a GeoJSON FeatureCollection
+(`application/geo+json`) for a zoom and a bounding box, `GET /map/images` lists the photos of one cell.
+Both take the shared item filter and `taken_from` / `taken_to`; an item-level predicate is resolved to
+the matching images first (at most 10000, `join_truncated` says when it was more).
+
+The browser draws the basemap from `OP_MAP_TILE_URL` (default
+`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, attribution `OP_MAP_TILE_ATTRIBUTION`). **Each tile
+request tells the tile server which area is on screen**: use a self-hosted tile server to keep
+locations on your network. The OpenStreetMap server's
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/) applies to the default.
+
 ## Export and training
 
 Freeze a holdout, export, run preflight, train, promote, compare in the bake-off.

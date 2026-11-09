@@ -18,6 +18,7 @@ box's area rank among the items stored on its image).
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -40,6 +41,7 @@ HUMAN_CLASS_SOURCES: tuple[str, ...] = ('human', 'human_move')
 # Every item a full-image SAM 3 pass writes carries the prompt set it came from
 # (and keeps it after a human relabels it), so that field is what ``sam3`` means.
 SAM3_ORIGIN_FIELD = 'open_vocab_set'
+IMAGE_IDS_MAX = 200
 
 
 class ItemFilter(BaseModel):
@@ -90,6 +92,12 @@ class ItemFilter(BaseModel):
     # True: only items the region gate skipped (``region_gate_skip`` set; the
     # segmenter was never asked, so they are safe to re-run).
     region_gate_skipped: bool | None = None
+    # Capture date range, inclusive days. Compared with the UTC capture time when the offset is
+    # known and with the wall-clock time (as if UTC) when it is not.
+    taken_from: dt.date | None = None
+    taken_to: dt.date | None = None
+    # Only items on these images (the map opens the list on the images of one cell).
+    image_ids: list[str] = Field(default_factory=list, max_length=IMAGE_IDS_MAX)
 
     def is_empty(self) -> bool:
         return self == type(self)()
@@ -220,6 +228,8 @@ def _state_clauses(f: ItemFilter, embedding: WriteFields) -> list[dict[str, Any]
 
 def _term_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    if f.image_ids:
+        out.append({'terms': {'image_id': f.image_ids}})
     for field, value in (
         ('source', f.source),
         ('class_id', f.class_id),
@@ -265,6 +275,32 @@ def _flag_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return out
 
 
+def _capture_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    if f.taken_from is None and f.taken_to is None:
+        return []
+    if f.taken_from is not None and f.taken_to is not None and f.taken_from > f.taken_to:
+        msg = f'taken_from ({f.taken_from}) is after taken_to ({f.taken_to})'
+        raise ValueError(msg)
+    bounds: dict[str, str] = {}
+    if f.taken_from is not None:
+        bounds['gte'] = f'{f.taken_from.isoformat()}T00:00:00'
+    if f.taken_to is not None:
+        bounds['lt'] = f'{(f.taken_to + dt.timedelta(days=1)).isoformat()}T00:00:00'
+    return [
+        _any_of(
+            [
+                {'range': {'capture_taken_utc': bounds}},
+                {
+                    'bool': {
+                        'must': [{'range': {'capture_taken_local': bounds}}],
+                        'must_not': [{'exists': {'field': 'capture_taken_utc'}}],
+                    }
+                },
+            ]
+        )
+    ]
+
+
 def _quality_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if f.min_blur_ratio is not None:
@@ -308,6 +344,7 @@ def item_filter_clauses(f: ItemFilter, *, embedding: WriteFields) -> list[dict[s
         *_state_clauses(f, embedding),
         *_term_clauses(f),
         *_flag_clauses(f),
+        *_capture_clauses(f),
         *_quality_clauses(f),
     ]
 

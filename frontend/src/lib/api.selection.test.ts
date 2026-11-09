@@ -143,6 +143,9 @@ describe('class identity is by name on the list routes', () => {
       origin: ['sam3'],
       embedding_state: ['failed'],
       review_status: ['pending'],
+      taken_from: '2024-03-05',
+      taken_to: '2024-03-06',
+      image_id: ['i1'],
     } satisfies Required<Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>>;
     const f = stub({ items: [], total: 0 });
     await getClusters(every);

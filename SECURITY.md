@@ -213,7 +213,9 @@ coordinates to about 1 km and `drop` stores none; a switch to `drop` clears the
 project's stored coordinates. Coordinates live only in the images index, never
 on items or labels. Exports keep the GPS embedded in the original files, as
 today, unless the project's policy is `drop`, in which case the export copy
-strips it.
+strips it. The Map page's basemap is drawn by the browser from `OP_MAP_TILE_URL`
+(OpenStreetMap by default), so each tile request tells that server which area is
+on screen; a self-hosted tile server keeps locations on your network.
 
 ## Monitoring profile and the container runtime socket
 

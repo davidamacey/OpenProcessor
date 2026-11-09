@@ -10,12 +10,25 @@ across the API. Routes keep their own route-specific parameters on top.
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Annotated
 
 from fastapi import Depends, Query
 
 from src.domain.embedding_state import EmbeddingState  # noqa: TC001 - FastAPI resolves it
-from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
+from src.services.curation.item_filter import IMAGE_IDS_MAX, ItemFilter, Origin, ReviewStatus
+
+
+TakenDate = Annotated[
+    dt.date | None,
+    Query(
+        description=(
+            'Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time '
+            'when the offset was known and on the wall-clock capture time (read as UTC) when '
+            'it was not; items with no capture time never match.'
+        )
+    ),
+]
 
 
 def item_filter_query(
@@ -99,6 +112,16 @@ def item_filter_query(
         list[ReviewStatus] | None,
         Query(description='pending, validated, dismissed or excluded; repeatable.'),
     ] = None,
+    taken_from: TakenDate = None,
+    taken_to: TakenDate = None,
+    image_id: Annotated[
+        list[str] | None,
+        Query(
+            max_length=IMAGE_IDS_MAX,
+            description='Only items on these images, repeatable (at most 200); the map opens '
+            'the list on the images of one cell this way.',
+        ),
+    ] = None,
 ) -> ItemFilter:
     return ItemFilter(
         class_names=class_name or [],
@@ -115,6 +138,9 @@ def item_filter_query(
         origin=origin or [],
         embedding_state=embedding_state or [],
         review_status=review_status or [],
+        taken_from=taken_from,
+        taken_to=taken_to,
+        image_ids=image_id or [],
     )
 
 

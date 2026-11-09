@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.exceptions import RequestRejectedError
+from src.services.curation.capture_read import read_capture
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
     refreshed_ingest_profiles,
 )
 from src.services.curation.ingest_policy_store import get_ingest_policy
+from src.services.curation.location_policy_store import get_location_policy
 
 
 async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
@@ -48,4 +50,6 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
         secondary_profile=secondary,
         pe_encoder=pe_encoder,
         policy=policy,
+        capture_reader=read_capture,
+        location_policy=get_location_policy,
     )

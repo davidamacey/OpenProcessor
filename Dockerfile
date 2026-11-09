@@ -34,6 +34,8 @@ FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6
 # procps -> pgrep, used by the curation worker services' healthchecks
 # (docker-compose.yml `profiles: [curation]`) -- the api image is shared with those workers.
 # postgresql-client -> pg_dump, used by the periodic worker's db_backup tick (src/services/periodic/db_backup.py)
+# libimage-exiftool-perl -> exiftool, the capture-metadata reader of every ingest path and the lossless
+# GPS strip of a `drop` project's exports (src/clients/exiftool_client.py; https://exiftool.org/)
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
@@ -43,6 +45,7 @@ RUN apt-get update && apt-get upgrade -y \
     libglib2.0-0t64 \
     libgomp1 \
     libpq5 \
+    libimage-exiftool-perl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean

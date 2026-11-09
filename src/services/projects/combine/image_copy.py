@@ -65,6 +65,8 @@ class CopyContext:
     originals: dict[tuple[int, str], tuple[str, str]]
     """``(source index, image id) -> (path, imohash)`` of every duplicate's priority image."""
     enqueue_pending: PendingEnqueue
+    location_policy: str
+    """The target's ``location_policy``: a copied position is kept only as far as it allows."""
     containment: float = 0.9
     counts: Counter[str] = field(default_factory=Counter)
 
@@ -262,6 +264,7 @@ async def _copy_image(
                 now=ctx.now,
                 spaces=ctx.spaces[source_index],
                 negative_for=negative_for,
+                location_policy=ctx.location_policy,
             ),
         }
     ]

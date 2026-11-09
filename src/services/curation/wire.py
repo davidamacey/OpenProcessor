@@ -24,6 +24,7 @@ from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 from src.services.curation.assist.item_wire import assist_to_wire
+from src.services.curation.capture_wire import item_capture_to_wire
 from src.services.curation.class_sources import (
     class_confidence,
     vlm_suggestion,
@@ -404,6 +405,7 @@ def serialize_item(
     item.update(region_to_wire(src, f))
     item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
     # The VLM's suggestions (class answer, pack attributes), apart from the labels.
+    item['capture'] = item_capture_to_wire(src)
     item['assist'] = assist_to_wire(src.get('assist'), {b['box_id'] for b in item['region_boxes']})
     return item
 

@@ -15,6 +15,7 @@ POSTGRES_BACKED_PREFIXES: tuple[str, ...] = (
     '/assist_loop_presets',
     '/near_dup_profiles',
     '/embedding',
+    '/location_policy',
 )
 
 # Mutating routes that write nothing by design (read-only work under POST,
