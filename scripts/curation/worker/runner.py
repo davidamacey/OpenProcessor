@@ -564,6 +564,7 @@ async def run(args: argparse.Namespace) -> int:
                     await _rt.vlm.aclose()
         await opensearch.close()
         await pool.close()
+        AppResources.async_triton_pool = None
 
     elapsed_total = time.monotonic() - started_at
     logger.info(

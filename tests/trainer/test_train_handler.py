@@ -132,7 +132,10 @@ async def _no_campaign(*_args: Any) -> None:
     return None
 
 
-def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05):
+def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05, hold_at: Any = None):
+    """``hold_at = (epoch, on_hold)``: after that epoch, ``on_hold()`` runs and the fit waits until
+    the handler has relayed the cancel into ``state`` (a fixed sleep would race a loaded host)."""
+
     def fit(spec, state) -> None:
         print('[fit] start')
         with state.lock:
@@ -147,6 +150,9 @@ def _fake_fit(*, fail_at: int | None = None, epoch_s: float = 0.05):
             with state.lock:
                 state.current_epoch = epoch
                 state.last_epoch_metric = {'epoch': epoch, 'map50': 0.1 * epoch}
+            if hold_at is not None and hold_at[0] == epoch:
+                hold_at[1]()
+                assert state.cancel_requested.wait(timeout=30), 'the cancel was never relayed'
             if state.cancel_requested.is_set():
                 with state.lock:
                     state.state = 'cancelled'
@@ -176,18 +182,13 @@ def test_a_fake_fit_completes_with_progress_per_epoch(world, monkeypatch) -> Non
 
 def test_a_cancel_stops_at_an_epoch_boundary_and_the_handler_returns(world, monkeypatch) -> None:
     ctx, _store, _run, stored = world
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(epoch_s=0.2))
+    # The cancel arrives after epoch 1; the fit stops at that epoch's boundary.
+    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(hold_at=(1, ctx.cancel.set)))
 
-    async def go() -> dict:
-        task = asyncio.ensure_future(celery_tasks.train(ctx))
-        await asyncio.sleep(0.3)
-        ctx.cancel.set()
-        return await task
-
-    result = asyncio.run(go())
+    result = asyncio.run(celery_tasks.train(ctx))
 
     assert result['state'] == 'cancelled'
-    assert max(done for done, _t, _s in ctx.progress_calls) < EPOCHS
+    assert max(done for done, _t, _s in ctx.progress_calls) == 1
     assert stored['manifest']['results']['final_state'] == 'cancelled'
 
 
