@@ -4,7 +4,6 @@ exporter's renderer produces for a default build, so an install or upgrade dirti
 
 from __future__ import annotations
 
-import ast
 import re
 import sys
 from pathlib import Path
@@ -17,10 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPORT_DIR = ROOT / 'export'
 if str(EXPORT_DIR) not in sys.path:
     sys.path.insert(0, str(EXPORT_DIR))
-
-# What the default FP16 detector build emits (measured on the TensorRT 11.0 Triton image):
-# export_models.py's sync_output_dtypes rewrites the config to these after every build.
-DEFAULT_E2E_DTYPES = {'det_boxes': 'TYPE_FP32', 'det_scores': 'TYPE_FP16'}
 
 
 def signature(text: str) -> dict[str, Any]:
@@ -46,41 +41,15 @@ def committed(model: str) -> dict[str, Any]:
     return signature((ROOT / 'models' / model / 'config.pbtxt').read_text())
 
 
-def function_from(path: Path, name: str, **namespace: Any):
-    """One top-level function of an export script, without importing its torch/tensorrt imports."""
-    tree = ast.parse(path.read_text())
-    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    ns: dict[str, Any] = dict(namespace)
-    exec(compile(ast.Module([node], []), str(path), 'exec'), ns)
-    return ns[name]
+@pytest.mark.parametrize(
+    ('model', 'max_batch'), [('yolov11_small_trt_end2end', 64), ('yolo26_small_trt', 32)]
+)
+def test_the_detector_configs_match_the_exporter(model: str, max_batch: int) -> None:
+    """Both head kinds are served as the same fused tensor, so one renderer writes both."""
+    from yolo_triton_config import render_fused_config
 
-
-def test_yolo11_end2end_config_matches_the_default_build() -> None:
-    render = function_from(
-        EXPORT_DIR / 'yolo_triton_config.py', 'generate_triton_config', IMG_SIZE=640
-    )
-    rendered = signature(
-        render(
-            'yolov11_small_trt_end2end',
-            'trt_end2end',
-            64,
-            has_nms=True,
-            output_dtypes=DEFAULT_E2E_DTYPES,
-        )
-    )
-    assert committed('yolov11_small_trt_end2end') == rendered
-
-
-def test_yolo26_config_matches_the_exporter(tmp_path: Path) -> None:
-    write = function_from(
-        EXPORT_DIR / 'export_yolo26.py',
-        'write_triton_config',
-        IMG_SIZE=640,
-        logger=__import__('logging').getLogger('t'),
-        Path=Path,
-    )
-    write(tmp_path, 'yolo26_small_trt', 32, 'output0', [300, 6])
-    assert committed('yolo26_small_trt') == signature((tmp_path / 'config.pbtxt').read_text())
+    rendered = signature(render_fused_config(model, max_batch, 'output0', [300, 6]))
+    assert committed(model) == rendered
 
 
 def test_pe_image_config_matches_the_renderer() -> None:

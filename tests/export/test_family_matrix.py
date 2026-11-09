@@ -2,12 +2,10 @@
 
 Marker ``families``: official weights from ``~/.cache/op-test-weights`` (CI job ``families`` fills
 it), CPU only, nothing committed. One row per family of ``src/domain/model_families.py``; each
-row goes through the production functions the stack uses:
-
-* one-to-one heads (YOLOv10, YOLO26): ``export/export_yolo26.py::export_fused_onnx`` and its
-  ``inspect_fused_output`` head check;
-* NMS heads: ``model_families.export_kwargs('nms', max_batch)``, the recipe the trainer's promote
-  export runs (``docker/trainer/trainer_fit.py``) and B3-E1's ``ultralytics_export`` will run.
+row goes through the production function the stack uses for every head kind,
+``export/ultralytics_export.py::export_fused_onnx`` with its ``inspect_fused_output`` head check;
+the arguments it passes are ``model_families.export_kwargs``, the recipe the trainer's promote
+export runs too (``docker/trainer/trainer_fit.py``).
 
 Documented arguments: https://docs.ultralytics.com/modes/export/ (``nms``, ``batch``, ``dynamic``,
 ``simplify``). The original-YOLOv5 ONNX rows (item 6) live in ``tests/test_yolov5_onnx_probe.py``,
@@ -19,9 +17,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import re
-import sys
 from pathlib import Path
-from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -33,6 +29,7 @@ from src.domain.model_families import FAMILIES, export_kwargs, head_kind_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
+    from types import ModuleType
 
 pytestmark = pytest.mark.families
 
@@ -57,24 +54,13 @@ ONE2ONE_ROWS = [r for r, (_, fam) in ROWS.items() if SPECS[fam].head_kind == 'on
 
 
 @pytest.fixture(scope='module')
-def export_yolo26() -> Iterator[ModuleType]:
-    """``export/export_yolo26.py`` imported without TensorRT (the export image has it).
-
-    The stub exists only for the import: a ``tensorrt`` module without a spec in ``sys.modules``
-    breaks ``torch._dynamo``, which the exports load afterwards.
-    """
+def ultralytics_export() -> Iterator[ModuleType]:
+    """``export/ultralytics_export.py`` (a script that imports its siblings by bare name)."""
     mp = pytest.MonkeyPatch()
     mp.syspath_prepend(str(REPO_ROOT / 'export'))
-    for name in ('trt_utils', 'export_yolo26'):
-        mp.delitem(sys.modules, name, raising=False)
-    with pytest.MonkeyPatch.context() as stub:
-        stub.setitem(sys.modules, 'tensorrt', ModuleType('tensorrt'))
-        module = importlib.import_module('export_yolo26')
     try:
-        yield module
+        yield importlib.import_module('ultralytics_export')
     finally:
-        sys.modules.pop('export_yolo26', None)
-        sys.modules.pop('trt_utils', None)
         mp.undo()
 
 
@@ -109,7 +95,9 @@ def _output_dims(path: Path) -> list[list[int | str]]:
 
 @pytest.fixture(scope='module')
 def exports(
-    load: Callable[[str], Any], export_yolo26: ModuleType, tmp_path_factory: pytest.TempPathFactory
+    load: Callable[[str], Any],
+    ultralytics_export: ModuleType,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> Callable[[str], Path]:
     """The served ONNX of a row, exported once per module."""
     cache: dict[str, Path] = {}
@@ -117,25 +105,8 @@ def exports(
     def get(row: str) -> Path:
         if row in cache:
             return cache[row]
-        model = load(row)
-        kind = head_kind_of(model.model.model[-1])
-        work = tmp_path_factory.mktemp(row)
-        if kind == 'one2one':
-            export_yolo26.EXPORT_DIR = work
-            path = export_yolo26.export_fused_onnx(
-                model, {'triton_name': row, 'max_batch': MAX_BATCH}
-            )
-        else:
-            path = Path(
-                model.export(
-                    format='onnx',
-                    imgsz=IMGSZ,
-                    dynamic=True,
-                    simplify=True,
-                    device='cpu',
-                    **export_kwargs('nms', MAX_BATCH),
-                )
-            )
+        ultralytics_export.MODELS_DIR = tmp_path_factory.mktemp(row)
+        path, _, _ = ultralytics_export.export_fused_onnx(load(row), row, MAX_BATCH)
         cache[row] = path
         return path
 
@@ -260,7 +231,7 @@ def test_yolo26_gives_the_nms_free_tensor_whether_or_not_it_is_simplified(
     row: str,
     simplify: bool,
     load: Callable[[str], Any],
-    export_yolo26: ModuleType,
+    ultralytics_export: ModuleType,
     tmp_path: Path,
 ) -> None:
     """Discrepancy rows: ``nms=False`` with ``simplify`` on and off; a raw head is refused."""
@@ -279,24 +250,24 @@ def test_yolo26_gives_the_nms_free_tensor_whether_or_not_it_is_simplified(
     assert out.shape == (2, 300, 6)
     assert 'TopK' in _graph_ops(path)
     if simplify:
-        assert export_yolo26.inspect_fused_output(path)[1] == [300, 6]
+        assert ultralytics_export.inspect_fused_output(path)[1] == [300, 6]
     else:
         # Without onnxslim the graph's output dims stay symbolic, so the declared-shape check
         # refuses it (fail closed) although the runtime tensor is the NMS-free one. The served
         # export always simplifies.
         with pytest.raises(RuntimeError, match='raw one-to-many head'):
-            export_yolo26.inspect_fused_output(path)
+            ultralytics_export.inspect_fused_output(path)
 
 
 def test_a_raw_head_is_refused_never_passed(
-    load: Callable[[str], Any], export_yolo26: ModuleType, tmp_path: Path
+    load: Callable[[str], Any], ultralytics_export: ModuleType, tmp_path: Path
 ) -> None:
     raw = Path(
         load('yolo26n').export(format='onnx', imgsz=IMGSZ, dynamic=True, device='cpu', nms=None)
     )
 
     with pytest.raises(RuntimeError, match='raw one-to-many head'):
-        export_yolo26.inspect_fused_output(raw)
+        ultralytics_export.inspect_fused_output(raw)
 
 
 def test_ultralytics_is_the_pinned_version() -> None:

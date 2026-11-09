@@ -27,6 +27,12 @@ MAX_DET = 300
 NMS_IOU = 0.7
 NMS_CONF = 0.25
 
+# The Triton model each head kind is served as (the name keeps meaning "NMS inside the engine",
+# B3 decision J6): ``{triton_name}_trt`` for the NMS-free head, ``{triton_name}_trt_end2end`` for
+# an embedded-NMS one. The ONNX both are built from is ``{triton_name}_end2end``.
+ENGINE_SUFFIX = {ONE2ONE: '_trt', NMS: '_trt_end2end'}
+ONNX_SUFFIX = '_end2end'
+
 
 @dataclass(frozen=True)
 class FamilySpec:
@@ -99,3 +105,10 @@ def export_kwargs(head_kind: str, max_batch: int) -> dict[str, Any]:
             'batch': max_batch,
         }
     raise ValueError(f'no export recipe for head kind {head_kind!r}')
+
+
+def engine_name(triton_name: str, head_kind: str) -> str:
+    """The Triton model name of the engine built for ``head_kind``."""
+    if head_kind not in ENGINE_SUFFIX:
+        raise ValueError(f'no engine name for head kind {head_kind!r}')
+    return f'{triton_name}{ENGINE_SUFFIX[head_kind]}'

@@ -9,7 +9,7 @@ this script runs inside
 ``${COMPOSE_PROJECT_NAME}-triton`` post-G-01, and api can't run
 docker commands regardless). ``convert_to_tensorrt_via_python_api``
 replaces it with the TensorRT Python API directly (same dependency
-``export/export_models.py`` already uses in-process), so these tests
+``export/ultralytics_export.py`` already uses in-process), so these tests
 fake ``tensorrt`` itself -- no GPU, no real engine build, no docker.
 
 Further regressions (TRT 11 flag removal, destructive rebuild):

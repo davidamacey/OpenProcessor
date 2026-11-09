@@ -195,7 +195,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
     rename it's ``${COMPOSE_PROJECT_NAME}-triton``, so this always
     printed "triton-server container is not running" even with Triton
     up. api already depends on ``tensorrt-cu13`` directly (see
-    requirements.txt; ``export/export_models.py`` builds YOLO engines
+    requirements.txt; ``export/ultralytics_export.py`` builds YOLO engines
     the same way), so there's no need for Triton to be running, or even
     exist, at export time -- only the ONNX file and a GPU.
     """
@@ -242,7 +242,7 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         # flag lookup raised AttributeError on the image's TRT 11.1,
         # failing the build. create_explicit_network passes the
         # flag only where it still exists (TRT <= 10.x) -- same helper
-        # export_models.py uses, which already works on TRT 11.1.
+        # ultralytics_export.py uses, which already works on TRT 11.1.
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, trt_logger)
         with Path(onnx_path).open('rb') as f:
