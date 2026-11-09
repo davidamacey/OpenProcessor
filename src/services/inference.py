@@ -18,7 +18,8 @@ from src.config.settings import TritonModelConfig
 from src.utils.cache import clip_text_tokens, get_image_cache, get_text_cache
 from src.utils.face_response import face_landmark_mismatch
 from src.utils.image_processing import decode_image, validate_image
-from src.utils.retry import RetryExhaustedError
+from src.utils.retry import TRITON_CALL_ERRORS, RetryExhaustedError
+from src.utils.upstream_errors import UpstreamError
 
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,19 @@ def build_response(
         response['embedding_norm'] = float(np.linalg.norm(embedding))
 
     return response
+
+
+def _refuse_unusable_face_result(result: dict[str, Any]) -> None:
+    """Raise for a face response that cannot be turned into faces: an undecodable image is the
+    caller's fault (400); a response whose landmarks do not pair with its faces is the model's
+    (503 with the stable reason). Neither may look like an image with no faces."""
+    if result.get('status') == 'error':
+        # src.core imports the services package, so this cannot be a module-level import.
+        from src.core.exceptions import RequestRejectedError
+
+        raise RequestRejectedError(400, result.get('error') or 'Failed to decode image')
+    if reason := face_landmark_mismatch(result):
+        raise UpstreamError('triton', reason)
 
 
 class InferenceService:
@@ -156,11 +170,16 @@ class InferenceService:
 
         Returns:
             Dict with:
-                - status: 'success' or 'error'
+                - status: 'success'
                 - num_faces: Number of faces detected
                 - faces: List of face dicts with box, landmarks, score, quality
                 - embeddings: List of 512-dim L2-normalized ArcFace embeddings
                 - orig_shape: (height, width)
+
+        Raises:
+            RequestRejectedError: 400, the bytes do not decode as an image.
+            UpstreamError: the face models failed or answered with unusable landmarks.
+            RetryExhaustedError: Triton is unreachable (the app answers 503/504).
         """
         face_client = get_fast_face_client(self.settings.triton_url)
 
@@ -168,36 +187,11 @@ class InferenceService:
             result = face_client.recognize(image_bytes, confidence=confidence)
         except RetryExhaustedError:
             raise
-        except Exception as e:
+        except TRITON_CALL_ERRORS as e:
             logger.error(f'Face detection failed: {e}')
-            return {
-                'status': 'error',
-                'error': str(e),
-                'num_faces': 0,
-                'faces': [],
-                'embeddings': [],
-                'orig_shape': (0, 0),
-            }
+            raise UpstreamError('triton', 'face_inference_failed') from e
 
-        if result.get('status') == 'error':
-            return {
-                'status': 'error',
-                'error': result.get('error', 'Unknown error'),
-                'num_faces': 0,
-                'faces': [],
-                'embeddings': [],
-                'orig_shape': (0, 0),
-            }
-
-        if reason := face_landmark_mismatch(result):
-            return {
-                'status': 'error',
-                'error': reason,
-                'num_faces': 0,
-                'faces': [],
-                'embeddings': [],
-                'orig_shape': (0, 0),
-            }
+        _refuse_unusable_face_result(result)
 
         # FastFaceClient returns already-normalized boxes, landmarks, embeddings
         faces = []
@@ -246,7 +240,7 @@ class InferenceService:
 
         Returns:
             Dict with:
-                - status: 'success' or 'error'
+                - status: 'success'
                 - detections: YOLO object detections
                 - num_detections: Number of objects detected
                 - num_faces: Number of faces detected
@@ -255,6 +249,11 @@ class InferenceService:
                 - image_embedding: 512-dim MobileCLIP embedding
                 - embedding_norm: L2 norm of image embedding
                 - orig_shape: (height, width)
+
+        Raises:
+            RequestRejectedError: 400, the bytes do not decode as an image.
+            UpstreamError: the models failed or the face response is unusable.
+            RetryExhaustedError: Triton is unreachable (the app answers 503/504).
         """
         from concurrent.futures import ThreadPoolExecutor
 
@@ -276,39 +275,16 @@ class InferenceService:
                 face_result = face_future.result()
         except RetryExhaustedError:
             raise
-        except Exception as e:
+        except TRITON_CALL_ERRORS as e:
             logger.error(f'Face recognition failed: {e}')
-            return {
-                'status': 'error',
-                'error': str(e),
-                'detections': [],
-                'num_detections': 0,
-                'num_faces': 0,
-                'faces': [],
-                'face_embeddings': [],
-                'image_embedding': None,
-                'embedding_norm': 0.0,
-                'orig_shape': (0, 0),
-            }
+            raise UpstreamError('triton', 'face_inference_failed') from e
 
         # Format YOLO detections
         detections = client.format_detections(yolo_result, model_name=TritonModelConfig.YOLO_MODEL)
 
         orig_h, orig_w = face_result.get('orig_shape', (0, 0))
 
-        if reason := face_landmark_mismatch(face_result):
-            return {
-                'status': 'error',
-                'error': reason,
-                'detections': [],
-                'num_detections': 0,
-                'num_faces': 0,
-                'faces': [],
-                'face_embeddings': [],
-                'image_embedding': None,
-                'embedding_norm': 0.0,
-                'orig_shape': (0, 0),
-            }
+        _refuse_unusable_face_result(face_result)
 
         # Format face detections (FastFaceClient returns already-normalized data)
         faces = []

@@ -18,12 +18,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import cv2
 import numpy as np
 
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
-from src.services.curation.ingest_models import ERROR_KIND_BULK_INDEX, IngestResult
+from src.services.curation.ingest_models import ERROR_KIND_BLUR, ERROR_KIND_BULK_INDEX, IngestResult
 from src.services.curation.ingest_policy import select_for_embedding
 from src.services.curation.item_doc import (
     DetectedItem,
@@ -43,6 +44,10 @@ from src.services.near_duplicates import content_key, pending as near_dup_pendin
 from src.utils.cpu_pool import run_cpu
 from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
+
+
+# What the Laplacian-variance maths raises: OpenCV, a missing host frame, a degenerate frame.
+BLUR_ERRORS = (cv2.error, ValueError, ArithmeticError)
 
 
 if TYPE_CHECKING:
@@ -363,8 +368,18 @@ async def index_items(
             rgb_frame, full_var = await run_cpu(
                 _full_frame_blur, img, ctx.rgb, nbytes=full_w * full_h * 3
             )
-    except Exception as exc:
-        logger.warning('ingest_blur_full_var_failed', path=image_path, error=str(exc))
+    except BLUR_ERRORS as exc:
+        logger.error('ingest_blur_failed', path=image_path, error=str(exc))
+        return IndexOutcome(
+            result=IngestResult(
+                status='failed',
+                image_path=image_path,
+                source_identifier=ctx.source_identifier,
+                imohash=ctx.imohash,
+                error=str(exc),
+                error_kind=ERROR_KIND_BLUR,
+            )
+        )
 
     bnorms = [_bbox_norm_fn(it.bbox_pixel, full_w, full_h) for it in items]
     areas = [max(0.0, bn[2] - bn[0]) * max(0.0, bn[3] - bn[1]) for bn in bnorms]

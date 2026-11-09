@@ -75,6 +75,11 @@ class AnalyzeResponse(BaseModel):
     # Face detection/recognition
     faces: list[FaceResult] = Field(default_factory=list, description='Detected faces')
     num_faces: int = Field(default=0, description='Number of faces detected')
+    faces_error: str | None = Field(
+        default=None,
+        description='Why face detection produced no result when it ran and failed; '
+        'null when it ran (even with no faces) or the deployment has faces off',
+    )
 
     # CLIP embedding
     global_embedding: list[float] | None = Field(

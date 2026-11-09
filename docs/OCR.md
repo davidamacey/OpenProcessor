@@ -319,7 +319,7 @@ Measured `/ocr/predict` throughput and latency are in [PERFORMANCE.md](PERFORMAN
 `POST /ocr/predict` answers `422` when the image cannot be decoded or is too small, and `502`
 when Triton or the OCR pipeline fails; Triton being unreachable after retries is `503`. An image
 with no text is a `200` with `num_texts: 0`. `POST /analyze` and `/analyze/batch` keep the rest of
-the analysis and set `ocr_error` when OCR failed. `POST /ocr/batch` lists a failed image under
+the analysis and set `ocr_error` when OCR failed (`faces_error` likewise when the face stage failed). `POST /ocr/batch` lists a failed image under
 `failures`.
 
 #### "Cudnn Error: CUDNN_STATUS_NOT_SUPPORTED"

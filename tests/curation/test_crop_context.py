@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -20,8 +21,6 @@ from curation.query_fakes import QueryFakeOpenSearch
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 from src.config import IndexRole, index_name
 from src.config.curation_accessors import base_curation_config
 from src.services.curation.wire import ITEM_WIRE_KEYS
@@ -239,3 +238,23 @@ def test_context_items_carry_their_outline_while_lists_do_not() -> None:
     assert 'mask_polygon' not in excludes['context'], 'sibling outlines come in the one call'
     assert 'class_id_history' in excludes['context']
     assert 'mask_polygon' in excludes['list']
+
+
+@pytest.mark.parametrize('exc', [SyntaxError('broken PNG chunk'), TypeError('malformed EXIF')])
+def test_pixel_size_from_header_is_none_for_every_pillow_decode_error(
+    exc: Exception, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.config.curation as curation_config_mod
+    import src.config.curation_accessors as curation_accessors_mod
+    from src.routers.curation.crop_context import _pixel_size_from_header
+
+    img_path = tmp_path / 'a.png'
+    Image.new('RGB', (4, 4)).save(img_path, format='PNG')
+    patched_cfg = curation_config_mod.CurationConfig(source_root=tmp_path)
+    monkeypatch.setattr(curation_accessors_mod, '_default_curation_config', patched_cfg)
+
+    def _broken(*_a: Any, **_k: Any) -> Any:
+        raise exc
+
+    monkeypatch.setattr(Image, 'open', _broken)
+    assert _pixel_size_from_header(str(img_path)) is None

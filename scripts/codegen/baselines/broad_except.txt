@@ -68,11 +68,10 @@ src/services/curation/clustering/embedding_reduce.py	1	tries alternate array con
 src/services/curation/clustering/umap_state.py	1	unpickling a stored reducer can raise anything; a failed load means refit, logged
 src/services/curation/dataset_import/runner.py	1	chunk boundary: a failed chunk is recorded as a chunk_failed issue and the import continues
 src/services/curation/empty_vlm_answer_repair.py	1	per-item boundary: any write failure is counted in errors and the sweep continues
-src/services/curation/export_readiness.py	1	best-effort index generation read: any failure is logged and the generation is reported unknown
 src/services/curation/index_bootstrap.py	2	bootstrap boundary: any migration or index-create failure is logged and the project is reported as not bootstrapped (retried on the next request)
 src/services/curation/ingest.py	1	per-image boundary: a primary detector failure becomes a failed IngestResult (error_kind detector_infer), logged
 src/services/curation/ingest_batch.py	1	batch detector failure falls back to the per-image path, which runs the detector again, logged
-src/services/curation/ingest_index.py	2	per-image boundary: a bulk-index failure marks the item failed and releases the claim, logged; a failed full-frame blur is logged and the item is written without it
+src/services/curation/ingest_index.py	1	per-image boundary: a bulk-index failure marks the item failed and releases the claim, logged
 src/services/curation/ingest_writer.py	1	drain-loop boundary: a crash fails every pending caller with the same exception
 src/services/curation/item_delete.py	1	delete boundary: the failure is recorded per crop id in errors
 src/services/curation/open_vocab_ingest.py	1	best-effort scheduling: any failure (config, OpenSearch, drain start) must not fail the ingest, logged and returns False
@@ -83,12 +82,11 @@ src/services/curation/region_test_run.py	1	test-run leg boundary: a detector fai
 src/services/curation/reprocess_images.py	2	per-scope and per-image boundary: any failure is counted as failed and the batch continues
 src/services/curation/reprocess_open_vocab.py	1	per-image boundary after a segmenter outage is handled: any other failure marks the image failed and the run continues
 src/services/curation/strategy_defaults.py	1	GET methods must never fail: any settings lookup failure falls back to the hardcoded defaults, logged
-src/services/curation/strategy_registry.py	2	GET /curation/methods must never fail: a failed settings lookup or field-coverage count degrades to defaults and unknown coverage, logged
+src/services/curation/strategy_registry.py	1	GET /curation/methods must never fail: a failed settings lookup degrades to the default settings, logged
 src/services/curation/vlm_strategies.py	1	GET methods boundary: a failed VLM state refresh degrades to the cached endpoint state, logged
 src/services/curation/worker_liveness.py	1	heartbeat loop boundary: one failed write is logged and must not stop the worker
 src/services/detection/segmenter_gate.py	1	caller-supplied visibility probe: any failure means unknown so the segmenter call runs (an error is not a no), logged
 src/services/face_identity/person_management.py	4	service boundary: a failed OpenSearch operation is returned as status=error with the message and the persons routes pass it to the client
-src/services/inference.py	2	service boundary: a failed detection is returned as status=error with the message (retry exhaustion re-raises); the face routes map it to a 500
 src/services/labeling/vlm_factory.py	1	cleanup: a failing close of a retired labeler client is logged and must not mask the caller
 src/services/model_export.py	1	validation boundary: loading a checkpoint can raise anything (pickle, torch, ultralytics); returned as an invalid-model result with the message
 src/services/projects/bootstrap.py	3	startup boundary: a failed region-class seed or registry bootstrap is logged and retried with backoff

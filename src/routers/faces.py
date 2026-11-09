@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from src.config.faces import require_faces
 from src.core.dependencies import VisualSearchDep
+from src.core.exceptions import RequestRejectedError
 from src.schemas.detection import ImageMetadata
 from src.services.inference import InferenceService
 from src.utils.retry import RetryExhaustedError
@@ -177,9 +178,6 @@ def detect_faces(
 
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
 
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
-
         orig_h, orig_w = result['orig_shape']
 
         faces = [
@@ -200,7 +198,7 @@ def detect_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face detection failed: {e}')
@@ -243,9 +241,6 @@ def recognize_faces(
 
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
 
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face recognition failed'))
-
         orig_h, orig_w = result['orig_shape']
 
         faces = [
@@ -267,7 +262,7 @@ def recognize_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face recognition failed: {e}')
@@ -318,11 +313,6 @@ def verify_faces(
         result1 = inference_service.detect_faces(image1_bytes, confidence=confidence)
         result2 = inference_service.detect_faces(image2_bytes, confidence=confidence)
 
-        if result1.get('status') == 'error':
-            raise HTTPException(500, f'Face detection failed on image1: {result1.get("error")}')
-        if result2.get('status') == 'error':
-            raise HTTPException(500, f'Face detection failed on image2: {result2.get("error")}')
-
         if result1['num_faces'] == 0:
             raise HTTPException(400, 'No face detected in first image')
         if result2['num_faces'] == 0:
@@ -352,7 +342,7 @@ def verify_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face verification failed: {e}')
@@ -415,9 +405,6 @@ async def search_faces(
         # Detect and recognize faces
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
 
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
-
         if result['num_faces'] == 0:
             raise HTTPException(400, 'No faces detected in query image')
 
@@ -467,7 +454,7 @@ async def search_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face search failed: {e}')
@@ -525,9 +512,6 @@ async def identify_faces(
 
         # Detect and recognize all faces
         result = inference_service.detect_faces(image_bytes, confidence=confidence)
-
-        if result.get('status') == 'error':
-            raise HTTPException(500, result.get('error', 'Face detection failed'))
 
         if result['num_faces'] == 0:
             return FaceIdentifyResponse(
@@ -589,7 +573,7 @@ async def identify_faces(
 
     except HTTPException:
         raise
-    except (RetryExhaustedError, UpstreamError):
+    except (RetryExhaustedError, UpstreamError, RequestRejectedError):
         raise
     except Exception as e:
         logger.error(f'Face identification failed: {e}')
