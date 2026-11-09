@@ -45,11 +45,17 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     from _curation_app import mount_curation_routers
 
+    from src.core.db_session import get_db
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
+
+    async def no_database() -> Any:  # a dry run enqueues no job, so it opens no session
+        yield None
+
+    app.dependency_overrides[get_db] = no_database
     with TestClient(app) as c:
         yield c
 
