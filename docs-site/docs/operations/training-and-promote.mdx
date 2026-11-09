@@ -11,27 +11,27 @@ title: Training, bake-off and promote
   caption="Training setup over the train routes (captured from Cropwright, a frontend for this backend)"
 />
 
-## The file protocol
+## How a run reaches the trainer
 
-`/curation/projects/{project}/train/*` is a control plane over files on the
-shared `/jobs` volume; the API never calls the trainer. Routes in this
-page are project-scoped; the prefix is omitted. Each project's job files
-live in its own directory, `/jobs/projects/<slug>/`, and the one trainer
-serves every project (it scans each project's directory for jobs). A run
-trains on, and is promoted from, one project's export.
+`/curation/projects/{project}/train/*` is a control plane over the job runtime; the API never
+calls the trainer. `POST /train/start` writes a `jobs` row of kind `train` and a `training_runs`
+row (the spec, the class names, the artifact prefix), and queues one message on the `gpu_train`
+queue. The trainer (`docker/trainer/`, service `curation-trainer`) is a Celery worker on that
+queue that takes one run per process (`-c 1 --max-tasks-per-child=1`, so GPU memory is released
+when a run ends). Routes in this page are project-scoped; the prefix is omitted. A run trains
+on, and is promoted from, one project's export.
 
-| File | Written by | Meaning |
-|---|---|---|
-| `<job_id>.job.json` | API (`POST /train/start`) | The job spec; the trainer claims it |
-| `<job_id>.cancel` | API (`POST /train/cancel/{job_id}`) | Cancel sentinel |
-| `<job_id>.status.json` | Trainer, every ~5 s | State, epochs, metrics, the `eval` block |
-| `<job_id>.run.log` | Trainer | Log, served by `GET /train/log/tail/{job_id}` |
-| `<job_id>.manifest.json` | Trainer, at the end | Lineage: dataset SHA, code versions, class remap, eval |
-| `.trainer_capabilities.json` | Trainer, every ~30 s | Heartbeat used by preflight |
+| Where | Holds |
+|---|---|
+| `jobs` row | Live state: `queued`, `running`, `cancelling`, `completed`, `failed`, `cancelled`, `interrupted`, with epoch progress and the heartbeat |
+| `training_runs` row | What the run is and produced: spec, class names, artifact prefix, the lineage manifest (dataset SHA, code versions, class remap, eval) |
+| Artifact blobs under the run's prefix | Weights, metric artifacts, the run log (`GET /train/log/tail/{job_id}`) |
+| `worker_capabilities` row | The trainer's heartbeat that preflight reads |
 
-The shipped trainer (`docker/trainer/`, service `curation-trainer`) runs
-jobs through Ultralytics. Any trainer that speaks this protocol can
-replace it.
+Cancel is cooperative: `POST /train/cancel/{job_id}` is a database write, and the trainer checks it
+at the next epoch boundary. The cards a run needs are reserved first; a start that cannot get them is
+refused (`gpu_busy`). The shipped trainer runs jobs through Ultralytics; the queue message carries only the
+job id.
 
 ## Running a training job
 

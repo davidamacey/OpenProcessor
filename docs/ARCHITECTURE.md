@@ -109,9 +109,9 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | Prometheus, Grafana, Loki, Alloy, DCGM exporter, node exporter, Valkey exporter, Flower, OpenSearch Dashboards | `monitoring` | 4604, 4605, 4606, 4610, 4613 (Flower), 4608 | Opt in only |
 | `triton-sdk` | `benchmark` | | Benchmark client |
 
-Named volumes: the PostgreSQL data volume, `openprocessor-state` (uploads and
-other state files), `openprocessor-jobs` (training and export working
-directories), `openprocessor-crop-cache`. Per-project exports and bake-off data
+Named volumes: `openprocessor-pg` (PostgreSQL), `openprocessor-queue` (Valkey's append-only
+file), `openprocessor-state` (uploads, training runs and other state files), the crop cache
+(tmpfs). Per-project exports and bake-off data
 live under `./data/projects/<slug>/`. Container names are
 `<project>-<service>-<n>`; no service sets `container_name`.
 

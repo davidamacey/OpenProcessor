@@ -140,8 +140,8 @@ reads the same state.
 `api` runs many uvicorn worker processes, and any of them can answer
 a given request. Job state is never in process memory or on a volume: a job is
 a row in PostgreSQL (`GET /curation/projects/{project}/jobs` lists them), and
-its messages travel through Valkey. Training working directories sit under
-`/jobs` on the shared volume, but their status is in the `jobs` table.
+its messages travel through Valkey. Training run outputs sit under
+`OP_TRAIN_RUNS_ROOT` on the shared state volume, but their status is in the `jobs` table.
 
 Events are rows in the PostgreSQL `events` table, announced by a Valkey
 wake-up, so a client on `GET /curation/events` sees events published by
