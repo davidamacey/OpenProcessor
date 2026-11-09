@@ -1,80 +1,28 @@
-"""OpenSearch request bodies and reply readers for near-duplicate detection.
+"""OpenSearch request bodies and reply readers for the core duplicate group queries.
 
 Pure functions: :class:`~src.services.duplicate_detection.service.DuplicateDetectionService`
-sends the bodies and hands the replies back here.
+sends the bodies and hands the replies back here. The group fields are the projection of the
+current core run (``near_dup_core_group``): ``near_dup_group_id``, ``near_dup_is_representative``
+and ``near_dup_cosine_to_rep``.
 """
 
 from typing import Any
 
-from src.services.duplicate_detection.models import DuplicateGroup, DuplicateMatch
+from src.services.duplicate_detection.models import DuplicateGroup
 
 
-GROUP_EXISTS_QUERY: dict[str, Any] = {'exists': {'field': 'duplicate_group_id'}}
+GROUP_EXISTS_QUERY: dict[str, Any] = {'exists': {'field': 'near_dup_group_id'}}
 
-_MATCH_SOURCE_FIELDS = ['image_id', 'image_path', 'duplicate_group_id']
 _MEMBER_SOURCE_FIELDS = [
     'image_id',
     'image_path',
-    'duplicate_group_id',
-    'is_duplicate_primary',
-    'duplicate_score',
+    'near_dup_group_id',
+    'near_dup_is_representative',
+    'near_dup_cosine_to_rep',
     'width',
     'height',
     'indexed_at',
 ]
-
-
-def knn_body(vector: list[float], k: int) -> dict[str, Any]:
-    """k-NN search over the global embedding returning ``k`` hits."""
-    return {
-        'size': k,
-        'query': {
-            'knn': {
-                'global_embedding': {
-                    'vector': vector,
-                    'k': k,
-                }
-            }
-        },
-        '_source': _MATCH_SOURCE_FIELDS,
-    }
-
-
-def matches_from_hits(
-    hits: list[dict[str, Any]], threshold: float, exclude_image_id: str | None
-) -> list[DuplicateMatch]:
-    """The hits scoring at least ``threshold``, minus ``exclude_image_id``, in reply order."""
-    duplicates = []
-    for hit in hits:
-        hit_id = hit['_id']
-        if exclude_image_id and hit_id == exclude_image_id:
-            continue
-
-        similarity = hit['_score']
-        if similarity < threshold:
-            continue
-
-        source = hit['_source']
-        duplicates.append(
-            DuplicateMatch(
-                image_id=hit_id,
-                image_path=source.get('image_path', ''),
-                similarity=similarity,
-                duplicate_group_id=source.get('duplicate_group_id'),
-            )
-        )
-    return duplicates
-
-
-def group_member_doc(group_id: str, *, primary: bool, score: float) -> dict[str, Any]:
-    """The partial doc that puts an image into a duplicate group."""
-    return {
-        'doc': {
-            'duplicate_group_id': group_id,
-            'is_duplicate_primary': primary,
-            'duplicate_score': score,
-        }
-    }
 
 
 def groups_aggregation_body(min_size: int) -> dict[str, Any]:
@@ -85,13 +33,13 @@ def groups_aggregation_body(min_size: int) -> dict[str, Any]:
         'aggs': {
             'groups': {
                 'terms': {
-                    'field': 'duplicate_group_id',
+                    'field': 'near_dup_group_id',
                     'size': 10000,  # Get all groups
                     'min_doc_count': min_size,
                 },
                 'aggs': {
                     'primary': {
-                        'filter': {'term': {'is_duplicate_primary': True}},
+                        'filter': {'term': {'near_dup_is_representative': True}},
                         'aggs': {
                             'doc': {
                                 'top_hits': {
@@ -129,13 +77,13 @@ def group_from_bucket(bucket: dict[str, Any]) -> DuplicateGroup:
 
 def group_members_body(group_id: str, include_primary: bool) -> dict[str, Any]:
     """Members of one group, the primary first, then by descending score."""
-    query: dict[str, Any] = {'term': {'duplicate_group_id': group_id}}
+    query: dict[str, Any] = {'term': {'near_dup_group_id': group_id}}
 
     if not include_primary:
         query = {
             'bool': {
                 'must': [query],
-                'must_not': [{'term': {'is_duplicate_primary': True}}],
+                'must_not': [{'term': {'near_dup_is_representative': True}}],
             }
         }
 
@@ -144,8 +92,8 @@ def group_members_body(group_id: str, include_primary: bool) -> dict[str, Any]:
         'query': query,
         '_source': _MEMBER_SOURCE_FIELDS,
         'sort': [
-            {'is_duplicate_primary': {'order': 'desc'}},
-            {'duplicate_score': {'order': 'desc'}},
+            {'near_dup_is_representative': {'order': 'desc'}},
+            {'near_dup_cosine_to_rep': {'order': 'desc'}},
         ],
     }
 
@@ -154,5 +102,5 @@ GROUPED_COUNT_BODY: dict[str, Any] = {'query': GROUP_EXISTS_QUERY}
 GROUP_CARDINALITY_BODY: dict[str, Any] = {
     'size': 0,
     'query': GROUP_EXISTS_QUERY,
-    'aggs': {'group_count': {'cardinality': {'field': 'duplicate_group_id'}}},
+    'aggs': {'group_count': {'cardinality': {'field': 'near_dup_group_id'}}},
 }

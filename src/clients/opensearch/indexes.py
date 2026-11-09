@@ -17,6 +17,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# The projection of the current core run (``near_dup_core_group``): research near-duplicates plan
+# 5.3, with the cosine to the representative the ``/query/duplicates`` wire shape shows.
+CORE_NEAR_DUP_MAPPING = {
+    'near_dup_group_id': {'type': 'keyword'},
+    'near_dup_is_representative': {'type': 'boolean'},
+    'near_dup_group_size': {'type': 'integer'},
+    'near_dup_cosine_to_rep': {'type': 'float'},
+    'near_dup_run_id': {'type': 'keyword'},
+}
+
 
 class IndexesMixin:
     """Index creation, HNSW tuning and deletion for the visual-search indexes."""
@@ -139,15 +149,19 @@ class IndexesMixin:
                     # Duplicate detection fields
                     'imohash': {'type': 'keyword'},  # Fast constant-time hash (48KB sampled)
                     'file_size_bytes': {'type': 'long'},  # For additional verification
-                    # Near-duplicate grouping (CLIP similarity)
-                    'duplicate_group_id': {'type': 'keyword'},  # Group ID for near-duplicates
-                    'is_duplicate_primary': {'type': 'boolean'},  # True = best quality in group
-                    'duplicate_score': {'type': 'float'},  # Similarity to group primary
+                    **CORE_NEAR_DUP_MAPPING,
                 }
             },
         }
 
-        return await self._create_index(index_name, index_body, force_recreate)
+        created = await self._create_index(index_name, index_body, force_recreate)
+        if created:
+            # An index from an earlier version has no near-duplicate fields (a mapping cannot be
+            # replaced, but a field can be added; the call is idempotent).
+            await self.client.indices.put_mapping(
+                index=index_name, body={'properties': CORE_NEAR_DUP_MAPPING}
+            )
+        return created
 
     async def create_vehicles_index(self, force_recreate: bool = False) -> bool:
         """

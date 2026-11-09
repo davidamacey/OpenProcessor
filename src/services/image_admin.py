@@ -42,9 +42,9 @@ async def fetch_image_data(
         indexed_at=source.get('indexed_at'),
         imohash=source.get('imohash'),
         file_size_bytes=source.get('file_size_bytes'),
-        duplicate_group_id=source.get('duplicate_group_id'),
-        is_duplicate_primary=source.get('is_duplicate_primary'),
-        duplicate_score=source.get('duplicate_score'),
+        duplicate_group_id=source.get('near_dup_group_id'),
+        is_duplicate_primary=source.get('near_dup_is_representative'),
+        duplicate_score=source.get('near_dup_cosine_to_rep'),
         cluster_id=source.get('cluster_id'),
         cluster_distance=source.get('cluster_distance'),
     )

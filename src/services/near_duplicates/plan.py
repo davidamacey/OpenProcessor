@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.clients.opensearch.names import IndexName
 from src.config.project_context import current_project
+from src.domain import near_dup as rules
 from src.domain.embedding_spaces import Target
 from src.services.embedding_spaces.resolve import embedding_space
 
@@ -43,6 +45,11 @@ class LevelPlan:
         return self.level == ITEM
 
     @property
+    def has_leak(self) -> bool:
+        """Every level but the core one keeps a second, looser grouping for the train/test guard."""
+        return self.level != rules.CORE
+
+    @property
     def params(self) -> dict[str, float | int | bool]:
         """The cuts a run records (``near_dup_runs.params``)."""
         return {
@@ -73,4 +80,23 @@ async def level_plan(profile: ActiveProfile, level: str) -> LevelPlan:
         k=profile.body.image.k,
         max_group_size=section.max_group_size,
         same_detector_class=level == ITEM and profile.body.item.same_detector_class,
+    )
+
+
+def core_plan() -> LevelPlan:
+    """The plan of the core global index: MobileCLIP ``global_embedding``, one cut, no profile.
+
+    The core index belongs to no project, so there is no embedding-space registry entry to
+    resolve and no profile to read: the cut is the code default and the space is a constant.
+    """
+    return LevelPlan(
+        level=rules.CORE,
+        index=IndexName.GLOBAL.value,
+        field='global_embedding',
+        space_key=rules.CORE_SPACE,
+        dedup_cosine=rules.DEFAULT_CORE_DEDUP_COSINE,
+        leak_cosine=rules.DEFAULT_CORE_DEDUP_COSINE,
+        k=rules.DEFAULT_K,
+        max_group_size=rules.DEFAULT_MAX_GROUP_SIZE,
+        same_detector_class=False,
     )

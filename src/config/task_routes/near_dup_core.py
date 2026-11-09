@@ -1,6 +1,10 @@
-"""Task routes of the `near_dup_core` research family; filled by the lane that owns it."""
+"""Task routes of the core near-duplicate grouping."""
 
 from __future__ import annotations
 
+from src.config.queue import TaskQueues
 
-ROUTES: dict[str, str] = {}
+
+ROUTES: dict[str, str] = {
+    'op.near_dup_core.group': TaskQueues.JOBS,
+}

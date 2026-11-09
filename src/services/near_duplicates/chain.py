@@ -48,6 +48,7 @@ async def _items_of(env: Env, image_ids: Collection[str]) -> AsyncIterator[list[
 
 async def mark_items_of(env: Env, image_ids: Collection[str]) -> int:
     """Mark every item standing on one of ``image_ids`` pending at the item level."""
+    assert env.project_id is not None  # the item level exists only inside a project
     marked = 0
     async for item_ids in _items_of(env, image_ids):
         async with env.scope() as session:

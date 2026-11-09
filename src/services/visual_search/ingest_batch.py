@@ -3,17 +3,13 @@
 import functools
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.clients.opensearch.client import OpenSearchClient
 from src.services.inference import InferenceService
 from src.services.visual_search.batch_documents import build_documents
 from src.services.visual_search.batch_inference import infer_batch
 from src.utils.task_group import run_settled
-
-
-if TYPE_CHECKING:
-    import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -76,12 +72,6 @@ class IngestBatchMixin:
     opensearch: OpenSearchClient
     inference: InferenceService
 
-    if TYPE_CHECKING:
-        # Implemented by IngestSingleMixin; declared so the mixin type-checks alone.
-        async def _assign_to_duplicate_group(
-            self, image_id: str, embedding: np.ndarray, threshold: float = 0.99
-        ) -> dict[str, Any] | None: ...
-
     # =========================================================================
     # Batch Ingestion (HIGH THROUGHPUT - 300+ RPS)
     # =========================================================================
@@ -91,7 +81,6 @@ class IngestBatchMixin:
         images_data: list[tuple[bytes, str, str | None]],
         skip_duplicates: bool = True,
         detect_near_duplicates: bool = True,
-        near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
         enable_detection: bool = True,
         enable_faces: bool = True,
@@ -107,7 +96,8 @@ class IngestBatchMixin:
         - Batch duplicate checking (msearch - 10x faster)
         - Batch Triton inference (dynamic batching: 16-48 avg)
         - OpenSearch bulk indexing for images and faces
-        - Parallel near-duplicate detection
+        - Near-duplicate grouping off the request: one pending row per image, grouped by the
+          single-writer ``near_dup_core_group`` job
         - Reduced HTTP overhead
 
         Target throughput: 300+ RPS with batch sizes of 32-64.
@@ -115,15 +105,13 @@ class IngestBatchMixin:
         Args:
             images_data: List of (image_bytes, image_id, image_path) tuples
             skip_duplicates: Skip processing if image hash exists
-            detect_near_duplicates: Auto-assign to duplicate groups
-            near_duplicate_threshold: Similarity threshold for grouping
+            detect_near_duplicates: Mark the indexed images for the core grouping job
             enable_ocr: Run OCR text extraction and indexing
             enable_detection: Run YOLO object detection
             enable_faces: Run face detection and embedding extraction
             enable_clip: Run MobileCLIP global image embedding
-            defer_heavy_ops: If True, skip near-duplicate detection during high
-                           throughput ingestion. These can be processed later
-                           via /ingest/process-deferred when load is lower.
+            defer_heavy_ops: If True, report the near-duplicate work as deferred. Grouping is
+                           done by the ``near_dup_core_group`` job either way.
             max_workers: Max parallel threads for inference
 
         Returns:
@@ -136,6 +124,7 @@ class IngestBatchMixin:
         from src.clients.triton_client import get_sync_triton_client
         from src.config import get_settings
         from src.config.faces import faces_enabled
+        from src.services.near_duplicates import core_pending
 
         enable_faces = enable_faces and faces_enabled()
 
@@ -212,21 +201,19 @@ class IngestBatchMixin:
             datetime.now(UTC).isoformat(),
         )
 
-        # Step 5: Bulk index to OpenSearch (global, vehicles, people, faces, OCR)
+        # Step 5: Mark the images for the core grouping job, then bulk index to OpenSearch
+        # (global, vehicles, people, faces, OCR). The pending row goes first: an extra row costs
+        # one idempotent rescore, a missing one would leave a stale group nobody knows about.
+        near_duplicates: list[dict] = []
+        deferred_count = 0
+        if detect_near_duplicates and documents:
+            await core_pending.record_pending([doc['image_id'] for doc in documents], 'added')
+            if defer_heavy_ops:
+                deferred_count = len(documents)
         indexed = await self._bulk_index(documents, face_documents)
         indexed['ocr'] = 0
         if enable_ocr:
             indexed['ocr'] = await self._index_ocr_results(inference_results, to_process)
-
-        # Step 6: Near-duplicate detection (parallel execution, can be deferred)
-        near_duplicates: list[dict] = []
-        deferred_count = 0
-        if detect_near_duplicates and documents and not defer_heavy_ops:
-            near_duplicates = await self._near_duplicates(documents, near_duplicate_threshold)
-        elif detect_near_duplicates and documents and defer_heavy_ops:
-            # Heavy operations deferred for later processing
-            deferred_count = len(documents)
-            logger.info(f'Deferred near-duplicate detection for {deferred_count} images')
 
         return {
             'status': 'success',
@@ -319,25 +306,3 @@ class IngestBatchMixin:
             ]
         )
         return sum(1 for r in ocr_results if r is True)
-
-    async def _near_duplicates(
-        self, documents: list[dict[str, Any]], threshold: float
-    ) -> list[dict]:
-        """Assign every indexed image to a duplicate group, all checks in parallel."""
-        import asyncio
-
-        async def check_near_dup(doc: dict) -> dict | None:
-            dup_info = await self._assign_to_duplicate_group(
-                image_id=doc['image_id'],
-                embedding=doc['global_embedding'],
-                threshold=threshold,
-            )
-            if dup_info:
-                return {'image_id': doc['image_id'], **dup_info}
-            return None
-
-        dup_results = await asyncio.gather(
-            *[check_near_dup(doc) for doc in documents],
-            return_exceptions=True,
-        )
-        return [r for r in dup_results if isinstance(r, dict) and r]

@@ -68,6 +68,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     schedule['near_dup_rescore'] = _every(
         'op.periodic.near_dup_rescore', NEAR_DUP_RESCORE_INTERVAL_S
     )
+    schedule['near_dup_core_group'] = _every(
+        'op.periodic.near_dup_core_group', NEAR_DUP_RESCORE_INTERVAL_S
+    )
     schedule['near_dup_full_build'] = _every(
         'op.periodic.near_dup_full_build', NEAR_DUP_FULL_BUILD_INTERVAL_S
     )

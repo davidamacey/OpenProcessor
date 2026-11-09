@@ -89,12 +89,6 @@ async def ingest_directory(
         True,
         description='Check for near-duplicates and assign to groups',
     ),
-    near_duplicate_threshold: float = Query(
-        0.99,
-        ge=0.90,
-        le=1.0,
-        description='Similarity threshold for near-duplicate grouping',
-    ),
     enable_ocr: bool = Query(
         True,
         description='Run OCR on images',
@@ -129,7 +123,6 @@ async def ingest_directory(
         batch_size=batch_size,
         skip_duplicates=skip_duplicates,
         detect_near_duplicates=detect_near_duplicates,
-        near_duplicate_threshold=near_duplicate_threshold,
         enable_ocr=enable_ocr,
         enable_detection=enable_detection,
         enable_faces=enable_faces,

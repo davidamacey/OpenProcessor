@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import test_ingest_batch_characterization as batch_char
@@ -23,9 +23,11 @@ def faces_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_single_ingest_skips_faces_even_when_asked(
-    faces_off: None, monkeypatch: pytest.MonkeyPatch
+    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
 ) -> None:
-    got = await single_char.run_scenario('full', monkeypatch)  # enable_faces defaults True
+    got = await single_char.run_scenario(
+        'full', monkeypatch, pending_calls
+    )  # enable_faces defaults True
     assert got['face_calls'] == []
     assert [c[0] for c in got['opensearch']].count('index_face') == 0
     assert got['result']['num_faces'] == 0
@@ -34,9 +36,9 @@ async def test_single_ingest_skips_faces_even_when_asked(
 
 @pytest.mark.asyncio
 async def test_batch_ingest_skips_faces_even_when_asked(
-    faces_off: None, monkeypatch: pytest.MonkeyPatch
+    faces_off: None, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
 ) -> None:
-    got = await batch_char.run_scenario('full', monkeypatch)
+    got = await batch_char.run_scenario('full', monkeypatch, pending_calls)
     assert got['face'] == []
     assert 'bulk_index_faces' not in [c[0] for c in got['opensearch']]
     assert got['result']['processed'] == 4

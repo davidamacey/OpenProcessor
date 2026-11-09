@@ -115,11 +115,9 @@ SCENARIOS: dict[str, dict[str, Any]] = {
     'jpeg_header_unreadable': {'jpeg_dims': 'fail'},
     'defer_heavy_ops': {'kwargs': {'defer_heavy_ops': True}},
     'near_duplicates_disabled': {'kwargs': {'detect_near_duplicates': False}},
-    'near_duplicate_group_and_error': {'dups': {'a': 'joined', 'c': 'raise', 'd': 'created'}},
     'ocr_index_failure': {'ocr_index_fail': ['a']},
     'bulk_ingest_partial_result': {'bulk_result': {'global': 2}},
     'face_bulk_errors': {'face_bulk': {'indexed': 3, 'errors': ['x']}},
-    'threshold_forwarded': {'kwargs': {'near_duplicate_threshold': 0.95}, 'dups': {'a': 'joined'}},
 }
 
 
@@ -198,7 +196,9 @@ def _plain(value: Any) -> Any:
     return value
 
 
-async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+async def run_scenario(
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+) -> dict[str, Any]:
     sc = SCENARIOS[name]
     images = sc.get('images', IMAGES)
     triton = FakeTriton(BASE_SCRIPT, set(sc.get('raise_for', [])))
@@ -221,29 +221,12 @@ async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
     svc = VisualSearchService.__new__(VisualSearchService)
     svc.opensearch = opensearch  # type: ignore[assignment]
     svc.inference = None  # type: ignore[assignment]
-    dup_calls: list[dict[str, Any]] = []
-
-    async def assign(image_id: str, embedding: Any, threshold: float = 0.99) -> Any:
-        dup_calls.append(
-            {'image_id': image_id, 'embedding': _plain(embedding), 'threshold': threshold}
-        )
-        kind = sc.get('dups', {}).get(image_id.removeprefix('id-'))
-        if kind == 'raise':
-            msg = 'dup service down'
-            raise RuntimeError(msg)
-        if kind == 'joined':
-            return {'action': 'joined_group', 'group_id': 'g1', 'similarity': 0.99}
-        if kind == 'created':
-            return {'action': 'created_group', 'group_id': 'g2', 'similarity': 0.97}
-        return None
-
-    svc._assign_to_duplicate_group = assign  # type: ignore[method-assign]
     result = await svc.ingest_batch(images, **sc.get('kwargs', {}))
     return _plain(
         {
             'result': result,
             'opensearch': opensearch.calls,
-            'dup_calls': sorted(dup_calls, key=lambda c: c['image_id']),
+            'pending': pending_calls.calls,
             'triton': sorted(triton.calls),
             'face': sorted(face.calls),
             'ocr': sorted(ocr.calls),
@@ -253,8 +236,10 @@ async def run_scenario(name: str, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('name', sorted(SCENARIOS))
-async def test_ingest_batch_matches_golden(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    got = await run_scenario(name, monkeypatch)
+async def test_ingest_batch_matches_golden(
+    name: str, monkeypatch: pytest.MonkeyPatch, pending_calls: Any
+) -> None:
+    got = await run_scenario(name, monkeypatch, pending_calls)
     # OCR indexing runs concurrently: compare it as a set, everything else in order.
     expected = json.loads(GOLDEN.read_text())[name]
     for snap in (got, expected):

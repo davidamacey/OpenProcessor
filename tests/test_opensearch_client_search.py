@@ -36,6 +36,7 @@ def client() -> OpenSearchClient:
     os_client = OpenSearchClient(hosts=['http://localhost:9200'])
     os_client.client = MagicMock()
     os_client.client.indices = MagicMock()
+    os_client.client.indices.put_mapping = AsyncMock()
     return os_client
 
 
@@ -105,6 +106,24 @@ class TestCreateAllIndexesIsIdempotent:
         results = await client.create_all_indexes(force_recreate=False)
         assert all(results.values()), results
         client.client.indices.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_an_existing_global_index_gains_the_near_duplicate_fields(
+        self, client: OpenSearchClient
+    ) -> None:
+        """An index from an earlier version has none of them (a field can be added, not changed)."""
+        client.client.indices.exists = AsyncMock(return_value=True)
+        await client.create_global_index()
+        client.client.indices.put_mapping.assert_awaited_once()
+        call = client.client.indices.put_mapping.await_args
+        assert call.kwargs['index'] == IndexName.GLOBAL.value
+        assert set(call.kwargs['body']['properties']) == {
+            'near_dup_group_id',
+            'near_dup_is_representative',
+            'near_dup_group_size',
+            'near_dup_cosine_to_rep',
+            'near_dup_run_id',
+        }
 
     @pytest.mark.asyncio
     async def test_a_missing_index_is_created(self, client: OpenSearchClient) -> None:

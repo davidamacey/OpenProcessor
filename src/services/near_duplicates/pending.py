@@ -52,6 +52,19 @@ async def enqueue_pending(
     return await repo.enqueue_pending(session, project, level, member_ids, reason)
 
 
+async def enqueue_core_pending(session: AsyncSession, image_ids: Iterable[str], reason: str) -> int:
+    """:func:`enqueue_pending` for the core global index: level ``core``, no project.
+
+    ``session`` is inside ``core_tx`` (or ``deployment_tx``): the rows belong to no project, and
+    row-level security refuses them to a project scope. The one entry point of core ingest, and
+    of the processing-plan executor when it takes core ingest over.
+    """
+    if reason not in rules.PENDING_REASONS:
+        msg = f'unknown pending reason {reason!r}'
+        raise PendingError(msg)
+    return await repo.enqueue_pending(session, None, rules.CORE, image_ids, reason)
+
+
 async def enqueue_pending_bound(level: str, member_ids: Iterable[str], reason: str) -> int:
     """:func:`enqueue_pending` in its own transaction, for the bound project."""
     ids = list(member_ids)

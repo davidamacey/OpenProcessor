@@ -77,13 +77,6 @@ async def ingest_image(
         True,
         description='Check for visually similar images and assign to duplicate groups.',
     ),
-    near_duplicate_threshold: float = Form(
-        0.99,
-        ge=0.90,
-        le=1.0,
-        description='Similarity threshold for near-duplicate grouping. '
-        '0.99 matches near-identical images, 0.90 matches similar content.',
-    ),
     enable_ocr: bool = Form(
         True,
         description='Run OCR to extract and index text content from the image.',
@@ -146,7 +139,6 @@ async def ingest_image(
             metadata=parsed_metadata,
             skip_duplicates=skip_duplicates,
             detect_near_duplicates=detect_near_duplicates,
-            near_duplicate_threshold=near_duplicate_threshold,
             enable_ocr=enable_ocr,
             enable_detection=enable_detection,
             enable_faces=enable_faces,

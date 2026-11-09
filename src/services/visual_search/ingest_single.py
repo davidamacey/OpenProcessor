@@ -1,4 +1,4 @@
-"""Single-image ingestion with category routing, near-duplicate grouping and OCR."""
+"""Single-image ingestion with category routing, near-duplicate marking and OCR."""
 
 import logging
 from typing import Any
@@ -74,7 +74,6 @@ class IngestSingleMixin:
         metadata: dict[str, Any] | None = None,
         skip_duplicates: bool = True,
         detect_near_duplicates: bool = True,
-        near_duplicate_threshold: float = 0.99,
         enable_ocr: bool = True,
         enable_detection: bool = True,
         enable_faces: bool = True,
@@ -92,7 +91,8 @@ class IngestSingleMixin:
            - Global embedding -> visual_search_global
            - Person detections -> visual_search_people
            - Vehicle detections -> visual_search_vehicles
-        6. Check for near-duplicates and auto-assign to groups (if enabled)
+        6. Mark the image for the core grouping job (if enabled; the group appears once
+           ``near_dup_core_group`` has run)
         7. Run OCR and index text content (if enable_ocr=True)
 
         Args:
@@ -102,17 +102,18 @@ class IngestSingleMixin:
             metadata: Optional metadata dictionary
             skip_duplicates: If True, skip processing if image hash already exists.
                            Set to False for benchmarks. Default: True (production).
-            detect_near_duplicates: If True, check for visually similar images
-                           and auto-assign to duplicate groups. Default: True.
-            near_duplicate_threshold: Similarity threshold for grouping.
-                           Default: 0.99 (matches Immich's maxDistance=0.01).
-                           Range: 0.90 (similar content) to 0.99 (near-identical).
+            detect_near_duplicates: If True, mark the image for the single-writer core
+                           grouping job. Default: True.
             enable_ocr: If True, run OCR and index detected text.
                            Default: True.
 
         Returns:
             dict with status, routing info, and counts per category
         """
+        # Imported here: the near-duplicate services import the app's dependency module, which
+        # imports this one.
+        from src.services.near_duplicates import core_pending
+
         enable_faces = enable_faces and faces_enabled()
         try:
             # 1. Compute imohash for duplicate detection
@@ -161,6 +162,11 @@ class IngestSingleMixin:
                 det_classes = result.get('classes', [])
                 det_scores = result.get('scores', [])
 
+            # The pending row goes before the index write it describes (an extra row costs one
+            # idempotent rescore; a missing one would leave a stale group nobody knows about).
+            if detect_near_duplicates:
+                await core_pending.record_pending([image_id], 'added')
+
             # Index in OpenSearch (auto-routes by class)
             ingest_result = await self.opensearch.ingest_image(
                 image_id=image_id,
@@ -184,15 +190,6 @@ class IngestSingleMixin:
                     face_result, image_id, image_path or image_id
                 )
 
-            # 6. Auto-detect and assign near-duplicates (runs in background, non-blocking)
-            duplicate_info = None
-            if detect_near_duplicates and ingest_result['global']:
-                duplicate_info = await self._assign_to_duplicate_group(
-                    image_id=image_id,
-                    embedding=global_embedding,
-                    threshold=near_duplicate_threshold,
-                )
-
             response = {
                 'status': 'success' if ingest_result['global'] else 'failed',
                 'image_id': image_id,
@@ -209,9 +206,6 @@ class IngestSingleMixin:
                 },
                 'errors': ingest_result.get('errors', []),
             }
-
-            if duplicate_info:
-                response['near_duplicate'] = duplicate_info
 
             # 7. Run OCR and index text content (if enabled)
             if enable_ocr:
@@ -268,96 +262,6 @@ class IngestSingleMixin:
                 except Exception as e:
                     logger.debug(f'Failed to index face {face_id}: {e}')
         return indexed
-
-    async def _assign_to_duplicate_group(
-        self,
-        image_id: str,
-        embedding: np.ndarray,
-        threshold: float = 0.99,
-    ) -> dict[str, Any] | None:
-        """
-        Check for near-duplicates and assign to existing group or create new one.
-
-        This runs automatically during ingestion to keep duplicate groups current.
-        No periodic retraining needed - groups are updated in real-time.
-
-        Algorithm:
-        1. Search for similar images above threshold
-        2. If found with existing group -> join that group
-        3. If found without group -> create new group with both images
-        4. If not found -> no action (unique image)
-
-        Args:
-            image_id: ID of newly ingested image
-            embedding: CLIP embedding of the image
-            threshold: Similarity threshold (default 0.99, matches Immich)
-
-        Returns:
-            Dict with duplicate info if assigned, None if unique
-        """
-        try:
-            from src.services.duplicate_detection.service import DuplicateDetectionService
-
-            dup_service = DuplicateDetectionService(self.opensearch)
-
-            # Find near-duplicates (excluding self)
-            duplicates = await dup_service.find_duplicates_by_embedding(
-                embedding=embedding,
-                threshold=threshold,
-                max_results=10,
-                exclude_image_id=image_id,
-            )
-
-            if not duplicates:
-                return None  # Unique image, no duplicates
-
-            # Check if any duplicate is already in a group
-            existing_group_id = None
-            for dup in duplicates:
-                if dup.duplicate_group_id:
-                    existing_group_id = dup.duplicate_group_id
-                    break
-
-            if existing_group_id:
-                # Join existing group
-                await self.opensearch.client.update(
-                    index='visual_search_global',
-                    id=image_id,
-                    body={
-                        'doc': {
-                            'duplicate_group_id': existing_group_id,
-                            'is_duplicate_primary': False,
-                            'duplicate_score': duplicates[0].similarity,
-                        }
-                    },
-                )
-                logger.info(f'Added {image_id} to existing duplicate group {existing_group_id}')
-                return {
-                    'action': 'joined_group',
-                    'group_id': existing_group_id,
-                    'similarity': duplicates[0].similarity,
-                    'matched_image': duplicates[0].image_id,
-                }
-
-            # Create new group with this image as primary and first duplicate
-            best_match = duplicates[0]
-            group_id = await dup_service.create_duplicate_group(
-                primary_image_id=image_id,
-                duplicate_image_ids=[best_match.image_id],
-                duplicate_scores=[best_match.similarity],
-            )
-            logger.info(f'Created new duplicate group {group_id} for {image_id}')
-            return {
-                'action': 'created_group',
-                'group_id': group_id,
-                'similarity': best_match.similarity,
-                'matched_image': best_match.image_id,
-            }
-
-        except Exception as e:
-            # Don't fail ingestion if duplicate detection fails
-            logger.warning(f'Near-duplicate detection failed for {image_id}: {e}')
-            return None
 
     async def _process_ocr(
         self,

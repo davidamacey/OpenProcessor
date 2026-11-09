@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class PendingCalls:
-    """Every ``enqueue_pending_bound`` call a test made: ``(level, sorted ids, reason)``."""
+    """Every pending write a test made: ``(level, sorted ids, reason)``. Core ingest's
+    ``record_pending`` is recorded at level ``core``."""
 
     calls: list[tuple[str, list[str], str]] = field(default_factory=list)
 
@@ -15,4 +16,10 @@ class PendingCalls:
         ids = sorted(member_ids)  # type: ignore[call-overload]
         if ids:
             self.calls.append((level, ids, reason))
+        return len(ids)
+
+    async def record_pending(self, image_ids: object, reason: str) -> int:
+        ids = sorted(image_ids)  # type: ignore[call-overload]
+        if ids:
+            self.calls.append(('core', ids, reason))
         return len(ids)

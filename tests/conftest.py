@@ -169,11 +169,12 @@ def pending_calls(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatc
     instead (``.calls``), and a ``db`` test writes the real rows."""
     from _pending_fake import PendingCalls
 
-    from src.services.near_duplicates import pending
+    from src.services.near_duplicates import core_pending, pending
 
     fake = PendingCalls()
     if request.node.get_closest_marker('db') is None:
         monkeypatch.setattr(pending, 'enqueue_pending_bound', fake.enqueue_pending_bound)
+        monkeypatch.setattr(core_pending, 'record_pending', fake.record_pending)
     return fake
 
 

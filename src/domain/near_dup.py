@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, Sequence
 
 
-LEVELS: tuple[str, ...] = ('image', 'item', 'core')
+CORE = 'core'
+LEVELS: tuple[str, ...] = ('image', 'item', CORE)
 PROJECT_LEVELS: tuple[str, ...] = ('image', 'item')
 PURPOSES: tuple[str, ...] = ('dedup', 'leak')
 PENDING_REASONS: tuple[str, ...] = (
@@ -41,6 +42,10 @@ ALGORITHM_VERSION = 'nd-1'
 DEFAULT_IMAGE_DEDUP_COSINE = 0.98
 DEFAULT_ITEM_DEDUP_COSINE = 0.98
 DEFAULT_K = 64
+# The core global index has one cut, in cosine (the 0.99 of its old OpenSearch ``cosinesimil``
+# score is this cosine: score = (1 + cosine) / 2).
+DEFAULT_CORE_DEDUP_COSINE = 0.98
+CORE_SPACE = 'mobileclip@core:global_embedding'
 DEFAULT_MAX_GROUP_SIZE = 1000
 MIN_K = 8
 MAX_K = 256

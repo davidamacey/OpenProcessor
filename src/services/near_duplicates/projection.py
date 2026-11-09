@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.db.repos import near_dup as repo
+from src.domain import near_dup as rules
 
 
 if TYPE_CHECKING:
@@ -29,10 +30,12 @@ FIELDS = (
     'near_dup_group_size',
     'near_dup_run_id',
 )
+# What a clear removes: the project fields and the core-only cosine.
+_CLEARED = (*FIELDS, 'near_dup_cosine_to_rep')
 BULK_CHUNK = 500
 _CLEAR = {
     'lang': 'painless',
-    'source': ''.join(f"ctx._source.remove('{f}');" for f in FIELDS),
+    'source': ''.join(f"ctx._source.remove('{f}');" for f in _CLEARED),
 }
 
 
@@ -47,7 +50,11 @@ def _fields(
     run_id: uuid.UUID,
     dedup: repo.MemberState | None,
     leak: repo.MemberState | None,
+    *,
+    core: bool,
 ) -> dict[str, Any]:
+    """The fields of one member. The core global index also carries the cosine to the
+    representative (its ``/query/duplicates`` wire shape shows it)."""
     out: dict[str, Any] = {'near_dup_run_id': str(run_id)}
     if dedup is not None:
         out.update(
@@ -55,6 +62,8 @@ def _fields(
             near_dup_is_representative=dedup.is_representative,
             near_dup_group_size=dedup.group_size,
         )
+        if core:
+            out['near_dup_cosine_to_rep'] = dedup.cosine_to_rep
     if leak is not None:
         out['near_dup_leak_group_id'] = str(leak.lineage_id)
     return out
@@ -107,7 +116,7 @@ async def apply_run(env: Env, run_id: uuid.UUID, task_id: uuid.UUID | None) -> P
     ops: list[dict[str, Any]] = []
     for member in write:
         ops.append({'update': {'_index': index, '_id': member}})
-        ops.append({'doc': _fields(run_id, *now[member])})
+        ops.append({'doc': _fields(run_id, *now[member], core=env.plan.level == rules.CORE)})
     await _bulk(env, ops)
     clear_ops: list[dict[str, Any]] = []
     for member in clear:
