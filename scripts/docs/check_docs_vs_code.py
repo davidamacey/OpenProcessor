@@ -95,10 +95,15 @@ _CODE_ENV_FILES = (
     'Dockerfile',
 )
 # Test harness files that read a documented variable (CONTRIBUTING.md names OP_TEST_DATABASE_URL
-# and OP_TEST_EVENTS_DATABASE_URL, which the database fixtures read and no code under the scanned
+# and OP_TEST_EVENTS_DATABASE_URL, which the database fixtures read; docker/test/README.md names
+# OP_TEST_TRITON_GRPC, which the GPU tier reads; no code under the scanned
 # roots does). The whole of tests/ is not scanned: a variable only a test reads should still be
 # named here on purpose.
-_TEST_ENV_FILES = ('tests/fixtures/postgres.py', 'tests/fixtures/postgres_events.py')
+_TEST_ENV_FILES = (
+    'tests/fixtures/postgres.py',
+    'tests/fixtures/postgres_events.py',
+    'tests/gpu/test_gpu_decode_parity.py',
+)
 
 _STATE: dict[str, list[Path] | None] = {'only': None}
 
