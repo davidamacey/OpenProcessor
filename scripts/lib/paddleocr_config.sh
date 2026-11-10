@@ -28,17 +28,10 @@ setup_dictionary() {
         return 0
     fi
 
-    # Copy multilingual dictionary from downloaded models
-    # The download_paddleocr.py script downloads ppocr_keys_v1.txt (6623 chars)
-    # but the multilingual PP-OCRv6 model uses ppocrv6_dict.txt (18708 chars).
-    # Check for ppocrv6_dict.txt first, then fall back to ppocr_keys_v1.txt.
+    # The PP-OCRv6 dictionary (ppocrv6_dict.txt, 18708 chars) is committed in the model repo.
     local dict_source=""
     if [ -f "$MODELS_DIR/paddleocr_rec_trt/ppocrv6_dict.txt" ]; then
         dict_source="$MODELS_DIR/paddleocr_rec_trt/ppocrv6_dict.txt"
-    elif [ -f "$PYTORCH_MODELS_DIR/ppocrv6_dict.txt" ]; then
-        dict_source="$PYTORCH_MODELS_DIR/ppocrv6_dict.txt"
-    elif [ -f "$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt" ]; then
-        dict_source="$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt"
     fi
 
     if [ -n "$dict_source" ]; then

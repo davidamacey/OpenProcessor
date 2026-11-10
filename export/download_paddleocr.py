@@ -62,11 +62,8 @@ MODELS: dict[str, dict[str, Any]] = {
     },
 }
 
-# Character dictionary
-# NOTE: The multilingual PP-OCRv6 dictionary (ppocrv6_dict.txt, 18708 chars)
-# is committed to git in models/paddleocr_rec_trt/ppocrv6_dict.txt.
-# No download needed for the dictionary.
-DICTIONARIES: dict = {}
+# The PP-OCRv6 dictionary (ppocrv6_dict.txt, 18708 chars) is committed to git in
+# models/paddleocr_rec_trt/; only the ONNX models are downloaded.
 
 # Output directory
 OUTPUT_DIR = (
@@ -244,7 +241,7 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
 
 
 def download_all(force: bool = False) -> dict[str, bool]:
-    """Download all models and dictionaries."""
+    """Download all models."""
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -253,10 +250,6 @@ def download_all(force: bool = False) -> dict[str, bool]:
     # Download models
     for model_id, config in MODELS.items():
         results[model_id] = download_model(model_id, config, force)
-
-    # Download dictionaries
-    for dict_id, config in DICTIONARIES.items():
-        results[dict_id] = download_model(dict_id, config, force)
 
     return results
 
@@ -275,8 +268,7 @@ def print_summary(results: dict[str, bool]) -> int:
     for item_id, success in results.items():
         status = 'OK' if success else 'FAILED'
 
-        # Get config from either MODELS or DICTIONARIES
-        config = MODELS.get(item_id) or DICTIONARIES.get(item_id)
+        config = MODELS.get(item_id)
         if config:
             filepath = OUTPUT_DIR / config['filename']
             size = get_file_size_mb(filepath) if filepath.exists() else 0
