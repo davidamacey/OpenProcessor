@@ -72,6 +72,9 @@ written while `ref` runs; their GPU runs wait for it.
 - Comparison points (read, do not re-measure): 0.6.0 set A one card 28.81-29.07 img/s, two cards
   55.08; set B 35.0 img/s; 0.7.0 stage profile set B 26.64 at 4 batches (shared host, noisy). Any
   row more than 2x spread below its comparison point is flagged and its binding stage named.
+- **Quick tier first (owner direction 2026-11-10):** run these rows once on about 50 images, 1 repetition,
+  `perf_analyzer` batch 1 and 8 (`baseline_suite.py --perf-concurrency 1:1:1 --perf-interval-ms 2000`), to find
+  functional bugs; the full rows above then run once. See `artifacts_local/GPU_QUICK_TIER.md`.
 - Output: `docs/PERFORMANCE.md` section "0.8.0 baseline (5a)"; raw JSON per M-8.
 
 **5a-R1 Parity reference `ref-b5a`.**
