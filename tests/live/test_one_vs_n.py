@@ -20,7 +20,6 @@ exposed. Docs: uvicorn ``WEB_CONCURRENCY`` https://www.uvicorn.org/deployment/ ;
 
 from __future__ import annotations
 
-import itertools
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -30,7 +29,7 @@ import httpx
 import pytest
 
 from tests.live import _compose
-from tests.live._jobs import start_infra_job, wait_for_job
+from tests.live._jobs import job_windows_disjoint, start_infra_job, wait_for_job
 from tests.live._scale import exec_json, reconfigure
 from tests.live._sse import SseCollector
 from tests.live.conftest import (
@@ -196,15 +195,13 @@ def _concurrent(api: httpx.Client, tag: str) -> dict[str, Any]:
             if r.status_code != 202
         ), [r.text for r in starts]
         # A run on this small index can finish while a late request is still connecting, so a
-        # second 202 is legitimate only if its job was queued after the first one had finished.
+        # second 202 is legitimate only if its job started running after the first one had finished.
         views = sorted(
             (wait_job(api, w.json()['job_id'], timeout=240) for w in winners),
-            key=lambda j: j['created_at'],
+            key=lambda j: j['started_at'],
         )
         out['singleton_job'] = sorted({v['status'] for v in views})
-        out['singleton_windows_disjoint'] = all(
-            nxt['created_at'] >= prev['finished_at'] for prev, nxt in itertools.pairwise(views)
-        )
+        out['singleton_windows_disjoint'] = job_windows_disjoint(views)
 
         # concurrent class creates: 6 names, each posted twice.
         names = [f'k{i}_{tag}' for i in range(6)]
