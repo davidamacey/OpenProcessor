@@ -59,7 +59,6 @@ LEGACY_DICT = frozenset(
         'GET /images/cache/stats',
         'GET /models/status',
         'POST /pipeline/auto_label',
-        'POST /probe/cancel',
         'GET /regions/clusters',
         'GET /regions/statuses',
         'GET /review/new_class_proposals/summary',
