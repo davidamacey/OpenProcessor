@@ -11960,6 +11960,56 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HoldoutClassBucket": {
+        "additionalProperties": true,
+        "properties": {
+          "deficient": {
+            "title": "Deficient",
+            "type": "boolean"
+          },
+          "doc_count": {
+            "title": "Doc Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "doc_count",
+          "deficient"
+        ],
+        "title": "HoldoutClassBucket",
+        "type": "object"
+      },
+      "HoldoutStats": {
+        "properties": {
+          "by_class": {
+            "items": {
+              "$ref": "#/components/schemas/HoldoutClassBucket"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "min_test_per_class": {
+            "title": "Min Test Per Class",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_class",
+          "min_test_per_class"
+        ],
+        "title": "HoldoutStats",
+        "type": "object"
+      },
       "ImportAction": {
         "properties": {
           "allowed": {
@@ -63285,9 +63335,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Test Holdout Stats Curation Projects  Project  Test Holdout Stats Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HoldoutStats"
                 }
               }
             },

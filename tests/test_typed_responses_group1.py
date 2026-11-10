@@ -12,6 +12,7 @@ CONTRACT = Path(__file__).resolve().parents[1] / 'contracts' / 'openapi' / 'cura
 PREFIX = '/curation/projects/{project}'
 
 TYPED = [
+    ('get', '/test_holdout/stats', 'HoldoutStats'),
     ('get', '/training_cohorts', 'TrainingCohortList'),
     ('get', '/class_sources', 'ClassSourceList'),
     ('post', '/classes', 'ClassCreated'),
@@ -30,3 +31,14 @@ def test_response_schema_names_the_model(method: str, path: str, model: str) -> 
     assert ref == model or ref.endswith(f'__{model}')
     component = doc['components']['schemas'][ref]
     assert component.get('properties')
+
+
+def test_holdout_stats_keeps_every_bucket_key() -> None:
+    from src.schemas.curation.holdout import HoldoutStats
+
+    body = {
+        'total': 3,
+        'by_class': [{'key': 2, 'doc_count': 3, 'deficient': True, 'extra_agg': 1}],
+        'min_test_per_class': 20,
+    }
+    assert HoldoutStats(**body).model_dump() == body
