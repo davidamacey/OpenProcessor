@@ -362,7 +362,7 @@
             </div>
             <div class="flex items-center justify-between gap-1 p-2 text-xs">
               <span class="font-mono font-semibold text-zinc-200" title={c.uid}
-                >{displayNoText(c)}</span
+                >{displayNoText(c) || c.uid.slice(0, 8)}</span
               >
               <span
                 class="text-zinc-400"
