@@ -24,6 +24,7 @@ from src.routers.curation._class_models import (
     ResolveConflict,
     ResolveNewClassRequest,
     ResolveNewClassResponse,
+    WriteFailure,
 )
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation.classes_write import create_registry_class
@@ -168,6 +169,7 @@ async def resolve_new_class_proposal(
             updated=0,
             updated_ids=[],
             conflicts=[],
+            failed=[],
             skipped=[],
         )
 
@@ -194,6 +196,10 @@ async def resolve_new_class_proposal(
         await refresh_items(opensearch)
     body = response_body(params, len(crop_ids), outcome)
     return ResolveNewClassResponse(
-        **{**body, 'conflicts': [ResolveConflict(**c) for c in outcome.conflicts]},
+        **{
+            **body,
+            'conflicts': [ResolveConflict(**c) for c in outcome.conflicts],
+            'failed': [WriteFailure(**c) for c in outcome.failed],
+        },
         matched_ids=crop_ids,
     )

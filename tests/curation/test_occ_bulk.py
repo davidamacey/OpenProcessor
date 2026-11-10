@@ -163,12 +163,12 @@ class TestOccUpdateBulk:
         assert len(client.bulk_calls) == 1
 
 
-def test_raise_on_errors_names_only_error_ids() -> None:
-    from src.clients.occ_bulk import BulkWriteError, raise_on_errors
+def test_raise_on_failed_names_the_failed_ids() -> None:
+    from src.clients.occ_bulk import BulkWriteError, failed_entry, raise_on_failed
 
-    raise_on_errors({'a': 'updated', 'b': 'conflict-exhausted', 'c': 'not-found'})
+    raise_on_failed([])
     with pytest.raises(BulkWriteError) as info:
-        raise_on_errors({'a': 'updated', 'b': 'error', 'c': 'conflict-exhausted'})
+        raise_on_failed([failed_entry('b')])
     assert info.value.doc_ids == ['b']
 
 
@@ -244,23 +244,65 @@ class TestOccBulkRounds:
         assert len(client.bulk_calls) == 1
 
 
-@pytest.mark.asyncio
-async def test_relabel_surfaces_a_non_409_item_error_not_a_conflict(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from src.clients.occ_bulk import BulkWriteError
-    from src.services.curation import crop_bulk
+@pytest.fixture
+def _items(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services.curation import crop_bulk, label_undo, new_class_resolve
 
     async def _no_excludes() -> list[str]:
         return VECTOR_EXCLUDES
 
-    monkeypatch.setattr(crop_bulk, 'vector_source_excludes', _no_excludes)
-    monkeypatch.setattr(crop_bulk, 'items_index', lambda: 'op_prj_default__items')
-    client = FakeOccOpenSearch(
+    for mod in (crop_bulk, label_undo, new_class_resolve):
+        monkeypatch.setattr(mod, 'vector_source_excludes', _no_excludes)
+        monkeypatch.setattr(mod, 'items_index', lambda: 'op_prj_default__items')
+
+
+def _bad_client() -> FakeOccOpenSearch:
+    return FakeOccOpenSearch(
         {'a': {'class_id': 1}}, bulk_status={'a': (400, 'mapper_parsing_exception')}
     )
-    with pytest.raises(BulkWriteError) as info:
-        await crop_bulk.occ_bulk_human_relabel(
-            client, ['a'], lambda _s: {'class_id': 2}, writer_id='t', max_retries=1
-        )
-    assert info.value.doc_ids == ['a']
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_relabel_reports_a_non_409_item_error_as_failed_not_conflict() -> None:
+    from src.services.curation import crop_bulk
+
+    out = await crop_bulk.occ_bulk_human_relabel(
+        _bad_client(), ['a'], lambda _s: {'class_id': 2}, writer_id='t', max_retries=1
+    )
+    assert out['conflicts'] == []
+    assert out['failed'] == [{'crop_id': 'a', 'reason': 'write_failed'}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_discard_many_reports_failed_apart_from_conflicts() -> None:
+    from src.services.curation import label_undo
+
+    by = await label_undo.discard_many(
+        _bad_client(), ['a'], clear_class=True, dismiss_from_review=False
+    )
+    assert by['failed'] == ['a']
+    assert by['conflicts'] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_resolve_reports_failed_apart_from_conflicts() -> None:
+    from src.services.curation.new_class_resolve import resolve_pending_proposals
+
+    client = FakeOccOpenSearch(
+        {
+            'a': {
+                'class_source': 'vlm_new_class_pending',
+                'vlm_proposed_class': 'sidecar',
+                'needs_new_class': True,
+            }
+        },
+        bulk_status={'a': (400, 'mapper_parsing_exception')},
+    )
+    out = await resolve_pending_proposals(
+        client, ['a'], label='sidecar', class_id=1, class_name='widget', label_source='human'
+    )
+    assert out.conflicts == []
+    assert out.failed == [{'crop_id': 'a', 'reason': 'write_failed'}]

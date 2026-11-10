@@ -110,6 +110,13 @@ class ResolveConflict(BaseModel):
     current_source: str | None = None
 
 
+class WriteFailure(BaseModel):
+    """An item the write errored on (not a concurrent edit): ``reason`` is ``write_failed``."""
+
+    crop_id: str
+    reason: str
+
+
 class ResolveNewClassResponse(BaseModel):
     class_id: int | None
     class_name: str
@@ -120,6 +127,7 @@ class ResolveNewClassResponse(BaseModel):
     updated: int
     updated_ids: list[str] = Field(default_factory=list)
     conflicts: list[ResolveConflict] = Field(default_factory=list)
+    failed: list[WriteFailure] = Field(default_factory=list)
     skipped: list[str] = Field(default_factory=list)
 
 

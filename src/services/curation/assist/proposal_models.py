@@ -70,6 +70,13 @@ class ApplyConflict(BaseModel):
     current_source: str | None = None
 
 
+class ApplyFailure(BaseModel):
+    """An item the write errored on (not a concurrent edit): ``reason`` is ``write_failed``."""
+
+    crop_id: str
+    reason: str
+
+
 class AssistApplyResponse(BaseModel):
     dry_run: bool
     class_name: str
@@ -80,11 +87,13 @@ class AssistApplyResponse(BaseModel):
     updated: int = 0
     updated_ids: list[str] = Field(default_factory=list)
     conflicts: list[ApplyConflict] = Field(default_factory=list)
+    failed: list[ApplyFailure] = Field(default_factory=list)
     scope_now: ScopeNow
 
 
 __all__ = [
     'ApplyConflict',
+    'ApplyFailure',
     'AssistApplyRequest',
     'AssistApplyResponse',
     'AttributeSummary',

@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from src.app.lifespan import lifespan
 from src.clients.occ import OCCFinalConflictError
-from src.clients.occ_bulk import BulkWriteError
 from src.config import get_settings
 from src.config.faces import FacesDisabledError
 from src.core.cors import add_lan_cors
@@ -208,26 +207,6 @@ def create_app() -> FastAPI:
                 'detail': 'concurrent write conflict; refresh and retry',
                 'doc_id': exc.doc_id,
                 'retries': exc.retries,
-                'request_id': req_id,
-            },
-            headers={'X-Request-ID': req_id},
-        )
-
-    @application.exception_handler(BulkWriteError)
-    async def bulk_write_error_handler(request: Request, exc: BulkWriteError) -> JSONResponse:
-        """A batch write failed for a reason other than a concurrent edit: 502."""
-        req_id = get_request_id()
-        logger.error(
-            'bulk_write_failed',
-            request_id=req_id,
-            path=request.url.path,
-            doc_ids=exc.doc_ids[:20],
-        )
-        return JSONResponse(
-            status_code=502,
-            content={
-                'detail': 'bulk_write_failed',
-                'doc_ids': exc.doc_ids,
                 'request_id': req_id,
             },
             headers={'X-Request-ID': req_id},

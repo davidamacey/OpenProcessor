@@ -51,20 +51,29 @@ def _is_transient(exc: OpenSearchException) -> bool:
 
 
 class BulkWriteError(Exception):
-    """A human batch write left items unwritten for a reason that is not a
-    concurrent edit (a failed bulk request or a non-409 item error); mapped to
-    HTTP 502 so the user is not told someone else edited the item."""
+    """A write left items unwritten for a reason that is not a concurrent edit,
+    raised only where the caller has no per-item result to carry it (a job or
+    recorded operation that reports counts)."""
 
     def __init__(self, doc_ids: list[str]) -> None:
         self.doc_ids = doc_ids
         super().__init__(f'bulk write failed for {len(doc_ids)} item(s): {doc_ids[:5]}')
 
 
-def raise_on_errors(status: dict[str, str]) -> None:
-    """Raise :class:`BulkWriteError` for every id ``occ_update_bulk`` marked ``'error'``."""
-    failed = [doc_id for doc_id, value in status.items() if value == 'error']
+WRITE_FAILED = 'write_failed'
+"""Per-item reason code on the wire for a doc that was not written and did not conflict."""
+
+
+def failed_entry(doc_id: str) -> dict[str, str]:
+    """The per-item wire entry for an id whose write failed for a reason other than a 409."""
+    return {'crop_id': doc_id, 'reason': WRITE_FAILED}
+
+
+def raise_on_failed(failed: list[dict[str, str]]) -> None:
+    """For a count-only caller (a job or recorded operation) with no per-item result
+    shape: raise :class:`BulkWriteError` when any entry in ``failed`` exists."""
     if failed:
-        raise BulkWriteError(failed)
+        raise BulkWriteError([entry['crop_id'] for entry in failed])
 
 
 def _bulk_body(
@@ -255,4 +264,11 @@ async def occ_update_bulk(
     return status
 
 
-__all__ = ['BulkFailure', 'BulkWriteError', 'occ_bulk_rounds', 'occ_update_bulk', 'raise_on_errors']
+__all__ = [
+    'BulkFailure',
+    'BulkWriteError',
+    'failed_entry',
+    'occ_bulk_rounds',
+    'occ_update_bulk',
+    'raise_on_failed',
+]
