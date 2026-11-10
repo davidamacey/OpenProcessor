@@ -223,7 +223,8 @@ def test_running_loop_offers_what_the_served_control_block_allows(stub, page, ap
     expect(page.get_by_test_id('loop-pause')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('loop-cancel')).to_be_visible()
     expect(page.get_by_test_id('loop-resume')).to_have_count(0)
-    expect(page.get_by_test_id('loop-rollback')).to_have_count(0)
+    expect(page.get_by_test_id('loop-rollback-all')).to_be_disabled()
+    expect(page.get_by_test_id('loop-rollback')).to_contain_text('Not available for this loop now.')
     with page.expect_response(
         lambda r: r.request.method == 'POST' and r.url.endswith('/pause'), timeout=ACTION_TIMEOUT_MS
     ):

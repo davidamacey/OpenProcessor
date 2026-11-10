@@ -68,9 +68,7 @@
         {#if hasLoop}
           <AssistLoopRun {ctl} />
           <AssistLoopNodes {ctl} />
-          {#if ctl.control?.can_rollback || ctl.rollbackPlan || ctl.rollbackResult}
-            <AssistLoopRollback {ctl} />
-          {/if}
+          <AssistLoopRollback {ctl} />
         {/if}
         {#if startable}
           {#if hasLoop && !showForm}
