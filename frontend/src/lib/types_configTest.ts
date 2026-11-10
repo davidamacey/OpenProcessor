@@ -151,7 +151,10 @@ export interface RegionTestCandidate {
   text_choice: string | null;
   text_confidence: number | null;
   text_disagreement: boolean | null;
-  text_engine_version: string | null;
+  text_frame: string | null;
+  text_conf_char_min: number | null;
+  text_reader: string | null;
+  text_reader_version: string | null;
   text_ocr: string | null;
   text_raw: string | null;
   text_source: string | null;

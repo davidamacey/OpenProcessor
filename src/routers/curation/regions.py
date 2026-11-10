@@ -10,7 +10,7 @@ human-edit endpoints that set, clear and patch the sub-bbox live in
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, Query
 
@@ -27,6 +27,7 @@ from src.routers.curation._region_status_models import RegionStatusCatalog
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_rows import search_region_rows
+from src.services.curation.region_text_search import TextMatch, region_text_match_clause
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
 from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
@@ -34,6 +35,10 @@ from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
 from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
 from src.services.labeling.vlm_endpoints import refresh_vlm_state
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 _TRAINING_CANDIDATE_MODES = tuple(TRAINING_CANDIDATE_MODES)
@@ -64,6 +69,8 @@ def _box_filter_parts(
     max_score: float | None,
     detector: str | None,
     text: str | None,
+    text_match: TextMatch | None,
+    confusables: Mapping[str, str],
 ) -> list[dict[str, Any]]:
     """The nested-box predicates that must all hold on the SAME box."""
     F = get_region_fields()
@@ -91,7 +98,9 @@ def _box_filter_parts(
         parts.append({'range': {f'{F.boxes}.score': rng}})
     if detector is not None:
         parts.append({'term': {f'{F.boxes}.detector': detector}})
-    if text:
+    if text and text_match is not None:
+        parts.append(region_text_match_clause(F.boxes, text, text_match, confusables))
+    elif text:
         parts.append(region_text_clause(f'{F.boxes}.text', text))
     return parts
 
@@ -143,7 +152,7 @@ def _region_sort(cluster_uid: str | None) -> list[dict[str, Any]]:
 )
 async def list_regions(
     opensearch: OpenSearchDep,
-    _profile: RegionProfileDep,
+    profile: RegionProfileDep,
     item_filter: ItemFilterQuery,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
@@ -154,7 +163,15 @@ async def list_regions(
     max_score: float | None = Query(None, ge=0.0, le=1.0, description='Box filter.'),
     verified: bool | None = Query(None),
     detector: str | None = Query(None, description='Box filter: the detector that found it.'),
-    text: str | None = Query(None, description='Box filter: substring search on the box text.'),
+    text: str | None = Query(None, description='Box filter: search on the box text.'),
+    text_match: TextMatch | None = Query(
+        None,
+        description=(
+            'How `text` matches: `exact`, `fuzzy` (one edit) or `fragment` compare the folded '
+            'plate text (letters and digits only, confusables folded); omitted, `text` is a '
+            'case-insensitive substring of the box text as read.'
+        ),
+    ),
     box_state: str | None = Query(
         None, description='Box filter: a box state (GET /regions/statuses box_states).'
     ),
@@ -194,15 +211,20 @@ async def list_regions(
             detail=f'box_state must be one of {sorted(BOX_STATES)}; got {box_state!r}',
         )
 
-    parts = _box_filter_parts(
-        status=status,
-        box_state=box_state,
-        cluster_uid=cluster_uid,
-        min_score=min_score,
-        max_score=max_score,
-        detector=detector,
-        text=text,
-    )
+    try:
+        parts = _box_filter_parts(
+            status=status,
+            box_state=box_state,
+            cluster_uid=cluster_uid,
+            min_score=min_score,
+            max_score=max_score,
+            detector=detector,
+            text=text,
+            text_match=text_match,
+            confusables=profile.text_confusables,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     filt: list[dict[str, Any]] = []
     must_not: list[dict[str, Any]] = []

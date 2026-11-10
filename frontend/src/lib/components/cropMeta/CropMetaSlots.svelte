@@ -195,9 +195,11 @@
                     {/if}
                   </div>
                 {/if}
-                {#if b.textEngineVersion}
+                {#if b.textReader}
                   <div class="font-mono text-[10px] text-zinc-500">
-                    text engine {b.textEngineVersion}
+                    text reader {b.textReader}{b.textReaderVersion
+                      ? ` ${b.textReaderVersion}`
+                      : ''}
                   </div>
                 {/if}
                 <!-- Why the chosen reading won / why the VLM's own reading

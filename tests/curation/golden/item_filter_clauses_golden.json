@@ -1140,12 +1140,54 @@
      }
     ]
    }
+  },
+  {
+   "nested": {
+    "path": "region_boxes",
+    "query": {
+     "wildcard": {
+      "region_boxes.text_fold.sub": {
+       "value": "*ABC123*"
+      }
+     }
+    }
+   }
   }
  ],
  "cluster_uid": [
   {
    "term": {
     "cluster_uid": "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
+   }
+  }
+ ],
+ "region_text_exact": [
+  {
+   "nested": {
+    "path": "region_boxes",
+    "query": {
+     "term": {
+      "region_boxes.text_fold": "ABC123XYZ"
+     }
+    }
+   }
+  }
+ ],
+ "region_text_fuzzy": [
+  {
+   "nested": {
+    "path": "region_boxes",
+    "query": {
+     "fuzzy": {
+      "region_boxes.text_fold": {
+       "value": "ABC123XYZ",
+       "fuzziness": 1,
+       "transpositions": true,
+       "prefix_length": 0,
+       "max_expansions": 50
+      }
+     }
+    }
    }
   }
  ]

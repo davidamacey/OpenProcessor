@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
+from src.domain.region_text import confusables_issue
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_issues import region_issue as _issue
 from src.services.detection.region_text import TEXT_READER_MODES
@@ -56,6 +57,7 @@ _DEFAULT_TEXT_FIELDS = (
     'text_format',
     'text_placeholders',
     'text_reject_sequences',
+    'text_confusables',
 )
 
 
@@ -190,6 +192,11 @@ def _check_text_mode(profile: DetectionProfile) -> list[ValidationIssue]:
             re.compile(value)
         except re.error as exc:
             issues.append(_issue('text_regex_invalid', 'error', f'{field}: {exc}', field=field))
+    bad_map = confusables_issue(profile.text_confusables, profile.text_charset)
+    if bad_map is not None:
+        issues.append(
+            _issue('text_confusables_invalid', 'error', bad_map, field='text_confusables')
+        )
     if profile.text_reader == 'none':
         non_default = [
             f

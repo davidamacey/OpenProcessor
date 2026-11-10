@@ -233,7 +233,10 @@ to the same box. Element keys are fixed strings:
 | `confidence` | keyword | VLM confidence bucket |
 | `rejection_reason` | keyword | why a verifier or human rejected it |
 | `text`, `text_raw` | keyword | the read text, and the text before normalization |
-| `text_source`, `text_engine_version`, `text_confidence` | keyword, keyword, float | where the text came from |
+| `text_source`, `text_confidence`, `text_conf_char_min` | keyword, float, float | where the text came from, and its line and per-character confidence |
+| `text_reader`, `text_reader_version` | keyword, keyword | the Triton model (or `vlm`) that read the text, and its version |
+| `text_frame` | keyword | this frame's own reading |
+| `text_norm`, `text_fold` | keyword with the `op_text_compact` normalizer; `text_fold.sub` is a `wildcard` | storage-only match keys: the compact upper-case text, and that after the profile's confusable map; exact and fuzzy search read `text_fold`, fragment search `text_fold.sub` |
 | `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | keyword, keyword, keyword, keyword, boolean | per-reader outputs and which was chosen |
 | `cluster_partition_id`, `cluster_uid`, `cluster_state`, `cluster_score`, `cluster_margin`, `cluster_assigned_by` | keyword, keyword, keyword, float, float, keyword | the box's own served cluster placement |
 | `detected_at` | date | when the box was written |

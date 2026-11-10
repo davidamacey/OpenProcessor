@@ -29,7 +29,8 @@ from src.config.region_rejection import (
 )
 from src.config.region_state import BOX_STATE_ROUTES, RegionStatus
 from src.domain.region_boxes import RegionBox, RegionBoxWriteError, next_box_id, read_boxes
-from src.services.detection.region_text import TEXT_CHOICE_HUMAN
+from src.domain.region_text import match_fields
+from src.services.detection.region_text import TEXT_CHOICE_HUMAN, active_confusables
 
 
 if TYPE_CHECKING:
@@ -152,6 +153,7 @@ def human_text_fields(text: str) -> dict[str, Any]:
         'text_source': 'human',
         'text_confidence': 1.0 if text else None,
         'text_choice': TEXT_CHOICE_HUMAN,
+        **match_fields(text, active_confusables()),
     }
 
 

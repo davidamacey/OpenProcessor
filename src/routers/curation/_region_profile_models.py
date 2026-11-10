@@ -76,6 +76,7 @@ class RegionProfileBody(BaseModel):
     text_format: str = ''
     text_placeholders: list[str] = Field(default_factory=list)
     text_reject_sequences: bool = False
+    text_confusables: dict[str, str] = Field(default_factory=dict)
     segmenter_text_prompt: str = ''
     secondary_shape_groups: list[str] = Field(default_factory=list)
     parent_classes: list[str] = Field(default_factory=list)

@@ -17,9 +17,10 @@ from src.services.detection.cascade_detect.ocr_recognizer import (
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,
+    Reader,
     TextNormalizer,
-    ocr_engine_id,
     ocr_needed,
+    ocr_reader,
     read_dominant_text,
     reads_text,
     resolve_region_text,
@@ -154,8 +155,9 @@ class TestReaderModes:
             vlm_confidence='high',
             vlm_engine='vlm-model',
             ocr=ocr,
-            ocr_engine='det:1+rec:1',
+            ocr_reader=Reader('paddleocr_rec_trt', '1'),
             normalizer=REF.normalizer,
+            confusables={},
         )
 
     def test_both_agree_after_normalization(self) -> None:
@@ -176,7 +178,7 @@ class TestReaderModes:
         out = self._resolve('both', None, self._ocr())
         assert out['text'] == 'ABC1234'
         assert out['text_source'] == 'ocr'
-        assert out['text_engine_version'] == 'det:1+rec:1'
+        assert (out['text_reader'], out['text_reader_version']) == ('paddleocr_rec_trt', '1')
         assert out['text_confidence'] == pytest.approx(0.91)
         assert 'text_disagreement' not in out
         assert 'text_vlm' not in out
@@ -191,7 +193,11 @@ class TestReaderModes:
             'text_vlm': 'ZZZ',
             'text': 'ZZZ',
             'text_source': 'vlm',
-            'text_engine_version': 'vlm-model',
+            'text_frame': 'ZZZ',
+            'text_norm': 'ZZZ',
+            'text_fold': 'ZZZ',
+            'text_reader': 'vlm',
+            'text_reader_version': 'vlm-model',
             'text_confidence': 0.92,
             'text_raw': 'ZZZ',
             'text_choice': 'vlm_only',
@@ -208,8 +214,8 @@ class TestReaderModes:
         assert texts_disagree(None, 'A', REF.normalizer) is None
         assert texts_disagree('--', 'A', REF.normalizer) is None
 
-    def test_engine_id(self) -> None:
-        assert ocr_engine_id(NEUTRAL_REGION_PROFILE) == 'paddleocr_rec_trt:1'
+    def test_ocr_reader(self) -> None:
+        assert ocr_reader(NEUTRAL_REGION_PROFILE) == Reader('paddleocr_rec_trt', '1')
 
 
 class TestTextFreeMode:
@@ -231,8 +237,9 @@ class TestTextFreeMode:
             vlm_confidence='high',
             vlm_engine='vlm-model',
             ocr=reading,
-            ocr_engine='det:1+rec:1',
+            ocr_reader=Reader('paddleocr_rec_trt', '1'),
             normalizer=REF.normalizer,
+            confusables={},
         )
         assert out == {}
 

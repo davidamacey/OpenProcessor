@@ -154,6 +154,22 @@ def test_text_regex_invalid() -> None:
 
 
 @pytest.mark.parametrize(
+    'confusables',
+    [{'OO': '0'}, {'O': '0', '0': 'Q'}, {'O': 'a'}],
+)
+def test_text_confusables_invalid(confusables: dict[str, str]) -> None:
+    body = _body(text_charset='[A-Z0-9]', text_confusables=confusables)
+    report = _run(validate_profile(None, body))
+    assert any(e.code == 'text_confusables_invalid' for e in report.errors)
+
+
+def test_text_confusables_valid() -> None:
+    body = _body(text_charset='[A-Z0-9]', text_confusables={'O': '0', 'I': '1'})
+    report = _run(validate_profile(None, body))
+    assert not any(e.code == 'text_confusables_invalid' for e in report.errors)
+
+
+@pytest.mark.parametrize(
     ('field', 'value'),
     [
         ('max_regions_per_item', 0),
