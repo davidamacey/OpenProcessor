@@ -122,6 +122,12 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
     && pip install --user --no-cache-dir --no-warn-script-location --no-deps \
         "perception_models @ git+https://github.com/facebookresearch/perception_models.git@3e352cca660658d4b5c90f42a7808b11469e4c66"
 
+# The CLIP text tokenizer, fetched here once so the API never reaches huggingface.co at run time
+# (src/utils/cache.py loads it with local_files_only). huggingface_hub: snapshot_download with
+# allow_patterns; transformers docs, "Offline mode".
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('openai/clip-vit-base-patch32', local_dir='/build/clip-tokenizer', allow_patterns=['vocab.json', 'merges.txt', 'tokenizer_config.json', 'special_tokens_map.json'])" \
+    && rm -rf /build/clip-tokenizer/.cache
+
 # The exact runtime versions, as pip constraints for the extra dependency sets below. The
 # direct-URL line cannot be a constraint; it is already installed.
 RUN pip freeze --user | grep -v '^perception' | LC_ALL=C sort > /tmp/runtime.freeze \
@@ -269,6 +275,7 @@ LABEL org.opencontainers.image.revision=${OP_BUILD_SHA}
 # docker-compose.yml overrides CMD with environment-specific worker counts.
 FROM runtime-base AS api
 
+COPY --from=builder --chown=appuser:appuser /build/clip-tokenizer /opt/clip-tokenizer
 COPY --chown=appuser:appuser src/ ./src/
 # Only what runs inside the container: the curation workers and the CLIs operators run with
 # `docker compose exec api python -m scripts.curation...`, the public COCO sample fetcher, and

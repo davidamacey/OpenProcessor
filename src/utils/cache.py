@@ -26,6 +26,7 @@ import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -238,6 +239,9 @@ def get_text_cache(max_size: int = 1000, ttl_seconds: int = 3600) -> EmbeddingCa
 # - Shared instance across all text embedding requests prevents repeated loading
 # - Thread-safe lock prevents concurrent initialization attempts
 _clip_tokenizer: CLIPTokenizer | None = None
+# The tokenizer files (vocab.json, merges.txt, ...) are fetched once at image build time (Dockerfile
+# builder stage), so the API never reaches huggingface.co at run time.
+CLIP_TOKENIZER_DIR = Path('/opt/clip-tokenizer')
 _tokenizer_lock = threading.Lock()
 
 
@@ -245,7 +249,7 @@ def get_clip_tokenizer() -> CLIPTokenizer:
     """
     Get cached CLIPTokenizer (singleton, thread-safe).
 
-    Loading CLIPTokenizer.from_pretrained() takes ~500ms.
+    Loads from local files only (no network). from_pretrained() takes ~500ms.
     This singleton ensures it's only loaded once per process.
 
     Returns:
@@ -257,7 +261,14 @@ def get_clip_tokenizer() -> CLIPTokenizer:
         with _tokenizer_lock:
             # Double-check locking pattern
             if _clip_tokenizer is None:
-                _clip_tokenizer = CLIPTokenizer.from_pretrained('openai/clip-vit-base-patch32')
+                if not (CLIP_TOKENIZER_DIR / 'vocab.json').is_file():
+                    raise RuntimeError(
+                        f'CLIP tokenizer files not found in {CLIP_TOKENIZER_DIR}; the image build '
+                        'downloads them (rebuild the api image)'
+                    )
+                _clip_tokenizer = CLIPTokenizer.from_pretrained(
+                    CLIP_TOKENIZER_DIR, local_files_only=True
+                )
 
     return _clip_tokenizer
 
