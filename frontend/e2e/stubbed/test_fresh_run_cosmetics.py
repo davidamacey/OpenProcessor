@@ -114,7 +114,7 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
     }
     register(stub, methods, 200, SETTINGS_EMPTY)
     page.goto(f'{app_url}/p/default/settings')
-    sort_select = page.locator('select').nth(1)
+    sort_select = page.locator('select').nth(0)
     sort_select.wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = sort_select.evaluate("el => el.options[el.selectedIndex]?.text ?? ''")
     assert shown.strip() != '', 'the unset sort select renders blank'
