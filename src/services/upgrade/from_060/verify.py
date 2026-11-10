@@ -13,7 +13,7 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, select, table as sa_table, update
+from sqlalchemy import column as sa_column, func, select, table as sa_table, update
 
 from src.db.models import ConfigRevision, Project, ProjectClass
 from src.services.upgrade.class_reconcile import reconcile_classes
@@ -164,9 +164,11 @@ async def _actual_counts(session: AsyncSession) -> dict[str, int]:
     out: dict[str, int] = {}
     for table in _EXACT:
         # table names come from the constant tuple above, never from input
-        out[table] = int(
-            (await session.execute(select(func.count()).select_from(sa_table(table)))).scalar_one()
-        )
+        query = select(func.count()).select_from(sa_table(table))
+        if table == 'models':
+            # ``db-migrate`` seeds the shipped engines before the upgrade; the load writes none
+            query = query.where(sa_column('origin') != 'builtin')
+        out[table] = int((await session.execute(query)).scalar_one())
     return out
 
 
