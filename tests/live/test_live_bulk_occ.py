@@ -29,7 +29,6 @@ from tests.live.conftest import (
     REPO_ROOT,
     get_doc,
     refresh,
-    search,
     wait_job,
 )
 
@@ -118,12 +117,18 @@ def _clone_items(opensearch: Any, count: int) -> list[str]:
 
 
 def _crop_ids(opensearch: Any, count: int, *, skip: int = 0) -> list[str]:
-    body = {'size': count + skip, '_source': False, 'query': {'bool': {'must_not': [{'prefix': {'crop_id': 'occ_extra_'}}]}},
-            'sort': [{'crop_id': {'order': 'asc'}}]}  # fmt: skip
-    hits = search(opensearch, INDEXES['items'], body)['hits']['hits']
-    ids = [h['_id'] for h in hits][skip:]
-    assert len(ids) == count, f'the seeded harness has only {len(ids)} items'
-    return ids
+    """``count`` private clones, so no seeded cohort doc is ever rewritten by these tests."""
+    return _clone_items(opensearch, count + skip)[skip:]
+
+
+@pytest.fixture(autouse=True)
+def _drop_clones(opensearch: Any) -> Any:
+    yield
+    opensearch.post(
+        f'/{INDEXES["items"]}/_delete_by_query',
+        params={'refresh': 'true'},
+        json={'query': {'prefix': {'crop_id': 'occ_extra_'}}},
+    ).raise_for_status()
 
 
 def _make_pending(opensearch: Any, ids: list[str], label: str) -> None:
@@ -182,25 +187,17 @@ def test_resolve_100_crops_over_http_updates_all(
 def test_resolve_501_crops_is_queued_and_the_job_completes(
     api_client: Any, opensearch: Any, class_ids: dict[str, int], label: str
 ) -> None:
-    clones = _clone_items(opensearch, 120)
-    try:
-        ids = [*_crop_ids(opensearch, 381), *clones]
-        assert len(set(ids)) == 501
-        _make_pending(opensearch, ids, label)
-        resp = api_client.post(
-            '/review/new_class_proposals/resolve',
-            json={'label': label, 'class_id': class_ids['box']},
-        )
-        assert resp.status_code == 202, resp.text
-        job = wait_job(api_client, resp.json()['job_id'], timeout=240)
-        assert job['status'] == 'completed', job
-        assert job['result']['updated'] == 501, job['result']
-    finally:
-        opensearch.post(
-            f'/{INDEXES["items"]}/_delete_by_query',
-            params={'refresh': 'true'},
-            json={'query': {'prefix': {'crop_id': 'occ_extra_'}}},
-        ).raise_for_status()
+    ids = _crop_ids(opensearch, 501)
+    assert len(set(ids)) == 501
+    _make_pending(opensearch, ids, label)
+    resp = api_client.post(
+        '/review/new_class_proposals/resolve',
+        json={'label': label, 'class_id': class_ids['box']},
+    )
+    assert resp.status_code == 202, resp.text
+    job = wait_job(api_client, resp.json()['job_id'], timeout=240)
+    assert job['status'] == 'completed', job
+    assert job['result']['updated'] == 501, job['result']
 
 
 def test_resolve_a_document_that_keeps_conflicting_is_a_per_item_conflict(
