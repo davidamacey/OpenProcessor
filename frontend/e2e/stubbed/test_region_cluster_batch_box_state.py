@@ -134,7 +134,7 @@ def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, ap
     select_all.wait_for(timeout=ACTION_TIMEOUT_MS)
     select_all.click()
 
-    verify_button = page.get_by_role('button', name='Verify')
+    verify_button = page.get_by_role('button', name='✓ Verify', exact=True)
     verify_button.wait_for(timeout=ACTION_TIMEOUT_MS)
     with expect_handled(
         page,
