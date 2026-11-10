@@ -20,6 +20,7 @@ from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.source_image_cache import crop_cache_file
+from src.services.detection.crop_sizing import cap_crop
 from src.services.detection.geometry import crop_rect
 
 
@@ -116,7 +117,7 @@ def crop_jpeg_from_disk(image_path: str, bbox: tuple[float, float, float, float]
     full_w, full_h = img.size
     x1, y1, x2, y2 = bbox
     rect = crop_rect((x1 * full_w, y1 * full_h, x2 * full_w, y2 * full_h), full_w, full_h)
-    crop = img.crop(rect)
+    crop = cap_crop(img.crop(rect), get_curation_config().crop_max_side)
     buf = io.BytesIO()
     crop.save(buf, format='JPEG', quality=CROP_JPEG_QUALITY)
     return buf.getvalue()
@@ -138,6 +139,11 @@ def load_item_crop_jpeg(
 
 #: Long edge of the crops sent to a VLM by the label and region routes.
 VLM_CROP_SIZE = 224
+
+
+def vlm_crop_size() -> int:
+    """The VLM payload's long edge: ``vlm_crop_max_side`` when set, else :data:`VLM_CROP_SIZE`."""
+    return get_curation_config().vlm_crop_max_side or VLM_CROP_SIZE
 
 
 def resolved_image_path(image_path: str) -> Path:
@@ -162,10 +168,11 @@ def load_vlm_item_jpeg(
     cut from the source image. ``None`` when neither can be read."""
     from src.services.curation.image_serving import THUMBNAIL_CACHE
 
+    size = vlm_crop_size()
     if cache_dir:
         try:
             img = Image.open(io.BytesIO(crop_cache_file(cache_dir, crop_id).read_bytes()))
-            img.thumbnail((VLM_CROP_SIZE, VLM_CROP_SIZE))
+            img.thumbnail((size, size))
             buf = io.BytesIO()
             img.convert('RGB').save(buf, format='JPEG', quality=CROP_JPEG_QUALITY)
             return buf.getvalue()
@@ -175,7 +182,7 @@ def load_vlm_item_jpeg(
             logger.warning('vlm_crop_cache_read_failed', crop_id=crop_id, error=str(exc))
     try:
         return THUMBNAIL_CACHE.get_or_compute(
-            resolved_image_path(image_path), tuple(bbox), size=VLM_CROP_SIZE
+            resolved_image_path(image_path), tuple(bbox), size=size
         )
     except IMAGE_DECODE_ERRORS as exc:
         logger.warning('vlm_crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
@@ -187,9 +194,8 @@ def load_region_jpeg(image_path: str, bbox: Sequence[float]) -> bytes:
     region verifier sends it."""
     from src.services.curation.image_serving import THUMBNAIL_CACHE
 
-    return THUMBNAIL_CACHE.get_or_compute(
-        resolved_image_path(image_path), tuple(bbox), size=VLM_CROP_SIZE
-    )
+    size = vlm_crop_size()
+    return THUMBNAIL_CACHE.get_or_compute(resolved_image_path(image_path), tuple(bbox), size=size)
 
 
 __all__ = [
@@ -203,4 +209,5 @@ __all__ = [
     'load_region_jpeg',
     'load_vlm_item_jpeg',
     'resolved_image_path',
+    'vlm_crop_size',
 ]
