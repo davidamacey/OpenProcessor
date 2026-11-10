@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,9 +21,16 @@ def _pins(rel: str) -> dict[str, str]:
     return out
 
 
-def test_trainer_installs_prometheus_client_at_the_api_pin() -> None:
-    # src/db/pool_metrics.py (imported by src.db.engine, hence by the Celery job runtime)
-    # does `from prometheus_client import Histogram`
+@pytest.mark.parametrize(
+    'package',
+    [
+        # src/db/pool_metrics.py (via src.db.engine) does `from prometheus_client import Histogram`
+        'prometheus-client',
+        # src/tasks/runtime/context.py imports tenacity.AsyncRetrying
+        'tenacity',
+    ],
+)
+def test_trainer_installs_runtime_imports_at_the_api_pin(package: str) -> None:
     trainer = _pins('docker/trainer/requirements.txt')
     api = _pins('requirements.txt')
-    assert trainer.get('prometheus-client') == api['prometheus-client']
+    assert trainer.get(package) == api[package]

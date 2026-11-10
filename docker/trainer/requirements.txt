@@ -55,6 +55,9 @@ structlog==26.1.0
 # src/db/pool_metrics.py (imported by the job runtime's engine) exposes pool histograms with it.
 prometheus-client==0.26.0
 
+# src/tasks/runtime/context.py retries with it.
+tenacity==9.2.1
+
 # The job runtime and the database layer (src/tasks/runtime, src/db): the same pins as the api image
 # (requirements.txt). psycopg[c] is built from source in the builder stage (libpq-dev) and runs on
 # libpq5.
