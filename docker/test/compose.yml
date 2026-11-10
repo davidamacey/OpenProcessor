@@ -368,6 +368,23 @@ services:
     networks:
       - verify_net
 
+  # The `cluster` queue's consumer (cluster_run): a queued run with no consumer would block the
+  # assist loop (`clustering_running`). One fresh child per run, as in docker-compose.yml.
+  cluster-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment: *process-env
+    command: celery -A src.tasks.app worker -Q cluster -c 1 --max-tasks-per-child=1 --hostname cluster@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "cluster"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
   # The fake trainer is a real `gpu_train` consumer (fake_trainer.py), no GPU.
   trainer:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
