@@ -389,6 +389,12 @@ PR2 (D-84); it may run while B2's W2.4 lanes code, never during PR3's live run 2
 | Host record | `/proc/loadavg` at start and end of every run, foreign GPU processes (`nvidia-smi --query-compute-apps`), GPU sampled every 500 ms; a run with 1-minute load above 16 is noisy and repeated |
 | Raw data | `artifacts_local/b3/gate/<step>/` (gitignored); public result files to `docs/benchmarks/b3/` |
 
+**Quick tier (owner direction 2026-11-10).** Every step G0-G12 runs first as a quick tier (a few images,
+max batch 8, 1 epoch on about 50 images, `perf_analyzer` batch 1 and 8 with one repetition) to find
+functional bugs, under about 5 minutes of GPU each; a quick pass means the run completes, shapes are right
+and the deltas are recorded. The table's bars apply to the full tier, which then runs once. Commands and
+durations: `artifacts_local/GPU_QUICK_TIER.md`.
+
 Engines: **E0** = today's YOLO11 EfficientNMS engine (8.3.253 venv, from `:b3-ref`); **EA** =
 Stage A engine (patch on `X`); **EB** = Stage B engine (`nms=True` on `X`).
 

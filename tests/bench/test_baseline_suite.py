@@ -72,3 +72,34 @@ def test_set_embedding_mode_puts_lazy_at_the_current_revision() -> None:
     ]
     assert b'"expected_revision":4' in seen[1][2].replace(b' ', b'')
     assert b'"lazy"' in seen[1][2]
+
+
+def _perf_cmd(monkeypatch, tmp_path, extra: list[str]) -> list[str]:
+    from scripts.bench import suite_phases
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(suite_phases, 'run_cmd', lambda cmd, **_: seen.append(cmd))
+    args = bs.build_parser().parse_args(
+        [
+            '--manifest', 'm', '--images', 'i', '--out', 'o', '--project', 'p',
+            '--api-url', 'a', '--triton-url', 't', '--opensearch-url', 'os',
+            '--perf-dir', str(tmp_path), '--perf-models', 'yolo', '--perf-batches', '1',
+            *extra,
+        ]
+    )  # fmt: skip
+    suite_phases.phase_triton(args)
+    return seen[0]
+
+
+def test_perf_analyzer_defaults_keep_the_full_tier(monkeypatch, tmp_path) -> None:
+    cmd = _perf_cmd(monkeypatch, tmp_path, [])
+    assert cmd[cmd.index('--concurrency-range') + 1] == '1:16:5'
+    assert cmd[cmd.index('--measurement-interval') + 1] == '5000'
+
+
+def test_perf_analyzer_quick_knobs(monkeypatch, tmp_path) -> None:
+    cmd = _perf_cmd(
+        monkeypatch, tmp_path, ['--perf-concurrency', '1:1:1', '--perf-interval-ms', '2000']
+    )
+    assert cmd[cmd.index('--concurrency-range') + 1] == '1:1:1'
+    assert cmd[cmd.index('--measurement-interval') + 1] == '2000'
