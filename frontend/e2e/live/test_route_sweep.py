@@ -108,6 +108,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/models', '[data-testid="models-status"] span:has-text("Updated")'),
     ('/bakeoff', '[data-testid="dataset-picker"]'),
     ('/settings', 'h1:has-text("Deployment defaults")'),
+    ('/map', 'h1:has-text("Map")'),
 ]
 
 # The one global (non-project-scoped) page this tier also sweeps —
