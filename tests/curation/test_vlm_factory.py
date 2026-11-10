@@ -350,3 +350,22 @@ async def test_a_long_lived_labeler_re_checks_its_host_after_the_ttl(
 
     _flip_to(monkeypatch, 'drift.corp.example', '10.0.0.9')
     assert (await labeler.health()).reachable is True  # and recovers when it is acceptable again
+
+
+def test_a_labeler_is_not_reused_by_another_event_loop() -> None:
+    """A Celery child runs each task in a loop of its own. The labeler's HTTP client keeps pooled
+    connections of the loop that first used it; handed to the next task's loop it fails with
+    'Event loop is closed'. One loop still shares its labeler, and a closed loop's is dropped."""
+    endpoint = _endpoint()
+
+    async def twice() -> tuple[Any, Any]:
+        return (
+            labeler_for(endpoint, GENERIC_ITEM_PACK, usage_source=None),
+            labeler_for(endpoint, GENERIC_ITEM_PACK, usage_source=None),
+        )
+
+    first, again = asyncio.run(twice())
+    assert first is again
+    second, _ = asyncio.run(twice())
+    assert second is not first
+    assert list(vlm_factory._LABELERS.values()) == [second]

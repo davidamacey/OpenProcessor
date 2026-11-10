@@ -78,10 +78,31 @@ def _pack_hash(pack: PromptPack) -> str:
     return hashlib.sha256(json.dumps(pack.to_dict(), sort_keys=True).encode()).hexdigest()[:12]
 
 
+def _loop_ref() -> weakref.ref[asyncio.AbstractEventLoop] | None:
+    """A weak reference to the running loop, ``None`` for a caller with no loop (its labeler binds
+    on first use). A dead reference equals only itself, so a new loop never matches an old key."""
+    try:
+        return weakref.ref(asyncio.get_running_loop())
+    except RuntimeError:
+        return None
+
+
+def _drop_closed_loops() -> None:
+    """Forget the labelers of loops that are closed or gone: their clients cannot be used."""
+    for key in list(_LABELERS):
+        ref = key[0]
+        if ref is not None and ((loop := ref()) is None or loop.is_closed()):
+            del _LABELERS[key]
+
+
 def _cache_key(
     endpoint: VlmEndpoint, pack: PromptPack, usage_source: str | None
 ) -> tuple[Any, ...]:
     return (
+        # A labeler's HTTP client pools connections of the loop that first used it, so the cache
+        # is per loop: a Celery child runs every task in a loop of its own and must not be handed
+        # the previous task's labeler ("Event loop is closed").
+        _loop_ref(),
         endpoint.ref,
         usage_source,
         endpoint.json_mode_on,
@@ -236,6 +257,7 @@ def labeler_for(endpoint: VlmEndpoint, pack: PromptPack, *, usage_source: str | 
 
     ``usage_source`` names who the calls are recorded under in ``vlm_usage_hourly``
     (``src.db.models.assist_loop.VLM_USAGE_SOURCES``); ``None`` records nothing (a probe)."""
+    _drop_closed_loops()
     key = _cache_key(endpoint, pack, usage_source)
     cached = _LABELERS.get(key)
     if cached is not None:
