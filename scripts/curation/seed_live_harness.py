@@ -283,8 +283,13 @@ def _build_items(
     cfg: Any,
     fields: Any,
     image_docs: list[dict[str, Any]],
+    registry_ids: dict[str, int],
 ) -> list[dict[str, Any]]:
-    """Materialize every item doc, deterministically."""
+    """Materialize every item doc, deterministically.
+
+    A cohort names its class by slot in ``CLASS_NAMES``; the stored ``class_id`` is the id the
+    registry gave that name (the region class is seeded first, so the slot is not the id).
+    """
     import numpy as np
 
     rng = np.random.default_rng(RANDOM_SEED)
@@ -316,6 +321,7 @@ def _build_items(
                 )
                 class_id = cohort.minority_class_id if is_minority else cohort.class_id
                 class_name = CLASS_NAMES[class_id] if class_id is not None else None
+                class_id = registry_ids[class_name] if class_name is not None else None
                 # Half of the pure class cluster is a settled human label.
                 validated = cohort.class_validated
                 class_source = cohort.class_source
@@ -503,8 +509,9 @@ async def _seed(args: argparse.Namespace) -> int:
 
         # 2. Class registry — before any item or label write.
         registry = get_class_registry()
+        registry_ids = {}
         for name in CLASS_NAMES:
-            await registry.ensure_class(name, group='shipping')
+            registry_ids[name], _ = await registry.ensure_class(name, group='shipping')
         # The API adds the active region profile's class at startup; seeding
         # it here keeps a restart from changing the registry the tests read.
         await ensure_region_class()
@@ -516,7 +523,7 @@ async def _seed(args: argparse.Namespace) -> int:
         print(f'images: {len(image_docs)} jpegs + docs -> {cfg.images_index}')
 
         # 4. Item docs.
-        item_docs = _build_items(cfg, fields, image_docs)
+        item_docs = _build_items(cfg, fields, image_docs, registry_ids)
         await _bulk(client, cfg.items_index, item_docs, 'crop_id')
         print(f'items: {len(item_docs)} docs -> {cfg.items_index}')
 
