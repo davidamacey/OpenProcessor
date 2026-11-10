@@ -15,6 +15,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from fixtures.contract import fill
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
 
@@ -36,6 +37,10 @@ class Projects:
         self.dry_run_blocking: list[dict[str, str]] = []
         self.referenced_by: list[dict[str, str]] = []
         self.delete_refusal: tuple[int, dict[str, Any]] | None = None
+        # A create is queued (202); its job stays `running` until a test
+        # releases it, so the `building` state is observable.
+        self.release_create_jobs = False
+        self.create_jobs: dict[str, str] = {}
 
     def listed(self, include_archived: bool) -> list[dict[str, Any]]:
         return [
@@ -48,6 +53,7 @@ class Projects:
         base = re.escape(API_PREFIX)
         stub.on('GET', rf'^{base}/projects$', self.get_list)
         stub.on('POST', rf'^{base}/projects$', self.create)
+        stub.on('GET', rf'^{base}/jobs/(job-create-[^/]+)$', self.create_job)
         stub.on('PATCH', rf'^{base}/projects/([^/]+)$', self.patch)
         stub.on('POST', rf'^{base}/projects/([^/]+)/(archive|unarchive)$', self.archive)
         stub.on('DELETE', rf'^{base}/projects/([^/]+)$', self.delete)
@@ -77,6 +83,11 @@ class Projects:
             body['slug'],
             display_name=body['display_name'],
             description=body.get('description', ''),
+            status='building',
+            writable=False,
+            selectable=False,
+            archivable=False,
+            deletable=False,
         )
         self.rows[row['slug']] = row
         warnings = (
@@ -89,7 +100,32 @@ class Projects:
             if self.capacity_status == 'warn'
             else []
         )
-        return (201, {'project': row, 'warnings': warnings})
+        job_id = f'job-create-{row["slug"]}'
+        self.create_jobs[job_id] = row['slug']
+        return (202, {'project': row, 'warnings': warnings, 'job_id': job_id})
+
+    def create_job(self, _request: Any, m: Any) -> Any:
+        job_id = m.group(1)
+        if not self.release_create_jobs:
+            return self._job(job_id, 'running')
+        row = self.rows[self.create_jobs[job_id]]
+        row.update(status='active', writable=True, selectable=True, archivable=True, deletable=True)
+        return self._job(job_id, 'completed', result={'warnings': []})
+
+    @staticmethod
+    def _job(job_id: str, status: str, **over: Any) -> dict[str, Any]:
+        # A project create belongs to no project: a deployment-scoped job.
+        return fill(
+            'JobView',
+            id=job_id,
+            kind='project_create',
+            project=None,
+            status=status,
+            queue='default',
+            scope='deployment',
+            requested_by='e2e',
+            **over,
+        )
 
     def patch(self, request: Any, m: Any) -> Any:
         slug = m.group(1)
@@ -199,6 +235,14 @@ def test_create_sends_the_form_and_toasts_served_warnings(stub, page, app_url):
     page.get_by_text('Served warning: near the recommended shard budget.').first.wait_for(
         timeout=ACTION_TIMEOUT_MS
     )
+    # 202: the project is listed as building, with no actions, until its job finishes.
+    assert page.get_by_test_id('project-status-gamma').inner_text() == 'Building'
+    assert page.get_by_test_id('project-delete-gamma').count() == 0
+    reg.release_create_jobs = True
+    page.get_by_test_id('project-status-gamma').filter(has_text='Active').wait_for(
+        timeout=ACTION_TIMEOUT_MS
+    )
+    assert page.get_by_test_id('project-delete-gamma').count() == 1
     assert reg.writes == [
         (
             'POST',

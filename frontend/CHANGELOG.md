@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Map page: the production build now ships the MapLibre worker (imported with `?url` and set through `setWorkerUrl`); before, `maplibre-gl-worker.mjs` was missing from the built app and the map never started. The cell popup text is readable on its light background.
 - `/export` takes its source chips from the same stats request as the class table, so Refresh updates them (it used to make a second raw request that never re-ran).
 - The diverse review page loads its items with one `GET /crops?ids=` request instead of one request per item.
 - Links to another project preload on tap, not hover, so hovering no longer binds that project in the background.
