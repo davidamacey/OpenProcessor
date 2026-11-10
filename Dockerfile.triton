@@ -77,14 +77,14 @@ RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
 # CVE hygiene beyond apt:
 # - Nsight Systems profiler CLI ships Go binaries carrying stdlib CVEs and
 #   is dev tooling unused at inference; drop it (also shrinks the image).
-# - the in-process `tritonserver` wheel (imported by nothing here; it pins numpy<2) and virtualenv
+# - the in-process `tritonserver` and `tritonfrontend` wheels (imported by nothing here; tritonserver pins numpy<2) and virtualenv
 #   (build tooling) are uninstalled so `pip check` below passes with the OpenCV 5 / numpy 2 set.
 # - starlette, anyio, certifi, filelock in the image's python env lag their
 #   security fixes; docker/triton/requirements-security.txt carries the exact floors.
 COPY docker/triton/ /tmp/triton-requirements/
 RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
     && pip install --no-cache-dir --upgrade -r /tmp/triton-requirements/requirements-security.txt \
-    && pip uninstall -y virtualenv tritonserver
+    && pip uninstall -y virtualenv tritonfrontend tritonserver
 
 # PyTorch and TorchVision (CUDA 13.x wheels) for the Python backend models, then OpenCV,
 # pyclipper and CuPy (see the header of each requirements file).
