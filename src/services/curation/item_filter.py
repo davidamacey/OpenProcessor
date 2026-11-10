@@ -24,10 +24,14 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config import get_region_fields
 from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause, state_clause
 from src.domain.item_text import item_text_query
+from src.domain.region_boxes import box_query
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
 from src.services.curation.name_match import DETECTOR_NAME_FIELDS, name_clause
+from src.services.curation.region_text_search import TextMatch, region_text_match_clause
+from src.services.detection.region_text import active_confusables
 
 
 if TYPE_CHECKING:
@@ -77,6 +81,10 @@ class ItemFilter(BaseModel):
     min_blur_ratio: float | None = Field(default=None, ge=0.0)
     classifier_conf_lt: float | None = Field(default=None, ge=0.0, le=1.0)
     item_text: str | None = Field(default=None, max_length=200)
+    # Plate-text search on a box (`region_text_match_clause`): the item has a box whose folded
+    # text matches.
+    region_text: str | None = Field(default=None, max_length=200)
+    region_text_match: TextMatch = 'exact'
     # The detector's own class (``detector_class_name``, by NAME like ``class_names``).
     detector_class_names: list[str] = Field(default_factory=list)
     # The detector's confidence: ``detector_conf_min`` inclusive, ``detector_conf_max``
@@ -324,6 +332,17 @@ def _quality_clauses(f: ItemFilter) -> list[dict[str, Any]]:
             msg = 'item_text must contain a letter or digit'
             raise ValueError(msg)
         out.append(text)
+    if f.region_text is not None:
+        out.append(
+            box_query(
+                region_text_match_clause(
+                    get_region_fields().boxes,
+                    f.region_text,
+                    f.region_text_match,
+                    active_confusables(),
+                )
+            )
+        )
     return out
 
 
@@ -334,7 +353,7 @@ def item_filter_clauses(f: ItemFilter, *, embedding: WriteFields) -> list[dict[s
     the ``embedding_state`` predicate and the ``all`` review tab read them.
 
     Raises ``ValueError`` for a malformed band (``conf_min`` above
-    ``conf_max``, ``min_area`` above ``max_area``) or an ``item_text`` with no
+    ``conf_max``, ``min_area`` above ``max_area``) or an ``item_text`` or ``region_text`` with no
     letter or digit, which the routes map to a 400.
     """
     return [

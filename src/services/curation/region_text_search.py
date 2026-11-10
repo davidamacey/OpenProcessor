@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
+from src.config import get_region_fields
+from src.config.curation_accessors import items_index
+from src.domain.region_boxes import read_boxes
 from src.domain.region_text import fold
 
 
@@ -29,6 +32,29 @@ FUZZY_MAX_EXPANSIONS = 50
 
 def _escape_wildcard(value: str) -> str:
     return value.replace('\\', '\\\\').replace('*', '\\*').replace('?', '\\?')
+
+
+async def same_text_key(opensearch: Any, ref: str) -> str:
+    """The folded text of the box ``ref`` (``<item_id>:<box_id>``) names, read server-side.
+
+    Raises ``ValueError`` for a malformed ref and ``LookupError`` when the item or box is
+    missing or the box has no text.
+    """
+    item_id, _, box_id = ref.partition(':')
+    if not item_id or not box_id:
+        msg = 'same_text_as must be <item_id>:<box_id>'
+        raise ValueError(msg)
+    boxes_field = get_region_fields().boxes
+    resp = await opensearch.mget(
+        index=items_index(), body={'ids': [item_id]}, _source_includes=[boxes_field]
+    )
+    [doc] = resp.get('docs') or [{}]
+    source = doc.get('_source') or {} if doc.get('found') else {}
+    for box in read_boxes(source):
+        if box.box_id == box_id and box.text_fold:
+            return box.text_fold
+    msg = f'no text on box {ref!r}'
+    raise LookupError(msg)
 
 
 def region_text_match_clause(

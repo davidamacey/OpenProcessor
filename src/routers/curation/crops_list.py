@@ -24,6 +24,7 @@ from src.services.curation.crop_listing import (
 )
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
+from src.services.curation.region_text_search import TextMatch, same_text_key
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import (
     item_state_fields,
@@ -114,6 +115,29 @@ async def list_crops(
             ),
         ),
     ] = None,
+    region_text: Annotated[
+        str | None,
+        Query(
+            max_length=200,
+            description=(
+                'Plate text on a box: the item has a box whose folded text matches this '
+                '(letters and digits only, confusables folded), as `region_text_match` says.'
+            ),
+        ),
+    ] = None,
+    region_text_match: Annotated[
+        TextMatch,
+        Query(description='How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.'),
+    ] = 'exact',
+    same_text_as: Annotated[
+        str | None,
+        Query(
+            description=(
+                "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. "
+                'Exclusive with `region_text`.'
+            ),
+        ),
+    ] = None,
     order: Annotated[
         str,
         Query(
@@ -160,6 +184,18 @@ async def list_crops(
         page_size = limit
     guard_page_depth(page, page_size)
     embedding = await item_write_fields()
+    if same_text_as is not None:
+        if region_text is not None:
+            raise HTTPException(
+                status_code=400, detail='same_text_as and region_text are exclusive'
+            )
+        try:
+            region_text = await same_text_key(opensearch, same_text_as)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        region_text_match = 'exact'
     try:
         listing = build_crop_list_query(
             embedding=embedding,
@@ -180,6 +216,8 @@ async def list_crops(
                 'min_blur_ratio': min_blur_ratio,
                 'classifier_conf_lt': classifier_conf_lt,
                 'item_text': item_text,
+                'region_text': region_text,
+                'region_text_match': region_text_match,
                 'open_vocab_set': open_vocab_set,
                 'source_prompt': source_prompt,
             },

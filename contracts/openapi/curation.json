@@ -15542,6 +15542,28 @@
             ],
             "title": "Region Gate Skipped"
           },
+          "region_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text"
+          },
+          "region_text_match": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "fuzzy",
+              "fragment"
+            ],
+            "title": "Region Text Match",
+            "type": "string"
+          },
           "review_dismissed": {
             "anyOf": [
               {
@@ -28534,6 +28556,28 @@
             },
             "title": "Region Status",
             "type": "array"
+          },
+          "region_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text"
+          },
+          "region_text_match": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "fuzzy",
+              "fragment"
+            ],
+            "title": "Region Text Match",
+            "type": "string"
           },
           "review_dismissed": {
             "anyOf": [
@@ -43494,6 +43538,60 @@
               ],
               "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
               "title": "Item Text"
+            }
+          },
+          {
+            "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+            "in": "query",
+            "name": "region_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+              "title": "Region Text"
+            }
+          },
+          {
+            "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "default": "exact",
+              "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+              "enum": [
+                "exact",
+                "fuzzy",
+                "fragment"
+              ],
+              "title": "Region Text Match",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+            "in": "query",
+            "name": "same_text_as",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+              "title": "Same Text As"
             }
           },
           {
