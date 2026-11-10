@@ -21,12 +21,7 @@ from src.services.curation.assist_loop.record import LoopRecord
 from src.services.curation.assist_loop.snapshots import SnapshotStore
 from src.services.curation.assist_loop.vlm_failure import VlmFailedError
 from src.services.curation.job_binding import bound_job_project, opensearch_client, project_record
-from src.services.jobs.blockers import (
-    PROJECT_PAUSED,
-    VLM_UNAVAILABLE,
-    project_is_paused,
-    vlm_available,
-)
+from src.services.jobs.blockers import PROJECT_PAUSED, VLM_UNAVAILABLE, project_is_paused, vlm_ready
 from src.tasks.runtime.context import Paused, Yield
 from src.tasks.runtime.register import register_job
 
@@ -40,18 +35,17 @@ logger = get_logger(__name__)
 _FACTORIES = {'opensearch': opensearch_client}
 
 
-def _system_pause(session: Session, ctx_project: Any) -> str | None:
-    if ctx_project is not None and project_is_paused(session, ctx_project):
-        return PROJECT_PAUSED
-    if not vlm_available(session):
-        return VLM_UNAVAILABLE
-    return None
+def _project_paused(session: Session, ctx_project: Any) -> bool:
+    return ctx_project is not None and project_is_paused(session, ctx_project)
 
 
 async def _blocked(ctx: JobContext) -> str | None:
     """Why this slice may not start: the project was paused, or the VLM was taken."""
     async with ctx.session() as session:
-        return await session.run_sync(lambda s: _system_pause(s, ctx.project_id))
+        if await session.run_sync(lambda s: _project_paused(s, ctx.project_id)):
+            return PROJECT_PAUSED
+    # The VLM registry is deployment-wide: its probes are not visible in the job's project scope.
+    return None if await vlm_ready() else VLM_UNAVAILABLE
 
 
 async def assist_loop(ctx: JobContext) -> dict[str, Any] | Paused | Yield:

@@ -29,7 +29,7 @@ from src.schemas.curation.assist_loop import (
     LoopVote,
 )
 from src.services.curation.assist_loop.snapshots import SnapshotStore
-from src.services.jobs.blockers import VLM_UNAVAILABLE, project_is_paused, vlm_available
+from src.services.jobs.blockers import VLM_UNAVAILABLE, project_is_paused
 from src.services.rejections import rejection
 
 
@@ -117,8 +117,14 @@ def _audit_view(
     )
 
 
-def loop_state(session: Session, run: rows.RunRow, job: JobView) -> AssistLoopState:
-    """The wire state of one run, from its rows and its job."""
+def loop_state(
+    session: Session, run: rows.RunRow, job: JobView, *, vlm_ok: bool
+) -> AssistLoopState:
+    """The wire state of one run, from its rows and its job.
+
+    ``vlm_ok`` is :func:`~src.services.jobs.blockers.vlm_ready`: the probes it reads are not
+    visible to the project-scope ``session``.
+    """
     counts = rows.iteration_counts(session, run.id)
     budget_rows = budget_repo.budgets(session, run.id)
     budget = _budget_view(budget_rows, int(counts.get('usage_missing', 0)))
@@ -126,7 +132,7 @@ def loop_state(session: Session, run: rows.RunRow, job: JobView) -> AssistLoopSt
     if job.status in ('paused', 'interrupted'):
         if project_is_paused(session, run.project_id):
             blocker = 'project_paused'
-        elif job.pause_reason == VLM_UNAVAILABLE and not vlm_available(session):
+        elif job.pause_reason == VLM_UNAVAILABLE and not vlm_ok:
             blocker = 'vlm_unavailable'
     flags = control_flags(job.status, pause_requested=job.pause_requested, blocker=blocker)
     partition = (run.pinned.get('partition') or None) and LoopPartition.model_validate(

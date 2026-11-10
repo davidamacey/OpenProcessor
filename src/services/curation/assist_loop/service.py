@@ -36,6 +36,7 @@ from src.services.curation.assist_loop.budget import BudgetLimits
 from src.services.curation.assist_loop.plan import build_plan
 from src.services.curation.assist_loop.undo import undo_loop
 from src.services.jobs import service as jobs, status as job_status
+from src.services.jobs.blockers import VLM_UNAVAILABLE, vlm_ready
 from src.services.rejections import rejection
 
 
@@ -108,7 +109,8 @@ async def run_of(session: AsyncSession, loop_id: str) -> rows.RunRow:
 
 async def state_of(session: AsyncSession, run: rows.RunRow) -> AssistLoopState:
     job = await job_status.get_job(session, run.job_id, project=current_project_id())
-    return await _read(session, lambda s: views.loop_state(s, run, job))
+    vlm_ok = job.pause_reason != VLM_UNAVAILABLE or await vlm_ready()
+    return await _read(session, lambda s: views.loop_state(s, run, job, vlm_ok=vlm_ok))
 
 
 async def get_state(session: AsyncSession, loop_id: str) -> AssistLoopState:

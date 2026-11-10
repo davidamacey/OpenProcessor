@@ -28,7 +28,7 @@ from src.db.repos import job_events, jobs as repo
 from src.db.session import deployment_tx, project_tx
 from src.domain import job_states as js
 from src.services.jobs import dispatch as dispatching
-from src.services.jobs.blockers import resume_blocker
+from src.services.jobs.blockers import VLM_UNAVAILABLE, resume_blocker, vlm_ready
 from src.tasks.runtime.event_wakeup import wake
 
 
@@ -336,7 +336,8 @@ async def resume_job(
                 'job_finished' if before.status in js.TERMINAL else 'resume_blocked',
                 f'job {job_id} is {before.status}, not resumable',
             )
-        blocker = await session.run_sync(lambda sync: resume_blocker(sync, before))
+        vlm_ok = before.pause_reason != VLM_UNAVAILABLE or await vlm_ready()
+        blocker = await session.run_sync(lambda sync: resume_blocker(sync, before, vlm_ok=vlm_ok))
         if blocker is not None:
             raise rejection(409, 'resume_blocked', f'cannot resume: {blocker}', reason=blocker)
         try:

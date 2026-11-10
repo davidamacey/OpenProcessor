@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import text
 
 from src.db.repos import gpu_arbiter as arbiter_repo
+from src.db.session import async_session_factory, deployment_tx
 from src.domain import gpu_arbiter_state as state
 
 
@@ -44,10 +45,27 @@ def vlm_available(session: Session) -> bool:
     return bool(latest_ok)
 
 
-def resume_blocker(session: Session, job: JobRow) -> str | None:
-    """The reason a person's resume is refused right now, or ``None``."""
+async def vlm_ready() -> bool:
+    """:func:`vlm_available` for a caller inside a project transaction.
+
+    The endpoint registry is deployment-wide (its documents have no project), and row-level
+    security hides those rows, and so every probe, from a project-scope session: read there, the
+    answer is always false. This reads them in a deployment-scope session of its own.
+    """
+    async with (
+        async_session_factory()() as session,
+        deployment_tx(session, 'latest probes of the deployment-wide VLM endpoints'),
+    ):
+        return await session.run_sync(vlm_available)
+
+
+def resume_blocker(session: Session, job: JobRow, *, vlm_ok: bool) -> str | None:
+    """The reason a person's resume is refused right now, or ``None``.
+
+    ``vlm_ok`` is :func:`vlm_ready`, read by the caller (it needs a session of its own).
+    """
     if job.project_id is not None and project_is_paused(session, job.project_id):
         return PROJECT_PAUSED
-    if job.pause_reason == VLM_UNAVAILABLE and not vlm_available(session):
+    if job.pause_reason == VLM_UNAVAILABLE and not vlm_ok:
         return VLM_UNAVAILABLE
     return None
