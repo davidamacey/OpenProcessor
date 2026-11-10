@@ -447,7 +447,7 @@ class Stub:
                     content_type = content_type_override
             elif len(result) == 2:
                 status, body = result
-        if content_type == 'application/json':
+        if content_type == 'application/json' or content_type.endswith('+json'):
             route.fulfill(status=status, content_type=content_type, body=json.dumps(body))
         else:
             route.fulfill(status=status, content_type=content_type, body=body)

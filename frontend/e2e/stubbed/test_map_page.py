@@ -62,7 +62,7 @@ def _serve_map(stub, page, app_url: str, meta: dict[str, Any]) -> dict[str, list
 
     def cells(request, _m):
         seen['cells'].append(request.url)
-        return (200, _cells())
+        return (200, _cells(), 'application/geo+json')  # what GET /map/cells serves (RFC 7946)
 
     def images(request, _m):
         seen['images'].append(request.url)
