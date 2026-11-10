@@ -194,7 +194,7 @@ itself, no dynamic batching). The recognizer ships one instance as a baseline fo
 The pipeline takes `ocr_images` (the resized UINT8 BGR frame), `original_image` (the full-size UINT8
 frame the crops are cut from) and `orig_shape`. It returns up to 128 texts per image:
 `num_texts`, `text_boxes` (`[128, 8]` quadrilaterals), `text_boxes_normalized` (`[128, 4]`),
-`texts`, `text_scores` (detection), `rec_scores` (recognition, the mean over a line's characters) and `rec_char_min` (the lowest single-character probability of each line; 0.0 for padded or empty slots, -1.0 when recognition failed). An FP32 pipeline config is
+`texts`, `text_scores` (detection), `rec_scores` (recognition, the mean over a line's characters) and `rec_char_min` (the lowest single-character probability of each line; 0.0 for padded or empty slots, -1.0 when recognition failed). It is an internal pipeline output: `src/clients/triton_ocr.py` hands it to the region cascade, which stores it as `text_conf_char_min` on a region box; the `/ocr/predict` and `/analyze` responses do not carry it (each line there has `det_score` and `rec_score` only). An FP32 pipeline config is
 refused at request time with the `./openprocessor models repair` hint
 (`src/clients/triton_ocr.py`). The installer GPU profiles set the instance counts.
 
