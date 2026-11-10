@@ -276,9 +276,11 @@ export async function apiFetch<T>(
       if (res.ok) {
         if (res.status === 204) return undefined as T;
         const ct = res.headers.get('content-type') ?? '';
-        const out = ct.includes('application/json')
-          ? ((await res.json()) as T)
-          : ((await res.text()) as unknown as T);
+        // `+json` covers structured-syntax types such as the map's application/geo+json (RFC 6839).
+        const out =
+          ct.includes('application/json') || ct.includes('+json')
+            ? ((await res.json()) as T)
+            : ((await res.text()) as unknown as T);
         assertFresh();
         return out;
       }
