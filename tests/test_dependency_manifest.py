@@ -46,7 +46,7 @@ _IMPORT_TO_DIST = {
     'sklearn': 'scikit-learn',
     'google': 'protobuf',
     'faiss': 'faiss-gpu-cu12',
-    'cupy': 'cupy-cuda12x',
+    'cupy': 'cupy-cuda13x',
     'onnxruntime': 'onnxruntime-gpu',
     'umap': 'umap-learn',
     'exiftool': 'pyexiftool',

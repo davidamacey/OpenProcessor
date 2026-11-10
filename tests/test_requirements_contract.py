@@ -70,7 +70,7 @@ def test_runtime_requirements_carry_no_export_toolchain() -> None:
     names = {re.split(r'[<>=\[ ;@]', ln, maxsplit=1)[0].lower() for ln in _requirement_lines()}
     leaked = sorted(n for n in names if n.startswith(_EXPORT_ONLY))
     assert leaked == []
-    assert {'onnx', 'onnxruntime-gpu', 'cupy-cuda12x'} <= names
+    assert {'onnx', 'onnxruntime-gpu', 'cupy-cuda13x'} <= names
 
 
 def _ultralytics_specs() -> dict[str, str]:
