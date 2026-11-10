@@ -138,7 +138,7 @@ class _Cluster:
     def __init__(self, fake: FakeOpenSearch) -> None:
         self._fake = fake
 
-    async def health(self, index: str, wait_for_status: str, timeout: str) -> dict[str, Any]:
+    async def health(self, index: str, wait_for_status: str, timeout: int) -> dict[str, Any]:
         self._fake.calls.append('cluster.health')
         return {'status': 'green', 'timed_out': False}
 

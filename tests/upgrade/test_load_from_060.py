@@ -289,3 +289,18 @@ async def test_label_operation_members_load_the_state_the_operation_replaced(
     assert rows(clean_db, 'SELECT count(*) FROM label_operation_members WHERE prior IS NULL') == [
         (0,)
     ]  # JSON null, not SQL NULL
+
+
+@pytest.mark.asyncio
+async def test_builtin_engine_rows_do_not_fail_verify(make_runner, clean_db) -> None:
+    """``db-migrate`` seeds the shipped models before the upgrade runs, so verify counts only the
+    rows the load wrote: a 0.6.0 install with no promotions must still verify."""
+    from sqlalchemy.orm import Session
+
+    from src.services.training.builtin_engines import seed_builtin_engines
+
+    with Session(clean_db.engine('super')) as session, session.begin():
+        assert seed_builtin_engines(session)
+    result = await make_runner().run()
+    assert result.verify is not None
+    assert result.verify.ok, result.verify.problems

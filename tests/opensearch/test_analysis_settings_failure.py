@@ -45,3 +45,29 @@ async def test_a_normalizer_that_analyzes_wrongly_stops_the_upgrade(tmp_path: Pa
 
     with pytest.raises(AnalysisSettingsError, match='expected'):
         await analysis_settings.apply(world.os, names)
+
+
+@pytest.mark.asyncio
+async def test_reopen_health_wait_is_accepted_by_the_real_client(monkeypatch) -> None:
+    """opensearch-py reads a ``timeout`` argument as the transport timeout in seconds, so a
+    duration string such as ``'120s'`` crashes the HTTP layer; the fakes of the other tests
+    accept anything and cannot see that."""
+    import json
+
+    from opensearchpy import AIOHttpConnection, AsyncOpenSearch
+
+    seen: list[tuple[str, object]] = []
+
+    async def perform_request(_self, method, url, params=None, body=None, timeout=None, **_):
+        assert timeout is None or isinstance(timeout, (int, float)), timeout
+        seen.append((url, timeout))
+        payload = {'status': 'yellow', 'timed_out': False, 'acknowledged': True}
+        return 200, {'content-type': 'application/json'}, json.dumps(payload)
+
+    monkeypatch.setattr(AIOHttpConnection, 'perform_request', perform_request)
+    client = AsyncOpenSearch(hosts=['http://127.0.0.1:9'])
+    try:
+        assert await analysis_settings._reopen(client, 'op_prj_x__items') == 'yellow'
+    finally:
+        await client.close()
+    assert any('_cluster/health' in url for url, _ in seen)
