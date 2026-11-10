@@ -466,7 +466,7 @@ ingest can decode JPEGs on the GPU.
   two need `OP_LOAD_PROFILE=ingest`, see [GPU sizing](../deployment/gpu-sizing.mdx)), loaded on first use. If the model
   cannot load, every photo is decoded on the CPU instead.
 - A JPEG that is not a baseline 8-bit file falls back to the CPU; the counter
-  `op_ingest_decode_total` shows how many were taken either way.
+  `op_decode_route_total` shows how many were taken either way.
 - It applies to the `/ingest/batch` path, which bulk ingest uses.
 
 To see whether it is on and whether the card has room:

@@ -11,7 +11,7 @@ cuts and returns the whole-frame vector and one vector per box. Only vectors com
 
 Fail closed, photo by photo, exactly where ingest falls back: below the gate, an unreadable
 header, a status other than ``ok`` (progressive, truncated, decoder, ...), a failed call or an
-answer with the wrong row count take the CPU path, counted in ``op_reprocess_decode_total``.
+answer with the wrong row count take the CPU path, counted in ``op_decode_route_total``.
 Model files older than this API (no ``boxes`` input) leave every photo on the CPU path without a
 call per photo.
 """
@@ -32,7 +32,7 @@ from src.services.curation.ingest_gpu_decode import (
     gpu_decode_ready,
     megapixels,
 )
-from src.services.curation.ops_metrics import OP_REPROCESS_DECODE_TOTAL
+from src.services.curation.ops_metrics import OP_DECODE_ROUTE_TOTAL
 
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ async def gpu_embed_route(service: CurationIngestService) -> GpuEmbedRoute | Non
 
 
 def _count(route: str) -> None:
-    OP_REPROCESS_DECODE_TOTAL.labels(route=route).inc()
+    OP_DECODE_ROUTE_TOTAL.labels(route=route, path='reprocess').inc()
 
 
 async def embed_on_gpu(

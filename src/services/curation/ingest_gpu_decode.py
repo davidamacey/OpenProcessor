@@ -10,7 +10,7 @@ reads every other per-image product from the returned :class:`GpuDecodeFrame`.
 
 Fail closed, image by image: an image the GPU decode does not take (not a baseline 8-bit JPEG,
 no end-of-image marker, below the gate, a decoder error) or a GPU decode call that fails is
-decoded on the CPU path as before, and counted in ``op_ingest_decode_total``. The GPU decode is
+decoded on the CPU path as before, and counted in ``op_decode_route_total``. The GPU decode is
 used only while its detector, network size and letterbox fill match the ingest profile and no
 secondary detector is configured (that one needs the CPU frame); otherwise every image takes the
 CPU path.
@@ -31,7 +31,7 @@ from PIL import Image
 from src.clients.pe_encoder import _l2_normalize
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
-from src.services.curation.ops_metrics import OP_INGEST_DECODE_TOTAL
+from src.services.curation.ops_metrics import OP_DECODE_ROUTE_TOTAL
 from src.services.detection.crop_quality import variance_from_sums
 from src.utils.retry import TRITON_CALL_ERRORS
 
@@ -223,4 +223,4 @@ async def run_gpu_decode(
 
 
 def count_route(route: str) -> None:
-    OP_INGEST_DECODE_TOTAL.labels(route=route).inc()
+    OP_DECODE_ROUTE_TOTAL.labels(route=route, path='ingest').inc()

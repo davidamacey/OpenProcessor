@@ -286,11 +286,11 @@ STAGE = 'op_gpu_prep_stage_seconds{stage="decode"} 1\nop_gpu_prep_stage_observat
 def test_metrics_pass_when_decode_counters_absent_with_note(fake, tmp_path):
     ph = _metrics_run(fake, tmp_path, '')
     assert ph['status'] == 'pass'
-    assert 'op_ingest_decode_total absent' in json.dumps(ph['evidence'])
+    assert 'op_decode_route_total absent' in json.dumps(ph['evidence'])
 
 
 def test_metrics_gpu_route_within_fallback_bound(fake, tmp_path):
-    decode = 'op_ingest_decode_total{route="gpu"} 996\nop_ingest_decode_total{route="cpu_call_failed"} 4\nop_ingest_decode_total{route="cpu_small"} 50\n'
+    decode = 'op_decode_route_total{route="gpu",path="ingest"} 996\nop_decode_route_total{route="cpu_call_failed",path="ingest"} 4\nop_decode_route_total{route="cpu_small",path="ingest"} 50\n'
     ph = _metrics_run(fake, tmp_path, decode, STAGE)
     assert ph['status'] == 'pass', ph
     ev = json.dumps(ph['evidence'])
@@ -299,27 +299,27 @@ def test_metrics_gpu_route_within_fallback_bound(fake, tmp_path):
 
 
 def test_metrics_fail_when_fallbacks_exceed_bound(fake, tmp_path):
-    decode = 'op_ingest_decode_total{route="gpu"} 90\nop_ingest_decode_total{route="cpu_call_failed"} 10\n'
+    decode = 'op_decode_route_total{route="gpu",path="ingest"} 90\nop_decode_route_total{route="cpu_call_failed",path="ingest"} 10\n'
     ph = _metrics_run(fake, tmp_path, decode, STAGE)
     assert ph['status'] == 'fail'
     assert 'exceed' in json.dumps(ph['evidence'])
 
 
 def test_metrics_fallback_bound_is_configurable(fake, tmp_path):
-    decode = 'op_ingest_decode_total{route="gpu"} 90\nop_ingest_decode_total{route="cpu_call_failed"} 10\n'
+    decode = 'op_decode_route_total{route="gpu",path="ingest"} 90\nop_decode_route_total{route="cpu_call_failed",path="ingest"} 10\n'
     ph = _metrics_run(fake, tmp_path, decode, STAGE, '--decode-fallback-max', '15')
     assert ph['status'] == 'pass', ph
 
 
 def test_metrics_fail_when_stage_counters_missing_on_active_gpu_route(fake, tmp_path):
-    decode = 'op_ingest_decode_total{route="gpu"} 100\n'
+    decode = 'op_decode_route_total{route="gpu",path="ingest"} 100\n'
     ph = _metrics_run(fake, tmp_path, decode, 'nv_inference_count 1\n')
     assert ph['status'] == 'fail'
     assert 'op_gpu_prep_stage_seconds' in json.dumps(ph['evidence'])
 
 
 def test_metrics_cpu_only_decode_skips_gpu_checks(fake, tmp_path):
-    decode = 'op_ingest_decode_total{route="cpu_small"} 100\n'
+    decode = 'op_decode_route_total{route="cpu_small",path="ingest"} 100\n'
     ph = _metrics_run(fake, tmp_path, decode, 'nothing 1\n')
     assert ph['status'] == 'pass'
     assert 'GPU decode route took no images' in json.dumps(ph['evidence'])

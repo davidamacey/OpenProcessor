@@ -147,7 +147,10 @@ async def test_a_memory_status_is_counted_and_takes_the_cpu_path(tmp_path, statu
 
     def sample() -> float:
         return (
-            REGISTRY.get_sample_value('op_ingest_decode_total', {'route': f'cpu_{status}'}) or 0.0
+            REGISTRY.get_sample_value(
+                'op_decode_route_total', {'route': f'cpu_{status}', 'path': 'ingest'}
+            )
+            or 0.0
         )
 
     svc, os_fake, triton, calls, sizes = _gpu_service(tmp_path, status=status)
