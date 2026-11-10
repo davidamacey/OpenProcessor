@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- The 0.6.0 upgrade refuses, at verify and before deleting anything, when it cannot find a project's class registry (no registry document and no `class_registry.json` where the project record says) and the project's items carry classes; the message names the project and the expected path. A project with no registry and no classed items still upgrades. Two earlier faults stopped every real upgrade: verify counted the seeded built-in models as unexpected rows, and the index reopen after the analysis-settings step passed a duration string as the transport timeout.
 - A batch write that errors on an item (a failed bulk request, a mapping error) is reported in that item's `failed` entry (`reason: write_failed`) on `POST /crops/discard_batch`, the new-class resolve and the assist apply, not as a `conflicts` entry that says someone else edited it. A 4xx bulk error is no longer retried. Label operations and the assist loop fail the job on an unwritable item.
 
 ### Added

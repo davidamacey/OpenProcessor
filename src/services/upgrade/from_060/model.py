@@ -43,6 +43,7 @@ class ProjectSrc:
     storage_prefix: str
     paused_at: dt.datetime | None
     legacy_indexes: dict[str, str]  # control role -> name, for the sources to delete
+    class_registry_path: str = ''  # where the project record says ``class_registry.json`` is
 
 
 @dataclass(frozen=True)

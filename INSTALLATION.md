@@ -578,7 +578,7 @@ configurations, activations, settings, label operations, jobs and run records) o
 `class_registry.json` files into PostgreSQL, in one step with the backup first. `upgrade` stops the
 stack, runs the database migrations, exports a bundle (`.install/upgrade-0.6.0-<utc>/`), loads it
 in one transaction, verifies the rows against the bundle, and only then deletes the 0.6.0 control
-indexes and files; a verify that fails deletes nothing and names the report. It resumes at the first
+indexes and files; a verify that fails deletes nothing and names the report. The upgrade also refuses, naming the project and the path it expected, when it cannot find a project's `class_registry.json` (for example the data directory is not mounted) and that project's items carry classes; mount the directory or restore the file and run `python -m scripts.db.upgrade_from_060 --reset`. A project with no registry and no classed items upgrades. It resumes at the first
 step that did not finish. `./setup-openprocessor.sh --rollback` rebuilds the 0.6.0 control indexes
 and files from the newest bundle and abandons what was written to PostgreSQL since (it asks first;
 classes, configurations and jobs created after the upgrade are not carried back). A checkout

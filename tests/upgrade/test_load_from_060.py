@@ -304,3 +304,35 @@ async def test_builtin_engine_rows_do_not_fail_verify(make_runner, clean_db) -> 
     result = await make_runner().run()
     assert result.verify is not None
     assert result.verify.ok, result.verify.problems
+
+
+@pytest.mark.asyncio
+async def test_a_missing_registry_of_a_project_with_items_refuses_and_deletes_nothing(
+    make_runner, clean_db, v060
+) -> None:
+    """A registry file that is not where the project record says (an unmounted data directory)
+    must not load as a project with no classes and then delete its sources."""
+    from src.services.upgrade.from_060.runner import VerifyFailedError
+
+    expected = v060.path('data/projects/default/class_registry.json')
+    expected.unlink()
+    with pytest.raises(VerifyFailedError) as err:
+        await make_runner().run()
+    assert any('default' in p and str(expected) in p for p in err.value.problems)
+    assert not rows(clean_db, "SELECT 1 FROM upgrade_runs WHERE step = 'delete_sources'")
+    assert not v060.path('data/projects/demo/class_registry.json.migrated-0.7.0').exists()
+
+
+@pytest.mark.asyncio
+async def test_a_project_with_no_registry_and_no_labeled_items_proceeds(
+    make_runner, clean_db
+) -> None:
+    """The fixture's ``lean`` project has neither a registry nor any item: the data itself says
+    there is nothing to lose."""
+    result = await make_runner().run()
+    assert result.verify is not None
+    assert result.verify.ok, result.verify.problems
+    assert rows(
+        clean_db,
+        "SELECT count(*) FROM project_classes c JOIN projects p ON p.id = c.project_id WHERE p.slug = 'lean'",
+    ) == [(0,)]
