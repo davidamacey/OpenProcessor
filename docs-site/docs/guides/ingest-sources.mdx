@@ -266,7 +266,7 @@ Outputs below are copied from the served status.
 | e | Cron `* * * * *`, one object uploaded | fired at the next minute (`last_fire_at ...:32:00`), `done 303` |
 | f | Credential disabled in MinIO | run `failed` with `could not read the source: ClientError: ... InvalidAccessKeyId ... Your account is disabled`; `watch.error` served with `backoff_until`; nothing ingested (`done` unchanged), API stayed healthy; after the credential was enabled again the next poll recovered (`done 304`). A bucket outside the allow-list: 422 `s3_not_allowed` on create; with the allow-list narrowed to another bucket the status served `blocked_reason: s3_not_allowed` and `can_run: false`, run answered 422 |
 | g | Other projects | `GET .../ingest/sources` is empty and `GET .../sources/<id>` is 404 `ingest_source_not_found` in two other projects; the events route answers 404 there; no `s3://` reference exists in them |
-| h | Bulk run in (a) | 23.6 images/s over 12.7 s; decode counter `op_ingest_decode_total{route="cpu_small"} 300` (COCO images are small, so the CPU route, not the GPU decode). A sanity figure on one small run, not a benchmark |
+| h | Bulk run in (a) | 23.6 images/s over 12.7 s; decode counter `op_decode_route_total{route="cpu_small",path="ingest"} 300` (COCO images are small, so the CPU route, not the GPU decode). A sanity figure on one small run, not a benchmark |
 
 Through Cropwright (headless Chromium against the Ingest page): **Add a source** with
 bucket `op-s3-test` and prefix `ui/`, **Save**, **Run now** gave `pending 0, ingested 5,

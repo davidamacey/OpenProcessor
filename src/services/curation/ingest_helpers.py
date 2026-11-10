@@ -7,8 +7,8 @@ orchestration only.
 from __future__ import annotations
 
 from src.config.env import env_int
-from src.services.curation.image_decode import DecodedImage, decode_image
 from src.services.detection.geometry import crop_id as _crop_id_fn
+from src.utils.image_decode import DecodedImage, decode_image
 from src.utils.stage_timing import stage_timer
 
 
@@ -20,7 +20,7 @@ MAX_INGEST_CONCURRENCY = env_int('OP_MAX_INGEST_CONCURRENCY', 16)
 
 
 def _decode_image(image_bytes: bytes) -> DecodedImage:
-    """Decode bytes into the upright RGB frame (:func:`~src.services.curation.image_decode.decode_image`)."""
+    """Decode bytes into the upright RGB frame (:func:`~src.utils.image_decode.decode_image`)."""
     with stage_timer('decode', nbytes=len(image_bytes)):
         return decode_image(image_bytes)
 

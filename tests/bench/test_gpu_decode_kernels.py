@@ -13,9 +13,10 @@ import pytest
 from PIL import Image
 
 from scripts.bench import gpu_decode_kernels as k, gpu_decode_lib as lib
+from src.domain.image_geometry import crop_rect, letterbox_geometry
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, image_lap_var
-from src.services.detection.geometry import crop_rect, letterbox_to_square
+from src.services.detection.geometry import letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb
 
 
@@ -42,7 +43,7 @@ def test_letterbox_matches_product_geometry_and_passes_t(size: tuple[int, int]) 
     assert got.dtype == torch.uint8
     assert tuple(got.shape) == ref.shape
     ref_hwc, got_hwc = ref[0].transpose(1, 2, 0), got[0].numpy().transpose(1, 2, 0)
-    geo = lib.letterbox_geometry(size[1], size[0], 640)
+    geo = letterbox_geometry(size[1], size[0], 640)
     pad_mask = np.ones((640, 640), dtype=bool)
     pad_mask[geo.top : geo.top + geo.new_h, geo.left : geo.left + geo.new_w] = False
     assert (got_hwc[pad_mask] == 114).all()

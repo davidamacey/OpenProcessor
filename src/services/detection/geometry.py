@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from src.domain.image_geometry import letterbox_geometry
 from src.utils.stage_timing import stage_timer
 
 
@@ -40,26 +41,6 @@ def bbox_norm(
         max(0.0, min(1.0, x2 / max(width, 1))),
         max(0.0, min(1.0, y2 / max(height, 1))),
     ]
-
-
-def crop_rect(
-    bbox_pixel: tuple[float, float, float, float], width: int, height: int
-) -> tuple[int, int, int, int]:
-    """The integer pixel rectangle ``(x1, y1, x2, y2)`` (x2/y2 exclusive) that holds the box
-    :func:`bbox_norm` stores: rounded, cut to the frame, at least one pixel wide and high.
-
-    A crop (and so its PE vector) is the pixels of the stored box. The GPU decode repeats this
-    arithmetic in ``models/gpu_image_prep/1/prep_geometry.py``; a test holds the two equal.
-    """
-    x1, y1, x2, y2 = bbox_pixel
-    x1i = min(max(0, round(x1)), max(width, 1) - 1)
-    y1i = min(max(0, round(y1)), max(height, 1) - 1)
-    return (
-        x1i,
-        y1i,
-        min(max(x1i + 1, round(x2)), max(width, 1)),
-        min(max(y1i + 1, round(y2)), max(height, 1)),
-    )
 
 
 def stored_bbox_norm(
@@ -127,14 +108,8 @@ def letterbox_params(
     Raises:
         ValueError: If ``img`` has a zero-size dimension.
     """
-    orig_w, orig_h = img.size
-    if orig_w == 0 or orig_h == 0:
-        msg = f'degenerate image size: ({orig_w}, {orig_h})'
-        raise ValueError(msg)
-    scale = min(target / orig_h, target / orig_w)
-    new_w = max(1, round(orig_w * scale))
-    new_h = max(1, round(orig_h * scale))
-    return float(scale), ((target - new_w) / 2.0, (target - new_h) / 2.0)
+    lb = letterbox_geometry(*img.size, target)
+    return lb.scale, (lb.pad_w, lb.pad_h)
 
 
 def letterbox_to_square(
@@ -159,41 +134,16 @@ def letterbox_to_square(
     """
     from PIL import Image as PILImage
 
-    orig_w, orig_h = img.size
-    if orig_w == 0 or orig_h == 0:
-        msg = f'degenerate image size: ({orig_w}, {orig_h})'
-        raise ValueError(msg)
+    lb = letterbox_geometry(*img.size, target)
 
     with stage_timer('letterbox'):
-        scale = min(target / orig_h, target / orig_w)
-        new_w = max(1, round(orig_w * scale))
-        new_h = max(1, round(orig_h * scale))
-        resized = img.resize((new_w, new_h), PILImage.Resampling.BILINEAR)
+        resized = img.resize((lb.new_w, lb.new_h), PILImage.Resampling.BILINEAR)
 
         canvas = PILImage.new('RGB', (target, target), fill)
-        pad_w = (target - new_w) / 2.0
-        pad_h = (target - new_h) / 2.0
-        canvas.paste(resized, (int(pad_w), int(pad_h)))
+        canvas.paste(resized, (lb.left, lb.top))
 
         chw = np.ascontiguousarray(np.asarray(canvas).transpose(2, 0, 1))[None]
-        return chw, float(scale), (float(pad_w), float(pad_h))
-
-
-def undo_letterbox(
-    bbox_pixel: tuple[float, float, float, float],
-    scale: float,
-    pad: tuple[float, float],
-) -> tuple[float, float, float, float]:
-    """Map a network-pixel-space bbox back to the pre-letterbox image's pixel coords."""
-    pad_w, pad_h = pad
-    x1, y1, x2, y2 = bbox_pixel
-    s = max(scale, 1e-6)
-    return (
-        (x1 - pad_w) / s,
-        (y1 - pad_h) / s,
-        (x2 - pad_w) / s,
-        (y2 - pad_h) / s,
-    )
+        return chw, lb.scale, (lb.pad_w, lb.pad_h)
 
 
 def crop_to_jpeg(crop: Image.Image, quality: int = 90) -> bytes:
@@ -216,5 +166,4 @@ __all__ = [
     'iou',
     'letterbox_params',
     'letterbox_to_square',
-    'undo_letterbox',
 ]

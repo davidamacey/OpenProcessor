@@ -45,6 +45,7 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.bench import gpu_decode_lib as lib, parity_metrics as pm
 from scripts.bench.detector_capture import decode_row, fused_detections
 from src.config.settings import TritonModelConfig
+from src.domain.image_geometry import letterbox_geometry
 
 
 DetRow = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
@@ -143,10 +144,11 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from PIL import Image
 
     from scripts.bench import gpu_decode_kernels as k
+    from src.domain.image_geometry import crop_rect
     from src.services.curation.ingest_helpers import _decode_image
     from src.services.curation.ingest_index import crop_pil
     from src.services.detection.crop_quality import crop_lap_var, image_lap_var
-    from src.services.detection.geometry import crop_rect, letterbox_to_square
+    from src.services.detection.geometry import letterbox_to_square
     from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
 
     pil = _decode_image(data).pil
@@ -187,7 +189,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     gpu_whole = k.whole_frame_u8(frame).cpu().numpy()
     area_whole = k.whole_frame_u8(frame, mode='area').cpu().numpy()
     dct8_whole = k.whole_frame_u8(frame, mode='dct8').cpu().numpy()
-    g = lib.letterbox_geometry(w, h, 640)
+    g = letterbox_geometry(w, h, 640)
     inner = gpu_lb_t[0, :, g.top : g.top + g.new_h, g.left : g.left + g.new_w].permute(1, 2, 0)
     cascade_whole = k.whole_frame_u8(inner).cpu().numpy()
     lb_hwc = gpu_lb_t[0].permute(1, 2, 0)

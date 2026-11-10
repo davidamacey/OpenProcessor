@@ -105,7 +105,7 @@ def decode_image(image_bytes: bytes, filename: str = 'unknown') -> np.ndarray:
     # Slower but handles more edge cases (WebP, animated GIF, special TIFF, etc.)
     try:
         # Load image from bytes
-        pil_image: Image.Image = Image.open(io.BytesIO(image_bytes))
+        pil_image: Image.Image = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes)))
 
         # Normalize mode to RGB/L (grayscale)
         # This handles: RGBA, P (palette), CMYK, LAB, etc.

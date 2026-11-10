@@ -36,10 +36,10 @@ call under the ingest profile, so those calls pay a few seconds once.
 its decoded frame from it before decoding and waits its turn (at most `BUDGET_WAIT_SECONDS`)
 instead of failing a CUDA allocation. The budget is reserved when the model loads: an
 instance that cannot hold it fails to load, Triton shows the model unavailable and ingest
-decodes on the CPU; the route counters (`op_ingest_decode_total`) show it. A photo that still hits a
+decodes on the CPU; the route counters (`op_decode_route_total`) show it. A photo that still hits a
 failed allocation, a wait that times out, or a photo larger than the budget is answered with a
-status and decoded on the CPU, counted in `op_ingest_decode_total` as `cpu_gpu_memory` or
-`cpu_over_budget` (embed pass: `op_reprocess_decode_total`). The stage counter
+status and decoded on the CPU, counted in `op_decode_route_total` as `cpu_gpu_memory` or
+`cpu_over_budget` (embed pass: `op_decode_route_total`). The stage counter
 `op_gpu_prep_stage_seconds{stage="budget"}` is the time spent waiting.
 
 A non-zero `cpu_gpu_memory` rate means the card is too full: use the profile below, lower the

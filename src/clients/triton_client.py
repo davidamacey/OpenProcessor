@@ -24,14 +24,12 @@ Active models:
 - paddleocr_det_trt + paddleocr_rec_trt: OCR (via ocr_pipeline BLS)
 """
 
-import io
 import logging
 import time
 from typing import Any, cast
 
 import cv2
 import numpy as np
-from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
@@ -48,6 +46,7 @@ from src.clients.triton_preprocess import (
 )
 from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
+from src.utils.image_decode import decode_image
 from src.utils.retry import retry_sync
 
 
@@ -255,7 +254,7 @@ class TritonClient:
             Dict with detections and image embedding
         """
         # CPU decode image
-        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        img = decode_image(image_bytes).pil
         orig_w, orig_h = img.size
         img_array = np.array(img)  # HWC, RGB, uint8
 

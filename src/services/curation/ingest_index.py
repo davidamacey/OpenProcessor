@@ -23,6 +23,7 @@ import numpy as np
 from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
+from src.domain.image_geometry import crop_rect
 from src.domain.location_policy import apply_location_policy
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import ERROR_KIND_BLUR, ERROR_KIND_BULK_INDEX, IngestResult
@@ -35,11 +36,7 @@ from src.services.curation.item_doc import (
 )
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
-from src.services.detection.geometry import (
-    bbox_norm as _bbox_norm_fn,
-    crop_id as _crop_id,
-    crop_rect,
-)
+from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
 from src.services.embedding_spaces.readers import frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 from src.utils.cpu_pool import run_cpu

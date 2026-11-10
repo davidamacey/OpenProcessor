@@ -39,10 +39,11 @@ from src.clients.model_adapters import FUSED_OUTPUT, FusedDetAdapter
 from src.clients.triton_pool_core import images_input
 from src.config.ingest_profiles import model_class_name, proposer_label
 from src.core.logging import get_logger
+from src.domain.image_geometry import undo_letterbox
 from src.services.curation.detector_class_map import registry_class_for
 from src.services.curation.ingest_policy import registry_name_index
 from src.services.curation.item_doc import DetectedItem
-from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square, undo_letterbox
+from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square
 from src.utils.class_names import normalize_class_name
 from src.utils.cpu_pool import run_cpu
 from src.utils.task_group import run_all

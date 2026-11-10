@@ -1,12 +1,12 @@
 """Host-side logic of the GPU decode: header routing, geometry and resampling weights.
 
 Numpy only, so the offline test suite covers it (``tests/models/test_gpu_image_prep_geometry.py``).
-Every function reproduces the arithmetic of the CPU ingest path it stands in for:
+Every function reproduces the arithmetic of the CPU ingest path it stands in for.
 
-* :func:`letterbox_geometry`  ``geometry.letterbox_to_square``
-* :func:`whole_square_geometry`  ``pe_preprocess.whole_frame_rgb_from_image`` and
-  ``pe_preprocess.resize_crop_rgb`` (shorter edge to 336, centre crop)
-* :func:`crop_rect`  ``ingest_index.crop_pil`` cut to the frame, the stored box (#259)
+The letterbox, whole-square, un-map and crop-rectangle arithmetic is ``image_geometry.py``, a
+byte-identical copy of ``src/domain/image_geometry.py`` (``tests/test_geometry_copy_identical.py``).
+Here:
+
 * :func:`stored_box_rects`  the embed pass's ``crop_pil`` of a stored ``bbox_norm`` (#259)
 * :func:`blur_rect`  ``crop_quality.crop_lap_var``'s clamped rectangle
 * :func:`filter_weights`  Pillow ``BILINEAR`` (antialiased: the support widens with the
@@ -19,6 +19,7 @@ import struct
 from typing import NamedTuple
 
 import numpy as np
+from image_geometry import crop_rect
 
 
 _SOF_MARKERS = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
@@ -120,60 +121,6 @@ def route(data: bytes, min_megapixels: float, max_megapixels: float) -> tuple[st
 def oriented_size(h: JpegHeader) -> tuple[int, int]:
     """``(width, height)`` after the EXIF orientation is applied."""
     return (h.height, h.width) if h.orientation in (5, 6, 7, 8) else (h.width, h.height)
-
-
-class Letterbox(NamedTuple):
-    new_w: int
-    new_h: int
-    left: int
-    top: int
-    scale: float
-    pad_w: float
-    pad_h: float
-
-
-def letterbox_geometry(w: int, h: int, target: int) -> Letterbox:
-    scale = min(target / h, target / w)
-    new_w = max(1, round(w * scale))
-    new_h = max(1, round(h * scale))
-    pad_w = (target - new_w) / 2.0
-    pad_h = (target - new_h) / 2.0
-    return Letterbox(new_w, new_h, int(pad_w), int(pad_h), float(scale), pad_w, pad_h)
-
-
-class Square(NamedTuple):
-    new_w: int
-    new_h: int
-    left: int
-    top: int
-
-
-def whole_square_geometry(w: int, h: int, target: int) -> Square:
-    scale = target / min(h, w)
-    nw, nh = max(target, round(w * scale)), max(target, round(h * scale))
-    return Square(nw, nh, (nw - target) // 2, (nh - target) // 2)
-
-
-def undo_letterbox(
-    box: tuple[float, float, float, float], lb: Letterbox
-) -> tuple[float, float, float, float]:
-    """A detector box (letterboxed network-input pixels, as the fused engine emits it) in frame
-    pixels, as ``WholeImageDetector.decode_primary_row`` maps it."""
-    s = max(lb.scale, 1e-6)
-    x1, y1, x2, y2 = (float(v) for v in box)
-    return ((x1 - lb.pad_w) / s, (y1 - lb.pad_h) / s, (x2 - lb.pad_w) / s, (y2 - lb.pad_h) / s)
-
-
-def crop_rect(bbox: tuple[float, float, float, float], w: int, h: int) -> tuple[int, int, int, int]:
-    x1, y1, x2, y2 = bbox
-    x1i = min(max(0, round(x1)), max(w, 1) - 1)
-    y1i = min(max(0, round(y1)), max(h, 1) - 1)
-    return (
-        x1i,
-        y1i,
-        min(max(x1i + 1, round(x2)), max(w, 1)),
-        min(max(y1i + 1, round(y2)), max(h, 1)),
-    )
 
 
 def stored_box_rects(boxes_norm: np.ndarray, w: int, h: int) -> list[tuple[int, int, int, int]]:

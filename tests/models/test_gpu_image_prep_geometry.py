@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import sys
 from pathlib import Path
 
 import cv2
@@ -12,13 +13,20 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from src.domain.image_geometry import (
+    crop_rect,
+    letterbox_geometry,
+    undo_letterbox,
+    whole_square_geometry,
+)
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, variance_from_sums
-from src.services.detection.geometry import letterbox_to_square, undo_letterbox
+from src.services.detection.geometry import letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
 
 
 _PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
+sys.path.insert(0, str(_PATH.parent))  # prep_geometry imports its sibling image_geometry
 _spec = importlib.util.spec_from_file_location('prep_geometry', _PATH)
 assert _spec is not None
 assert _spec.loader is not None
@@ -92,11 +100,11 @@ class TestGeometry:
     def test_letterbox_and_undo_match_the_detector_path(self, size: tuple[int, int]) -> None:
         img = Image.new('RGB', size)
         _chw, scale, pad = letterbox_to_square(img, 640)
-        lb = fg.letterbox_geometry(*size, 640)
+        lb = letterbox_geometry(*size, 640)
         assert (lb.scale, lb.pad_w, lb.pad_h) == (scale, *pad)
         box = (0.1, 0.2, 0.7, 0.9)
         x1, y1, x2, y2 = (v * 640 for v in box)
-        assert fg.undo_letterbox((x1, y1, x2, y2), lb) == undo_letterbox(
+        assert undo_letterbox((x1, y1, x2, y2), lb.scale, (lb.pad_w, lb.pad_h)) == undo_letterbox(
             (x1, y1, x2, y2), scale, pad
         )
 
@@ -107,7 +115,7 @@ class TestGeometry:
         self, box: tuple[float, float, float, float]
     ) -> None:
         img = Image.new('RGB', (120, 90))
-        x1, y1, x2, y2 = fg.crop_rect(box, 120, 90)
+        x1, y1, x2, y2 = crop_rect(box, 120, 90)
         assert crop_pil(img, box).size == (x2 - x1, y2 - y1)
         rgb = np.random.default_rng(1).integers(0, 256, (90, 120, 3), dtype=np.uint8)
         rect = fg.blur_rect(box, 120, 90)
@@ -156,7 +164,7 @@ class TestStoredBoxes:
         halves = [((k + 0.5) / w, (k + 0.5) / h) for k in range(0, min(w, h) - 1, 7)]
         boxes = [*self._boxes(w), *((x, y, 1.0, 1.0) for x, y in halves)]
         rects = fg.stored_box_rects(np.array(boxes, np.float64), w, h)
-        assert rects == [fg.crop_rect(_pixel_box(b, w, h), w, h) for b in boxes]
+        assert rects == [crop_rect(_pixel_box(b, w, h), w, h) for b in boxes]
 
     def test_the_pixels_are_the_cpu_crop(self) -> None:
         from src.services.curation.reprocess_embed import _pixel_box
@@ -180,7 +188,7 @@ class TestWeights:
         self, size: tuple[int, int]
     ) -> None:
         rgb = np.random.default_rng(size[0]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
-        g = fg.whole_square_geometry(*size, 336)
+        g = whole_square_geometry(*size, 336)
         full = _resample(rgb, g.new_w, g.new_h, antialias=True)
         ours = full[g.top : g.top + 336, g.left : g.left + 336]
         ref = whole_frame_rgb_from_image(Image.fromarray(rgb))
@@ -191,7 +199,7 @@ class TestWeights:
         self, size: tuple[int, int]
     ) -> None:
         rgb = np.random.default_rng(size[1]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
-        g = fg.whole_square_geometry(*size, 336)
+        g = whole_square_geometry(*size, 336)
         full = _resample(rgb, g.new_w, g.new_h, antialias=False)
         ours = full[g.top : g.top + 336, g.left : g.left + 336]
         ref = resize_crop_rgb(rgb)

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from src.domain.image_geometry import undo_letterbox
 from src.services.detection.geometry import (
     bbox_norm,
     box_area,
@@ -13,7 +14,6 @@ from src.services.detection.geometry import (
     crop_to_jpeg,
     iou,
     letterbox_to_square,
-    undo_letterbox,
 )
 
 

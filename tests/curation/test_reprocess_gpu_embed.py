@@ -113,7 +113,10 @@ def _fresh_ready_cache() -> Any:
 
 
 def _sample(route: str) -> float:
-    return REGISTRY.get_sample_value('op_reprocess_decode_total', {'route': route}) or 0.0
+    return (
+        REGISTRY.get_sample_value('op_decode_route_total', {'route': route, 'path': 'reprocess'})
+        or 0.0
+    )
 
 
 def _world(

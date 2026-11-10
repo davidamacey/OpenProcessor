@@ -43,18 +43,12 @@ OP_INGEST_IMAGES_TOTAL = Counter(
     'Images through ingest, by project and outcome (ok / failed / skipped = duplicate).',
     labelnames=('project', 'outcome'),
 )
-OP_INGEST_DECODE_TOTAL = Counter(
-    'op_ingest_decode_total',
-    'Images decoded by ingest, by route: gpu (the GPU decode) or cpu_<reason> (the CPU path: '
-    'off, small, not_jpeg, progressive, truncated, decoder, call_failed, ...).',
-    labelnames=('route',),
-)
-OP_REPROCESS_DECODE_TOTAL = Counter(
-    'op_reprocess_decode_total',
-    'Photos of the embed reprocess pass, by route, counted while the GPU decode is usable: gpu '
-    '(embedded on the GPU decode) or cpu_<reason> (decoded in the API: small, not_image, '
-    'progressive, decoder, call_failed, box_count, ...).',
-    labelnames=('route',),
+OP_DECODE_ROUTE_TOTAL = Counter(
+    'op_decode_route_total',
+    'Images decoded, by path (ingest, or reprocess for the embed reprocess pass) and route: gpu '
+    '(the GPU decode) or cpu_<reason> (the CPU path: off, small, not_jpeg, progressive, truncated, '
+    'decoder, call_failed, ...). The reprocess path counts only while the GPU decode is usable.',
+    labelnames=('route', 'path'),
 )
 OP_INGEST_ITEMS_TOTAL = Counter(
     'op_ingest_items_total',

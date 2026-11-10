@@ -21,7 +21,7 @@ torchvision==0.29.1
 
 # Image Processing
 opencv-python==5.0.0.93
-# JPEG decode for ingest (libjpeg-turbo, bundled): src/services/curation/image_decode.py
+# JPEG decode for ingest (libjpeg-turbo, bundled): src/utils/image_decode.py
 simplejpeg==1.9.0
 # Pillow: image decode fallback and overlays (src/utils/image_processing.py, src/services/curation/image_serving.py)
 pillow==13.0.0

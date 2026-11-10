@@ -72,7 +72,7 @@ independent in files; `prep` waits for `profile`'s report.
 ### Track `decode`
 
 **5b-D1 GPU-3b: one oriented decode helper.** Size M.
-- Pattern: move `src/services/curation/image_decode.decode_image` (proven equal to Pillow
+- Pattern: move `src/utils/image_decode.decode_image` (proven equal to Pillow
   `ImageOps.exif_transpose` for all 8 EXIF tags; returns `DecodedImage`, raises `ImageDecodeError`)
   to `src/utils/image_decode.py`; update its 6 importers (`rg -n "image_decode import" src scripts tests`);
   no re-export shim at the old path.
