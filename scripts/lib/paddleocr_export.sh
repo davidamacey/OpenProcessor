@@ -89,7 +89,7 @@ unload_models_for_memory() {
 # =============================================================================
 
 download_models() {
-    log_info "Downloading PP-OCRv5 ONNX models (detection + multilingual recognition)..."
+    log_info "Downloading PP-OCRv6 ONNX models (detection + multilingual recognition)..."
 
     local download_ok=false
 

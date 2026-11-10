@@ -1,7 +1,7 @@
 """
-OCR Service for PP-OCRv5 Text Detection and Recognition.
+OCR Service for PP-OCRv6 Text Detection and Recognition.
 
-This service provides OCR inference via Triton Server with PP-OCRv5 models.
+This service provides OCR inference via Triton Server with PP-OCRv6 models.
 It handles preprocessing, inference orchestration, and result formatting.
 
 Pipeline:
@@ -46,7 +46,7 @@ class OcrService:
     """
     OCR service for text detection and recognition.
 
-    Uses PP-OCRv5 models via Triton Server:
+    Uses PP-OCRv6 models via Triton Server:
     - paddleocr_det_trt: Text detection
     - paddleocr_rec_trt: Text recognition
     - ocr_pipeline: BLS orchestrator (optional, if using Triton BLS)

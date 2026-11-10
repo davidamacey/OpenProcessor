@@ -11,7 +11,7 @@ import pytest
 import simplejpeg
 from PIL import Image
 
-from src.services.curation.image_decode import ImageDecodeError, decode_image
+from src.utils.image_decode import ImageDecodeError, decode_image
 
 
 HEADER_ERROR = 'tjDecompressHeader3(): Could not determine subsampling level of JPEG image'

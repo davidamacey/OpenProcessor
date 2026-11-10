@@ -4,13 +4,11 @@ Pure array functions: they take pixels or encoded bytes and return the tensors
 :class:`src.clients.triton_client.TritonClient` sends, with no Triton or network access.
 """
 
-import io
-
 import cv2
 import numpy as np
-from PIL import Image
 
 from src.utils.cpu_preprocess import center_crop_cpu
+from src.utils.image_decode import decode_image
 
 
 def preprocess_yolo_cpu(img_array: np.ndarray, target_size: int) -> tuple[np.ndarray, float, tuple]:
@@ -53,5 +51,5 @@ def preprocess_clip_cpu(img_array: np.ndarray) -> np.ndarray:
 
 def preprocess_for_mobileclip(image_bytes: bytes) -> np.ndarray:
     """Preprocess encoded image bytes for MobileCLIP (256x256, BILINEAR, center crop)."""
-    rgb = np.asarray(Image.open(io.BytesIO(image_bytes)).convert('RGB'))
+    rgb = np.asarray(decode_image(image_bytes).pil)
     return preprocess_clip_cpu(rgb)

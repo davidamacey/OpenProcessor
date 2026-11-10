@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Region box text: the wire no longer carries `text_engine_version`; the slot reads `text_reader` and `text_reader_version` (the model that read the text) and the config-test candidate adds `text_frame` and `text_conf_char_min`.
+
 ### Fixed
 
 - Map page: points render again. The API client now parses every `+json` response (`/map/cells` answers `application/geo+json`); before, the body arrived as text and MapLibre tried to fetch it as a URL.

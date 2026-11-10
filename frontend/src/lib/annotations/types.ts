@@ -116,7 +116,9 @@ export interface SlotBox {
   textRaw: string | null;
   textSource: string | null;
   textConfidence: number | null;
-  textEngineVersion: string | null;
+  /** The model that read the text (a Triton model name, or `vlm`) and its version. */
+  textReader: string | null;
+  textReaderVersion: string | null;
   /** The VLM's / OCR engine's own candidate readings. */
   textVlm: string | null;
   textOcr: string | null;

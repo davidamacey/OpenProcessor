@@ -24,14 +24,12 @@ Active models:
 - paddleocr_det_trt + paddleocr_rec_trt: OCR (via ocr_pipeline BLS)
 """
 
-import io
 import logging
 import time
 from typing import Any, cast
 
 import cv2
 import numpy as np
-from PIL import Image
 from tritonclient.grpc import InferInput, InferRequestedOutput
 from ultralytics.data.augment import LetterBox
 
@@ -48,6 +46,7 @@ from src.clients.triton_preprocess import (
 )
 from src.config.settings import TritonModelConfig
 from src.utils.affine import format_detections_from_triton, inverse_letterbox_coords
+from src.utils.image_decode import decode_image
 from src.utils.retry import retry_sync
 
 
@@ -64,7 +63,7 @@ class TritonClient:
     Pipelines:
     - infer_fused_detector: fused detector engine (CPU preprocessing)
     - infer_yolo_clip_cpu: YOLO + MobileCLIP (CPU preprocessing)
-    - infer_ocr: PP-OCRv5 text detection + recognition (BLS pipeline)
+    - infer_ocr: PP-OCRv6 text detection + recognition (BLS pipeline)
     """
 
     def __init__(
@@ -255,7 +254,7 @@ class TritonClient:
             Dict with detections and image embedding
         """
         # CPU decode image
-        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        img = decode_image(image_bytes).pil
         orig_w, orig_h = img.size
         img_array = np.array(img)  # HWC, RGB, uint8
 
@@ -361,12 +360,12 @@ class TritonClient:
         return preprocess_for_mobileclip(image_bytes)
 
     # =========================================================================
-    # OCR: PP-OCRv5 Text Detection and Recognition
+    # OCR: PP-OCRv6 Text Detection and Recognition
     # =========================================================================
 
     def infer_ocr(self, image: bytes | np.ndarray) -> dict[str, Any]:
         """
-        OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
+        OCR inference: PP-OCRv6 text detection and recognition via BLS pipeline.
 
         Args:
             image: a decoded, EXIF-oriented BGR array, or raw image bytes

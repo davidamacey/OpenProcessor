@@ -418,6 +418,8 @@ const CASES: [string, string[]][] = [
       proposed_by_import: true,
       reason: true,
       region_gate_skipped: true,
+      region_text: true,
+      region_text_match: true,
       region_status: true,
       review_dismissed: true,
       review_status: true,

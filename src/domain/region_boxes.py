@@ -59,8 +59,13 @@ class RegionBox:
     text: str | None = None
     text_raw: str | None = None
     text_source: str | None = None
-    text_engine_version: str | None = None
+    text_frame: str | None = None
+    text_norm: str | None = None
+    text_fold: str | None = None
     text_confidence: float | None = None
+    text_conf_char_min: float | None = None
+    text_reader: str | None = None
+    text_reader_version: str | None = None
     text_vlm: str | None = None
     text_ocr: str | None = None
     text_choice: str | None = None

@@ -147,26 +147,6 @@ def route(header: JpegHeader, policy: RoutePolicy) -> str:
 # ------------------------------------------------------------------------------- geometry
 
 
-class Letterbox(NamedTuple):
-    new_w: int
-    new_h: int
-    left: int
-    top: int
-    scale: float
-    pad_w: float
-    pad_h: float
-
-
-def letterbox_geometry(w: int, h: int, target: int) -> Letterbox:
-    """``letterbox_to_square``'s arithmetic: resize size, paste offset and the un-map pad."""
-    scale = min(target / h, target / w)
-    new_w = max(1, round(w * scale))
-    new_h = max(1, round(h * scale))
-    pad_w = (target - new_w) / 2.0
-    pad_h = (target - new_h) / 2.0
-    return Letterbox(new_w, new_h, int(pad_w), int(pad_h), float(scale), pad_w, pad_h)
-
-
 class PeSquare(NamedTuple):
     new_w: int
     new_h: int

@@ -32,7 +32,7 @@ from src.services.detection.region_text import (
     TEXT_SOURCE_VLM,
     DominantTextConfig,
     DominantTextReading,
-    ocr_engine_id,
+    ocr_reader,
     resolve_region_text,
 )
 from src.services.embedding_spaces.readers import vector_source_excludes
@@ -50,8 +50,13 @@ HUMAN_TEXT_SOURCE = 'human'
 MANAGED_ATTRS: tuple[str, ...] = (
     'text',
     'text_source',
+    'text_frame',
+    'text_norm',
+    'text_fold',
     'text_confidence',
-    'text_engine_version',
+    'text_conf_char_min',
+    'text_reader',
+    'text_reader_version',
     'text_disagreement',
     'text_choice',
     'text_vlm_invalid',
@@ -111,8 +116,9 @@ def rederive(
         # write time; ``vlm_model``), not whatever this process is configured with.
         vlm_engine=vlm_model or '',
         ocr=ocr,
-        ocr_engine=ocr_engine_id(profile),
+        ocr_reader=ocr_reader(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
+        confusables=profile.text_confusables,
         rules=rules,
     )
     target = {a: out.get(a) for a in MANAGED_ATTRS}
@@ -125,7 +131,8 @@ def rederive(
         # engine and source spelling.
         target['text_source'] = stored_source
         target['text_confidence'] = view['text_confidence']
-        target['text_engine_version'] = view['text_engine_version']
+        target['text_reader'] = view['text_reader']
+        target['text_reader_version'] = view['text_reader_version']
     return target
 
 

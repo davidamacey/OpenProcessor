@@ -416,6 +416,10 @@ def box_thumbnail_url(prefix: str, crop_id: str, box_id: str) -> str:
     return f'{prefix}/crops/{crop_id}/region_thumbnail?box_id={box_id}'
 
 
+# Match keys the index searches; the readable ``text`` is what a client sees.
+STORAGE_ONLY_BOX_KEYS: tuple[str, ...] = ('text_norm', 'text_fold')
+
+
 def region_box_to_wire(
     src: dict[str, Any], box: RegionBox, *, crop_id: str = '', prefix: str = ''
 ) -> dict[str, Any]:
@@ -425,6 +429,8 @@ def region_box_to_wire(
     one place the box wire is built: a stored box and a test-run candidate
     render with the same keys."""
     doc = box.to_doc()
+    for key in STORAGE_ONLY_BOX_KEYS:
+        del doc[key]
     doc['locked'] = is_locked_box(box)
     doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
     doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None

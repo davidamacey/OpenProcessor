@@ -35,7 +35,8 @@ def _vlm_box(vlm: str, ocr: str | None = None, box_id: str = 'b1', **over: Any) 
         'text_vlm': vlm,
         'text_source': 'vlm',
         'text_confidence': 0.92,
-        'text_engine_version': 'vlm-model',
+        'text_reader': 'vlm',
+        'text_reader_version': 'vlm-model',
         'text_raw': ocr or vlm,
     }
     if ocr:
@@ -60,7 +61,8 @@ class TestRederive:
         assert target['text'] == 'VWY7977'
         assert target['text_source'] == 'ocr'
         assert target['text_confidence'] is None
-        assert target['text_engine_version'] == 'paddleocr_rec_trt:1'
+        assert (target['text_reader'], target['text_reader_version']) == ('paddleocr_rec_trt', '1')
+        assert target['text_fold'] == 'VWY7977'
         assert target['text_choice'] == 'vlm_invalid'
         assert target['text_vlm_invalid'] == 'placeholder'
         assert target['text_disagreement'] is None
@@ -78,7 +80,7 @@ class TestRederive:
         assert target['text'] == 'HK2E1K'
         assert target['text_source'] == 'vlm'
         assert target['text_confidence'] == 0.92
-        assert target['text_engine_version'] == 'vlm-model'
+        assert (target['text_reader'], target['text_reader_version']) == ('vlm', 'vlm-model')
         assert target['text_choice'] == 'vlm_preferred'
 
     def test_legacy_model_id_source_counts_as_the_vlm_reading(self) -> None:

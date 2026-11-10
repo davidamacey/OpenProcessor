@@ -208,6 +208,9 @@ COPY --chown=appuser:appuser config_templates/ ./config_templates/
 # config tree. Seeded into ./models on first use by sync_model_seed.py.
 COPY --chown=appuser:appuser models/ /opt/openprocessor/model_repo_seed/
 
+# The export scripts run as `python /app/export/x.py` (sys.path[0] is export/) and import `src.*`.
+ENV PYTHONPATH=/app
+
 USER appuser
 
 CMD ["python", "-m", "export.preflight"]

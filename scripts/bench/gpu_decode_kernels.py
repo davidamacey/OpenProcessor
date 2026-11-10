@@ -27,6 +27,7 @@ import torch
 import torch.nn.functional as F  # noqa: N812  # conventional alias
 
 from scripts.bench import gpu_decode_lib as lib
+from src.domain.image_geometry import letterbox_geometry
 
 
 def _to_u8(x: torch.Tensor) -> torch.Tensor:
@@ -42,7 +43,7 @@ def letterbox_u8(
 ) -> tuple[torch.Tensor, float, tuple[float, float]]:
     """HWC uint8 frame -> ``(1, 3, target, target)`` uint8, scale, ``(pad_w, pad_h)``."""
     h, w = int(frame.shape[0]), int(frame.shape[1])
-    g = lib.letterbox_geometry(w, h, target)
+    g = letterbox_geometry(w, h, target)
     resized = F.interpolate(
         _nchw_float(frame), size=(g.new_h, g.new_w), mode='bilinear', antialias=True
     )

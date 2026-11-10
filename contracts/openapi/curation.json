@@ -16672,6 +16672,28 @@
             ],
             "title": "Region Gate Skipped"
           },
+          "region_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text"
+          },
+          "region_text_match": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "fuzzy",
+              "fragment"
+            ],
+            "title": "Region Text Match",
+            "type": "string"
+          },
           "review_dismissed": {
             "anyOf": [
               {
@@ -27212,6 +27234,13 @@
             "title": "Text Charset",
             "type": "string"
           },
+          "text_confusables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Text Confusables",
+            "type": "object"
+          },
           "text_crop_margin": {
             "default": 0.05,
             "title": "Text Crop Margin",
@@ -27723,7 +27752,8 @@
               "string_list",
               "int_list",
               "float_pair",
-              "rgb"
+              "rgb",
+              "string_map"
             ],
             "title": "Type",
             "type": "string"
@@ -29931,6 +29961,17 @@
             ],
             "title": "Text Choice"
           },
+          "text_conf_char_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Conf Char Min"
+          },
           "text_confidence": {
             "anyOf": [
               {
@@ -29953,7 +29994,7 @@
             ],
             "title": "Text Disagreement"
           },
-          "text_engine_version": {
+          "text_frame": {
             "anyOf": [
               {
                 "type": "string"
@@ -29962,7 +30003,7 @@
                 "type": "null"
               }
             ],
-            "title": "Text Engine Version"
+            "title": "Text Frame"
           },
           "text_ocr": {
             "anyOf": [
@@ -29985,6 +30026,28 @@
               }
             ],
             "title": "Text Raw"
+          },
+          "text_reader": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reader"
+          },
+          "text_reader_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reader Version"
           },
           "text_source": {
             "anyOf": [
@@ -30045,8 +30108,11 @@
           "text",
           "text_raw",
           "text_source",
-          "text_engine_version",
+          "text_frame",
           "text_confidence",
+          "text_conf_char_min",
+          "text_reader",
+          "text_reader_version",
           "text_vlm",
           "text_ocr",
           "text_choice",
@@ -31047,6 +31113,28 @@
             },
             "title": "Region Status",
             "type": "array"
+          },
+          "region_text": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region Text"
+          },
+          "region_text_match": {
+            "default": "exact",
+            "enum": [
+              "exact",
+              "fuzzy",
+              "fragment"
+            ],
+            "title": "Region Text Match",
+            "type": "string"
           },
           "review_dismissed": {
             "anyOf": [
@@ -38061,6 +38149,7 @@
               "region_class_name_invalid",
               "text_reader_invalid",
               "text_regex_invalid",
+              "text_confusables_invalid",
               "detector_model_not_found",
               "detector_model_not_ready",
               "detector_model_unusable",
@@ -46343,6 +46432,60 @@
               ],
               "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
               "title": "Item Text"
+            }
+          },
+          {
+            "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+            "in": "query",
+            "name": "region_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+              "title": "Region Text"
+            }
+          },
+          {
+            "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "default": "exact",
+              "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+              "enum": [
+                "exact",
+                "fuzzy",
+                "fragment"
+              ],
+              "title": "Region Text Match",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+            "in": "query",
+            "name": "same_text_as",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+              "title": "Same Text As"
             }
           },
           {
@@ -59823,7 +59966,7 @@
             }
           },
           {
-            "description": "Box filter: substring search on the box text.",
+            "description": "Box filter: search on the box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -59836,8 +59979,31 @@
                   "type": "null"
                 }
               ],
-              "description": "Box filter: substring search on the box text.",
+              "description": "Box filter: search on the box text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "How `text` matches: `exact`, `fuzzy` (one edit) or `fragment` compare the folded plate text (letters and digits only, confusables folded); omitted, `text` is a case-insensitive substring of the box text as read.",
+            "in": "query",
+            "name": "text_match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "exact",
+                    "fuzzy",
+                    "fragment"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How `text` matches: `exact`, `fuzzy` (one edit) or `fragment` compare the folded plate text (letters and digits only, confusables folded); omitted, `text` is a case-insensitive substring of the box text as read.",
+              "title": "Text Match"
             }
           },
           {

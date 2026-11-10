@@ -761,7 +761,7 @@ What was built (branch `perf/gpu-decode-impl`, on top of the CPU slices):
 | Slice | What | Where |
 |---|---|---|
 | CPU single decode | the whole-frame square is cut from the frame decoded for the detector (Pillow `BILINEAR`, shorter edge to 336, centre crop); `exif_transpose` only when the tag moves pixels | `pe_preprocess.whole_frame_rgb_from_image`, `ingest_helpers._decode_image` |
-| libjpeg-turbo decode | JPEG through `simplejpeg` (the libjpeg-turbo Pillow runs, pixels identical) straight into the array the blur reads | `src/services/curation/image_decode.py` |
+| libjpeg-turbo decode | JPEG through `simplejpeg` (the libjpeg-turbo Pillow runs, pixels identical) straight into the array the blur reads | `src/utils/image_decode.py` |
 | GPU decode | Triton Python model `gpu_image_prep`, decoupled, one process: nvJPEG decoupled API with the GPU-Huffman backend through ctypes (16 lanes), EXIF on the GPU, fused uint8 CuPy kernels (separable Pillow-`BILINEAR` resampler for the letterbox and whole frame, plain bilinear for crop squares, exact grey + Laplacian sums), detector and PE through BLS, crop JPEGs encoded on host threads; per-image worker pool, bounded in flight | `models/gpu_image_prep/`, `src/services/curation/ingest_gpu_decode.py` |
 | Routing | `OP_INGEST_GPU_DECODE` (on by default; the installer writes 0 for profiles without room), size gate `OP_INGEST_GPU_MIN_MEGAPIXELS` (3.0); the model is loaded on first use and used only when its detector input matches the ingest profile; declined files (progressive, no end-of-image marker, not a baseline JPEG, decoder error) take the CPU path, counted in `op_ingest_decode_total{route}` | `ingest_batch._prefill_gpu_decode` |
 

@@ -466,6 +466,9 @@ export interface ReprocessFilter {
   proposed_by_import?: boolean | null;
   reason?: string[];
   region_gate_skipped?: boolean | null;
+  /** The item has a box whose folded text matches this (at most 200 characters). */
+  region_text?: string | null;
+  region_text_match?: 'exact' | 'fuzzy' | 'fragment';
   region_status?: string[];
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];

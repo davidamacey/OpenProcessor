@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from src.services.curation.dataset_import.paths import DatasetPathNotAllowedError
-from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
+from src.utils.image_decode import IMAGE_DECODE_ERRORS
 
 
 if TYPE_CHECKING:

@@ -396,10 +396,11 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
     item = serialize_item(src, 'x', state_fields=DEFAULT_STATE_FIELDS)
     # bbox_in_parent / thumbnail_url / locked are derived wire-only additions
     # on top of the stored element (the lock rule) -- not part of
-    # RegionBox.to_doc().
+    # RegionBox.to_doc(); the storage-only match keys are left off the wire.
+    stored = {k: v for k, v in box.to_doc().items() if k not in ('text_norm', 'text_fold')}
     assert item['region_boxes'] == [
         {
-            **box.to_doc(),
+            **stored,
             'bbox_in_parent': None,
             'locked': False,
             'thumbnail_url': item['region_boxes'][0]['thumbnail_url'],

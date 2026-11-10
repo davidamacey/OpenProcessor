@@ -53,18 +53,10 @@ import cupy as cp
 import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
+from image_geometry import crop_rect, letterbox_geometry, undo_letterbox, whole_square_geometry
 from nvjpeg_lanes import NvJpegLanes
 from prep_budget import ByteBudget, is_memory_error, need_bytes
-from prep_geometry import (
-    blur_rect,
-    crop_rect,
-    letterbox_geometry,
-    oriented_size,
-    route,
-    stored_box_rects,
-    undo_letterbox,
-    whole_square_geometry,
-)
+from prep_geometry import blur_rect, oriented_size, route, stored_box_rects
 from prep_kernels import PrepKernels
 from stage_metrics import StageClock, StageMetrics
 
@@ -137,6 +129,7 @@ class TritonPythonModel:
         self.max_mp = float(p.get('MAX_MEGAPIXELS', '100'))
         self.pe_batch = int(p.get('PE_BATCH', '32'))
         self.quality = int(p.get('JPEG_QUALITY', '90'))
+        self.crop_max_side = int(p.get('CROP_MAX_SIDE', '0'))
         device = int(args['model_instance_device_id'])
         cp.cuda.Device(device).use()
         # CuPy keeps freed blocks for reuse; photo frames differ in size, so without a cap the pool
@@ -284,7 +277,10 @@ class TritonPythonModel:
             im.boxes = rows[:, :4].astype(np.float32)
             im.scores = rows[:, 4].astype(np.float32)
             im.classes = rows[:, 5].astype(np.int32)
-            im.rects = [crop_rect(undo_letterbox(tuple(b), lb), w, h) for b in im.boxes]
+            im.rects = [
+                crop_rect(undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h)), w, h)
+                for b in im.boxes
+            ]
 
     def _embed(self, im: _Image, clock: StageClock) -> np.ndarray:
         """PE vectors of the whole-frame square and, when asked, of every detection's square."""
@@ -322,7 +318,10 @@ class TritonPythonModel:
     def _blur_sums(self, im: _Image) -> np.ndarray:
         """``[1 + detections, 3]`` (pixels, sum, sum of squares): the frame, then each box."""
         w, h = im.size
-        clamped = [blur_rect(undo_letterbox(tuple(b), im.lb), w, h) for b in im.boxes]
+        clamped = [
+            blur_rect(undo_letterbox(tuple(b), im.lb.scale, (im.lb.pad_w, im.lb.pad_h)), w, h)
+            for b in im.boxes
+        ]
         rects = [(0, 0, w, h)] + [r for r in clamped if r is not None]
         sums = iter(cp.asnumpy(self.kernels.lap_sums(im.frame, rects)))
         rows = [(w * h, *next(sums))]
@@ -341,6 +340,15 @@ class TritonPythonModel:
     def _encode(self, pixels: np.ndarray) -> tuple[bytes, float]:
         """The JPEG and the seconds the encode took on its host thread."""
         start = time.perf_counter()
+        side = max(pixels.shape[:2])
+        if 0 < self.crop_max_side < side:  # cap before encode: area filter, never upscaled
+            scale = self.crop_max_side / side
+            h, w = pixels.shape[:2]
+            pixels = cv2.resize(
+                pixels,
+                (max(1, round(w * scale)), max(1, round(h * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
         ok, buf = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
         if not ok:
             raise RuntimeError('crop JPEG encode failed')

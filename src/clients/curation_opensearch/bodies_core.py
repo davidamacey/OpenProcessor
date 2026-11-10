@@ -25,7 +25,7 @@ from src.clients.curation_opensearch.open_vocab_fields import (
     OPEN_VOCAB_IMAGE_MAPPING,
     OPEN_VOCAB_ITEM_MAPPING,
 )
-from src.clients.curation_opensearch.text_analysis import ITEMS_ANALYSIS
+from src.clients.curation_opensearch.text_analysis import ITEMS_ANALYSIS, NORMALIZER_NAME
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -197,8 +197,18 @@ def _region_boxes_mapping() -> dict[str, Any]:
                 'text': {'type': 'keyword'},
                 'text_raw': {'type': 'keyword'},
                 'text_source': {'type': 'keyword'},
-                'text_engine_version': {'type': 'keyword'},
+                'text_frame': {'type': 'keyword'},
+                'text_norm': {'type': 'keyword', 'normalizer': NORMALIZER_NAME},
+                # Exact and fuzzy search read the keyword; fragment search the wildcard sub-field.
+                'text_fold': {
+                    'type': 'keyword',
+                    'normalizer': NORMALIZER_NAME,
+                    'fields': {'sub': {'type': 'wildcard', 'normalizer': NORMALIZER_NAME}},
+                },
                 'text_confidence': {'type': 'float'},
+                'text_conf_char_min': {'type': 'float'},
+                'text_reader': {'type': 'keyword'},
+                'text_reader_version': {'type': 'keyword'},
                 'text_vlm': {'type': 'keyword'},
                 'text_ocr': {'type': 'keyword'},
                 'text_choice': {'type': 'keyword'},

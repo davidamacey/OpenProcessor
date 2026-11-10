@@ -102,24 +102,22 @@ applies to you.
 
 ---
 
-## PaddlePaddle PaddleOCR (PP-OCRv5)
+## PaddlePaddle PaddleOCR (PP-OCRv6)
 
 The OCR subsystem (`docker/segmenter/` is unrelated; see
-[`docs/OCR.md`](docs/OCR.md)) uses PP-OCRv5 detection and recognition
+[`docs/OCR.md`](docs/OCR.md)) uses PP-OCRv6 detection and recognition
 models exported to ONNX/TensorRT.
 
 ### Repository Information
 - **Repository:** https://github.com/PaddlePaddle/PaddleOCR
 - **License:** Apache License 2.0
-- **Model:** PP-OCRv5 mobile detection + recognition (`paddleocr_det_trt`, `paddleocr_rec_trt`)
-- **Model source used by this project:** ONNX re-exports of the
-  official PP-OCRv5 mobile checkpoints, downloaded via
-  `export/download_paddleocr.py` from
-  `https://github.com/MeKo-Christian/paddleocr-onnx/releases` — a
-  third-party ONNX repackaging of the same upstream weights, not an
-  independently trained model. Verify that repackaging's release notes
-  against the upstream PaddleOCR license if you redistribute the
-  exported engines yourself.
+- **Model:** PP-OCRv6 small detection + recognition (`paddleocr_det_trt`, `paddleocr_rec_trt`)
+- **Model source used by this project:** the official ONNX exports published by
+  the PaddlePaddle organisation on Hugging Face (Apache-2.0),
+  `PaddlePaddle/PP-OCRv6_small_det_onnx` and `PaddlePaddle/PP-OCRv6_small_rec_onnx`,
+  downloaded via `export/download_paddleocr.py`. The recognition dictionary
+  (`models/paddleocr_rec_trt/ppocrv6_dict.txt`, 18708 characters) is the
+  `character_dict` of that repo's `inference.yml`.
 
 ### Usage in This Project
 - `export/export_paddleocr_det.py` / `export/export_paddleocr_rec.py`: TensorRT export of the detection/recognition ONNX models
@@ -304,7 +302,7 @@ Special thanks to:
 - **InsightFace Team (Jia Guo, Jiankang Deng et al.)** - For SCRFD face detection, ArcFace recognition, and face alignment algorithms
 - **Hien Nguyen (@hiennguyen9874)** - For the triton-face-recognition reference implementation
 - **OpenCLIP Contributors** - For the open-source CLIP implementation
-- **PaddlePaddle / PaddleOCR Team** - For PP-OCRv5 text detection and recognition models
+- **PaddlePaddle / PaddleOCR Team** - For PP-OCRv6 text detection and recognition models
 - **Meta AI (FAIR) Perception Encoder team** - For PE-Core, which powers curation semantic search
 - **Meta AI (FAIR)** - For Segment Anything 3, which powers the optional segmenter container
 
@@ -329,7 +327,7 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | Apple MobileCLIP2-S2 (weights) | `apple-amlr` (research-only, **not redistributable**) | ✓ Yes (this file) — see the model-weight license note above |
 | InsightFace (SCRFD, ArcFace) code | MIT | ✓ Yes (this file) |
 | InsightFace `buffalo_l` pretrained weights | Non-commercial research use only (verify upstream) | ✓ Yes (this file) — see the model-weight license note above |
-| PaddlePaddle PaddleOCR (PP-OCRv5) | Apache 2.0 | ✓ Yes (this file) |
+| PaddlePaddle PaddleOCR (PP-OCRv6) | Apache 2.0 | ✓ Yes (this file) |
 | Meta Perception Encoder (PE-Core) | Apache 2.0 | ✓ Yes (this file) |
 | OpenSearch | Apache 2.0 | ✓ Yes |
 | OpenCLIP | MIT | ✓ Yes |
@@ -366,7 +364,7 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | SCRFD-10G (`scrfd_10g_bnkps`), ArcFace w600k_r50 (`arcface_w600k_r50`) | InsightFace model zoo (`buffalo_l`) | Non-commercial research only | No — user downloads them |
 | MobileCLIP2-S2 image/text | `apple/MobileCLIP2-S2` (HF) | `apple-amlr` | No — user downloads them |
 | PE-Core-L14-336 (`pe_image_encoder`, text ONNX) | `facebook/PE-Core-L14-336` (HF, not gated) | Apache-2.0 | Yes |
-| PP-OCRv5 det/rec (`paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline`) | PaddleOCR (via third-party ONNX repackaging) | Apache-2.0 | Yes |
+| PP-OCRv6 det/rec (`paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline`) | PaddleOCR (official PaddlePaddle ONNX exports) | Apache-2.0 | Yes |
 | SAM 3 (segmenter) | `facebook/sam3` (HF, gated, needs `HF_TOKEN`) | SAM License | Yes, with the SAM License attached, but gated |
 | VLM (labeling assist, BYO -- see `OP_VLM_URL`/`OP_VLM_MODEL`) | Whatever OpenAI-compatible model you configure | Depends on your chosen model/quant | Verify the model card you deploy |
 | Local VLM catalog (`examples/vlm/catalog.tsv`, selected with `openprocessor vlm use`) | The catalog's `hf_repo` column | Each row's model card (the catalog marks which rows are tested) | Models are downloaded from their publisher at runtime, never redistributed here; check each model's license before use |

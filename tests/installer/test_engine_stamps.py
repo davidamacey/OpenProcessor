@@ -35,8 +35,8 @@ ENGINES: dict[str, dict[str, tuple[str, str]]] = {
         'arcface_w600k_r50': ('pytorch_models/arcface_w600k_r50.onnx', 'fp16'),
     },
     'ocr': {
-        'paddleocr_det_trt': ('pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx', 'fp32'),
-        'paddleocr_rec_trt': ('pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx', 'fp32'),
+        'paddleocr_det_trt': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
+        'paddleocr_rec_trt': ('pytorch_models/paddleocr/ppocrv6_rec_small.onnx', 'fp32'),
     },
 }
 GROUP_MODELS = {

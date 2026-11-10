@@ -47,7 +47,7 @@ The models run as TensorRT engines in Triton with dynamic batching:
 - detection: YOLO11 and YOLO26;
 - faces: SCRFD and ArcFace;
 - whole-image embeddings: MobileCLIP2-S2;
-- OCR: PP-OCRv5;
+- OCR: PP-OCRv6;
 - curation embeddings: the PE-Core image encoder, plus a CPU text encoder.
 
 Each process shares one gRPC client pool, because opening a connection per request defeats Triton's

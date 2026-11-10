@@ -60,11 +60,11 @@ if TYPE_CHECKING:
 
     from PIL import Image
 
-    from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_detect import SecondaryOutput
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame, GpuRoute
     from src.services.curation.item_doc import DetectedItem
+    from src.utils.image_decode import DecodedImage
 
 
 logger = get_logger(__name__)

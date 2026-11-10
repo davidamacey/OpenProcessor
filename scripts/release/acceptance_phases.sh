@@ -410,11 +410,11 @@ ph_metrics() {
 # cpu_off and cpu_small are policy (route disabled, image under the size gate), not fallbacks.
 check_gpu_route() {
     local gpu fb tot pct tm="$TRITON_METRICS_URL"
-    if ! grep -q '^op_ingest_decode_total' "$BODY"; then
-        ev "SKIP-PART: op_ingest_decode_total absent (build without the decode counter); GPU route checks not run"
+    if ! grep -q '^op_decode_route_total{.*path="ingest"' "$BODY"; then
+        ev "SKIP-PART: op_decode_route_total absent (build without the decode counter); GPU route checks not run"
         return 0
     fi
-    read -r gpu fb < <(awk '/^op_ingest_decode_total\{/ {
+    read -r gpu fb < <(awk '/^op_decode_route_total\{.*path="ingest"/ {
         r = $0; sub(/.*route="/, "", r); sub(/".*/, "", r); v = $NF + 0
         if (r == "gpu") g += v; else if (r != "cpu_off" && r != "cpu_small" && r ~ /^cpu_/) f += v
     } END { printf "%d %d\n", g, f }' "$BODY")
@@ -424,7 +424,7 @@ check_gpu_route() {
     fi
     tot=$((gpu + fb))
     pct="$(awk -v f="$fb" -v t="$tot" 'BEGIN { printf "%.3f", 100 * f / t }')"
-    ev "op_ingest_decode_total: gpu=${gpu} fallbacks=${fb} (${pct}%, bound ${DECODE_FALLBACK_MAX_PCT}%)"
+    ev "op_decode_route_total: gpu=${gpu} fallbacks=${fb} (${pct}%, bound ${DECODE_FALLBACK_MAX_PCT}%)"
     awk -v p="$pct" -v m="$DECODE_FALLBACK_MAX_PCT" 'BEGIN { exit !(p + 0 <= m + 0) }' \
         || fail "GPU decode fallbacks ${pct}% exceed ${DECODE_FALLBACK_MAX_PCT}%"
     if [[ -z "$tm" ]]; then

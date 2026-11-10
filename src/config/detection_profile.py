@@ -133,6 +133,10 @@ class DetectionProfile:
     text_format: str = ''
     text_placeholders: frozenset[str] = field(default_factory=frozenset)
     text_reject_sequences: bool = False
+    # Fold map for matching only (``src/domain/region_text.py``): characters a
+    # reader confuses (O and 0), upper-case, one character each. Never rewrites
+    # the shown text.
+    text_confusables: dict[str, str] = field(default_factory=dict)
     segmenter_text_prompt: str = ''
     secondary_shape_groups: frozenset[str] = field(default_factory=frozenset)
     # Region profiles only: the item class names (matched against an item's
@@ -232,6 +236,8 @@ class DetectionProfile:
             elif isinstance(current, tuple):
                 item_type = type(current[0]) if current else str
                 overrides[f.name] = tuple(_list_items(var, raw, item_type, keep_empty=True))
+            elif isinstance(current, dict):
+                overrides[f.name] = _json_str_map(var, raw)
             elif isinstance(current, frozenset):
                 # Element type from the annotation (an empty default carries
                 # none): ``frozenset[int]`` fields parse ints.
@@ -245,6 +251,21 @@ class DetectionProfile:
     def env_overrides_present(cls, prefix: str) -> bool:
         """``True`` if any ``{prefix}<FIELD>`` env var is set."""
         return any(env_is_set(f'{prefix}{f.name.upper()}') for f in fields(cls))
+
+
+def _json_str_map(var: str, raw: str) -> dict[str, str]:
+    """``raw`` as a JSON object of string pairs; anything else raises :class:`EnvError`."""
+    import json
+
+    try:
+        value = json.loads(raw)
+    except ValueError as exc:
+        raise EnvError(var, raw, 'must be a JSON object of strings') from exc
+    if not isinstance(value, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+    ):
+        raise EnvError(var, raw, 'must be a JSON object of strings')
+    return value
 
 
 def _list_items(var: str, raw: str, item_type: type, *, keep_empty: bool) -> list[Any]:

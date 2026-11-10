@@ -491,6 +491,8 @@ services:
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
+      # The promote job writes the served model under the Triton repository.
+      - ./models:/app/models
       - ./secrets/vlm:/run/secrets/op_vlm:ro
     healthcheck:
       test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "jobs"]
@@ -1427,9 +1429,10 @@ services:
       # records `checkpoint_path` verbatim and promote resolves that exact
       # string from the API container.
       - openprocessor-state:/var/lib/openprocessor
-      # Frozen dataset exports. Mounted at the same path api uses so the
-      # absolute `dataset_export_dir` in job.json resolves identically.
-      - ./data:/app/data:ro
+      # Frozen dataset exports, mounted at the same path api uses so the absolute
+      # `dataset_export_dir` in job.json resolves identically. Read-write: the run's artifacts
+      # (run.log, weights, metrics) are published under projects/<slug>/training/.
+      - ./data:/app/data
       # Triton model repo, read-only — only so the incumbent comparison can
       # read a served model's labels.txt (OP_TRITON_MODEL_REPO).
       - ./models:/models:ro

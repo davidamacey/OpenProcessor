@@ -1,4 +1,4 @@
-# PP-OCRv5 Text Recognition Model (TensorRT)
+# PP-OCRv6 Text Recognition Model (TensorRT)
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
@@ -8,8 +8,8 @@
 #        Text crops with height=48, width=48-2048
 #
 # Output:
-#   - fetch_name_0: [B, T, 18385] FP32, character probabilities
-#        T timesteps (dynamic), 18385 character classes (multilingual dict)
+#   - fetch_name_0: [B, T, 18710] FP32, character probabilities
+#        T timesteps (dynamic), 18710 character classes (multilingual dict)
 #
 # TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 
@@ -29,7 +29,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 18385 ]
+    dims: [ -1, 18710 ]
   }
 ]
 

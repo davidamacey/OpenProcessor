@@ -23,7 +23,8 @@ describe('multi-box mapping (region_boxes)', () => {
       text_raw: 'tag-001',
       text_source: 'gemma',
       text_confidence: 0.8,
-      text_engine_version: '2',
+      text_reader: 'paddleocr_rec_trt',
+      text_reader_version: '2',
       text_vlm: 'TAG-001',
       text_ocr: 'TAG-008',
       text_disagreement: true,
@@ -43,7 +44,8 @@ describe('multi-box mapping (region_boxes)', () => {
     expect(box?.textRaw).toBe('tag-001');
     expect(box?.textSource).toBe('gemma');
     expect(box?.textConfidence).toBeCloseTo(0.8);
-    expect(box?.textEngineVersion).toBe('2');
+    expect(box?.textReader).toBe('paddleocr_rec_trt');
+    expect(box?.textReaderVersion).toBe('2');
     expect(box?.textVlm).toBe('TAG-001');
     expect(box?.textOcr).toBe('TAG-008');
     expect(box?.textDisagreement).toBe(true);

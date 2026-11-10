@@ -1,18 +1,18 @@
 """
-Triton Python Backend: PP-OCRv5 Text Detection & Recognition Pipeline
+Triton Python Backend: PP-OCRv6 Text Detection & Recognition Pipeline
 
 Complete OCR pipeline that handles text detection and recognition via BLS:
 1. Receives preprocessed OCR image
-2. Calls PP-OCRv5 detection TensorRT for text region detection
+2. Calls PP-OCRv6 detection TensorRT for text region detection
 3. Post-processes detection output (DBPostProcess)
 4. Sorts text boxes in reading order
 5. Crops text regions with perspective transform
-6. Calls PP-OCRv5 recognition TensorRT for text reading
+6. Calls PP-OCRv6 recognition TensorRT for text reading
 7. Decodes text using CTC and returns results
 
 Architecture:
     Inputs:
-        - ocr_images: [3, H, W] UINT8 BGR image for detection (normalized here to [-1, 1])
+        - ocr_images: [3, H, W] UINT8 BGR image for detection (normalized here with ImageNet mean/std)
         - original_image: [3, H, W] UINT8 BGR original image for cropping
         - orig_shape: [2] Original image shape [H, W]
 
@@ -22,7 +22,8 @@ Architecture:
         - text_boxes_normalized: [128, 4] Axis-aligned boxes [x1, y1, x2, y2] normalized
         - texts: [128] Detected text strings (as bytes)
         - text_scores: [128] Detection confidence scores
-        - rec_scores: [128] Recognition confidence scores
+        - rec_scores: [128] Recognition confidence scores (mean over the decoded characters)
+        - rec_char_min: [128] Lowest single-character probability of each line (0.0 when padded or empty, -1.0 when recognition failed)
 
 Based on: Immich OCR implementation and RapidOCR
 """
@@ -35,7 +36,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from ocr_postprocess import CTCLabelDecode, DBPostProcess
+from ocr_postprocess import CTCLabelDecode, DBPostProcess, normalize_det_image
 
 
 # GPU-accelerated libraries
@@ -59,11 +60,11 @@ DET_MODEL = 'paddleocr_det_trt'
 REC_MODEL = 'paddleocr_rec_trt'
 REC_HEIGHT = 48
 REC_WIDTH = 320
-DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv5_dict.txt')
+DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv6_dict.txt')
 
 
 class TritonPythonModel:
-    """PP-OCRv5 Text Detection & Recognition Pipeline via BLS"""
+    """PP-OCRv6 Text Detection & Recognition Pipeline via BLS"""
 
     def initialize(self, args):
         """Initialize model configuration."""
@@ -151,7 +152,7 @@ class TritonPythonModel:
         for name, tensor in (('ocr_images', ocr_image), ('original_image', original_image)):
             if tensor.dtype != np.uint8:
                 raise ValueError(f"input '{name}' must be UINT8, got {tensor.dtype}")
-        ocr_image = ocr_image.astype(np.float32) / 127.5 - 1.0
+        ocr_image = normalize_det_image(ocr_image)
 
         orig_h, orig_w = int(orig_shape[0]), int(orig_shape[1])
 
@@ -187,13 +188,15 @@ class TritonPythonModel:
             return self._create_empty_response()
 
         # Step 5: Call recognition model
-        texts, rec_scores = self._call_recognition(text_crops)
+        texts, rec_scores, rec_char_min = self._call_recognition(text_crops)
         logger.debug(f'Recognition: {len(texts)} texts recognized')
         if texts:
             logger.debug(f'First 3 texts: {texts[:3]}')
 
         # Step 6: Create output tensors
-        return self._create_response(boxes, det_scores, texts, rec_scores, orig_h, orig_w)
+        return self._create_response(
+            boxes, det_scores, texts, rec_scores, rec_char_min, orig_h, orig_w
+        )
 
     def _call_detection(self, ocr_image: np.ndarray) -> np.ndarray:
         """Call detection model via BLS with GPU tensor handling."""
@@ -218,7 +221,9 @@ class TritonPythonModel:
         output_tensor = pb_utils.get_output_tensor_by_name(infer_response, 'fetch_name_0')
         return self._triton_to_numpy(output_tensor)  # shape [1, 1, H, W]
 
-    def _call_recognition(self, text_crops: list[np.ndarray]) -> tuple[list[str], list[float]]:
+    def _call_recognition(
+        self, text_crops: list[np.ndarray]
+    ) -> tuple[list[str], list[float], list[float]]:
         """
         Recognition model via BLS with optimized preprocessing.
 
@@ -272,7 +277,7 @@ class TritonPythonModel:
                 # confidence (always in [0, 1]) -- callers must be able to
                 # tell "recognition backend failed for this crop" apart
                 # from "recognition ran and found no confident text".
-                all_results.append(('', -1.0))
+                all_results.append(('', -1.0, -1.0))
                 continue
 
             output_tensor = pb_utils.get_output_tensor_by_name(infer_response, 'fetch_name_0')
@@ -283,7 +288,7 @@ class TritonPythonModel:
             all_results.append(batch_results[0])
 
             if i < 3:
-                text, score = batch_results[0]
+                text, score, _ = batch_results[0]
                 logger.debug(
                     f'  Crop {i}: width={target_w}, text="{text[:30]}..." score={score:.3f}'
                 )
@@ -291,9 +296,10 @@ class TritonPythonModel:
         # Extract texts and scores
         texts = [r[0] for r in all_results]
         scores = [r[1] for r in all_results]
+        char_mins = [r[2] for r in all_results]
 
         logger.debug(f'Recognition complete: {len(texts)} texts')
-        return texts, scores
+        return texts, scores, char_mins
 
     def _resize_norm_img(self, img: np.ndarray, imgW: int) -> np.ndarray:
         """
@@ -417,6 +423,7 @@ class TritonPythonModel:
         det_scores: np.ndarray,
         texts: list[str],
         rec_scores: list[float],
+        rec_char_min: list[float],
         orig_h: int,
         orig_w: int,
     ):
@@ -429,6 +436,7 @@ class TritonPythonModel:
         padded_boxes_norm = np.zeros((self.max_texts, 4), dtype=np.float32)
         padded_det_scores = np.zeros(self.max_texts, dtype=np.float32)
         padded_rec_scores = np.zeros(self.max_texts, dtype=np.float32)
+        padded_rec_char_min = np.zeros(self.max_texts, dtype=np.float32)
         padded_texts = np.zeros(self.max_texts, dtype=object)
 
         for i, box in enumerate(boxes[:num_texts]):
@@ -444,6 +452,7 @@ class TritonPythonModel:
 
             padded_det_scores[i] = det_scores[i] if i < len(det_scores) else 0.0
             padded_rec_scores[i] = rec_scores[i] if i < len(rec_scores) else 0.0
+            padded_rec_char_min[i] = rec_char_min[i] if i < len(rec_char_min) else 0.0
             padded_texts[i] = texts[i] if i < len(texts) else ''
 
         # Convert texts to bytes for Triton BYTES type
@@ -458,6 +467,7 @@ class TritonPythonModel:
             pb_utils.Tensor('texts', texts_bytes),
             pb_utils.Tensor('text_scores', padded_det_scores),
             pb_utils.Tensor('rec_scores', padded_rec_scores),
+            pb_utils.Tensor('rec_char_min', padded_rec_char_min),
         ]
 
         return pb_utils.InferenceResponse(output_tensors=output_tensors)
@@ -473,6 +483,7 @@ class TritonPythonModel:
             pb_utils.Tensor('texts', np.array([b'' for _ in range(self.max_texts)], dtype=object)),
             pb_utils.Tensor('text_scores', np.zeros(self.max_texts, dtype=np.float32)),
             pb_utils.Tensor('rec_scores', np.zeros(self.max_texts, dtype=np.float32)),
+            pb_utils.Tensor('rec_char_min', np.zeros(self.max_texts, dtype=np.float32)),
         ]
 
         return pb_utils.InferenceResponse(output_tensors=output_tensors)

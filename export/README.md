@@ -24,10 +24,10 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `build_pe_trt.sh` | PE-Core ONNX → TensorRT engine (Path 1) | TensorRT engine |
 | `build_pe_ort_fallback.sh` | PE-Core ONNX served by Triton's ORT backend (Path 2) | ONNX model dir |
 | `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX (+ optional Triton ORT model dir) |
-| `export_paddleocr_det.py` | PP-OCRv5 text detection | TensorRT engine |
-| `export_paddleocr_rec.py` | PP-OCRv5 text recognition | TensorRT engine |
+| `export_paddleocr_det.py` | PP-OCRv6 text detection | TensorRT engine |
+| `export_paddleocr_rec.py` | PP-OCRv6 text recognition | TensorRT engine |
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
-| `download_paddleocr.py` | Download PP-OCRv5 models | ONNX models |
+| `download_paddleocr.py` | Download PP-OCRv6 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
 | `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton. It runs `ultralytics_export.py` for every head kind (the head kind only names the engine: `{name}_trt` for the NMS-free head of YOLO26 and YOLOv10, `{name}_trt_end2end` for an embedded-NMS head); a job queued by an older version has no head kind and fails with "re-upload the model" | task status files |
 
@@ -73,10 +73,10 @@ models/
 ├── pe_text_encoder/                    # PE-Core-L14-336 text encoder (optional)
 │   ├── 1/model.onnx                    #   --install-triton
 │   └── config.pbtxt                    #   onnxruntime_onnx, KIND_CPU
-├── paddleocr_det_trt/                  # PP-OCRv5 detection
+├── paddleocr_det_trt/                  # PP-OCRv6 detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
-├── paddleocr_rec_trt/                  # PP-OCRv5 recognition
+├── paddleocr_rec_trt/                  # PP-OCRv6 recognition
 │   ├── 1/model.plan
 │   └── config.pbtxt
 └── ocr_pipeline/                       # OCR BLS pipeline (calls the two above)
@@ -306,10 +306,10 @@ batches are accepted.
 - TensorRT `trtexec` optimization profiles (image Path 1):
   <https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/command-line-programs.html>
 
-### PP-OCRv5 (Text Recognition)
+### PP-OCRv6 (Text Recognition)
 
 ```bash
-# Download PP-OCRv5 models
+# Download PP-OCRv6 models
 docker compose run --rm model-export python /app/export/download_paddleocr.py
 
 # Export detection and recognition
@@ -361,11 +361,11 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
 - Served by Triton `pe_text_encoder` (`onnxruntime_onnx`, CPU, max batch 32,
   the only text backend)
 
-### PP-OCRv5 Detection
+### PP-OCRv6 Detection
 - Input: `[B, 3, H, W]` FP32, dynamic size
 - Output: Text region polygons
 
-### PP-OCRv5 Recognition
+### PP-OCRv6 Recognition
 - Input: `[B, 3, 48, W]` FP32, dynamic width
 - Output: Character sequence probabilities
 

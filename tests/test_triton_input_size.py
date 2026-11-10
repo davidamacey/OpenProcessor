@@ -4,10 +4,12 @@ a shape error."""
 
 from __future__ import annotations
 
+import io
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from PIL import Image
 
 from src.clients import triton_client as tc
 
@@ -86,8 +88,8 @@ def test_the_ingest_clip_path_letterboxes_to_the_detector_size(
         client, '_preprocess_clip_cpu', lambda _img: np.zeros((1, 3, 256, 256), dtype=np.float32)
     )
     img = np.zeros((480, 600, 3), dtype=np.uint8)
-    buf = tc.io.BytesIO()
-    tc.Image.fromarray(img).save(buf, format='JPEG')
+    buf = io.BytesIO()
+    Image.fromarray(img).save(buf, format='JPEG')
 
     class _Resp:
         def as_numpy(self, _n: str) -> np.ndarray:

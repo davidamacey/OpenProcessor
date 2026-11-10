@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Download PP-OCRv5 models for text detection and recognition.
+Download PP-OCRv6 models for text detection and recognition.
 
 Models:
-- PP-OCRv5 Detection (Mobile): Text detection ~4MB
-- PP-OCRv5 Recognition (Mobile): Text recognition ~11MB
+- PP-OCRv6 small detection: ~10MB
+- PP-OCRv6 small recognition: ~21MB
 - Character dictionaries for Chinese/English
 
 Sources:
-- PaddlePaddle/PaddleOCR GitHub releases
-- RapidOCR model repository
+- PaddlePaddle ONNX repos on Hugging Face (PP-OCRv6_small_det_onnx, PP-OCRv6_small_rec_onnx)
 
 Usage:
     # From api container:
@@ -31,50 +30,40 @@ from urllib.request import urlretrieve
 # Model Configuration
 # =============================================================================
 
-# PP-OCRv5 Mobile Models (best speed/accuracy tradeoff)
-# Source: https://github.com/MeKo-Christian/paddleocr-onnx/releases
+# PP-OCRv6 small tier (the balanced tier for desktop/mobile; PP-OCRv6 has no tier called "mobile").
+# Source: the official PaddlePaddle ONNX repos on Hugging Face (Apache-2.0), exported by
+# PaddleOCR 3.7 itself; no third-party repackaging.
+# https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx
+# https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx
 MODELS: dict[str, dict[str, Any]] = {
-    # PP-OCRv5 Detection (DB++)
-    # Input: [B, 3, H, W] where H,W are multiples of 32
-    # Output: Text probability map
-    'ppocr_det_v5_mobile': {
+    # Input: [B, 3, H, W], dynamic H and W. Output: text probability map.
+    'ppocrv6_det_small': {
         'urls': [
-            # Primary: MeKo-Christian/paddleocr-onnx releases (pre-converted ONNX)
-            'https://github.com/MeKo-Christian/paddleocr-onnx/releases/download/v1.0.0/PP-OCRv5_mobile_det.onnx',
-            # Backup: Hugging Face (server version, larger)
-            'https://huggingface.co/marsena/paddleocr-onnx-models/resolve/main/PP-OCRv5_server_det_infer.onnx',
+            'https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/main/inference.onnx',
         ],
-        'filename': 'ppocr_det_v5_mobile.onnx',
-        'size_mb': 5,  # Mobile is ~4.6MB
-        'description': 'PP-OCRv5 text detector (DB++ architecture)',
-        'input_shape': '[B, 3, H, W] (H,W multiples of 32, max 960)',
+        'filename': 'ppocrv6_det_small.onnx',
+        'size_mb': 10,
+        'description': 'PP-OCRv6 small text detector (PPLCNetV4 + RepLKFPN)',
+        'input_shape': '[B, 3, H, W] (dynamic)',
         'output': 'probability map for text regions',
-        'preprocessing': '(x / 255 - 0.5) / 0.5 = x / 127.5 - 1, BGR',
+        'preprocessing': '(x / 255 - mean) / std, ImageNet mean/std, BGR array order',
     },
-    # PP-OCRv5 Recognition (SVTR-LCNet)
-    # Input: [B, 3, 48, 320] text crops
-    # Output: text sequence logits
-    'ppocr_rec_v5_mobile': {
+    # Input: [B, 3, 48, W], dynamic W. Output: [B, T, 18710] (18708 dictionary + blank + space).
+    'ppocrv6_rec_small': {
         'urls': [
-            # Primary: MeKo-Christian/paddleocr-onnx releases (pre-converted ONNX)
-            'https://github.com/MeKo-Christian/paddleocr-onnx/releases/download/v1.0.0/PP-OCRv5_mobile_rec.onnx',
-            # Backup: Hugging Face (server version, larger)
-            'https://huggingface.co/marsena/paddleocr-onnx-models/resolve/main/PP-OCRv5_server_rec_infer.onnx',
+            'https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/main/inference.onnx',
         ],
-        'filename': 'ppocr_rec_v5_mobile.onnx',
-        'size_mb': 16,  # Mobile is ~16MB
-        'description': 'PP-OCRv5 text recognizer (SVTR-LCNet architecture)',
-        'input_shape': '[B, 3, 48, 320]',
-        'output': 'character sequence logits',
+        'filename': 'ppocrv6_rec_small.onnx',
+        'size_mb': 21,
+        'description': 'PP-OCRv6 small text recognizer (EncoderWithLightSVTR, CTC)',
+        'input_shape': '[B, 3, 48, W] (dynamic W)',
+        'output': 'character sequence probabilities',
         'preprocessing': '(x / 255 - 0.5) / 0.5 = x / 127.5 - 1, BGR',
     },
 }
 
-# Character dictionary
-# NOTE: The multilingual PP-OCRv5 dictionary (ppocrv5_dict.txt, 18383 chars)
-# is committed to git in models/paddleocr_rec_trt/ppocrv5_dict.txt.
-# No download needed for the dictionary.
-DICTIONARIES: dict = {}
+# The PP-OCRv6 dictionary (ppocrv6_dict.txt, 18708 chars) is committed to git in
+# models/paddleocr_rec_trt/; only the ONNX models are downloaded.
 
 # Output directory
 OUTPUT_DIR = (
@@ -252,7 +241,7 @@ def download_model(model_id: str, config: dict, force: bool = False) -> bool:
 
 
 def download_all(force: bool = False) -> dict[str, bool]:
-    """Download all models and dictionaries."""
+    """Download all models."""
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -261,10 +250,6 @@ def download_all(force: bool = False) -> dict[str, bool]:
     # Download models
     for model_id, config in MODELS.items():
         results[model_id] = download_model(model_id, config, force)
-
-    # Download dictionaries
-    for dict_id, config in DICTIONARIES.items():
-        results[dict_id] = download_model(dict_id, config, force)
 
     return results
 
@@ -283,8 +268,7 @@ def print_summary(results: dict[str, bool]) -> int:
     for item_id, success in results.items():
         status = 'OK' if success else 'FAILED'
 
-        # Get config from either MODELS or DICTIONARIES
-        config = MODELS.get(item_id) or DICTIONARIES.get(item_id)
+        config = MODELS.get(item_id)
         if config:
             filepath = OUTPUT_DIR / config['filename']
             size = get_file_size_mb(filepath) if filepath.exists() else 0
@@ -313,13 +297,13 @@ def main() -> int:
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Download PP-OCRv5 models')
+    parser = argparse.ArgumentParser(description='Download PP-OCRv6 models')
     parser.add_argument('--force', action='store_true', help='Re-download even if exists')
     parser.add_argument('--list', action='store_true', help='List available models')
     args = parser.parse_args()
 
     if args.list:
-        print('Available PP-OCRv5 models:')
+        print('Available PP-OCRv6 models:')
         print()
         for model_id, config in MODELS.items():
             print(f'  {model_id}:')
@@ -327,17 +311,17 @@ def main() -> int:
             print(f'    Size: ~{config["size_mb"]} MB')
             print(f'    Input: {config["input_shape"]}')
             print()
-        print('Note: Multilingual dictionary (ppocrv5_dict.txt) is committed to git.')
+        print('Note: Multilingual dictionary (ppocrv6_dict.txt) is committed to git.')
         return 0
 
     print('=' * 60)
-    print('PP-OCRv5 Model Downloader')
+    print('PP-OCRv6 Model Downloader')
     print('=' * 60)
     print(f'Output directory: {OUTPUT_DIR}')
     print()
     print('Models to download:')
-    print('  - PP-OCRv5 Detection (text region detection)')
-    print('  - PP-OCRv5 Multilingual Recognition (text reading)')
+    print('  - PP-OCRv6 Detection (text region detection)')
+    print('  - PP-OCRv6 Multilingual Recognition (text reading)')
     print('  (Dictionary is committed to git, no download needed)')
 
     results = download_all(args.force)

@@ -168,7 +168,7 @@
       "lane": "ocr",
       "col": 2,
       "type": "cloud",
-      "label": "PP-OCRv5 det",
+      "label": "PP-OCRv6 det",
       "sublabel": "text regions",
       "width": 140
     },
@@ -177,7 +177,7 @@
       "lane": "ocr",
       "col": 3,
       "type": "cloud",
-      "label": "PP-OCRv5 rec",
+      "label": "PP-OCRv6 rec",
       "sublabel": "CTC decode",
       "width": 140
     }

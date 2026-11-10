@@ -47,6 +47,7 @@ def _fake_ocr_response(rec_scores: list[float]) -> _FakeResponse:
             'texts': np.array([f't{i}'.encode() for i in range(n)], dtype=object),
             'text_scores': np.array([0.9] * n, dtype=np.float32),
             'rec_scores': np.array(rec_scores, dtype=np.float32),
+            'rec_char_min': np.array(rec_scores, dtype=np.float32),
         }
     )
 
@@ -284,6 +285,7 @@ def test_cascade_parse_drops_sentinel_line_even_with_nonempty_text() -> None:
                 'texts': np.array([b'good', b'oops'], dtype=object),
                 'text_scores': np.array([0.9, 0.9], dtype=np.float32),
                 'rec_scores': np.array([0.9, -1.0], dtype=np.float32),
+                'rec_char_min': np.array([0.4, -1.0], dtype=np.float32),
             }
             return arrays[name]
 
@@ -291,3 +293,18 @@ def test_cascade_parse_drops_sentinel_line_even_with_nonempty_text() -> None:
 
     assert [ln.text for ln in lines] == ['good']
     assert all(ln.score >= 0.0 for ln in lines)
+
+
+def test_infer_ocr_returns_char_min_with_none_for_failed_lines(
+    triton_client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import cv2
+
+    monkeypatch.setattr(
+        triton_client, '_infer_with_retry', lambda *_a, **_k: _fake_ocr_response([0.9, -1.0])
+    )
+    image_bytes = cv2.imencode('.jpg', np.zeros((32, 32, 3), dtype=np.uint8))[1].tobytes()
+
+    result = triton_client.infer_ocr(image_bytes)
+
+    assert result['rec_char_min'] == [pytest.approx(0.9), None]

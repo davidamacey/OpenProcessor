@@ -212,6 +212,7 @@ ValidationCode = Literal[
     'region_class_name_invalid',
     'text_reader_invalid',
     'text_regex_invalid',
+    'text_confusables_invalid',
     'detector_model_not_found',
     'detector_model_not_ready',
     'detector_model_unusable',

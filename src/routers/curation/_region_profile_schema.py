@@ -34,6 +34,7 @@ _TYPES: dict[str, FieldType] = {
     'tuple[float, float]': 'float_pair',
     'frozenset[str]': 'string_list',
     'frozenset[int]': 'int_list',
+    'dict[str, str]': 'string_map',
 }
 
 GROUPS: tuple[RegionProfileGroup, ...] = (
@@ -88,6 +89,10 @@ _HELP: dict[str, str] = {
     'max_regions_per_item': 'Boxes kept per item. Above 1 enables multi-box regions.',
     'segmenter_text_prompt': 'Text prompt for the segmenter leg (one short line).',
     'text_reader': 'Which reader fills the region text; none stores no text.',
+    'text_confusables': (
+        'Characters a reader confuses, one per entry (for example O and 0). Used only to '
+        'match text; the shown text is never rewritten.'
+    ),
     'region_class_name': 'Registry class the region boxes are exported as.',
 }
 

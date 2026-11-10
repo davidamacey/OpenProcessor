@@ -7,7 +7,7 @@ A high-performance FastAPI service providing comprehensive visual AI capabilitie
 - Image and text embeddings (MobileCLIP)
 - Visual similarity search (OpenSearch k-NN)
 - Data ingestion with duplicate detection
-- OCR text extraction (PP-OCRv5)
+- OCR text extraction (PP-OCRv6)
 - Clustering and album organization (FAISS IVF)
 
 All inference runs through NVIDIA Triton Inference Server for optimal GPU utilization.

@@ -12,13 +12,13 @@ from src.core.exceptions import RequestRejectedError
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, is_not_found, logger, router
 from src.routers.curation._item_models import ItemDoc
-from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.wire import (
     item_context_source_excludes,
     item_source_excludes,
     serialize_item,
 )
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
+from src.utils.image_decode import IMAGE_DECODE_ERRORS
 
 
 _MAX_SIBLINGS = 500

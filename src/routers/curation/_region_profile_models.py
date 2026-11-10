@@ -15,7 +15,16 @@ from src.utils.class_names import confine_labels_path
 ProfileSourceWire = Literal['env', 'registered', 'stored', 'template']
 
 FieldType = Literal[
-    'string', 'int', 'float', 'bool', 'enum', 'string_list', 'int_list', 'float_pair', 'rgb'
+    'string',
+    'int',
+    'float',
+    'bool',
+    'enum',
+    'string_list',
+    'int_list',
+    'float_pair',
+    'rgb',
+    'string_map',
 ]
 ChoicesFrom = Literal[
     'detectors',
@@ -76,6 +85,7 @@ class RegionProfileBody(BaseModel):
     text_format: str = ''
     text_placeholders: list[str] = Field(default_factory=list)
     text_reject_sequences: bool = False
+    text_confusables: dict[str, str] = Field(default_factory=dict)
     segmenter_text_prompt: str = ''
     secondary_shape_groups: list[str] = Field(default_factory=list)
     parent_classes: list[str] = Field(default_factory=list)

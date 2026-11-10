@@ -14,4 +14,5 @@ class EmptyOcrResponse:
             'texts': np.array([b''] * 128, dtype=object),
             'text_scores': np.zeros(128, np.float32),
             'rec_scores': np.zeros(128, np.float32),
+            'rec_char_min': np.zeros(128, np.float32),
         }[name]

@@ -33,7 +33,7 @@ README is the overview, the install and a first result.
 - Object detection (YOLO11 and YOLO26 side by side), batch up to 64 images.
 - Face detection, ArcFace embeddings, 1:1 verify, search and 1:N identify.
 - MobileCLIP image and text embeddings, visual search over OpenSearch k-NN.
-- PP-OCRv5 text detection and recognition.
+- PP-OCRv6 text detection and recognition.
 - Combined analysis, ingest into the visual-search indexes, FAISS clustering
   and albums.
 
@@ -297,7 +297,7 @@ Inputs and returns per route: [Core routes](docs-site/docs/api-reference/core.md
 | Ingest | `/ingest` | POST | Ingest one image (indexes faces, OCR, objects) |
 | | `/ingest/batch` | POST | Batch ingest (up to 64 images) |
 | | `/ingest/directory` | POST | Bulk ingest from a server directory |
-| OCR | `/ocr/predict` | POST | Extract text (PP-OCRv5) |
+| OCR | `/ocr/predict` | POST | Extract text (PP-OCRv6) |
 | | `/ocr/batch` | POST | Batch OCR |
 | Analysis | `/analyze` | POST | Detection + faces + CLIP + OCR in one call |
 | | `/analyze/batch` | POST | Batch analysis |
@@ -389,7 +389,7 @@ throughput: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 | SCRFD-10G | Face detection + landmarks | TensorRT |
 | ArcFace | Face embeddings (512-dim) | TensorRT |
 | MobileCLIP | Image/text embeddings (512-dim) | TensorRT |
-| PP-OCRv5 | Text detection + recognition | TensorRT |
+| PP-OCRv6 | Text detection + recognition | TensorRT |
 | PE-Core-L14-336 | Curation embeddings (1024-dim, image and text) | TensorRT image, Triton CPU text |
 | Segmenter | Region proposals from a text prompt (optional) | HTTP service |
 | VLM | Class labels and region verdicts (optional) | OpenAI-compatible endpoint |

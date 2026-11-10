@@ -87,6 +87,9 @@ export interface ItemFilter {
   origin?: ItemOrigin[];
   proposed_by_import?: boolean | null;
   region_gate_skipped?: boolean | null;
+  /** The item has a box whose folded text matches this (at most 200 characters). */
+  region_text?: string | null;
+  region_text_match?: 'exact' | 'fuzzy' | 'fragment';
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
   review_tab?: string | null;

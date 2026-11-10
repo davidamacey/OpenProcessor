@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-PP-OCRv5 Multilingual Recognition Model - Verify & Convert to TensorRT.
+PP-OCRv6 Multilingual Recognition Model - Verify & Convert to TensorRT.
 
-This script verifies and optionally converts the PP-OCRv5 multilingual recognition
+This script verifies and optionally converts the PP-OCRv6 multilingual recognition
 model ONNX to TensorRT for high-performance text recognition on GPU.
 
-Model: PP-OCRv5 Multilingual Recognition (SVTR-LCNet architecture)
+Model: PP-OCRv6 Multilingual Recognition (SVTR-LCNet architecture)
 - Input: [B, 3, 48, W] text crop images (W: 48-2048, dynamic)
-- Output: [B, T, 18385] character sequence logits (T dynamic, 18385 = 18383 chars + blank + space)
+- Output: [B, T, 18710] character sequence logits (T dynamic, 18710 = 18708 chars + blank + space)
 - Preprocessing: (x / 127.5) - 1, BGR format
 
 The multilingual ONNX is downloaded by download_paddleocr.py (no PaddleX needed).
@@ -31,7 +31,7 @@ from trt_build_settings import max_batch, workspace_bytes
 
 
 # Model configuration
-MODEL_NAME = 'PP-OCRv5_mobile_rec'
+MODEL_NAME = 'PP-OCRv6_small_rec'
 INPUT_NAME = 'x'
 OUTPUT_NAME = 'fetch_name_0'
 
@@ -42,7 +42,7 @@ OPT_WIDTH = 320  # Optimal width for TensorRT
 MAX_WIDTH = 2048  # Maximum width for long text
 
 # Dynamic output
-NUM_CHARS = 18385  # 18383 multilingual chars + blank + space
+NUM_CHARS = 18710  # 18708 multilingual chars + blank + space
 
 # Batch sizes (recognition processes many text crops per image)
 MIN_BATCH = 1
@@ -55,9 +55,9 @@ _PROJECT_DIR = _SCRIPT_DIR.parent
 MODELS_DIR = _PROJECT_DIR / 'models'
 
 ONNX_PATH = (
-    Path('/app/pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx')
+    Path('/app/pytorch_models/paddleocr/ppocrv6_rec_small.onnx')
     if Path('/app').exists()
-    else _PROJECT_DIR / 'pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx'
+    else _PROJECT_DIR / 'pytorch_models/paddleocr/ppocrv6_rec_small.onnx'
 )
 PLAN_OUTPUT = MODELS_DIR / 'paddleocr_rec_trt/1/model.plan'
 
@@ -301,11 +301,11 @@ def create_triton_config(plan_path: Path) -> None:
 
     config_path = plan_path.parent.parent / 'config.pbtxt'
 
-    config_content = f"""# PP-OCRv5 Multilingual Text Recognition Model (TensorRT)
+    config_content = f"""# PP-OCRv6 Multilingual Text Recognition Model (TensorRT)
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
-# Multilingual model: Chinese + English + symbols (18385 character classes)
+# Multilingual model: Chinese + English + symbols (18710 character classes)
 #
 # Input:
 #   - x: [B, 3, 48, W] FP32, preprocessed (x / 127.5 - 1), BGR
@@ -361,7 +361,7 @@ dynamic_batching {{
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Verify & convert PP-OCRv5 multilingual recognition to TensorRT'
+        description='Verify & convert PP-OCRv6 multilingual recognition to TensorRT'
     )
     parser.add_argument(
         '--skip-tensorrt',
@@ -376,10 +376,10 @@ def main() -> int:
     args = parse_args()
 
     print('=' * 70)
-    print('PP-OCRv5 Multilingual Recognition Model - Verify & Convert')
+    print('PP-OCRv6 Multilingual Recognition Model - Verify & Convert')
     print(f'  Model: {MODEL_NAME}')
     print(f'  Dynamic width: {MIN_WIDTH} - {MAX_WIDTH}')
-    print(f'  Characters: {NUM_CHARS} (18383 multilingual + blank + space)')
+    print(f'  Characters: {NUM_CHARS} (18708 multilingual + blank + space)')
     print('=' * 70)
 
     # Check ONNX exists (downloaded by download_paddleocr.py)

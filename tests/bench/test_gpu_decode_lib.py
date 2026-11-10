@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from scripts.bench import gpu_decode_lib as lib
+from src.domain.image_geometry import letterbox_geometry
 from src.services.detection.geometry import letterbox_params
 
 
@@ -99,7 +100,7 @@ def test_route_explains_every_cpu_case() -> None:
 @pytest.mark.parametrize('size', [(640, 480), (480, 640), (5472, 3648), (1, 900), (1023, 767)])
 def test_letterbox_geometry_matches_product(size: tuple[int, int]) -> None:
     w, h = size
-    g = lib.letterbox_geometry(w, h, 640)
+    g = letterbox_geometry(w, h, 640)
     scale, (pad_w, pad_h) = letterbox_params(Image.new('RGB', size), target=640)
     assert g.scale == pytest.approx(scale)
     assert (g.pad_w, g.pad_h) == (pad_w, pad_h)
@@ -125,8 +126,8 @@ def test_pe_square_geometry_matches_product(size: tuple[int, int]) -> None:
 
 
 def test_crop_rect_matches_crop_pil() -> None:
+    from src.domain.image_geometry import crop_rect
     from src.services.curation.ingest_index import crop_pil
-    from src.services.detection.geometry import crop_rect
 
     img = Image.new('RGB', (100, 80))
     for box in [(10.4, 5.5, 50.6, 60.49), (-3.2, -1.0, 20.0, 20.0), (90.0, 70.0, 90.2, 70.1)]:

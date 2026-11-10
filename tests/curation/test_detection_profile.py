@@ -111,6 +111,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
         'TEXT_FORMAT': '[A-Z]{3}[0-9]{3}',
         'TEXT_PLACEHOLDERS': 'XX11, YY22',
         'TEXT_REJECT_SEQUENCES': 'true',
+        'TEXT_CONFUSABLES': '{"O": "0", "I": "1"}',
         'SEGMENTER_TEXT_PROMPT': 'env prompt',
         'SECONDARY_SHAPE_GROUPS': 'group_a,group_b',
         'PARENT_CLASSES': 'car, Bus',
@@ -180,6 +181,7 @@ def test_from_env_overrides_every_field(monkeypatch) -> None:
     assert profile.text_format == '[A-Z]{3}[0-9]{3}'
     assert profile.text_placeholders == frozenset({'XX11', 'YY22'})
     assert profile.text_reject_sequences is True
+    assert profile.text_confusables == {'O': '0', 'I': '1'}
     assert profile.segmenter_text_prompt == 'env prompt'
     assert profile.secondary_shape_groups == frozenset({'group_a', 'group_b'})
     assert profile.assigns_class is True

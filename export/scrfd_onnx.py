@@ -133,8 +133,8 @@ def _rename_outputs_semantically(model: Any) -> dict[str, str]:
     return rename_map
 
 
-def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set[int], set[str]]:
-    """Find the Transpose nodes (by ``id``) and Reshape shape initializers feeding the outputs."""
+def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set[str], set[str]]:
+    """Find the Transpose nodes (by output tensor name; protobuf wrappers have no stable ``id``) and Reshape shape initializers feeding the outputs."""
     producer = {}
     for node in model.graph.node:
         for o in node.output:
@@ -146,7 +146,7 @@ def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set
         output_names.add(name)
 
     # Find Transpose nodes that feed into output-connected Reshape nodes
-    transpose_ids = set()
+    transpose_ids: set[str] = set()
     reshape_init_names = set()
     for out_name in output_names:
         node = producer.get(out_name)
@@ -157,7 +157,7 @@ def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set
             if current.op_type == 'Reshape':
                 reshape_init_names.add(current.input[1])
             if current.op_type == 'Transpose':
-                transpose_ids.add(id(current))
+                transpose_ids.add(current.output[0])
                 break
             if current.input:
                 prev = producer.get(current.input[0])
@@ -170,11 +170,11 @@ def _find_output_transposes(model: Any, rename_map: dict[str, str]) -> tuple[set
     return transpose_ids, reshape_init_names
 
 
-def _fix_transpose_perms(model: Any, transpose_ids: set[int]) -> None:
+def _fix_transpose_perms(model: Any, transpose_ids: set[str]) -> None:
     """Transpose perm [2,3,0,1] -> [0,2,3,1] so the batch stays first."""
     fixed_transposes = 0
     for node in model.graph.node:
-        if node.op_type == 'Transpose' and id(node) in transpose_ids:
+        if node.op_type == 'Transpose' and node.output[0] in transpose_ids:
             for attr in node.attribute:
                 if attr.name == 'perm' and list(attr.ints) == [2, 3, 0, 1]:
                     attr.ints[:] = [0, 2, 3, 1]
