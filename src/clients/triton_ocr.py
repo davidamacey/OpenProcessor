@@ -1,4 +1,4 @@
-"""OCR through Triton's ``ocr_pipeline`` BLS model (PP-OCRv5 detection and recognition).
+"""OCR through Triton's ``ocr_pipeline`` BLS model (PP-OCRv6 detection and recognition).
 
 :func:`infer_ocr` is what :meth:`src.clients.triton_client.TritonClient.infer_ocr` delegates to;
 ``infer`` is the client's retrying ``(model_name, inputs, outputs)`` call.
@@ -57,7 +57,7 @@ def infer_ocr(
     datatype_of: Callable[[str], str],
 ) -> dict[str, Any]:
     """
-    OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
+    OCR inference: PP-OCRv6 text detection and recognition via BLS pipeline.
 
     Args:
         image: an already decoded, EXIF-oriented BGR array (the frame the caller reports
@@ -112,7 +112,7 @@ def infer_ocr(
 
     resized = cv2.resize(img_array, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
 
-    # The BLS normalizes ((x / 127.5) - 1 for the detector) and crops from the raw pixels.
+    # The BLS normalizes (ImageNet mean/std for the detector) and crops from the raw pixels.
     with stage_timer('triton_request', nbytes=resized.nbytes + img_array.nbytes):
         ocr_input = np.ascontiguousarray(resized.transpose(2, 0, 1))
         orig_chw = np.ascontiguousarray(img_array.transpose(2, 0, 1))

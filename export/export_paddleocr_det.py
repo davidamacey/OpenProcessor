@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Export PP-OCRv5 Detection Model to TensorRT.
+Export PP-OCRv6 Detection Model to TensorRT.
 
-This script converts the PP-OCRv5 detection ONNX model to TensorRT for
+This script converts the PP-OCRv6 detection ONNX model to TensorRT for
 high-performance text detection on GPU.
 
-Model: PP-OCRv5 Detection (DB++ architecture)
+Model: PP-OCRv6 Detection (DB++ architecture)
 - Input: [B, 3, H, W] where H,W are multiples of 32 (max 960)
 - Output: [B, 1, H, W] probability map for text regions
-- Preprocessing: (x / 255 - 0.5) / 0.5 = x / 127.5 - 1, BGR format
+- Preprocessing: ((x / 255) - mean) / std with ImageNet mean/std, BGR array order (PP-OCRv6 det inference.yml)
 
 Run from: api container
     docker compose run --rm model-export python /app/export/export_paddleocr_det.py
@@ -24,13 +24,13 @@ from trt_build_settings import max_batch, workspace_bytes
 
 # Model configuration
 INPUT_NAME = 'x'
-OUTPUT_NAME = 'fetch_name_0'  # PP-OCRv5 output name
+OUTPUT_NAME = 'fetch_name_0'  # PP-OCRv6 output name
 MAX_RESOLUTION = 960
 MIN_RESOLUTION = 32
 OPTIMAL_RESOLUTION = 736
 
 # Output paths
-ONNX_PATH = Path('/app/pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx')
+ONNX_PATH = Path('/app/pytorch_models/paddleocr/ppocrv6_det_small.onnx')
 PLAN_OUTPUT = Path('/app/models/paddleocr_det_trt/1/model.plan')
 
 
@@ -220,12 +220,12 @@ def create_triton_config(model_dir: Path, max_batch_size: int = 4) -> None:
     """Create Triton config.pbtxt for the detection model."""
     config_path = model_dir / 'config.pbtxt'
 
-    config_content = f"""# PP-OCRv5 Text Detection Model (TensorRT)
+    config_content = f"""# PP-OCRv6 Text Detection Model (TensorRT)
 #
 # DB++ architecture for text region detection
 #
 # Input:
-#   - x: [B, 3, H, W] FP32, preprocessed (x / 127.5 - 1), BGR
+#   - x: [B, 3, H, W] FP32, preprocessed ((x / 255 - mean) / std, ImageNet), BGR
 #        H,W must be multiples of 32, max {MAX_RESOLUTION}
 #
 # Output:
@@ -273,7 +273,7 @@ dynamic_batching {{
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Export PP-OCRv5 Detection to TensorRT')
+    parser = argparse.ArgumentParser(description='Export PP-OCRv6 Detection to TensorRT')
     parser.add_argument(
         '--onnx-path',
         type=Path,
@@ -306,7 +306,7 @@ def main() -> int:
     args = parse_args()
 
     print('=' * 70)
-    print('PP-OCRv5 Detection Model Export')
+    print('PP-OCRv6 Detection Model Export')
     print('=' * 70)
 
     # Check ONNX exists
@@ -350,7 +350,7 @@ def main() -> int:
     print('\nModel specifications:')
     print(f'  - Input: x [B, 3, H, W] FP32, H,W multiples of 32, max {MAX_RESOLUTION}')
     print('  - Output: sigmoid_0.tmp_0 [B, 1, H, W] FP32, probability map')
-    print('  - Preprocessing: (x / 127.5) - 1, BGR format')
+    print('  - Preprocessing: ((x / 255) - mean) / std, ImageNet mean/std, BGR array order')
 
     if plan_path:
         print('\nNext steps:')

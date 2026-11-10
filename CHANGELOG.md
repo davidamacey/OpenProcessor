@@ -11,6 +11,14 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Changed
+
+- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 2: rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
+
+### Changed
+
+- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 2: rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
+
 ### Fixed
 
 - A batch write that errors on an item (a failed bulk request, a mapping error) is reported in that item's `failed` entry (`reason: write_failed`) on `POST /crops/discard_batch`, the new-class resolve and the assist apply, not as a `conflicts` entry that says someone else edited it. A 4xx bulk error is no longer retried. Label operations and the assist loop fail the job on an unwritable item.

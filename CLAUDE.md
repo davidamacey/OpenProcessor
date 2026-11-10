@@ -39,7 +39,7 @@ at port 4603.
 
 - **Inference API** (`/detect`, `/faces`, `/embed`, `/search`, `/ingest`,
   `/ocr`, `/analyze`, `/clusters`, `/query`, `/models`, `/health`): YOLO11 and
-  YOLO26 detection, SCRFD + ArcFace faces, MobileCLIP embeddings, PP-OCRv5.
+  YOLO26 detection, SCRFD + ArcFace faces, MobileCLIP embeddings, PP-OCRv6.
   Also served under `/v1`.
 - **Curation subsystem** (`/curation`, no `/v1` twin): isolated projects,
   ingest, a region stage producing one or many boxes per item, VLM labeling,

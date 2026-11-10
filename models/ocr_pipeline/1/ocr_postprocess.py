@@ -1,4 +1,4 @@
-"""PP-OCRv5 post-processing for the ocr_pipeline BLS: DB detection boxes and CTC text decoding.
+"""PP-OCRv6 post-processing for the ocr_pipeline BLS: DB detection boxes and CTC text decoding.
 
 Kept next to ``model.py`` (Triton loads the version directory as a flat module path) so the
 numpy/OpenCV logic is importable without the Triton Python backend.
@@ -13,6 +13,15 @@ import pyclipper
 
 
 logger = logging.getLogger(__name__)
+
+# PP-OCRv6 det inference.yml NormalizeImage: ImageNet mean/std applied to the BGR array as-is.
+DET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
+DET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+
+
+def normalize_det_image(image: np.ndarray) -> np.ndarray:
+    """[3, H, W] uint8 -> float32 ``(x / 255 - mean) / std`` for the detector."""
+    return (image.astype(np.float32) / 255.0 - DET_MEAN) / DET_STD
 
 
 class DBPostProcess:

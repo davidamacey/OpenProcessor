@@ -76,7 +76,7 @@ curl -X POST "http://localhost:4603/search/text?text=sunset+beach&top_k=10"
 
 | Method | Path | Inputs | Purpose |
 |---|---|---|---|
-| POST | `/ocr/predict` | `image`; `min_det_score`, `min_rec_score`, `filter_by_score` | PP-OCRv5 text boxes, strings, scores |
+| POST | `/ocr/predict` | `image`; `min_det_score`, `min_rec_score`, `filter_by_score` | PP-OCRv6 text boxes, strings, scores |
 | POST | `/ocr/batch` | `images`; `min_det_score`, `min_rec_score`, `max_workers` | Batch OCR |
 
 ## Clustering, albums and queries

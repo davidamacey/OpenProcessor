@@ -195,7 +195,7 @@ REAL_TRACKED = {
     'src/utils/vectors.py',
     'models/ocr_pipeline/config.pbtxt',
     'models/pe_image_encoder/config.pbtxt',
-    'models/paddleocr_rec_trt/ppocrv5_dict.txt',
+    'models/paddleocr_rec_trt/ppocrv6_dict.txt',
     'models/yolo26_small_trt/labels.txt',
 }
 

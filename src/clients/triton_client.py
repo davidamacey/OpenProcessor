@@ -64,7 +64,7 @@ class TritonClient:
     Pipelines:
     - infer_fused_detector: fused detector engine (CPU preprocessing)
     - infer_yolo_clip_cpu: YOLO + MobileCLIP (CPU preprocessing)
-    - infer_ocr: PP-OCRv5 text detection + recognition (BLS pipeline)
+    - infer_ocr: PP-OCRv6 text detection + recognition (BLS pipeline)
     """
 
     def __init__(
@@ -361,12 +361,12 @@ class TritonClient:
         return preprocess_for_mobileclip(image_bytes)
 
     # =========================================================================
-    # OCR: PP-OCRv5 Text Detection and Recognition
+    # OCR: PP-OCRv6 Text Detection and Recognition
     # =========================================================================
 
     def infer_ocr(self, image: bytes | np.ndarray) -> dict[str, Any]:
         """
-        OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
+        OCR inference: PP-OCRv6 text detection and recognition via BLS pipeline.
 
         Args:
             image: a decoded, EXIF-oriented BGR array, or raw image bytes

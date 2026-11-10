@@ -1,18 +1,18 @@
 """
-Triton Python Backend: PP-OCRv5 Text Detection & Recognition Pipeline
+Triton Python Backend: PP-OCRv6 Text Detection & Recognition Pipeline
 
 Complete OCR pipeline that handles text detection and recognition via BLS:
 1. Receives preprocessed OCR image
-2. Calls PP-OCRv5 detection TensorRT for text region detection
+2. Calls PP-OCRv6 detection TensorRT for text region detection
 3. Post-processes detection output (DBPostProcess)
 4. Sorts text boxes in reading order
 5. Crops text regions with perspective transform
-6. Calls PP-OCRv5 recognition TensorRT for text reading
+6. Calls PP-OCRv6 recognition TensorRT for text reading
 7. Decodes text using CTC and returns results
 
 Architecture:
     Inputs:
-        - ocr_images: [3, H, W] UINT8 BGR image for detection (normalized here to [-1, 1])
+        - ocr_images: [3, H, W] UINT8 BGR image for detection (normalized here with ImageNet mean/std)
         - original_image: [3, H, W] UINT8 BGR original image for cropping
         - orig_shape: [2] Original image shape [H, W]
 
@@ -35,7 +35,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import triton_python_backend_utils as pb_utils
-from ocr_postprocess import CTCLabelDecode, DBPostProcess
+from ocr_postprocess import CTCLabelDecode, DBPostProcess, normalize_det_image
 
 
 # GPU-accelerated libraries
@@ -59,11 +59,11 @@ DET_MODEL = 'paddleocr_det_trt'
 REC_MODEL = 'paddleocr_rec_trt'
 REC_HEIGHT = 48
 REC_WIDTH = 320
-DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv5_dict.txt')
+DICT_PATH = Path('/models/paddleocr_rec_trt/ppocrv6_dict.txt')
 
 
 class TritonPythonModel:
-    """PP-OCRv5 Text Detection & Recognition Pipeline via BLS"""
+    """PP-OCRv6 Text Detection & Recognition Pipeline via BLS"""
 
     def initialize(self, args):
         """Initialize model configuration."""
@@ -151,7 +151,7 @@ class TritonPythonModel:
         for name, tensor in (('ocr_images', ocr_image), ('original_image', original_image)):
             if tensor.dtype != np.uint8:
                 raise ValueError(f"input '{name}' must be UINT8, got {tensor.dtype}")
-        ocr_image = ocr_image.astype(np.float32) / 127.5 - 1.0
+        ocr_image = normalize_det_image(ocr_image)
 
         orig_h, orig_w = int(orig_shape[0]), int(orig_shape[1])
 

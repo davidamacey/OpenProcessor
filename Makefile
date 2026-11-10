@@ -808,22 +808,22 @@ test-models: ## Verify all Triton models are loaded
 	@./tests/test_endpoints.sh models
 
 # ==================================================================================
-# OCR (PP-OCRv5)
+# OCR (PP-OCRv6)
 # ==================================================================================
 
 .PHONY: download-paddleocr
-download-paddleocr: ## Download PP-OCRv5 ONNX models and dictionaries
-	@echo "Downloading PP-OCRv5 models..."
+download-paddleocr: ## Download PP-OCRv6 ONNX models and dictionaries
+	@echo "Downloading PP-OCRv6 models..."
 	$(EXPORT_RUN) python /app/export/download_paddleocr.py
 
 .PHONY: export-paddleocr-det
 export-paddleocr-det: ## Export PaddleOCR detection model to TensorRT
-	@echo "Exporting PP-OCRv5 detection to TensorRT..."
+	@echo "Exporting PP-OCRv6 detection to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_paddleocr_det.py
 
 .PHONY: export-paddleocr-rec
 export-paddleocr-rec: ## Export PaddleOCR recognition model to TensorRT
-	@echo "Exporting PP-OCRv5 recognition to TensorRT..."
+	@echo "Exporting PP-OCRv6 recognition to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_paddleocr_rec.py
 
 .PHONY: export-paddleocr

@@ -13,7 +13,7 @@ Routers:
 - analyze: Combined analysis (YOLO + faces + CLIP + OCR)
 - clusters: FAISS IVF clustering and albums
 - query: Data retrieval and statistics
-- ocr: PP-OCRv5 text extraction
+- ocr: PP-OCRv6 text extraction
 - v1: Versioned API (all endpoints under /v1)
 """
 

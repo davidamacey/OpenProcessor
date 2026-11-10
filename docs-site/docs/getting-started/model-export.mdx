@@ -33,7 +33,7 @@ in `docker-compose.yml`:
 | `scrfd_10g_bnkps` | Face detection + 5-point landmarks |
 | `arcface_w600k_r50` | Face embedding, 512-dim |
 | `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder` | CLIP image/text embeddings, 512-dim |
-| `paddleocr_det_trt`, `paddleocr_rec_trt` | PP-OCRv5 text detection / recognition |
+| `paddleocr_det_trt`, `paddleocr_rec_trt` | PP-OCRv6 text detection / recognition |
 | `ocr_pipeline` | OCR orchestration (Triton Python backend, BLS) |
 | `pe_image_encoder` | PE-Core image embedding, 1024-dim (curation) |
 | `pe_text_encoder` | PE-Core text embedding for semantic search (ONNX Runtime, CPU) |
@@ -46,7 +46,7 @@ in `docker-compose.yml`:
 | YOLO11 detection | `make export-models` | Exports YOLO11 small to one fused TensorRT engine (`output0` `[300, 6]`, boxes in letterboxed input pixels), writes `labels.txt` and `config.pbtxt` |
 | Faces | `make setup-face-pipeline` | `download-face-models`, `export-face-recognition` (ArcFace) and `export-scrfd` (SCRFD-10G), then loads both |
 | CLIP embeddings | `make export-mobileclip` | Exports the MobileCLIP image and text encoders, then restarts Triton |
-| OCR | `make setup-ocr` | `download-paddleocr` (PP-OCRv5 ONNX + dictionaries), `export-paddleocr` (det + rec to TensorRT), then restarts Triton |
+| OCR | `make setup-ocr` | `download-paddleocr` (PP-OCRv6 ONNX + dictionaries), `export-paddleocr` (det + rec to TensorRT), then restarts Triton |
 
 `make export-all` builds nano through xlarge, which takes a long time;
 `make export-onnx` writes the fused ONNX only.

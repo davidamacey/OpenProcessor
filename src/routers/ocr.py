@@ -1,7 +1,7 @@
 """
 OCR Router - Text Detection and Recognition.
 
-Provides OCR endpoints using PP-OCRv5 for text extraction from images.
+Provides OCR endpoints using PP-OCRv6 for text extraction from images.
 
 Endpoints:
 - POST /ocr/predict - Extract text from single image
@@ -144,15 +144,15 @@ def ocr_predict(
     ] = True,
 ) -> OcrPredictResponse:
     """
-    Extract text from a single image using PP-OCRv5.
+    Extract text from a single image using PP-OCRv6.
 
     Pipeline:
     1. Image preprocessing
-    2. PP-OCRv5 detection (text localization)
-    3. PP-OCRv5 recognition (text decoding)
+    2. PP-OCRv6 detection (text localization)
+    3. PP-OCRv6 recognition (text decoding)
     4. Results with quad boxes and confidence scores
 
-    PP-OCRv5 supports multiple languages and handles various text styles
+    PP-OCRv6 supports multiple languages and handles various text styles
     including curved text, rotated text, and dense text layouts.
 
     Args:

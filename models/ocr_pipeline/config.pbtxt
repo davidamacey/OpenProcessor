@@ -1,12 +1,12 @@
-# PP-OCRv5 Text Detection & Recognition Pipeline (Python BLS)
+# PP-OCRv6 Text Detection & Recognition Pipeline (Python BLS)
 #
 # Complete OCR pipeline that:
 # 1. Receives preprocessed image
-# 2. Calls PP-OCRv5 detection TensorRT
+# 2. Calls PP-OCRv6 detection TensorRT
 # 3. Post-processes detection (DBPostProcess)
 # 4. Sorts boxes in reading order
 # 5. Crops text regions with perspective transform
-# 6. Calls PP-OCRv5 recognition TensorRT
+# 6. Calls PP-OCRv6 recognition TensorRT
 # 7. Decodes text with CTC
 #
 # Inputs:

@@ -23,7 +23,7 @@ It is licensed **AGPL-3.0-or-later** (see [Licenses](../reference/licenses.mdx))
 | Faces | `/faces/detect`, `/faces/recognize`, `/faces/verify`, `/faces/search`, `/faces/identify` | SCRFD-10G (boxes + 5-point landmarks) and ArcFace (512-dim) |
 | Embeddings | `/embed/image`, `/embed/text`, `/embed/batch`, `/embed/boxes` | MobileCLIP2-S2 image and text encoders (512-dim) |
 | Visual search | `/search/image`, `/search/text`, `/search/face`, `/search/ocr`, `/search/object` | OpenSearch k-NN |
-| OCR | `/ocr/predict`, `/ocr/batch` | PP-OCRv5 detection + recognition, orchestrated by a Triton Python-backend (BLS) model |
+| OCR | `/ocr/predict`, `/ocr/batch` | PP-OCRv6 detection + recognition, orchestrated by a Triton Python-backend (BLS) model |
 | Combined analysis | `/analyze`, `/analyze/batch` | All of the above on one image |
 | Ingest | `/ingest`, `/ingest/batch`, `/ingest/directory` | Indexes global, face, object and OCR documents into OpenSearch |
 | Curation | everything under `/curation`; data routes under `/curation/projects/{project}` | PE-Core embeddings, your own detector, an optional VLM, segmenter and trainer |
