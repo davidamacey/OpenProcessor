@@ -27,7 +27,13 @@ _cp_random() {
 # _cp_ensure_file FILE [PREFIX] -> create FILE with PREFIX + a random value unless it has content
 _cp_ensure_file() {
     local file="$1" prefix="${2:-}" value
-    [[ -s "$file" ]] && return 0
+    if [[ -d "$file" ]]; then
+        # Docker creates a root-owned directory at a missing bind-mount path; never delete it for the user.
+        echo "error: $file is a directory (Docker creates one when a container starts before the secrets exist)." >&2
+        echo "  Stop the stack, remove it yourself (it may be root-owned: sudo rm -r '$file'), then rerun." >&2
+        return 1
+    fi
+    [[ -f "$file" && -s "$file" ]] && return 0
     value="$(_cp_random)" || return 1
     [[ -n "$value" ]] || return 1
     ( umask 077; printf '%s%s' "$prefix" "$value" > "$file" ) || return 1

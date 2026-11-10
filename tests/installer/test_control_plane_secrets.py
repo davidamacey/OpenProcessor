@@ -259,3 +259,16 @@ def test_a_fresh_install_prints_nothing_on_stderr(tmp_path: Path) -> None:
     done, _ = _run(tmp_path, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stderr == ''
+
+
+def test_a_directory_at_a_secret_file_path_is_refused_not_replaced(tmp_path: Path) -> None:
+    # Docker creates a root-owned directory at a missing bind-mount path; a file must never be
+    # silently skipped because the path is "non-empty".
+    stray = tmp_path / 'secrets' / 'valkey' / 'password'
+    stray.mkdir(parents=True)
+    (stray / 'keep').write_text('x')
+    done, _ = _run(tmp_path, tmp_path)
+    assert done.returncode != 0
+    assert 'is a directory' in done.stderr
+    assert str(stray) in done.stderr
+    assert (stray / 'keep').exists()
