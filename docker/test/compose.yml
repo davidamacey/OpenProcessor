@@ -413,6 +413,92 @@ services:
     networks:
       - verify_net
 
+  # Consumers of the queues whose real handlers need a GPU or a model: fake_consumers.py registers
+  # fake handlers for the four job kinds (same claim, heartbeat and terminal-state wrapper). The
+  # `arbiter` consumer is the real tick; with no OP_GPU_ARBITER_CONTAINERS it skips, and it mounts
+  # no Docker socket.
+  open-vocab-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: &fake-volumes
+      - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
+      - ../../src:/app/src:ro
+      - ./verify-data:/verify-data
+      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
+    environment: &fake-env
+      <<: *process-env
+      PYTHONPATH: /app:/opt/fake_consumers
+    command: celery -A fake_consumers:app worker -Q open_vocab --pool=prefork --concurrency=1 --hostname open_vocab@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A fake_consumers:app inspect ping --timeout 10 -d \"open_vocab@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
+  autolabel-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *fake-volumes
+    environment: *fake-env
+    command: celery -A fake_consumers:app worker -Q autolabel --pool=prefork --concurrency=1 --hostname autolabel@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A fake_consumers:app inspect ping --timeout 10 -d \"autolabel@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
+  export-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *fake-volumes
+    environment: *fake-env
+    command: celery -A fake_consumers:app worker -Q gpu_export --pool=prefork --concurrency=1 --hostname gpu_export@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A fake_consumers:app inspect ping --timeout 10 -d \"gpu_export@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
+  eval-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *fake-volumes
+    environment: *fake-env
+    command: celery -A fake_consumers:app worker -Q gpu_eval --pool=prefork --concurrency=1 --hostname gpu_eval@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A fake_consumers:app inspect ping --timeout 10 -d \"gpu_eval@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
+  arbiter-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment: *process-env
+    command: celery -A src.tasks.app worker -Q arbiter -c 1 --hostname arbiter@%h -E
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "arbiter"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
 networks:
   verify_net:
     driver: bridge

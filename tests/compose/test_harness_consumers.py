@@ -1,4 +1,4 @@
-"""The live harness consumes every queue a live check starts a job on.
+"""The live harness consumes every queue the main compose routes.
 
 A job on a queue with no consumer stays `queued` forever, and a queued `cluster_run` makes the
 assist loop refuse to start (`clustering_running`). Docs:
@@ -17,15 +17,9 @@ from src.config.queue import TaskQueues
 
 HARNESS = Path(__file__).resolve().parents[2] / 'docker' / 'test' / 'compose.yml'
 
-# The queues the live checks reach: the job routes (jobs), the beat tasks (periodic), the assist
-# loop, the region and cluster refresh (cluster) and training (the fake trainer).
-NEEDED = (
-    TaskQueues.JOBS,
-    TaskQueues.PERIODIC,
-    TaskQueues.ASSIST_LOOP,
-    TaskQueues.CLUSTER,
-    TaskQueues.GPU_TRAIN,
-)
+# Every queue the main compose routes: a job (or a beat tick) sent to a queue the harness does not
+# consume would stay `queued` forever, and tests/live/test_queue_delivery.py proves each one.
+NEEDED = TaskQueues.ALL
 
 
 def test_the_harness_has_a_consumer_for_every_queue_the_live_checks_use() -> None:
