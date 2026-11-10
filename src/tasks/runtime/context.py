@@ -20,7 +20,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_delay, wait_exponential
 
 from src.db.repos import job_events, jobs as repo
 from src.domain import job_timing
@@ -36,6 +38,27 @@ if TYPE_CHECKING:
 
     from src.config.job_kinds.kind import JobKind
     from src.tasks.runtime.heartbeat import JobHeartbeat
+
+# A database that restarts or fails over answers with OperationalError until it is back. The
+# control-plane writes below wait for it for as long as the holder may still write (the heartbeat
+# fences it at LEASE_TTL_S - FENCE_MARGIN_S), instead of failing a job that would have finished.
+# tenacity docs: https://tenacity.readthedocs.io/en/stable/ (AsyncRetrying, wait_exponential).
+DB_OUTAGE_WAIT = wait_exponential(multiplier=0.5, max=5)
+DB_OUTAGE_BUDGET_S = job_timing.LEASE_TTL_S - job_timing.FENCE_MARGIN_S
+
+
+async def _through_db_outage[T](write: Callable[[], Awaitable[T]]) -> T:
+    """Run a fenced control-plane write, retrying while the database is unreachable."""
+    async for attempt in AsyncRetrying(
+        retry=retry_if_exception_type(OperationalError),
+        wait=DB_OUTAGE_WAIT,
+        stop=stop_after_delay(DB_OUTAGE_BUDGET_S),
+        reraise=True,
+    ):
+        with attempt:
+            return await write()
+    raise AssertionError('unreachable')  # pragma: no cover - AsyncRetrying always yields
+
 
 ClientFactory = Callable[[], Awaitable[Any]]
 """Builds one client inside the task's loop; the wrapper closes it (``aclose`` or ``close``)."""
@@ -122,10 +145,16 @@ class JobContext:
     async def request_pause(self, reason: str) -> None:
         """Ask for this job's own pause (``audit``, ``budget``, ``project_paused``,
         ``vlm_unavailable``); then return :class:`Paused` at the next boundary."""
-        async with AsyncSession(self._engine) as session, self._tx(session):
-            stored = await session.run_sync(
-                lambda s: repo.request_pause(s, self.job_id, self.fencing_token, reason)
-            )
+
+        async def write() -> bool:
+            async with AsyncSession(self._engine) as session, self._tx(session):
+                return bool(
+                    await session.run_sync(
+                        lambda s: repo.request_pause(s, self.job_id, self.fencing_token, reason)
+                    )
+                )
+
+        stored = await _through_db_outage(write)
         if not stored:
             self._beat.lost.set()
             return
@@ -162,12 +191,18 @@ class JobContext:
             await self._write_progress(self._unwritten)
 
     async def _write_progress(self, snapshot: dict[str, Any]) -> None:
-        async with AsyncSession(self._engine) as session, self._tx(session):
-            control = await session.run_sync(
-                lambda s: repo.progress(s, self.job_id, self.fencing_token, snapshot)
-            )
-            if control is not None:
-                await session.run_sync(lambda s: job_events.emit_progress(s, self._job, snapshot))
+        async def write() -> repo.Control | None:
+            async with AsyncSession(self._engine) as session, self._tx(session):
+                control = await session.run_sync(
+                    lambda s: repo.progress(s, self.job_id, self.fencing_token, snapshot)
+                )
+                if control is not None:
+                    await session.run_sync(
+                        lambda s: job_events.emit_progress(s, self._job, snapshot)
+                    )
+                return control
+
+        control = await _through_db_outage(write)
         self._last_progress_at = self._clock()
         self._last_stage = snapshot['stage']
         self._unwritten = None
@@ -179,10 +214,14 @@ class JobContext:
 
     async def checkpoint(self, cursor: Mapping[str, Any] | None) -> None:
         """Write the resume cursor, fenced; a resumable kind writes it after each durable chunk."""
-        async with AsyncSession(self._engine) as session, self._tx(session):
-            control = await session.run_sync(
-                lambda s: repo.checkpoint(s, self.job_id, self.fencing_token, cursor)
-            )
+
+        async def write() -> repo.Control | None:
+            async with AsyncSession(self._engine) as session, self._tx(session):
+                return await session.run_sync(
+                    lambda s: repo.checkpoint(s, self.job_id, self.fencing_token, cursor)
+                )
+
+        control = await _through_db_outage(write)
         if control is None:
             self._beat.lost.set()
             return
