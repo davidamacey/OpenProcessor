@@ -13,11 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
-- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 2: rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
-
-### Changed
-
-- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 2: rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
+- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 3 (the new `rec_char_min` output, the lowest single-character probability of each line, next to `rec_scores`): rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
 
 ### Fixed
 

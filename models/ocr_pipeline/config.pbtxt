@@ -74,6 +74,11 @@ output [
     name: "rec_scores"
     data_type: TYPE_FP32
     dims: [ 128 ]  # Recognition scores
+  },
+  {
+    name: "rec_char_min"
+    data_type: TYPE_FP32
+    dims: [ 128 ]  # Lowest single-character probability per line
   }
 ]
 

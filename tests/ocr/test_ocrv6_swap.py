@@ -45,8 +45,8 @@ def test_bls_loads_ocrv6_dictionary_and_det_normaliser() -> None:
     assert 'normalize_det_image(ocr_image)' in text
 
 
-def test_model_version_bumped() -> None:
-    assert (ROOT / 'models/ocr_pipeline/MODEL_VERSION').read_text().strip() == '2'
+def test_model_version_bumped_for_char_min() -> None:
+    assert (ROOT / 'models/ocr_pipeline/MODEL_VERSION').read_text().strip() == '3'
 
 
 @pytest.mark.parametrize(

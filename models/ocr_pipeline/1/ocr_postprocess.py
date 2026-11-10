@@ -212,7 +212,7 @@ class CTCLabelDecode:
 
         self.character.append(' ')  # Space at end
 
-    def __call__(self, preds: np.ndarray) -> list[tuple[str, float]]:
+    def __call__(self, preds: np.ndarray) -> list[tuple[str, float, float]]:
         """
         Decode CTC output.
 
@@ -220,7 +220,8 @@ class CTCLabelDecode:
             preds: [B, T, num_chars] softmax output
 
         Returns:
-            List of (text, confidence) tuples
+            List of (text, mean confidence, lowest single-character probability) tuples;
+            both scores are 0.0 for a line with no decoded character
         """
         results = []
         preds_idx = preds.argmax(axis=2)  # [B, T]
@@ -239,6 +240,7 @@ class CTCLabelDecode:
                 prev_idx = char_idx
 
             conf = float(np.mean(conf_list)) if conf_list else 0.0
-            results.append((text, conf))
+            char_min = float(np.min(conf_list)) if conf_list else 0.0
+            results.append((text, conf, char_min))
 
         return results
