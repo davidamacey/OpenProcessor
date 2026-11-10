@@ -93,14 +93,6 @@ model_setup_all_models() {
     for g in $groups; do model_setup_group_models "$g"; done
 }
 
-# model_setup_all_models "core curation ..." -> every Triton model of the tiers' groups (the
-# list the installer's health check waits on); the faces group's models drop out when faces are off.
-model_setup_all_models() {
-    local g groups
-    groups="$(model_setup_groups_for_tiers "$1")" || return 2
-    for g in $groups; do model_setup_group_models "$g"; done
-}
-
 # model_setup_required_models "core curation ..." -> comma list for OP_REQUIRED_MODELS, the
 # models the API's /health waits on. OCR is skipped by the minimal profile and the PE text
 # tower has a CPU fallback, so neither gates readiness; the PE image encoder has none.
