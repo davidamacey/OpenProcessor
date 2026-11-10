@@ -316,9 +316,16 @@
         : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
       onclick={() => (expanded = true)}
       title="Sort / filter strategy"
+      aria-label={[
+        `Sort: ${currentLabel}. Change sort and filters.`,
+        pinnedFallbackLabel,
+        fallbackReason,
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
-      <span class="text-zinc-500">sort:</span>
-      <span class="min-w-0 truncate">{currentLabel}</span>
+      <span class="shrink-0 text-zinc-500">sort:</span>
+      <span class="min-w-[4.5rem] shrink-0 truncate">{currentLabel}</span>
       {#if pinnedFallbackLabel}
         <!-- S1 (visual audit 2026-09-24): merges with, never doubles up
              alongside, the plain "→ applied" mismatch chip below — a
