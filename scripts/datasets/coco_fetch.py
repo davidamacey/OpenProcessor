@@ -69,3 +69,27 @@ def write_coco_gt(
         'categories': categories,
     }
     write_json(path, payload)
+
+
+_IMPORT_SPLIT_NAMES = {'val2017': 'val', 'train2017': 'train', 'test2017': 'test'}
+
+
+def write_import_annotations(
+    out_dir: Path,
+    rows: list[dict[str, Any]],
+    annotations_by_image: dict[int, list[dict[str, Any]]],
+    categories: list[dict[str, Any]],
+) -> list[Path]:
+    """``<out_dir>/annotations/instances_<split>.json``, one per split present in ``rows``.
+
+    The layout the COCO importer reads as written (``images/`` + ``annotations/*.json``); it
+    derives each frame's split from the file name, so a combined file would pin every frame to
+    one split.
+    """
+    written: list[Path] = []
+    for source_split in sorted({r['split'] for r in rows}):
+        split_rows = [r for r in rows if r['split'] == source_split]
+        path = out_dir / 'annotations' / f'instances_{_IMPORT_SPLIT_NAMES[source_split]}.json'
+        write_coco_gt(path, split_rows, annotations_by_image, categories)
+        written.append(path)
+    return written

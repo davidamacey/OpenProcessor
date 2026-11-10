@@ -151,6 +151,16 @@ def load_pin(path: Path) -> dict[str, Any]:
     return pin
 
 
+def manifest_rows(path: Path) -> list[dict[str, Any]]:
+    """The image rows of a pinned manifest: a ``--bench-set`` pin (``{'images': [...]}``) or the
+    plain selection list ``fetch_coco_subset.py`` pins for a class-balanced draw."""
+    doc = json.loads(path.read_text(encoding='utf-8'))
+    rows = doc['images'] if isinstance(doc, dict) else doc
+    if not isinstance(rows, list):
+        raise FetchError(f'{path}: not a manifest (expected an image list or a pin with images)')
+    return rows
+
+
 def verify_images(pin: dict[str, Any], images_dir: Path) -> list[str]:
     """Problems found re-hashing ``images_dir`` against the pin (empty list = clean)."""
     problems = []

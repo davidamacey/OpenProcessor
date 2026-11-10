@@ -32,6 +32,13 @@ from pathlib import Path
 from typing import Any
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.datasets import bench_set
+
+
 Det = tuple[float, float, float, float, float, int]
 Box = tuple[float, float, float, float]
 
@@ -379,9 +386,10 @@ def main(argv: list[str] | None = None) -> int:
     annotations = merge_annotations(
         [json.loads(Path(a).read_text(encoding='utf-8')) for a in args.annotations]
     )
-    manifest = json.loads(Path(args.manifest).read_text(encoding='utf-8'))
     image_ids = [
-        int(r['image_id']) for r in manifest['images'] if not args.split or r['split'] == args.split
+        int(r['image_id'])
+        for r in bench_set.manifest_rows(Path(args.manifest))
+        if not args.split or r['split'] == args.split
     ]
     cat_ids = class_to_category(annotations['categories'])
     gt = build_ground_truth(annotations, image_ids)

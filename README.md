@@ -222,7 +222,7 @@ make sample-coco-readme   # or, from an installed deployment: ./openprocessor sa
 ```
 
 It writes `data/samples/coco_va_readme/` (images, `ATTRIBUTION.csv`,
-`coco_gt.json`; gitignored) from a pinned selection filtered to Flickr licenses
+`coco_gt.json`, `annotations/instances_<split>.json`, the layout the COCO importer reads; gitignored) from a pinned selection filtered to Flickr licenses
 safe to redistribute crops of (never NonCommercial or NoDerivs).
 `make sample-coco`, `make sample-plates` and `make sample-clean` use the same
 tool. Then, in a source checkout:

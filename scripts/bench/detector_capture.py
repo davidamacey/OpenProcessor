@@ -33,6 +33,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.datasets import bench_set
 from src.domain.image_geometry import undo_letterbox
 from src.services.detection.geometry import letterbox_to_square
 
@@ -123,8 +124,7 @@ def gpu_decode_row(client: Any, model: str, data: bytes) -> list[list[float]]:
 def run(args: argparse.Namespace) -> int:
     import tritonclient.grpc as grpcclient
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding='utf-8'))
-    rows = manifest['images']
+    rows = bench_set.manifest_rows(Path(args.manifest))
     client = grpcclient.InferenceServerClient(args.url)
     specs: list[tuple[str, str]] = []
     for m in args.model:
