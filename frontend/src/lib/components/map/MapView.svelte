@@ -10,8 +10,12 @@
     Map as MapLibreMap,
     NavigationControl,
     Popup,
+    setWorkerUrl,
     type GeoJSONSource,
   } from 'maplibre-gl';
+  // MapLibre 6 looks for its worker file next to the bundled library chunk, where Vite does
+  // not emit it; handing Vite the file makes the build copy it and gives its served URL.
+  import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { viewQuery } from '$lib/map/viewport';
   import type { MapCellCollection, MapMeta, MapViewQuery } from '$lib/types_map';
@@ -69,6 +73,7 @@
   }
 
   onMount(() => {
+    setWorkerUrl(workerUrl);
     const bounds = meta.bounds;
     map = new MapLibreMap({
       container,
@@ -199,3 +204,10 @@
   role="application"
   aria-label="Map of where the photos were taken"
 ></div>
+
+<style>
+  /* The popup box is white (MapLibre's stylesheet); the page's light text colour is unreadable on it. */
+  :global(.maplibregl-popup-content) {
+    color: #18181b;
+  }
+</style>
