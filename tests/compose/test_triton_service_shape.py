@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from compose._helpers import REPO_ROOT, render
+from compose._helpers import REPO_ROOT, ComposeLoader, render
 
 
 def _device_ids(env: dict[str, str]) -> list[str]:
@@ -40,14 +40,6 @@ def test_triton_server_has_no_container_name() -> None:
 # --- the installer-generated per-card overlay (scripts/lib/gpu.sh) -----------------------------
 
 
-class _TagIgnoringLoader(yaml.SafeLoader):
-    """Reads Compose's `!override` tag as the plain value it wraps."""
-
-
-_TagIgnoringLoader.add_multi_constructor(
-    '!', lambda loader, _suffix, node: loader.construct_sequence(node)
-)
-
 TOPOLOGY = Path(__file__).parent / 'fixtures' / 'topo_two_numa.txt'
 
 
@@ -66,7 +58,7 @@ def _generate(ids: str, topology: Path = TOPOLOGY) -> subprocess.CompletedProces
 def test_the_generated_overlay_has_one_pinned_server_per_card() -> None:
     done = _generate('2,0')
     assert done.returncode == 0, done.stderr
-    services = yaml.load(done.stdout, Loader=_TagIgnoringLoader)['services']
+    services = yaml.load(done.stdout, Loader=ComposeLoader)['services']
     assert set(services) == {'triton-server', 'triton-server-2'}
     primary, second = services['triton-server'], services['triton-server-2']
     assert primary['cpuset'] == '0-11,24-35'
