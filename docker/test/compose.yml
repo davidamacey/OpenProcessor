@@ -152,6 +152,8 @@ services:
     volumes:
       - ../../src:/app/src:ro
       - ../../scripts:/app/scripts:ro
+      # the builtin engine seed reads the shipped config.pbtxt files
+      - ../../models:/app/models:ro
       - ./verify-data/secrets/postgres:/run/secrets/op_pg:ro
     environment:
       - OP_DB_HOST=postgres

@@ -438,6 +438,8 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
     volumes:
       - ./secrets/postgres:/run/secrets/op_pg:ro
+      # the builtin engine seed reads the shipped config.pbtxt files
+      - ./models:/app/models:ro
       - ./data:/app/data
     depends_on:
       postgres:
