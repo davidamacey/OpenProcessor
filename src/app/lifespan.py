@@ -240,14 +240,16 @@ async def _stop_event_bus() -> None:
 
 
 async def _close_triton_pool() -> None:
-    if AppResources.async_triton_pool is not None:
-        await AppResources.async_triton_pool.close()
+    pool, AppResources.async_triton_pool = AppResources.async_triton_pool, None
+    if pool is not None:
+        await pool.close()
         logger.info('triton_pool_closed')
 
 
 def _shutdown_shared_executor() -> None:
-    if AppResources.shared_executor is not None:
-        AppResources.shared_executor.shutdown(wait=True)
+    executor, AppResources.shared_executor = AppResources.shared_executor, None
+    if executor is not None:
+        executor.shutdown(wait=True)
         logger.info('executor_shutdown')
 
 
