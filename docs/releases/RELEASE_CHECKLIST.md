@@ -60,9 +60,8 @@ Carried forward from 0.5.0; nothing here changes for 0.6.0 unless noted.
   version, so `latest` can only ever point at a stable release. A backport or an old line is
   pushed by hand with `docker push` of the version tag only. The installer pins digests from
   `images.lock` and never uses `latest`.
-- **Control-plane-only mode: DECIDED.** Kept as an optional installer flag
-  (`--cpu --control-plane-only`), never the default and not part of the supported
-  production path. It starts only OpenSearch and the API (plus Cropwright if asked).
+- **Control-plane-only mode: RETIRED in 0.7.0.** The flag is refused (every service needs its
+  dependencies; the API refuses to start without Triton).
 - **Unverified VLM catalog entries: DECIDED.** Kept, marked `unverified/experimental`; never
   auto-selected (explicit `--vlm-model-id` only).
 - **OpenSearch heap and shard budget: DECIDED.** Default heap is half of host RAM, 2 GB
