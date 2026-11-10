@@ -70,22 +70,21 @@ def label_op_accepted(op_id: str = 'op-1', job_id: str = 'job-1') -> dict[str, A
 
 def job(job_id: str = 'job-1', status: str = 'completed', **over: Any) -> dict[str, Any]:
     """One ``GET /jobs/{id}`` body. ``result`` is the job's own result document."""
-    return fill(
-        'JobView',
-        id=job_id,
-        kind='label_write',
-        project='default',
-        status=status,
-        queue='default',
-        scope='project',
-        requested_by='e2e',
-        **over,
-    )
+    base = {
+        'id': job_id,
+        'kind': 'label_write',
+        'project': 'default',
+        'status': status,
+        'queue': 'default',
+        'scope': 'project',
+        'requested_by': 'e2e',
+    }
+    return fill('JobView', **{**base, **over})
 
 
 def undo_response(op_id: str = 'op-1', **over: Any) -> dict[str, Any]:
     """The ``LabelOpUndoResponse`` a finished ``label_undo`` job carries as its result."""
-    return fill('LabelOpUndoResponse', op_id=op_id, status='undone', **over)
+    return fill('LabelOpUndoResponse', **{'op_id': op_id, 'status': 'undone', **over})
 
 
 def cluster_card(uid: str = 'cl-fixture-0001', **over: Any) -> dict[str, Any]:

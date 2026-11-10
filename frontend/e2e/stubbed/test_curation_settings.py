@@ -5,8 +5,8 @@ Four passes against `/settings`:
 
   Pass 1 — the settings endpoint fails. The error and a Retry button
            render; no controls at all.
-  Pass 2 — today's real /methods shape (no assist axes). The two real
-           controls render, and a save round-trip is observed verbatim.
+  Pass 2 — today's real /methods shape (no assist axes). The one real
+           control renders, and a save round-trip is observed verbatim.
   Pass 3 — /methods advertises the two advisory axes too. They render
            read-only; the control count does not change.
   Pass 4 — a PUT 422s. The server's own words render on the page, and the
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 
+from fixtures.contract import fill
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -80,15 +81,16 @@ METHODS_WITH_ASSIST_AXES = {
     'flags': {},
 }
 
-SETTINGS_EMPTY = {'defaults': {}, 'updated_at': None, 'updated_by': None}
+SETTINGS_EMPTY = fill('CurationSettingsResponse')
 
 # Deliberately contains 'cluster', which pass 2's PUT never sends, so
 # adopting-the-response (not an optimistic guess) is observable in the DOM.
-SETTINGS_MERGED = {
-    'defaults': {'cluster': 'ivf', 'sort': 'uncertainty_entropy'},
-    'updated_at': '2026-09-21T00:00:00+00:00',
-    'updated_by': None,
-}
+SETTINGS_MERGED = fill(
+    'CurationSettingsResponse',
+    defaults={'cluster': 'ivf', 'sort': 'uncertainty_entropy'},
+    revision=1,
+    updated_at='2026-09-21T00:00:00+00:00',
+)
 
 SETTINGS_422 = {
     'detail': "'uncertainty_entropy' is not a currently-advertised id for axis 'sort'; "
@@ -146,11 +148,12 @@ def test_curation_settings(stub, page, app_url):
     put_calls = register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_MERGED)
 
     page.goto(f'{app_url}/p/default/settings')
-    page.get_by_text('Clustering method').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_text('Review queue sort').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     selects = page.locator('select')
-    expect(selects).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
-    assert page.get_by_text('Clustering method').count() > 0
+    # The cluster method is a cluster-profile setting now, not a shared default.
+    expect(selects).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    assert page.get_by_text('Clustering method').count() == 0
     assert page.get_by_text('Review queue sort').count() > 0
 
     options_text = page.locator('select option').all_inner_texts()
@@ -159,11 +162,11 @@ def test_curation_settings(stub, page, app_url):
     )
     assert page.get_by_text('Not settable on this backend').count() == 0
 
-    sort_select = selects.nth(1)
+    sort_select = selects.nth(0)
     sort_select.select_option('uncertainty_entropy')
     save_buttons = page.get_by_role('button', name='Save')
-    expect(save_buttons.nth(1)).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
-    save_buttons.nth(1).click()
+    expect(save_buttons.nth(0)).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
+    save_buttons.nth(0).click()
 
     dialog = page.get_by_role('dialog')
     expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -180,7 +183,7 @@ def test_curation_settings(stub, page, app_url):
     _url, body = put_calls[0]
     # JS's JSON.stringify (what the client actually sends) has no separator
     # whitespace, unlike Python's json.dumps default.
-    assert body == '{"defaults":{"sort":"uncertainty_entropy"}}', body
+    assert body == '{"defaults":{"sort":"uncertainty_entropy"},"expected_revision":0}', body
 
     expect(page.get_by_text('pinned').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
@@ -195,7 +198,7 @@ def test_curation_settings(stub, page, app_url):
 
     assert page.get_by_text('grounding_v2').count() > 0
     assert page.get_by_text('warehouse_v1').count() > 0
-    expect(page.locator('select')).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('select')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     advisory_heading = page.get_by_text('Not settable on this backend')
     advisory_section = advisory_heading.locator('xpath=ancestor::section[1]')
     assert advisory_section.get_by_role('button', name='Save').count() == 0
@@ -222,7 +225,7 @@ def test_curation_settings(stub, page, app_url):
         stub,
         methods_settable,
         200,
-        {'defaults': {'detection_profile': 'off'}, 'updated_at': None, 'updated_by': None},
+        fill('CurationSettingsResponse', defaults={'detection_profile': 'off'}),
     )
     page.goto(f'{app_url}/p/default/settings')
     page.get_by_text('Detection profile').first.wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -238,11 +241,11 @@ def test_curation_settings(stub, page, app_url):
     register(stub, METHODS_TODAY, 200, SETTINGS_EMPTY, put_response=SETTINGS_422, put_status=422)
 
     page.goto(f'{app_url}/p/default/settings')
-    page.get_by_text('Clustering method').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_text('Review queue sort').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    sort_select4 = page.locator('select').nth(1)
+    sort_select4 = page.locator('select').nth(0)
     sort_select4.select_option('uncertainty_entropy')
-    save_btn4 = page.get_by_role('button', name='Save').nth(1)
+    save_btn4 = page.get_by_role('button', name='Save').nth(0)
     expect(save_btn4).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
     save_btn4.click()
     confirm_dialog4 = page.get_by_role('dialog')
@@ -256,6 +259,6 @@ def test_curation_settings(stub, page, app_url):
     error_text = page.get_by_text(re.compile(r"is not a currently-advertised id for axis 'sort'"))
     expect(error_text.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text(re.compile(r"valid ids:\s*\['recent'\]")).count() > 0
-    assert page.locator('select').nth(1).input_value() != 'uncertainty_entropy', (
+    assert page.locator('select').nth(0).input_value() != 'uncertainty_entropy', (
         "the control's value must not be left showing the rejected selection as though saved"
     )
