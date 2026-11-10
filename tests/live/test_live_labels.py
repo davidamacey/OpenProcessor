@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import CLASS_NAMES, INDEXES, crop_ids_in, get_doc, refresh
+from .conftest import CLASS_NAMES, INDEXES, crop_ids_in, get_doc, refresh, wait_job
 
 
 pytestmark = pytest.mark.live
@@ -49,19 +49,22 @@ def label_cohort(opensearch: Any) -> list[str]:
 
 
 def test_single_label_writes_class_and_grows_history(
-    api_client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str], class_ids: dict[str, int]
 ) -> None:
+    crate = class_ids[CLASS_NAMES[3]]
     crop_id = label_cohort[0]
     before = _source(opensearch, crop_id)
     assert before['cluster_uid'], 'the seed partition places the cohort'
     history_before = len(before.get('class_id_history') or [])
 
-    resp = api_client.put(f'/crops/{crop_id}/label', json={'class_id': 3, 'label_source': 'human'})
+    resp = api_client.put(
+        f'/crops/{crop_id}/label', json={'class_id': crate, 'label_source': 'human'}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()['class_name'] == CLASS_NAMES[3]
 
     after = _source(opensearch, crop_id)
-    assert after['class_id'] == 3
+    assert after['class_id'] == crate
     assert after['class_name'] == CLASS_NAMES[3]
     assert after['class_validated'] is True
     assert after['class_source'] == 'human'
@@ -75,15 +78,16 @@ def test_single_label_writes_class_and_grows_history(
 
 
 def test_second_label_appends_another_history_entry(
-    api_client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str], class_ids: dict[str, int]
 ) -> None:
     crop_id = label_cohort[0]
     before = _source(opensearch, crop_id)
-    api_client.put(f'/crops/{crop_id}/label', json={'class_id': 4}).raise_for_status()
+    pallet = class_ids[CLASS_NAMES[4]]
+    api_client.put(f'/crops/{crop_id}/label', json={'class_id': pallet}).raise_for_status()
     after = _source(opensearch, crop_id)
-    assert after['class_id'] == 4
+    assert after['class_id'] == pallet
     assert len(after['class_id_history']) == len(before['class_id_history']) + 1
-    assert after['class_id_history'][-1]['class_id'] == 3
+    assert after['class_id_history'][-1]['class_id'] == class_ids[CLASS_NAMES[3]]
 
 
 def test_unknown_class_is_rejected_and_leaves_the_doc_untouched(
@@ -102,26 +106,31 @@ def test_unknown_class_is_rejected_and_leaves_the_doc_untouched(
 
 
 def test_batch_label_updates_every_crop(
-    api_client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str], class_ids: dict[str, int]
 ) -> None:
     batch = label_cohort[2:8]
+    drum = class_ids[CLASS_NAMES[5]]
     placed = {c: _placement(_source(opensearch, c)) for c in batch}
-    resp = api_client.put('/crops/batch_label', json={'crop_ids': batch, 'class_id': 5})
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
+    resp = api_client.put('/crops/batch_label', json={'crop_ids': batch, 'class_id': drum})
+    # A recorded label operation runs as a queued job: 202 with the op and the job.
+    assert resp.status_code == 202, resp.text
+    job = wait_job(api_client, resp.json()['job_id'])
+    assert job['status'] == 'completed', job
+    body = job['result']
     assert body['updated'] == len(batch), body
-    assert body['conflicts'] == []
+    assert body['conflicts'] == 0, body
+    refresh(opensearch, INDEXES['items'])
 
     for crop_id in batch:
         src = _source(opensearch, crop_id)
-        assert src['class_id'] == 5
+        assert src['class_id'] == drum
         assert src['class_name'] == CLASS_NAMES[5]
         assert src['class_validated'] is True
         assert _placement(src) == placed[crop_id]
 
 
 def test_unlabel_resets_class_provenance(
-    api_client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str], class_ids: dict[str, int]
 ) -> None:
     crop_id = label_cohort[2]
     placed = _placement(_source(opensearch, crop_id))
@@ -135,7 +144,7 @@ def test_unlabel_resets_class_provenance(
     assert src['class_source'] == 'secondary_model'
     assert src['label_source'] == 'secondary_model'
     # The first 16 seeded cls1 rows are the class-2 minority.
-    assert src['class_id'] == 2
+    assert src['class_id'] == class_ids[CLASS_NAMES[2]]
     assert _placement(src) == placed
 
 
@@ -205,7 +214,7 @@ def test_flag_new_class_queues_for_the_curator(
 
 
 def test_parallel_labels_of_one_item_do_not_tear_the_history(
-    api_client: Any, opensearch: Any, label_cohort: list[str]
+    api_client: Any, opensearch: Any, label_cohort: list[str], class_ids: dict[str, int]
 ) -> None:
     """Two concurrent human labels on the same doc.
 
@@ -214,6 +223,7 @@ def test_parallel_labels_of_one_item_do_not_tear_the_history(
     way the stored history must be internally consistent — no duplicated
     or half-written entry.
     """
+    tube, crate = class_ids[CLASS_NAMES[2]], class_ids[CLASS_NAMES[3]]
     crop_id = label_cohort[21]
     before = _source(opensearch, crop_id)
     n_history_before = len(before.get('class_id_history') or [])
@@ -222,14 +232,14 @@ def test_parallel_labels_of_one_item_do_not_tear_the_history(
         return api_client.put(f'/crops/{crop_id}/label', json={'class_id': class_id}).status_code
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        statuses = list(pool.map(label, (2, 3)))
+        statuses = list(pool.map(label, (tube, crate)))
 
     assert 200 in statuses, statuses
     # A losing writer is allowed to 409/500 out, but never to corrupt state.
     assert all(s in (200, 409, 500) for s in statuses), statuses
 
     after = _source(opensearch, crop_id)
-    assert after['class_id'] in (2, 3)
+    assert after['class_id'] in (tube, crate)
     history = after['class_id_history']
     n_wins = sum(1 for s in statuses if s == 200)
     assert len(history) == n_history_before + n_wins, history
