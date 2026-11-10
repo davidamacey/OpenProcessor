@@ -43,12 +43,12 @@ Under `/curation/projects/{project}/open_vocab`:
 | Call | Purpose |
 |---|---|
 | `GET` (`include_templates=true`), `POST` | List sets / create |
-| `GET /schema`, `POST /validate` | Field specs for a form / validate a draft |
-| `POST /test` | Try one unsaved target on one image; writes nothing |
-| `GET /active`, `POST /active/rollback`, `POST /deactivate` | Active set; re-activate the previous; turn the pass off |
-| `GET`, `PUT`, `DELETE /{name}` | One set / new revision / delete a set that is not active |
-| `POST /{name}/activate`, `POST /{name}/clone` | Activate a revision / copy a set or template (optionally from another project) |
-| `GET /{name}/revisions[/{revision}]` | History |
+| `GET /curation/projects/{project}/open_vocab/schema`, `POST /curation/projects/{project}/open_vocab/validate` | Field specs for a form / validate a draft |
+| `POST /curation/projects/{project}/open_vocab/test` | Try one unsaved target on one image; writes nothing |
+| `GET /curation/projects/{project}/open_vocab/active`, `POST /curation/projects/{project}/open_vocab/active/rollback`, `POST /curation/projects/{project}/open_vocab/deactivate` | Active set; re-activate the previous; turn the pass off |
+| `GET`, `PUT`, `DELETE /curation/projects/{project}/open_vocab/{name}` | One set / new revision / delete a set that is not active |
+| `POST /curation/projects/{project}/open_vocab/{name}/activate`, `POST /curation/projects/{project}/open_vocab/{name}/clone` | Activate a revision / copy a set or template (optionally from another project) |
+| `GET /curation/projects/{project}/open_vocab/{name}/revisions[/{revision}]` | History |
 
 Activation re-validates and needs a configured, reachable segmenter and at least one enabled
 target; `force: true` bypasses only the segmenter checks. Cloning a project with the

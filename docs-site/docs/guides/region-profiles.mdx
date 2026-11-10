@@ -41,14 +41,14 @@ Under `/curation/projects/{project}/region_profiles`:
 | Call | Purpose |
 |---|---|
 | `GET` (`include_templates=true`), `POST` | List / create a stored profile |
-| `GET /schema` | Fields with ranges and choice sources |
-| `POST /validate`, `POST /validate_segmenter_prompt` | Validate a draft or one prompt; never writes |
-| `POST /test` | Dry run on a crop ([Test on a crop](./test-on-crop.mdx)) |
-| `GET /active`, `GET /active/impact` | Active profile and what workers applied / what activation means for existing items |
-| `POST /active/rollback`, `POST /deactivate` | Re-activate the previous / switch region detection off |
-| `GET`, `PUT`, `DELETE /{name}` | One profile / new revision / delete |
-| `POST /{name}/activate`, `POST /{name}/clone` | Activate / copy |
-| `GET /{name}/revisions[/{revision}]` | History |
+| `GET /curation/projects/{project}/region_profiles/schema` | Fields with ranges and choice sources |
+| `POST /curation/projects/{project}/region_profiles/validate`, `POST /curation/projects/{project}/region_profiles/validate_segmenter_prompt` | Validate a draft or one prompt; never writes |
+| `POST /curation/projects/{project}/region_profiles/test` | Dry run on a crop ([Test on a crop](./test-on-crop.mdx)) |
+| `GET /curation/projects/{project}/region_profiles/active`, `GET /curation/projects/{project}/region_profiles/active/impact` | Active profile and what workers applied / what activation means for existing items |
+| `POST /curation/projects/{project}/region_profiles/active/rollback`, `POST /curation/projects/{project}/region_profiles/deactivate` | Re-activate the previous / switch region detection off |
+| `GET`, `PUT`, `DELETE /curation/projects/{project}/region_profiles/{name}` | One profile / new revision / delete |
+| `POST /curation/projects/{project}/region_profiles/{name}/activate`, `POST /curation/projects/{project}/region_profiles/{name}/clone` | Activate / copy |
+| `GET /curation/projects/{project}/region_profiles/{name}/revisions[/{revision}]` | History |
 
 ```bash
 curl -s "$API/curation/projects/cars/region_profiles?include_templates=true"

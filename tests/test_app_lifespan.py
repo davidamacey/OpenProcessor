@@ -223,13 +223,13 @@ def test_startup_then_shutdown_run_every_step_in_order(world: World) -> None:
     assert seen['bus'] is True
     assert app.state.pe_encoder.triton_pool is seen['pool']
     assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
-    # shutdown clears the tasks and flags but keeps the pool and executor references
+    # shutdown clears the tasks and flags and unpublishes the closed pool and executor
     assert AppResources.ops_metrics_task is None
     assert AppResources.project_registry_poll_task is None
     assert AppResources.config_store_poll_task is None
     assert AppResources.event_bus_started is False
-    assert AppResources.async_triton_pool is seen['pool']
-    assert AppResources.shared_executor is seen['executor']
+    assert AppResources.async_triton_pool is None
+    assert AppResources.shared_executor is None
 
 
 def test_a_failing_event_listener_start_is_skipped_and_its_stop_is_not_attempted(

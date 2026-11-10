@@ -55,17 +55,18 @@ image size that disagrees with the image skips it (`image_size_mismatch`).
 
 ## Routes
 
-All under `/curation/projects/{project}/datasets`:
-
 | Call | Purpose |
 |---|---|
-| `POST /uploads` | Upload a dataset archive |
-| `GET /formats` | Formats, issue catalog, upload limits |
-| `POST /preview` | Preview; writes nothing |
-| `POST`/`GET /imports` | Start / list (`page`, `page_size`, `status`) |
-| `GET /imports/{import_id}` | Status and report |
-| `GET /imports/{import_id}/entries`, `/issues` | Per-image rows (filters `split`, `label_state`, `status`) / issues with samples |
-| `POST /imports/{import_id}/cancel`, `/resume`, `/undo` | Stop; continue an interrupted, failed or cancelled import (re-checks the source); dry run or real undo |
+| `POST /curation/projects/{project}/datasets/uploads` | Upload a dataset archive |
+| `GET /curation/projects/{project}/datasets/formats` | Formats, issue catalog, upload limits |
+| `POST /curation/projects/{project}/datasets/preview` | Preview; writes nothing |
+| `POST`/`GET /curation/projects/{project}/datasets/imports` | Start / list (`page`, `page_size`, `status`) |
+| `GET /curation/projects/{project}/datasets/imports/{import_id}` | Status and report |
+| `GET /curation/projects/{project}/datasets/imports/{import_id}/entries` | Per-image rows (filters `split`, `label_state`, `status`) |
+| `GET /curation/projects/{project}/datasets/imports/{import_id}/issues` | Issues with samples |
+| `POST /curation/projects/{project}/datasets/imports/{import_id}/cancel` | Stop |
+| `POST /curation/projects/{project}/datasets/imports/{import_id}/resume` | Continue an interrupted, failed or cancelled import (re-checks the source) |
+| `POST /curation/projects/{project}/datasets/imports/{import_id}/undo` | Dry run or real undo |
 
 ## Upload an archive
 

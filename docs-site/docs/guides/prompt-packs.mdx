@@ -77,13 +77,13 @@ Under `/curation/projects/{project}/prompt_packs`:
 | Call | Purpose |
 |---|---|
 | `GET`, `POST` | List packs, templates and the active one / create a stored pack |
-| `GET /schema` | Field, call and placeholder specs |
-| `POST /validate` | Validate a draft; never writes |
-| `POST /test` | Dry run against crops ([Test on a crop](./test-on-crop.mdx)) |
-| `GET /active`, `POST /active/rollback` | Active pack and what workers applied / re-activate the previous |
-| `GET`, `PUT`, `DELETE /{name}` | One pack / new revision / delete a stored pack |
-| `POST /{name}/activate`, `POST /{name}/clone` | Activate / copy into a new stored pack |
-| `GET /{name}/revisions[/{revision}]` | History |
+| `GET /curation/projects/{project}/prompt_packs/schema` | Field, call and placeholder specs |
+| `POST /curation/projects/{project}/prompt_packs/validate` | Validate a draft; never writes |
+| `POST /curation/projects/{project}/prompt_packs/test` | Dry run against crops ([Test on a crop](./test-on-crop.mdx)) |
+| `GET /curation/projects/{project}/prompt_packs/active`, `POST /curation/projects/{project}/prompt_packs/active/rollback` | Active pack and what workers applied / re-activate the previous |
+| `GET`, `PUT`, `DELETE /curation/projects/{project}/prompt_packs/{name}` | One pack / new revision / delete a stored pack |
+| `POST /curation/projects/{project}/prompt_packs/{name}/activate`, `POST /curation/projects/{project}/prompt_packs/{name}/clone` | Activate / copy into a new stored pack |
+| `GET /curation/projects/{project}/prompt_packs/{name}/revisions[/{revision}]` | History |
 
 ```bash
 curl -s "$API/curation/projects/cars/prompt_packs"
