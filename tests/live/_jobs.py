@@ -75,17 +75,30 @@ app.send_task({task!r}, task_id={task_id!r})
 """
 
 
-# N small noop jobs started back to back, each tagged with the run so the check can find them.
+# N small jobs of a project-scoped kind started back to back, round-robin over the projects, each
+# tagged with the run so the check can find them.
 _START_BURST = """
 import asyncio, json, time
+from sqlalchemy import text
 from src.db.session import async_session_factory
 from src.services.jobs.service import start_job
 
+SLUGS = {slugs!r}
+
 async def main():
+    ids = {{}}
+    async with async_session_factory()() as session:
+        for slug in SLUGS:
+            ids[slug] = (await session.execute(
+                text('SELECT id FROM projects WHERE slug = :s'), {{'s': slug}}
+            )).scalar_one()
     began = time.monotonic()
     for i in range({count}):
         async with async_session_factory()() as session:
-            await start_job(session, 'noop', None, params={{'load_run': {run!r}, 'i': i}})
+            await start_job(
+                session, {kind!r}, ids[SLUGS[i % len(SLUGS)]],
+                params={{'crop_ids': [], 'load_run': {run!r}, 'i': i}},
+            )
     print(json.dumps({{'seconds': time.monotonic() - began}}))
 
 asyncio.run(main())
@@ -147,11 +160,12 @@ def start_job_in_project(kind: str, *, slug: str = 'default', **params: Any) -> 
     return str(json.loads(proc.stdout.strip().splitlines()[-1])['job_id'])
 
 
-def start_noop_burst(count: int, run: str) -> float:
-    """Start ``count`` noop jobs tagged ``params.load_run = run``; the seconds the starts took."""
+def start_burst(count: int, run: str, slugs: list[str], kind: str) -> float:
+    """Start ``count`` ``kind`` jobs over the projects ``slugs``; the seconds the starts took."""
     proc = compose(
         'exec', '-T', 'api', 'python', '-',
-        stdin=_START_BURST.format(count=count, run=run), check=False, timeout=900,
+        stdin=_START_BURST.format(count=count, run=run, slugs=slugs, kind=kind),
+        check=False, timeout=900,
     )  # fmt: skip
     if proc.returncode != 0:
         raise StartFailedError(proc.stderr)
