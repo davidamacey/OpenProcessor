@@ -98,9 +98,20 @@ def compose(*args: str, check: bool = True, timeout: int = 300) -> subprocess.Co
 
 
 def docker_ps_snapshot() -> str:
-    """Stable, sorted `docker ps` view used to prove the GPU arbiter no-ops."""
+    """Stable, sorted `docker ps` view of this harness's project, to prove the GPU arbiter no-ops.
+
+    Scoped to the compose project: other stacks on a shared host start and stop containers at any
+    time, which is not the arbiter's doing.
+    """
     proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-        ['docker', 'ps', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}'],
+        [
+            'docker',
+            'ps',
+            '--filter',
+            f'label=com.docker.compose.project={COMPOSE_PROJECT}',
+            '--format',
+            '{{.Names}}\t{{.Status}}\t{{.Image}}',
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -300,6 +311,15 @@ def harness_safety_guard() -> None:
             'disposable instance, refusing to run',
             returncode=3,
         )
+
+
+@pytest.fixture(scope='session', autouse=True)
+def stack_restored_after_scale_overlay(harness_safety_guard: None) -> Any:
+    """A run that used the scale overlay leaves the stack unscaled for the next run on it."""
+    yield
+    from tests.live._scale import restore_base_stack  # circular at import time
+
+    restore_base_stack()
 
 
 @pytest.fixture(scope='session')

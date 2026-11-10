@@ -244,7 +244,11 @@ def test_an_auto_resume_job_is_requeued_and_finished_after_the_worker_dies(
     if how == 'sigkill':
         _compose.kill('jobs-worker')
     else:
-        _compose.stop('jobs-worker', grace_s=75)  # the 30 s soft shutdown, then the cold exit
+        # SIGTERM starts Celery's warm shutdown, which waits for the running task; Docker's SIGKILL
+        # ends it at the grace. The grace must be shorter than the handler's 30 s OpenSearch client
+        # timeout: with OpenSearch frozen, a longer one lets that timeout fail the job first
+        # (measured: failed at 32-34 s with handler_error, 3 of 3 runs at a 75 s grace).
+        _compose.stop('jobs-worker', grace_s=20)
     _compose.compose('unpause', 'opensearch')
     _compose.up('jobs-worker')
 
