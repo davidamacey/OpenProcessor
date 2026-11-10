@@ -77,15 +77,9 @@ describe('ingest contract', () => {
       'summary',
       'results',
     ] satisfies (keyof BatchIngestResponse)[];
-    // The generated schema name is mangled by the module path FastAPI
-    // resolved the model from (two `BatchIngestResponse`-titled models
-    // exist server-side); `src__routers__curation___common_models__` is
-    // the real one this endpoint's response references (BA-1/BA-7 split
-    // the wire models out of `_common.py` into `_common_models.py` —
-    // this schema name moved with them, was `___common__` before).
-    expect([...RESPONSE_KEYS].sort()).toEqual(
-      keysOf('src__routers__curation___common_models__BatchIngestResponse'),
-    );
+    // The wire model is named apart from the core `BatchIngestResponse`: this
+    // endpoint's response is the curation one.
+    expect([...RESPONSE_KEYS].sort()).toEqual(keysOf('CurationBatchIngestResponse'));
   });
 
   it('RegionDependencyStatus (types_ingest.ts) has exactly the served properties', () => {

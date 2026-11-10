@@ -23,6 +23,7 @@ from src.routers.curation._common import OpenSearchDep, RegionProfileDep, guard_
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._region_row_models import RegionRowPage
+from src.routers.curation._region_status_models import RegionStatusCatalog
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_rows import search_region_rows
@@ -406,7 +407,7 @@ async def training_candidates(
     return {**page_body, 'mode': mode, 'selection_reason': reason}
 
 
-@router.get('/regions/statuses')
+@router.get('/regions/statuses', response_model=RegionStatusCatalog)
 async def region_statuses() -> dict[str, Any]:
     """The region lifecycle vocabulary: every status with its ``label``,
     ``role``, ``terminal``, ``human_writable``, ``clears_box`` and

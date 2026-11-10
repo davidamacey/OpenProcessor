@@ -21,6 +21,7 @@ from src.config import get_curation_config
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
+from src.routers.curation._umap_models import UmapRebuildResponse
 from src.services.curation.clustering.embedding_reduce import umap_rebuild
 from src.services.curation.clustering.pool_size import TooFewItemsError
 
@@ -32,7 +33,7 @@ config = get_curation_config()
 router = APIRouter(prefix='/cluster', tags=[f'{config.api_tag} — Clustering'])
 
 
-@router.post('/umap/rebuild')
+@router.post('/umap/rebuild', response_model=UmapRebuildResponse, response_model_exclude_unset=True)
 async def post_umap_rebuild(client: Any = Depends(_raw_opensearch_dep)) -> dict[str, Any]:
     """Refit the UMAP reducer over the residual pool (visualization only; it never changes a
     cluster).

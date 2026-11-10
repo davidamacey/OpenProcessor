@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from src.routers.curation._region_vocabulary_models import RegionProfileSummary
+from src.routers.curation._region_vocabulary_models import ActiveRegionProfileSummary
 
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
@@ -27,7 +27,7 @@ class HealthResponse(BaseModel):
     opensearch: dict[str, Any]
     vlm: dict[str, Any]
     registry: dict[str, Any]
-    region_profile: RegionProfileSummary | None = Field(
+    region_profile: ActiveRegionProfileSummary | None = Field(
         description=(
             'The active region profile, or null when none is configured -- '
             'THE signal a client checks to decide whether region-scoped '

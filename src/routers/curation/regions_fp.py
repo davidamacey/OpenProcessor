@@ -30,6 +30,7 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._region_row_models import RegionRowPage
+from src.routers.curation._region_status_models import RegionClusterList
 from src.routers.curation.regions import region_source_excludes
 from src.schemas.curation.region_fp import RegionFpCentroidsStarted
 from src.services.curation.region_fp_clusters import region_cluster_cards
@@ -59,7 +60,11 @@ _suspected_fp_cache: dict[
 ] = {}
 
 
-@router.get('/regions/clusters', responses=REGION_PROFILE_RESPONSES)
+@router.get(
+    '/regions/clusters',
+    response_model=None,
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionClusterList}},
+)
 async def list_region_clusters(
     opensearch: OpenSearchDep,
     _profile: RegionProfileDep,

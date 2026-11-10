@@ -66,7 +66,7 @@ class BatchIngestSummaryResponse(BaseModel):
     n_filtered: int = 0
 
 
-class BatchIngestResponse(BaseModel):
+class CurationBatchIngestResponse(BaseModel):
     status: Literal['success', 'partial', 'error']
     summary: BatchIngestSummaryResponse
     results: list[IngestImageResponse] = Field(default_factory=list)

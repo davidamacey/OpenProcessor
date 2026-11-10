@@ -88,7 +88,18 @@ async def _cached_stats_payload(opensearch: AsyncOpenSearch) -> dict[str, Any]:
     return await asyncio.shield(task)
 
 
-@router.get('/pipeline/events', response_class=EventSourceResponse)
+@router.get(
+    '/pipeline/events',
+    response_class=EventSourceResponse,
+    responses={
+        200: {
+            'description': (
+                'Server-sent event stream of `snapshot`, `state` and `stats` frames, each a '
+                'JSON `data` payload. No body validation: the stream is open-ended.'
+            )
+        }
+    },
+)
 async def pipeline_events(opensearch: OpenSearchDep) -> AsyncIterator[ServerSentEvent]:
     """Server-sent events stream for the curation dashboard.
 
