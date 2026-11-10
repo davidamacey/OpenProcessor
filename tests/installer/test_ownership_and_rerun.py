@@ -352,12 +352,6 @@ def test_leading_zero_octets_are_rejected(shimmed: Shimmed, bind: str) -> None:
     assert shimmed.run(['--dry-run', '--bind', bind]).returncode == 2
 
 
-def test_monitoring_is_refused_with_control_plane_only(shimmed: Shimmed) -> None:
-    result = shimmed.run(['--dry-run', '--cpu', '--control-plane-only', '--with-monitoring'])
-    assert result.returncode == 2
-    assert 'not available with --control-plane-only' in result.stderr
-
-
 def test_monitoring_health_verifies_the_loaded_config(shimmed: Shimmed) -> None:
     ok = install(shimmed, '--with-monitoring', '--skip-models')
     assert ok.returncode == 0, ok.stderr[-2000:]

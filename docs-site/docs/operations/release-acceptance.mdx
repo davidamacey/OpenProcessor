@@ -37,7 +37,7 @@ These phases are on `main` and ship in the next release after 0.6.0.
 | `metrics` | After ingest, `op_ingest_decode_total` shows the GPU route with CPU fallbacks at or under `--decode-fallback-max` percent (default 0.5; `cpu_off` and `cpu_small` are policy, not fallbacks). With `--triton-metrics-url` it also requires `op_gpu_prep_stage_seconds` and `op_gpu_prep_stage_observations` on Triton's metrics port. Without the counters, or when the GPU route took no images, this part is skipped and the evidence says so |
 
 Useful flags: `--only a,b` and `--skip a,b` (see `--list` for phase names),
-`--train-gpu`, `--control-plane-only`, `--triton-metrics-url <url>`,
+`--train-gpu`, `--triton-metrics-url <url>`,
 `--decode-fallback-max <percent>`, `--label-ops-crops <n>`, `--vlm-endpoint <name>` (the endpoint the vlm_label phase activates; default `env`, else the stack's only saved endpoint), `--installer-args "<flags>"` (flags added to the installer_rerun, installer_repair and installer_upgrade calls; a stack installed from a local bundle needs `--release-dir`, `--version` and `--image-tag` or the installer re-downloads the published release), `--vlm-switch-id <id>`, `--upgrade-version vX.Y.Z`, `--strict`.
 The JSON report records, per phase, pass/fail/skip, seconds and evidence; the exit
 status is non-zero when a required phase fails. A cleanup trap always removes the

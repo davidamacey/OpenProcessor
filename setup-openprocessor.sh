@@ -46,7 +46,7 @@
 #   OP_WITH_MONITORING / --with-monitoring, OP_SAMPLE_DATA / --sample-data
 #   OP_UNATTENDED / --unattended     no prompts (auto when /dev/tty is unusable)
 #   OP_DRY_RUN / --dry-run           print every mutating command, run none
-#   OP_FORCE_CPU / --cpu             no GPU; see --control-plane-only
+#   OP_FORCE_CPU / --cpu             no GPU: explains why and exits 4 (there is no CPU inference path)
 #   OP_ALLOW_PUBLIC_BIND=1           unattended consent for a non-loopback --bind
 #   OP_ALLOW_EXTERNAL_VLM=1          unattended consent for a non-private --vlm-remote
 #   --yes                            consent to a destructive step (uninstall, rollback,
@@ -86,7 +86,7 @@ EXIT_HEALTH=8
 EXIT_CONSENT=9
 
 TIER_LIST=(core curation segmenter vlm trainer cropwright)
-COMPOSE_MIN_OVERRIDE="2.24.4"
+RETIRED_CONTROL_PLANE_ONLY="--control-plane-only (and OP_CONTROL_PLANE_ONLY) no longer exists in 0.7.0: every service needs its dependencies and the API refuses to start without Triton. Install on a machine with an NVIDIA GPU and the NVIDIA container runtime (there is no CPU inference path); an install made with the flag cannot be upgraded, so reinstall on a GPU host or stay on 0.6.0."
 
 # --- Logging (self-contained: nothing is sourced before the release is verified) ---
 log_info()    { echo "[INFO] $*"; }
@@ -136,9 +136,6 @@ dc() {
     local project="${OP_PROJECT:?OP_PROJECT not set}" dir="${OP_DIR:?OP_DIR not set}"
     local -a cmd=(docker compose -p "$project" --env-file "${dir}/.env"
         --project-directory "$dir" -f "${dir}/docker-compose.yml")
-    if [[ -f "${dir}/docker-compose.cpu.yml" ]]; then
-        cmd+=(-f "${dir}/docker-compose.cpu.yml")
-    fi
     cmd+=("$@")
     if [[ "${OP_DRY_RUN:-0}" == "1" ]] && ! _dc_is_readonly "$@"; then
         echo "DRY: ${cmd[*]//"$dir"/"${OP_REAL_DIR:-$dir}"}"
@@ -1350,7 +1347,7 @@ plan_ports() {
         read -r key def tier <<< "$entry"
         case "$tier" in
             base) ;;
-            core) [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && continue ;;
+            core) ;;
             monitoring) [[ "$OP_WITH_MONITORING" == 1 ]] || continue ;;
             *) _has_tier "$tier" || continue ;;
         esac
@@ -1676,7 +1673,7 @@ pull_images() {
         log_info "all ${#images[@]} images are already present"
         return 0
     fi
-    log_info "pulling ${#missing[@]} image(s)$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo "; the Triton image alone is ~30 GB")"
+    log_info "pulling ${#missing[@]} image(s); the Triton image alone is ~30 GB"
     for img in "${missing[@]}"; do
         if [[ "$IMAGE_MODE" == tag && "$RESOLVED_MODE" != branch && "$img" == "${OP_IMAGE_REPO}/openprocessor"*":${OP_IMAGE_TAG}" ]]; then
             die "${img} is not present locally: --image-tag runs local builds only and never pulls an unpinned image (build it, or install a release)" "$EXIT_VERIFY"
@@ -1784,7 +1781,6 @@ state_write() {
         echo "  \"installed_at\": $(_json_str "${INSTALLED_AT:-}"),"
         echo "  \"updated_at\": $(_json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),"
         echo "  \"tiers\": $(_json_str "${SELECTED_TIERS:-}"),"
-        echo "  \"control_plane_only\": $(_json_str "${OP_CONTROL_PLANE_ONLY:-0}"),"
         echo "  \"with_monitoring\": $(_json_str "${OP_WITH_MONITORING:-0}"),"
         echo "  \"gpu_plan\": $(_json_str "${GPU_PLAN_SUMMARY:-}"),"
         echo "  \"ports\": $(_json_str "${PORTS_SUMMARY%,}"),"
@@ -1799,10 +1795,6 @@ state_write() {
 }
 
 # --- 7. Cropwright tier (the `cropwright` profile of the main compose project) ---
-_version_ge() {
-    [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" == "$2" ]]
-}
-
 setup_cropwright() {
     local port
     port="$(read_env_var "${OP_DIR}/.env" OP_CROPWRIGHT_PORT || true)"
@@ -1903,19 +1895,17 @@ run_health() {
     fi
     log_step "Health"
     p="$(read_env_var "$ENV_FILE" API_PORT)"
-    if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        local tp
-        tp="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT)"
-        if wait_http "http://${h}:${tp}/v2/health/ready" 180; then
-            models=()
-            [[ "$OP_SKIP_MODELS" == 1 ]] || read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
-            for m in ${models[@]+"${models[@]}"}; do
-                curl -fsS --max-time 5 "http://${h}:${tp}/v2/models/${m}/ready" >/dev/null 2>&1 \
-                    || fails+=("triton model ${m} not READY: ./openprocessor models install")
-            done
-        else
-            fails+=("triton not ready: ./openprocessor logs triton-server")
-        fi
+    local tp
+    tp="$(read_env_var "$ENV_FILE" TRITON_HTTP_PORT)"
+    if wait_http "http://${h}:${tp}/v2/health/ready" 180; then
+        models=()
+        [[ "$OP_SKIP_MODELS" == 1 ]] || read -ra models <<< "$(model_setup_all_models "$SELECTED_TIERS")"
+        for m in ${models[@]+"${models[@]}"}; do
+            curl -fsS --max-time 5 "http://${h}:${tp}/v2/models/${m}/ready" >/dev/null 2>&1 \
+                || fails+=("triton model ${m} not READY: ./openprocessor models install")
+        done
+    else
+        fails+=("triton not ready: ./openprocessor logs triton-server")
     fi
     # The VLM loads for minutes on a cold start; the functional probe below
     # requires it reachable, so wait for it first.
@@ -1930,10 +1920,10 @@ run_health() {
             fails+=("vlm not serving local-vlm (${vlm_repo}): ./openprocessor logs vlm")
         fi
     fi
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 || "$OP_SKIP_MODELS" == 1 ]]; then
-        # Without Triton (or its models, --skip-models) /health is 503 by design; its body still shows OpenSearch is up.
+    if [[ "$OP_SKIP_MODELS" == 1 ]]; then
+        # Without its models (--skip-models) /health is 503 by design; its body still shows OpenSearch is up.
         wait_http "http://${h}:${p}/health" 240 '"opensearch":{"ok":true' -sS \
-            && log_warn "API is up but not ready (expected without Triton models: control-plane-only or --skip-models)" \
+            && log_warn "API is up but not ready (expected without Triton models: --skip-models)" \
             || fails+=("API /health not ready: ./openprocessor logs api")
     elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
         fails+=("API /health not ready: ./openprocessor logs api")
@@ -2284,7 +2274,7 @@ Usage: setup-openprocessor.sh [options]
   --force-existing-dir    install into a non-empty dir this installer did not create (backed up first)
   --local-only            Cropwright only on this computer (default: reachable from your LAN)
   --yes                   confirm destructive steps (uninstall, rollback, upgrade) without a prompt
-  --cpu [--control-plane-only]
+  --cpu
   --repair | --rollback | --uninstall [--purge-volumes] [--purge-data] [--remove-images]
                           (--rollback restores the newest backup of a different version)
   --reset-hf-token        ask for a new HuggingFace token
@@ -2323,7 +2313,7 @@ parse_args() {
     _OP_PROJECT_FLAG="${OP_PROJECT:-}"
     OP_ACTION="install"
     local unattended="${OP_UNATTENDED:-0}" dry="${OP_DRY_RUN:-0}" cpu="${OP_FORCE_CPU:-0}"
-    local mon="${OP_WITH_MONITORING:-0}" sample="${OP_SAMPLE_DATA:-0}" cpo="${OP_CONTROL_PLANE_ONLY:-0}"
+    local mon="${OP_WITH_MONITORING:-0}" sample="${OP_SAMPLE_DATA:-0}"
     OP_SKIP_MODELS=0; OP_NO_START=0; OP_FORCE=0; OP_PURGE_VOLUMES=0; OP_PURGE_DATA=0
     OP_REMOVE_IMAGES=0; OP_RESET_HF_TOKEN=0; OP_FORCE_EXISTING_DIR=0; OP_LOCAL_ONLY=0
     local yes=0
@@ -2355,7 +2345,7 @@ parse_args() {
             --unattended) unattended=1; shift ;;
             --dry-run) dry=1; shift ;;
             --cpu) cpu=1; shift ;;
-            --control-plane-only) cpo=1; shift ;;
+            --control-plane-only) die "$RETIRED_CONTROL_PLANE_ONLY" "$EXIT_USAGE" ;;
             --force) OP_FORCE=1; shift ;;
             --force-existing-dir) OP_FORCE_EXISTING_DIR=1; shift ;;
             --local-only) OP_LOCAL_ONLY=1; shift ;;
@@ -2385,10 +2375,7 @@ parse_args() {
     OP_FORCE_CPU=0; _truthy "$cpu" && OP_FORCE_CPU=1
     OP_WITH_MONITORING=0; _truthy "$mon" && OP_WITH_MONITORING=1
     OP_SAMPLE_DATA=0; _truthy "$sample" && OP_SAMPLE_DATA=1
-    OP_CONTROL_PLANE_ONLY=0; _truthy "$cpo" && OP_CONTROL_PLANE_ONLY=1
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 && "$OP_WITH_MONITORING" == 1 ]]; then
-        die "--with-monitoring is not available with --control-plane-only (only OpenSearch and the API run)" "$EXIT_USAGE"
-    fi
+    ! _truthy "${OP_CONTROL_PLANE_ONLY:-0}" || die "$RETIRED_CONTROL_PLANE_ONLY" "$EXIT_USAGE"
     if ! tty_usable; then OP_UNATTENDED=1; fi
 
     if [[ -n "$_OP_PROJECT_FLAG" ]] && ! validate_project_name "$_OP_PROJECT_FLAG"; then
@@ -2548,8 +2535,10 @@ do_install() {
             OP_TIERS="${OP_TIERS// /,}"
             log_info "keeping the installed tiers: ${OP_TIERS} (pass --tiers to change them)"
         fi
-        [[ "$(state_get control_plane_only)" == 1 ]] && OP_CONTROL_PLANE_ONLY=1
-        if [[ "$(state_get with_monitoring)" == 1 && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+        if [[ "$(state_get control_plane_only)" == 1 || -f "${OP_DIR}/docker-compose.cpu.yml" ]]; then
+            die "this install was made with --control-plane-only. $RETIRED_CONTROL_PLANE_ONLY" "$EXIT_USAGE"
+        fi
+        if [[ "$(state_get with_monitoring)" == 1 ]]; then
             OP_WITH_MONITORING=1
         fi
         INSTALLED_AT="$(state_get installed_at || true)"
@@ -2572,9 +2561,8 @@ do_install() {
         state_write
     fi
     local rt
-    rt="$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] && echo skip || docker_runtime_has_nvidia)"
+    rt="$(docker_runtime_has_nvidia)"
     case "$rt" in
-        skip) ;;
         1) log_info "Docker has the nvidia runtime registered" ;;
         0) log_warn "Docker lists no nvidia runtime; relying on the --gpus container probe" ;;
         *) log_warn "could not determine Docker's runtimes; relying on the --gpus container probe" ;;
@@ -2643,10 +2631,8 @@ do_install() {
     _env_msg="$(env_generate "${OP_DIR}/env.template" "$ENV_FILE")" || die "could not create ${ENV_FILE}"
     [[ -z "$_env_msg" ]] || log_info "$_env_msg"
     env_set COMPOSE_PROJECT_NAME "$OP_PROJECT"
-    if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        # Without a primary ingest detector /ingest answers 503 on a fresh install.
-        env_set_default OP_INGEST_PRIMARY_DETECTOR_MODEL yolov11_small_trt_end2end
-    fi
+    # Without a primary ingest detector /ingest answers 503 on a fresh install.
+    env_set_default OP_INGEST_PRIMARY_DETECTOR_MODEL yolov11_small_trt_end2end
 
     # A re-run keeps the installed catalog VLM unless --vlm-model-id says
     # otherwise: re-planning must never silently swap the model.
@@ -2660,7 +2646,7 @@ do_install() {
     fi
 
     # Likewise the installed GPU placement (also for tiers now off: managed.env records what the plan set): re-planning from free VRAM would move services on an unchanged re-run.
-    if (( existing )) && [[ -z "$OP_GPU_PLAN" && "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
+    if (( existing )) && [[ -z "$OP_GPU_PLAN" ]]; then
         local kept_plan="" kv_id spec
         for spec in triton:TRITON_GPU_ID segmenter:SEGMENTER_GPU_ID vlm:VLM_GPU_ID trainer:OP_TRAIN_GPU_ORDER; do
             kv_id="$(read_env_var "$ENV_FILE" "${spec#*:}" || true)"
@@ -2691,114 +2677,86 @@ do_install() {
         gpus="$(gpu_subtract_own "$gpus" "$(gpu_own_usage)")"
     fi
     if [[ "$OP_FORCE_CPU" == 1 || -z "$gpus" ]]; then
-        if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-            log_error "$([[ "$OP_FORCE_CPU" == 1 ]] && echo "--cpu on its own cannot work" || echo "No usable NVIDIA GPU"). There is no CPU inference path today."
-            log_error "Re-run with --cpu --control-plane-only to install OpenSearch, the API"
-            log_error "and Cropwright without Triton (inference routes will return 503)."
-            exit "$EXIT_GPU"
-        fi
+        log_error "$([[ "$OP_FORCE_CPU" == 1 ]] && echo "--cpu on its own cannot work" || echo "No usable NVIDIA GPU"). There is no CPU inference path today."
+        log_error "Triton needs an NVIDIA GPU and the NVIDIA container runtime; install on a host that has both."
+        exit "$EXIT_GPU"
     fi
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        log_warn "control-plane-only install: no Triton, no exports, inference routes return 503."
-        log_warn "This is NOT a functional inference install."
-        local t
-        for t in segmenter vlm trainer; do
-            [[ ",${OP_TIERS}," == *",${t},"* ]] && die "--control-plane-only cannot install the ${t} tier" "$EXIT_USAGE"
-        done
-        SELECTED_TIERS="core"
-        if [[ ",${OP_TIERS}," == *",cropwright,"* ]]; then SELECTED_TIERS="core cropwright"; fi
-        # api reserves a GPU in the base compose; without one it could
-        # never start, so the control-plane install drops that reservation, turns
-        # Triton off for every later `up` and probes / (the API's /health is 503).
-        local cver
-        cver="$(dc version --short 2>/dev/null || true)"
-        _version_ge "${cver#v}" "$COMPOSE_MIN_OVERRIDE" \
-            || die "Docker Compose ${COMPOSE_MIN_OVERRIDE}+ is needed for --control-plane-only (found '${cver:-unknown}')"
-        ( umask 022; cat > "${OP_DIR}/docker-compose.cpu.yml" <<'YAML'
-services:
-  api: {deploy: !reset {}, depends_on: !override {opensearch: {condition: service_healthy}}, healthcheck: {test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]}}
-  triton-server: {profiles: !override [no-gpu]}
-YAML
-        )
-        GPU_PLAN_SUMMARY="none (control-plane-only)"
-    else
-        if [[ -n "$OP_TIERS" ]]; then
-            tiers_validate "$OP_TIERS" || exit "$EXIT_USAGE"
-            tiers_arg="$(tiers_close_dependencies "$OP_TIERS")"
+    if [[ -n "$OP_TIERS" ]]; then
+        tiers_validate "$OP_TIERS" || exit "$EXIT_USAGE"
+        tiers_arg="$(tiers_close_dependencies "$OP_TIERS")"
+    fi
+    if [[ -n "$OP_VLM_URL" && " $tiers_arg " == *" vlm "* ]]; then
+        die "choose either the local vlm tier or --vlm-remote, not both" "$EXIT_USAGE"
+    fi
+    local remote=0
+    [[ -n "$OP_VLM_URL" ]] && remote=1
+    local -a plan_args=("force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")
+    if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
+        print_gpu_plan "$plan"
+        die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
+    fi
+    print_gpu_plan "$plan"
+    local busy line
+    while read -r line; do
+        [[ "$line" =~ ^[0-9]+$ ]] || continue
+        busy="$(nvidia-smi -i "$line" --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c . || true)"
+        (( busy > 0 )) && log_info "GPU ${line}: ${busy} other process(es) hold VRAM"
+    done < <(printf '%s\n' "$plan" | sed -n -E 's/^warn=GPU ([0-9]+):.*in use.*/\1/p')
+    rec="$(plan_get "$plan" recommended_tiers)"
+    if [[ -z "$tiers_arg" && ",${rec}," == *",segmenter,"* ]] && ! hf_token_available \
+            && { [[ "$OP_UNATTENDED" == 1 ]] || ! tty_usable; }; then
+        rec="${rec//,segmenter/}"
+        log_warn "the segmenter tier needs a HuggingFace token (SAM 3 is gated) and none was given: not selected (set HF_TOKEN_FILE and add --tiers ...,segmenter)"
+    fi
+    if [[ -z "$tiers_arg" ]]; then
+        local chosen="$rec"
+        if [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
+            chosen="$(select_tiers_interactive "$rec")"
         fi
-        if [[ -n "$OP_VLM_URL" && " $tiers_arg " == *" vlm "* ]]; then
-            die "choose either the local vlm tier or --vlm-remote, not both" "$EXIT_USAGE"
-        fi
-        local remote=0
-        [[ -n "$OP_VLM_URL" ]] && remote=1
-        local -a plan_args=("force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")
+        tiers_arg="$(tiers_close_dependencies "$chosen")"
         if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
-            print_gpu_plan "$plan"
             die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
         fi
-        print_gpu_plan "$plan"
-        local busy line
-        while read -r line; do
-            [[ "$line" =~ ^[0-9]+$ ]] || continue
-            busy="$(nvidia-smi -i "$line" --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c . || true)"
-            (( busy > 0 )) && log_info "GPU ${line}: ${busy} other process(es) hold VRAM"
-        done < <(printf '%s\n' "$plan" | sed -n -E 's/^warn=GPU ([0-9]+):.*in use.*/\1/p')
-        rec="$(plan_get "$plan" recommended_tiers)"
-        if [[ -z "$tiers_arg" && ",${rec}," == *",segmenter,"* ]] && ! hf_token_available \
-                && { [[ "$OP_UNATTENDED" == 1 ]] || ! tty_usable; }; then
-            rec="${rec//,segmenter/}"
-            log_warn "the segmenter tier needs a HuggingFace token (SAM 3 is gated) and none was given: not selected (set HF_TOKEN_FILE and add --tiers ...,segmenter)"
+    fi
+    SELECTED_TIERS="$(tiers_close_dependencies "$(plan_get "$plan" tiers)")"
+    VLM_PICK="$(plan_get "$plan" VLM_CATALOG_ID)"
+    local key val
+    for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
+            OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_DECODE SEGMENTER_INSTANCES; do
+        val="$(plan_get "$plan" "$key")"
+        # a re-run keeps installed values: free VRAM now includes this install's own services (#411)
+        if [[ -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]] && { [[ "$KEPT_GPU_PLAN" == 1 && -z "$GPU_PROFILE_FLAG" ]] \
+                || [[ "$key" == SEGMENTER_* && "$OP_GPU_PLAN" != *segmenter=* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* ]]; }; then
+            continue
         fi
-        if [[ -z "$tiers_arg" ]]; then
-            local chosen="$rec"
-            if [[ "$OP_UNATTENDED" != 1 ]] && tty_usable; then
-                chosen="$(select_tiers_interactive "$rec")"
-            fi
-            tiers_arg="$(tiers_close_dependencies "$chosen")"
-            if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
-                die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
-            fi
+        if [[ -n "$OP_GPU_PLAN" || ( "$key" == GPU_PROFILE && -n "$GPU_PROFILE_FLAG" ) ]]; then
+            env_set "$key" "$val"
+        else
+            env_set_default "$key" "$val"
         fi
-        SELECTED_TIERS="$(tiers_close_dependencies "$(plan_get "$plan" tiers)")"
-        VLM_PICK="$(plan_get "$plan" VLM_CATALOG_ID)"
-        local key val
-        for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
-                OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_DECODE SEGMENTER_INSTANCES; do
-            val="$(plan_get "$plan" "$key")"
-            # a re-run keeps installed values: free VRAM now includes this install's own services (#411)
-            if [[ -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]] && { [[ "$KEPT_GPU_PLAN" == 1 && -z "$GPU_PROFILE_FLAG" ]] \
-                    || [[ "$key" == SEGMENTER_* && "$OP_GPU_PLAN" != *segmenter=* && " $(tiers_close_dependencies "$(plan_get "$plan" tiers)") " != *" segmenter "* ]]; }; then
-                continue
-            fi
-            if [[ -n "$OP_GPU_PLAN" || ( "$key" == GPU_PROFILE && -n "$GPU_PROFILE_FLAG" ) ]]; then
-                env_set "$key" "$val"
-            else
-                env_set_default "$key" "$val"
-            fi
-        done
-        [[ -n "${OP_FACES_ENABLED:-}" ]] && env_set OP_FACES_ENABLED "$OP_FACES_ENABLED"; OP_FACES_ENABLED="$(read_env_var "$ENV_FILE" OP_FACES_ENABLED || true)"; export OP_FACES_ENABLED
-        env_set OP_GPU_LABELS "$(printf '%s\n' "$raw_gpus" | gpu_labels)"; env_set OP_REQUIRED_MODELS "$(model_setup_required_models "$SELECTED_TIERS")"
-        GPU_PROFILE="$(read_env_var "$ENV_FILE" GPU_PROFILE)"
-        GPU_PLAN_SUMMARY="triton=$(read_env_var "$ENV_FILE" TRITON_GPU_ID),segmenter=$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID),vlm=$(read_env_var "$ENV_FILE" VLM_GPU_ID),trainer=$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER),profile=${GPU_PROFILE}"
-        if _has_tier vlm; then
-            [[ -n "$VLM_PICK" ]] || die "the vlm tier was selected but no catalog entry was chosen" "$EXIT_GPU"
-            local maxi ctx
-            maxi="$(vlm_catalog_field "$VLM_PICK" max_images)"
-            ctx="$(vlm_catalog_field "$VLM_PICK" served_context)"
-            env_set VLM_CATALOG_ID "$VLM_PICK"
-            env_set VLM_MODEL "$(vlm_catalog_field "$VLM_PICK" hf_repo)"
-            env_set VLM_SERVED_MODEL_NAME local-vlm
-            env_set OP_VLM_MODEL local-vlm
-            env_set OP_VLM_URL "http://vlm:8000/v1"
-            env_set OP_LOCAL_VLM_ENDPOINT env
-            env_set VLM_MAX_MODEL_LEN "$ctx"
-            env_set VLM_LIMIT_MM_IMAGES "$maxi"
-            env_set OP_VLM_MAX_IMAGES_PER_CALL "$maxi"
-            env_set VLM_GPU_MEMORY_UTILIZATION "$(plan_get "$plan" VLM_GPU_MEMORY_UTILIZATION)"
-            env_set VLM_GPU_TOTAL_MIB "$(plan_get "$plan" VLM_GPU_TOTAL_MIB)"
-            log_info "local VLM: ${VLM_PICK} ($(read_env_var "$ENV_FILE" VLM_MODEL), status $(plan_get "$plan" vlm_status))"
-            [[ "$(plan_get "$plan" vlm_status)" == tested ]] || log_warn "VLM ${VLM_PICK} is unverified/experimental; prefer a tested catalog entry"
-        fi
+    done
+    [[ -n "${OP_FACES_ENABLED:-}" ]] && env_set OP_FACES_ENABLED "$OP_FACES_ENABLED"; OP_FACES_ENABLED="$(read_env_var "$ENV_FILE" OP_FACES_ENABLED || true)"; export OP_FACES_ENABLED
+    env_set OP_GPU_LABELS "$(printf '%s\n' "$raw_gpus" | gpu_labels)"; env_set OP_REQUIRED_MODELS "$(model_setup_required_models "$SELECTED_TIERS")"
+    GPU_PROFILE="$(read_env_var "$ENV_FILE" GPU_PROFILE)"
+    GPU_PLAN_SUMMARY="triton=$(read_env_var "$ENV_FILE" TRITON_GPU_ID),segmenter=$(read_env_var "$ENV_FILE" SEGMENTER_GPU_ID),vlm=$(read_env_var "$ENV_FILE" VLM_GPU_ID),trainer=$(read_env_var "$ENV_FILE" OP_TRAIN_GPU_ORDER),profile=${GPU_PROFILE}"
+    if _has_tier vlm; then
+        [[ -n "$VLM_PICK" ]] || die "the vlm tier was selected but no catalog entry was chosen" "$EXIT_GPU"
+        local maxi ctx
+        maxi="$(vlm_catalog_field "$VLM_PICK" max_images)"
+        ctx="$(vlm_catalog_field "$VLM_PICK" served_context)"
+        env_set VLM_CATALOG_ID "$VLM_PICK"
+        env_set VLM_MODEL "$(vlm_catalog_field "$VLM_PICK" hf_repo)"
+        env_set VLM_SERVED_MODEL_NAME local-vlm
+        env_set OP_VLM_MODEL local-vlm
+        env_set OP_VLM_URL "http://vlm:8000/v1"
+        env_set OP_LOCAL_VLM_ENDPOINT env
+        env_set VLM_MAX_MODEL_LEN "$ctx"
+        env_set VLM_LIMIT_MM_IMAGES "$maxi"
+        env_set OP_VLM_MAX_IMAGES_PER_CALL "$maxi"
+        env_set VLM_GPU_MEMORY_UTILIZATION "$(plan_get "$plan" VLM_GPU_MEMORY_UTILIZATION)"
+        env_set VLM_GPU_TOTAL_MIB "$(plan_get "$plan" VLM_GPU_TOTAL_MIB)"
+        log_info "local VLM: ${VLM_PICK} ($(read_env_var "$ENV_FILE" VLM_MODEL), status $(plan_get "$plan" vlm_status))"
+        [[ "$(plan_get "$plan" vlm_status)" == tested ]] || log_warn "VLM ${VLM_PICK} is unverified/experimental; prefer a tested catalog entry"
     fi
     log_info "tiers: ${SELECTED_TIERS}"
 
@@ -2889,12 +2847,10 @@ YAML
     verify_image_digests
     if (( existing )) && upgrade_060_applies "$prev"; then upgrade_060_step || exit "$EXIT_HEALTH"; fi
     state_write
-    if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        local ids=()
-        mapfile -t ids < <(for key in TRITON_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID OP_TRAIN_GPU_ORDER; do
-            read_env_var "$ENV_FILE" "$key"; done | tr ',' '\n' | sort -u)
-        gpu_container_probe "${ids[@]}"
-    fi
+    local ids=()
+    mapfile -t ids < <(for key in TRITON_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID OP_TRAIN_GPU_ORDER; do
+        read_env_var "$ENV_FILE" "$key"; done | tr ',' '\n' | sort -u)
+    gpu_container_probe "${ids[@]}"
 
     # --- host dir ownership (containers run as uid 1000) ----------------------
     if [[ "$(id -u)" != 1000 ]]; then
@@ -2925,10 +2881,7 @@ YAML
     # shellcheck disable=SC2034
     MODEL_SETUP_LOGDIR="${OP_DIR}/.install/logs"
     local group_rc=0
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        dc up -d --remove-orphans opensearch || die "compose up opensearch failed"
-        dc up -d --no-deps api || die "compose up api failed"
-    elif [[ "$OP_SKIP_MODELS" == 1 ]]; then
+    if [[ "$OP_SKIP_MODELS" == 1 ]]; then
         log_info "--skip-models: engines are not exported; run ./openprocessor models install later"
         # The start below uses --no-deps (no depends_on), and the API creates its kNN indexes once at boot.
         dc up -d --wait --no-deps --remove-orphans opensearch || die "OpenSearch did not become healthy: ./openprocessor logs opensearch" "$EXIT_HEALTH"
@@ -2944,10 +2897,8 @@ YAML
 
     # --- up + health ----------------------------------------------------------
     log_step "Start"
-    if [[ "$OP_CONTROL_PLANE_ONLY" != 1 ]]; then
-        local gate=(); [[ "$OP_SKIP_MODELS" == 1 ]] && gate=(--no-deps) # the API is 503 until models exist: do not gate dependents on it
-        dc up -d --remove-orphans ${gate[@]+"${gate[@]}"} || die "compose up failed"
-    fi
+    local gate=(); [[ "$OP_SKIP_MODELS" == 1 ]] && gate=(--no-deps) # the API is 503 until models exist: do not gate dependents on it
+    dc up -d --remove-orphans ${gate[@]+"${gate[@]}"} || die "compose up failed"
     local health_rc=0
     run_health || health_rc=1
     if [[ "$OP_SAMPLE_DATA" == 1 ]]; then

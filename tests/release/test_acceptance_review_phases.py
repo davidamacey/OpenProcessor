@@ -24,13 +24,11 @@ def test_health_fails_when_required_models_not_ok(fake, tmp_path):
     assert 'yolo MISSING' in json.dumps(by_name(data)['health']['evidence'])
 
 
-def test_health_models_absent_only_passes_for_control_plane_runs(fake, tmp_path):
+def test_health_fails_when_the_models_entry_is_absent(fake, tmp_path):
     routes = _happy_routes()
     routes[('GET', '/health')] = _health(None, triton_ok=False)
-    proc, data = run(fake(routes), tmp_path, '--only', 'health')
+    _proc, data = run(fake(routes), tmp_path, '--only', 'health')
     assert by_name(data)['health']['status'] == 'fail'
-    proc, data = run(fake(routes), tmp_path, '--only', 'health', '--control-plane-only')
-    assert by_name(data)['health']['status'] == 'pass', proc.stdout
 
 
 @pytest.mark.parametrize('path', ['/live', '/'])

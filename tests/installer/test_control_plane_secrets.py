@@ -203,3 +203,59 @@ def test_the_installing_users_ids_are_recorded_in_an_existing_env_and_kept(tmp_p
 def test_no_env_file_is_created_just_for_the_ids(tmp_path: Path) -> None:
     assert _run(tmp_path, tmp_path)[0].returncode == 0
     assert not (tmp_path / '.env').exists()
+
+
+def test_a_root_owned_secrets_directory_left_by_0_6_0_is_handed_back_through_the_image(
+    tmp_path: Path,
+) -> None:
+    """0.6.0 bind-mounts ./secrets/vlm without creating it, so Docker made ./secrets root-owned;
+    the upgrade must not die on mkdir. An unwritable directory stands in for the root-owned one."""
+    secrets = tmp_path / 'secrets'
+    secrets.mkdir()
+    secrets.chmod(0o555)
+    bin_dir, log = _shims(tmp_path)
+    docker = bin_dir / 'docker'
+    # the stand-in for `docker run ... chown`: makes the directory writable like the real chown
+    docker.write_text(
+        f'#!/bin/bash\nprintf "docker %s\\n" "$*" >> "{log}"\nchmod 700 "{secrets}"\n'
+    )
+    docker.chmod(0o755)
+    done = subprocess.run(
+        ['bash', '-c', f'source "{LIB}"; ensure_control_plane_secrets "{tmp_path}" img:tag'],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={'PATH': f'{bin_dir}:/usr/bin:/bin', 'HOME': str(tmp_path)},
+    )
+    assert done.returncode == 0, done.stderr
+    calls = [line for line in log.read_text().splitlines() if line.startswith('docker ')]
+    assert len(calls) == 1
+    assert 'img:tag' in calls[0]
+    assert '--user 0' in calls[0]
+    assert 'chown' in calls[0]
+    assert (secrets / 'postgres' / 'super_password').is_file()
+
+
+def test_a_writable_secrets_directory_never_starts_a_container(tmp_path: Path) -> None:
+    bin_dir, log = _shims(tmp_path)
+    docker = bin_dir / 'docker'
+    docker.write_text(f'#!/bin/bash\nprintf "docker %s\\n" "$*" >> "{log}"\n')
+    docker.chmod(0o755)
+    done = subprocess.run(
+        ['bash', '-c', f'source "{LIB}"; ensure_control_plane_secrets "{tmp_path}" img:tag'],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={'PATH': f'{bin_dir}:/usr/bin:/bin', 'HOME': str(tmp_path)},
+    )
+    assert done.returncode == 0, done.stderr
+    assert 'docker ' not in log.read_text()
+
+
+def test_a_fresh_install_prints_nothing_on_stderr(tmp_path: Path) -> None:
+    """The conf is read to see whether it is stale; its absence on a first run is not an error."""
+    done, _ = _run(tmp_path, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stderr == ''
