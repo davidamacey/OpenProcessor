@@ -68,6 +68,7 @@ describe('discardSelected then undoLast', () => {
       discarded: 1,
       conflicts: [],
       not_found: ['b'],
+      failed: [],
     });
     const errorSpy = vi.spyOn(toastStore, 'error').mockImplementation(() => 'x');
     const a = crop('a');

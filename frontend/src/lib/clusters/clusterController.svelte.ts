@@ -351,6 +351,9 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
         const res = await discardCropsBatch(ids);
         succeededIds = res.items.map((c) => c.id);
         failedCount = ids.length - succeededIds.length;
+        if (res.failed.length > 0) {
+          lastError = `${res.failed.length} could not be written`;
+        }
       }
     } catch (e) {
       lastError = apiErrorText(e);

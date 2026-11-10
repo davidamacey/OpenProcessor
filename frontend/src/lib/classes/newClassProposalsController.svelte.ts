@@ -75,6 +75,7 @@ export function createNewClassProposalsController() {
     if (res.updated_ids.length > 0) undoStore.recordWrites(res.updated_ids);
     const parts = [`${res.updated} updated`];
     if (res.conflicts.length > 0) parts.push(`${res.conflicts.length} conflict(s)`);
+    if (res.failed.length > 0) parts.push(`${res.failed.length} failed to write`);
     if (res.skipped.length > 0) parts.push(`${res.skipped.length} skipped`);
     toastStore.success(`${verb} — ${parts.join(', ')}.`);
   }
