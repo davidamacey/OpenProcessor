@@ -48,7 +48,7 @@ transformers==5.22.2
 opencv-python==5.0.0.93
 # models/ocr_pipeline/1/ocr_postprocess.py (DB unclip), imported by the BLS tests
 pyclipper==1.4.0
-# src/services/curation/image_decode.py
+# src/utils/image_decode.py
 simplejpeg==1.9.0
 # src/utils/image_processing.py, src/services/curation/image_serving.py
 pillow==13.0.0

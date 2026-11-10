@@ -333,7 +333,7 @@ RD-52, RD-53 answered as recommended (D-78)). Why at ingest: the capture-date fi
 the plate burst consensus of W5e groups by (review 3.6; the upgrade backfill reads the stored files,
 so waiting loses nothing for files still present). Owns: new `src/domain/capture_metadata.py` (`CaptureMetadata`,
 `parse_capture(exif_ifd0, exif_ifd, gps_ifd)`, pure, no Pillow import); the header read in
-`src/services/curation/image_decode.py` (`DecodedImage.capture`; 5b-D1 moves it in W5b); the capture
+`src/utils/image_decode.py` (`DecodedImage.capture`; 5b-D1 moves it in W5b); the capture
 part of the ingest writer; new `src/clients/curation_opensearch/capture_fields.py` and its
 mapping-migration registration (2F's additive registry); the `capture` wire block and the
 `taken_from` / `taken_to` filter on the crops list; the capture and location-purge steps of the

@@ -72,7 +72,6 @@ from opensearchpy.exceptions import OpenSearchException
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.capture_metadata import unknown_capture
-from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
@@ -96,6 +95,7 @@ from src.services.curation.ops_metrics import record_ingest_result
 from src.services.events.publish import apublish_crops_created
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 from src.utils.cpu_pool import encoded_nbytes, run_cpu
+from src.utils.image_decode import IMAGE_DECODE_ERRORS
 
 
 if TYPE_CHECKING:
@@ -108,8 +108,8 @@ if TYPE_CHECKING:
     from src.clients.triton_pool_core import AsyncTritonPool
     from src.config import CurationConfig, DetectionProfile
     from src.domain.capture_metadata import CaptureMetadata
-    from src.services.curation.image_decode import DecodedImage
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
+    from src.utils.image_decode import DecodedImage
 
 
 logger = get_logger(__name__)

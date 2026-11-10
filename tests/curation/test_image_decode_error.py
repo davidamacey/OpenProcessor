@@ -11,7 +11,7 @@ import sys
 import pytest
 from PIL import Image, UnidentifiedImageError
 
-from src.services.curation.image_decode import ImageDecodeError, decode_image
+from src.utils.image_decode import ImageDecodeError, decode_image
 
 
 @pytest.fixture

@@ -24,7 +24,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.clients.exiftool_client import ExifToolError, get_exiftool_client
 from src.config.env import env_optional_str
 from src.core.logging import get_logger
-from src.services.curation.image_decode import IMAGE_DECODE_ERRORS
+from src.utils.image_decode import IMAGE_DECODE_ERRORS, decode_image
 
 
 if TYPE_CHECKING:
@@ -412,18 +412,18 @@ def _copy_or_resize_one(
             return dest_path, True, None
         from PIL import Image
 
-        with Image.open(src_path) as img:
-            rgb = img.convert('RGB')
-            if crop_norm is not None:
-                rgb = _crop_pil(rgb, crop_norm)
-            if resize_mode == 'letterbox':
-                rgb = _letterbox_pil(rgb, target_size)
-            elif resize_mode == 'aspect':
-                rgb.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
-            elif resize_mode is not None:
-                msg = f'unknown resize_mode: {resize_mode!r}'
-                raise ValueError(msg)
-            rgb.save(dest_path, format='JPEG', quality=90)
+        # Boxes are drawn on the upright frame, so the resize and crop start from it.
+        rgb = decode_image(Path(src_path).read_bytes()).pil
+        if crop_norm is not None:
+            rgb = _crop_pil(rgb, crop_norm)
+        if resize_mode == 'letterbox':
+            rgb = _letterbox_pil(rgb, target_size)
+        elif resize_mode == 'aspect':
+            rgb.thumbnail((target_size, target_size), Image.Resampling.LANCZOS)
+        elif resize_mode is not None:
+            msg = f'unknown resize_mode: {resize_mode!r}'
+            raise ValueError(msg)
+        rgb.save(dest_path, format='JPEG', quality=90)
         return dest_path, True, None
     except IMAGE_DECODE_ERRORS as exc:
         return dest_path, False, str(exc)

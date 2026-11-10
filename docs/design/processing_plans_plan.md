@@ -134,7 +134,7 @@ Derived shared stages, run at most once per image and only when a branch needs t
 | Stage | Runs when | Today's code to reuse |
 |---|---|---|
 | hash (imohash, dedup) | the route stores (core `/ingest`, curation) | `ingest_single._imohash`, `ingest_helpers._imohash_bytes` |
-| decode (EXIF upright, uint8) | any pixel branch runs | `src/services/curation/image_decode.py` (CPU), `gpu_image_prep` (GPU) |
+| decode (EXIF upright, uint8) | any pixel branch runs | `src/utils/image_decode.py` (CPU), `gpu_image_prep` (GPU) |
 | detector letterbox (built as uint8; the wire datatype is the model's own, FP32 or UINT8, via `images_input` and `get_model_input_datatype`, #428; the metadata read is made only when `detect` runs) | `detect` | `preprocess_yolo_cpu`, `gpu_image_prep._detect` |
 | encoder square of the frame | `embed_frame` | `preprocess_clip_cpu` (core), `pe_preprocess.whole_frame_rgb_from_image` (curation) |
 | crop squares | `embed_crops` (only for the selected detections) | `embed_boxes_from_full_res` / `center_crop_cpu`; `gpu_image_prep._embed` |
