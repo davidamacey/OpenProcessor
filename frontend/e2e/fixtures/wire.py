@@ -296,6 +296,8 @@ _EXPLICIT: dict[str, Any] = {
     'mask_polygon': None,
     'region_gate_skip': None,
     'assist': None,
+    # Capture time/place of the photo; null when the file carried none.
+    'capture': None,
     # Audit draw state the audit queue shows (#166); all null off the audit queue.
     'audit_sample': None,
     'audit_batch_id': None,
