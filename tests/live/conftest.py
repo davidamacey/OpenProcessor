@@ -58,9 +58,11 @@ FORBIDDEN_PORTS = {4600, 4601, 4602, 4603, 4604, 4605, 4606, 4607, 4608, 9200}
 CLASS_NAMES = ('box', 'envelope', 'tube', 'crate', 'pallet', 'drum', 'sack', 'canister')
 REGION_CLUSTER_ID = 1
 FP_REGION_CLUSTER_ID = -100
-MERGE_SOURCE_CLASS_ID = 7
-MERGE_TARGET_CLASS_ID = 6
-FROZEN_CLASS_ID = 2
+# Classes are addressed by name; the registry hands out the ids (the region class is seeded first,
+# so a name's position in CLASS_NAMES is not its id). The `class_ids` fixture maps name -> id.
+MERGE_SOURCE_CLASS = CLASS_NAMES[7]
+MERGE_TARGET_CLASS = CLASS_NAMES[6]
+FROZEN_CLASS = CLASS_NAMES[2]
 
 
 def compose(*args: str, check: bool = True, timeout: int = 300) -> subprocess.CompletedProcess:
@@ -132,6 +134,24 @@ def wait_until(predicate: Any, *, timeout: float = 60.0, interval: float = 0.5) 
             return last
         time.sleep(interval)
     return last
+
+
+JOB_TERMINAL = ('completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted')
+
+
+def wait_job(api_client: Any, job_id: str, *, timeout: float = 120.0) -> dict[str, Any]:
+    """Poll ``GET /jobs/{job_id}`` until the job is terminal; return its last view.
+
+    A job route answers 202 with a queued job; the worker finishes it afterwards. Returns the last
+    view even when the deadline passes, so the caller's assertion shows what it saw.
+    """
+
+    def fetch() -> dict[str, Any]:
+        resp = api_client.get(f'/jobs/{job_id}')
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    return wait_for_state(fetch, lambda job: job['status'] in JOB_TERMINAL, timeout=timeout)
 
 
 # Indexes OpenSearch itself creates (system, plugin bookkeeping). Anything
@@ -290,6 +310,14 @@ def api_client(api: Any) -> Any:
             return call
 
     return _Prefixed()
+
+
+@pytest.fixture(scope='session')
+def class_ids(api_client: Any) -> dict[str, int]:
+    """Registry class name -> id, read through the API after the seed."""
+    resp = api_client.get('/classes')
+    resp.raise_for_status()
+    return {c['class_name']: c['class_id'] for c in resp.json()['classes']}
 
 
 @pytest.fixture

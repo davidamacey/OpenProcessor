@@ -332,7 +332,7 @@ and `{name: null, revision: null}` when it reported no VLM configured.
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/settings` | | `CurationSettingsResponse`: `defaults` (map axis id to id), `updated_at`, `updated_by` (always `null`) |
-| PUT | `/settings` | `{defaults: {<axis>: <id or null>}}`, partial | the updated `CurationSettingsResponse` |
+| PUT | `/settings` | `{defaults: {<axis>: <id or null>}, expected_revision}`, partial; `409 revision_conflict` on a stale revision | the updated `CurationSettingsResponse` |
 
 `defaults` is an open map. A missing key means no override for the axis.
 A project with no settings document answers `200` with `defaults: {}`.
@@ -1358,7 +1358,7 @@ among active classes of a project. See [Class identity](#class-identity).
 | POST | `/classes` | `ClassCreateRequest`: `name`, `group`, `notes`, `hotkey_letter` | `201` registry entry | `422` bad name, `409` name or hotkey taken, `400`/`422` hotkey rules |
 | GET | `/classes/{class_id}` | | `ClassEntry` | `404` |
 | PUT | `/classes/{class_id}` | `ClassUpdateRequest`: `name`, `group`, `hotkey_letter` | registry entry | `404`, `409`, `422` |
-| POST | `/classes/merge` | `{source_id, target_id}`, query `dry_run` | merge report | `400`, `409` |
+| POST | `/classes/merge` | `{source_id, target_id}`, query `dry_run` | `202` the `class_merge` job (poll `GET /jobs/{job_id}`); `dry_run` answers `200` with the report | `400`, `409` |
 | POST | `/classes/{class_id}/deprecate` | | registry entry | `404`, `409 class_still_referenced` |
 | POST | `/classes/{class_id}/restore` | | registry entry | `404`, `409`, `409 class_merged` |
 | GET | `/class_sources` | | `{class_sources[]}` | |

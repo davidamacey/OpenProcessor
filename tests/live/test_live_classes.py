@@ -9,19 +9,21 @@ three live together rather than being spread across modules.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import pytest
 
 from .conftest import (
-    FROZEN_CLASS_ID,
+    FROZEN_CLASS,
     INDEXES,
-    MERGE_SOURCE_CLASS_ID,
-    MERGE_TARGET_CLASS_ID,
+    MERGE_SOURCE_CLASS,
+    MERGE_TARGET_CLASS,
     crop_ids_in,
     get_doc,
     refresh,
     search,
+    wait_job,
 )
 
 
@@ -34,75 +36,112 @@ def _classes(api_client: Any) -> dict[int, dict[str, Any]]:
     return {c['class_id']: c for c in resp.json()['classes']}
 
 
-def test_registry_lists_the_seeded_classes_with_live_counts(api_client: Any) -> None:
+def test_registry_lists_the_seeded_classes_with_live_counts(
+    api_client: Any, class_ids: dict[str, int]
+) -> None:
     classes = _classes(api_client)
     assert len(classes) >= 8, classes
-    assert classes[0]['class_name'] == 'box'
+    box = classes[class_ids['box']]
     # Counts come from a live aggregation over the items index, not from
-    # the registry file's stored sample_count.
-    assert classes[0]['sample_count'] > 0
+    # the registry's stored sample_count.
+    assert box['sample_count'] > 0
+
+
+# The registry lives in PostgreSQL and outlives a harness reseed, so a probe class is named per
+# session and its hotkey is released at the end of the rename test.
+_PROBE = f'live_probe_{uuid.uuid4().hex[:8]}'
 
 
 def test_create_class_appends_to_the_registry(api_client: Any) -> None:
-    resp = api_client.post('/classes', json={'name': 'live_probe_class', 'group': 'harness'})
+    resp = api_client.post('/classes', json={'name': _PROBE, 'group': 'harness'})
     assert resp.status_code == 201, resp.text
     new_id = resp.json()['class_id']
     assert new_id >= 8
 
     classes = _classes(api_client)
-    assert classes[new_id]['class_name'] == 'live_probe_class'
+    assert classes[new_id]['class_name'] == _PROBE
     assert classes[new_id]['group'] == 'harness'
 
     # Append-only: a duplicate name is a conflict, not a silent no-op.
-    dup = api_client.post('/classes', json={'name': 'live_probe_class'})
+    dup = api_client.post('/classes', json={'name': _PROBE})
     assert dup.status_code == 409, dup.text
 
 
 def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
     classes = _classes(api_client)
-    target = next(c for c in classes.values() if c['class_name'] == 'live_probe_class')
+    target = next(c for c in classes.values() if c['class_name'] == _PROBE)
     class_id = target['class_id']
+    renamed = f'{_PROBE}_renamed'
 
-    resp = api_client.put(f'/classes/{class_id}', json={'name': 'live_probe_renamed'})
+    resp = api_client.put(f'/classes/{class_id}', json={'name': renamed})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['class_name'] == 'live_probe_renamed'
+    assert resp.json()['class_name'] == renamed
 
     resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'q'})
     assert resp.status_code == 200, resp.text
-    assert resp.json()['hotkey_letter'] == 'q'
+    try:
+        assert resp.json()['hotkey_letter'] == 'q'
 
-    # A reserved action letter must be refused rather than silently bound.
-    resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'g'})
-    assert resp.status_code == 422, resp.text
+        # A reserved action letter must be refused rather than silently bound.
+        resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'g'})
+        assert resp.status_code == 422, resp.text
 
-    assert _classes(api_client)[class_id]['class_name'] == 'live_probe_renamed'
+        assert _classes(api_client)[class_id]['class_name'] == renamed
+    finally:
+        api_client.put(f'/classes/{class_id}', json={'hotkey_letter': ''}).raise_for_status()
 
 
 def test_settings_put_then_get_round_trips(api_client: Any) -> None:
     methods = api_client.get('/methods')
     methods.raise_for_status()
-    settable = {'sort', 'detection_profile', 'prompt_pack'}
     by_axis: dict[str, list[str]] = {}
     for entry in methods.json()['strategies']:
         by_axis.setdefault(entry['axis'], []).append(entry['id'])
-    axis = next(a for a in sorted(by_axis) if a in settable)
-    chosen = sorted(by_axis[axis])[0]
+    # A deployment default is gated: a sort must order by a field items carry, a detection
+    # profile must be servable by the harness Triton. `recent` orders by a field every item has.
+    axis = 'sort'
+    chosen = 'recent'
+    assert chosen in by_axis[axis], by_axis
 
-    resp = api_client.put('/settings', json={'defaults': {axis: chosen}})
+    # The PUT carries the revision it was made against (docs/design/curation_api_contract.md,
+    # "expected_revision"); a write answers with the next one.
+    revision = api_client.get('/settings').json()['revision']
+    resp = api_client.put(
+        '/settings', json={'defaults': {axis: chosen}, 'expected_revision': revision}
+    )
     assert resp.status_code == 200, resp.text
     assert resp.json()['defaults'][axis] == chosen
+    revision = resp.json()['revision']
+    assert revision > 0
 
     assert api_client.get('/settings').json()['defaults'][axis] == chosen
 
     # An id that is not advertised for that axis must 422, not persist.
-    bad = api_client.put('/settings', json={'defaults': {axis: 'definitely_not_a_strategy'}})
+    bad = api_client.put(
+        '/settings',
+        json={'defaults': {axis: 'definitely_not_a_strategy'}, 'expected_revision': revision},
+    )
     assert bad.status_code == 422, bad.text
     assert api_client.get('/settings').json()['defaults'][axis] == chosen
+
+    # A stale revision is a conflict, whatever the value.
+    stale = api_client.put(
+        '/settings', json={'defaults': {axis: chosen}, 'expected_revision': revision - 1}
+    )
+    assert stale.status_code == 409, stale.text
 
 
 def test_freeze_test_holdout_selects_a_deterministic_cohort(
     api_client: Any, opensearch: Any
 ) -> None:
+    # The first freeze needs a current item-level near-duplicate run (contract: "Near-duplicates"),
+    # and the item level takes its scope from a current image run, so the image level runs first.
+    for level in ('image', 'item'):
+        started = api_client.post('/near_duplicates/runs', json={'level': level, 'mode': 'full'})
+        assert started.status_code == 202, started.text
+        run = wait_job(api_client, started.json()['job_id'])
+        assert run['status'] == 'completed', run
+
     resp = api_client.post('/test_holdout/freeze', json={'percent': 10})
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -128,8 +167,9 @@ def test_freeze_test_holdout_selects_a_deterministic_cohort(
 
 
 def test_merge_is_refused_when_it_would_relabel_frozen_holdout_rows(
-    api_client: Any, opensearch: Any
+    api_client: Any, opensearch: Any, class_ids: dict[str, int]
 ) -> None:
+    frozen_id = class_ids[FROZEN_CLASS]
     frozen_in_class = search(
         opensearch,
         INDEXES['items'],
@@ -138,7 +178,7 @@ def test_merge_is_refused_when_it_would_relabel_frozen_holdout_rows(
             'query': {
                 'bool': {
                     'must': [
-                        {'term': {'class_id': FROZEN_CLASS_ID}},
+                        {'term': {'class_id': frozen_id}},
                         {'term': {'test_holdout': True}},
                     ]
                 }
@@ -147,49 +187,61 @@ def test_merge_is_refused_when_it_would_relabel_frozen_holdout_rows(
     )['hits']['total']['value']
     assert frozen_in_class > 0, 'precondition: the freeze must have covered this class'
 
-    resp = api_client.post('/classes/merge', json={'source_id': FROZEN_CLASS_ID, 'target_id': 3})
+    resp = api_client.post(
+        '/classes/merge', json={'source_id': frozen_id, 'target_id': class_ids['crate']}
+    )
     assert resp.status_code == 409, resp.text
     assert 'test_holdout' in resp.text
 
     # Refusal must be total: the registry entry stays active.
-    assert _classes(api_client)[FROZEN_CLASS_ID]['deprecated'] is False
+    assert _classes(api_client)[frozen_id]['deprecated'] is False
 
 
-def test_merge_success_relabels_items(api_client: Any, opensearch: Any) -> None:
+def test_merge_success_relabels_items(
+    api_client: Any, opensearch: Any, class_ids: dict[str, int]
+) -> None:
+    source_id = class_ids[MERGE_SOURCE_CLASS]
+    target_id = class_ids[MERGE_TARGET_CLASS]
     source_ids = crop_ids_in(opensearch, 'cls7', limit=40)
     assert source_ids, 'precondition: the mergeable cohort must exist'
 
-    resp = api_client.post(
-        '/classes/merge',
-        json={'source_id': MERGE_SOURCE_CLASS_ID, 'target_id': MERGE_TARGET_CLASS_ID},
-    )
-    assert resp.status_code == 200, resp.text
+    # The merge is a queued job (docs/design/curation_api_contract.md, class merge): 202 with the
+    # job, then the relabel lands when the worker finishes it.
+    resp = api_client.post('/classes/merge', json={'source_id': source_id, 'target_id': target_id})
+    assert resp.status_code == 202, resp.text
     body = resp.json()
-    assert body['deprecated'] is True
-    assert body['target_id'] == MERGE_TARGET_CLASS_ID
+    assert body['kind'] == 'class_merge'
+    assert body['params'] == {'source_id': source_id, 'target_id': target_id}
+    job = wait_job(api_client, body['id'])
+    assert job['status'] == 'completed', job
 
     classes = _classes(api_client)
-    assert classes[MERGE_SOURCE_CLASS_ID]['deprecated'] is True
+    assert classes[source_id]['deprecated'] is True
+    assert classes[source_id]['merged_into'] == target_id
 
     refresh(opensearch, INDEXES['items'])
 
     still_source = opensearch.post(
         f'/{INDEXES["items"]}/_count',
-        json={'query': {'term': {'class_id': MERGE_SOURCE_CLASS_ID}}},
+        json={'query': {'term': {'class_id': source_id}}},
     ).json()['count']
     assert still_source == 0, 'every non-holdout item should have been relabeled'
 
     sample = get_doc(opensearch, INDEXES['items'], source_ids[0])['_source']
-    assert sample['class_id'] == MERGE_TARGET_CLASS_ID
+    assert sample['class_id'] == target_id
     assert sample['class_source'] == 'class_merge'
-    # A merged crop must not keep a stale human-validated flag.
+    # A merge keeps class_validated (contract: class merge); the cls7 cohort is unvalidated.
     assert sample['class_validated'] is False
     assert 'cluster_id' not in sample
     assert sample['class_id_history'][-1]['writer'] == 'class_merge'
 
 
-def test_labeling_against_a_deprecated_class_is_refused(api_client: Any, opensearch: Any) -> None:
+def test_labeling_against_a_deprecated_class_is_refused(
+    api_client: Any, opensearch: Any, class_ids: dict[str, int]
+) -> None:
     crop_id = crop_ids_in(opensearch, 'noise', limit=1)[0]
-    resp = api_client.put(f'/crops/{crop_id}/label', json={'class_id': MERGE_SOURCE_CLASS_ID})
+    resp = api_client.put(
+        f'/crops/{crop_id}/label', json={'class_id': class_ids[MERGE_SOURCE_CLASS]}
+    )
     assert resp.status_code == 400, resp.text
     assert 'unknown class_id' in resp.text
