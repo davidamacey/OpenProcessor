@@ -115,6 +115,8 @@ describe('item-filter body schemas', () => {
       origin: true,
       proposed_by_import: true,
       region_gate_skipped: true,
+      region_text: true,
+      region_text_match: true,
       review_dismissed: true,
       review_status: true,
       review_tab: true,
