@@ -302,6 +302,15 @@ def harness_safety_guard() -> None:
         )
 
 
+@pytest.fixture(scope='session', autouse=True)
+def stack_restored_after_scale_overlay(harness_safety_guard: None) -> Any:
+    """A run that used the scale overlay leaves the stack unscaled for the next run on it."""
+    yield
+    from tests.live._scale import restore_base_stack  # circular at import time
+
+    restore_base_stack()
+
+
 @pytest.fixture(scope='session')
 def api(harness_safety_guard: None) -> Any:
     """HTTP client bound to the harness API (synchronous by design)."""
