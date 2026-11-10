@@ -22,6 +22,7 @@ PYTHON_SERVICES = (
     'jobs-beat',
     'flower',
     'cluster-worker',
+    'text-read-worker',
     'curation-auto-label-worker',
     'curation-assist-loop-worker',
 )

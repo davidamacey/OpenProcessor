@@ -24,6 +24,7 @@ EXPECTED = {
     TaskQueues.AUTOLABEL: 'curation-auto-label-worker',
     TaskQueues.ASSIST_LOOP: 'curation-assist-loop-worker',
     TaskQueues.CLUSTER: 'cluster-worker',
+    TaskQueues.TEXT_READ: 'text-read-worker',
     TaskQueues.GPU_TRAIN: 'curation-trainer',
     TaskQueues.GPU_EXPORT: 'model-export-worker',
     TaskQueues.GPU_EVAL: 'curation-evaluator',

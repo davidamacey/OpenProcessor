@@ -84,6 +84,7 @@ services:
   periodic-worker: *pooled
   open-vocab-worker: *pooled
   cluster-worker: *pooled
+  text-read-worker: *pooled
   curation-auto-label-worker: *pooled
   curation-assist-loop-worker: *pooled
   curation-trainer: *pooled

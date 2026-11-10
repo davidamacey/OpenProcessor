@@ -31,6 +31,7 @@ class TaskQueues:
     GPU_EXPORT = 'gpu_export'
     GPU_EVAL = 'gpu_eval'
     CLUSTER = 'cluster'
+    TEXT_READ = 'text_read'
 
     ALL: tuple[str, ...] = (
         JOBS,
@@ -43,6 +44,7 @@ class TaskQueues:
         GPU_EXPORT,
         GPU_EVAL,
         CLUSTER,
+        TEXT_READ,
     )
 
 
@@ -59,6 +61,7 @@ QUEUE_PROFILE: dict[str, str] = {
     TaskQueues.GPU_EXPORT: 'export',
     TaskQueues.GPU_EVAL: 'evaluator',
     TaskQueues.CLUSTER: 'curation',
+    TaskQueues.TEXT_READ: 'curation',
 }
 
 # Queues whose tasks are not ``jobs`` rows (beat ticks): they have a route and no job kind.

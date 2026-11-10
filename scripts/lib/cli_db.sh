@@ -9,7 +9,7 @@
 
 # Workers and apps that must be stopped while the database is replaced.
 _DB_APP_SERVICES=(
-    api jobs-worker periodic-worker open-vocab-worker jobs-beat flower cluster-worker
+    api jobs-worker periodic-worker open-vocab-worker jobs-beat flower cluster-worker text-read-worker
     curation-detection-worker curation-vlm-worker curation-auto-label-worker
     curation-assist-loop-worker
 )

@@ -57,6 +57,7 @@ def test_the_celery_workers_of_the_api_image_run_the_pool_healthcheck() -> None:
         'periodic-worker',
         'open-vocab-worker',
         'cluster-worker',
+        'text-read-worker',
         'curation-auto-label-worker',
         'curation-assist-loop-worker',
     }

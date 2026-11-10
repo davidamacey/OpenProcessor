@@ -25,7 +25,13 @@ NEW = (
     'jobs-beat',
     'flower',
 )
-CELERY_WORKERS = ('jobs-worker', 'periodic-worker', 'open-vocab-worker', 'cluster-worker')
+CELERY_WORKERS = (
+    'jobs-worker',
+    'periodic-worker',
+    'open-vocab-worker',
+    'cluster-worker',
+    'text-read-worker',
+)
 # Python services that run the application image (db-migrate is the one that migrates).
 PYTHON_SERVICES = (
     'api',
@@ -33,6 +39,7 @@ PYTHON_SERVICES = (
     'periodic-worker',
     'open-vocab-worker',
     'cluster-worker',
+    'text-read-worker',
     'jobs-beat',
     'flower',
     'curation-detection-worker',
@@ -223,6 +230,7 @@ def _overlay(path: str) -> dict[str, Any]:
 
 DEV_PYTHON = (
     'cluster-worker',
+    'text-read-worker',
     'db-migrate',
     'jobs-worker',
     'periodic-worker',
