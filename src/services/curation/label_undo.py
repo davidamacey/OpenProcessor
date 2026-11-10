@@ -15,7 +15,7 @@ from typing import Any
 from opensearchpy.exceptions import NotFoundError
 
 from src.clients.occ import Merger, occ_update_one
-from src.clients.occ_bulk import occ_update_bulk
+from src.clients.occ_bulk import occ_update_bulk, raise_on_errors
 from src.config.curation_accessors import items_index
 from src.domain.history import (
     CLASS_STATE_FIELDS,
@@ -171,6 +171,7 @@ async def discard_many(
         max_retries=5,
         refresh='wait_for',
     )
+    raise_on_errors(status)
     by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': []}
     outcome_of = {'updated': 'discarded', 'not-found': 'not_found'}
     for crop_id in crop_ids:

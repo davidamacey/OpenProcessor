@@ -145,7 +145,7 @@ failures of a request body are the standard FastAPI `422` list.
 | `422` | `validation_failed`, `slug_invalid`, `confirm_mismatch`, `combine_invalid`, `class_mapping_incomplete`, `class_mapping_invalid`, `import_blocked`, `format_undetected`, `dataset_path_not_allowed`, `archive_invalid`, `reprocess_targets_invalid`, `region_profile_required`, `unknown_pack`, `unknown_profile`, `unknown_detector_names`, `ingest_source_invalid`, `too_few_items`, `unknown_vlm`, `vlm_external_not_acknowledged`, `unknown_catalog_id`, `vlm_catalog_does_not_fit`, `export_outside_project`, `pack_invalid`, `profile_invalid`, `no_box_to_verify`, `too_many_crops`, `too_many_crop_ids`, `too_many_boxes`, `region_text_disabled`, `box_id_in_batch`, `box_id_required` |
 | `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
 | `500` | `internal_isolation_error` (a cross-project access was refused), `path_escape` |
-| `502` | `vlm_transport_error`, `segmenter_error`, `detector_error`, a Triton load refusal on promote |
+| `502` | `bulk_write_failed` (a batch label, discard, relabel or audit write failed for a reason other than a concurrent edit; body lists `doc_ids`), `vlm_transport_error`, `segmenter_error`, `detector_error`, a Triton load refusal on promote |
 | `503` | `config_store_unavailable`, `detector_unavailable` (`POST /classes/seed_from_detector`), `vlm_unreachable` (`POST /vlm/label_batch`: no crop got an answer, nothing was written), an OpenSearch outage on a read, ingest unavailable before the encoder has loaded |
 | `504` | `test_timeout` |
 

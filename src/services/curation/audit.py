@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.clients.occ import is_locked_class
-from src.clients.occ_bulk import occ_update_bulk
+from src.clients.occ_bulk import occ_update_bulk, raise_on_errors
 from src.config.curation_accessors import items_index
 from src.domain.audit_math import (
     AUDIT_BATCH,
@@ -136,8 +136,14 @@ async def start_audit(
         return _marker(batch_id, stamp, source)
 
     if chosen:
-        await occ_update_bulk(
+        status = await occ_update_bulk(
             opensearch, vector_excludes=await vector_source_excludes(), ids=chosen, merge_fn=merge
+        )
+        raise_on_errors(status)
+        # A marker that did not land (conflict outlasted the retries, item gone)
+        # is not part of the sample.
+        marked.difference_update(
+            i for i, v in status.items() if v in ('conflict-exhausted', 'not-found')
         )
     per_stratum = [
         {

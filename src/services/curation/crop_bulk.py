@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.occ_bulk import occ_update_bulk
+from src.clients.occ_bulk import occ_update_bulk, raise_on_errors
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.embedding_spaces.readers import vector_source_excludes
@@ -30,7 +30,8 @@ async def occ_bulk_human_relabel(
     ``current_source`` on each conflict entry is looked up with one
     follow-up ``mget`` restricted to the (normally empty) conflict set,
     to preserve the pre-existing response shape without re-adding a
-    per-crop read.
+    per-crop read. A failed bulk request or non-409 item error raises
+    :class:`~src.clients.occ_bulk.BulkWriteError` (502) instead of a conflict.
     """
     status_map = await occ_update_bulk(
         opensearch,
@@ -41,6 +42,7 @@ async def occ_bulk_human_relabel(
         max_retries=max_retries,
         refresh='wait_for',
     )
+    raise_on_errors(status_map)
     updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
     conflict_ids = [cid for cid in crop_ids if status_map.get(cid) != 'updated']
 
