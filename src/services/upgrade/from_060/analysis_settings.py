@@ -27,7 +27,11 @@ from src.clients.curation_opensearch.text_analysis import ITEMS_ANALYSIS, NORMAL
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-HEALTH_WAIT = '120s'
+HEALTH_WAIT_S = 120
+# opensearch-py reads a ``timeout`` argument as the transport timeout (seconds) and never sends it
+# as the server-side wait, so each health call waits the server's default 30 s at most and the
+# loop in ``_reopen`` makes the bound.
+HEALTH_CALL_TRANSPORT_TIMEOUT_S = 40
 # What the normalizer must make of this text: separators dropped, accent folded, upper-cased.
 PROBE_TEXT = 'ab-1 cé 9'
 PROBE_EXPECTED = 'AB1CE9'
@@ -95,12 +99,17 @@ async def dry_run(
 async def _reopen(client: Any, index: str) -> str:
     """Open the index and wait (bounded) for at least yellow; returns the health colour."""
     await client.indices.open(index=index)
-    health = await client.cluster.health(index=index, wait_for_status='yellow', timeout=HEALTH_WAIT)
-    if health.get('timed_out'):
-        raise AnalysisSettingsError(
-            index, f'did not reach yellow health within {HEALTH_WAIT} after reopening'
+    deadline = time.monotonic() + HEALTH_WAIT_S
+    while True:
+        health = await client.cluster.health(
+            index=index, wait_for_status='yellow', timeout=HEALTH_CALL_TRANSPORT_TIMEOUT_S
         )
-    return str(health.get('status', 'unknown'))
+        if not health.get('timed_out'):
+            return str(health.get('status', 'unknown'))
+        if time.monotonic() >= deadline:
+            raise AnalysisSettingsError(
+                index, f'did not reach yellow health within {HEALTH_WAIT_S} s after reopening'
+            )
 
 
 async def _verify(client: Any, index: str) -> None:
