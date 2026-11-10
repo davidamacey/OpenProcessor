@@ -137,6 +137,7 @@ class TritonPythonModel:
         self.max_mp = float(p.get('MAX_MEGAPIXELS', '100'))
         self.pe_batch = int(p.get('PE_BATCH', '32'))
         self.quality = int(p.get('JPEG_QUALITY', '90'))
+        self.crop_max_side = int(p.get('CROP_MAX_SIDE', '0'))
         device = int(args['model_instance_device_id'])
         cp.cuda.Device(device).use()
         # CuPy keeps freed blocks for reuse; photo frames differ in size, so without a cap the pool
@@ -341,6 +342,15 @@ class TritonPythonModel:
     def _encode(self, pixels: np.ndarray) -> tuple[bytes, float]:
         """The JPEG and the seconds the encode took on its host thread."""
         start = time.perf_counter()
+        side = max(pixels.shape[:2])
+        if 0 < self.crop_max_side < side:  # cap before encode: area filter, never upscaled
+            scale = self.crop_max_side / side
+            h, w = pixels.shape[:2]
+            pixels = cv2.resize(
+                pixels,
+                (max(1, round(w * scale)), max(1, round(h * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
         ok, buf = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
         if not ok:
             raise RuntimeError('crop JPEG encode failed')

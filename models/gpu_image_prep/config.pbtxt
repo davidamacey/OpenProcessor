@@ -93,6 +93,8 @@ parameters { key: "LANES" value: { string_value: "16" } }
 parameters { key: "WORKERS" value: { string_value: "16" } }
 parameters { key: "MAX_IN_FLIGHT" value: { string_value: "32" } }
 parameters { key: "ENCODE_THREADS" value: { string_value: "8" } }
+# Long-side cap of the crop JPEGs in pixels (0 = source size); keep equal to OP_CROP_MAX_SIDE.
+parameters { key: "CROP_MAX_SIDE" value: { string_value: "0" } }
 
 # Per-stage wall timing is always on (counters op_gpu_prep_stage_seconds and
 # op_gpu_prep_stage_observations on Triton's metrics port, see 1/stage_metrics.py). "1" makes a
