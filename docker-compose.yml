@@ -491,6 +491,8 @@ services:
       - openprocessor-crop-cache:/var/cache/openprocessor/crops
       - ${OP_SOURCE_ROOT_HOST:-./data/source}:/data/source:ro
       - ./data:/app/data
+      # The promote job writes the served model under the Triton repository.
+      - ./models:/app/models
       - ./secrets/vlm:/run/secrets/op_vlm:ro
     healthcheck:
       test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "jobs"]
