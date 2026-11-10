@@ -1,0 +1,60 @@
+---
+sidebar_position: 2
+title: Control plane (PostgreSQL and Valkey)
+---
+
+# Control plane: PostgreSQL and Valkey
+
+From 0.7.0 the stack keeps its control data in PostgreSQL and moves job
+messages through Valkey. OpenSearch keeps what it is good at: the per-project
+item, image and vector indexes.
+
+| Service | What it is |
+|---|---|
+| `postgres` | PostgreSQL 18. Projects, classes, config documents and their activations, settings, holdout freezes, label operations, jobs, events, embedding spaces, cluster partitions, near-duplicate groups and the auto-label loop record. Internal network only |
+| `valkey` | Valkey 9. The Celery broker and the wake-up channel for the event stream. Internal network only |
+| `db-migrate` | One-shot service: the schema migration and the index migration. The API and the workers wait for it |
+
+The API and every worker refuse to start until PostgreSQL, Valkey and
+OpenSearch answer and the schema is at the revision the image carries. Celery
+workers and beat exit at start when the database is unreachable for 60 s or
+sits at another revision.
+
+## Isolation
+
+Every project row carries the project id, and row-level security limits a
+transaction to its own project. Like the OpenSearch guard it protects against a
+bug in the application, not against someone who holds the database password.
+Neither service publishes a port; both need a password file under `secrets/`
+(`secrets/postgres/`, `secrets/valkey/`, `secrets/flower/`). Back up `secrets/`
+together with the PostgreSQL volume. See [Security](../deployment/security.mdx).
+
+## Readiness
+
+`/ready` and `/health` probe the database, the task queue and free disk. A down
+database or queue, or a data or OpenSearch volume under `OP_DISK_CRITICAL_PCT`
+(default 3 percent) free, answers 503 and names the cause; under
+`OP_DISK_LOW_PCT` (default 10) the body says `disk: low` and stays 200. `/live`
+probes nothing. See [Health and stalls](health-and-stalls.mdx).
+
+## Backup, restore, verify
+
+```bash
+./openprocessor db backup
+./openprocessor db verify
+./openprocessor db restore
+```
+
+`verify` reports class drift, missing indexes and storage problems. To take a
+`pg_dump` on a schedule set `OP_DB_BACKUP_DIR` and `OP_DB_BACKUP_INTERVAL_H`;
+the periodic worker runs it. There is no schema downgrade: take a backup before
+an upgrade you may want to undo. See
+[Upgrade, repair and back up](upgrade-and-backup.mdx).
+
+## Connection pooling
+
+Pools are sized from deployment totals per process, so more API workers do not
+mean more connections (`OP_DB_API_CONNECTIONS_TOTAL`, `OP_API_REPLICAS`; the
+formulas are in `INSTALLATION.md`). For many replicas the opt-in overlay
+`docker-compose.pgbouncer.yml` puts PgBouncer in front of PostgreSQL. The
+database settings are the `OP_DB_*` variables.

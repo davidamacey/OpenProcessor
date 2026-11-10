@@ -19,6 +19,16 @@ highlight one part of it.
 | Workflows | Region cascade | The detection worker's legs (region detector, segmenter, OCR text hint) over a per-project profile, candidate selection up to `max_regions_per_item`, one numbered VLM verify per item, per-box verdicts and text, and the terminal statuses. |
 | Sequences | Training and promote | The job-file protocol between the API and the trainer for one project, the GPU arbiter, and the gated promote into Triton. |
 
+The diagrams predate the 0.7.0 control plane in places. In 0.7.0 the control
+data is in PostgreSQL, long jobs run on Celery workers with Valkey as the
+broker, and the shared job volumes are gone. The text below is current:
+
+| Part | What it does | Page |
+| --- | --- | --- |
+| `postgres`, `valkey`, `db-migrate` | Projects, classes, configs, settings, jobs, events; the broker and event wake-ups | [Control plane](../operations/control-plane.mdx) |
+| `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `cluster-worker`, `jobs-beat` | Every long operation is a job row; a reaper recovers dead workers | [Jobs](../operations/jobs.mdx) |
+| API replicas | Stateless processes behind a proxy; SSE resumes with `Last-Event-ID` | [Scale-out](../operations/scale-out.mdx) |
+
 The curation parts of these diagrams share three ideas:
 
 - A **project** owns its indexes, files and settings. Requests bind one
@@ -42,6 +52,7 @@ The curation parts of these diagrams share three ideas:
   and how they are built.
 - [Workers and heartbeats](../operations/workers.mdx): the curation
   workers and their shared job state.
+- [Roadmap and work in progress](../about/roadmap.mdx): what is not shipped yet.
 - [Training, bake-off and promote](../operations/training-and-promote.mdx):
   the file protocol between the API, trainer and evaluator.
 

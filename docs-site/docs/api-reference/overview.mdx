@@ -51,6 +51,13 @@ The item wire shape is also exported as `contracts/json/item_wire.json`
 and `contracts/ts/itemWire.ts`, and the keymap action registry as
 `contracts/json/keymap_actions.json`.
 
+Responses are typed: each curation route declares a response model, so the
+generated schema names every field it returns, and a pre-commit hook rejects a
+stale contract. Long operations answer `202` with a job id
+([Jobs](../operations/jobs.mdx)); `/curation` JSON bodies carry no
+`total_time_ms` or `request_id` (the `X-Process-Time` and `X-Request-ID`
+headers remain), and a 500 body holds `detail` and `request_id`.
+
 The hand-written contract (`docs/design/curation_api_contract.md`) adds the
 parts a schema can't express: which names are frozen, the one-vocabulary
 wire rule, undo semantics, error behavior, and breaking-change notes for

@@ -136,6 +136,15 @@ offline test checks that every metric an alert rule or dashboard panel reads
 is one the stack exports, so a rule on a missing series cannot come back.
 :::
 
+## Jobs, Celery and Flower
+
+The `monitoring` profile also starts Flower (port 4613, bound to
+`OP_BIND_ADDRESS`, login from `secrets/flower/`), a Valkey exporter and a
+Prometheus scrape job for the Celery workers' own metrics
+(`OP_WORKER_METRICS_PORT`). Job gauges: `op_jobs{kind,status}`,
+`op_jobs_oldest_queued_seconds` and `op_jobs_failed_total`. A growing oldest-queued
+age means a queue's worker is down or saturated; see [Jobs](jobs.mdx).
+
 ## Logs with Loki
 
 Alloy (`monitoring/alloy-config.alloy`) discovers containers through the
