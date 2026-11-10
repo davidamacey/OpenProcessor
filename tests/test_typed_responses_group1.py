@@ -91,3 +91,13 @@ def test_registry_class_entry_has_one_unprefixed_name() -> None:
     names = json.loads(CONTRACT.read_text())['components']['schemas']
     assert 'RegistryClassEntry' in names
     assert not [n for n in names if n.endswith('__RegistryClassEntry')]
+
+
+def test_class_merge_documents_dry_run_and_job() -> None:
+    operation = json.loads(CONTRACT.read_text())['paths'][PREFIX + '/classes/merge']['post']
+    refs = {
+        code: operation['responses'][code]['content']['application/json']['schema']['$ref']
+        for code in ('200', '202')
+    }
+    assert refs['200'].endswith('/ClassMergeDryRun')
+    assert refs['202'].endswith('/JobView')

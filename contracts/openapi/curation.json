@@ -4753,6 +4753,50 @@
         "title": "ClassMappingEntry",
         "type": "object"
       },
+      "ClassMergeDryRun": {
+        "description": "``POST /classes/merge?dry_run=true``: what the merge would touch.",
+        "properties": {
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "holdout_blocking": {
+            "title": "Holdout Blocking",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "validations_carried_over": {
+            "title": "Validations Carried Over",
+            "type": "integer"
+          },
+          "would_relabel": {
+            "title": "Would Relabel",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "source_id",
+          "target_id",
+          "would_relabel",
+          "validations_carried_over",
+          "holdout_blocking",
+          "blocked"
+        ],
+        "title": "ClassMergeDryRun",
+        "type": "object"
+      },
       "ClassMergeRequest": {
         "properties": {
           "source_id": {
@@ -41753,10 +41797,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMergeDryRun"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {

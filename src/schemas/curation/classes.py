@@ -23,3 +23,15 @@ class ClassCreated(BaseModel):
     class_name: str
     group: str
     hotkey_letter: str | None = None
+
+
+class ClassMergeDryRun(BaseModel):
+    """``POST /classes/merge?dry_run=true``: what the merge would touch."""
+
+    dry_run: bool
+    source_id: int
+    target_id: int
+    would_relabel: int
+    validations_carried_over: int
+    holdout_blocking: int
+    blocked: bool
