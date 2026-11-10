@@ -53,8 +53,10 @@ Deployment-wide registry:
 | `GET /curation/vlm/catalog`, `GET /curation/vlm/local` | Catalog with `fits`, `serving`, `desired`; local status |
 | `POST`/`DELETE /curation/vlm/local/select` | Record / clear the desired local model |
 
-Per project, under `/curation/projects/{project}/vlm/endpoints`: `GET /active`,
-`POST /{name}/activate`, `POST /deactivate`, `POST /active/rollback`.
+Per project: `GET /curation/projects/{project}/vlm/endpoints/active`,
+`POST /curation/projects/{project}/vlm/endpoints/{name}/activate`,
+`POST /curation/projects/{project}/vlm/endpoints/deactivate`,
+`POST /curation/projects/{project}/vlm/endpoints/active/rollback`.
 
 ## Register an endpoint
 

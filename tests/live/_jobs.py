@@ -8,6 +8,8 @@ call, over the container's own database and broker configuration. Reads use the 
 
 from __future__ import annotations
 
+import datetime as dt
+import itertools
 import json
 import time
 from typing import Any
@@ -230,3 +232,19 @@ def wait_for_job(
         time.sleep(interval_s)
         job = get_job(api, job_id)
     return job
+
+
+def job_windows_disjoint(views: list[dict[str, Any]]) -> bool:
+    """True when each job began running no earlier than the previous one (in order) finished.
+
+    Compares ``started_at`` with ``finished_at``, not ``created_at``: the latter is the INSERT
+    transaction's ``now()``, which can precede the previous job's finish while the INSERT waits on
+    the exclusivity index (tests/compose/test_live_job_windows.py).
+    """
+
+    def at(view: dict[str, Any], key: str) -> dt.datetime:
+        return dt.datetime.fromisoformat(view[key])
+
+    return all(
+        at(nxt, 'started_at') >= at(prev, 'finished_at') for prev, nxt in itertools.pairwise(views)
+    )

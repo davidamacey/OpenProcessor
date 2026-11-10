@@ -52,6 +52,36 @@ def reconfigure(*, workers: int, api_replicas: int, jobs_replicas: int) -> None:
     )  # fmt: skip
 
 
+def restore_base_stack() -> None:
+    """Undo ``reconfigure`` when it ran: drop the proxy and put ``api`` / ``jobs-worker`` back to one container.
+
+    The proxy publishes ``VERIFY_API_PORT``, so a later plain ``up --force-recreate api`` (the API
+    restart check in test_live_vlm.py) cannot bind it while the overlay's proxy is still there.
+    """
+    env = {**os.environ, 'VERIFY_COMPOSE_PROJECT': COMPOSE_PROJECT}
+    base = ['docker', 'compose', '-p', COMPOSE_PROJECT, *COMPOSE_FILE_ARGS]
+    proxy = subprocess.run(  # nosec B603 - fixed argv, no shell
+        [*base, '-f', str(SCALE_FILE), 'ps', '-q', 'proxy'],
+        check=True, capture_output=True, text=True, timeout=60, cwd=str(REPO_ROOT), env=env,
+    )  # fmt: skip
+    if not proxy.stdout.strip():
+        return
+    for argv in (
+        [*base, '-f', str(SCALE_FILE), 'rm', '-sf', 'proxy'],
+        [*base, 'up', '-d', '--wait', '--no-build', '--no-deps', '--force-recreate',
+         '--scale', 'api=1', '--scale', 'jobs-worker=1', 'api', 'jobs-worker'],
+    ):  # fmt: skip
+        subprocess.run(  # nosec B603 - fixed argv, no shell
+            argv,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=400,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+
+
 def exec_json(code: str, service: str = 'api', index: int = 1) -> Any:
     """Run ``code`` in replica ``index`` of ``service``; return the last stdout line parsed as JSON."""
     import json

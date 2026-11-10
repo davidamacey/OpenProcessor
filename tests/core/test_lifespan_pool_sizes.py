@@ -68,3 +68,16 @@ async def test_without_a_worker_count_the_lifespan_refuses_to_size_the_pools(
         await lifespan_module._start_pools(get_settings())
     assert AppResources.async_triton_pool is None
     assert AppResources.shared_executor is None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_unpublishes_the_closed_pool_and_executor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A closed pool left published would be handed to the next caller instead of refusing.
+    monkeypatch.setenv('WEB_CONCURRENCY', '1')
+    await lifespan_module._start_pools(get_settings())
+    await lifespan_module._close_triton_pool()
+    lifespan_module._shutdown_shared_executor()
+    assert AppResources.async_triton_pool is None
+    assert AppResources.shared_executor is None
