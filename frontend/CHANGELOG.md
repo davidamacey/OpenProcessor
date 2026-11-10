@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Map page: points render again. The API client now parses every `+json` response (`/map/cells` answers `application/geo+json`); before, the body arrived as text and MapLibre tried to fetch it as a URL.
+- Review sort chip: on narrow screens the sort label keeps a minimum width instead of collapsing, and the button's accessible name carries the sort, any applied fallback and the server's reason.
 - Discard, new-class resolve and assist apply show items the server could not write (`failed`) apart from conflicts, instead of reporting them as someone else's edit.
 
 ### Added
