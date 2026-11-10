@@ -35,10 +35,7 @@ STREAM_OR_FILE = frozenset(
 LEGACY_DICT = frozenset(
     {
         'GET /train/manifest/{job_id}',
-        'GET /class_sources',
-        'POST /classes',
         'POST /classes/merge',
-        'PUT /classes/{class_id}',
         'POST /cluster/umap/rebuild',
         'GET /clusters/representatives',
         'POST /crops/discard_batch',

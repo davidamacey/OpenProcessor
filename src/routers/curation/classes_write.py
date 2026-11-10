@@ -11,6 +11,7 @@ from src.config.curation_accessors import items_index
 from src.routers.curation._class_hotkeys import project_keymap_overrides, validated_hotkey
 from src.routers.curation._class_models import ClassCreateRequest, ClassUpdateRequest
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.schemas.curation.classes import ClassCreated
 from src.services.classes.registry import ClassRegistry, ClassRegistryError
 
 
@@ -53,7 +54,7 @@ async def create_registry_class(
     }
 
 
-@router.post('/classes', status_code=status.HTTP_201_CREATED)
+@router.post('/classes', status_code=status.HTTP_201_CREATED, response_model=ClassCreated)
 async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
     """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
     an optional ``hotkey_letter`` is validated like on update before
@@ -75,7 +76,7 @@ async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.put('/classes/{class_id}')
+@router.put('/classes/{class_id}', response_model=RegistryClassEntry)
 async def update_class(class_id: int, payload: ClassUpdateRequest) -> dict[str, Any]:
     """Rename, regroup, or assign/clear a hotkey on a class."""
     reg = get_class_registry()

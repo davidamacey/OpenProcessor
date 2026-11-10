@@ -4453,6 +4453,41 @@
         "title": "ClassCreateRequest",
         "type": "object"
       },
+      "ClassCreated": {
+        "description": "``POST /classes``: the class that was added.",
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "group"
+        ],
+        "title": "ClassCreated",
+        "type": "object"
+      },
       "ClassEntry": {
         "properties": {
           "added_at": {
@@ -4734,6 +4769,50 @@
           "target_id"
         ],
         "title": "ClassMergeRequest",
+        "type": "object"
+      },
+      "ClassSourceEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "short_label": {
+            "title": "Short Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role",
+          "short_label"
+        ],
+        "title": "ClassSourceEntry",
+        "type": "object"
+      },
+      "ClassSourceList": {
+        "properties": {
+          "class_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClassSourceEntry"
+            },
+            "title": "Class Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "class_sources"
+        ],
+        "title": "ClassSourceList",
         "type": "object"
       },
       "ClassUpdateRequest": {
@@ -40937,17 +41016,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response List Class Sources Curation Projects  Project  Class Sources Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassSourceList"
                 }
               }
             },
@@ -41041,9 +41110,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Class Curation Projects  Project  Classes Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassCreated"
                 }
               }
             },
@@ -41281,9 +41348,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Class Curation Projects  Project  Classes  Class Id  Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
                 }
               }
             },
