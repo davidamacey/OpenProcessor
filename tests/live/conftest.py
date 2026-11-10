@@ -98,9 +98,20 @@ def compose(*args: str, check: bool = True, timeout: int = 300) -> subprocess.Co
 
 
 def docker_ps_snapshot() -> str:
-    """Stable, sorted `docker ps` view used to prove the GPU arbiter no-ops."""
+    """Stable, sorted `docker ps` view of this harness's project, to prove the GPU arbiter no-ops.
+
+    Scoped to the compose project: other stacks on a shared host start and stop containers at any
+    time, which is not the arbiter's doing.
+    """
     proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-        ['docker', 'ps', '--format', '{{.Names}}\t{{.Status}}\t{{.Image}}'],
+        [
+            'docker',
+            'ps',
+            '--filter',
+            f'label=com.docker.compose.project={COMPOSE_PROJECT}',
+            '--format',
+            '{{.Names}}\t{{.Status}}\t{{.Image}}',
+        ],
         check=True,
         capture_output=True,
         text=True,
