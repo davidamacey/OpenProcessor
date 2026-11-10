@@ -18,3 +18,15 @@ def test_built_overlay_has_no_source_mounts_or_builds() -> None:
             assert not src.startswith(str(REPO_ROOT / 'src')), (name, src)
             assert not src.startswith(str(REPO_ROOT / 'scripts')), (name, src)
             assert not src.endswith('/VERSION'), (name, src)
+
+
+def test_live_harness_adds_the_built_overlay_to_every_compose_call() -> None:
+    from live.conftest import compose_file_args
+
+    base = ['-f', str(REPO_ROOT / 'docker/test/compose.yml')]
+    assert compose_file_args({}) == base
+    assert compose_file_args({'OP_TEST_IMAGE_TAG': 'x1'}) == [
+        *base,
+        '-f',
+        str(REPO_ROOT / 'docker/test/compose.built.yml'),
+    ]

@@ -18,6 +18,7 @@ import json
 import os
 import subprocess  # nosec B404 - drives the harness's own compose project
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -28,6 +29,17 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = REPO_ROOT / 'docker' / 'test' / 'compose.yml'
+
+
+def compose_file_args(env: Mapping[str, str]) -> list[str]:
+    """``-f`` arguments for every compose call; OP_TEST_IMAGE_TAG adds the built-image overlay."""
+    files = [COMPOSE_FILE]
+    if env.get('OP_TEST_IMAGE_TAG'):
+        files.append(COMPOSE_FILE.parent / 'compose.built.yml')
+    return [arg for f in files for arg in ('-f', str(f))]
+
+
+COMPOSE_FILE_ARGS = compose_file_args(os.environ)
 # Overridable so a second harness (own project + container prefix) can run beside
 # another one without sharing fixed container names.
 COMPOSE_PROJECT = os.environ.get('VERIFY_COMPOSE_PROJECT', 'op-live-verify')
@@ -72,8 +84,7 @@ def compose(*args: str, check: bool = True, timeout: int = 300) -> subprocess.Co
         'compose',
         '-p',
         COMPOSE_PROJECT,
-        '-f',
-        str(COMPOSE_FILE),
+        *COMPOSE_FILE_ARGS,
         *args,
     ]
     return subprocess.run(  # nosec B603 - fixed argv, no shell
