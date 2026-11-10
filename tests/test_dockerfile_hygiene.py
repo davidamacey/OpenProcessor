@@ -298,7 +298,9 @@ def test_api_image_copies_every_scripts_file_it_imports_or_sources() -> None:
     dirs, files = _copied_scripts('Dockerfile', 'api')
     assert 'scripts' not in dirs, 'the api image must copy a runtime subset of scripts/'
     needed = _scripts_modules_imported(['src', 'config_templates', 'scripts/curation'])
-    needed |= _scripts_modules_imported(['scripts/datasets'])
+    needed |= _scripts_modules_imported(
+        ['scripts/datasets', 'scripts/db', 'scripts/healthcheck', 'scripts/flower']
+    )
     needed |= _COCO_SAMPLE | _SHELL_LIBS
     missing = sorted(n for n in _with_sourced_libs(needed) if not _covered(n, dirs, files))
     assert missing == [], f'api target does not COPY: {missing}'

@@ -11,7 +11,7 @@ import json
 import subprocess  # nosec B404 - drives the harness's own compose project
 from typing import Any
 
-from tests.live.conftest import COMPOSE_FILE, COMPOSE_PROJECT, REPO_ROOT
+from tests.live.conftest import COMPOSE_FILE_ARGS, COMPOSE_PROJECT, REPO_ROOT
 
 
 DEFAULT_TIMEOUT_S = 120
@@ -27,7 +27,7 @@ def compose(
 ) -> subprocess.CompletedProcess[str]:
     """``docker compose -p NAME -f docker/test/compose.yml ARGS``; raises on a non-zero exit."""
     return subprocess.run(  # nosec B603 - fixed argv, no shell
-        ['docker', 'compose', '-p', COMPOSE_PROJECT, '-f', str(COMPOSE_FILE), *args],
+        ['docker', 'compose', '-p', COMPOSE_PROJECT, *COMPOSE_FILE_ARGS, *args],
         input=stdin,
         check=check,
         capture_output=True,
