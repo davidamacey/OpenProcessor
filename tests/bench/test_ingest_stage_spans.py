@@ -8,6 +8,7 @@ turning back into unattributed API CPU.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import io
 from types import SimpleNamespace
 from typing import Any, cast
@@ -136,6 +137,7 @@ def test_opensearch_serializer_is_timed_and_encodes_like_the_stock_one() -> None
 
 @pytest.fixture
 def index_service(tmp_path):
+    from src.config.curation import CurationConfig
     from src.services.curation.ingest_policy import IngestPolicy
 
     class _Encoder:
@@ -152,7 +154,9 @@ def index_service(tmp_path):
         policy=IngestPolicy(),
         profile=SimpleNamespace(batch_limit=16),
         pe_encoder=_Encoder(),
-        config=SimpleNamespace(crop_cache_dir=str(tmp_path / 'crops'), crop_cache_max_bytes=0),
+        config=dataclasses.replace(
+            CurationConfig(), crop_cache_dir=tmp_path / 'crops', crop_cache_max_bytes=0
+        ),
         region_seed_status=None,
         _bulk_index=_bulk_index,
         _publish_created=_no_publish,
