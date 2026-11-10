@@ -4453,6 +4453,41 @@
         "title": "ClassCreateRequest",
         "type": "object"
       },
+      "ClassCreated": {
+        "description": "``POST /classes``: the class that was added.",
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "group"
+        ],
+        "title": "ClassCreated",
+        "type": "object"
+      },
       "ClassEntry": {
         "properties": {
           "added_at": {
@@ -4718,6 +4753,50 @@
         "title": "ClassMappingEntry",
         "type": "object"
       },
+      "ClassMergeDryRun": {
+        "description": "``POST /classes/merge?dry_run=true``: what the merge would touch.",
+        "properties": {
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "holdout_blocking": {
+            "title": "Holdout Blocking",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "validations_carried_over": {
+            "title": "Validations Carried Over",
+            "type": "integer"
+          },
+          "would_relabel": {
+            "title": "Would Relabel",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "source_id",
+          "target_id",
+          "would_relabel",
+          "validations_carried_over",
+          "holdout_blocking",
+          "blocked"
+        ],
+        "title": "ClassMergeDryRun",
+        "type": "object"
+      },
       "ClassMergeRequest": {
         "properties": {
           "source_id": {
@@ -4734,6 +4813,50 @@
           "target_id"
         ],
         "title": "ClassMergeRequest",
+        "type": "object"
+      },
+      "ClassSourceEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "short_label": {
+            "title": "Short Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role",
+          "short_label"
+        ],
+        "title": "ClassSourceEntry",
+        "type": "object"
+      },
+      "ClassSourceList": {
+        "properties": {
+          "class_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClassSourceEntry"
+            },
+            "title": "Class Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "class_sources"
+        ],
+        "title": "ClassSourceList",
         "type": "object"
       },
       "ClassUpdateRequest": {
@@ -5555,6 +5678,41 @@
           "class_name"
         ],
         "title": "ClusterRepresentative",
+        "type": "object"
+      },
+      "ClusterRepresentativesPage": {
+        "description": "``GET {P}/clusters/representatives``: one page of clusters, keyed by ``cluster_uid``.",
+        "properties": {
+          "clusters": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClusterRepresentative"
+              },
+              "type": "array"
+            },
+            "title": "Clusters",
+            "type": "object"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "max_clusters": {
+            "title": "Max Clusters",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clusters",
+          "count",
+          "offset",
+          "max_clusters"
+        ],
+        "title": "ClusterRepresentativesPage",
         "type": "object"
       },
       "ClusterRunAccepted": {
@@ -7266,7 +7424,7 @@
           },
           "registry_classes": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__RegistryClassEntry"
+              "$ref": "#/components/schemas/VocabularyRegistryClass"
             },
             "title": "Registry Classes",
             "type": "array"
@@ -11879,6 +12037,56 @@
           "region_profile"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HoldoutClassBucket": {
+        "additionalProperties": true,
+        "properties": {
+          "deficient": {
+            "title": "Deficient",
+            "type": "boolean"
+          },
+          "doc_count": {
+            "title": "Doc Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "doc_count",
+          "deficient"
+        ],
+        "title": "HoldoutClassBucket",
+        "type": "object"
+      },
+      "HoldoutStats": {
+        "properties": {
+          "by_class": {
+            "items": {
+              "$ref": "#/components/schemas/HoldoutClassBucket"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "min_test_per_class": {
+            "title": "Min Test Per Class",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_class",
+          "min_test_per_class"
+        ],
+        "title": "HoldoutStats",
         "type": "object"
       },
       "ImportAction": {
@@ -19031,6 +19239,27 @@
         "title": "ModelChoice",
         "type": "object"
       },
+      "ModelClassMappingCounts": {
+        "properties": {
+          "mapped_count": {
+            "title": "Mapped Count",
+            "type": "integer"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mapped_count",
+          "unmapped"
+        ],
+        "title": "ModelClassMappingCounts",
+        "type": "object"
+      },
       "ModelClassMappingEntry": {
         "properties": {
           "class_id": {
@@ -19343,6 +19572,295 @@
           "project"
         ],
         "title": "ModelSharingUser",
+        "type": "object"
+      },
+      "ModelStatusEntry": {
+        "additionalProperties": true,
+        "description": "A Triton model, the segmenter or a VLM endpoint.\n\nThe fields after ``unloadable`` belong to one kind only; the route sets\n``response_model_exclude_unset`` so a row never gains a key it did not have.\n``extra='allow'`` keeps any key a producer adds that is not listed here.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "active_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "class_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelClassMappingCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "exec_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exec Count"
+          },
+          "friendly_name": {
+            "title": "Friendly Name",
+            "type": "string"
+          },
+          "inference_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Count"
+          },
+          "inference_failed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Failed"
+          },
+          "is_region_protected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Region Protected"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "model_type": {
+            "title": "Model Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optional"
+          },
+          "owned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "requires_force_to_unload": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Force To Unload"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared"
+          },
+          "sharing_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing Revision"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unloadable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unloadable"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name",
+          "friendly_name",
+          "role",
+          "kind",
+          "model_type",
+          "status"
+        ],
+        "title": "ModelStatusEntry",
+        "type": "object"
+      },
+      "ModelsStatusResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStatusEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ModelsStatusResponse",
         "type": "object"
       },
       "NearDupActiveProfile": {
@@ -22075,6 +22593,123 @@
           "measured_on"
         ],
         "title": "PreviewRateWire",
+        "type": "object"
+      },
+      "ProbeCancelResponse": {
+        "properties": {
+          "actionable_min_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actionable Min Confidence"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "train_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Job Id"
+          },
+          "updated_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Count"
+          }
+        },
+        "required": [
+          "status",
+          "cancelled"
+        ],
+        "title": "ProbeCancelResponse",
         "type": "object"
       },
       "ProbeRunRequest": {
@@ -28012,6 +28647,66 @@
           "rejection_reasons"
         ],
         "title": "RegionVocabularyResponse",
+        "type": "object"
+      },
+      "RegistryClassEntry": {
+        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
         "type": "object"
       },
       "RejectionReasonEntry": {
@@ -34799,6 +35494,73 @@
         "title": "TrainedModelList",
         "type": "object"
       },
+      "TrainingCohort": {
+        "properties": {
+          "cutoffs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Cutoffs",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "row_kind": {
+            "enum": [
+              "crop",
+              "region"
+            ],
+            "title": "Row Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "cutoffs",
+          "endpoint",
+          "params",
+          "row_kind"
+        ],
+        "title": "TrainingCohort",
+        "type": "object"
+      },
+      "TrainingCohortList": {
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingCohort"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohorts"
+        ],
+        "title": "TrainingCohortList",
+        "type": "object"
+      },
       "TriggersWire": {
         "additionalProperties": false,
         "properties": {
@@ -37334,6 +38096,28 @@
         "title": "VocabularyOption",
         "type": "object"
       },
+      "VocabularyRegistryClass": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "choice"
+        ],
+        "title": "VocabularyRegistryClass",
+        "type": "object"
+      },
       "WatchTriggerWire": {
         "additionalProperties": false,
         "properties": {
@@ -37520,66 +38304,6 @@
           "type"
         ],
         "title": "_PublishEvent",
-        "type": "object"
-      },
-      "src__clients__curation_opensearch__RegistryClassEntry": {
-        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
-        "properties": {
-          "added_at": {
-            "title": "Added At",
-            "type": "string"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          },
-          "deprecated": {
-            "default": false,
-            "title": "Deprecated",
-            "type": "boolean"
-          },
-          "group": {
-            "default": "unknown",
-            "title": "Group",
-            "type": "string"
-          },
-          "hotkey_letter": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hotkey Letter"
-          },
-          "merged_into": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged Into"
-          },
-          "notes": {
-            "default": "",
-            "title": "Notes",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       },
       "src__routers__curation___common_models__BatchIngestResponse": {
@@ -37825,28 +38549,6 @@
           "label"
         ],
         "title": "Choice",
-        "type": "object"
-      },
-      "src__routers__curation__config_vocabulary__RegistryClassEntry": {
-        "properties": {
-          "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name",
-          "choice"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       }
     }
@@ -40937,17 +41639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response List Class Sources Curation Projects  Project  Class Sources Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassSourceList"
                 }
               }
             },
@@ -41041,9 +41733,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Class Curation Projects  Project  Classes Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassCreated"
                 }
               }
             },
@@ -41107,10 +41797,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMergeDryRun"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -41281,9 +41983,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Class Curation Projects  Project  Classes  Class Id  Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -41420,7 +42120,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -41472,7 +42172,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -42875,9 +43575,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cluster Representatives Curation Projects  Project  Clusters Representatives Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClusterRepresentativesPage"
                 }
               }
             },
@@ -51796,9 +52494,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Models Status Curation Projects  Project  Models Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelsStatusResponse"
                 }
               }
             },
@@ -54902,9 +55598,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Probe Cancel Curation Projects  Project  Probe Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProbeCancelResponse"
                 }
               }
             },
@@ -63153,9 +63847,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Test Holdout Stats Curation Projects  Project  Test Holdout Stats Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HoldoutStats"
                 }
               }
             },
@@ -64214,9 +64906,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Training Cohorts Curation Projects  Project  Training Cohorts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TrainingCohortList"
                 }
               }
             },

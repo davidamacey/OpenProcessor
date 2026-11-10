@@ -35,12 +35,7 @@ STREAM_OR_FILE = frozenset(
 LEGACY_DICT = frozenset(
     {
         'GET /train/manifest/{job_id}',
-        'GET /class_sources',
-        'POST /classes',
-        'POST /classes/merge',
-        'PUT /classes/{class_id}',
         'POST /cluster/umap/rebuild',
-        'GET /clusters/representatives',
         'POST /crops/discard_batch',
         'POST /crops/flag_new_class',
         'POST /crops/{crop_id}/discard',
@@ -60,9 +55,7 @@ LEGACY_DICT = frozenset(
         'GET /export/single_class/status',
         'POST /export/yolo',
         'GET /images/cache/stats',
-        'GET /models/status',
         'POST /pipeline/auto_label',
-        'POST /probe/cancel',
         'GET /regions/clusters',
         'GET /regions/statuses',
         'GET /review/new_class_proposals/summary',
@@ -75,8 +68,6 @@ LEGACY_DICT = frozenset(
         'POST /select/cancel',
         'GET /select/status',
         'GET /stats/classes',
-        'GET /test_holdout/stats',
-        'GET /training_cohorts',
         'POST /viz/projection/cancel',
         'GET /viz/projection/status',
     }

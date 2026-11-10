@@ -134,7 +134,7 @@ class TextReaderModeEntry(BaseModel):
     needs_ocr: bool
 
 
-class RegistryClassEntry(BaseModel):
+class VocabularyRegistryClass(BaseModel):
     class_id: int
     class_name: str
     choice: Choice
@@ -171,7 +171,7 @@ class ConfigVocabularyResponse(BaseModel):
     ocr: OcrBlock
     model_choices: list[ModelChoice] = Field(default_factory=list)
     text_reader_modes: list[TextReaderModeEntry]
-    registry_classes: list[RegistryClassEntry]
+    registry_classes: list[VocabularyRegistryClass]
     prompt_pack_calls: list[PromptPackCallEntry]
     labels: VocabularyLabels = Field(default_factory=VocabularyLabels)
     reprocess: ReprocessVocabulary
@@ -379,10 +379,10 @@ def _build_text_reader_modes() -> list[TextReaderModeEntry]:
     ]
 
 
-async def _build_registry_classes() -> list[RegistryClassEntry]:
+async def _build_registry_classes() -> list[VocabularyRegistryClass]:
     reg = await get_class_registry().snapshot()
     return [
-        RegistryClassEntry(
+        VocabularyRegistryClass(
             class_id=c.class_id,
             class_name=c.class_name,
             choice=Choice(id=c.class_name, label=c.class_name),
