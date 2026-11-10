@@ -134,3 +134,39 @@ def test_make_app_keeps_pynvml_out_of_the_parent() -> None:
         timeout=120,
     )
     assert result.stdout.strip() == 'False'
+
+
+class _LibraryNotFoundError(_NvmlError):
+    pass
+
+
+class _DriverNotLoadedError(_NvmlError):
+    pass
+
+
+@pytest.mark.parametrize('missing', [_LibraryNotFoundError, _DriverNotLoadedError])
+def test_a_container_without_nvml_records_no_cards(writer: FakeWriter, missing: type) -> None:
+    """No NVIDIA runtime (no libnvidia-ml, no driver) is a container with no cards, not a crash."""
+    nvml = fake_nvml()
+    nvml.NVMLError_LibraryNotFound = _LibraryNotFoundError
+    nvml.NVMLError_DriverNotLoaded = _DriverNotLoadedError
+
+    def init() -> None:
+        raise missing('no NVML')
+
+    nvml.nvmlInit = init
+    gpu_app.start_inventory(None, nvml)
+    assert (writer.devices, writer.capabilities) == ({}, [])
+
+
+def test_another_nvml_failure_at_init_still_refuses_the_start(writer: FakeWriter) -> None:
+    nvml = fake_nvml()
+    nvml.NVMLError_LibraryNotFound = _LibraryNotFoundError
+    nvml.NVMLError_DriverNotLoaded = _DriverNotLoadedError
+
+    def init() -> None:
+        raise _NvmlError('insufficient permissions')
+
+    nvml.nvmlInit = init
+    with pytest.raises(_NvmlError):
+        gpu_app.start_inventory(None, nvml)

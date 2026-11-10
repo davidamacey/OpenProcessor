@@ -255,7 +255,12 @@ def start_inventory(device_uuid: str | None, nvml: Any = None) -> None:
     """
     global _inventory  # noqa: PLW0603 - the heartbeat refreshes what the start recorded
     library = nvml if nvml is not None else _import_pynvml()
-    library.nvmlInit()
+    try:
+        library.nvmlInit()
+    except (library.NVMLError_LibraryNotFound, library.NVMLError_DriverNotLoaded):
+        # No NVIDIA runtime in this container (no libnvidia-ml, no driver): it sees no cards.
+        logger.info('gpu_inventory_no_nvml')
+        return
     try:
         devices = read_devices(library)
     finally:
