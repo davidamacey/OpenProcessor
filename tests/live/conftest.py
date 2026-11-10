@@ -154,24 +154,54 @@ def wait_job(api_client: Any, job_id: str, *, timeout: float = 120.0) -> dict[st
     return wait_for_state(fetch, lambda job: job['status'] in JOB_TERMINAL, timeout=timeout)
 
 
+def probe_vlm_endpoint(api: Any, name: str) -> None:
+    """Record a successful probe of ``name`` against the harness VLM.
+
+    A VLM job runs only while an endpoint's latest probe is ok (``vlm_available``); a forced
+    activation records none (docs/design/curation_api_contract.md, VLM endpoints: ``force`` bypasses
+    ``vlm_not_probed`` only).
+    """
+    probed = api.post(f'{API_PREFIX}/vlm/endpoints/{name}/probe')
+    assert probed.status_code == 200, probed.text
+    assert probed.json()['ok'] is True, probed.text
+
+
 def run_near_duplicates(api: Any, prefix: str = PROJECT_PREFIX) -> None:
-    """Build the image- then item-level near-duplicate groups and wait for both runs.
+    """Build the image- then item-level near-duplicate groups and wait until neither is stale.
 
     The first holdout freeze needs a current item-level run, and the item level takes its scope
-    from a current image run (docs/design/curation_api_contract.md, "Near-duplicates").
+    from a current image run (docs/design/curation_api_contract.md, "Near-duplicates"). A run is
+    followed by a projection-sync job in the same exclusivity group, so the next start waits for
+    the active job (409 ``job_busy`` names it) instead of racing it.
     """
-    for level in ('image', 'item'):
-        started = api.post(f'{prefix}/near_duplicates/runs', json={'level': level, 'mode': 'full'})
-        assert started.status_code == 202, started.text
-        job_id = started.json()['job_id']
 
-        def fetch(job_id: str = job_id) -> dict[str, Any]:
+    def wait(job_id: str) -> dict[str, Any]:
+        def fetch() -> dict[str, Any]:
             resp = api.get(f'{prefix}/jobs/{job_id}')
             assert resp.status_code == 200, resp.text
             return resp.json()
 
-        job = wait_for_state(fetch, lambda j: j['status'] in JOB_TERMINAL, timeout=180.0)
+        return wait_for_state(fetch, lambda j: j['status'] in JOB_TERMINAL, timeout=180.0)
+
+    for level in ('image', 'item'):
+        for _attempt in range(10):
+            started = api.post(
+                f'{prefix}/near_duplicates/runs', json={'level': level, 'mode': 'full'}
+            )
+            if started.status_code != 409:
+                break
+            busy = started.json()['detail']
+            assert busy['error'] == 'job_busy', started.text
+            wait(busy['active_job_id'])
+        assert started.status_code == 202, started.text
+        job = wait(started.json()['job_id'])
         assert job['status'] == 'completed', job
+
+    def settled() -> bool:
+        status = api.get(f'{prefix}/near_duplicates/status').json()
+        return all(not lv['stale_reasons'] for lv in status['levels'])
+
+    assert wait_until(settled, timeout=120), api.get(f'{prefix}/near_duplicates/status').text
 
 
 def create_project(api: Any, slug: str, display_name: str, *, timeout: float = 180.0) -> None:
@@ -330,6 +360,7 @@ def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
         },
     )
     assert activated.status_code == 200, activated.text
+    probe_vlm_endpoint(api, 'env')
     return {'items': count, 'stdout': proc.stdout}
 
 

@@ -23,6 +23,7 @@ from .conftest import (
     API_PREFIX,
     compose,
     create_project,
+    probe_vlm_endpoint,
     refresh,
     run_near_duplicates,
     search,
@@ -131,7 +132,9 @@ def _serve_partition(api: Any, opensearch: Any) -> list[str]:
 
 
 @pytest.fixture(scope='module')
-def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[dict[str, Any]]:
+def loop_project(
+    api: Any, opensearch: Any, seeded: dict[str, Any], fake_vlm: Any
+) -> Iterator[dict[str, Any]]:
     """A fresh project holding the seeded cohorts, with seven human labels, some of them frozen."""
     create_project(api, PROJECT, 'Loop live')
     proc = compose(
@@ -162,6 +165,8 @@ def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[
         json={'revision': 1, 'force': True, 'acknowledge_external': True},
     )
     assert active.status_code == 200, active.text
+    probe_vlm_endpoint(api, name)
+    fake_vlm.post('/__reset')  # the probe's calls are not the loop's
     root_uids = _serve_partition(api, opensearch)
     classes = api.get(f'{PREFIX}/classes').json()
     person_class = next(c['class_id'] for c in classes['classes'] if c['class_name'] == 'box')
@@ -324,7 +329,7 @@ def test_a_loop_propagates_within_budget_leaves_locks_alone_and_rolls_back(
         f'{PREFIX}/assist/loops/{loop_id}/rollback', json={'node_paths': None, 'dry_run': True}
     )
     assert dry.status_code == 200, dry.text
-    assert dry.json()['restored'] == len(propagated)
+    assert dry.json()['restored'] == len(propagated), dry.text
     assert dry.json()['kept_changed'] == 0
     assert _roots(opensearch) == after, 'a rollback dry run writes nothing'
 
@@ -352,9 +357,11 @@ def test_a_loop_propagates_within_budget_leaves_locks_alone_and_rolls_back(
     nothing = api.post(
         f'{PREFIX}/assist/loops/{loop_id}/rollback', json={'node_paths': None, 'dry_run': True}
     )
-    # What a person changed stays matched but is never restored; nothing else is left to restore.
+    # "A second rollback finds nothing" (docs/design/curation_api_contract.md, assist loops): the
+    # item a person changed no longer carries the loop's tag, so it is not matched either.
     assert nothing.json()['restored'] == 0
-    assert nothing.json()['kept_changed'] == 1
+    assert nothing.json()['kept_changed'] == 0
+    assert nothing.json()['matched'] == 0
 
 
 def test_a_cluster_that_fails_the_gate_is_split_then_left_for_review(
@@ -394,9 +401,11 @@ def test_the_budget_is_a_hard_cap(
     api: Any, opensearch: Any, loop_project: dict[str, Any], fake_vlm: Any
 ) -> None:
     fake_vlm.post('/__reset')
+    # on_budget 'complete' leaves the nodes the budget cannot cover unvisited and ends the loop;
+    # the default, 'pause', is the next test.
     start = api.post(
         f'{PREFIX}/assist/loops',
-        json=_request(loop_project, seed=13, budget={'max_vlm_crops': 40}),
+        json=_request(loop_project, seed=13, budget={'max_vlm_crops': 40}, on_budget='complete'),
     )
     assert start.status_code == 200, start.text
     state = _wait_terminal(api, start.json()['loop_id'])
@@ -405,3 +414,23 @@ def test_the_budget_is_a_hard_cap(
     _assert_budget_respected(state)
     assert 0 < state['budget']['vlm']['crops_spent'] <= 40
     assert len(fake_vlm.get('/__seen').json()['hashes']) <= 40
+
+
+def test_a_reached_budget_pauses_the_loop_by_default(
+    api: Any, opensearch: Any, loop_project: dict[str, Any], fake_vlm: Any
+) -> None:
+    fake_vlm.post('/__reset')
+    start = api.post(
+        f'{PREFIX}/assist/loops',
+        json=_request(loop_project, seed=13, budget={'max_vlm_crops': 40}),
+    )
+    assert start.status_code == 200, start.text
+    loop_id = start.json()['loop_id']
+    state = _wait_terminal(api, loop_id)
+    assert state['status'] == 'paused', state
+    assert state['pause_reason'] == 'budget', state
+    _assert_budget_respected(state)
+    assert 0 < state['budget']['vlm']['crops_spent'] <= 40
+    cancelled = api.post(f'{PREFIX}/assist/loops/{loop_id}/cancel')
+    assert cancelled.status_code == 200, cancelled.text
+    assert _wait_terminal(api, loop_id)['status'] == 'cancelled'
