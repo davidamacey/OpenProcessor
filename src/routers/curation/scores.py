@@ -23,6 +23,11 @@ from src.config.env import env_bool
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._latest_job_models import (
+    ScoresCancelResponse,
+    ScoresCoverageResponse,
+    ScoresState,
+)
 
 
 def _scores_enabled() -> bool:
@@ -36,7 +41,7 @@ class ScoresComputeRequest(BaseModel):
     )
 
 
-@router.post('/scores/compute', status_code=202)
+@router.post('/scores/compute', status_code=202, response_model=ScoresState)
 async def scores_compute(payload: ScoresComputeRequest, session: DbSessionDep) -> dict[str, Any]:
     """Queue the scoring job (202 with its state; 409 `job_busy` while one is active)."""
     if not _scores_enabled():
@@ -67,12 +72,12 @@ async def _state(session: Any) -> dict[str, Any]:
     return scores_job.state_dict(await latest_job(session, scores_job.KIND))
 
 
-@router.get('/scores/status')
+@router.get('/scores/status', response_model=ScoresState)
 async def scores_status(session: DbSessionDep) -> dict[str, Any]:
     return await _state(session)
 
 
-@router.post('/scores/cancel')
+@router.post('/scores/cancel', response_model=ScoresCancelResponse)
 async def scores_cancel(session: DbSessionDep) -> dict[str, Any]:
     from src.services.curation.item_scores.job import KIND
     from src.services.curation.latest_job import cancel_latest
@@ -81,7 +86,7 @@ async def scores_cancel(session: DbSessionDep) -> dict[str, Any]:
     return {'cancelled': cancelled, **await _state(session)}
 
 
-@router.get('/scores/coverage')
+@router.get('/scores/coverage', response_model=ScoresCoverageResponse)
 async def scores_coverage(opensearch: OpenSearchDep) -> dict[str, Any]:
     from src.services.curation.item_scores import job as scores_job
 

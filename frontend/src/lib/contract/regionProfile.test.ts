@@ -27,7 +27,7 @@ const FRONTEND_KEYS = {
 // The health/vocabulary identity summary. The generated schema name is
 // module-namespaced because the region-profile editor's list row is also
 // called `RegionProfileSummary`.
-const SUMMARY = 'src__routers__curation___region_vocabulary_models__RegionProfileSummary';
+const SUMMARY = 'ActiveRegionProfileSummary';
 
 describe('RegionProfileSummary', () => {
   it('ServedRegionProfile has exactly the served keys, all required', () => {

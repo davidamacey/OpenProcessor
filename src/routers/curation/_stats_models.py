@@ -6,7 +6,9 @@ Leaf module."""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.stats_embedding import EmbeddingBreakdown
 
@@ -83,3 +85,36 @@ class DatasetStatsResponse(BaseModel):
 
 
 __all__ = ['DatasetStatsResponse']
+
+
+class ClassStatsRow(BaseModel):
+    class_id: int
+    class_name: str
+    count: int
+    validated_count: int
+    trainable: int = Field(description='Validated minus holdout minus human-excluded crops.')
+    trainable_gap: int = Field(description='Shortfall against the per-class minimum, floored at 0.')
+    adequacy: Literal['block', 'warn', 'ok']
+    aug_target: int
+    aug_gap: int
+
+
+class ClassStatsThresholds(BaseModel):
+    block_below: int
+    warn_below: int
+    min_test_per_class: int
+    min_train_per_class: int
+    min_val_per_class: int
+    aug_target_min: int
+    aug_target_max: int
+
+
+class ClassStatsResponse(BaseModel):
+    """``GET /stats/classes``: the registry-joined ``classes`` and ``thresholds`` beside the
+    raw OpenSearch ``aggregations`` (``by_class`` and the like), which are carried as extras
+    so none is dropped."""
+
+    model_config = ConfigDict(extra='allow')
+
+    classes: list[ClassStatsRow]
+    thresholds: ClassStatsThresholds

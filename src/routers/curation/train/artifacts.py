@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse
 
 from src.core.wire_json import WireJSONResponse
+from src.routers.curation.train._manifest_models import RunManifest
 from src.services.training import job_manifest
 from src.services.training.job_wire import artifact_media_type
 
@@ -15,7 +16,7 @@ from src.services.training.job_wire import artifact_media_type
 router = APIRouter()
 
 
-@router.get('/manifest/{job_id}')
+@router.get('/manifest/{job_id}', response_model=None, responses={200: {'model': RunManifest}})
 async def get_manifest(
     job_id: Annotated[str, PathParam(description='Training job_id from {api_prefix}/train/runs')],
 ) -> WireJSONResponse:

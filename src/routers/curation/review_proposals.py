@@ -15,6 +15,7 @@ from fastapi import Query
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.routers.curation._review_proposals_models import NewClassProposalSummary
 from src.services.curation.new_class_terms import (
     PROPOSED_NAME_FIELD,
     classify_term,
@@ -28,7 +29,7 @@ def _sample_ids(bucket: dict[str, Any]) -> list[Any]:
     return [(h.get('_source') or {}).get('crop_id') or h.get('_id') for h in hits]
 
 
-@router.get('/review/new_class_proposals/summary')
+@router.get('/review/new_class_proposals/summary', response_model=NewClassProposalSummary)
 async def review_new_class_summary(
     opensearch: OpenSearchDep,
     size: Annotated[int, Query(ge=1, le=1000)] = 100,

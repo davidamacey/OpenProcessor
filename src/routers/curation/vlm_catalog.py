@@ -15,10 +15,10 @@ from src.config.env import env_optional_str, env_str
 from src.routers.curation._api_error import api_error
 from src.routers.curation._vlm_endpoint_models import (
     CATALOG_STATUS_LABELS,
-    Choice,
     VlmCatalogEntry,
     VlmCatalogLabels,
     VlmCatalogResponse,
+    VlmChoice,
     VlmLocalSelectRequest,
     VlmLocalStatus,
 )
@@ -61,7 +61,7 @@ async def _local_status() -> VlmLocalStatus:
 def _entry_wire(entry: CatalogEntry, local: VlmLocalStatus) -> VlmCatalogEntry:
     return VlmCatalogEntry(
         id=entry.id,
-        choice=Choice(id=entry.id, label=entry.hf_repo),
+        choice=VlmChoice(id=entry.id, label=entry.hf_repo),
         hf_repo=entry.hf_repo,
         family=entry.family,
         license=entry.license,

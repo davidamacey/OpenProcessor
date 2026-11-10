@@ -30,8 +30,8 @@ from src.core.disk_space import DISK_GUARD
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
-    BatchIngestResponse as _BatchIngestResponse,
     BatchIngestSummaryResponse as _BatchIngestSummaryResponse,
+    CurationBatchIngestResponse as _BatchIngestResponse,
     IngestImageRequest,
     IngestImageResponse,
 )

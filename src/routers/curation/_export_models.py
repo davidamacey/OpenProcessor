@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -94,3 +94,57 @@ class ExportSingleClassRequest(BaseModel):
     # 'keep_imported' (default) keeps the split a dataset import filed each
     # frame under; 'recompute' ignores it and splits by the exporter's rule.
     split_mode: Literal['keep_imported', 'recompute'] = 'keep_imported'
+
+
+class SingleClassSplitCounts(BaseModel):
+    train: int
+    val: int
+    test: int
+
+
+class ExportSingleClassResponse(BaseModel):
+    """``POST /export/single_class``: the finished export's integrity envelope."""
+
+    status: Literal['success']
+    export_dir: str
+    version_tag: str
+    manifest_path: str
+    data_yaml_path: str
+    dataset_sha: str
+    frozen_test_sha: str
+    split_counts: SingleClassSplitCounts
+    image_count: int
+    class_count: int
+    positive_images: int
+    background_images: int
+    positives_zero_warning: bool = Field(
+        description='True when the dataset has no positives and cannot train a detector.'
+    )
+    current_symlink: str
+    started_at: str | None
+    finished_at: str | None
+
+
+class ExportSingleClassStatus(BaseModel):
+    """``GET /export/single_class/status``.
+
+    ``idle`` carries only ``status``, ``last_run`` and ``profile_name``; ``unknown`` adds
+    ``export_dir``; ``success`` adds the manifest fields (``null`` when the manifest lacks
+    one). Served with ``response_model_exclude_unset`` so a branch never gains keys.
+    """
+
+    status: Literal['idle', 'unknown', 'success']
+    last_run: str | None = None
+    profile_name: str
+    export_dir: str | None = None
+    dataset_kind: str | None = None
+    dataset_sha: str | None = None
+    frozen_test_sha: str | None = None
+    class_count: int | None = None
+    class_names: list[str] | None = None
+    image_count: int | None = None
+    positive_images: int | None = None
+    background_images: int | None = None
+    false_positive_background_images: int | None = None
+    positives_zero_warning: bool | None = None
+    split_counts: dict[str, Any] | None = None

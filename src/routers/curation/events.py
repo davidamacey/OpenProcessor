@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from src.config import get_curation_config
 from src.routers.curation._common import router
 from src.routers.curation._event_streams import ProjectSubscriptionDep, to_sse
+from src.routers.curation._events_models import EventPublishAck, EventStreamStats
 from src.services.curation.wire import region_wire_key
 from src.services.events import publish as event_publish
 from src.services.events.listener import get_listener
@@ -39,7 +40,18 @@ class _PublishEvent(BaseModel):
     extra: dict[str, Any] | None = None
 
 
-@router.get('/events', response_class=EventSourceResponse)
+@router.get(
+    '/events',
+    response_class=EventSourceResponse,
+    responses={
+        200: {
+            'description': (
+                'Server-sent event stream; each frame carries `id`, `event` (the event type) '
+                'and a JSON `data` payload. No body validation: the stream is open-ended.'
+            )
+        }
+    },
+)
 async def curation_events(
     sub: ProjectSubscriptionDep,
     topic: str | None = Query(
@@ -68,7 +80,7 @@ async def curation_events(
         yield to_sse(frame)
 
 
-@router.post('/events/publish')
+@router.post('/events/publish', response_model=EventPublishAck)
 async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
     """Publish one event for the bound project.
 
@@ -116,7 +128,7 @@ async def curation_events_publish(payload: _PublishEvent) -> dict[str, Any]:
     return {'ok': True}
 
 
-@router.get('/events/stats')
+@router.get('/events/stats', response_model=EventStreamStats)
 async def curation_events_stats() -> dict[str, Any]:
     """Ops counters for the bound project's stream: its local subscribers, the clients this
     process dropped for falling behind, and whether the listener and its Valkey subscription run."""

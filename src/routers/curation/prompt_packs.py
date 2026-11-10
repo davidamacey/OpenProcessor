@@ -39,7 +39,12 @@ from src.routers.curation._prompt_pack_models import (
     PromptPackTemplateSummary,
     PromptPackValidateRequest,
 )
-from src.schemas.curation.config_common import ActivateResponse, ActiveConfigResponse, ActiveRef
+from src.schemas.curation.config_common import (
+    ActivateResponse,
+    ActiveConfigResponse,
+    ActiveRef,
+    ValidationReport,
+)
 from src.services.config_store import (
     ActiveConflictError,
     ConfigStoreUnavailableError,
@@ -236,7 +241,7 @@ async def get_prompt_pack_schema() -> PromptPackSchema:
 # =============================================================================
 
 
-@router.post('/prompt_packs/validate')
+@router.post('/prompt_packs/validate', response_model=ValidationReport)
 async def validate_prompt_pack_route(
     body: PromptPackValidateRequest, profile: str | None = None
 ) -> Any:

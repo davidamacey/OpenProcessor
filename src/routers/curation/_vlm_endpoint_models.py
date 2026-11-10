@@ -33,7 +33,7 @@ ExternalPolicyWire = Literal['ack', 'deny']
 CatalogStatusWire = Literal['tested', 'to_verify']
 
 
-class Choice(BaseModel):
+class VlmChoice(BaseModel):
     id: str | None
     label: str
 
@@ -80,7 +80,7 @@ class VlmEndpointSummary(BaseModel):
 class SecretRef(BaseModel):
     ref: str
     present: bool
-    choice: Choice
+    choice: VlmChoice
 
 
 class VlmEndpointLabels(BaseModel):
@@ -208,10 +208,10 @@ class VlmEndpointFieldSchema(BaseModel):
     default: Any
     min: float | None = None
     max: float | None = None
-    enum: list[Choice] | None = None
+    enum: list[VlmChoice] | None = None
     advanced: bool = False
     choices_from: VlmChoicesFrom | None = None
-    empty_choice: Choice | None = None
+    empty_choice: VlmChoice | None = None
     help: str = ''
 
 
@@ -230,7 +230,7 @@ class VlmEndpointSchema(BaseModel):
 
 class VlmCatalogEntry(BaseModel):
     id: str
-    choice: Choice
+    choice: VlmChoice
     hf_repo: str
     family: str
     license: str
@@ -300,7 +300,6 @@ __all__ = [
     'SOURCE_LABELS',
     'STATUS_LABELS',
     'ActiveRef',
-    'Choice',
     'SecretRef',
     'ValidationIssue',
     'ValidationReport',
@@ -309,6 +308,7 @@ __all__ = [
     'VlmCatalogEntry',
     'VlmCatalogLabels',
     'VlmCatalogResponse',
+    'VlmChoice',
     'VlmDeactivateRequest',
     'VlmEndpointBody',
     'VlmEndpointCloneRequest',
