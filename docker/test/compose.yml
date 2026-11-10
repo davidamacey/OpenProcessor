@@ -385,7 +385,7 @@ services:
     command: celery -A fake_trainer:app worker -Q gpu_train --pool=prefork --concurrency=1 --hostname gpu_train@%h
     depends_on: *worker-deps
     healthcheck:
-      test: ["CMD-SHELL", "celery -A fake_trainer:app inspect ping --timeout 10 -d \"celery@$$(hostname)\" > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "celery -A fake_trainer:app inspect ping --timeout 10 -d \"gpu_train@$$(hostname)\" > /dev/null || exit 1"]
       interval: 15s
       timeout: 15s
       start_period: 60s
