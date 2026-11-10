@@ -1,4 +1,4 @@
-"""Export resize/crop decodes through the oriented helper (research finding L-X1).
+"""Export resize/crop decodes through the oriented helper.
 
 A phone photo stores its pixels sideways and a tag; the boxes are drawn on the upright frame.
 An export that resizes or crops from the raw pixels lands the boxes beside the object.

@@ -33,7 +33,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from src.services.detection.geometry import letterbox_to_square, undo_letterbox
+from src.domain.image_geometry import undo_letterbox
+from src.services.detection.geometry import letterbox_to_square
 
 
 ARMS = ('ingest', 'detect', 'detect_scaleup')

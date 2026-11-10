@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -16,11 +17,12 @@ import pytest
 from PIL import Image
 
 from curation.ingest_fakes import FakePEEncoder, _jpeg_bytes, _make_service
+from src.domain.image_geometry import crop_rect
 from src.services.curation.ingest_index import crop_pil
-from src.services.detection.geometry import crop_rect
 
 
 _PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
+sys.path.insert(0, str(_PATH.parent))  # prep_geometry imports its sibling image_geometry
 _spec = importlib.util.spec_from_file_location('prep_geometry_259', _PATH)
 assert _spec is not None
 assert _spec.loader is not None

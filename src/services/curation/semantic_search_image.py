@@ -24,10 +24,10 @@ from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
 from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace
+from src.domain.image_geometry import crop_rect
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation.semantic_search import _filter_for
 from src.services.curation.semantic_search_run import QueryVector, resolve_search_spaces, run_search
-from src.services.detection.geometry import crop_rect
 from src.services.embedding_spaces.readers import item_write_fields
 from src.services.rejections import rejection
 from src.utils.cpu_pool import run_cpu

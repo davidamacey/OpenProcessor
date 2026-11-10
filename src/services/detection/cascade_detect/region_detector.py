@@ -10,9 +10,9 @@ from tritonclient.grpc import InferRequestedOutput
 
 from src.clients.model_adapters import FUSED_OUTPUT, is_fused_shape
 from src.clients.triton_pool_core import images_input
+from src.domain.image_geometry import undo_letterbox
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.cascade_detect.preprocess import _decode_jpeg, _letterbox
-from src.services.detection.geometry import undo_letterbox
 
 
 if TYPE_CHECKING:
