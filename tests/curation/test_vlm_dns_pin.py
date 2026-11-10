@@ -9,7 +9,7 @@ layer to open."""
 from __future__ import annotations
 
 import asyncio
-import time
+import re
 from typing import Any
 
 import httpcore
@@ -29,6 +29,7 @@ from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK
 GOOD = '10.0.0.9'
 EVIL = '10.0.0.66'  # also private/allowed by policy: only the pin can tell the two apart
 METADATA = '169.254.169.254'
+CALL_BUDGET_S = 15.0  # one selection-path test with DNS failing (about 3 s here); a retry loop hits the 30 s timeout
 
 
 class _Dns:
@@ -396,7 +397,6 @@ def test_the_selection_routes_answer_promptly_with_dns_failing(mode: str) -> Non
 
     here = Path(__file__).resolve().parent
     env = {**os.environ, 'NODNS': mode, 'PYTHONPATH': str(here)}
-    started = time.monotonic()
     done = subprocess.run(
         [
             sys.executable,
@@ -410,6 +410,8 @@ def test_the_selection_routes_answer_promptly_with_dns_failing(mode: str) -> Non
             '30',
             '-p',
             'no:cacheprovider',
+            '--durations=0',
+            '--durations-min=0',
             str(here / 'test_vlm_selection_paths.py'),
         ],
         env=env,
@@ -420,4 +422,8 @@ def test_the_selection_routes_answer_promptly_with_dns_failing(mode: str) -> Non
         cwd=here.parent.parent,
     )
     assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-1000:]
-    assert time.monotonic() - started < 120
+    # Each test's own run, not interpreter start-up and imports on a shared host: a retry loop
+    # against an unreachable address shows up as a slow call phase.
+    calls = [float(m.group(1)) for m in re.finditer(r'^([\d.]+)s call ', done.stdout, re.MULTILINE)]
+    assert calls, done.stdout[-3000:]
+    assert max(calls) < CALL_BUDGET_S, sorted(calls)[-5:]
