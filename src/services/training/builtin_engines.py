@@ -19,6 +19,7 @@ what the readers do with two rows of one name).
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,6 +36,8 @@ from src.schemas.models import EngineInputContract, EngineOutputContract, Normal
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 MODELS_DIR = Path(__file__).resolve().parents[3] / 'models'
 UNRECORDED = 'unrecorded'
@@ -271,10 +274,15 @@ def seed_builtin_engines(session: Session, models_dir: Path = MODELS_DIR) -> lis
     """Insert the missing builtin model and engine rows; return the Triton names inserted.
 
     Runs inside the caller's deployment transaction and never commits. Re-running inserts
-    nothing; a row is never rewritten, so a measured value survives a later seed.
+    nothing; a row is never rewritten, so a measured value survives a later seed. A model whose
+    config is not in the repository yet (a control-plane-only install, before ``models install``)
+    is left for a later run: ``db-migrate`` runs on every start.
     """
     inserted: list[str] = []
     for shipped in SHIPPED:
+        if not (models_dir / shipped.name / 'config.pbtxt').is_file():
+            logger.warning('builtin engine %s: no config.pbtxt in %s yet', shipped.name, models_dir)
+            continue
         facts = read_pbtxt(models_dir, shipped.name)
         model = session.execute(
             select(Model).where(

@@ -137,3 +137,23 @@ def test_the_catalogued_encoders_are_available_with_the_seeded_engines(pg) -> No
         wanted = EncoderInputSpec.model_validate(entry.input_spec).image
         assert wanted == EngineInputContract.model_validate(ready[entry.triton_image_model])  # type: ignore[index]
         assert availability(cast('Any', entry), ready).available is True, entry.model_key
+
+
+@pytest.mark.db
+def test_a_model_not_yet_in_the_repository_is_seeded_on_a_later_run(pg, tmp_path) -> None:
+    """A control-plane-only install has no config yet: migrate passes, the next run seeds it."""
+    sql(pg, "DELETE FROM model_engines WHERE build_stamp = 'shipped'")  # the module shares one db
+    sql(pg, "DELETE FROM models WHERE origin = 'builtin'")
+    repo = tmp_path / 'models'
+    for name in shipped_engines()[1:]:
+        (repo / name).mkdir(parents=True)
+        for f in ('config.pbtxt', 'labels.txt'):
+            if (MODELS / name / f).is_file():
+                (repo / name / f).write_text((MODELS / name / f).read_text())
+    with deployment_session(pg.engine('app')) as session:
+        assert sorted(builtin.seed_builtin_engines(session, repo)) == shipped_engines()[1:]
+    first = shipped_engines()[0]
+    (repo / first).mkdir()
+    (repo / first / 'config.pbtxt').write_text((MODELS / first / 'config.pbtxt').read_text())
+    with deployment_session(pg.engine('app')) as session:
+        assert builtin.seed_builtin_engines(session, repo) == [first]
