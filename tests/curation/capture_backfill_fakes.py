@@ -128,12 +128,16 @@ def bind_backfill(monkeypatch: pytest.MonkeyPatch, policy: str) -> None:
     async def location_policy() -> str:
         return policy
 
+    async def stored_policy(*, fresh: bool = False) -> tuple[str, int]:
+        return policy, 1
+
     async def no_wait() -> None:
         return None
 
     monkeypatch.setattr(job, 'bound_job_project', bound_job_project)
     monkeypatch.setattr(job, 'images_index', lambda: 'images')
     monkeypatch.setattr(job, 'get_location_policy', location_policy)
+    monkeypatch.setattr(job, 'read_location_policy', stored_policy)
     monkeypatch.setattr(job, 'settle', no_wait)
     monkeypatch.setattr('src.services.source_backfill.capture.images_index', lambda: 'images')
     monkeypatch.setattr('src.services.source_backfill.capture.items_index', lambda: 'items')

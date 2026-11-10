@@ -117,6 +117,24 @@ async def test_the_pass_is_bounded_and_the_first_pass_waits_for_every_cached_pol
 
 
 @pytest.mark.asyncio
+async def test_the_purge_reads_the_stored_policy_not_this_workers_cached_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An earlier job in the same worker cached `store`; the switch to `drop` was stored after."""
+    bind_backfill(monkeypatch, 'store')
+
+    async def read(*, fresh: bool = False) -> tuple[str, int]:
+        return ('drop', 2) if fresh else ('store', 1)
+
+    monkeypatch.setattr(job, 'read_location_policy', read)
+    images = {'a': _image(1.5, 2.5)}
+    client = FakeBackfillOpenSearch(images, {})
+    await job.run(BackfillCtx(client, ['location_purge']))
+    assert client.by_query_calls, 'the purge ran under the stale cached policy and did nothing'
+    assert 'location' not in images['a']['capture']
+
+
+@pytest.mark.asyncio
 async def test_an_unknown_step_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     bind_backfill(monkeypatch, 'drop')
     with pytest.raises(job.UnknownStepError):

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from src.config.curation_accessors import images_index
-from src.services.curation.location_policy_store import get_location_policy
+from src.services.curation.location_policy_store import get_location_policy, read_location_policy
 from src.services.jobs.bound import bound_job_project
 from src.services.source_backfill.capture import CaptureCounts, record_captures
 from src.services.source_backfill.content import ContentCounts, record_contents
@@ -150,17 +150,23 @@ async def _walk(
         await ctx.progress(state.scanned, None, shown, state.tally())
 
 
+async def _stored_policy() -> str:
+    """The policy as stored now. This worker's own cache can still hold the previous one (an
+    earlier job here read it within the TTL), and a purge run under it would change nothing."""
+    return (await read_location_policy(fresh=True))[0]
+
+
 async def _purge(
     ctx: JobContext, state: _State, client: AsyncOpenSearch
 ) -> JobResult | Yield | Paused | None:
     """The location-purge passes; ``None`` once a pass changes nothing."""
-    if not state.settled and await get_location_policy() != 'store':
+    if not state.settled and await _stored_policy() != 'store':
         await settle()
         state.settled = True
     while True:
         if (stop := await _interrupted(ctx, state)) is not None:
             return stop
-        changed = await purge_pass(client, await get_location_policy())
+        changed = await purge_pass(client, await _stored_policy())
         state.purged += changed
         state.walked = True
         await ctx.checkpoint(state.cursor())
