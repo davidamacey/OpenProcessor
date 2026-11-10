@@ -26,7 +26,7 @@ import pytest
 
 from tests.live import _compose
 from tests.live._jobs import start_burst
-from tests.live.conftest import VERIFY_DATA_DIR, create_project
+from tests.live.conftest import API_PREFIX, VERIFY_DATA_DIR, create_project
 
 
 if TYPE_CHECKING:
@@ -97,6 +97,14 @@ def test_a_burst_of_small_jobs_all_complete_once(api: Any, four_job_workers: Non
     slugs = [f'load{n}{run[:5]}' for n in range(PROJECTS)]
     for slug in slugs:
         create_project(api, slug, f'Load {slug}')
+        # A project calls no VLM until it activates one; the handler fails without an endpoint.
+        base = f'{API_PREFIX}/projects/{slug}/vlm/endpoints'
+        active = api.get(f'{base}/active').json()['active']
+        activated = api.post(
+            f'{base}/env/activate',
+            json={'force': True, 'acknowledge_external': True, 'expected_active': active},
+        )
+        assert activated.status_code == 200, activated.text
     max_connections = int(_compose.psql('SHOW max_connections'))
     with _ConnectionSampler() as sampler:
         began = time.monotonic()
