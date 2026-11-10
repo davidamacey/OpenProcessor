@@ -252,3 +252,10 @@ def test_a_writable_secrets_directory_never_starts_a_container(tmp_path: Path) -
     )
     assert done.returncode == 0, done.stderr
     assert 'docker ' not in log.read_text()
+
+
+def test_a_fresh_install_prints_nothing_on_stderr(tmp_path: Path) -> None:
+    """The conf is read to see whether it is stale; its absence on a first run is not an error."""
+    done, _ = _run(tmp_path, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stderr == ''

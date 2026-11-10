@@ -57,7 +57,7 @@ ensure_control_plane_secrets() {
     _cp_ensure_file "$sdir/valkey/password" || return 1
     pw="$(<"$sdir/valkey/password")"
     # The conf is derived from the password, so a lost or stale conf is rebuilt, never the password.
-    if [[ "$(<"$sdir/valkey/valkey.conf" 2>/dev/null)" != "requirepass ${pw}" ]]; then
+    if [[ ! -f "$sdir/valkey/valkey.conf" || "$(<"$sdir/valkey/valkey.conf")" != "requirepass ${pw}" ]]; then
         ( umask 077; printf 'requirepass %s\n' "$pw" > "$sdir/valkey/valkey.conf" ) || return 1
     fi
     chmod 600 "$sdir/valkey/valkey.conf"
