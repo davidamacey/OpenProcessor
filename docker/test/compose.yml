@@ -302,7 +302,10 @@ services:
   jobs-worker:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes: *api-volumes
-    environment: *process-env
+    environment:
+      <<: *process-env
+      # As in docker-compose.yml: Docker's SIGTERM becomes Celery's soft-shutdown path.
+      REMAP_SIGTERM: SIGQUIT
     command: celery -A src.tasks.app worker -Q jobs --concurrency=2 --hostname jobs@%h -E
     healthcheck:
       # The image's default HEALTHCHECK probes the API port; a worker probes its own pool.

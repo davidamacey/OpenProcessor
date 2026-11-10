@@ -95,18 +95,14 @@ asyncio.run(main())
 # The cancel the family routes call, for a job id (no generic cancel route exists).
 _CANCEL = """
 import asyncio, json, uuid
-from sqlalchemy import text
 from src.db.session import async_session_factory
 from src.services.jobs.service import cancel_job
 
 async def main():
     async with async_session_factory()() as session:
-        row = (await session.execute(
-            text('SELECT project_id FROM jobs WHERE id = :id'), {{'id': {job_id!r}}}
-        )).one()
-    async with async_session_factory()() as session:
         done = await cancel_job(
-            session, uuid.UUID({job_id!r}), row.project_id, requested_by='live-test'
+            session, uuid.UUID({job_id!r}),
+            uuid.UUID({project!r}) if {project!r} else None, requested_by='live-test'
         )
     print(json.dumps({{'status': done.job.status, 'changed': done.changed}}))
 
@@ -162,10 +158,17 @@ def start_noop_burst(count: int, run: str) -> float:
     return float(json.loads(proc.stdout.strip().splitlines()[-1])['seconds'])
 
 
+def _job_project(job_id: str) -> str:
+    return compose(
+        'exec', '-T', 'postgres', 'psql', '-U', 'op_super', '-d', 'openprocessor', '-At',
+        '-c', f"SELECT coalesce(project_id::text, '') FROM jobs WHERE id = '{job_id}'",
+    ).stdout.strip()  # fmt: skip
+
+
 def cancel_job_in_container(job_id: str) -> dict[str, Any]:
     """Cancel through the job service (what the family cancel routes call): ``status``, ``changed``."""
     proc = compose(
-        'exec', '-T', 'api', 'python', '-', stdin=_CANCEL.format(job_id=job_id),
+        'exec', '-T', 'api', 'python', '-', stdin=_CANCEL.format(job_id=job_id, project=_job_project(job_id)),
         check=False, timeout=90,
     )  # fmt: skip
     if proc.returncode != 0:
