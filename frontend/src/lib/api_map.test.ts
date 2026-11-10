@@ -38,6 +38,17 @@ describe('map wrappers', () => {
     expect(url.searchParams.get('bbox')).toBe('7,46,9,48');
   });
 
+  it('parses the geo+json the server answers /map/cells with as an object, not text', async () => {
+    const body = { type: 'FeatureCollection', features: [] };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/geo+json' },
+      }),
+    );
+    expect(await getMapCells({ zoom: 6, bbox: '7,46,9,48' }, {})).toEqual(body);
+  });
+
   it('asks for the images of one cell', async () => {
     fetchMock.mockResolvedValue(
       ok({ tile: '9/1/1', count: 0, image_ids: [], truncated: false }),

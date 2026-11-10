@@ -87,6 +87,22 @@ describe('StrategyBar — pinned-default-coverage chip', () => {
     expect(el.textContent).not.toContain('→ Atypicality (outlier-first)');
   });
 
+  it('keeps the full sort and fallback text reachable on the truncated summary button', () => {
+    withZeroCoverageUncertainty();
+    const el = render({
+      bar: createStrategyBar(),
+      appliedSort: 'atypicality',
+      pinnedSortId: 'uncertainty_entropy',
+      fallbackReason: 'no item has a cluster_score yet',
+    });
+    const label = el
+      .querySelector('button[title="Sort / filter strategy"]')!
+      .getAttribute('aria-label')!;
+    expect(label).toContain('Sort:');
+    expect(label).toContain('Atypicality (outlier-first)');
+    expect(label).toContain('no item has a cluster_score yet');
+  });
+
   it('shows no chip when the pinned default has real coverage', () => {
     strategiesStore.methods = {
       ...EMPTY_METHODS,
