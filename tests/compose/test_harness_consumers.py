@@ -32,3 +32,11 @@ def test_the_harness_has_a_consumer_for_every_queue_the_live_checks_use() -> Non
     services = yaml.safe_load(HARNESS.read_text(encoding='utf-8'))['services']
     found = consumers(services)
     assert [q for q in NEEDED if q not in found] == []
+
+
+def test_the_harness_beat_is_restarted_after_it_exits() -> None:
+    """Beat exits when it loses its database lock connection (a database restart), so that the
+    lock is released; the supervisor starts it again. Without the policy no reaper tick ever runs
+    after a database restart and a job whose lease expired stays `running`."""
+    services = yaml.safe_load(HARNESS.read_text(encoding='utf-8'))['services']
+    assert services['jobs-beat'].get('restart') == 'unless-stopped'

@@ -338,6 +338,9 @@ services:
     volumes: *api-volumes
     environment: *process-env
     command: celery -A src.tasks.app beat -s /tmp/celerybeat-schedule
+    # Beat exits when it loses its database lock connection (so the lock is released): a
+    # restart policy is the supervisor that starts it again, as in docker-compose.yml.
+    restart: unless-stopped
     healthcheck:
       # A fresh schedule file (as in docker-compose.yml); an empty glob fails.
       test: ["CMD", "python", "-c", "import glob,os,sys,time; f=glob.glob('/tmp/celerybeat-schedule*'); sys.exit(0 if f and time.time()-max(map(os.path.getmtime,f))<300 else 1)"]
