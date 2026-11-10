@@ -1,0 +1,52 @@
+# Opt-in overlay: N uvicorn workers, M api replicas, and a small nginx in front, for the
+# scale-out live checks (tests/live/test_one_vs_n.py, test_sse_across_replicas.py).
+#
+#   API_WORKERS=4 OP_API_REPLICAS=2 OP_JOBS_REPLICAS=2 VERIFY_COMPOSE_PROJECT=op-live-b \
+#   docker compose -p op-live-b -f docker/test/compose.yml -f docker/test/compose.scale.yml up -d --wait
+#
+# The api no longer publishes a port (replicas cannot share one); the proxy publishes
+# ${VERIFY_API_PORT} (balanced) plus one port per replica (14725 -> replica 1, 14726 -> replica 2).
+# Worker count follows the one knob, WEB_CONCURRENCY, which uvicorn reads for --workers
+# (https://www.uvicorn.org/deployment/), exactly as docker-compose.yml does.
+services:
+  api:
+    ports: !reset []
+    environment:
+      WEB_CONCURRENCY: ${API_WORKERS:-1}
+      # docker-compose.yml's api gets this from .env (env_file); the harness has no env_file. The
+      # pool share is total // (workers x replicas), so the process must know the replica count.
+      OP_API_REPLICAS: ${OP_API_REPLICAS:-1}
+    command:
+      - uvicorn
+      - src.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --log-level=info
+    deploy:
+      replicas: ${OP_API_REPLICAS:-1}
+
+  jobs-worker:
+    deploy:
+      replicas: ${OP_JOBS_REPLICAS:-1}
+
+  proxy:
+    image: nginx:1.31.8-alpine3.24@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+    environment:
+      VERIFY_COMPOSE_PROJECT: ${VERIFY_COMPOSE_PROJECT:?set VERIFY_COMPOSE_PROJECT to the -p name}
+    volumes:
+      - ./nginx/scale.conf.template:/etc/nginx/templates/scale.conf.template:ro
+      - ./nginx/proxy.inc:/etc/nginx/conf.d/proxy.inc:ro
+    ports:
+      - ${VERIFY_API_PORT:-14701}:8000
+      - ${VERIFY_REPLICA1_PORT:-14725}:8001
+      - ${VERIFY_REPLICA2_PORT:-14726}:8002
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/live >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - verify_net
