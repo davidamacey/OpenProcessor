@@ -17,7 +17,7 @@ from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 from test_assist_loop_panel import serve_loop, serve_plan_form, show_finished_loop, show_plan_form
 from test_cluster_discard import CLASSES, CLUSTERS, crop
-from test_cluster_facets import serve_cluster
+from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
@@ -155,7 +155,7 @@ PAGES = [
     ('cluster-detail', '/p/default/clusters/1', serve_clusters, '[data-testid="class-name"]'),
     (
         'cluster-detail-facets',
-        '/p/default/clusters/2',
+        f'/p/default/clusters/{FACET_UID}',
         serve_cluster_with_facets,
         '[data-testid="cluster-facets"]',
     ),
