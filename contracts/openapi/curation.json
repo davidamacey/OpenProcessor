@@ -56992,7 +56992,7 @@
             }
           },
           {
-            "description": "Box filter: substring search on the box text.",
+            "description": "Box filter: search on the box text.",
             "in": "query",
             "name": "text",
             "required": false,
@@ -57005,8 +57005,31 @@
                   "type": "null"
                 }
               ],
-              "description": "Box filter: substring search on the box text.",
+              "description": "Box filter: search on the box text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "How `text` matches: `exact`, `fuzzy` (one edit) or `fragment` compare the folded plate text (letters and digits only, confusables folded); omitted, `text` is a case-insensitive substring of the box text as read.",
+            "in": "query",
+            "name": "text_match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "exact",
+                    "fuzzy",
+                    "fragment"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How `text` matches: `exact`, `fuzzy` (one edit) or `fragment` compare the folded plate text (letters and digits only, confusables folded); omitted, `text` is a case-insensitive substring of the box text as read.",
+              "title": "Text Match"
             }
           },
           {
