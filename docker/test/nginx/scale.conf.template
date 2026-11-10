@@ -1,0 +1,25 @@
+# Rendered by the nginx image's entrypoint (envsubst over /etc/nginx/templates, which substitutes
+# only the variables defined in the environment): https://hub.docker.com/_/nginx ("Using environment
+# variables in nginx configuration").
+#   :8000  every api replica, balanced by Docker's DNS round robin (the "one URL" a client sees)
+#   :8001  replica 1 only        :8002  replica 2 only   (a test moves a client between them)
+# The names are re-resolved (Docker's embedded DNS, 127.0.0.11) so a restarted replica is found.
+resolver 127.0.0.11 valid=1s ipv6=off;
+
+server {
+    listen 8000;
+    set $upstream "http://api:8000";
+    include /etc/nginx/conf.d/proxy.inc;
+}
+
+server {
+    listen 8001;
+    set $upstream "http://${VERIFY_COMPOSE_PROJECT}-api-1:8000";
+    include /etc/nginx/conf.d/proxy.inc;
+}
+
+server {
+    listen 8002;
+    set $upstream "http://${VERIFY_COMPOSE_PROJECT}-api-2:8000";
+    include /etc/nginx/conf.d/proxy.inc;
+}
