@@ -1,16 +1,16 @@
 """The 1,000-job load check (plan 03_b2_overview step 24, owner decision D-83).
 
 ``VERIFY_LOAD_JOBS`` sets the job count (default 1000; use 50 for a smoke run of the same path).
-It queues that many ``noop`` jobs against 4 ``jobs-worker`` processes (2 replicas, concurrency 2)
+It queues that many ``vlm_label_batch`` jobs (empty crop list) over 10 projects against 4 ``jobs-worker`` processes (2 replicas, concurrency 2)
 and requires: every job ends ``completed``; none is lost or run twice (one ``job_attempts`` row
 per job); no deadlock in the worker logs; the peak of ``pg_stat_activity`` stays inside the
 connection budget (``max_connections - 13``, 02b section 8); the run ends inside the bound of
 1.2 s per job (20 minutes for 1,000). The timings are printed and written to
 ``docker/test/verify-data/job_load_<N>.json`` (git-ignored) for the report.
 
-The infra ``noop`` is deployment-wide, so the plan's "spread over 10 projects" fairness clause
-(each project's first job inside 60 s) has no project to measure here; the claim latency is
-recorded for the whole set instead (``claim_p50_s``, ``claim_max_s``).
+Fairness (plan step 24): every project's first job must start within 60 s. The kind is the
+cheapest project-scoped one with no exclusive group; the infra ``noop`` is deployment-wide.
+Heartbeat lag is recorded when a job beat before it ended (-1 otherwise).
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from tests.live import _compose
-from tests.live._jobs import start_noop_burst
-from tests.live.conftest import VERIFY_DATA_DIR
+from tests.live._jobs import start_burst
+from tests.live.conftest import API_PREFIX, VERIFY_DATA_DIR, create_project
 
 
 if TYPE_CHECKING:
@@ -36,6 +36,11 @@ pytestmark = pytest.mark.live
 
 COUNT = int(os.environ.get('VERIFY_LOAD_JOBS', '1000'))
 REPLICAS = 2
+PROJECTS = 10
+FIRST_START_WITHIN_S = 60.0
+# The cheapest project-scoped kind: queue `jobs`, no exclusive group (so a project can hold many),
+# and an empty crop list makes its real handler return at once.
+KIND = 'vlm_label_batch'
 BOUND_S_PER_JOB = 1.2
 ACTIVE = ('queued', 'running', 'cancelling')
 CONNECTION_RESERVE = 13
@@ -87,12 +92,23 @@ def _by_status(run: str) -> dict[str, int]:
     return {k: int(v) for k, v in (line.split('|') for line in rows.splitlines() if line)}
 
 
-def test_a_burst_of_small_jobs_all_complete_once(four_job_workers: None) -> None:
+def test_a_burst_of_small_jobs_all_complete_once(api: Any, four_job_workers: None) -> None:
     run = uuid.uuid4().hex
+    slugs = [f'load{n}{run[:5]}' for n in range(PROJECTS)]
+    for slug in slugs:
+        create_project(api, slug, f'Load {slug}')
+        # A project calls no VLM until it activates one; the handler fails without an endpoint.
+        base = f'{API_PREFIX}/projects/{slug}/vlm/endpoints'
+        active = api.get(f'{base}/active').json()['active']
+        activated = api.post(
+            f'{base}/env/activate',
+            json={'force': True, 'acknowledge_external': True, 'expected_active': active},
+        )
+        assert activated.status_code == 200, activated.text
     max_connections = int(_compose.psql('SHOW max_connections'))
     with _ConnectionSampler() as sampler:
         began = time.monotonic()
-        enqueue_s = start_noop_burst(COUNT, run)
+        enqueue_s = start_burst(COUNT, run, slugs, KIND)
         bound_s = max(120.0, COUNT * BOUND_S_PER_JOB)
         status: dict[str, int] = {}
         while time.monotonic() - began < bound_s:
@@ -116,6 +132,21 @@ def test_a_burst_of_small_jobs_all_complete_once(four_job_workers: None) -> None
         f"JOIN jobs j ON j.id = a.job_id WHERE j.params->>'load_run' = '{run}'"
     )
     p50, worst = (float(x) for x in claim.split('|'))
+    first = _compose.psql(
+        'SELECT extract(epoch FROM max(f)) FROM (SELECT min(a.started_at - j.created_at) AS f '
+        'FROM job_attempts a JOIN jobs j ON j.id = a.job_id '
+        f"WHERE j.params->>'load_run' = '{run}' GROUP BY j.project_id) t"
+    )
+    worst_first = float(first)
+    assert worst_first <= FIRST_START_WITHIN_S, (
+        f'a project waited {worst_first:.1f} s for its first job'
+    )
+    beat = _compose.psql(
+        'SELECT coalesce(extract(epoch FROM percentile_cont(0.5) WITHIN GROUP '
+        '(ORDER BY j.heartbeat_at - a.started_at)), -1) FROM job_attempts a '
+        f"JOIN jobs j ON j.id = a.job_id WHERE j.params->>'load_run' = '{run}' "
+        'AND j.heartbeat_at IS NOT NULL'
+    )
     logs = _compose.compose('logs', '--no-log-prefix', 'jobs-worker', timeout=300).stdout
     bad = [ln for ln in logs.splitlines() if 'deadlock' in ln.lower()]
     assert not bad, bad[:5]
@@ -130,6 +161,10 @@ def test_a_burst_of_small_jobs_all_complete_once(four_job_workers: None) -> None
         'jobs_per_s': round(COUNT / total_s, 2),
         'claim_p50_s': round(p50, 2),
         'claim_max_s': round(worst, 2),
+        'projects': PROJECTS,
+        'kind': KIND,
+        'worst_first_start_s': round(worst_first, 2),
+        'heartbeat_after_start_p50_s': round(float(beat), 2),  # -1: no job beat before it ended
         'peak_connections': sampler.peak,
         'max_connections': max_connections,
     }
