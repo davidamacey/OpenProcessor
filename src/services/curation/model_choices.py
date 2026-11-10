@@ -16,7 +16,7 @@ from src.config import get_curation_config
 from src.config.env import env_optional_str, env_str
 from src.config.faces import faces_enabled
 from src.config.settings import TritonModelConfig
-from src.services.curation.ingest_detector import project_ingest_profiles
+from src.services.curation.ingest_detector import IngestProfiles, project_ingest_profiles
 
 
 def _choice(value: str) -> dict[str, str]:
@@ -46,6 +46,33 @@ def _row(
         'settable_via': settable_via,
         'reason': reason,
     }
+
+
+def _ingest_row(
+    role: str, label: str, current: str | None, ingest: IngestProfiles, env_name: str
+) -> dict[str, Any]:
+    """An ingest detector row. A project's active ingest profile overrides the
+    environment, so then the row is project-scoped and changed by activating a
+    profile; otherwise it is deployment configuration."""
+    if ingest.source == 'stored' and ingest.ref is not None:
+        return _row(
+            role,
+            label,
+            'config_store',
+            current,
+            settable=True,
+            settable_via='POST /ingest_profiles/{name}/activate',
+            reason=f'Set by the active ingest profile {ingest.ref[0]!r}; the environment is overridden.',
+        )
+    return _row(
+        role,
+        label,
+        'deployment',
+        current,
+        settable=False,
+        settable_via=env_name,
+        reason='Ingest detectors are deployment configuration; changing one needs a restart.',
+    )
 
 
 def _vlm_rows() -> list[dict[str, Any]]:
@@ -129,23 +156,19 @@ def build_model_choices(
             settable_via='?model_name= on /detect and /detect/batch',
             choices=detector_ids,
         ),
-        _row(
+        _ingest_row(
             'item_detector',
             'Item detector (ingest)',
-            'deployment',
             primary.detector_model or primary.name,
-            settable=False,
-            settable_via='OP_INGEST_PRIMARY_DETECTOR_MODEL (restart)',
-            reason='Ingest detectors are deployment configuration; changing one needs a restart.',
+            ingest,
+            'OP_INGEST_PRIMARY_DETECTOR_MODEL (restart)',
         ),
-        _row(
+        _ingest_row(
             'secondary_classifier',
             'Secondary classifier (ingest)',
-            'deployment',
             (secondary.detector_model or secondary.name) if secondary is not None else None,
-            settable=False,
-            settable_via='OP_INGEST_SECONDARY_DETECTOR_MODEL (restart)',
-            reason='Ingest detectors are deployment configuration; changing one needs a restart.',
+            ingest,
+            'OP_INGEST_SECONDARY_DETECTOR_MODEL (restart)',
         ),
         _row(
             'region_detector',
