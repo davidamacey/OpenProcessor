@@ -75,7 +75,6 @@ UPGRADE_VERSION=""
 WORKDIR=""
 LOG_REPEAT_MAX=25
 POLL_S="${ACC_POLL_S:-5}"
-CONTROL_PLANE_ONLY=0
 TRITON_METRICS_URL="${OP_TRITON_METRICS_URL:-}"
 DECODE_FALLBACK_MAX_PCT=0.5
 LABEL_OPS_CROPS=10
@@ -117,7 +116,6 @@ Options:
   --vlm-switch-id ID     enable vlm_switch: `./openprocessor vlm use ID --yes`
   --vlm-switch-force     add --force to vlm use
   --upgrade-version vX   enable installer_upgrade (upgrade to vX, then --rollback)
-  --control-plane-only   the stack runs without Triton: /health may omit services.models
   --triton-metrics-url U Triton metrics endpoint (default $OP_TRITON_METRICS_URL, e.g. http://127.0.0.1:4602/metrics);
                          enables the op_gpu_prep_stage_* check when the GPU decode route is active
   --decode-fallback-max P  max percent of ingest decodes that fall back from the GPU route to the CPU (default 0.5)
@@ -153,7 +151,6 @@ while (($#)); do
         --vlm-switch-id) VLM_SWITCH_ID="${2:?}"; shift 2 ;;
         --vlm-switch-force) VLM_SWITCH_FORCE=1; shift ;;
         --upgrade-version) UPGRADE_VERSION="${2:?}"; shift 2 ;;
-        --control-plane-only) CONTROL_PLANE_ONLY=1; shift ;;
         --triton-metrics-url) TRITON_METRICS_URL="${2:?}"; shift 2 ;;
         --decode-fallback-max) DECODE_FALLBACK_MAX_PCT="${2:?}"; shift 2 ;;
         --label-ops-crops) LABEL_OPS_CROPS="${2:?}"; shift 2 ;;
