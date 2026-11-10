@@ -125,7 +125,7 @@ RUN pip install --user --no-cache-dir --no-warn-script-location \
 # The CLIP text tokenizer, fetched here once so the API never reaches huggingface.co at run time
 # (src/utils/cache.py loads it with local_files_only). huggingface_hub: snapshot_download with
 # allow_patterns; transformers docs, "Offline mode".
-RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('openai/clip-vit-base-patch32', local_dir='/build/clip-tokenizer', allow_patterns=['vocab.json', 'merges.txt', 'tokenizer_config.json', 'special_tokens_map.json'])" \
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('openai/clip-vit-base-patch32', revision='3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268', local_dir='/build/clip-tokenizer', allow_patterns=['vocab.json', 'merges.txt', 'tokenizer_config.json', 'special_tokens_map.json'])" \
     && rm -rf /build/clip-tokenizer/.cache
 
 # The exact runtime versions, as pip constraints for the extra dependency sets below. The
