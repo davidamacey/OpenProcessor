@@ -30,8 +30,7 @@ def test_response_schema_names_the_model(method: str, path: str, model: str) -> 
     status = next(s for s in operation['responses'] if s.startswith('2'))
     schema = operation['responses'][status]['content']['application/json']['schema']
     ref = schema['$ref'].rsplit('/', 1)[1]
-    # pydantic prefixes the module path when two models share a name
-    assert ref == model or ref.endswith(f'__{model}')
+    assert ref == model
     component = doc['components']['schemas'][ref]
     assert component.get('properties')
 
@@ -85,3 +84,10 @@ def test_models_status_rows_keep_exactly_their_keys() -> None:
         return {'models': rows}
 
     assert TestClient(app).get('/s').json() == {'models': rows}
+
+
+def test_registry_class_entry_has_one_unprefixed_name() -> None:
+    # Two models sharing a class name make FastAPI emit module-path names, which leak into TS types.
+    names = json.loads(CONTRACT.read_text())['components']['schemas']
+    assert 'RegistryClassEntry' in names
+    assert not [n for n in names if n.endswith('__RegistryClassEntry')]

@@ -7380,7 +7380,7 @@
           },
           "registry_classes": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__RegistryClassEntry"
+              "$ref": "#/components/schemas/VocabularyRegistryClass"
             },
             "title": "Registry Classes",
             "type": "array"
@@ -28605,6 +28605,66 @@
         "title": "RegionVocabularyResponse",
         "type": "object"
       },
+      "RegistryClassEntry": {
+        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
+        "type": "object"
+      },
       "RejectionReasonEntry": {
         "description": "One pipeline-written ``region_rejection_reason`` value.",
         "properties": {
@@ -37992,6 +38052,28 @@
         "title": "VocabularyOption",
         "type": "object"
       },
+      "VocabularyRegistryClass": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "choice"
+        ],
+        "title": "VocabularyRegistryClass",
+        "type": "object"
+      },
       "WatchTriggerWire": {
         "additionalProperties": false,
         "properties": {
@@ -38178,66 +38260,6 @@
           "type"
         ],
         "title": "_PublishEvent",
-        "type": "object"
-      },
-      "src__clients__curation_opensearch__RegistryClassEntry": {
-        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
-        "properties": {
-          "added_at": {
-            "title": "Added At",
-            "type": "string"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          },
-          "deprecated": {
-            "default": false,
-            "title": "Deprecated",
-            "type": "boolean"
-          },
-          "group": {
-            "default": "unknown",
-            "title": "Group",
-            "type": "string"
-          },
-          "hotkey_letter": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hotkey Letter"
-          },
-          "merged_into": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged Into"
-          },
-          "notes": {
-            "default": "",
-            "title": "Notes",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       },
       "src__routers__curation___common_models__BatchIngestResponse": {
@@ -38483,28 +38505,6 @@
           "label"
         ],
         "title": "Choice",
-        "type": "object"
-      },
-      "src__routers__curation__config_vocabulary__RegistryClassEntry": {
-        "properties": {
-          "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name",
-          "choice"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       }
     }
@@ -41927,7 +41927,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -42064,7 +42064,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -42116,7 +42116,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
