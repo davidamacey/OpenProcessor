@@ -27752,7 +27752,8 @@
               "string_list",
               "int_list",
               "float_pair",
-              "rgb"
+              "rgb",
+              "string_map"
             ],
             "title": "Type",
             "type": "string"

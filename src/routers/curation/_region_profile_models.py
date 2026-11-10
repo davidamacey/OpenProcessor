@@ -15,7 +15,16 @@ from src.utils.class_names import confine_labels_path
 ProfileSourceWire = Literal['env', 'registered', 'stored', 'template']
 
 FieldType = Literal[
-    'string', 'int', 'float', 'bool', 'enum', 'string_list', 'int_list', 'float_pair', 'rgb'
+    'string',
+    'int',
+    'float',
+    'bool',
+    'enum',
+    'string_list',
+    'int_list',
+    'float_pair',
+    'rgb',
+    'string_map',
 ]
 ChoicesFrom = Literal[
     'detectors',

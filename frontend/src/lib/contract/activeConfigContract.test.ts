@@ -61,6 +61,7 @@ const FIELD_TYPES = [
   'int_list',
   'float_pair',
   'rgb',
+  'string_map',
 ] as const satisfies readonly ProfileFieldType[];
 const CHOICES_FROM = [
   'detectors',
