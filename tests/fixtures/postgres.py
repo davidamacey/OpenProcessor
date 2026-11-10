@@ -16,10 +16,8 @@ from __future__ import annotations
 import itertools
 import os
 import re
-import tempfile
 import uuid
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import psycopg
@@ -35,6 +33,7 @@ from src.config.database import DatabaseSettings
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
 
     from sqlalchemy.engine import Engine
     from sqlalchemy.ext.asyncio import AsyncEngine
@@ -247,24 +246,24 @@ def _settings_for(server: PgServer, dbname: str, secrets: Path) -> DatabaseSetti
 
 
 @pytest.fixture(scope='session')
-def _pg_template(pg_server: PgServer) -> Iterator[tuple[PgServer, str, Path]]:
+def _pg_template(
+    pg_server: PgServer, tmp_path_factory: pytest.TempPathFactory
+) -> Iterator[tuple[PgServer, str, Path]]:
     worker = os.environ.get('PYTEST_XDIST_WORKER', 'main')
     template = f'op_template_{_RUN_ID}_{worker}'
-    with tempfile.TemporaryDirectory(prefix='op-pg-secrets-') as raw:
-        secrets = Path(raw)
-        _run_as_super(
-            pg_server,
-            sql.SQL('DROP DATABASE IF EXISTS {} WITH (FORCE)').format(sql.Identifier(template)),
-        )
-        _run_as_super(pg_server, sql.SQL('CREATE DATABASE {}').format(sql.Identifier(template)))
-        migrate.upgrade(
-            _settings_for(pg_server, template, secrets), super_user=pg_server.super_user
-        )
-        yield pg_server, template, secrets
-        _run_as_super(
-            pg_server,
-            sql.SQL('DROP DATABASE IF EXISTS {} WITH (FORCE)').format(sql.Identifier(template)),
-        )
+    # Under pytest's base temp, which pytest prunes, so a killed worker leaves no password files behind.
+    secrets = tmp_path_factory.mktemp('pg-secrets')
+    _run_as_super(
+        pg_server,
+        sql.SQL('DROP DATABASE IF EXISTS {} WITH (FORCE)').format(sql.Identifier(template)),
+    )
+    _run_as_super(pg_server, sql.SQL('CREATE DATABASE {}').format(sql.Identifier(template)))
+    migrate.upgrade(_settings_for(pg_server, template, secrets), super_user=pg_server.super_user)
+    yield pg_server, template, secrets
+    _run_as_super(
+        pg_server,
+        sql.SQL('DROP DATABASE IF EXISTS {} WITH (FORCE)').format(sql.Identifier(template)),
+    )
 
 
 _counter = itertools.count()
