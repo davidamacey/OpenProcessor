@@ -29,7 +29,7 @@ from src.services.curation.reprocess_vocabulary import (
 )
 
 
-class Choice(BaseModel):
+class VocabularyChoice(BaseModel):
     id: str
     label: str
 
@@ -51,7 +51,7 @@ class DetectorEntry(BaseModel):
     model_config = {'extra': 'allow'}
 
     name: str
-    choice: Choice
+    choice: VocabularyChoice
     source: str
     state: str | None = None
     ready: bool = False
@@ -62,7 +62,7 @@ class DetectorEntry(BaseModel):
 
 class SegmenterEntry(BaseModel):
     name: str
-    choice: Choice
+    choice: VocabularyChoice
     endpoint: str
     status: str
     masks: bool = True
@@ -103,7 +103,7 @@ class ModelChoice(BaseModel):
     scope: Literal['per_request', 'per_run', 'region_profile', 'config_store', 'deployment']
     current: str | None
     dims: int | None = None
-    choices: list[Choice]
+    choices: list[VocabularyChoice]
     settable: bool
     settable_via: str | None = None
     reason: str | None = None
@@ -111,7 +111,7 @@ class ModelChoice(BaseModel):
 
 class OcrModelEntry(BaseModel):
     name: str
-    choice: Choice
+    choice: VocabularyChoice
     source: str
     state: str | None = None
     ready: bool = False
@@ -127,17 +127,17 @@ class OcrBlock(BaseModel):
 
 class TextReaderModeEntry(BaseModel):
     id: str
-    choice: Choice
+    choice: VocabularyChoice
     label: str
     reads_text: bool
     needs_vlm: bool
     needs_ocr: bool
 
 
-class RegistryClassEntry(BaseModel):
+class VocabularyRegistryClass(BaseModel):
     class_id: int
     class_name: str
-    choice: Choice
+    choice: VocabularyChoice
 
 
 class PromptPackCallEntry(BaseModel):
@@ -171,7 +171,7 @@ class ConfigVocabularyResponse(BaseModel):
     ocr: OcrBlock
     model_choices: list[ModelChoice] = Field(default_factory=list)
     text_reader_modes: list[TextReaderModeEntry]
-    registry_classes: list[RegistryClassEntry]
+    registry_classes: list[VocabularyRegistryClass]
     prompt_pack_calls: list[PromptPackCallEntry]
     labels: VocabularyLabels = Field(default_factory=VocabularyLabels)
     reprocess: ReprocessVocabulary
@@ -215,7 +215,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
     for name, state in state_by_name.items():
         raw[name] = {
             'name': name,
-            'choice': Choice(id=name, label=name),
+            'choice': VocabularyChoice(id=name, label=name),
             'source': 'triton',
             'state': state.get('state'),
             'ready': state.get('state') == 'READY',
@@ -226,7 +226,7 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
         state = state_by_name.get(name, {})
         raw[name] = {
             'name': name,
-            'choice': Choice(id=name, label=f'{name} (promoted)'),
+            'choice': VocabularyChoice(id=name, label=f'{name} (promoted)'),
             'source': 'promoted',
             'state': state.get('state'),
             'ready': state.get('state') == 'READY',
@@ -242,7 +242,9 @@ async def _build_detectors(*, include_other_projects: bool) -> list[DetectorEntr
             state = state_by_name.get(name, {})
             raw[name] = {
                 'name': name,
-                'choice': Choice(id=name, label=f'{name} (shared by {shared.get("project")})'),
+                'choice': VocabularyChoice(
+                    id=name, label=f'{name} (shared by {shared.get("project")})'
+                ),
                 'source': 'promoted',
                 'state': state.get('state'),
                 'ready': state.get('state') == 'READY',
@@ -272,7 +274,7 @@ async def _build_segmenter() -> list[SegmenterEntry]:
     return [
         SegmenterEntry(
             name=built['name'],
-            choice=Choice(id=built['name'], label=built['name']),
+            choice=VocabularyChoice(id=built['name'], label=built['name']),
             endpoint=built['endpoint'],
             status=built['status'],
             # No fixed server-side candidate cap exists in this codebase
@@ -346,7 +348,7 @@ async def _build_ocr() -> OcrBlock:
         state = state_by_name.get(name, {})
         return OcrModelEntry(
             name=name,
-            choice=Choice(id=name, label=name),
+            choice=VocabularyChoice(id=name, label=name),
             source='triton',
             state=state.get('state'),
             ready=state.get('state') == 'READY',
@@ -369,7 +371,7 @@ def _build_text_reader_modes() -> list[TextReaderModeEntry]:
     return [
         TextReaderModeEntry(
             id=mode,
-            choice=Choice(id=mode, label=_TEXT_READER_LABELS.get(mode, mode)),
+            choice=VocabularyChoice(id=mode, label=_TEXT_READER_LABELS.get(mode, mode)),
             label=_TEXT_READER_LABELS.get(mode, mode),
             reads_text=mode != 'none',
             needs_vlm=mode in _TEXT_READER_NEEDS_VLM,
@@ -379,13 +381,13 @@ def _build_text_reader_modes() -> list[TextReaderModeEntry]:
     ]
 
 
-async def _build_registry_classes() -> list[RegistryClassEntry]:
+async def _build_registry_classes() -> list[VocabularyRegistryClass]:
     reg = await get_class_registry().snapshot()
     return [
-        RegistryClassEntry(
+        VocabularyRegistryClass(
             class_id=c.class_id,
             class_name=c.class_name,
-            choice=Choice(id=c.class_name, label=c.class_name),
+            choice=VocabularyChoice(id=c.class_name, label=c.class_name),
         )
         for c in reg.classes
         if not c.deprecated

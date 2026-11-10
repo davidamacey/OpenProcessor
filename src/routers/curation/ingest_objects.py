@@ -26,7 +26,7 @@ from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
-    BatchIngestResponse as _BatchIngestResponse,
+    CurationBatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,
 )
 from src.routers.curation._ingest_objects_models import (

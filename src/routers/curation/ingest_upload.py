@@ -17,7 +17,7 @@ from fastapi import File, Form, HTTPException, UploadFile
 from src.core.disk_space import DISK_GUARD
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._common_models import (
-    BatchIngestResponse as _BatchIngestResponse,
+    CurationBatchIngestResponse as _BatchIngestResponse,
     IngestImageResponse,
 )
 from src.routers.curation.ingest import _batch_response

@@ -26,7 +26,11 @@ from fastapi import Depends, HTTPException, Query
 
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, logger, router
-from src.routers.curation._export_models import ExportSingleClassRequest
+from src.routers.curation._export_models import (
+    ExportSingleClassRequest,
+    ExportSingleClassResponse,
+    ExportSingleClassStatus,
+)
 from src.routers.curation.near_dup_gate import require_near_dup_fresh
 from src.services.curation.export_models import MANIFEST_FILENAME, SingleClassExportProfile
 from src.services.curation.export_readiness import NothingToExportError
@@ -53,7 +57,11 @@ def _resolve_current_dir(profile_name: str) -> Path:
     return resolve_current_single_class_dir(SingleClassExportProfile(name=profile_name))
 
 
-@router.post('/export/single_class', dependencies=[Depends(require_near_dup_fresh)])
+@router.post(
+    '/export/single_class',
+    response_model=ExportSingleClassResponse,
+    dependencies=[Depends(require_near_dup_fresh)],
+)
 async def export_single_class(
     payload: ExportSingleClassRequest,
     opensearch: OpenSearchDep,
@@ -119,7 +127,11 @@ async def export_single_class(
     }
 
 
-@router.get('/export/single_class/status')
+@router.get(
+    '/export/single_class/status',
+    response_model=ExportSingleClassStatus,
+    response_model_exclude_unset=True,
+)
 async def export_single_class_status(
     profile_name: str = Query(
         'single_class',

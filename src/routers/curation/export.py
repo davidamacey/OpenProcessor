@@ -49,7 +49,35 @@ class ExportSkippedItems(BaseModel):
     )
 
 
-@router.post('/export/yolo', dependencies=[Depends(require_near_dup_fresh)])
+class ExportYoloResponse(BaseModel):
+    """``POST /export/yolo``: the finished export's counts and integrity envelope."""
+
+    status: Literal['success']
+    export_dir: str
+    version_tag: str
+    manifest_path: str
+    dataset_sha: str
+    image_count: int
+    object_count: int
+    split_counts: ExportSplitCounts
+    class_count: int
+    classes_with_objects: int
+    split_object_counts: ExportSplitCounts
+    require_fully_labeled_images: bool
+    unlabeled_items_on_exported_images: int
+    images_with_unlabeled_items: int
+    images_dropped_not_fully_labeled: int
+    skipped_items: ExportSkippedItems
+    collapse_near_duplicates: bool
+    started_at: str | None
+    finished_at: str | None
+
+
+@router.post(
+    '/export/yolo',
+    response_model=ExportYoloResponse,
+    dependencies=[Depends(require_near_dup_fresh)],
+)
 async def export_yolo(
     payload: ExportYoloRequest,
     opensearch: OpenSearchDep,
@@ -216,7 +244,29 @@ def _scan_export_datasets() -> list[dict[str, Any]]:
     return rows
 
 
-@router.get('/export/datasets')
+class ExportDatasetRow(BaseModel):
+    """One materialized dataset version; manifest-sourced fields are ``null`` when unrecorded."""
+
+    kind: str
+    profile_name: str | None
+    export_dir: str
+    version_tag: str
+    image_count: int | None
+    object_count: int | None
+    split_counts: dict[str, Any] | None
+    dataset_sha: str | None
+    exported_at: str | None
+    class_count: int | None
+    classes_with_objects: int | None
+    is_current: bool
+
+
+class ExportDatasetList(BaseModel):
+    datasets: list[ExportDatasetRow]
+    count: int
+
+
+@router.get('/export/datasets', response_model=ExportDatasetList)
 async def list_export_datasets(
     kind: Annotated[
         str | None,

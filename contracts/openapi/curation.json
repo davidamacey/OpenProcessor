@@ -377,6 +377,58 @@
         "title": "ActiveRef",
         "type": "object"
       },
+      "ActiveRegionProfileSummary": {
+        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/RegionProfileLimits",
+            "description": "Served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reads_text": {
+            "description": "False for a text-free profile: no region text is read, stored or editable.",
+            "title": "Reads Text",
+            "type": "boolean"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "text_hint_enabled": {
+            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
+            "title": "Text Hint Enabled",
+            "type": "boolean"
+          },
+          "text_reader": {
+            "description": "The profile's text reader; 'none' for a text-free profile.",
+            "title": "Text Reader",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "display_name",
+          "display_name_singular",
+          "region_class_name",
+          "text_reader",
+          "reads_text",
+          "text_hint_enabled",
+          "limits"
+        ],
+        "title": "ActiveRegionProfileSummary",
+        "type": "object"
+      },
       "ApiErrorResponse": {
         "description": "The body of every error :func:`api_error` raises.",
         "properties": {
@@ -2293,6 +2345,138 @@
           "queue_max_age_seconds"
         ],
         "title": "AutoLabelJobState",
+        "type": "object"
+      },
+      "AutoLabelRunSummary": {
+        "additionalProperties": true,
+        "description": "``POST /pipeline/auto_label``: the synchronous run's per-stage counts.\n\nKeys after ``baseline`` appear only when the run got that far (``after`` / ``delta`` / ``final``\nafter the stages, ``stages_error`` when the fetch failed); served with\n``response_model_exclude_unset`` semantics through ``responses=``.",
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "baseline": {
+            "additionalProperties": true,
+            "title": "Baseline",
+            "type": "object"
+          },
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Id"
+          },
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "final": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final"
+          },
+          "prompt_pack": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack"
+          },
+          "prompt_pack_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Pack Revision"
+          },
+          "stages": {
+            "additionalProperties": true,
+            "title": "Stages",
+            "type": "object"
+          },
+          "stages_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stages Error"
+          },
+          "unvalidated_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unvalidated Remaining"
+          }
+        },
+        "required": [
+          "stages",
+          "class_id",
+          "cluster_uid",
+          "prompt_pack",
+          "prompt_pack_revision",
+          "baseline"
+        ],
+        "title": "AutoLabelRunSummary",
         "type": "object"
       },
       "BakeoffComparison": {
@@ -4453,6 +4637,41 @@
         "title": "ClassCreateRequest",
         "type": "object"
       },
+      "ClassCreated": {
+        "description": "``POST /classes``: the class that was added.",
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "group"
+        ],
+        "title": "ClassCreated",
+        "type": "object"
+      },
       "ClassEntry": {
         "properties": {
           "added_at": {
@@ -4718,6 +4937,50 @@
         "title": "ClassMappingEntry",
         "type": "object"
       },
+      "ClassMergeDryRun": {
+        "description": "``POST /classes/merge?dry_run=true``: what the merge would touch.",
+        "properties": {
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "holdout_blocking": {
+            "title": "Holdout Blocking",
+            "type": "integer"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "integer"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "integer"
+          },
+          "validations_carried_over": {
+            "title": "Validations Carried Over",
+            "type": "integer"
+          },
+          "would_relabel": {
+            "title": "Would Relabel",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "source_id",
+          "target_id",
+          "would_relabel",
+          "validations_carried_over",
+          "holdout_blocking",
+          "blocked"
+        ],
+        "title": "ClassMergeDryRun",
+        "type": "object"
+      },
       "ClassMergeRequest": {
         "properties": {
           "source_id": {
@@ -4734,6 +4997,175 @@
           "target_id"
         ],
         "title": "ClassMergeRequest",
+        "type": "object"
+      },
+      "ClassSourceEntry": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "short_label": {
+            "title": "Short Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "role",
+          "short_label"
+        ],
+        "title": "ClassSourceEntry",
+        "type": "object"
+      },
+      "ClassSourceList": {
+        "properties": {
+          "class_sources": {
+            "items": {
+              "$ref": "#/components/schemas/ClassSourceEntry"
+            },
+            "title": "Class Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "class_sources"
+        ],
+        "title": "ClassSourceList",
+        "type": "object"
+      },
+      "ClassStatsResponse": {
+        "additionalProperties": true,
+        "description": "``GET /stats/classes``: the registry-joined ``classes`` and ``thresholds`` beside the\nraw OpenSearch ``aggregations`` (``by_class`` and the like), which are carried as extras\nso none is dropped.",
+        "properties": {
+          "classes": {
+            "items": {
+              "$ref": "#/components/schemas/ClassStatsRow"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ClassStatsThresholds"
+          }
+        },
+        "required": [
+          "classes",
+          "thresholds"
+        ],
+        "title": "ClassStatsResponse",
+        "type": "object"
+      },
+      "ClassStatsRow": {
+        "properties": {
+          "adequacy": {
+            "enum": [
+              "block",
+              "warn",
+              "ok"
+            ],
+            "title": "Adequacy",
+            "type": "string"
+          },
+          "aug_gap": {
+            "title": "Aug Gap",
+            "type": "integer"
+          },
+          "aug_target": {
+            "title": "Aug Target",
+            "type": "integer"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "trainable": {
+            "description": "Validated minus holdout minus human-excluded crops.",
+            "title": "Trainable",
+            "type": "integer"
+          },
+          "trainable_gap": {
+            "description": "Shortfall against the per-class minimum, floored at 0.",
+            "title": "Trainable Gap",
+            "type": "integer"
+          },
+          "validated_count": {
+            "title": "Validated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "count",
+          "validated_count",
+          "trainable",
+          "trainable_gap",
+          "adequacy",
+          "aug_target",
+          "aug_gap"
+        ],
+        "title": "ClassStatsRow",
+        "type": "object"
+      },
+      "ClassStatsThresholds": {
+        "properties": {
+          "aug_target_max": {
+            "title": "Aug Target Max",
+            "type": "integer"
+          },
+          "aug_target_min": {
+            "title": "Aug Target Min",
+            "type": "integer"
+          },
+          "block_below": {
+            "title": "Block Below",
+            "type": "integer"
+          },
+          "min_test_per_class": {
+            "title": "Min Test Per Class",
+            "type": "integer"
+          },
+          "min_train_per_class": {
+            "title": "Min Train Per Class",
+            "type": "integer"
+          },
+          "min_val_per_class": {
+            "title": "Min Val Per Class",
+            "type": "integer"
+          },
+          "warn_below": {
+            "title": "Warn Below",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "block_below",
+          "warn_below",
+          "min_test_per_class",
+          "min_train_per_class",
+          "min_val_per_class",
+          "aug_target_min",
+          "aug_target_max"
+        ],
+        "title": "ClassStatsThresholds",
         "type": "object"
       },
       "ClassUpdateRequest": {
@@ -5555,6 +5987,41 @@
           "class_name"
         ],
         "title": "ClusterRepresentative",
+        "type": "object"
+      },
+      "ClusterRepresentativesPage": {
+        "description": "``GET {P}/clusters/representatives``: one page of clusters, keyed by ``cluster_uid``.",
+        "properties": {
+          "clusters": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClusterRepresentative"
+              },
+              "type": "array"
+            },
+            "title": "Clusters",
+            "type": "object"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "max_clusters": {
+            "title": "Max Clusters",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clusters",
+          "count",
+          "offset",
+          "max_clusters"
+        ],
+        "title": "ClusterRepresentativesPage",
         "type": "object"
       },
       "ClusterRunAccepted": {
@@ -7266,7 +7733,7 @@
           },
           "registry_classes": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__RegistryClassEntry"
+              "$ref": "#/components/schemas/VocabularyRegistryClass"
             },
             "title": "Registry Classes",
             "type": "array"
@@ -7998,6 +8465,35 @@
           "crop_ids"
         ],
         "title": "CropsTarget",
+        "type": "object"
+      },
+      "CurationBatchIngestResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/IngestImageResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "success",
+              "partial",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/BatchIngestSummaryResponse"
+          }
+        },
+        "required": [
+          "status",
+          "summary"
+        ],
+        "title": "CurationBatchIngestResponse",
         "type": "object"
       },
       "CurationSettingsResponse": {
@@ -9991,7 +10487,7 @@
         "additionalProperties": true,
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            "$ref": "#/components/schemas/VocabularyChoice"
           },
           "job_id": {
             "anyOf": [
@@ -11069,6 +11565,52 @@
         "title": "EvalDatasetList",
         "type": "object"
       },
+      "EventPublishAck": {
+        "properties": {
+          "ok": {
+            "const": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "EventPublishAck",
+        "type": "object"
+      },
+      "EventStreamStats": {
+        "description": "Ops counters for the bound project's event stream.",
+        "properties": {
+          "clients_dropped": {
+            "description": "Clients this process dropped for falling behind.",
+            "title": "Clients Dropped",
+            "type": "integer"
+          },
+          "listener_running": {
+            "title": "Listener Running",
+            "type": "boolean"
+          },
+          "pubsub_connected": {
+            "description": "The Valkey subscription is up.",
+            "title": "Pubsub Connected",
+            "type": "boolean"
+          },
+          "subscribers": {
+            "description": "This process's local subscribers of the project stream.",
+            "title": "Subscribers",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "subscribers",
+          "clients_dropped",
+          "listener_running",
+          "pubsub_connected"
+        ],
+        "title": "EventStreamStats",
+        "type": "object"
+      },
       "EventsAccepted": {
         "description": "What one notification did. ``received`` = ``queued`` + ``duplicates`` + ``ignored``.",
         "properties": {
@@ -11137,6 +11679,153 @@
           "class_name"
         ],
         "title": "ExportClassSplitCounts",
+        "type": "object"
+      },
+      "ExportDatasetList": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/ExportDatasetRow"
+            },
+            "title": "Datasets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "datasets",
+          "count"
+        ],
+        "title": "ExportDatasetList",
+        "type": "object"
+      },
+      "ExportDatasetRow": {
+        "description": "One materialized dataset version; manifest-sourced fields are ``null`` when unrecorded.",
+        "properties": {
+          "class_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Count"
+          },
+          "classes_with_objects": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classes With Objects"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "export_dir": {
+            "title": "Export Dir",
+            "type": "string"
+          },
+          "exported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported At"
+          },
+          "image_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Count"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "object_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Count"
+          },
+          "profile_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Name"
+          },
+          "split_counts": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split Counts"
+          },
+          "version_tag": {
+            "title": "Version Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "profile_name",
+          "export_dir",
+          "version_tag",
+          "image_count",
+          "object_count",
+          "split_counts",
+          "dataset_sha",
+          "exported_at",
+          "class_count",
+          "classes_with_objects",
+          "is_current"
+        ],
+        "title": "ExportDatasetRow",
         "type": "object"
       },
       "ExportSingleClassRequest": {
@@ -11245,6 +11934,281 @@
           }
         },
         "title": "ExportSingleClassRequest",
+        "type": "object"
+      },
+      "ExportSingleClassResponse": {
+        "description": "``POST /export/single_class``: the finished export's integrity envelope.",
+        "properties": {
+          "background_images": {
+            "title": "Background Images",
+            "type": "integer"
+          },
+          "class_count": {
+            "title": "Class Count",
+            "type": "integer"
+          },
+          "current_symlink": {
+            "title": "Current Symlink",
+            "type": "string"
+          },
+          "data_yaml_path": {
+            "title": "Data Yaml Path",
+            "type": "string"
+          },
+          "dataset_sha": {
+            "title": "Dataset Sha",
+            "type": "string"
+          },
+          "export_dir": {
+            "title": "Export Dir",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "frozen_test_sha": {
+            "title": "Frozen Test Sha",
+            "type": "string"
+          },
+          "image_count": {
+            "title": "Image Count",
+            "type": "integer"
+          },
+          "manifest_path": {
+            "title": "Manifest Path",
+            "type": "string"
+          },
+          "positive_images": {
+            "title": "Positive Images",
+            "type": "integer"
+          },
+          "positives_zero_warning": {
+            "description": "True when the dataset has no positives and cannot train a detector.",
+            "title": "Positives Zero Warning",
+            "type": "boolean"
+          },
+          "split_counts": {
+            "$ref": "#/components/schemas/SingleClassSplitCounts"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "version_tag": {
+            "title": "Version Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "export_dir",
+          "version_tag",
+          "manifest_path",
+          "data_yaml_path",
+          "dataset_sha",
+          "frozen_test_sha",
+          "split_counts",
+          "image_count",
+          "class_count",
+          "positive_images",
+          "background_images",
+          "positives_zero_warning",
+          "current_symlink",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "ExportSingleClassResponse",
+        "type": "object"
+      },
+      "ExportSingleClassStatus": {
+        "description": "``GET /export/single_class/status``.\n\n``idle`` carries only ``status``, ``last_run`` and ``profile_name``; ``unknown`` adds\n``export_dir``; ``success`` adds the manifest fields (``null`` when the manifest lacks\none). Served with ``response_model_exclude_unset`` so a branch never gains keys.",
+        "properties": {
+          "background_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Background Images"
+          },
+          "class_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Count"
+          },
+          "class_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Names"
+          },
+          "dataset_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Kind"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "export_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Export Dir"
+          },
+          "false_positive_background_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "False Positive Background Images"
+          },
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "image_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Count"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run"
+          },
+          "positive_images": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive Images"
+          },
+          "positives_zero_warning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positives Zero Warning"
+          },
+          "profile_name": {
+            "title": "Profile Name",
+            "type": "string"
+          },
+          "split_counts": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split Counts"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "unknown",
+              "success"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "profile_name"
+        ],
+        "title": "ExportSingleClassStatus",
         "type": "object"
       },
       "ExportSkippedItems": {
@@ -11624,6 +12588,122 @@
         "title": "ExportYoloRequest",
         "type": "object"
       },
+      "ExportYoloResponse": {
+        "description": "``POST /export/yolo``: the finished export's counts and integrity envelope.",
+        "properties": {
+          "class_count": {
+            "title": "Class Count",
+            "type": "integer"
+          },
+          "classes_with_objects": {
+            "title": "Classes With Objects",
+            "type": "integer"
+          },
+          "collapse_near_duplicates": {
+            "title": "Collapse Near Duplicates",
+            "type": "boolean"
+          },
+          "dataset_sha": {
+            "title": "Dataset Sha",
+            "type": "string"
+          },
+          "export_dir": {
+            "title": "Export Dir",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "image_count": {
+            "title": "Image Count",
+            "type": "integer"
+          },
+          "images_dropped_not_fully_labeled": {
+            "title": "Images Dropped Not Fully Labeled",
+            "type": "integer"
+          },
+          "images_with_unlabeled_items": {
+            "title": "Images With Unlabeled Items",
+            "type": "integer"
+          },
+          "manifest_path": {
+            "title": "Manifest Path",
+            "type": "string"
+          },
+          "object_count": {
+            "title": "Object Count",
+            "type": "integer"
+          },
+          "require_fully_labeled_images": {
+            "title": "Require Fully Labeled Images",
+            "type": "boolean"
+          },
+          "skipped_items": {
+            "$ref": "#/components/schemas/ExportSkippedItems"
+          },
+          "split_counts": {
+            "$ref": "#/components/schemas/ExportSplitCounts"
+          },
+          "split_object_counts": {
+            "$ref": "#/components/schemas/ExportSplitCounts"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "unlabeled_items_on_exported_images": {
+            "title": "Unlabeled Items On Exported Images",
+            "type": "integer"
+          },
+          "version_tag": {
+            "title": "Version Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "export_dir",
+          "version_tag",
+          "manifest_path",
+          "dataset_sha",
+          "image_count",
+          "object_count",
+          "split_counts",
+          "class_count",
+          "classes_with_objects",
+          "split_object_counts",
+          "require_fully_labeled_images",
+          "unlabeled_items_on_exported_images",
+          "images_with_unlabeled_items",
+          "images_dropped_not_fully_labeled",
+          "skipped_items",
+          "collapse_near_duplicates",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "ExportYoloResponse",
+        "type": "object"
+      },
       "FacetCount": {
         "properties": {
           "count": {
@@ -11836,7 +12916,7 @@
           "region_profile": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__routers__curation___region_vocabulary_models__RegionProfileSummary"
+                "$ref": "#/components/schemas/ActiveRegionProfileSummary"
               },
               {
                 "type": "null"
@@ -11879,6 +12959,56 @@
           "region_profile"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HoldoutClassBucket": {
+        "additionalProperties": true,
+        "properties": {
+          "deficient": {
+            "title": "Deficient",
+            "type": "boolean"
+          },
+          "doc_count": {
+            "title": "Doc Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "doc_count",
+          "deficient"
+        ],
+        "title": "HoldoutClassBucket",
+        "type": "object"
+      },
+      "HoldoutStats": {
+        "properties": {
+          "by_class": {
+            "items": {
+              "$ref": "#/components/schemas/HoldoutClassBucket"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "min_test_per_class": {
+            "title": "Min Test Per Class",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_class",
+          "min_test_per_class"
+        ],
+        "title": "HoldoutStats",
         "type": "object"
       },
       "ImportAction": {
@@ -18258,6 +19388,402 @@
         "title": "LoopVote",
         "type": "object"
       },
+      "ManifestCodeVersions": {
+        "additionalProperties": true,
+        "properties": {
+          "api_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Sha"
+          },
+          "trainer_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trainer Sha"
+          },
+          "ultralytics_pkg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultralytics Pkg"
+          },
+          "ultralytics_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ultralytics Sha"
+          }
+        },
+        "title": "ManifestCodeVersions",
+        "type": "object"
+      },
+      "ManifestLineage": {
+        "additionalProperties": true,
+        "properties": {
+          "augmentation_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Augmentation Seed"
+          },
+          "class_remap": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Remap"
+          },
+          "dataset_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Sha"
+          },
+          "dataset_version_tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Version Tag"
+          },
+          "deterministic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deterministic"
+          },
+          "export_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Export Dir"
+          },
+          "frozen_test_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen Test Sha"
+          },
+          "include_classes": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Classes"
+          },
+          "registry_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Sha"
+          },
+          "single_cls": {
+            "title": "Single Cls"
+          },
+          "test_label_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Label Sha"
+          },
+          "training_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Seed"
+          }
+        },
+        "title": "ManifestLineage",
+        "type": "object"
+      },
+      "ManifestPromotion": {
+        "additionalProperties": true,
+        "properties": {
+          "force_used": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Used"
+          },
+          "gate_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gate Report"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "triton_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Triton Model Name"
+          }
+        },
+        "title": "ManifestPromotion",
+        "type": "object"
+      },
+      "ManifestResults": {
+        "additionalProperties": true,
+        "properties": {
+          "best_checkpoint_metric": {
+            "title": "Best Checkpoint Metric"
+          },
+          "checkpoint_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Path"
+          },
+          "checkpoint_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Sha256"
+          },
+          "compare": {
+            "title": "Compare"
+          },
+          "eval": {
+            "title": "Eval"
+          },
+          "final_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final State"
+          },
+          "last_epoch_metric": {
+            "title": "Last Epoch Metric"
+          },
+          "mlflow_experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Experiment Id"
+          },
+          "mlflow_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Run Id"
+          },
+          "mlflow_run_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlflow Run Url"
+          }
+        },
+        "title": "ManifestResults",
+        "type": "object"
+      },
+      "ManifestSpec": {
+        "additionalProperties": true,
+        "properties": {
+          "augmentation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Augmentation"
+          },
+          "cuda_visible_devices": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cuda Visible Devices"
+          },
+          "hyperparameters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hyperparameters"
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "model_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Size"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile"
+          }
+        },
+        "title": "ManifestSpec",
+        "type": "object"
+      },
       "MapBounds": {
         "properties": {
           "east": {
@@ -18947,7 +20473,7 @@
         "properties": {
           "choices": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+              "$ref": "#/components/schemas/VocabularyChoice"
             },
             "title": "Choices",
             "type": "array"
@@ -19029,6 +20555,27 @@
           "settable"
         ],
         "title": "ModelChoice",
+        "type": "object"
+      },
+      "ModelClassMappingCounts": {
+        "properties": {
+          "mapped_count": {
+            "title": "Mapped Count",
+            "type": "integer"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mapped_count",
+          "unmapped"
+        ],
+        "title": "ModelClassMappingCounts",
         "type": "object"
       },
       "ModelClassMappingEntry": {
@@ -19343,6 +20890,295 @@
           "project"
         ],
         "title": "ModelSharingUser",
+        "type": "object"
+      },
+      "ModelStatusEntry": {
+        "additionalProperties": true,
+        "description": "A Triton model, the segmenter or a VLM endpoint.\n\nThe fields after ``unloadable`` belong to one kind only; the route sets\n``response_model_exclude_unset`` so a row never gains a key it did not have.\n``extra='allow'`` keeps any key a producer adds that is not listed here.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "active_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "class_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelClassMappingCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "exec_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exec Count"
+          },
+          "friendly_name": {
+            "title": "Friendly Name",
+            "type": "string"
+          },
+          "inference_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Count"
+          },
+          "inference_failed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Failed"
+          },
+          "is_region_protected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Region Protected"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "model_type": {
+            "title": "Model Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optional"
+          },
+          "owned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "requires_force_to_unload": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Force To Unload"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared"
+          },
+          "sharing_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing Revision"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unloadable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unloadable"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name",
+          "friendly_name",
+          "role",
+          "kind",
+          "model_type",
+          "status"
+        ],
+        "title": "ModelStatusEntry",
+        "type": "object"
+      },
+      "ModelsStatusResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStatusEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ModelsStatusResponse",
         "type": "object"
       },
       "NearDupActiveProfile": {
@@ -19814,6 +21650,46 @@
         "title": "NearDupStatus",
         "type": "object"
       },
+      "NewClassProposalSummary": {
+        "properties": {
+          "flagged_terms": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalTerm"
+            },
+            "title": "Flagged Terms",
+            "type": "array"
+          },
+          "term_rules": {
+            "$ref": "#/components/schemas/ProposalTermRulesWire"
+          },
+          "top_terms": {
+            "description": "Terms worth creating (flag null).",
+            "items": {
+              "$ref": "#/components/schemas/ProposalTerm"
+            },
+            "title": "Top Terms",
+            "type": "array"
+          },
+          "total_pending": {
+            "title": "Total Pending",
+            "type": "integer"
+          },
+          "without_term": {
+            "description": "Queue items with no proposed name.",
+            "title": "Without Term",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_pending",
+          "without_term",
+          "top_terms",
+          "flagged_terms",
+          "term_rules"
+        ],
+        "title": "NewClassProposalSummary",
+        "type": "object"
+      },
       "NewClassVotes": {
         "properties": {
           "name": {
@@ -20026,7 +21902,7 @@
       "OcrModelEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            "$ref": "#/components/schemas/VocabularyChoice"
           },
           "configured": {
             "default": false,
@@ -22075,6 +23951,123 @@
           "measured_on"
         ],
         "title": "PreviewRateWire",
+        "type": "object"
+      },
+      "ProbeCancelResponse": {
+        "properties": {
+          "actionable_min_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actionable Min Confidence"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "model_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Path"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "train_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Job Id"
+          },
+          "updated_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated Count"
+          }
+        },
+        "required": [
+          "status",
+          "cancelled"
+        ],
+        "title": "ProbeCancelResponse",
         "type": "object"
       },
       "ProbeRunRequest": {
@@ -24417,6 +26410,114 @@
         "title": "Proposal",
         "type": "object"
       },
+      "ProposalTerm": {
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when flag is existing_class: map to it.",
+            "title": "Class Id"
+          },
+          "count": {
+            "description": "What a resolve for this label matches.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "flag": {
+            "anyOf": [
+              {
+                "enum": [
+                  "existing_class",
+                  "generic_parent",
+                  "non_object"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flag"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sample_crop_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Sample Crop Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "label",
+          "count",
+          "sample_crop_ids",
+          "flag",
+          "class_id"
+        ],
+        "title": "ProposalTerm",
+        "type": "object"
+      },
+      "ProposalTermRulesWire": {
+        "properties": {
+          "existing_classes_flagged": {
+            "title": "Existing Classes Flagged",
+            "type": "boolean"
+          },
+          "generic_terms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Generic Terms",
+            "type": "array"
+          },
+          "generic_terms_env": {
+            "title": "Generic Terms Env",
+            "type": "string"
+          },
+          "non_object_terms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Non Object Terms",
+            "type": "array"
+          },
+          "non_object_terms_env": {
+            "title": "Non Object Terms Env",
+            "type": "string"
+          },
+          "registry_groups_are_generic": {
+            "title": "Registry Groups Are Generic",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generic_terms",
+          "non_object_terms",
+          "registry_groups_are_generic",
+          "existing_classes_flagged",
+          "generic_terms_env",
+          "non_object_terms_env"
+        ],
+        "title": "ProposalTermRulesWire",
+        "type": "object"
+      },
       "QuantizeRequest": {
         "additionalProperties": false,
         "description": "Export a run to ONNX variants and score them in the same job.",
@@ -24534,6 +26635,189 @@
           "box_id"
         ],
         "title": "RegionBoxPatchResponse",
+        "type": "object"
+      },
+      "RegionBoxStateEntry": {
+        "properties": {
+          "badge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge"
+          },
+          "dashed": {
+            "title": "Dashed",
+            "type": "boolean"
+          },
+          "dim": {
+            "title": "Dim",
+            "type": "boolean"
+          },
+          "exported": {
+            "title": "Exported",
+            "type": "boolean"
+          },
+          "human_writable": {
+            "title": "Human Writable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "tone": {
+            "description": "A semantic meaning, not a CSS color.",
+            "title": "Tone",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label",
+          "role",
+          "tone",
+          "human_writable",
+          "exported",
+          "dashed",
+          "dim",
+          "badge"
+        ],
+        "title": "RegionBoxStateEntry",
+        "type": "object"
+      },
+      "RegionBoxStateRoute": {
+        "properties": {
+          "new_box_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Box Default"
+          },
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "states": {
+            "items": {
+              "type": "string"
+            },
+            "title": "States",
+            "type": "array"
+          }
+        },
+        "required": [
+          "route",
+          "states",
+          "new_box_default"
+        ],
+        "title": "RegionBoxStateRoute",
+        "type": "object"
+      },
+      "RegionClusterCard": {
+        "properties": {
+          "box_count": {
+            "title": "Box Count",
+            "type": "integer"
+          },
+          "cluster_uid": {
+            "title": "Cluster Uid",
+            "type": "string"
+          },
+          "representative_box_ids": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Representative Box Ids",
+            "type": "array"
+          },
+          "representative_crop_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Representative Crop Ids",
+            "type": "array"
+          },
+          "representative_thumb_urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Representative Thumb Urls",
+            "type": "array"
+          },
+          "representatives": {
+            "items": {
+              "$ref": "#/components/schemas/RegionRow"
+            },
+            "title": "Representatives",
+            "type": "array"
+          },
+          "size": {
+            "description": "Items with at least one box in the cluster.",
+            "title": "Size",
+            "type": "integer"
+          },
+          "validated_count": {
+            "title": "Validated Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cluster_uid",
+          "size",
+          "box_count",
+          "validated_count",
+          "representative_crop_ids",
+          "representative_box_ids",
+          "representative_thumb_urls",
+          "representatives"
+        ],
+        "title": "RegionClusterCard",
+        "type": "object"
+      },
+      "RegionClusterList": {
+        "properties": {
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/RegionClusterCard"
+            },
+            "title": "Clusters",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clusters",
+          "count"
+        ],
+        "title": "RegionClusterList",
         "type": "object"
       },
       "RegionDependencyStatusResponse": {
@@ -25499,7 +27783,7 @@
           },
           "profiles": {
             "items": {
-              "$ref": "#/components/schemas/src__routers__curation___region_profile_models__RegionProfileSummary"
+              "$ref": "#/components/schemas/RegionProfileSummary"
             },
             "title": "Profiles",
             "type": "array"
@@ -25655,6 +27939,127 @@
           "groups"
         ],
         "title": "RegionProfileSchema",
+        "type": "object"
+      },
+      "RegionProfileSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "active_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Revision"
+          },
+          "detector_model": {
+            "title": "Detector Model",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_singular": {
+            "title": "Display Name Singular",
+            "type": "string"
+          },
+          "etag": {
+            "title": "Etag",
+            "type": "string"
+          },
+          "max_regions_per_item": {
+            "title": "Max Regions Per Item",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_classes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parent Classes",
+            "type": "array"
+          },
+          "read_only": {
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "reads_text": {
+            "title": "Reads Text",
+            "type": "boolean"
+          },
+          "region_class_name": {
+            "title": "Region Class Name",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "segmenter_text_prompt": {
+            "title": "Segmenter Text Prompt",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "registered",
+              "stored",
+              "template"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "text_reader": {
+            "title": "Text Reader",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "read_only",
+          "revision",
+          "etag",
+          "display_name",
+          "display_name_singular",
+          "region_class_name",
+          "text_reader",
+          "reads_text",
+          "detector_model",
+          "segmenter_text_prompt",
+          "parent_classes",
+          "max_regions_per_item",
+          "active"
+        ],
+        "title": "RegionProfileSummary",
         "type": "object"
       },
       "RegionProfileTemplateSummary": {
@@ -27146,6 +29551,97 @@
         "title": "RegionStats",
         "type": "object"
       },
+      "RegionStatusCatalog": {
+        "properties": {
+          "box_state_routes": {
+            "items": {
+              "$ref": "#/components/schemas/RegionBoxStateRoute"
+            },
+            "title": "Box State Routes",
+            "type": "array"
+          },
+          "box_states": {
+            "items": {
+              "$ref": "#/components/schemas/RegionBoxStateEntry"
+            },
+            "title": "Box States",
+            "type": "array"
+          },
+          "confirm_status": {
+            "title": "Confirm Status",
+            "type": "string"
+          },
+          "false_positive_status": {
+            "title": "False Positive Status",
+            "type": "string"
+          },
+          "reject_status": {
+            "title": "Reject Status",
+            "type": "string"
+          },
+          "statuses": {
+            "items": {
+              "$ref": "#/components/schemas/RegionStatusEntry"
+            },
+            "title": "Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "statuses",
+          "confirm_status",
+          "reject_status",
+          "false_positive_status",
+          "box_states",
+          "box_state_routes"
+        ],
+        "title": "RegionStatusCatalog",
+        "type": "object"
+      },
+      "RegionStatusEntry": {
+        "properties": {
+          "clears_box": {
+            "description": "A human write of this status removes the region box.",
+            "title": "Clears Box",
+            "type": "boolean"
+          },
+          "human_writable": {
+            "title": "Human Writable",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "terminal": {
+            "title": "Terminal",
+            "type": "boolean"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          },
+          "wants_reason": {
+            "title": "Wants Reason",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "value",
+          "label",
+          "role",
+          "terminal",
+          "human_writable",
+          "clears_box",
+          "wants_reason"
+        ],
+        "title": "RegionStatusEntry",
+        "type": "object"
+      },
       "RegionTestCandidate": {
         "description": "One raw candidate of a leg, as a complete region-box wire element\n(``box_id`` is ``null``: ids are assigned on write) plus what the\nselection did with it.",
         "properties": {
@@ -27959,7 +30455,7 @@
           "region_profile": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__routers__curation___region_vocabulary_models__RegionProfileSummary"
+                "$ref": "#/components/schemas/ActiveRegionProfileSummary"
               },
               {
                 "type": "null"
@@ -28012,6 +30508,66 @@
           "rejection_reasons"
         ],
         "title": "RegionVocabularyResponse",
+        "type": "object"
+      },
+      "RegistryClassEntry": {
+        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "group": {
+            "default": "unknown",
+            "title": "Group",
+            "type": "string"
+          },
+          "hotkey_letter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hotkey Letter"
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Merged Into"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name"
+        ],
+        "title": "RegistryClassEntry",
         "type": "object"
       },
       "RejectionReasonEntry": {
@@ -31122,6 +33678,108 @@
         "title": "RowClassMapping",
         "type": "object"
       },
+      "RunManifest": {
+        "additionalProperties": true,
+        "description": "The run's lineage envelope; ``promoted_to`` is ``null`` until the run is promoted.",
+        "properties": {
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign Id"
+          },
+          "code_versions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManifestCodeVersions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "lineage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManifestLineage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "promoted_to": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManifestPromotion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "results": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManifestResults"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ManifestSpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RunManifest",
+        "type": "object"
+      },
       "RunModelRef": {
         "additionalProperties": false,
         "properties": {
@@ -31263,6 +33921,109 @@
         "title": "ScopeNow",
         "type": "object"
       },
+      "ScorerCoverage": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "n_scored": {
+            "title": "N Scored",
+            "type": "integer"
+          },
+          "pct": {
+            "title": "Pct",
+            "type": "number"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "field",
+          "n_scored",
+          "total",
+          "pct"
+        ],
+        "title": "ScorerCoverage",
+        "type": "object"
+      },
+      "ScoresCancelResponse": {
+        "properties": {
+          "cancelled": {
+            "description": "A cancellation was requested for an active job.",
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "job_id": {
+            "description": "Empty string while the feature has never run.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "results": {
+            "additionalProperties": true,
+            "description": "Per-scorer outcome of the finished job.",
+            "title": "Results",
+            "type": "object"
+          },
+          "scorers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scorers",
+            "type": "array"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "description": "'idle' without a job, else the job status.",
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "started_at",
+          "finished_at",
+          "error",
+          "scorers",
+          "processed",
+          "total",
+          "results",
+          "cancelled"
+        ],
+        "title": "ScoresCancelResponse",
+        "type": "object"
+      },
       "ScoresComputeRequest": {
         "properties": {
           "scorers": {
@@ -31282,6 +34043,93 @@
           }
         },
         "title": "ScoresComputeRequest",
+        "type": "object"
+      },
+      "ScoresCoverageResponse": {
+        "properties": {
+          "coverage": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ScorerCoverage"
+            },
+            "description": "Keyed by scorer id.",
+            "title": "Coverage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "coverage"
+        ],
+        "title": "ScoresCoverageResponse",
+        "type": "object"
+      },
+      "ScoresState": {
+        "description": "``GET /scores/status`` (and the 202 of ``POST /scores/compute``).",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "job_id": {
+            "description": "Empty string while the feature has never run.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "results": {
+            "additionalProperties": true,
+            "description": "Per-scorer outcome of the finished job.",
+            "title": "Results",
+            "type": "object"
+          },
+          "scorers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scorers",
+            "type": "array"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "description": "'idle' without a job, else the job status.",
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "started_at",
+          "finished_at",
+          "error",
+          "scorers",
+          "processed",
+          "total",
+          "results"
+        ],
+        "title": "ScoresState",
         "type": "object"
       },
       "SearchImageResponse": {
@@ -32645,7 +35493,7 @@
       "SecretRef": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+            "$ref": "#/components/schemas/VlmChoice"
           },
           "present": {
             "title": "Present",
@@ -32893,7 +35741,7 @@
       "SegmenterEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            "$ref": "#/components/schemas/VocabularyChoice"
           },
           "default_min_score": {
             "anyOf": [
@@ -33115,6 +35963,29 @@
           "body"
         ],
         "title": "ServingActive",
+        "type": "object"
+      },
+      "SingleClassSplitCounts": {
+        "properties": {
+          "test": {
+            "title": "Test",
+            "type": "integer"
+          },
+          "train": {
+            "title": "Train",
+            "type": "integer"
+          },
+          "val": {
+            "title": "Val",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "train",
+          "val",
+          "test"
+        ],
+        "title": "SingleClassSplitCounts",
         "type": "object"
       },
       "SkippedCounts": {
@@ -33862,7 +36733,7 @@
       "TextReaderModeEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
+            "$ref": "#/components/schemas/VocabularyChoice"
           },
           "id": {
             "title": "Id",
@@ -34799,6 +37670,73 @@
         "title": "TrainedModelList",
         "type": "object"
       },
+      "TrainingCohort": {
+        "properties": {
+          "cutoffs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Cutoffs",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "row_kind": {
+            "enum": [
+              "crop",
+              "region"
+            ],
+            "title": "Row Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "cutoffs",
+          "endpoint",
+          "params",
+          "row_kind"
+        ],
+        "title": "TrainingCohort",
+        "type": "object"
+      },
+      "TrainingCohortList": {
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingCohort"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohorts"
+        ],
+        "title": "TrainingCohortList",
+        "type": "object"
+      },
       "TriggersWire": {
         "additionalProperties": false,
         "properties": {
@@ -34815,6 +37753,56 @@
           }
         },
         "title": "TriggersWire",
+        "type": "object"
+      },
+      "UmapRebuildResponse": {
+        "description": "``no_residuals`` carries only ``status``, ``n_residuals`` and ``refit``; the backend keys\nappear on ``success`` (served with ``response_model_exclude_unset``).",
+        "properties": {
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "backend_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Detail"
+          },
+          "n_residuals": {
+            "title": "N Residuals",
+            "type": "integer"
+          },
+          "refit": {
+            "title": "Refit",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "success",
+              "no_residuals"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "n_residuals",
+          "refit"
+        ],
+        "title": "UmapRebuildResponse",
         "type": "object"
       },
       "UnknownDetectorNamesDetail": {
@@ -35288,6 +38276,179 @@
         "title": "VerifyResult",
         "type": "object"
       },
+      "VizProjectionCancelResponse": {
+        "properties": {
+          "cancelled": {
+            "description": "A cancellation was requested for an active job.",
+            "title": "Cancelled",
+            "type": "boolean"
+          },
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "job_id": {
+            "description": "Empty string while the feature has never run.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "n_pool": {
+            "title": "N Pool",
+            "type": "integer"
+          },
+          "n_written": {
+            "title": "N Written",
+            "type": "integer"
+          },
+          "projection_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Version"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "description": "'idle' without a job, else the job status.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "started_at",
+          "finished_at",
+          "error",
+          "scope",
+          "cluster_uid",
+          "n_pool",
+          "n_written",
+          "projection_version",
+          "cancelled"
+        ],
+        "title": "VizProjectionCancelResponse",
+        "type": "object"
+      },
+      "VizProjectionState": {
+        "description": "``GET /viz/projection/status`` (and the 202 of ``POST /viz/projection/rebuild``).",
+        "properties": {
+          "cluster_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Uid"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "description": "Unix seconds; 0 while it has not finished.",
+            "title": "Finished At",
+            "type": "number"
+          },
+          "job_id": {
+            "description": "Empty string while the feature has never run.",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "n_pool": {
+            "title": "N Pool",
+            "type": "integer"
+          },
+          "n_written": {
+            "title": "N Written",
+            "type": "integer"
+          },
+          "projection_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Version"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "started_at": {
+            "description": "Unix seconds; 0 before the job starts.",
+            "title": "Started At",
+            "type": "number"
+          },
+          "status": {
+            "description": "'idle' without a job, else the job status.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "started_at",
+          "finished_at",
+          "error",
+          "scope",
+          "cluster_uid",
+          "n_pool",
+          "n_written",
+          "projection_version"
+        ],
+        "title": "VizProjectionState",
+        "type": "object"
+      },
       "VlmActivateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -35482,7 +38643,7 @@
       "VlmCatalogEntry": {
         "properties": {
           "choice": {
-            "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+            "$ref": "#/components/schemas/VlmChoice"
           },
           "context_max": {
             "title": "Context Max",
@@ -35675,6 +38836,31 @@
           "labels"
         ],
         "title": "VlmCatalogResponse",
+        "type": "object"
+      },
+      "VlmChoice": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "VlmChoice",
         "type": "object"
       },
       "VlmDeactivateRequest": {
@@ -36107,7 +39293,7 @@
           "empty_choice": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+                "$ref": "#/components/schemas/VlmChoice"
               },
               {
                 "type": "null"
@@ -36118,7 +39304,7 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/src__routers__curation___vlm_endpoint_models__Choice"
+                  "$ref": "#/components/schemas/VlmChoice"
                 },
                 "type": "array"
               },
@@ -37251,6 +40437,24 @@
         "title": "VocabEntry",
         "type": "object"
       },
+      "VocabularyChoice": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "VocabularyChoice",
+        "type": "object"
+      },
       "VocabularyDetector": {
         "properties": {
           "filterable": {
@@ -37332,6 +40536,28 @@
           "label"
         ],
         "title": "VocabularyOption",
+        "type": "object"
+      },
+      "VocabularyRegistryClass": {
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/VocabularyChoice"
+          },
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "choice"
+        ],
+        "title": "VocabularyRegistryClass",
         "type": "object"
       },
       "WatchTriggerWire": {
@@ -37520,333 +40746,6 @@
           "type"
         ],
         "title": "_PublishEvent",
-        "type": "object"
-      },
-      "src__clients__curation_opensearch__RegistryClassEntry": {
-        "description": "Single class entry of the registry.\n\n``id`` / ``name`` are accepted as aliases (the export snapshot's\nolder label-file schema). Internally we expose\n``class_id`` / ``class_name`` to avoid shadowing Python builtins.\nPydantic ``AliasChoices`` handles the bridge in both directions.\n\nNamed ``RegistryClassEntry`` (not ``ClassEntry``) to avoid\ncolliding with the distinct HTTP-response ``ClassEntry`` model in\n``src.routers.curation._common``.",
-        "properties": {
-          "added_at": {
-            "title": "Added At",
-            "type": "string"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          },
-          "deprecated": {
-            "default": false,
-            "title": "Deprecated",
-            "type": "boolean"
-          },
-          "group": {
-            "default": "unknown",
-            "title": "Group",
-            "type": "string"
-          },
-          "hotkey_letter": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hotkey Letter"
-          },
-          "merged_into": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged Into"
-          },
-          "notes": {
-            "default": "",
-            "title": "Notes",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name"
-        ],
-        "title": "RegistryClassEntry",
-        "type": "object"
-      },
-      "src__routers__curation___common_models__BatchIngestResponse": {
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/IngestImageResponse"
-            },
-            "title": "Results",
-            "type": "array"
-          },
-          "status": {
-            "enum": [
-              "success",
-              "partial",
-              "error"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/BatchIngestSummaryResponse"
-          }
-        },
-        "required": [
-          "status",
-          "summary"
-        ],
-        "title": "BatchIngestResponse",
-        "type": "object"
-      },
-      "src__routers__curation___region_profile_models__RegionProfileSummary": {
-        "properties": {
-          "active": {
-            "title": "Active",
-            "type": "boolean"
-          },
-          "active_revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Revision"
-          },
-          "detector_model": {
-            "title": "Detector Model",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "display_name_singular": {
-            "title": "Display Name Singular",
-            "type": "string"
-          },
-          "etag": {
-            "title": "Etag",
-            "type": "string"
-          },
-          "max_regions_per_item": {
-            "title": "Max Regions Per Item",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "parent_classes": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Parent Classes",
-            "type": "array"
-          },
-          "read_only": {
-            "title": "Read Only",
-            "type": "boolean"
-          },
-          "reads_text": {
-            "title": "Reads Text",
-            "type": "boolean"
-          },
-          "region_class_name": {
-            "title": "Region Class Name",
-            "type": "string"
-          },
-          "revision": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revision"
-          },
-          "segmenter_text_prompt": {
-            "title": "Segmenter Text Prompt",
-            "type": "string"
-          },
-          "source": {
-            "enum": [
-              "env",
-              "registered",
-              "stored",
-              "template"
-            ],
-            "title": "Source",
-            "type": "string"
-          },
-          "text_reader": {
-            "title": "Text Reader",
-            "type": "string"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          }
-        },
-        "required": [
-          "name",
-          "source",
-          "read_only",
-          "revision",
-          "etag",
-          "display_name",
-          "display_name_singular",
-          "region_class_name",
-          "text_reader",
-          "reads_text",
-          "detector_model",
-          "segmenter_text_prompt",
-          "parent_classes",
-          "max_regions_per_item",
-          "active"
-        ],
-        "title": "RegionProfileSummary",
-        "type": "object"
-      },
-      "src__routers__curation___region_vocabulary_models__RegionProfileSummary": {
-        "description": "The active region profile's identity, served on ``GET /health`` and\n``GET /regions/vocabulary`` -- THE signal a client keys on to decide\nwhether region-scoped UI/routes are available at all.",
-        "properties": {
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "display_name_singular": {
-            "title": "Display Name Singular",
-            "type": "string"
-          },
-          "limits": {
-            "$ref": "#/components/schemas/RegionProfileLimits",
-            "description": "Served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "reads_text": {
-            "description": "False for a text-free profile: no region text is read, stored or editable.",
-            "title": "Reads Text",
-            "type": "boolean"
-          },
-          "region_class_name": {
-            "title": "Region Class Name",
-            "type": "string"
-          },
-          "text_hint_enabled": {
-            "description": "Whether the OCR text-hint re-pass is enabled after a segmenter miss.",
-            "title": "Text Hint Enabled",
-            "type": "boolean"
-          },
-          "text_reader": {
-            "description": "The profile's text reader; 'none' for a text-free profile.",
-            "title": "Text Reader",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "display_name",
-          "display_name_singular",
-          "region_class_name",
-          "text_reader",
-          "reads_text",
-          "text_hint_enabled",
-          "limits"
-        ],
-        "title": "RegionProfileSummary",
-        "type": "object"
-      },
-      "src__routers__curation___vlm_endpoint_models__Choice": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "Choice",
-        "type": "object"
-      },
-      "src__routers__curation__config_vocabulary__Choice": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "Choice",
-        "type": "object"
-      },
-      "src__routers__curation__config_vocabulary__RegistryClassEntry": {
-        "properties": {
-          "choice": {
-            "$ref": "#/components/schemas/src__routers__curation__config_vocabulary__Choice"
-          },
-          "class_id": {
-            "title": "Class Id",
-            "type": "integer"
-          },
-          "class_name": {
-            "title": "Class Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "class_id",
-          "class_name",
-          "choice"
-        ],
-        "title": "RegistryClassEntry",
         "type": "object"
       }
     }
@@ -40937,17 +43836,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response List Class Sources Curation Projects  Project  Class Sources Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassSourceList"
                 }
               }
             },
@@ -41041,9 +43930,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Create Class Curation Projects  Project  Classes Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassCreated"
                 }
               }
             },
@@ -41107,10 +43994,22 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ClassMergeDryRun"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {
@@ -41281,9 +44180,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Update Class Curation Projects  Project  Classes  Class Id  Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -41420,7 +44317,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -41472,7 +44369,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__clients__curation_opensearch__RegistryClassEntry"
+                  "$ref": "#/components/schemas/RegistryClassEntry"
                 }
               }
             },
@@ -41587,9 +44484,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Post Umap Rebuild Curation Projects  Project  Cluster Umap Rebuild Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/UmapRebuildResponse"
                 }
               }
             },
@@ -42875,9 +45770,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cluster Representatives Curation Projects  Project  Clusters Representatives Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClusterRepresentativesPage"
                 }
               }
             },
@@ -47283,7 +50176,7 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Server-sent event stream; each frame carries `id`, `event` (the event type) and a JSON `data` payload. No body validation: the stream is open-ended."
           },
           "422": {
             "content": {
@@ -47332,9 +50225,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Curation Events Publish Curation Projects  Project  Events Publish Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EventPublishAck"
                 }
               }
             },
@@ -47377,9 +50268,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Curation Events Stats Curation Projects  Project  Events Stats Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EventStreamStats"
                 }
               }
             },
@@ -47458,9 +50347,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Export Datasets Curation Projects  Project  Export Datasets Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportDatasetList"
                 }
               }
             },
@@ -47563,9 +50450,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Single Class Curation Projects  Project  Export Single Class Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportSingleClassResponse"
                 }
               }
             },
@@ -47620,9 +50505,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Single Class Status Curation Projects  Project  Export Single Class Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportSingleClassStatus"
                 }
               }
             },
@@ -47718,9 +50601,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Export Yolo Curation Projects  Project  Export Yolo Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ExportYoloResponse"
                 }
               }
             },
@@ -48028,7 +50909,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
+                  "$ref": "#/components/schemas/CurationBatchIngestResponse"
                 }
               }
             },
@@ -48567,7 +51448,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
+                  "$ref": "#/components/schemas/CurationBatchIngestResponse"
                 }
               }
             },
@@ -49388,7 +52269,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__curation___common_models__BatchIngestResponse"
+                  "$ref": "#/components/schemas/CurationBatchIngestResponse"
                 }
               }
             },
@@ -51796,9 +54677,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Models Status Curation Projects  Project  Models Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelsStatusResponse"
                 }
               }
             },
@@ -53978,9 +56857,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Pipeline Auto Label Curation Projects  Project  Pipeline Auto Label Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/AutoLabelRunSummary"
                 }
               }
             },
@@ -54863,7 +57740,7 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Server-sent event stream of `snapshot`, `state` and `stats` frames, each a JSON `data` payload. No body validation: the stream is open-ended."
           },
           "422": {
             "content": {
@@ -54902,9 +57779,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Probe Cancel Curation Projects  Project  Probe Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ProbeCancelResponse"
                 }
               }
             },
@@ -55349,7 +58224,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Validate Prompt Pack Route Curation Projects  Project  Prompt Packs Validate Post"
+                  "$ref": "#/components/schemas/ValidationReport"
                 }
               }
             },
@@ -57598,9 +60473,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response List Region Clusters Curation Projects  Project  Regions Clusters Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionClusterList"
                 }
               }
             },
@@ -57720,9 +60593,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Region Statuses Curation Projects  Project  Regions Statuses Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/RegionStatusCatalog"
                 }
               }
             },
@@ -58307,9 +61178,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Review New Class Summary Curation Projects  Project  Review New Class Proposals Summary Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/NewClassProposalSummary"
                 }
               }
             },
@@ -59794,9 +62663,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Scores Cancel Curation Projects  Project  Scores Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoresCancelResponse"
                 }
               }
             },
@@ -59849,9 +62716,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Scores Compute Curation Projects  Project  Scores Compute Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoresState"
                 }
               }
             },
@@ -59893,9 +62758,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Scores Coverage Curation Projects  Project  Scores Coverage Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoresCoverageResponse"
                 }
               }
             },
@@ -59937,9 +62800,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Scores Status Curation Projects  Project  Scores Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ScoresState"
                 }
               }
             },
@@ -62639,9 +65500,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Stats Classes Curation Projects  Project  Stats Classes Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClassStatsResponse"
                 }
               }
             },
@@ -63153,9 +66012,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Test Holdout Stats Curation Projects  Project  Test Holdout Stats Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/HoldoutStats"
                 }
               }
             },
@@ -63526,7 +66383,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RunManifest"
+                }
               }
             },
             "description": "Successful Response"
@@ -64214,9 +67073,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Training Cohorts Curation Projects  Project  Training Cohorts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TrainingCohortList"
                 }
               }
             },
@@ -64438,9 +67295,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Viz Projection Cancel Curation Projects  Project  Viz Projection Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VizProjectionCancelResponse"
                 }
               }
             },
@@ -64511,7 +67366,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Viz Projection Rebuild Curation Projects  Project  Viz Projection Rebuild Post"
+                  "$ref": "#/components/schemas/VizProjectionState"
                 }
               }
             },
@@ -64553,9 +67408,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Viz Projection Status Curation Projects  Project  Viz Projection Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/VizProjectionState"
                 }
               }
             },

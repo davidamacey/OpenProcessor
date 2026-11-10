@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AutoLabelJobState(BaseModel):
@@ -61,3 +61,26 @@ class AutoLabelActionResponse(AutoLabelJobState):
 
 
 __all__ = ['AutoLabelActionResponse', 'AutoLabelCancelResponse', 'AutoLabelJobState']
+
+
+class AutoLabelRunSummary(BaseModel):
+    """``POST /pipeline/auto_label``: the synchronous run's per-stage counts.
+
+    Keys after ``baseline`` appear only when the run got that far (``after`` / ``delta`` / ``final``
+    after the stages, ``stages_error`` when the fetch failed); served with
+    ``response_model_exclude_unset`` semantics through ``responses=``.
+    """
+
+    model_config = ConfigDict(extra='allow')
+
+    stages: dict[str, Any]
+    class_id: int | None
+    cluster_uid: str | None
+    prompt_pack: str | None
+    prompt_pack_revision: int | None
+    baseline: dict[str, Any]
+    after: dict[str, Any] | None = None
+    delta: dict[str, int] | None = None
+    final: dict[str, int] | None = None
+    unvalidated_remaining: int | None = None
+    stages_error: str | None = None

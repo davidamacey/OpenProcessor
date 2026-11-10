@@ -12,6 +12,8 @@ from src.config.project_context import current_project_id
 from src.db.session import async_session_factory
 from src.routers.curation._class_models import ClassMergeRequest
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
+from src.schemas.curation.classes import ClassMergeDryRun
+from src.schemas.jobs import JobView
 from src.services.classes import projection_sync
 from src.services.jobs import service as jobs
 from src.services.jobs.status import get_job
@@ -56,7 +58,11 @@ async def _merge_dry_run(payload: ClassMergeRequest, opensearch: Any) -> dict[st
     }
 
 
-@router.post('/classes/merge', response_model=None)
+@router.post(
+    '/classes/merge',
+    response_model=None,
+    responses={200: {'model': ClassMergeDryRun}, 202: {'model': JobView}},
+)
 async def merge_class(
     payload: ClassMergeRequest,
     opensearch: OpenSearchDep,

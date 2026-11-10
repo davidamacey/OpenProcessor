@@ -1,0 +1,47 @@
+---
+sidebar_position: 4
+title: Scale-out
+---
+
+# Scale-out
+
+Any request may reach any API process of any replica, so the API keeps no state
+that another process would have to see. Shared state is in PostgreSQL, Valkey
+and OpenSearch.
+
+## API workers and replicas
+
+- `API_WORKERS` in `.env` is the uvicorn worker count of one API container (the
+  installer writes `min(nproc, 32)`; compose passes it as `WEB_CONCURRENCY`).
+- For several replicas set `API_WORKERS=1` and raise `OP_API_REPLICAS`, then
+  put a proxy in front of the replicas.
+- The database, thread and Triton-channel pools are split from deployment
+  totals per process, so the worker count is a tuning knob and not a connection
+  multiplier. Keep the total of `API_WORKERS * OP_API_REPLICAS` API processes
+  plus every worker process under `OP_PG_MAX_CONNECTIONS` (default 400), or use
+  the PgBouncer overlay. See [Control plane](control-plane.mdx).
+
+## Behind a proxy: SSE resume
+
+The event stream is Server-Sent Events. Every frame has `id: <xid>-<id>`. Each
+API process keeps one Valkey subscription and reads new rows from its own
+cursor, so a client can reconnect to a different replica with `Last-Event-ID`
+and receive what it missed. A cursor older than the 24-hour retention, or from
+before a restore, gets a `reset` event first and the client re-reads its state.
+The proxy must not buffer `text/event-stream` responses.
+
+## Workers
+
+Raise `OP_JOBS_CONCURRENCY` or `OP_JOBS_REPLICAS` for more job throughput.
+Stream workers (detection, VLM) share projects through leases in PostgreSQL:
+each replica claims whole projects. A job that a lost worker left behind is
+recovered by the reaper; see [Jobs](jobs.mdx).
+
+## Limits to know
+
+- Several hosts need a shared POSIX volume for uploads, exports and the crop
+  cache.
+- The GPU arbiter overlay is single-host.
+- Upgrades are stop-the-world: old and new processes never run together.
+- Each project adds two OpenSearch indexes; watch the shard budget
+  ([Memory, disk and storage](../deployment/sizing-and-storage.mdx)).

@@ -18,6 +18,7 @@ from typing import Annotated, Any
 
 from fastapi import Query
 
+from src.routers.curation._autolabel_models import AutoLabelRunSummary
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation.pipeline_params import (
     ACKNOWLEDGE_EXTERNAL_DESC,
@@ -38,7 +39,11 @@ from src.services.curation.vlm_policy import VlmScope
 # never settable by an HTTP request. Kept as a comment (not the
 # docstring below) since the docstring is the public OpenAPI
 # `description` -- it must describe only the public contract.
-@router.post('/pipeline/auto_label')
+@router.post(
+    '/pipeline/auto_label',
+    response_model=None,
+    responses={200: {'model': AutoLabelRunSummary}},
+)
 async def pipeline_auto_label(
     opensearch: OpenSearchDep,
     vlm_batch_size: Annotated[int, Query(ge=4, le=64)] = 32,

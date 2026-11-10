@@ -55,6 +55,10 @@ class ProbeStatusResponse(BaseModel):
     actionable_min_confidence: float | None = None
 
 
+class ProbeCancelResponse(ProbeStatusResponse):
+    cancelled: bool
+
+
 async def _resolve_probe_weights(train_job_id: str) -> Path:
     """The finished run's exported checkpoint, or ``409`` when missing /
     the run isn't finished yet.
@@ -135,7 +139,7 @@ async def probe_status(session: DbSessionDep) -> dict[str, Any]:
     return await _status(session)
 
 
-@router.post('/probe/cancel')
+@router.post('/probe/cancel', response_model=ProbeCancelResponse)
 async def probe_cancel(session: DbSessionDep) -> dict[str, Any]:
     """Cancel the active probe job, if there is one."""
     from src.services.curation.latest_job import ACTIVE_STATUSES, latest_job

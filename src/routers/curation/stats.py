@@ -20,7 +20,7 @@ from src.db.session import async_session_factory
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
-from src.routers.curation._stats_models import DatasetStatsResponse
+from src.routers.curation._stats_models import ClassStatsResponse, DatasetStatsResponse
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.stats_classes import ClassRegistryUnavailableError, class_stats
 from src.services.curation.stats_dataset import build_dataset_stats
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-@router.get('/stats/classes')
+@router.get('/stats/classes', response_model=ClassStatsResponse, response_model_exclude_unset=True)
 async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery) -> dict[str, Any]:
     """Per-class total/validated breakdown.
 

@@ -13,12 +13,15 @@ from src.routers.curation._common import (
     get_class_registry,
     router,
 )
+from src.schemas.curation.classes import ClassSourceList
 from src.services.curation.class_counts import fetch_class_counts
 from src.services.curation.class_sources import class_source_catalog
 from src.services.curation.dataset_thresholds import adequacy, dataset_thresholds
 
 
-@router.get('/class_sources', dependencies=[Depends(_raw_opensearch_dep)])
+@router.get(
+    '/class_sources', dependencies=[Depends(_raw_opensearch_dep)], response_model=ClassSourceList
+)
 async def list_class_sources() -> dict[str, list[dict[str, str]]]:
     """Every ``class_source`` value this deployment can write.
 

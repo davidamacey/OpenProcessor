@@ -12,6 +12,7 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._holdout_models import TestHoldoutFreezeRequest, TestHoldoutFreezeResponse
 from src.routers.curation.near_dup_gate import require_near_dup_freezable
+from src.schemas.curation.holdout import HoldoutStats
 from src.services.curation import holdout_freeze as svc
 
 
@@ -67,7 +68,7 @@ async def freeze_test_holdout(
     return TestHoldoutFreezeResponse(**asdict(result))
 
 
-@router.get('/test_holdout/stats')
+@router.get('/test_holdout/stats', response_model=HoldoutStats)
 async def test_holdout_stats(opensearch: OpenSearchDep) -> dict[str, Any]:
     """Per-class test-set counts."""
     try:

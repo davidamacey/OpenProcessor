@@ -138,3 +138,12 @@ class ClusterFacets(TypedDict):
     detector_confidence_missing: Annotated[
         int, Field(description='Members with no detector confidence (in no bin).')
     ]
+
+
+class ClusterRepresentativesPage(TypedDict):
+    """``GET {P}/clusters/representatives``: one page of clusters, keyed by ``cluster_uid``."""
+
+    clusters: dict[str, list[ClusterRepresentative]]
+    count: int
+    offset: int
+    max_clusters: int

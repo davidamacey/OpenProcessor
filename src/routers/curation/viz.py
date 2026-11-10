@@ -39,6 +39,7 @@ from src.config.env import env_bool, env_int
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._latest_job_models import VizProjectionCancelResponse, VizProjectionState
 
 
 DEFAULT_MAX_N = 20_000
@@ -58,7 +59,12 @@ def _max_n() -> int:
         return DEFAULT_MAX_N
 
 
-@router.post('/viz/projection/rebuild', status_code=202)
+@router.post(
+    '/viz/projection/rebuild',
+    status_code=202,
+    response_model=None,
+    responses={202: {'model': VizProjectionState}},
+)
 async def viz_projection_rebuild(
     session: DbSessionDep,
     scope: str = Query('residual', pattern='^(residual|cluster)$'),
@@ -89,12 +95,12 @@ async def _state(session: Any) -> dict[str, Any]:
     return embedding_viz.state_dict(await latest_job(session, embedding_viz.KIND))
 
 
-@router.get('/viz/projection/status')
+@router.get('/viz/projection/status', response_model=VizProjectionState)
 async def viz_projection_status(session: DbSessionDep) -> dict[str, Any]:
     return await _state(session)
 
 
-@router.post('/viz/projection/cancel')
+@router.post('/viz/projection/cancel', response_model=VizProjectionCancelResponse)
 async def viz_projection_cancel(session: DbSessionDep) -> dict[str, Any]:
     from src.services.curation import embedding_viz
     from src.services.curation.latest_job import cancel_latest

@@ -9,8 +9,8 @@ from src.routers.curation._vlm_endpoint_models import (
     LOCALITY_LABELS,
     SOURCE_LABELS,
     STATUS_LABELS,
-    Choice,
     SecretRef,
+    VlmChoice,
     VlmEndpointDoc,
     VlmEndpointFieldSchema,
     VlmEndpointGroup,
@@ -112,7 +112,7 @@ def secret_refs_wire() -> list[SecretRef]:
         SecretRef(
             ref=ref,
             present=True,
-            choice=Choice(id=ref, label=ref.removeprefix('secret:')),
+            choice=VlmChoice(id=ref, label=ref.removeprefix('secret:')),
         )
         for ref in list_secret_refs()
     ]
@@ -148,7 +148,7 @@ def endpoint_schema() -> VlmEndpointSchema:
             type='string',
             default=None,
             choices_from='secret_refs',
-            empty_choice=Choice(id=None, label='No key'),
+            empty_choice=VlmChoice(id=None, label='No key'),
             help=NO_KEY_HELP,
         ),
         VlmEndpointFieldSchema(
@@ -200,9 +200,9 @@ def endpoint_schema() -> VlmEndpointSchema:
             type='enum',
             default='auto',
             enum=[
-                Choice(id='auto', label='Automatic (from the last test)'),
-                Choice(id='on', label='Always on'),
-                Choice(id='off', label='Off'),
+                VlmChoice(id='auto', label='Automatic (from the last test)'),
+                VlmChoice(id='on', label='Always on'),
+                VlmChoice(id='off', label='Off'),
             ],
             advanced=True,
             help='Ask the server for JSON-only replies. Some servers reject it.',
@@ -225,7 +225,7 @@ def endpoint_schema() -> VlmEndpointSchema:
             type='string',
             default=None,
             choices_from='vlm_catalog',
-            empty_choice=Choice(id=None, label='Not from the catalog'),
+            empty_choice=VlmChoice(id=None, label='Not from the catalog'),
             advanced=True,
             help='Only used to show what is known about the model and to pair it with profiles.',
         ),

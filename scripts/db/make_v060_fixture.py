@@ -6,7 +6,8 @@
 A small synthetic 0.6.0 install (public names and numbers only): three projects (``default``, in
 the pre-folding layout with separate settings and view-state indexes and a ``class_registry.json``
 file; ``demo``, folded, with the class registry as a document; ``lean``, folded, whose axes point at built-ins with no
-stored revision), one deleted slug, classes with a
+stored revision, and which has NO class registry on purpose: it also has no items, the one case in
+which the upgrade accepts a missing registry), one deleted slug, classes with a
 merge, hotkeys and the R-3 name pairs, prompt-pack revisions with an activation history, a VLM
 endpoint with a probe, a settings document, a keymap, a holdout freeze, label operations, an
 ingest source with a ``queue.sqlite``, a dataset import with a ledger, a training run, a

@@ -105,6 +105,7 @@ def _project(
         storage_prefix=f'projects/{slug}',
         paused_at=parse_ts(flag.mtime, updated) if flag is not None else None,
         legacy_indexes={role: roles[role] for role in legacy.CONTROL_ROLES if role in roles},
+        class_registry_path=str(resources.get('class_registry_path') or ''),
     )
 
 

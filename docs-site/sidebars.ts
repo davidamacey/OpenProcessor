@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
             'guides/ingest-large-folder',
             'guides/ingest-sources',
             'guides/ingest-policy',
+            'guides/privacy-and-location',
             'guides/ingest-profiles',
             'guides/dataset-import',
           ],
@@ -87,6 +88,9 @@ const sidebars: SidebarsConfig = {
       items: [
         'operations/curation-workflow',
         'operations/health-and-stalls',
+        'operations/control-plane',
+        'operations/jobs',
+        'operations/scale-out',
         'operations/workers',
         'operations/ingest-load-profile',
         'operations/exports-and-retention',
@@ -101,7 +105,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'About',
-      items: ['about/vision-and-goals', 'about/whitepaper'],
+      items: ['about/vision-and-goals', 'about/roadmap', 'about/whitepaper'],
     },
     {
       type: 'category',

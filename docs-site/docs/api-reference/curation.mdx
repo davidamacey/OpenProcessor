@@ -33,9 +33,10 @@ The routes outside a project:
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/curation/health` | Deployment facts only: `status`, Triton, OpenSearch, VLM, versions |
-| GET | `/curation/events` | Server-sent events with `project: null`: `project.*`, `combine.*`, `vlm.changed` |
+| GET | `/curation/events` | Server-sent events with `project: null`: `project.*`, `combine.*`, `vlm.changed`. Frames carry an `id`; reconnect with `Last-Event-ID` to replay |
+| GET | `/curation/jobs/{job_id}` | One deployment job by id |
 | GET | `/curation/projects` | List projects (`?include_archived=true`), shard capacity, slug limits, display labels |
-| POST | `/curation/projects` | Create a project (`slug`, `display_name`, optional `description`, `clone_settings_from`, `clone_axes`). `201` |
+| POST | `/curation/projects` | Create a project (`slug`, `display_name`, optional `description`, `clone_settings_from`, `clone_axes`). `202`: the project comes back in status `building` with the `project_create` job in `job_id`; the same `Idempotency-Key` again answers `200` with the first job |
 | GET | `/curation/projects/{project}` | One project: status, revision, counts, resources, flags (`writable`, `deletable`, ...) |
 | PATCH | `/curation/projects/{project}` | Edit `display_name` / `description`; needs `expected_revision` |
 | POST | `/curation/projects/{project}/archive` | Archive (read-only). `/unarchive` reverses it |
@@ -130,6 +131,31 @@ or `region`. Every class that has boxes needs a decision
 (`422 class_mapping_incomplete` lists the `unmapped` names). A COCO layout
 (`images/` next to `annotations/*.json`) is detected automatically.
 
+## Jobs
+
+Routes that start long work answer `202` with a `job_id`; see
+[Jobs, queues and recovery](../operations/jobs.mdx).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/jobs` | The project's jobs, newest first; filters `kind` and `status`, keyset pages |
+| GET | `/jobs/{job_id}` | One job; another project's job is `404 job_not_found` |
+
+A job-starting route accepts an `Idempotency-Key` header; the same key with
+other parameters answers `422 idempotency_key_reused`.
+
+## Location policy and map
+
+See [Capture metadata, location and privacy](../guides/privacy-and-location.mdx).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/location_policy` | What the project keeps of a photo's position: `drop`, `store_coarse` or `store` |
+| PUT | `/location_policy` | Change it; a change that keeps less starts the `location_purge` step of `source_backfill` |
+| GET | `/map` | Whether the Map page is available for this project |
+| GET | `/map/cells` | GeoJSON grid cells for a zoom and bounding box (`application/geo+json`) |
+| GET | `/map/images` | The photos of one cell |
+
 ## Reprocess
 
 One route re-runs pipeline stages over existing data. See
@@ -140,7 +166,7 @@ One route re-runs pipeline stages over existing data. See
 | POST | `/reprocess` | `targets` (exactly one of `image_ids`, `crop_ids`, `filter`), `scopes` (`detect`, `region`, `vlm`, `embed`), `region_mode` (`redetect` / `reverify`), `dry_run` (default `true`) |
 | POST | `/images/{image_id}/reprocess` | The per-image button; applies by default |
 | POST | `/crops/{crop_id}/reprocess` | The per-item button; applies by default |
-| GET | `/reprocess/jobs/{job_id}` | Progress of a job (`detect` or `embed` beyond `OP_REPROCESS_SYNC_MAX` images runs as a file-backed job; one live job per project, `409 reprocess_busy`) |
+| GET | `/reprocess/jobs/{job_id}` | Progress of a job (`detect` or `embed` beyond `OP_REPROCESS_SYNC_MAX` images runs as a job; one live job per project, `409 reprocess_busy`) |
 | POST | `/reprocess/jobs/{job_id}/cancel` | Stop a live job after its current chunk |
 
 Locked items and boxes are never written; each scope reports
@@ -191,14 +217,14 @@ and warns. A live combine marks its sources and target `project_busy`.
 | GET | `/crops/{crop_id}/history` | Label/edit history |
 | PUT | `/crops/{crop_id}/label` | Set the class (`class_id`, `label_source` `human` or `human_confirmed`) |
 | DELETE | `/crops/{crop_id}/label` | Clear a human label |
-| PUT | `/crops/batch_label` | Label many; returns `updated_ids` and per-item `conflicts` |
+| PUT | `/crops/batch_label` | Label many; `202` with a job and an `op_id` (see [Jobs](../operations/jobs.mdx)) |
 | POST | `/crops/{crop_id}/label/undo` | Undo the last human class write |
 | POST | `/crops/label/undo_batch` | Batch undo |
 | POST | `/crops/move` | Move items to another cluster |
 | POST | `/crops/batch_exclude` | Exclude from datasets (with a `reason`) |
 | POST | `/crops/batch_unexclude` | Restore excluded items |
 | POST | `/crops/{crop_id}/discard` | Discard an item |
-| POST | `/crops/discard_batch` | Discard many |
+| POST | `/crops/discard_batch` | Discard many; an item that someone else edited is a `conflicts` entry, an item whose write errored is a `failed` entry with `reason: write_failed` |
 | POST | `/crops/flag_new_class` | Flag items as a class the registry lacks |
 | POST | `/crops/{crop_id}/review_dismiss` | Hide from every review queue |
 | POST | `/crops/{crop_id}/review_undismiss` | Return an item to the queues |
