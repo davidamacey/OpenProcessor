@@ -73,7 +73,6 @@ RETIRED: dict[str, str] = {
     'text_raw': 'region_text_raw',
     'text_confidence': 'region_text_confidence',
     'text_source': 'region_text_source',
-    'text_engine_version': 'region_text_engine_version',
     'text_vlm': 'region_text_vlm',
     'text_ocr': 'region_text_ocr',
     'text_disagreement': 'region_text_disagreement',

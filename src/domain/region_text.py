@@ -45,6 +45,14 @@ def fold(text: str, confusables: Mapping[str, str]) -> str:
     return ''.join(confusables.get(ch, ch) for ch in normalize(text))
 
 
+def match_fields(text: str | None, confusables: Mapping[str, str]) -> dict[str, str | None]:
+    """The storage-only match keys written next to ``text``; both ``None`` for no usable text."""
+    norm = normalize(text) if text else ''
+    if not norm:
+        return {'text_norm': None, 'text_fold': None}
+    return {'text_norm': norm, 'text_fold': fold(norm, confusables)}
+
+
 def confusables_issue(confusables: Mapping[str, str], charset: str) -> str | None:
     """Why a confusable map is not valid, or ``None``.
 

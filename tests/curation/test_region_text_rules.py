@@ -21,6 +21,7 @@ from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.region_text import (
     DominantTextConfig,
     OcrLine,
+    Reader,
     read_dominant_text,
     resolve_region_text,
 )
@@ -143,8 +144,9 @@ def _resolve(mode: str, vlm: str | None, ocr: Any) -> dict[str, Any]:
         vlm_confidence='high',
         vlm_engine='vlm-model',
         ocr=ocr,
-        ocr_engine='det:1+rec:1',
+        ocr_reader=Reader('paddleocr_rec_trt', '1'),
         normalizer=REF_CFG.normalizer,
+        confusables={},
         rules=REF_RULES,
     )
 

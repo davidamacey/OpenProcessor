@@ -27442,6 +27442,17 @@
             ],
             "title": "Text Choice"
           },
+          "text_conf_char_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Conf Char Min"
+          },
           "text_confidence": {
             "anyOf": [
               {
@@ -27464,7 +27475,7 @@
             ],
             "title": "Text Disagreement"
           },
-          "text_engine_version": {
+          "text_frame": {
             "anyOf": [
               {
                 "type": "string"
@@ -27473,7 +27484,7 @@
                 "type": "null"
               }
             ],
-            "title": "Text Engine Version"
+            "title": "Text Frame"
           },
           "text_ocr": {
             "anyOf": [
@@ -27496,6 +27507,28 @@
               }
             ],
             "title": "Text Raw"
+          },
+          "text_reader": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reader"
+          },
+          "text_reader_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Reader Version"
           },
           "text_source": {
             "anyOf": [
@@ -27556,8 +27589,11 @@
           "text",
           "text_raw",
           "text_source",
-          "text_engine_version",
+          "text_frame",
           "text_confidence",
+          "text_conf_char_min",
+          "text_reader",
+          "text_reader_version",
           "text_vlm",
           "text_ocr",
           "text_choice",

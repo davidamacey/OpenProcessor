@@ -26,9 +26,11 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.domain.region_text import match_fields
+
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Mapping, Sequence
 
     from src.config import DetectionProfile
     from src.services.detection.region_text_rules import RegionTextRules
@@ -73,6 +75,62 @@ TEXT_CHOICES: tuple[str, ...] = (
     TEXT_CHOICE_NONE,
     TEXT_CHOICE_HUMAN,
 )
+
+# The reader name stored for a VLM reading (an OCR reading stores its Triton model name).
+VLM_READER = 'vlm'
+
+# Every per-box text attribute a reading sets (``RegionBox`` field names); a new reading
+# replaces all of them, so none of a previous reading's survives.
+TEXT_BOX_ATTRS: tuple[str, ...] = (
+    'text',
+    'text_raw',
+    'text_source',
+    'text_frame',
+    'text_norm',
+    'text_fold',
+    'text_confidence',
+    'text_conf_char_min',
+    'text_reader',
+    'text_reader_version',
+    'text_vlm',
+    'text_ocr',
+    'text_choice',
+    'text_vlm_invalid',
+    'text_disagreement',
+)
+
+
+@dataclass(frozen=True)
+class Reader:
+    """Which model read a box's text: a Triton model name (or ``vlm``) and its version."""
+
+    name: str
+    version: str
+
+
+def reading_fields(
+    text: str, reader: Reader, confusables: Mapping[str, str], char_min: float | None = None
+) -> dict[str, Any]:
+    """The attributes every stored reading carries beside its ``text``: the frame's own
+    reading, the storage-only match keys, the reader and the per-character minimum."""
+    out: dict[str, Any] = {
+        'text_frame': text,
+        **match_fields(text, confusables),
+        'text_reader': reader.name,
+        'text_reader_version': reader.version,
+    }
+    if char_min is not None:
+        out['text_conf_char_min'] = char_min
+    return out
+
+
+def active_confusables() -> Mapping[str, str]:
+    """The active region profile's confusable map; empty with no active profile."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    return profile.text_confusables if profile is not None else {}
+
 
 # VLM text confidence arrives as a category; stored as a number so both
 # readers share one float field.
@@ -206,6 +264,15 @@ class DominantTextReading:
     kept: tuple[OcrLine, ...]
     reason: str
 
+    @property
+    def char_min(self) -> float | None:
+        """The lowest single-character probability over the kept lines; ``None`` when no line
+        is kept or any kept line has none (a missing value is never read as confident)."""
+        values = [ln.char_min for ln in self.kept]
+        if not values or any(v is None for v in values):
+            return None
+        return min(v for v in values if v is not None)
+
 
 def _valid(lines: Iterable[OcrLine]) -> list[OcrLine]:
     return [ln for ln in lines if ln.text.strip() and ln.width > 0.0 and ln.height > 0.0]
@@ -317,8 +384,9 @@ def resolve_region_text(
     vlm_confidence: str | None,
     vlm_engine: str,
     ocr: DominantTextReading | None,
-    ocr_engine: str,
+    ocr_reader: Reader,
     normalizer: TextNormalizer,
+    confusables: Mapping[str, str],
     rules: RegionTextRules | None = None,
 ) -> dict[str, Any]:
     """Region text fields for one detected region, keyed by ``RegionFields``
@@ -364,15 +432,15 @@ def resolve_region_text(
         out['text_disagreement'] = disagree
 
     use_ocr = bool(ocr_text) and (mode == TEXT_READER_OCR or not vlm_valid)
-    if use_ocr and ocr is not None:
+    if use_ocr and ocr is not None and ocr_text:
         out['text'] = ocr_text
         out['text_source'] = TEXT_SOURCE_OCR
-        out['text_engine_version'] = ocr_engine
+        out.update(reading_fields(ocr_text, ocr_reader, confusables, ocr.char_min))
         out['text_confidence'] = ocr.confidence
     elif vlm_valid:
         out['text'] = vlm_valid
         out['text_source'] = TEXT_SOURCE_VLM
-        out['text_engine_version'] = vlm_engine
+        out.update(reading_fields(vlm_valid, Reader(VLM_READER, vlm_engine), confusables))
         if vlm_confidence:
             out['text_confidence'] = VLM_TEXT_CONFIDENCE.get(vlm_confidence, 0.70)
     choice = _text_choice(
@@ -415,13 +483,13 @@ def _text_choice(
     return TEXT_CHOICE_NONE if rejected else None
 
 
-def ocr_engine_id(profile: DetectionProfile) -> str:
-    """``region_text_engine_version`` for an OCR reading: the rec model id
-    and version the pipeline ran."""
-    return f'{profile.ocr_rec_model}:{profile.ocr_rec_version}'
+def ocr_reader(profile: DetectionProfile) -> Reader:
+    """The reader of an OCR reading: the rec model and version the pipeline ran."""
+    return Reader(profile.ocr_rec_model, profile.ocr_rec_version)
 
 
 __all__ = [
+    'TEXT_BOX_ATTRS',
     'TEXT_CHOICES',
     'TEXT_CHOICE_AGREE',
     'TEXT_CHOICE_HUMAN',
@@ -439,14 +507,18 @@ __all__ = [
     'TEXT_READER_VLM_THEN_OCR',
     'TEXT_SOURCE_OCR',
     'TEXT_SOURCE_VLM',
+    'VLM_READER',
     'VLM_TEXT_CONFIDENCE',
     'DominantTextConfig',
     'DominantTextReading',
     'OcrLine',
+    'Reader',
     'TextNormalizer',
-    'ocr_engine_id',
+    'active_confusables',
     'ocr_needed',
+    'ocr_reader',
     'read_dominant_text',
+    'reading_fields',
     'reading_order',
     'reads_text',
     'resolve_region_text',

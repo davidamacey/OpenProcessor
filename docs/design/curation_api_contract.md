@@ -636,7 +636,7 @@ resolved `(name, revision)` into the job.
 
 Items record which endpoint answered: `vlm_endpoint` (`name@revision`),
 `vlm_model` (the resolved model) and `vlm_prompt_pack`. `region_verifier`,
-`text_engine_version` and the class `detector`/`labeler` provenance carry the
+`text_reader_version` and the class `detector`/`labeler` provenance carry the
 resolved model, not the configured name.
 
 ### Local model catalog (global routes)
@@ -801,7 +801,7 @@ separate single-box shape. Each element:
 | `score`, `detector`, `detector_version`, `source`, `detected_at` | provenance. A box a human draws or moves has `detector` set to the profile's human detector name, `score` 1.0 and `source` `human` |
 | `bbox_correct`, `confidence` | the verifier's verdict on the geometry and its category; `bbox_correct` is `null` when no verdict was given |
 | `rejection_reason` | why the box is `rejected` (see below) |
-| `text`, `text_raw`, `text_source`, `text_engine_version`, `text_confidence`, `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | per-box text, only when the region profile reads text |
+| `text`, `text_raw`, `text_source`, `text_frame`, `text_reader`, `text_reader_version`, `text_confidence`, `text_conf_char_min`, `text_vlm`, `text_ocr`, `text_choice`, `text_vlm_invalid`, `text_disagreement` | per-box text, only when the region profile reads text |
 | `cluster` | per-box served cluster placement (the `ClusterRef` of an item) |
 | `locked` | server-derived: [the lock rule](#the-lock-rule) for this box |
 | `bbox_in_parent` | server-derived: the box in the item-crop frame, clamped to `[0, 1]`; `null` when the item has no usable `bbox_norm`. Draw it on the item thumbnail as is |
@@ -847,8 +847,10 @@ profile's `text_reader`:
 | `vlm_then_ocr` (default) | when the VLM read nothing | the VLM's, else the OCR's |
 | `both` | always | the VLM's, else the OCR's |
 
-- `text_source` is `vlm`, `ocr` or `human`. `text_engine_version` is the VLM
-  model id or the OCR detector and recognizer ids. `text_confidence` is the
+- `text_source` is `vlm`, `ocr` or `human`. `text_reader` and
+  `text_reader_version` name the model that read it: `vlm` and the VLM model id, or the OCR
+  recognizer and its version. `text_conf_char_min` is the lowest single-character probability of
+  the kept OCR lines, absent when the pipeline did not report it. `text_confidence` is the
   VLM category mapped to 0.92, 0.70 or 0.40, or the minimum recognition score
   of the kept OCR lines. `text_raw` is every OCR line, unfiltered. `text_vlm`
   and `text_ocr` are each reader's own reading. `text_disagreement` is

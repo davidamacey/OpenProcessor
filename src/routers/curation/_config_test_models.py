@@ -142,8 +142,11 @@ class RegionTestCandidate(BaseModel):
     text: str | None
     text_raw: str | None
     text_source: str | None
-    text_engine_version: str | None
+    text_frame: str | None
     text_confidence: float | None
+    text_conf_char_min: float | None
+    text_reader: str | None
+    text_reader_version: str | None
     text_vlm: str | None
     text_ocr: str | None
     text_choice: str | None

@@ -49,15 +49,17 @@ from src.domain.item_text import item_text_update
 from src.domain.region_boxes import has_human_text, new_box_placeholder
 from src.services.detection.cascade_detect.sanity import is_plausible_region_bbox
 from src.services.detection.region_text import (
+    TEXT_BOX_ATTRS,
     TEXT_CHOICE_OCR_ONLY,
     TEXT_CHOICE_VLM_INVALID,
     TEXT_SOURCE_OCR,
     DominantTextConfig,
     DominantTextReading,
     OcrLine,
-    ocr_engine_id,
     ocr_needed,
+    ocr_reader,
     read_dominant_text,
+    reading_fields,
     resolve_region_text,
 )
 from src.services.detection.region_text_rules import RegionTextRules, region_text_rules
@@ -143,22 +145,8 @@ async def read_region_text(
     return read_dominant_text(lines, DominantTextConfig.from_profile(profile))
 
 
-_TEXT_ATTRS = (
-    'text',
-    'text_raw',
-    'text_source',
-    'text_confidence',
-    'text_engine_version',
-    'text_vlm',
-    'text_ocr',
-    'text_disagreement',
-    'text_choice',
-    'text_vlm_invalid',
-)
-
-
 def _drop_region_text(doc: dict[str, Any]) -> None:
-    for attr in _TEXT_ATTRS:
+    for attr in TEXT_BOX_ATTRS:
         doc.pop(attr, None)
 
 
@@ -206,26 +194,13 @@ async def apply_region_text(
         vlm_confidence=vlm_confidence,
         vlm_engine=vlm_model or '',
         ocr=reading,
-        ocr_engine=ocr_engine_id(profile),
+        ocr_reader=ocr_reader(profile),
         normalizer=DominantTextConfig.from_profile(profile).normalizer,
+        confusables=profile.text_confusables,
         rules=rules,
     )
     _drop_region_text(doc)
     doc.update(fields)
-
-
-_TEXT_BOX_ATTRS = (
-    'text',
-    'text_raw',
-    'text_source',
-    'text_engine_version',
-    'text_confidence',
-    'text_vlm',
-    'text_ocr',
-    'text_choice',
-    'text_vlm_invalid',
-    'text_disagreement',
-)
 
 
 def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any]) -> RegionBox:
@@ -243,8 +218,8 @@ def _box_with_resolved_text(box: RegionBox, doc: dict[str, Any]) -> RegionBox:
     """
     if has_human_text(box):
         return box
-    updates: dict[str, Any] = dict.fromkeys(_TEXT_BOX_ATTRS)
-    updates.update({attr: doc[attr] for attr in _TEXT_BOX_ATTRS if attr in doc})
+    updates: dict[str, Any] = dict.fromkeys(TEXT_BOX_ATTRS)
+    updates.update({attr: doc[attr] for attr in TEXT_BOX_ATTRS if attr in doc})
     return dataclasses.replace(box, **updates)
 
 
@@ -375,7 +350,7 @@ def apply_text_hint_fallback(
     doc['text'] = text
     doc['text_raw'] = text
     doc['text_source'] = TEXT_SOURCE_OCR
-    doc['text_engine_version'] = ocr_engine_id(profile)
+    doc.update(reading_fields(text, ocr_reader(profile), profile.text_confusables))
     doc['text_confidence'] = confidence
     doc['text_choice'] = (
         TEXT_CHOICE_VLM_INVALID if doc.get('text_vlm_invalid') else TEXT_CHOICE_OCR_ONLY
