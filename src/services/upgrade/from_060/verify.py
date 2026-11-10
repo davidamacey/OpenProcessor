@@ -185,8 +185,21 @@ async def _check_counts(
             report.problems.append(f'{table}: expected {want} rows, found {actual[table]}')
 
 
+async def _has_labeled_items(ctx: StepContext, index: str) -> bool:
+    """Whether any item of the index carries a class (id or name): the data's own answer to
+    whether a missing registry loses anything."""
+    clause = {
+        'bool': {'should': [{'exists': {'field': 'class_id'}}, {'exists': {'field': 'class_name'}}]}
+    }
+    return await ctx.writer.count(index, clause) > 0
+
+
 async def _check_classes(
-    session: AsyncSession, parsed: Parsed, project_ids: dict[str, Any], report: VerifyReport
+    session: AsyncSession,
+    parsed: Parsed,
+    project_ids: dict[str, Any],
+    report: VerifyReport,
+    ctx: StepContext,
 ) -> dict[str, dict[int, str]]:
     registries: dict[str, dict[int, str]] = {}
     for pd in parsed.projects:
@@ -200,6 +213,14 @@ async def _check_classes(
         found = dict(rows)
         registries[pd.project.slug] = found
         if pd.registry is None:
+            items = pd.project.indexes.get('items', '')
+            if pd.project.status != 'failed' and items and await _has_labeled_items(ctx, items):
+                report.problems.append(
+                    f'{pd.project.slug}: no class registry found at '
+                    f'{pd.project.class_registry_path or "(no path in the project record)"} and no '
+                    f'registry document, but {items} holds items with classes; mount the data '
+                    f'directory or restore the file, then run again with --reset'
+                )
             continue
         want = {c.class_id: c.name for c in pd.registry.classes}
         missing = {k: v for k, v in want.items() if found.get(k) != v}
@@ -265,7 +286,7 @@ async def verify_load(
     """Verify the loaded rows. ``ctx`` is the load's step context (ids and the reader)."""
     report = VerifyReport()
     await _check_counts(session, parsed, bundle, report)
-    registries = await _check_classes(session, parsed, ctx.project_ids, report)
+    registries = await _check_classes(session, parsed, ctx.project_ids, report, ctx)
     await _check_config_bodies(session, parsed, ctx.config_ids, report)
     await _check_indexes(session, reader, parsed, report)
     for pd in parsed.projects:
