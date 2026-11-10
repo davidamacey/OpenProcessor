@@ -19195,6 +19195,27 @@
         "title": "ModelChoice",
         "type": "object"
       },
+      "ModelClassMappingCounts": {
+        "properties": {
+          "mapped_count": {
+            "title": "Mapped Count",
+            "type": "integer"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mapped_count",
+          "unmapped"
+        ],
+        "title": "ModelClassMappingCounts",
+        "type": "object"
+      },
       "ModelClassMappingEntry": {
         "properties": {
           "class_id": {
@@ -19507,6 +19528,295 @@
           "project"
         ],
         "title": "ModelSharingUser",
+        "type": "object"
+      },
+      "ModelStatusEntry": {
+        "additionalProperties": true,
+        "description": "A Triton model, the segmenter or a VLM endpoint.\n\nThe fields after ``unloadable`` belong to one kind only; the route sets\n``response_model_exclude_unset`` so a row never gains a key it did not have.\n``extra='allow'`` keeps any key a producer adds that is not listed here.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "active_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active In"
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
+          },
+          "class_mapping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelClassMappingCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
+          },
+          "exec_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exec Count"
+          },
+          "friendly_name": {
+            "title": "Friendly Name",
+            "type": "string"
+          },
+          "inference_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Count"
+          },
+          "inference_failed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Failed"
+          },
+          "is_region_protected": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Region Protected"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "model_type": {
+            "title": "Model Type",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "optional": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optional"
+          },
+          "owned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owned"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          },
+          "promoted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Promoted At"
+          },
+          "requires_force_to_unload": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires Force To Unload"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared"
+          },
+          "sharing_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharing Revision"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unloadable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unloadable"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "name",
+          "friendly_name",
+          "role",
+          "kind",
+          "model_type",
+          "status"
+        ],
+        "title": "ModelStatusEntry",
+        "type": "object"
+      },
+      "ModelsStatusResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStatusEntry"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "title": "ModelsStatusResponse",
         "type": "object"
       },
       "NearDupActiveProfile": {
@@ -52128,9 +52438,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Models Status Curation Projects  Project  Models Status Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ModelsStatusResponse"
                 }
               }
             },

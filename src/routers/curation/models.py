@@ -31,6 +31,7 @@ from src.routers.curation._models_class_mapping import (
     listing_fields,
 )
 from src.routers.curation._models_vlm import vlm_status_rows
+from src.schemas.curation.models_status import ModelsStatusResponse
 from src.services.curation.ingest_detector import refreshed_ingest_profiles
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.detection.segmenter_health import (
@@ -153,7 +154,9 @@ async def _attach_listing_fields(models: list[dict[str, Any]]) -> None:
             )
 
 
-@router.get('/models/status')
+@router.get(
+    '/models/status', response_model=ModelsStatusResponse, response_model_exclude_unset=True
+)
 async def models_status(
     include_other_projects: Annotated[
         bool,

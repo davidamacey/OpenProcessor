@@ -12,6 +12,7 @@ CONTRACT = Path(__file__).resolve().parents[1] / 'contracts' / 'openapi' / 'cura
 PREFIX = '/curation/projects/{project}'
 
 TYPED = [
+    ('get', '/models/status', 'ModelsStatusResponse'),
     ('get', '/clusters/representatives', 'ClusterRepresentativesPage'),
     ('post', '/probe/cancel', 'ProbeCancelResponse'),
     ('get', '/test_holdout/stats', 'HoldoutStats'),
@@ -44,3 +45,43 @@ def test_holdout_stats_keeps_every_bucket_key() -> None:
         'min_test_per_class': 20,
     }
     assert HoldoutStats(**body).model_dump() == body
+
+
+def test_models_status_rows_keep_exactly_their_keys() -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from src.schemas.curation.models_status import ModelsStatusResponse
+
+    rows = [
+        {
+            'name': 'seg',
+            'friendly_name': 'Segmenter',
+            'role': 'r',
+            'kind': 'external',
+            'model_type': 't',
+            'status': 'ready',
+            'version': None,
+            'last_error': None,
+            'unloadable': False,
+            'future_key': {'a': 1},
+        },
+        {
+            'name': 'm',
+            'friendly_name': 'M',
+            'role': 'r',
+            'kind': 'triton',
+            'model_type': 't',
+            'status': 'ready',
+            'version': '1',
+            'class_mapping': {'mapped_count': 1, 'unmapped': ['x']},
+            'sharing_revision': None,
+        },
+    ]
+    app = FastAPI()
+
+    @app.get('/s', response_model=ModelsStatusResponse, response_model_exclude_unset=True)
+    async def s() -> dict[str, object]:
+        return {'models': rows}
+
+    assert TestClient(app).get('/s').json() == {'models': rows}
