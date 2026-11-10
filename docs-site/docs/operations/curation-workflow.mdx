@@ -97,7 +97,7 @@ target and level is serving, and every cluster has a stable `cluster_uid` that l
 when its members mostly stay together. A member is `assigned`, `review` or `unassigned`. Each
 card carries `cluster_uid`, dominant class, `label_agreement`, validated count, quality flags
 and representatives. A run starts when the project has grown (the cluster refresh tick, see
-[Pipeline modes](../guides/pipeline-modes.mdx#3-what-the-cluster-refresh-does)) or when you
+[Pipeline modes](../guides/pipeline-modes.mdx#b-detection-embedding-and-clustering)) or when you
 start one with `POST /curation/projects/{project}/clusters/runs`; a finished partition is
 served after `PUT /curation/projects/{project}/clusters/activation` unless the profile
 activates it at once. Review it first with `GET .../clusters/partitions/{partition_id}`.
@@ -114,9 +114,9 @@ activates it at once. Review it first with `GET .../clusters/partitions/{partiti
   activates one (the `env` endpoint from `OP_VLM_URL`/`OP_VLM_MODEL` included), so
   nothing waits for a VLM. Switch an active project off with
   `POST /vlm/endpoints/deactivate` (see
-  [VLM selection](../guides/vlm-selection.mdx#turn-the-vlm-off-for-a-project)), or run
+  [VLM selection](../guides/vlm-selection.mdx#activate-for-a-project)), or run
   the VLM for one job only with `vlm=<name>` (see the
-  [selective recipe](../guides/pipeline-modes.mdx#recipe-ingest-without-the-vlm-cluster-name-by-hand-then-run-the-vlm-for-one-thing)). Run
+  [selective recipe](../guides/pipeline-modes.mdx#recipe-cluster-name-by-hand-then-run-the-vlm-for-one-thing)). Run
   `auto_label/start?run_vlm=true`, label a cluster or a
   sample with `POST /assist/runs`, or let `curation-vlm-worker`
   suggest classes continuously. Register and activate other endpoints as

@@ -5,58 +5,48 @@ title: Selective VLM and segmenter assist
 
 # Selective VLM and segmenter assist
 
-Ingest a lot of images, cluster them, name a few clusters by hand, then ask the
-VLM (and the segmenter) for help on exactly the part you are working on: one
-cluster, the crops you selected, one crop or one box. The
-VLM and segmenter choices are per run. Nothing is called until you start a run.
+Ingest, cluster, name a few clusters by hand, then ask the VLM (and the segmenter) for help
+on exactly the part you are working on: one cluster, selected crops, one crop or one box.
+Nothing is called until you start a run.
 
-An **assist run** is one request shape for every scope. It plans first (a dry
-run is the default) and shows what it would do; you start it on purpose. Its
-output is suggestions: a class, attributes the prompt pack declares, box
-verdicts, and for a cluster a proposed label. A suggestion
-never overwrites a label a human or an import set. The routes and fields are
-in the API contract (`docs/design/curation_api_contract.md`).
+An **assist run** is one request shape for every scope. It plans first (dry run is the
+default) and shows what it would do. Its output is suggestions: a class, the attributes the
+prompt pack declares, box verdicts and, for a cluster, a proposed label. A suggestion never
+overwrites a label a human or an import set. Routes and fields:
+`docs/design/curation_api_contract.md`.
 
-`API=http://localhost:4603/curation/projects/cars` is assumed in the snippets.
-They are marked `# not run` unless a run produced the output.
+`API=http://localhost:4603/curation/projects/cars` is assumed.
 
 ## The recipe
 
-1. **Ingest** with the VLM off. A project calls no VLM until it activates one,
-   or until a run names one. See [Pipeline modes](./pipeline-modes.mdx).
-2. **Cluster.** `POST $API/pipeline/auto_label/start?train_clusters=true`. If
-   a cluster mixes things, run a finer cluster profile (`POST $API/clusters/runs`) and
-   activate the new partition; a cluster's members are listed with
-   `GET $API/crops?cluster_uid=<cluster uid>`.
-3. **Name some clusters by hand.** Label a few clusters in
-   Cropwright or with `PUT $API/crops/batch_label`. Those labels are
-   human-validated: no automated writer overwrites them.
-4. **Assist** on a cluster, a selection, a crop or a box. Pick
-   what the VLM sees, what to do, and which VLM. Read the plan, start the run.
-5. **Read the proposal and apply it on purpose.** A run over a cluster
-   proposes its label. Apply it to label the members you have not
-   already labelled.
+1. **Ingest** with the VLM off. A project calls no VLM until it activates one or a run names
+   one ([Pipeline modes](./pipeline-modes.mdx)).
+2. **Cluster:** `POST $API/pipeline/auto_label/start?train_clusters=true`. If a cluster mixes
+   things, run a finer cluster profile (`POST $API/clusters/runs`) and activate the new
+   partition. List a cluster's members with `GET $API/crops?cluster_uid=<cluster uid>`.
+3. **Name some clusters by hand** in Cropwright or with `PUT $API/crops/batch_label`. Those
+   labels are human-validated; no automated writer overwrites them.
+4. **Assist** on a cluster, selection, crop or box: pick what the VLM sees, what to do and
+   which VLM; read the plan; start the run.
+5. **Read the proposal and apply it on purpose.**
 
-In Cropwright, steps 4 and 5 are the **Assist…** button on a cluster page. See
-[Assist in Cropwright](../cropwright/user-guide/assist.md).
+In Cropwright, steps 4 and 5 are the **Assist…** button on a cluster page
+([Assist in Cropwright](../cropwright/user-guide/assist.md)).
 
 ## What the VLM sees: the sample
 
 | Choice | When | Request |
 |---|---|---|
-| The crops you selected (one crop is a selection of one) | You know which crops to ask about | `target` `{"kind":"crops","crop_ids":[...]}`, `sample.mode` `all` |
-| Every member of a cluster or a filter | The scope is small, or you want an answer for each | `target` `{"kind":"cluster","cluster_uid":"7c1e0a52-3b64-4f0e-9d58-2a1f6b3c9e10"}`, `sample.mode` `all` |
-| A random representative sample | The scope is large and you want a label for it, not an answer for each member | `sample` `{"mode":"representative"}` |
+| Selected crops (one crop is a selection of one) | You know which to ask about | `target` `{"kind":"crops","crop_ids":[...]}`, `sample.mode` `all` |
+| Every member of a cluster or filter | Small scope, or an answer for each | `target` `{"kind":"cluster","cluster_uid":"..."}`, `sample.mode` `all` |
+| A random representative sample | Large scope; you want a label for it, not an answer per member | `sample` `{"mode":"representative"}` |
 
-A representative sample is seeded, so the same scope, seed and size give the
-same members. Its size grows with the scope and is bounded. By default it is
-`max(8, min(64, ceil(2 * sqrt(n))))` of `n` members: 5 members are all sent,
-25 send 10, 100 send 20, 400 send 40, and 1000 or more send 64. `sample.size`
-(at most 256) overrides it. The plan reports `scope_count`, `sampled`, the
-strata and `estimated_vlm_calls`, so you see the cost before you start.
+A representative sample is seeded (same scope, seed and size give the same members). Default
+size is `max(8, min(64, ceil(2 * sqrt(n))))` for `n` members (5 sends all, 25 sends 10, 100
+sends 20, 1000+ sends 64); `sample.size` (at most 256) overrides it. The plan reports
+`scope_count`, `sampled`, the strata and `estimated_vlm_calls` before you start.
 
 ```bash
-# not run  (code-verified by tests/curation/test_assist_run_scope.py)
 curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' -d '{
   "target": {"kind":"cluster","cluster_uid":"7c1e0a52-3b64-4f0e-9d58-2a1f6b3c9e10"},
   "sample": {"mode":"representative","size":24,"seed":3},
@@ -64,104 +54,85 @@ curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' -d '{
 }'
 ```
 
-The frozen test holdout and items you ignored are never sent. A locked item
-(a class a human or an import set, or a validated one) in the scope is sent for
-a suggestion and counts as a vote, which is a useful check against your own
-label; its class is never written.
-
-A scope over 5000 items with `sample.mode` `all` is refused with `422
-assist_too_large`: sample it, narrow it, or use the
+The frozen test holdout and ignored items are never sent. A locked item (class set by a human
+or import, or validated) is sent for a suggestion and counts as a vote, a useful check on your
+own label; its class is never written. A scope over 5000 items with `sample.mode` `all` is
+`422 assist_too_large`: sample it, narrow it, or use the
 [auto-label job](./pipeline-modes.mdx#c-vlm-assisted-labeling-of-a-large-batch).
 
 ## What to do: the actions
 
 | Action | Targets | Result |
 |---|---|---|
-| `classify` | crops, cluster, filter | A class suggestion per sampled item, through the guarded VLM writer. A locked, validated or held-out item keeps its class and gets the answer as a suggestion only |
-| `attributes` | crops, boxes, cluster, filter | The attributes the prompt pack declares, stored apart from the labels |
-| `verify` | crops, boxes | The VLM judges each box that is still open to a machine verdict. Human- and import-owned boxes are never sent |
-| `segment` | crops, cluster, filter | Re-queues the items for the segmenter in the region worker. See [Segmenter verification](#segmenter-verification) |
+| `classify` | crops, cluster, filter | A class suggestion per sampled item via the guarded VLM writer; a locked, validated or held-out item keeps its class and gets the answer as a suggestion only |
+| `attributes` | crops, boxes, cluster, filter | The attributes the prompt pack declares, stored apart from labels |
+| `verify` | crops, boxes | The VLM judges each box still open to a machine verdict; human- and import-owned boxes are never sent |
+| `segment` | crops, cluster, filter | Re-queues the items for the segmenter in the region worker ([below](#segmenter-verification)) |
 
-A run takes the VLM and the prompt pack by name: `"vlm": "env"` and
-`"prompt_pack": "cars"` (`name` or `name@revision`). Omitted, it uses the
-project's active endpoint and default pack. An endpoint that sends crops outside
-the deployment needs `"acknowledge_external": true`. The run pins the endpoint
-and pack it resolved, so the result says what produced it.
+A run takes the VLM and pack by name: `"vlm": "env"`, `"prompt_pack": "cars"` (`name` or
+`name@revision`). Omitted, it uses the project's active endpoint and default pack. An
+endpoint outside the deployment needs `"acknowledge_external": true`. The run pins what it
+resolved, so the result says what produced it.
 
 ## Attributes in prompt packs
 
-A [prompt pack](./prompt-packs.mdx) declares the facts it wants reported, such
-as a car's make or a wheel's rim material:
+A [prompt pack](./prompt-packs.mdx) declares the facts it wants reported:
 
 ```json
-{
-  "attributes": [
-    {"key": "make", "description": "The maker of the car", "applies_to": "item"},
-    {"key": "body_style", "description": "The body style", "values": ["sedan", "suv", "pickup"], "applies_to": "item"},
-    {"key": "rim_material", "description": "What the rim is made of", "applies_to": "box"}
-  ]
-}
+{"attributes": [
+  {"key": "make", "description": "The maker of the car", "applies_to": "item"},
+  {"key": "body_style", "description": "The body style", "values": ["sedan", "suv", "pickup"], "applies_to": "item"},
+  {"key": "rim_material", "description": "What the rim is made of", "applies_to": "box"}]}
 ```
 
-`examples/prompt_packs/vehicle_wheel.json` is a complete one, and
-`examples/prompt_packs/general_objects.json` is a domain-neutral one for COCO-style
-objects (`brand` as free text, `colour` and `material` as closed lists). The VLM answers
-each attribute with a value and a confidence (`high`, `medium`, `low`). The
-server drops a key the pack did not declare and a value outside a closed
-`values` list, and counts those as `invalid_values`. The attributes are stored
-in the item's `assist` object (box attributes under `assist.boxes`), never in
-the class or the box. They are suggestions only: Cropwright shows them as
-dashed "VLM suggests" chips, never as labels. Preview a pack's attributes on up
-to 64 crops with [Test on a crop](./test-on-crop.mdx) before a run.
+`examples/prompt_packs/vehicle_wheel.json` is a complete pack; `general_objects.json` is a
+domain-neutral one (`brand` free text, `colour` and `material` closed lists). The VLM answers
+each attribute with a value and a confidence (`high`, `medium`, `low`); undeclared keys and
+values outside a closed list are dropped and counted as `invalid_values`. Attributes are
+stored in the item's `assist` object (box attributes under `assist.boxes`), never in the
+class or box, and Cropwright shows them as dashed "VLM suggests" chips. Preview on up to 64
+crops with [Test on a crop](./test-on-crop.mdx).
 
 ## The proposal for a cluster
 
-A `classify` run over a cluster reads the sampled answers as a
-label for the scope. The result has the top class, the **agreement** (the share
-of answers for it), the vote distribution, new-class names the VLM proposed
-when nothing fit, and a summary of the attributes. The proposal names a class
-only when at least 3 answers exist and the agreement reaches `min_agreement`
-(default 0.6); otherwise the distribution is shown and no class is proposed.
-The assist dialog has an **Agreement needed** field for a cluster `classify` run: empty uses the
-server's default (shown in the field), and it accepts 0.5 to 1.0.
+A `classify` run over a cluster reads the sampled answers as a label for the scope: the top
+class, the **agreement** (share of answers for it), the vote distribution, new-class names
+the VLM proposed when nothing fit, and an attribute summary. It names a class only when at
+least 3 answers exist and agreement reaches `min_agreement` (default 0.6, accepts 0.5 to 1.0;
+the Cropwright **Agreement needed** field); otherwise only the distribution is shown.
 
-Applying it is a separate, explicit call, with a dry-run count first:
+Applying is a separate call, with a dry-run count first:
 
 ```bash
-# not run  (code-verified by tests/curation/test_assist_proposal.py)
 curl -s -X POST "$API/assist/runs/RUN_ID/apply" -H 'content-type: application/json' \
   -d '{"class_name":"spoiler","dry_run":true}'
 ```
 
-The count is the members it would label; locked, validated, held-out and
-ignored members are left alone. Send `"dry_run": false` to label them as a
-human would (validated, trainable). A run remembers the members it resolved. If
-a new cluster partition is activated or members move, the scope changes, `scope_now.changed`
-turns true, and apply refuses with `409 scope_changed` until you run again. The
-class is matched by name; a name the registry lacks is `409
-class_not_in_registry`: create the class first.
+The count is the members it would label; locked, validated, held-out and ignored members are
+left alone. `"dry_run": false` labels them as a human would (validated, trainable). A run
+remembers the members it resolved; if a new partition is activated or members move,
+`scope_now.changed` turns true and apply refuses with `409 scope_changed` until you run
+again. The class is matched by name; a name the registry lacks is `409 class_not_in_registry`
+(create the class first).
 
 ## Segmenter verification
 
-The segmenter proposes boxes from a text prompt; the VLM can verify each one.
-That check is now a choice, not a side effect of having a VLM:
+The segmenter proposes boxes from a text prompt; the VLM can verify each one. That check is a
+choice:
 
-- **Per project.** The VLM policy's `region_verify` is `vlm` (the default: the
-  region worker asks the project's VLM when it has one) or `none` (accept the
-  boxes without a VLM, even with a VLM active). Cropwright has it on the VLM
-  scope panel in Settings.
-- **Per run.** An assist run with the `segment` action re-segments the chosen
-  crops, a cluster or a filter, and `segment` `{"verify": "vlm" | "none"}` says
-  how the worker verifies those items only. The run waits in the status
-  `waiting_region` until the worker has written the boxes, then completes with
-  the `segment` counts. A validated region set is skipped.
-- **Segment, then verify with a chosen VLM.** The region worker verifies with
-  the project's active VLM only. To judge the new boxes with another endpoint,
-  run `segment` with `verify` `none` and the `verify` action in the same
-  request, on a `crops` target, with `vlm` naming the endpoint.
+- **Per project:** the VLM policy's `region_verify` is `vlm` (default: the region worker asks
+  the project's VLM when it has one) or `none` (accept boxes without a VLM). Cropwright has it
+  on the VLM scope panel in Settings.
+- **Per run:** the `segment` action re-segments chosen crops, a cluster or a filter, and
+  `segment` `{"verify": "vlm" | "none"}` says how the worker verifies those items only. The
+  run waits in `waiting_region` until the boxes are written, then completes with the `segment`
+  counts. A validated region set is skipped.
+- **Segment, then verify with a chosen VLM:** the region worker verifies with the project's
+  active VLM only. To judge the new boxes with another endpoint, send `segment` with
+  `verify` `none` plus the `verify` action in one request, on a `crops` target, with `vlm`
+  naming the endpoint:
 
 ```bash
-# not run  (code-verified by tests/curation/test_region_run_verify.py)
 curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' -d '{
   "target": {"kind":"crops","crop_ids":["050ad3a2...","05ad8ec2...","0a1f9c3e..."]},
   "actions": ["segment","verify"],
@@ -171,16 +142,12 @@ curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' -d '{
 }'
 ```
 
-Segment refusals: `409 region_profile_required` (no active region profile),
-`no_segmenter_leg` (the profile has no `segmenter_text_prompt`),
-`region_stage_paused`, and `verify_endpoint_mismatch` (`verify` `vlm` with an
-endpoint other than the project's). See [Region profiles](./region-profiles.mdx),
-and [Worked example: wheels on cars](./wheel-example.mdx) for a profile that
-uses it.
+Segment refusals: `409 region_profile_required`, `no_segmenter_leg` (no
+`segmenter_text_prompt`), `region_stage_paused`, `verify_endpoint_mismatch` (`verify` `vlm`
+with an endpoint other than the project's). See [Region profiles](./region-profiles.mdx) and
+[wheels on cars](./wheel-example.mdx).
 
 ## See also
 
-- [Assist in Cropwright](../cropwright/user-guide/assist.md)
-- [Pipeline modes](./pipeline-modes.mdx), the recipe with every step run on public data
-- [VLM selection](./vlm-selection.mdx), the project policy and endpoints
-- [Prompt packs](./prompt-packs.mdx), including attributes
+[Assist in Cropwright](../cropwright/user-guide/assist.md), [Pipeline modes](./pipeline-modes.mdx),
+[VLM selection](./vlm-selection.mdx), [Prompt packs](./prompt-packs.mdx)
