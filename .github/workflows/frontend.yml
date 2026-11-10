@@ -85,8 +85,9 @@ jobs:
           e2e/.venv/bin/pip install -q -r e2e/requirements.txt
           e2e/.venv/bin/playwright install --with-deps chromium
 
+      # The map page needs WebGL2, which headless Chromium only has under an X server.
       - name: Stubbed e2e suite (fail-closed against a built preview server)
-        run: npm run test:e2e
+        run: xvfb-run -a npm run test:e2e
 
   changelog:
     runs-on: ubuntu-latest
