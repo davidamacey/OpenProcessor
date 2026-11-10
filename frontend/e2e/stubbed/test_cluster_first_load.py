@@ -21,7 +21,11 @@ def test_first_page_of_a_slow_cluster_says_what_it_is_doing(stub, page, app_url)
     )
     held: list = []
     # Registered after the stub's catch-all, so it wins: hold the crops page.
-    page.route('**/crops?*cluster_uid=*', held.append)
+
+    def hold(route) -> None:
+        held.append(route)
+
+    page.route('**/crops?*cluster_uid=*', hold)
 
     page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
     hint = page.get_by_test_id('cluster-slow-load-hint')
