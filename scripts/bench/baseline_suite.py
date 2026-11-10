@@ -101,6 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--perf-dir', type=Path, default=Path('artifacts_local/bench/perf_analyzer'))
     p.add_argument('--perf-models', default=','.join(PERF_MODELS))
     p.add_argument('--perf-batches', default=','.join(str(b) for b in PERF_BATCHES))
+    p.add_argument(
+        '--perf-concurrency',
+        default='1:16:5',
+        help='perf_analyzer --concurrency-range start:end:step (quick tier: 1:1:1)',
+    )
+    p.add_argument(
+        '--perf-interval-ms',
+        type=int,
+        default=5000,
+        help='perf_analyzer --measurement-interval in ms (quick tier: 2000)',
+    )
     p.add_argument('--endpoint-images', type=int, default=200)
     p.add_argument('--vlm-crops', type=int, default=200)
     p.add_argument('--vlm-reps', type=int, default=2)
