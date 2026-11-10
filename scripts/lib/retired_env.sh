@@ -32,3 +32,11 @@ refuse_retired_env() {
     done
     (( found == 0 )) || exit 2
 }
+
+# refuse_control_plane_only_install DIR -- exit 2 for an install made with the retired
+# --control-plane-only mode (its docker-compose.cpu.yml moves Triton to a dead profile)
+refuse_control_plane_only_install() {
+    [[ -f "$1/docker-compose.cpu.yml" ]] || return 0
+    echo "[ERROR] this install was made with --control-plane-only, which no longer exists in 0.7.0: every service needs its dependencies and the API refuses to start without Triton. Reinstall on a host with an NVIDIA GPU, or stay on 0.6.0." >&2
+    exit 2
+}

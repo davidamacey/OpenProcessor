@@ -149,24 +149,6 @@ def test_unhealthy_stack_exits_8_and_never_claims_success(shimmed: Shimmed) -> N
     assert 'health: ' in result.stderr
 
 
-def test_control_plane_only_health_accepts_a_503_with_opensearch_up(shimmed: Shimmed) -> None:
-    # Without Triton /health answers 503 by design; the install must still pass.
-    shimmed.gpus(None)
-    shimmed.flag('api_not_ready')
-    result = install(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 0, result.stderr
-    assert 'expected without Triton' in result.stderr
-
-
-def test_control_plane_only_health_fails_when_opensearch_is_down(shimmed: Shimmed) -> None:
-    shimmed.gpus(None)
-    shimmed.flag('api_not_ready')
-    (shimmed.state / 'os_down').touch()
-    result = install(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 8
-    assert 'API /health' in result.stderr
-
-
 def test_wrong_vlm_model_served_fails_health(shimmed: Shimmed) -> None:
     tok = shimmed.root / 'tok'
     tok.write_text('hf_TESTSECRET1234567890\n')

@@ -34,11 +34,20 @@ _cp_ensure_file() {
     chmod 600 "$file"
 }
 
-# ensure_control_plane_secrets ROOT -> secrets/{postgres,valkey,flower} under ROOT (and the empty
+# ensure_control_plane_secrets ROOT [IMAGE] -> secrets/{postgres,valkey,flower} under ROOT (and the empty
 # secrets/vlm directory, so Docker never creates it root-owned)
 ensure_control_plane_secrets() {
-    local root="${1:-.}" sdir pw
+    local root="${1:-.}" image="${2:-}" sdir pw
     sdir="$root/secrets"
+    # 0.6.0 bind-mounts ./secrets/vlm without creating it, so Docker made ./secrets root-owned on
+    # an install that never stored a remote VLM key; hand it back through the image, as the
+    # installer does for models/ and data/.
+    if [[ -d "$sdir" && ! -w "$sdir" ]]; then
+        [[ -n "$image" ]] || image="$(env_get_key "$root/.env" OP_API_IMAGE 2>/dev/null || true)"
+        [[ -n "$image" ]] || image="${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-latest}"
+        docker run --rm --user 0 --entrypoint chown -v "${root}:/w" "$image" \
+            -R "$(id -u):$(id -g)" /w/secrets || return 1
+    fi
     ( umask 077; mkdir -p "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower" ) || return 1
     chmod 700 "$sdir" "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower"
     local name
@@ -48,7 +57,7 @@ ensure_control_plane_secrets() {
     _cp_ensure_file "$sdir/valkey/password" || return 1
     pw="$(<"$sdir/valkey/password")"
     # The conf is derived from the password, so a lost or stale conf is rebuilt, never the password.
-    if [[ "$(<"$sdir/valkey/valkey.conf" 2>/dev/null)" != "requirepass ${pw}" ]]; then
+    if [[ ! -f "$sdir/valkey/valkey.conf" || "$(<"$sdir/valkey/valkey.conf")" != "requirepass ${pw}" ]]; then
         ( umask 077; printf 'requirepass %s\n' "$pw" > "$sdir/valkey/valkey.conf" ) || return 1
     fi
     chmod 600 "$sdir/valkey/valkey.conf"

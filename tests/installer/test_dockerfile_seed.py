@@ -102,9 +102,11 @@ def test_dockerfile_triton_drops_unused_dev_packages_before_the_upgrade_rewrites
 
 def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None:
     """The NGC image's python env lags its security fixes; the release gate fails on a fixable
-    CRITICAL, so certifi (GHSA-6q48-6c7w-9gw2) is raised with starlette and anyio. filelock and
-    virtualenv carry fixable HIGHs the CI image scan fails on; the exact pins are installed with
-    --upgrade before the torch set, which keeps what it finds when the pin satisfies it."""
+    CRITICAL, so certifi (GHSA-6q48-6c7w-9gw2) is raised with starlette and anyio. filelock
+    carries a fixable HIGH the CI image scan fails on; the exact pins are installed with
+    --upgrade before the torch set, which keeps what it finds when the pin satisfies it.
+    virtualenv (build tooling, it carried a fixable HIGH) is uninstalled instead: its packaging
+    floor conflicts with the packaging pin DALI needs, and nothing in the image uses it."""
     dockerfile = (REPO_ROOT / 'Dockerfile.triton').read_text()
     assert '--upgrade -r /tmp/triton-requirements/requirements-security.txt' in dockerfile
     assert dockerfile.index('requirements-security.txt') < dockerfile.index(
@@ -116,12 +118,13 @@ def test_dockerfile_triton_upgrades_the_python_packages_the_scan_flags() -> None
         'anyio': (4, 14, 2),
         'certifi': (2026, 10, 18),
         'filelock': (4, 2, 1),
-        'virtualenv': (21, 7, 13),
     }
     for package, floor in floors.items():
         match = re.search(rf'^{package}==([0-9.]+)\s*$', pins, re.M)
         assert match, package
         assert tuple(int(p) for p in match.group(1).split('.')) >= floor, package
+    assert re.search(r'^virtualenv==', pins, re.M) is None
+    assert re.search(r'pip uninstall -y [^\n]*\bvirtualenv\b', dockerfile)
 
 
 def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags() -> None:

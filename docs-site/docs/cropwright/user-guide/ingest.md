@@ -97,7 +97,7 @@ The panel refreshes on the interval the backend serves.
 
 <Screenshot name="cropwright/ingest-source-card-1600.png" alt="A source card with counts, watch and schedule times, the webhook path and event counts, and the last run" caption="A source card as the backend serves it" />
 
-The server-side checks are in [Verified on a live stack](../../guides/ingest-sources.mdx#verified-on-a-live-stack).
+How sources, triggers and retries work: [Ingest from S3 and watched sources](../../guides/ingest-sources.mdx).
 
 <Screenshot name="cropwright/ingest-source-gave-up-1300.png" alt="A source card with gave up 2 and the Retry the 2 that gave up button" caption="A source with objects that gave up: the Retry button" />
 

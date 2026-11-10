@@ -75,8 +75,10 @@ ftfy==6.3.1  # Text cleaning for CLIP tokenizer (required by open_clip)
 open-clip-torch==4.2.1  # OpenCLIP; MobileCLIP2-S2 configs need >=3.2
 
 # GPU clustering backend (src/services/curation/clustering/backend.py); it used to arrive only
-# through nvidia-modelopt, which the runtime image no longer installs.
-cupy-cuda12x==14.2.0
+# through nvidia-modelopt, which the runtime image no longer installs. The cuda13x wheel: torch is
+# cu132, and the export image gets cupy-cuda13x from nvidia-modelopt[onnx], so the two images must
+# agree (both wheels own the same cupy/ files).
+cupy-cuda13x==14.2.0
 
 # FAISS Clustering (GPU-accelerated vector clustering)
 faiss-gpu-cu12==1.14.1.post1  # FAISS GPU for billion-scale clustering (CUDA 12)

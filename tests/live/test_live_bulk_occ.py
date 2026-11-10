@@ -23,7 +23,7 @@ from typing import Any
 import pytest
 
 from tests.live.conftest import (
-    COMPOSE_FILE,
+    COMPOSE_FILE_ARGS,
     COMPOSE_PROJECT,
     INDEXES,
     REPO_ROOT,
@@ -89,7 +89,7 @@ asyncio.run(main())
 
 def _run_in_api(request: dict[str, Any]) -> dict[str, Any]:
     done = subprocess.run(  # nosec B603 - fixed argv, no shell
-        ['docker', 'compose', '-p', COMPOSE_PROJECT, '-f', str(COMPOSE_FILE), 'exec', '-T',
+        ['docker', 'compose', '-p', COMPOSE_PROJECT, *COMPOSE_FILE_ARGS, 'exec', '-T',
          'api', 'python', '-c', _SCRIPT],
         input=json.dumps(request), capture_output=True, text=True, timeout=240, cwd=str(REPO_ROOT),
         check=False,

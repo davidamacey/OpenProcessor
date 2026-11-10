@@ -163,3 +163,23 @@ def test_the_served_vocabulary_matches_the_builder(vlm_api) -> None:
             'settable_via',
             'reason',
         }
+
+
+def test_an_active_ingest_profile_makes_the_ingest_rows_project_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.config.detection_profile import DetectionProfile
+    from src.services.curation import model_choices as mc
+    from src.services.curation.ingest_detector import IngestProfiles
+
+    primary = DetectionProfile.from_env('OP_INGEST_PRIMARY', name='primary')
+    stored = IngestProfiles(
+        primary=primary, secondary=primary, source='stored', ref=('house_profile', 3)
+    )
+    monkeypatch.setattr(mc, 'project_ingest_profiles', lambda: stored)
+    rows = _rows()
+    for role in ('item_detector', 'secondary_classifier'):
+        assert rows[role]['scope'] == 'config_store', role
+        assert rows[role]['settable'] is True, role
+        assert 'ingest_profiles' in rows[role]['settable_via'], role
+    assert 'house_profile' in rows['item_detector']['reason']

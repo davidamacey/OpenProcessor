@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from tests.live.conftest import COMPOSE_FILE, COMPOSE_PROJECT, REPO_ROOT
+from tests.live.conftest import COMPOSE_FILE, COMPOSE_FILE_ARGS, COMPOSE_PROJECT, REPO_ROOT
 
 
 SCALE_FILE = COMPOSE_FILE.parent / 'compose.scale.yml'
@@ -44,7 +44,7 @@ def reconfigure(*, workers: int, api_replicas: int, jobs_replicas: int) -> None:
         'OP_API_REPLICAS': str(api_replicas),
         'OP_JOBS_REPLICAS': str(jobs_replicas),
     }
-    base = ['docker', 'compose', '-p', COMPOSE_PROJECT, '-f', str(COMPOSE_FILE)]
+    base = ['docker', 'compose', '-p', COMPOSE_PROJECT, *COMPOSE_FILE_ARGS]
     subprocess.run(  # nosec B603 - fixed argv, no shell
         [*base, '-f', str(SCALE_FILE), 'up', '-d', '--wait', '--no-build', '--no-deps',
          '--force-recreate', 'api', 'jobs-worker', 'proxy'],
@@ -57,7 +57,7 @@ def exec_json(code: str, service: str = 'api', index: int = 1) -> Any:
     import json
 
     proc = subprocess.run(  # nosec B603 - fixed argv, no shell
-        ['docker', 'compose', '-p', COMPOSE_PROJECT, '-f', str(COMPOSE_FILE), 'exec', '-T',
+        ['docker', 'compose', '-p', COMPOSE_PROJECT, *COMPOSE_FILE_ARGS, 'exec', '-T',
          '--index', str(index), service, 'python', '-c', code],
         check=True, capture_output=True, text=True, timeout=120, cwd=str(REPO_ROOT),
     )  # fmt: skip

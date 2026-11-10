@@ -5,30 +5,24 @@ title: Settings and configuration
 
 # Settings and configuration
 
-Domain behavior is data, not code. A project keeps its own configuration in
-its configs index, and the API reads and writes it. This page covers the
-project settings document, the config store behind it, the vocabulary
-route that lists every model choice, and cloning settings between
-projects.
-
-`API=http://localhost:4603` and project `cars` are assumed.
+Domain behavior is data, not code. A project keeps its configuration in the config store and
+the API reads and writes it. This page covers the project settings document, the vocabulary
+route that lists every model choice, and cloning settings between projects. Examples assume
+`API=http://localhost:4603` and project `cars`.
 
 ## Concepts
 
-- **Config store.** A per-project set of versioned documents: prompt packs,
-  region profiles, the keymap, and one activation document per axis. Every
-  save makes a new numbered revision. Activating a document points the
-  project at one revision. See [Prompt packs](./prompt-packs.mdx),
-  [Region profiles](./region-profiles.mdx) and [Keymaps](./keymaps.mdx).
-- **Three activation axes.** `prompt_pack`, `detection_profile` and `vlm`.
-  The VLM axis names an endpoint from the global registry; see
-  [VLM selection](./vlm-selection.mdx). A new activation is checked as a
-  set: the pack, the profile and the VLM must agree with each other.
-- **Settings document.** One shared document per project. It holds default
-  strategy ids for UI-facing axes. It is not the place for secrets or
-  deployment values.
-- **Deployment configuration.** Values in `.env`, such as the ingest
-  detectors and the segmenter service. They change only with a restart.
+- **Config store.** Per-project versioned documents: prompt packs, region profiles, ingest
+  profiles, the keymap and one activation document per axis. Every save is a new revision;
+  activating points the project at one revision. See [Prompt packs](./prompt-packs.mdx),
+  [Region profiles](./region-profiles.mdx), [Keymaps](./keymaps.mdx).
+- **Activation axes.** `prompt_pack`, `detection_profile` and `vlm` (the VLM names an endpoint
+  from the global registry, [VLM selection](./vlm-selection.mdx)). A new activation is checked
+  as a set: pack, profile and VLM must agree.
+- **Settings document.** One per project, holding default strategy ids for UI-facing axes. Not
+  for secrets or deployment values.
+- **Deployment configuration.** Values in `.env` (ingest detectors, segmenter service); they
+  change only with a restart.
 
 ## Read and write settings
 
@@ -37,86 +31,67 @@ curl -s "$API/curation/projects/cars/settings"
 ```
 
 ```json
-{
-  "defaults": {"prompt_pack": "vehicle_wheel", "detection_profile": "vehicle_wheel", "vlm": "env"},
-  "updated_at": null,
-  "updated_by": null
-}
+{"defaults": {"prompt_pack": "vehicle_wheel", "detection_profile": "vehicle_wheel", "vlm": "env"},
+ "updated_at": null, "updated_by": null}
 ```
 
-`defaults` is an open map from axis id to a strategy id. No document yet
-means `defaults` is empty. `prompt_pack`, `detection_profile` and `vlm` are
-read from the config store's activations, not from the settings document.
-`updated_by` is always null: there is no user-account system.
+`defaults` maps axis id to strategy id (empty when no document exists).
+`prompt_pack`, `detection_profile` and `vlm` are read from the activations, not from the
+document. `updated_by` is always null (no user accounts).
 
-Update with a partial body. Only the axes present are changed:
+Update with a partial body; only present axes change, and `null` clears one:
 
 ```bash
-curl -s -X PUT "$API/curation/projects/cars/settings" \
-  -H 'Content-Type: application/json' \
+curl -s -X PUT "$API/curation/projects/cars/settings" -H 'Content-Type: application/json' \
   -d '{"defaults": {"sort": "uncertainty", "detection_profile": "vehicle_wheel"}}'
 ```
 
-A `null` value clears that axis. Settable axes are `cluster`, `sort`,
-`prompt_pack`, `detection_profile` and `vlm`. For `cluster` and `sort`,
-each id must be currently listed by
-`GET /curation/projects/{project}/methods`, and an id that orders by a
-field no item has is refused. For `prompt_pack` and `detection_profile`,
-the id must be a known pack or profile (`detection_profile` also accepts
-`off`). `null` deactivates the axis. A combined body that changes several
-config-store axes is checked as one set and applied only if every part
-passes, so a PUT is never half applied.
-
-Errors:
+Settable axes: `cluster`, `sort`, `prompt_pack`, `detection_profile`, `vlm`. A `cluster` or
+`sort` id must be listed by `GET .../methods`, and a sort by a field no item has is refused.
+A `prompt_pack` or `detection_profile` id must exist (`detection_profile` also accepts
+`off`). A body changing several config-store axes is checked as one set and applied only if
+every part passes.
 
 | Status | `error` | When |
 |---|---|---|
 | 422 | (plain message) | Unsettable axis, id not advertised, or a sort field with no coverage |
-| 422 | `unknown_vlm` | The `vlm` default names an endpoint that does not exist |
-| 422 | `unknown_pack`, `unknown_profile` | The pack or profile id does not exist; `valid_ids` is returned |
-| 422 | `validation_failed` | The activation gate refused the pack, profile and VLM combination; `report` lists the issues |
-| 409 | `active_conflict` | Another writer changed the activation first |
-| 409 | `project_archived` | The project is archived |
+| 422 | `unknown_vlm`, `unknown_pack`, `unknown_profile` | Unknown endpoint, pack or profile (`valid_ids` returned for the last two) |
+| 422 | `validation_failed` | The activation gate refused the combination (`report` lists the issues) |
+| 409 | `active_conflict`, `project_archived` | Another writer changed the activation; project archived |
 
 ## Vocabulary
 
-The vocabulary route returns every choice a configuration form needs in
-one call.
+One call returns every choice a configuration form needs:
 
 ```bash
 curl -s "$API/curation/projects/cars/config/vocabulary"
 curl -s "$API/curation/projects/cars/config/vocabulary?include_other_projects=true"
 ```
 
-The response contains:
-
 | Field | Content |
 |---|---|
-| `detectors` | Detector models in Triton and promoted models, with `ready` and `source` |
-| `segmenters` | Configured segmenter services with `endpoint`, `status`, `masks`, default score |
+| `detectors` | Triton and promoted detector models, with `ready` and `source` |
+| `segmenters` | Segmenter services with `endpoint`, `status`, `masks`, default score |
 | `vlm` | `active` endpoint and every registered endpoint with locality and status |
 | `ocr` | OCR detection, recognition and pipeline models |
-| `text_reader_modes` | Valid text reader modes, and whether each needs OCR or a VLM |
-| `prompt_pack_calls` | The VLM call ids a prompt pack must cover |
-| `registry_classes` | Active (not deprecated) classes of this project |
+| `text_reader_modes` | Valid modes, and whether each needs OCR or a VLM |
+| `prompt_pack_calls` | The VLM call ids a pack must cover |
+| `registry_classes` | Active (not deprecated) classes |
 | `model_choices` | The table below |
 
-`include_other_projects=true` adds detector models other projects have
-opted to share.
+`include_other_projects=true` adds detector models other projects share.
 
-### What can be set, and where
-
-Each row of `model_choices` has `role`, `scope`, `current`, `settable`,
-`settable_via` and, when not settable, `reason`.
+Each `model_choices` row has `role`, `scope`, `current`, `settable`, `settable_via` and, when
+not settable, `reason`:
 
 | Role | Scope | Settable | How |
 |---|---|---|---|
 | `detect_model` | per request | yes | `model_name` query parameter on the detect routes |
-| `item_detector` | deployment | no | `OP_INGEST_PRIMARY_DETECTOR_MODEL`, then restart |
-| `secondary_classifier` | deployment | no | `OP_INGEST_SECONDARY_DETECTOR_MODEL`, then restart |
-| `region_detector` | region profile | yes | `detector_model` in the region profile |
+| `item_detector` | deployment | no | `OP_INGEST_PRIMARY_DETECTOR_MODEL` (restart); a project's active [ingest profile](./ingest-profiles.mdx) overrides it for that project |
+| `secondary_classifier` | deployment | no | `OP_INGEST_SECONDARY_DETECTOR_MODEL` (restart) |
+| `region_detector` | region profile | yes | `detector_model` in the profile |
 | `region_segmenter` | deployment | no | `OP_SEGMENTER_URL` or `OP_SEGMENTER_URLS`; the prompt is per profile |
-| `region_ocr` | region profile | yes | OCR model fields in the region profile |
+| `region_ocr` | region profile | yes | OCR model fields in the profile |
 | `vlm` | config store | yes | Activate an endpoint, or pass `vlm` per run |
 | `local_vlm_model` | deployment | only with an in-compose VLM | Select a catalog entry, then run the host command |
 | `item_embedding`, `search_embedding` | deployment | no | Changing them changes vector size and needs a re-index (future work) |
@@ -125,42 +100,32 @@ Each row of `model_choices` has `role`, `scope`, `current`, `settable`,
 
 ## Clone settings between projects
 
-Copy configuration from one project into an existing `active` project
-that has nothing in the way. A clone is a starting point, never a merge:
+Copy configuration into an existing `active` project; a clone is a starting point, never a merge:
 
 ```bash
-curl -s -X POST "$API/curation/projects/cars/clone_settings" \
-  -H 'Content-Type: application/json' \
+curl -s -X POST "$API/curation/projects/cars/clone_settings" -H 'Content-Type: application/json' \
   -d '{"from": "default", "axes": ["classes", "prompt_packs", "keymap"], "expected_revision": 2}'
 ```
 
-`axes` is optional. Valid axes are `settings_defaults`, `classes`,
-`activations`, `keymap`, `prompt_packs` and `vlm_activation`. Omitted or
-empty means all of them. The response is the project lifecycle envelope.
-If a copied keymap action collides with a class hotkey in the target, the
-whole keymap is skipped (the target's keymap is left unchanged) and each
-colliding action is listed in `keymap_clone_conflicts`
-(`action_id`, `combo`, `class_id`, `class_name`). Nothing is unbound
-silently. The same options exist at create time through
-`clone_settings_from` and `clone_axes`; see [Projects](./projects.mdx).
-
-Errors:
+`axes` (optional; omitted or empty = all): `settings_defaults`, `classes`, `activations`,
+`keymap`, `prompt_packs`, `vlm_activation`. The response is the project lifecycle envelope.
+If a copied keymap action collides with a class hotkey in the target, the whole keymap is
+skipped and each collision is listed in `keymap_clone_conflicts` (`action_id`, `combo`,
+`class_id`, `class_name`); nothing is unbound silently. The same options exist at create time
+as `clone_settings_from` / `clone_axes` ([Projects](./projects.mdx)).
 
 | Status | `error` | When |
 |---|---|---|
 | 404 | `project_not_found` | Target or source unknown |
 | 409 | `clone_source_not_ready` | Source is not `active` or `archived` |
-| 409 | `target_not_empty` | `classes`: target already has items. `prompt_packs`: target has stored packs. `activations`: target already has an active pack or profile, or a stored one with the same name |
-| 409 | `revision_conflict` | `expected_revision` is stale |
+| 409 | `target_not_empty` | `classes`: target has items. `prompt_packs`: target has stored packs. `activations`: target has an active pack or profile, or a stored one with the same name |
+| 409 | `revision_conflict` | Stale `expected_revision` |
 | 422 | `combine_invalid` | Unknown axis, or source equals target |
 | 422 | `validation_failed` | A copied activation fails its gate in the target |
 
-## Related environment values
-
-Values that decide where per-project data lives are `OP_PROJECTS_DATA_ROOT`,
-`OP_PROJECT_INDEX_PREFIX` and `OP_STATE_DIR`. VLM policy values are
-`OP_VLM_EXTERNAL_POLICY`, `OP_VLM_SECRETS_DIR` and `OP_LOCAL_VLM_ENDPOINT`.
-See [Basic configuration](../configuration/basic.mdx) and
+Where per-project data lives is set by `OP_PROJECTS_DATA_ROOT`, `OP_PROJECT_INDEX_PREFIX` and
+`OP_STATE_DIR`; VLM policy by `OP_VLM_EXTERNAL_POLICY`, `OP_VLM_SECRETS_DIR` and
+`OP_LOCAL_VLM_ENDPOINT`. See [Basic configuration](../configuration/basic.mdx) and
 [Advanced configuration](../configuration/advanced.mdx).
 
 ## Cropwright
@@ -168,19 +133,16 @@ See [Basic configuration](../configuration/basic.mdx) and
 <Screenshot
   name="settings-1600.png"
   alt="Settings page showing the active cluster method, prompt pack and VLM"
-  caption="Deployment defaults: active prompt pack, VLM and the other settable values (captured from Cropwright against the public COCO sample projects)"
+  caption="Defaults: active prompt pack, VLM and the other settable values"
 />
 
 <Screenshot
   name="settings-models-1600.png"
   alt="Settings models page with the model choices table showing settable and read-only rows"
-  caption="The model choices table with settable and read-only rows (captured from Cropwright against the public COCO sample projects)"
+  caption="The model choices table"
 />
 
 ## See also
 
-- [Projects](./projects.mdx)
-- [Prompt packs](./prompt-packs.mdx)
-- [Region profiles](./region-profiles.mdx)
-- [VLM selection](./vlm-selection.mdx)
-- [Keymaps](./keymaps.mdx)
+[Projects](./projects.mdx), [Prompt packs](./prompt-packs.mdx), [Region profiles](./region-profiles.mdx),
+[VLM selection](./vlm-selection.mdx), [Keymaps](./keymaps.mdx)

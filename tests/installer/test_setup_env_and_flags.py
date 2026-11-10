@@ -238,26 +238,6 @@ def test_no_gpu_exits_4(shimmed: Shimmed) -> None:
     assert dry(shimmed).returncode == 4
 
 
-def test_control_plane_only_starts_api_and_opensearch_only(shimmed: Shimmed) -> None:
-    shimmed.gpus(None)
-    result = dry(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 0, result.stderr
-    dry_compose = [ln for ln in result.stdout.splitlines() if ln.startswith('DRY: docker compose')]
-    assert any(ln.endswith(' up -d --remove-orphans opensearch') for ln in dry_compose)
-    assert any(ln.endswith(' up -d --no-deps api') for ln in dry_compose)
-    assert not any('triton-server' in ln for ln in dry_compose)
-    assert all('docker-compose.cpu.yml' in ln for ln in dry_compose)
-    assert configure(shimmed, '--cpu', '--control-plane-only').returncode == 0
-    overlay = (shimmed.root / 'inst' / 'docker-compose.cpu.yml').read_text()
-    assert '!reset' in overlay
-    # `./openprocessor start` runs a plain `up -d`: Triton must stay off and the
-    # API must not wait for it or be marked unhealthy by its own /health 503.
-    assert 'triton-server' in overlay
-    assert 'depends_on: !override' in overlay
-    assert 'localhost:8000/health' not in overlay
-    assert 'NOT a functional inference install' in result.stdout + result.stderr
-
-
 # --- messages a first-time user reads -----------------------------------------------
 
 
@@ -274,42 +254,12 @@ def test_bad_version_is_refused_before_any_preflight(shimmed: Shimmed) -> None:
     assert 'Preflight' not in result.stdout
 
 
-def test_control_plane_only_install_does_not_mention_gpu_or_triton_downloads(
-    shimmed: Shimmed,
-) -> None:
-    shimmed.gpus(None)
-    result = dry(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 0, result.stderr
-    assert 'nvidia runtime' not in result.stdout + result.stderr
-    assert 'Triton image alone' not in result.stdout
-
-
-def test_control_plane_only_summary_points_at_the_liveness_url_not_the_503(
-    shimmed: Shimmed,
-) -> None:
-    shimmed.gpus(None)
-    result = configure(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 0, result.stderr
-    urls = [ln for ln in result.stdout.splitlines() if ln.startswith('    API ')]
-    health = [ln for ln in urls if '/health' in ln]
-    assert all('503' in ln for ln in health), urls
-    assert any(ln.rstrip().split()[2].endswith('/') for ln in urls if 'live' in ln), urls
-
-
 def test_a_default_install_summary_keeps_the_plain_health_url(shimmed: Shimmed) -> None:
     result = configure(shimmed)
     assert result.returncode == 0, result.stderr
     health = [ln for ln in result.stdout.splitlines() if ln.startswith('    API health')]
     assert health
     assert '503' not in health[0]
-
-
-def test_no_start_hint_skips_model_install_for_control_plane_only(shimmed: Shimmed) -> None:
-    shimmed.gpus(None)
-    result = configure(shimmed, '--cpu', '--control-plane-only')
-    assert result.returncode == 0, result.stderr
-    assert 'run ./openprocessor start' in result.stdout
-    assert 'models install' not in result.stdout
 
 
 def test_low_disk_error_names_the_install_dir_even_in_a_dry_run(shimmed: Shimmed) -> None:
@@ -378,3 +328,46 @@ def test_api_workers_the_user_set_is_kept_on_rerun(shimmed: Shimmed) -> None:
     env_path.write_text(env_path.read_text().replace('API_WORKERS=12', 'API_WORKERS=3', 1))
     assert configure(shimmed, OP_MEMINFO_PATH=mem, OP_NPROC='12').returncode == 0
     assert env_file(shimmed)['API_WORKERS'] == '3'
+
+
+# --- the retired --control-plane-only mode -------------------------------------------
+
+
+def test_the_control_plane_only_flag_is_refused_and_says_what_to_do(shimmed: Shimmed) -> None:
+    shimmed.gpus(None)
+    result = dry(shimmed, '--cpu', '--control-plane-only')
+    assert result.returncode == 2
+    assert 'Preflight' not in result.stdout
+    assert 'no longer exists' in result.stderr
+    assert 'Triton' in result.stderr
+    assert 'NVIDIA GPU' in result.stderr
+
+
+def test_the_control_plane_only_variable_is_refused_too(shimmed: Shimmed) -> None:
+    result = dry(shimmed, OP_CONTROL_PLANE_ONLY='1')
+    assert result.returncode == 2
+    assert 'no longer exists' in result.stderr
+
+
+def _installed_as_0_6_0_control_plane_only(shimmed: Shimmed, how: str) -> Path:
+    inst = shimmed.root / 'inst'
+    assert configure(shimmed).returncode == 0
+    if how == 'state':
+        state = inst / '.install' / 'state.json'
+        # the 0.6.0 installer recorded this key; state_get reads the file line by line
+        state.write_text(state.read_text().replace('{\n', '{\n  "control_plane_only": "1",\n', 1))
+    else:
+        (inst / 'docker-compose.cpu.yml').write_text('services: {}\n')
+    return inst
+
+
+@pytest.mark.parametrize('how', ['state', 'overlay'])
+def test_an_upgrade_of_a_control_plane_only_install_refuses_before_touching_anything(
+    shimmed: Shimmed, how: str
+) -> None:
+    inst = _installed_as_0_6_0_control_plane_only(shimmed, how)
+    result = configure(shimmed)
+    assert result.returncode == 2
+    assert 'control-plane-only' in result.stderr
+    assert 'Triton' in result.stderr
+    assert not (inst / 'backups').exists()

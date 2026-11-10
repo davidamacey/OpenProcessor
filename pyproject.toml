@@ -34,7 +34,7 @@ dependencies = [
     "tritonclient[all]==2.74.0",
     "onnx==1.21.0",
     "onnxruntime-gpu==1.30.0",
-    "cupy-cuda12x==14.2.0",
+    "cupy-cuda13x==14.2.0",
     "torch==2.15.0",
     "torchvision==0.29.1",
     "opencv-python==5.0.0.93",

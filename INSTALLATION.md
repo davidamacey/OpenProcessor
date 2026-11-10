@@ -126,7 +126,7 @@ Every flag also has an environment variable (the flag wins).
 | `--force` | | accept a GPU plan the hardware check refused |
 | `--force-existing-dir` | | install into a non-empty directory this installer did not create (its files are backed up first) |
 | `--yes` | | confirm a destructive step (uninstall, rollback, upgrade) without a prompt; `--unattended` implies it. A missing terminal alone is never consent |
-| `--cpu [--control-plane-only]` | `OP_FORCE_CPU` | no GPU. Alone it explains why and exits 4; with `--control-plane-only` it installs OpenSearch, the API and Cropwright with no inference |
+| `--cpu` | `OP_FORCE_CPU` | no GPU: explains why and exits 4 (there is no CPU inference path) |
 | `--repair` | | re-verify files, re-pull missing images, re-run failed model groups, at the installed version |
 | `--rollback` | | restore the newest backup of a different version (see below) |
 | `--uninstall` | | stop and remove the containers; add `--purge-volumes`, `--purge-data`, `--remove-images` to delete more |
@@ -159,16 +159,13 @@ The login, the bind rules, `OP_UI_BIND_ADDRESS` and `OP_GATEWAY_SUBPATHS` are in
 [Security and network exposure](docs-site/docs/deployment/security.mdx#lan-access-from-the-one-line-installer);
 the policy is [SECURITY.md](SECURITY.md). Do not port-forward any of these ports to the public internet; use a reverse proxy with authentication for remote access.
 
-### Control-plane-only mode (optional, not the default)
+### Control-plane-only mode (removed in 0.7.0)
 
-`--cpu --control-plane-only` is an installer option for a machine with no
-usable NVIDIA GPU. It starts only OpenSearch and the API, plus Cropwright if you
-ask for that tier. It does not start Triton, the curation workers, the VLM, the
-segmenter, the trainer or monitoring, and it refuses `--tiers` that include
-them. Use it to browse or manage an existing index, or when the models run on
-another machine. Anything that needs local inference (ingest detection, embeddings,
-exports, training) answers 503, and the API reports `degraded`. The default
-install requires a GPU and builds the full stack for the tiers you pick.
+`--control-plane-only` (and `OP_CONTROL_PLANE_ONLY`) no longer exists. Every service needs its
+dependencies and the API refuses to start without Triton, so a stack without Triton cannot run.
+The installer and `./openprocessor` refuse the flag, and an upgrade of an install that was made
+with it stops before changing anything. Install on a host with an NVIDIA GPU and the NVIDIA
+container runtime, or stay on 0.6.0.
 
 ### The control plane: PostgreSQL, Valkey and the workers
 
@@ -532,9 +529,8 @@ Common cases:
 - **Port in use**: interactively the installer offers the next free port;
   unattended it takes it and warns. `--port-base N` moves the whole block.
 - **No GPU**: there is no CPU inference path (every model except the text
-  encoder is a TensorRT engine). `--cpu --control-plane-only` gives you
-  OpenSearch, the API and Cropwright for browsing an existing index or using a
-  remote VLM; the API reports `degraded`.
+  encoder is a TensorRT engine). The installer exits 4 and `--control-plane-only` is
+  refused (removed in 0.7.0).
 - **Failed model groups**: the summary lists them with
   `./openprocessor models install --only <group>` to retry each one.
 - **Disk**: the installer warns if it cannot check free space; the Triton

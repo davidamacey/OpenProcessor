@@ -5,102 +5,104 @@ title: Auto-label loop
 
 # Auto-label loop
 
-Assist labels one cluster at a time and asks you to apply the result. The **auto-label loop**
-does that across the whole project: it samples each cluster, asks the VLM, and writes a class
-to the rest of a cluster only when the sample shows the cluster is homogeneous. A cluster that
-fails the test is split by embedding and each part is tried again. Whatever is still doubtful
-is left for you, with the votes it got.
+[Assist](./selective-assist.mdx) labels one cluster at a time and asks you to apply the
+result. The **auto-label loop** does that across the whole project: it samples each cluster,
+asks the VLM, and writes a class to the rest of a cluster only when the sample shows the
+cluster is homogeneous. A cluster that fails is split by embedding and each part is tried
+again. Whatever is still doubtful is left for you, with the votes it got. It is built for
+large sets: the VLM sees a small share of the crops. Routes and fields:
+`docs/design/curation_api_contract.md`, "Auto-label loops".
 
-It is built for large sets (hundreds of thousands of crops): the VLM sees a small share of
-them. The routes and every field are in the API contract
-(`docs/design/curation_api_contract.md`, "Auto-label loops").
-
-`API=http://localhost:4603/curation/projects/cars` is assumed. Snippets are marked `# not run`
-unless a run produced the output.
+`API=http://localhost:4603/curation/projects/cars` is assumed.
 
 ## What it does and does not do
 
 - **Samples, then proves.** For a cluster of N free members it draws a seeded sample and
   needs enough agreeing answers to show, at the confidence you set, that at least `theta` of
-  the cluster has that class. 300 members need 32 clean answers at the defaults; a cluster of
-  10,000 needs 35. It is not "3 of 3 agree".
-- **Splits what fails.** A mixed cluster is cut into `branching` parts by embedding. Answers
-  already gotten are reused, so a child costs less than a fresh sample.
-- **Writes a machine label.** Propagated items get `class_source: "assist_propagated"`. They
-  are not validated, not locked against your later fixes, and not exported for training until
-  you have reviewed them.
+  the cluster has that class (at the defaults 300 members need 32 clean answers, 10,000
+  need 35). It is not "3 of 3 agree".
+- **Splits what fails.** A mixed cluster is cut into `branching` parts by embedding; answers
+  already gotten are reused.
+- **Writes a machine label.** Propagated items get `class_source: "assist_propagated"`: not
+  validated, not locked against your later fixes, not exported for training until reviewed.
 - **Never overwrites a person.** Items with a human or validated import class, a validated
-  class, an exclusion or a place in the frozen test holdout are never written. A write that
+  class, an exclusion or a place in the frozen test holdout are never written; a write that
   races yours loses.
 - **Stays inside a budget.** `max_vlm_crops` is required. Each request is reserved before it
-  is sent; a crash can waste what was in flight, never exceed the cap. It also stops on
+  is sent, so a crash can waste what was in flight but never exceed the cap. It also stops on
   `max_vlm_requests`, `max_wall_s`, cancel and a failing audit.
-- **Is reproducible and reversible.** The same seed draws the same samples and splits the same way. With
-  `node_concurrency` above 1 and a binding budget, the set of clusters visited can differ
-  between runs, because it depends on which running nodes have finished when the next one is
-  considered; at 1 it is the same. A resume restarts the nodes it had admitted. Everything it wrote
-  can be rolled back, and a rollback keeps anything changed since.
+- **Is reproducible and reversible.** The same seed draws the same samples and splits. With
+  `node_concurrency` above 1 and a binding budget, the clusters visited can differ between
+  runs. A resume restarts the nodes it had admitted. Everything it wrote can be rolled back,
+  and a rollback keeps anything changed since.
 
 ## The recipe
 
 1. **Ingest, cluster, name a few classes** as in [Selective assist](./selective-assist.mdx).
-   Start the `curation-assist-loop-worker` service (`make curation-up`, or
-   `./openprocessor curation up curation-assist-loop-worker`). The project needs a VLM
+   Start the `curation-assist-loop-worker` (`make curation-up`, or
+   `./openprocessor curation up curation-assist-loop-worker`). The project needs an active VLM
    (`GET $API/vlm/endpoints/active`) and at least one item class.
-2. **Plan.** A dry run (the default) writes nothing and returns the plan:
+2. **Plan.** A dry run (the default) writes nothing:
 
    ```bash
    curl -s -X POST $API/assist/loops -H 'content-type: application/json' \
-     -d '{"scope": {"min_root_size": 40}, "budget": {"max_vlm_crops": 30000}}'   # not run
+     -d '{"scope": {"min_root_size": 40}, "budget": {"max_vlm_crops": 30000}}'
    ```
 
-   Read `plan`: `roots`, `eligible_items`, `estimated_vlm_crops_root_level` (the cost of the
-   first draws if every cluster passes; splits add to it) and `fits_budget`.
-3. **Start.** The same body with `"dry_run": false`. The API queues the loop and answers
-   `queued`; the worker picks it up. One loop runs per project (`409 assist_loop_busy`), and
-   not while an auto-label job is running (`409 clustering_running`).
-4. **Watch.** `GET $API/assist/loops/{loop_id}` shows the status, the budget spent, a row per
-   level (nodes passed, split, left for review, items labeled by propagation and directly) and
-   the audit. `GET .../nodes?decision=review_leaf` lists the clusters left for you;
-   `GET .../nodes/{path}/members` lists their crop ids to open as a selection.
-5. **Review, then roll back or keep.** Fix what is wrong by hand; a fixed item is never touched
-   again. To undo the loop, `POST .../rollback` (a dry run unless `"dry_run": false`).
+   Read `plan`: `roots`, `eligible_items`, `estimated_vlm_crops_root_level` (the first draws
+   if every cluster passes; splits add to it) and `fits_budget`.
+3. **Start.** The same body with `"dry_run": false` answers `queued` and the worker picks it
+   up. One loop runs per project (`409 assist_loop_busy`), and not while an auto-label job
+   runs (`409 clustering_running`).
+4. **Watch.** `GET $API/assist/loops/{loop_id}` shows status, budget spent, a row per level
+   (nodes passed, split, left for review, items labeled by propagation and directly) and the
+   audit. `GET .../nodes?decision=review_leaf` lists clusters left for you;
+   `GET .../nodes/{path}/members` lists their crop ids.
+5. **Review, then roll back or keep.** Fix what is wrong by hand; a fixed item is never
+   touched again. To undo the loop, `POST .../rollback` (dry run unless `"dry_run": false`).
 
-`cancel` stops a loop after the requests in flight; `resume` continues an `interrupted`,
-`paused` or `cancelled` loop from its log. If the worker dies the loop reads
-`interrupted` until you resume it. A loop whose VLM stopped answering ends `failed` with
-`stop_reason: vlm_failed` and the error; it spends nothing more and writes nothing for that
-node, and (unlike other `failed` loops) it can be resumed: after the endpoint or model is fixed asks the node again.
+Controls: `POST .../cancel` stops after the requests in flight; `POST .../pause` and
+`.../resume` pause and continue (resume also continues an `interrupted` or `cancelled` loop
+from its log); `PATCH .../budget` raises or lowers a budget (below spent plus reserved is
+`409 budget_below_spent`, and an edit never resumes the loop). If the worker dies the loop
+reads `interrupted` until you resume it. A loop whose VLM stopped answering ends `failed` with
+`stop_reason: vlm_failed`, writes nothing more for that node, and can be resumed once the
+endpoint is fixed. A loop pauses for a person, a reached budget limit, a failing audit
+(`pause_reason: "audit"`) or a paused project.
 
 ## In the app
 
-The Clusters page has an auto-label loop panel (it is absent when the backend does not serve
-`/assist/loops`). It shows the served dry run before a start, then live status, the VLM and
-audit budget meters, per-level counts, totals and the second-opinion result. It can start,
-cancel and resume a loop, open the node table with votes and member crops, and roll back in two
-steps (a served dry run, then confirm), whole or per node. It has no pause button and no event
-log: the API serves neither yet (tracked in #286). A loop pauses only on a failing audit.
+The Clusters page has an auto-label loop panel (absent when the backend does not serve
+`/assist/loops`). It shows the served dry run before a start, then live status, VLM and audit
+budget meters, per-level counts, totals and the second-opinion result. It can start, pause,
+resume, cancel and edit the budget of a loop, open the node table with votes and member
+crops, and roll back in two steps (a served dry run, then confirm), whole or per node. Every
+figure and enabled button is the server's.
+
+<Screenshot
+  name="auto-label-loop-panel-1600.png"
+  alt="The auto-label loop panel on the Clusters page with its budget fields and the served dry run"
+  caption="The panel before a start: budget, thresholds and the server's dry run"
+/>
 
 ## The audit
 
 Name a second model in `audit.vlm` and the loop re-checks a sample of what it propagated with
 it: 1% by default, at least 30 per batch, 500 crops at most, in a budget of its own. The audit
-writes nothing. When the one-sided 95% lower bound on agreement falls under `floor` (0.85), the
-loop pauses (`pause_reason: "audit"`) so you can look; with `on_fail: "rollback"` it also
-restores the failing batch. With `audit.vlm` null there is no second opinion, and the record
-says so. A remote audit model goes through the same external-images consent as any run.
+writes nothing. When the one-sided 95% lower bound on agreement falls under `floor` (0.85) the
+loop pauses so you can look; with `on_fail: "rollback"` it also restores the failing batch.
+With `audit.vlm` null there is no second opinion, and the record says so. A remote audit model
+goes through the same external-images consent as any run.
 
 ## While it runs
 
-The loop works on the member ids it snapshotted. While it is `queued` or `running`, the project's
-cluster retrain is held: the refresh daemon neither retrains nor auto-promotes, and
+The loop works on the member ids it snapshotted. While it is `queued` or `running` the
+project's cluster retrain is held: the refresh tick neither retrains nor auto-promotes, and
 `POST $API/pipeline/auto_label/start` with `train_clusters=true` answers
-`409 assist_loop_running`. Cancel the loop first if you need to recluster. Ingest keeps
-assigning new items to the nearest centroid; items ingested after the snapshot are outside the
-loop. A node whose members moved clusters turns `stale` and nothing is written to a member that
-left.
-
-## Settings
+`409 assist_loop_running`. Cancel the loop first to recluster. Ingest keeps assigning new
+items to the nearest centroid; items ingested after the snapshot are outside the loop. A node
+whose members moved clusters turns `stale` and nothing is written to a member that left.
 
 The loop's whole record is in PostgreSQL (the `assist_loop_*` tables). The service is
-`curation-assist-loop-worker` (profile `curation`); see [Workers and heartbeats](../operations/workers.mdx).
+`curation-assist-loop-worker` (profile `curation`); see
+[Workers and heartbeats](../operations/workers.mdx).

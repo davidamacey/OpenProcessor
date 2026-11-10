@@ -18,9 +18,8 @@ ph_health() {
     models_ok="$(jqb 'if .services.models == null then "absent" else (.services.models.ok | tostring) end')"
     triton_ok="$(jqb 'if .services.triton == null then "absent" else (.services.triton.ok | tostring) end')"
     if [[ "$models_ok" == absent ]]; then
-        # no models entry means Triton was unreachable: only a run without Triton may skip
-        ((CONTROL_PLANE_ONLY)) || fail "/health served no services.models (triton ok=${triton_ok}); pass --control-plane-only for a run without Triton"
-        ev "services.models absent (control-plane-only run): model readiness not asserted"
+        # no models entry means Triton was unreachable, which no accepted run tolerates
+        fail "/health served no services.models (triton ok=${triton_ok})"
     else
         [[ "$models_ok" == true ]] || fail "services.models.ok=${models_ok}: $(jqb '.services.models.detail // ""')"
         ev "services.models.ok == true: $(jqb '.services.models.detail // ""')"

@@ -147,3 +147,15 @@ equal `VERIFY_COMPOSE_PROJECT`: `tests/live/conftest.py` uses it to find the sta
 containers. If the host ports are remapped too (`VERIFY_API_PORT`,
 `VERIFY_OPENSEARCH_PORT`, `VERIFY_FAKE_VLM_PORT`), set the matching `VERIFY_API_URL`,
 `VERIFY_OPENSEARCH_URL` and `VERIFY_FAKE_VLM_URL` for the test process.
+
+## Testing the built images (`compose.built.yml`)
+
+`compose.built.yml` runs the harness on the release images with no `src/`, `scripts/` or
+`VERSION` bind mount, so a file missing from the image, a wrong entrypoint or a permission
+problem for the non-root user fails here. `OP_TEST_IMAGE_TAG` selects the
+`op-local/api` and `op-local/fake-vlm` tag; start with `--no-build`:
+
+```bash
+export OP_TEST_IMAGE_TAG=b4-9629e5c VERIFY_CONTAINER_PREFIX=op-live-built VERIFY_COMPOSE_PROJECT=op-live-built
+docker compose -p op-live-built -f docker/test/compose.yml -f docker/test/compose.built.yml up -d --no-build --wait
+```
