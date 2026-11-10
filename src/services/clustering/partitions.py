@@ -368,12 +368,14 @@ class PartitionRow:
     created_at: str
     parent_partition_id: uuid.UUID | None
     serving: bool
+    serving_revision: int | None
 
 
 _SELECT_PARTITION = (
     'SELECT p.id, p.target, p.level, p.embedding_field, p.method, p.status, p.n_items, '
     'p.n_clusters, p.n_review, p.n_unassigned, p.metrics, p.diff, p.created_at::text, '
-    'p.parent_partition_id, COALESCE(a.serving_partition_id = p.id, false) AS serving '
+    'p.parent_partition_id, COALESCE(a.serving_partition_id = p.id, false) AS serving, '
+    'CASE WHEN a.serving_partition_id = p.id THEN a.revision END AS serving_revision '
     'FROM cluster_partitions p LEFT JOIN cluster_activations a ON a.project_id = p.project_id '
     'AND a.target = p.target AND a.level = p.level AND a.embedding_field = p.embedding_field '
 )

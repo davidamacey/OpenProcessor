@@ -10,7 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import Depends, FastAPI
-from fixtures.job_rows import make_project
+from fixtures.job_rows import make_project, sql
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import set_bound_project
@@ -154,3 +154,38 @@ async def test_activation_is_202_and_a_stale_view_is_409(http, pg) -> None:
     listed = await http.get('/curation/projects/rt-act/clusters/partitions')
     assert listed.status_code == 200
     assert {p['id'] for p in listed.json()['partitions']} == {str(first), str(second)}
+
+
+async def test_the_listing_serves_the_revision_the_next_activation_must_send(http, pg) -> None:
+    """Activating over a serving partition needs the activation revision the caller saw; the
+    listing is where a client reads it (docs/design/curation_api_contract.md, Clusters)."""
+    project = _project(http, pg, 'rt-rev')
+    first, second = await _partition(project), await _partition(project)
+    base = '/curation/projects/rt-rev/clusters'
+    assert (
+        await http.put(f'{base}/activation', json={'target': 'item', 'partition_id': str(first)})
+    ).status_code == 202
+
+    # One projection per project at a time: cancel the first activation's.
+    sql(
+        pg,
+        "UPDATE jobs SET status = 'cancelled', finished_at = now() "
+        "WHERE project_id = %s AND kind = 'cluster_projection_sync'",
+        project,
+    )
+    listed = {p['id']: p for p in (await http.get(f'{base}/partitions')).json()['partitions']}
+    assert listed[str(first)]['serving'] is True
+    assert listed[str(first)]['serving_revision'] == 1
+    assert listed[str(second)]['serving_revision'] is None
+
+    moved = await http.put(
+        f'{base}/activation',
+        json={
+            'target': 'item',
+            'partition_id': str(second),
+            'expected_serving_partition_id': str(first),
+            'expected_revision': listed[str(first)]['serving_revision'],
+        },
+    )
+    assert moved.status_code == 202, moved.text
+    assert moved.json()['revision'] == 2

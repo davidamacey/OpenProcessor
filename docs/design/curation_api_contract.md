@@ -1130,8 +1130,8 @@ Every human region writer enforces, server-side:
   reject are never reopened by it;
 - human writes set `region_validated`. A box write that leaves a `proposed`
   box is a partial review and leaves it as stored;
-- a box that becomes `false_positive` is parked in the permanent FP cluster
-  (id `-100`); one that leaves it is released;
+- a box that becomes `false_positive` is in no cluster (`cluster_*` null); clusters hold
+  only `proposed` and `accepted` boxes;
 - a write that re-asserts the stored status re-derives nothing: cluster
   placement stays;
 - a human reject stamps the box as human-owned; a human-typed text sets
@@ -1406,7 +1406,7 @@ no longer exist.
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters` (max 1000), `class_id`, `offset` (max 64535, so `offset + max_clusters` stays within OpenSearch `search.max_buckets`; above it `422`) |
 | POST | `/clusters/runs` | `ClusterRunRequest` (`target`, optional `level`); `202` `{job_id}`. Writes a new partition with the active `cluster_profile`; the serving partition keeps serving |
 | PUT | `/clusters/activation` | `ClusterActivationRequest` (`target`, `partition_id`, optional `level`, `expected_serving_partition_id`, `expected_revision`); `202` `{job_id, pending_partition_id, revision}`. `409 partition_conflict` when the caller did not see the current serving partition |
-| GET | `/clusters/partitions` | `ClusterPartitionList`; query `target`, `limit`. Method, backend, counts, metrics and stage durations of each run |
+| GET | `/clusters/partitions` | `ClusterPartitionList`; query `target`, `limit`. Method, backend, counts, metrics and stage durations of each run; `serving` and, for the serving partition, `serving_revision`: the `expected_revision` the next activation sends (a first activation sends none) |
 | GET | `/clusters/partitions/{partition_id}` | one partition with its calibration and lineage |
 | POST | `/cluster/umap/rebuild` | refit the UMAP reducer on the residual pool. Returns the clustering summary |
 

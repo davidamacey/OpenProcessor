@@ -5354,6 +5354,18 @@
             "title": "Serving",
             "type": "boolean"
           },
+          "serving_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The activation revision, for the serving partition: send it as `expected_revision` with the next activation. Null for any other partition.",
+            "title": "Serving Revision"
+          },
           "status": {
             "enum": [
               "building",
@@ -5384,7 +5396,8 @@
           "diff",
           "created_at",
           "parent_partition_id",
-          "serving"
+          "serving",
+          "serving_revision"
         ],
         "title": "ClusterPartitionView",
         "type": "object"

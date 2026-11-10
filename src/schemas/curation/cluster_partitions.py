@@ -33,6 +33,10 @@ class ClusterPartitionView(BaseModel):
     created_at: str
     parent_partition_id: uuid.UUID | None
     serving: bool
+    serving_revision: int | None = Field(
+        description='The activation revision, for the serving partition: send it as '
+        '`expected_revision` with the next activation. Null for any other partition.'
+    )
 
 
 class ClusterPartitionList(BaseModel):

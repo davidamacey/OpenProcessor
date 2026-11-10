@@ -210,6 +210,7 @@ def _partition_row(**over: Any) -> Any:
         'created_at': '2026-11-08 10:00:00+00',
         'parent_partition_id': None,
         'serving': True,
+        'serving_revision': 1,
     }
     return PartitionRow(**{**fields, **over})
 
