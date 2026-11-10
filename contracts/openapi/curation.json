@@ -5636,6 +5636,41 @@
         "title": "ClusterRepresentative",
         "type": "object"
       },
+      "ClusterRepresentativesPage": {
+        "description": "``GET {P}/clusters/representatives``: one page of clusters, keyed by ``cluster_uid``.",
+        "properties": {
+          "clusters": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/ClusterRepresentative"
+              },
+              "type": "array"
+            },
+            "title": "Clusters",
+            "type": "object"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "max_clusters": {
+            "title": "Max Clusters",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clusters",
+          "count",
+          "offset",
+          "max_clusters"
+        ],
+        "title": "ClusterRepresentativesPage",
+        "type": "object"
+      },
       "ClusterRunAccepted": {
         "properties": {
           "job_id": {
@@ -43174,9 +43209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Cluster Representatives Curation Projects  Project  Clusters Representatives Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ClusterRepresentativesPage"
                 }
               }
             },

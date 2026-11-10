@@ -37,7 +37,6 @@ LEGACY_DICT = frozenset(
         'GET /train/manifest/{job_id}',
         'POST /classes/merge',
         'POST /cluster/umap/rebuild',
-        'GET /clusters/representatives',
         'POST /crops/discard_batch',
         'POST /crops/flag_new_class',
         'POST /crops/{crop_id}/discard',

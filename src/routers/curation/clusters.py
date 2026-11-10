@@ -12,7 +12,11 @@ from src.core.db_session import DbSessionDep
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
-from src.schemas.curation.clusters import ClusterFacets, ClusterListResponse
+from src.schemas.curation.clusters import (
+    ClusterFacets,
+    ClusterListResponse,
+    ClusterRepresentativesPage,
+)
 from src.services.curation.cluster_cards import (
     ClusterListParams,
     ClusterSortId,
@@ -127,7 +131,11 @@ _OPENSEARCH_MAX_BUCKETS = 65_535
 _REPRESENTATIVES_MAX_OFFSET = _OPENSEARCH_MAX_BUCKETS - _REPRESENTATIVES_MAX_CLUSTERS
 
 
-@router.get('/clusters/representatives')
+@router.get(
+    '/clusters/representatives',
+    response_model=None,
+    responses={200: {'model': ClusterRepresentativesPage}},
+)
 async def cluster_representatives(
     opensearch: OpenSearchDep,
     per_cluster: int = Query(4, ge=1, le=10, description='Top crops per cluster'),
