@@ -2,6 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
+    "output": "cropwright-projects-config.html",
     "title": "Cropwright \u2014 Projects and Config Store",
     "quality_profile": "showcase",
     "viewBox": [

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
+    "output": "data-model.html",
     "title": "OpenSearch Data Model",
     "locale": "en",
     "quality_profile": "showcase",

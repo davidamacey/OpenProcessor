@@ -2,6 +2,7 @@
   "schema_version": 2,
   "diagram_type": "workflow",
   "meta": {
+    "output": "curation-pipeline.html",
     "title": "Curation Pipeline",
     "locale": "en",
     "quality_profile": "showcase",

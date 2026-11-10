@@ -26,7 +26,9 @@ Pipeline:
    (``scripts/datasets/manifests/<name>.json``) if one exists, else write
    it as the new pin.
 8. Download every selected image and write ``ATTRIBUTION.csv``,
-   ``coco_gt.json`` (a COCO-format ground-truth subset), and
+   ``coco_gt.json`` (a COCO-format ground-truth subset for the evaluation tools),
+   ``annotations/instances_<split>.json`` (the same boxes split per source split, the layout the
+   COCO importer reads as written), and
    ``SELECTION.json`` alongside ``images/``.
 
 Throughput benchmark sets (``--bench-set N``) use a different draw: uniform over
@@ -94,6 +96,7 @@ from scripts.datasets.coco_fetch import (
     download_images,
     ensure_annotations,
     write_coco_gt,
+    write_import_annotations,
 )
 from scripts.datasets.coco_selection import (
     DEFAULT_CLASSES,
@@ -383,6 +386,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     write_coco_gt(
         args.out / 'coco_gt.json', [*selected, *negatives], annotations_by_image, categories
     )
+    write_import_annotations(args.out, [*selected, *negatives], annotations_by_image, categories)
 
     _write_attribution(args.out / 'ATTRIBUTION.csv', [*selected, *negatives])
     for name, rows in side_selected.items():

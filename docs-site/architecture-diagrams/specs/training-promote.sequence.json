@@ -2,6 +2,7 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
+    "output": "training-promote.html",
     "title": "Training and Promote",
     "locale": "en",
     "viewBox": [

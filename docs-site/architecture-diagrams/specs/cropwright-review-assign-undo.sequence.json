@@ -2,8 +2,9 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
+    "output": "cropwright-review-assign-undo.html",
     "title": "Cropwright — Review Assign + Undo",
-    "viewBox": [900, 660],
+    "viewBox": [900, 676],
     "quality_profile": "showcase",
     "views": [
       { "id": "assign", "label": "Keypress to write", "focus": ["operator", "page", "controller", "api"], "note": "Enter/a class hotkey triggers an optimistic queue removal before the API call resolves." },

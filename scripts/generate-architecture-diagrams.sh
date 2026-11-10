@@ -75,6 +75,8 @@ for spec in "${specs[@]}"; do
   fi
   node "$ARCHIFY_DIR/bin/archify.mjs" deliver "$diagram_type" "$spec" "$out" --quality showcase --json \
     | python3 -c "import json,sys; d=json.load(sys.stdin); print('    delivered:', d['validation']['compositionStatus'], d['artifact']['bytes'], 'bytes')"
+  # Archify >= 3 writes a <name>.delivery.json provenance sidecar beside the HTML; it is not shipped.
+  rm -f "${out%.html}.delivery.json"
 done
 
 exit $status
