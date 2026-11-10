@@ -12,57 +12,49 @@ from typing import Any
 
 import pytest
 
-from .conftest import (
-    FP_REGION_CLUSTER_ID,
-    INDEXES,
-    cohort_cluster_uid,
-    refresh,
-    search,
-    wait_for_state,
-)
+from .conftest import INDEXES, cohort_cluster_uid, refresh, search, wait_for_state, wait_job
 
 
 pytestmark = pytest.mark.live
 
+# A job view is final once it is none of these.
+LIVE_STATES = ('queued', 'running', 'cancelling')
 
-def _region_box_buckets(
+
+def _region_box_clusters(
     opensearch: Any, box_filter: dict[str, Any] | None = None
-) -> dict[int, int]:
-    """Boxes per region cluster id: a nested terms aggregation, so each BOX
-    counts once (an item with two boxes in one cluster contributes two)."""
-    inner: dict[str, Any] = {
-        'terms': {'field': 'region_boxes.cluster_id', 'size': 50},
-    }
-    agg: dict[str, Any] = {'boxes': {'nested': {'path': 'region_boxes'}, 'aggs': {'rc': inner}}}
+) -> dict[str, int]:
+    """Boxes per ``cluster_uid`` of the serving region-box partition: a nested terms aggregation,
+    so each BOX counts once (an item with two boxes in one cluster contributes two)."""
+    inner: dict[str, Any] = {'terms': {'field': 'region_boxes.cluster_uid', 'size': 50}}
+    agg: dict[str, Any] = {'boxes': {'nested': {'path': 'region_boxes'}, 'aggs': {'uid': inner}}}
     if box_filter is not None:
         agg = {
             'boxes': {
                 'nested': {'path': 'region_boxes'},
-                'aggs': {'scoped': {'filter': box_filter, 'aggs': {'rc': inner}}},
+                'aggs': {'scoped': {'filter': box_filter, 'aggs': {'uid': inner}}},
             }
         }
     resp = search(opensearch, INDEXES['items'], {'size': 0, 'aggs': agg})['aggregations']['boxes']
-    buckets = (resp['scoped'] if box_filter is not None else resp)['rc']['buckets']
+    buckets = (resp['scoped'] if box_filter is not None else resp)['uid']['buckets']
     return {b['key']: b['doc_count'] for b in buckets}
 
 
-def _region_subid_terms(opensearch: Any, cluster_id: int) -> dict[str, int]:
-    """Distinct box sub-cluster ids inside one region cluster."""
-    agg = {
-        'boxes': {
-            'nested': {'path': 'region_boxes'},
+def _boxes_in_state(opensearch: Any, state: str) -> int:
+    resp = search(
+        opensearch,
+        INDEXES['items'],
+        {
+            'size': 0,
             'aggs': {
-                'in_cluster': {
-                    'filter': {'term': {'region_boxes.cluster_id': cluster_id}},
-                    'aggs': {
-                        'subids': {'terms': {'field': 'region_boxes.cluster_subid', 'size': 50}}
-                    },
+                'boxes': {
+                    'nested': {'path': 'region_boxes'},
+                    'aggs': {'s': {'filter': {'term': {'region_boxes.state': state}}}},
                 }
             },
-        }
-    }
-    resp = search(opensearch, INDEXES['items'], {'size': 0, 'aggs': agg})['aggregations']['boxes']
-    return {b['key']: b['doc_count'] for b in resp['in_cluster']['subids']['buckets']}
+        },
+    )
+    return int(resp['aggregations']['boxes']['s']['doc_count'])
 
 
 def test_cluster_cards_report_agreement_and_unlabeled(api_client: Any, opensearch: Any) -> None:
@@ -89,71 +81,62 @@ def test_cluster_cards_report_agreement_and_unlabeled(api_client: Any, opensearc
 # ---------------------------------------------------------------------------
 
 
-def _wait_for_job(get_state: Any, *, timeout: float = 300.0) -> dict[str, Any]:
-    state = wait_for_state(get_state, lambda s: not s.get('running'), timeout=timeout)
-    assert not state.get('running'), state
-    return state
-
-
 def test_region_clustering_partitions_the_region_pool(api_client: Any, opensearch: Any) -> None:
-    resp = api_client.post('/regions/cluster', params={'auto_fp_threshold': 0.0})
-    assert resp.status_code == 200, resp.text
-
-    state = _wait_for_job(lambda: api_client.get('/regions/cluster/status').json())
-    assert state.get('error') is None, state
-    result = state['result']
+    started = api_client.post('/clusters/runs', json={'target': 'region_box'})
+    assert started.status_code == 202, started.text
+    run = wait_job(api_client, started.json()['job_id'], timeout=300.0)
+    assert run['status'] == 'completed', run
+    result = run['result']
     assert result['status'] == 'success', result
-    assert result['n_boxes'] >= 32
-    # Counts name their unit: a box is changed only if its cluster did, and
-    # several boxes share an item.
-    assert 0 < result['n_boxes_changed'] <= result['n_boxes'], result
-    assert 0 < result['n_items_written'] <= result['n_boxes_changed'], result
+    assert result['n_items'] >= 32, result
+    assert result['n_clusters'] >= 2, result
+
+    # A run writes a partition; the serving one keeps serving until it is activated.
+    partitions = api_client.get('/clusters/partitions', params={'target': 'region_box'}).json()
+    serving = next((p for p in partitions['partitions'] if p['serving']), None)
+    activation = api_client.put(
+        '/clusters/activation',
+        json={
+            'target': 'region_box',
+            'partition_id': result['partition_id'],
+            'expected_serving_partition_id': None if serving is None else serving['id'],
+            'expected_revision': None if serving is None else serving['serving_revision'],
+        },
+    )
+    assert activation.status_code == 202, activation.text
+    projected = wait_job(api_client, activation.json()['job_id'], timeout=300.0)
+    assert projected['status'] == 'completed', projected
 
     refresh(opensearch, INDEXES['items'])
-    assigned = _region_box_buckets(opensearch)
-    # The permanent false-positive bucket must survive a re-partition.
-    assert assigned.get(FP_REGION_CLUSTER_ID, 0) == 12, assigned
-    assert len([k for k in assigned if k >= 0]) >= 2, assigned
+    assigned = _region_box_clusters(opensearch)
+    assert len(assigned) == result['n_clusters'], assigned
+    assert sum(assigned.values()) == result['n_items'], assigned
+    # Only proposed and accepted boxes are clustered: a false-positive box is never placed.
+    false_positive = {'term': {'region_boxes.state': 'false_positive'}}
+    assert _boxes_in_state(opensearch, 'false_positive') >= 1, 'the seed holds false-positive boxes'
+    assert _region_box_clusters(opensearch, false_positive) == {}
 
 
-def test_region_cluster_cards_pin_the_false_positive_bucket_first(api_client: Any) -> None:
-    resp = api_client.get('/regions/clusters')
+def test_region_cluster_cards_list_the_serving_clusters(api_client: Any, opensearch: Any) -> None:
+    resp = api_client.get('/regions/clusters', params={'max_clusters': 50, 'per_cluster': 2})
     assert resp.status_code == 200, resp.text
     clusters = resp.json()['clusters']
     assert clusters, resp.text
-    assert clusters[0]['id'] == FP_REGION_CLUSTER_ID
-    assert clusters[0]['cluster_kind'] == 'false_positive'
-
-
-def test_region_refine_writes_region_subids(api_client: Any, opensearch: Any) -> None:
-    buckets = [
-        {'key': key, 'doc_count': n}
-        for key, n in _region_box_buckets(opensearch).items()
-        if key >= 0
-    ]
-    biggest = max(buckets, key=lambda b: b['doc_count'])
-    if biggest['doc_count'] < 4:
-        pytest.skip(f'no region bucket has the 4-member AHC floor: {buckets}')
-
-    resp = api_client.post(f'/regions/clusters/refine/{biggest["key"]}')
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body['action'] == 'refined', body
-    assert body['n_boxes_updated'] == body['n_boxes']
-
-    refresh(opensearch, INDEXES['items'])
-    subids = _region_subid_terms(opensearch, biggest['key'])
-    assert sum(subids.values()) == body['n_boxes'], subids
+    # Cards are the clusters of the serving partition, largest first, identified by cluster_uid.
+    assert {c['cluster_uid'] for c in clusters} == set(_region_box_clusters(opensearch))
+    sizes = [c['box_count'] for c in clusters]
+    assert sizes == sorted(sizes, reverse=True), sizes
+    assert all(c['representative_crop_ids'] for c in clusters)
 
 
 def test_fp_centroid_build_then_suspected_false_positives(api_client: Any) -> None:
     resp = api_client.post('/regions/fp_centroids/build')
-    assert resp.status_code == 200, resp.text
-    state = _wait_for_job(lambda: api_client.get('/regions/fp_centroids/status').json())
-    assert state.get('error') is None, state
-    result = state['result']
+    assert resp.status_code == 202, resp.text
+    job = wait_job(api_client, resp.json()['job_id'], timeout=300.0)
+    assert job['status'] == 'completed', job
+    result = job['result']
     assert result['status'] == 'success', result
-    assert result['n_boxes'] >= 1, result
+    assert result['fp_centroids']['n_boxes'] >= 1, result
 
     suspected = api_client.get('/regions/suspected_false_positives', params={'threshold': 0.35})
     assert suspected.status_code == 200, suspected.text
@@ -171,13 +154,13 @@ def test_fp_centroid_build_then_suspected_false_positives(api_client: Any) -> No
 
 def _run_scorer(api_client: Any, scorer: str) -> dict[str, Any]:
     resp = api_client.post('/scores/compute', json={'scorers': [scorer]})
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 202, resp.text
     state = wait_for_state(
         lambda: api_client.get('/scores/status').json(),
-        lambda s: s.get('status') != 'running',
+        lambda s: s.get('status') not in LIVE_STATES,
         timeout=300.0,
     )
-    assert state['status'] != 'running', 'the scoring job never left the running state'
+    assert state['status'] not in LIVE_STATES, 'the scoring job never finished'
     return state
 
 
@@ -253,7 +236,7 @@ def test_viz_projection_rebuild_then_serve(api_client: Any, opensearch: Any) -> 
 
     state = wait_for_state(
         lambda: api_client.get('/viz/projection/status').json(),
-        lambda s: s.get('status') != 'running',
+        lambda s: s.get('status') not in LIVE_STATES,
         timeout=600.0,
         interval=2.0,
     )

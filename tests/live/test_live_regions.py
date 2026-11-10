@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from .conftest import FP_REGION_CLUSTER_ID, INDEXES, crop_ids_in, get_doc, refresh
+from .conftest import INDEXES, crop_ids_in, get_doc, refresh
 
 
 pytestmark = pytest.mark.live
@@ -108,15 +108,16 @@ def test_patch_box_text_writes_text_and_source_on_that_box(
     box = _source(opensearch, crop_id)['region_boxes'][0]
     assert box['text'] == 'LIVE-HARNESS-7'
     assert box['text_source'] == 'human'
-    # A text-only edit must not touch the box's geometry or cluster bucket.
+    # A text-only edit must not touch the box's geometry or cluster placement.
     assert box['bbox_norm'] == before['bbox_norm']
-    assert box['cluster_id'] == before['cluster_id']
+    assert box['cluster_uid'] == before['cluster_uid']
 
 
-def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
+def test_patch_region_status_marks_every_box_false_positive(
     api_client: Any, opensearch: Any, region_cohort: list[str]
 ) -> None:
     crop_id = region_cohort[4]
+    placement_before = [b['cluster_uid'] for b in _source(opensearch, crop_id)['region_boxes']]
     resp = api_client.patch(
         f'/crops/{crop_id}/region_meta',
         json={'region_status': 'false_positive', 'region_label_source': 'human'},
@@ -125,8 +126,11 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
 
     src = _source(opensearch, crop_id)
     assert src['region_status'] == 'false_positive'
-    assert {b['cluster_id'] for b in src['region_boxes']} == {FP_REGION_CLUSTER_ID}
-    assert {b['cluster_subid'] for b in src['region_boxes']} == {None}
+    # The FP cluster is gone with the integer cluster ids (docs/design/curation_api_contract.md,
+    # Clusters): the boxes are in the false_positive state and keep their placement until the
+    # next clustering run, which takes only proposed and accepted boxes.
+    assert {b['state'] for b in src['region_boxes']} == {'false_positive'}
+    assert [b['cluster_uid'] for b in src['region_boxes']] == placement_before
     assert src['region_validated'] is True
 
     # A false-positive item has no accepted box, so whole-set confirm is a
@@ -134,7 +138,7 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
     confirm = api_client.patch(f'/crops/{crop_id}/region_meta', json={'region_status': 'detected'})
     assert confirm.status_code == 422, confirm.text
 
-    # Accepting each box releases it so the next re-cluster re-absorbs it.
+    # Accepting each box returns it to the clusterable states; the next clustering run places it.
     for box in src['region_boxes']:
         resp = api_client.patch(
             f'/crops/{crop_id}/regions/{box["box_id"]}', json={'state': 'accepted'}
@@ -142,7 +146,8 @@ def test_patch_region_status_routes_false_positives_to_the_fp_bucket(
         assert resp.status_code == 200, resp.text
     src = _source(opensearch, crop_id)
     assert src['region_status'] == 'detected'
-    assert {b['cluster_id'] for b in src['region_boxes']} == {None}
+    assert {b['state'] for b in src['region_boxes']} == {'accepted'}
+    assert [b['cluster_uid'] for b in src['region_boxes']] == placement_before
 
 
 def test_patch_region_rejects_a_non_human_status_and_an_empty_body(

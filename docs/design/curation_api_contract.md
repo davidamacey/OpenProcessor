@@ -1130,8 +1130,8 @@ Every human region writer enforces, server-side:
   reject are never reopened by it;
 - human writes set `region_validated`. A box write that leaves a `proposed`
   box is a partial review and leaves it as stored;
-- a box that becomes `false_positive` is in no cluster (`cluster_*` null); clusters hold
-  only `proposed` and `accepted` boxes;
+- a box that becomes `false_positive` keeps its cluster placement until the next clustering run,
+  which clusters only `proposed` and `accepted` boxes;
 - a write that re-asserts the stored status re-derives nothing: cluster
   placement stays;
 - a human reject stamps the box as human-owned; a human-typed text sets
