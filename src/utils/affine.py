@@ -12,6 +12,8 @@ from typing import Literal
 import numpy as np
 from PIL import Image
 
+from src.utils.image_decode import EXIF_ORIENTATION
+
 
 BoxFrame = Literal['pixels']
 """Frame of detector boxes relative to the letterboxed model input. The fused detector
@@ -20,48 +22,16 @@ else fails closed."""
 
 
 def get_jpeg_dimensions_fast(image_bytes: bytes) -> tuple[int, int]:
+    """The upright ``(width, height)`` of an encoded image, read from the header only.
+
+    ``Image.open`` is lazy (Pillow reads the header, not the pixels), so this stays cheap on a
+    large photo. The EXIF orientation is applied to the size (tags 5-8 swap it), the frame every
+    box is drawn on and un-mapped to, matching :func:`src.utils.image_decode.decode_image`.
     """
-    Get JPEG dimensions from header without full decode.
-
-    This is ~100x faster than PIL.Image.open().size for large images.
-    Falls back to PIL for non-JPEG or corrupted headers.
-
-    Args:
-        image_bytes: Raw JPEG/PNG bytes
-
-    Returns:
-        (width, height) tuple
-    """
-    # Try fast JPEG header parse first
-    if len(image_bytes) > 2 and image_bytes[0:2] == b'\xff\xd8':
-        try:
-            # JPEG format - parse SOF markers
-            pos = 2
-            while pos < len(image_bytes) - 8:
-                if image_bytes[pos] != 0xFF:
-                    break
-                marker = image_bytes[pos + 1]
-
-                # SOF markers (Start Of Frame) contain dimensions
-                if marker in (0xC0, 0xC1, 0xC2):  # SOF0, SOF1, SOF2
-                    height = (image_bytes[pos + 5] << 8) | image_bytes[pos + 6]
-                    width = (image_bytes[pos + 7] << 8) | image_bytes[pos + 8]
-                    return width, height
-
-                # Skip to next marker
-                if marker in {0xD8, 0xD9}:  # SOI, EOI
-                    pos += 2
-                elif marker == 0xFF:
-                    pos += 1
-                else:
-                    length = (image_bytes[pos + 2] << 8) | image_bytes[pos + 3]
-                    pos += 2 + length
-        except (IndexError, ValueError):
-            pass  # Fall back to PIL
-
-    # Fallback: Use PIL (handles all formats)
-    img = Image.open(BytesIO(image_bytes))
-    return img.size  # (width, height)
+    with Image.open(BytesIO(image_bytes)) as img:
+        width, height = img.size
+        orientation = img.getexif().get(EXIF_ORIENTATION, 1)
+    return (height, width) if orientation in (5, 6, 7, 8) else (width, height)
 
 
 def inverse_letterbox_coords(

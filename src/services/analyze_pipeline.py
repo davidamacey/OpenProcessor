@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -128,12 +127,11 @@ def crop_batch_tensor(
 ) -> np.ndarray:
     """Crop and preprocess every detection into one ``[N, 3, 256, 256]`` batch."""
     import numpy as np
-    from PIL import Image
 
     from src.utils.cpu_preprocess import center_crop_cpu
+    from src.utils.image_decode import decode_image
 
-    pil_img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
-    np_img = np.array(pil_img)
+    np_img = np.array(decode_image(image_bytes).pil)
 
     preprocessed = []
     for det in detections:

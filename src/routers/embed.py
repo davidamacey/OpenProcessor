@@ -11,11 +11,9 @@ Provides endpoints for MobileCLIP embeddings:
 import logging
 import uuid
 from functools import lru_cache
-from io import BytesIO
 
 import numpy as np
 from fastapi import APIRouter, Body, File, HTTPException, Query, UploadFile
-from PIL import Image
 
 from src.routers._errors import server_error
 from src.schemas.embed import (
@@ -27,6 +25,7 @@ from src.schemas.embed import (
     TextEmbeddingResponse,
 )
 from src.services.inference import InferenceService
+from src.utils.image_decode import decode_image
 from src.utils.retry import RetryExhaustedError
 
 
@@ -283,7 +282,7 @@ def embed_boxes(
         if not image_bytes:
             raise HTTPException(status_code=400, detail='Empty image file')
 
-        pil_image = Image.open(BytesIO(image_bytes)).convert('RGB')
+        pil_image = decode_image(image_bytes).pil
         img_width, img_height = pil_image.size
         np_img = np.array(pil_image)
 
