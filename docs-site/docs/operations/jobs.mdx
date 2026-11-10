@@ -1,0 +1,92 @@
+---
+sidebar_position: 3
+title: Jobs, queues and recovery
+---
+
+# Jobs, queues and recovery
+
+Every long operation of the curation API, the trainer, the evaluator and the
+model export is a **job**: a row in the PostgreSQL `jobs` table with a kind, a
+status, attempts, items and progress. Starting one inserts the row and sends a
+Celery message that carries only the job id; a worker loads the row and runs it.
+
+## The 202 contract
+
+A route that starts a job answers `202` with a `job_id` (the body also names the
+record, such as `op_id`, `import_id` or `run_id`). Follow it with:
+
+- `GET /curation/projects/{project}/jobs` (newest first; filters `kind` and
+  `status`; keyset pages);
+- `GET /curation/projects/{project}/jobs/{job_id}`; another project's job is
+  `404 job_not_found`;
+- `GET /curation/jobs/{job_id}` for a deployment-wide job.
+
+Statuses: `queued`, `running`, `paused`, `cancelling`, `completed`,
+`completed_with_errors`, `failed`, `cancelled`, `interrupted`. A kind may be
+exclusive per project, and a second start then answers `409 job_busy`.
+
+Affected routes include project create (`POST /curation/projects` answers 202
+with the project in status `building`), delete and combine, bulk label and move,
+label-operation undo, dataset import, bulk ingest and source runs, promote,
+scores, probe and projection builds, cluster runs, embedding-space builds,
+near-duplicate runs and source backfill. `POST /crops/region/undo_batch` and the
+new-class resolve answer 202 only above `OP_BATCH_SYNC_MAX` matching items
+(default 500), and 200 below it.
+
+### Idempotency-Key
+
+Send an `Idempotency-Key` header on a job-starting route. A repeat with the same
+key returns the first job (project create answers 200); the same key with other
+parameters answers `422 idempotency_key_reused`.
+
+## Bulk writes and per-item `failed`
+
+Bulk writers use optimistic concurrency (a read, a merge and a versioned write)
+and never overwrite a human- or import-validated item or the test holdout. The
+response reports each item the write could not apply: an item someone else
+edited meanwhile is a `conflicts` entry, and an item whose write errored (a
+failed bulk request, a mapping error) is a `failed` entry with
+`reason: write_failed`. This holds for `POST /crops/discard_batch`, the
+new-class resolve and the assist apply. A 4xx bulk error is not retried. Label
+operations and the assist loop fail the job on an unwritable item.
+
+## Queues and workers
+
+| Queue | Worker |
+|---|---|
+| `jobs` | `jobs-worker` (concurrency `OP_JOBS_CONCURRENCY`, replicas `OP_JOBS_REPLICAS`) |
+| `periodic` | `periodic-worker` |
+| `open_vocab` | `open-vocab-worker` |
+| `cluster` | `cluster-worker` |
+| `autolabel` | `curation-auto-label-worker` |
+| `assist_loop` | `curation-assist-loop-worker` |
+| `gpu_train`, `gpu_eval`, `gpu_export` | trainer, evaluator, `model-export-worker` |
+
+The full table of workers is in [Workers and heartbeats](workers.mdx).
+
+## Beat and the reaper
+
+`jobs-beat` (one replica) queues the periodic work: the reaper every 30 s, the
+ingest dispatcher (`OP_INGEST_DISPATCH_S`), the open-vocabulary sweep, the
+cluster refresh (`OP_CLUSTER_REFRESH_INTERVAL_S`, default 120, `0` removes it),
+the near-duplicate rescore and the optional database backup.
+
+The **reaper** recovers a job whose worker died (it becomes `interrupted`, and
+resumes by itself when the kind allows), fails the jobs of a queue whose worker
+profile never started, and prunes old events and finished jobs. Cancel and pause
+are database writes that a worker reads between slices of work; nothing calls
+Celery `revoke`.
+
+## Events
+
+`GET /curation/events` and `GET /curation/projects/{project}/events` are
+Server-Sent Events. Frames carry an `id`; a client that reconnects with
+`Last-Event-ID` gets what it missed, and one whose cursor is older than the
+24-hour retention gets a `reset` event first. See [Scale-out](scale-out.mdx).
+
+## Watching jobs
+
+Flower (profile `monitoring`, port 4613) shows the Celery side. Prometheus gets
+`op_jobs{kind,status}`, `op_jobs_oldest_queued_seconds` and
+`op_jobs_failed_total`, and each Celery worker's own metrics on
+`OP_WORKER_METRICS_PORT`. See [Monitoring](monitoring.mdx).
