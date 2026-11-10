@@ -53,6 +53,12 @@ Map page (MapLibre). The server aggregates positions in OpenSearch (a
 its points: `GET /map/cells` answers GeoJSON for a zoom and bounding box and
 `GET /map/images` lists the photos of one cell. Both take the shared item filter.
 
+![Map page with located photos](/img/screenshots/cropwright/map-1440.png)
+
+On a phone the same page stacks the header and fills the width:
+
+![Map page at 430 px](/img/screenshots/cropwright/map-430.png)
+
 The browser draws the basemap from `OP_MAP_TILE_URL` (OpenStreetMap by default;
 `OP_MAP_TILE_ATTRIBUTION` sets the credit). Each tile request tells that server
 which area is on screen. Point it at your own tile server to keep locations on
