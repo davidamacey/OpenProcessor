@@ -5,192 +5,113 @@ title: Dataset import
 
 # Dataset import
 
-Bring an already-labeled dataset into a project: a YOLO dataset, a COCO
-dataset, a Pascal VOC dataset, an Open Images dataset, a CVAT, Label Studio,
-KITTI, CreateML or LabelMe export, or an OpenProcessor export. Classes are mapped by name, never by
-index. A dataset's class order is not trusted across the boundary.
+Bring an already-labeled dataset into a project. Classes are mapped by name, never by
+index; a dataset's class order is not trusted. Examples assume `API=http://localhost:4603`
+and project `cars`.
 
-`API=http://localhost:4603` and project `cars` are assumed.
+## Formats
 
-## Concepts
+`source.format` is `auto` (default) or one of:
 
-- **Formats.** `yolo` (a `data.yaml` with class names, plus `images/` and
-  `labels/` per split; polygon and oriented-box rows are imported as their
-  bounding box), `coco` (instances JSON files, with an images directory per
-  file), `voc`, `openimages` and `openprocessor_export` (an export written
-  by this system, which can be re-imported where it was written). `auto`
-  detects the layout. Detection order (first match wins): export, then YOLO
-  (a `data.yaml`), then COCO (an `annotations/` directory with JSON files and
-  no `labels/` directory, which includes `images/` next to `annotations/`),
-  then Pascal VOC (`Annotations/` or `annotations/` holding `*.xml` and no
-  `*.json`), then Open Images (a `*annotations-bbox*.csv` and a
-  `*class-descriptions*.csv` directly in the directory), then YOLO (an
-  `images/` directory, or a child directory with `images/`). Between Open
-  Images and the final YOLO rule, CVAT (an `annotations.xml`), Label Studio,
-  CreateML and LabelMe (JSON files whose first 64 KiB carry the format's keys)
-  and KITTI (`label_2/`) are tried in that order. A `data.yaml`
-  always wins, so a YOLO dataset that also carries VOC or Open Images files is
-  YOLO; an `annotations/` directory with both JSON and XML is COCO. Force a
-  format with `source.format`.
-- **Pascal VOC.** The directory holds `Annotations/*.xml`, the images in
-  `JPEGImages/` (else `images/`, else the directory itself) and optionally
-  `ImageSets/Main/{train,val,test}.txt` for splits. The class is the
-  `<name>` text. Boxes are 1-based pixel coordinates and the image size comes
-  from `<size>`. Objects marked `difficult` are skipped; an annotation with
-  no object is a verified negative; `<path>` and `<folder>` are ignored. An
-  image with no XML file is not imported.
-- **Open Images.** The directory holds `class-descriptions-boxable.csv`, one
-  or more `*-annotations-bbox.csv` files (the split comes from the file
-  name) and the images (`images/<split>/`, `<split>/`, `images/` or the
-  directory itself) named `<ImageID>.<ext>`. The class is the `DisplayName`
-  of the MID. Group boxes are skipped, depiction boxes are kept, an image is
-  never a verified negative (it is `unlabeled` when it has no kept box), and
-  images with no box row are not imported.
-- **CVAT, Label Studio, KITTI, CreateML, LabelMe.** Format ids `cvat`,
-  `labelstudio`, `kitti`, `createml`, `labelme`. CVAT is the "for images 1.1"
-  `annotations.xml` with the images in `images/`. Label Studio is the full JSON
-  export (not `JSON_MIN`) with `rectanglelabels` results; its image reference
-  (`/data/upload/<n>/file` or `/data/local-files/?d=path`) is looked up in
-  `images/` or the directory, and a task with several annotations is skipped.
-  KITTI is `label_2/*.txt` with `image_2/` (also under `training/`). CreateML
-  boxes are centre-based pixels and LabelMe boxes are `rectangle` shapes.
-  The class is always the label text. An image with no object is a verified
-  negative; rotated boxes, polygons, masks and other non-box shapes are
-  skipped (`shape_not_box_skipped`).
-  In the pixel formats (CVAT, KITTI, CreateML, LabelMe) the image size comes from the image; a declared
-  size that disagrees with it skips the image (`image_size_mismatch`). Label Studio coordinates are
-  percentages. An image with no annotation in Label Studio is unlabeled; one annotation with no box is a
-  negative. YOLO rows with more than five columns (segmentation, oriented boxes) are imported as their
-  bounding box. An image reference that leaves the dataset (`..`, an absolute path, a link out) or names a
-  remote URL is never followed (`image_file_missing`). The Label Studio `JSON_MIN` export, CVAT video
-  (track) exports and COCO segmentation-only files are not read: convert them or export the full JSON.
-- **YOLO names files.** A YOLO dataset may name its classes in `classes.txt`
-  (or `obj.names`, `names.txt`), one per line, beside `images/` and `labels/`.
-  With no `data.yaml` and no names file the dataset is refused (`format_undetected`); a names file with a blank
-  or repeated name is a blocking `yolo_names_file_invalid`.
-- **Allowed paths.** `source.path` must be absolute and, after symlinks are
-  resolved, sit under a configured image source root (`OP_SOURCE_ROOT` and
-  `OP_SOURCE_PATH_ALIASES`), the project's upload root, or the project's
-  export root. Anything a dataset names (a `data.yaml` path, a COCO
-  `file_name`, an archive member) must stay inside it.
-- **There is no `root` request parameter.** The dataset location is
-  `source.path` only (a directory, or for YOLO a `data.yaml` file), in one
-  of the forms above; `root` is a field of the preview *response* (the
-  resolved directory) and is ignored as input. A COCO dataset is a directory
-  holding `images/` and `annotations/*.json` (for example
-  `/data/source/my_coco/images/` and `/data/source/my_coco/annotations/instances_train.json`),
-  with `"format": "coco"` or `"auto"`; pass the directory that contains those
-  two folders, not `images/` or a JSON file.
-- **Preview, then import.** A preview writes nothing and returns the
-  detected format, totals, splits, a decision row per dataset class, issues
-  and an `import_key`. The import re-scans and is authoritative.
-- **Class mapping.** Every dataset class that has boxes needs one decision:
-  `map` to an existing class (`class_id`), `create` a class
-  (`new_class_name`, optional `new_class_group`), `skip` (the frames stay
-  unlabeled), or `region` (the class is a region of its parent item, not an
-  item; needs an active region profile). The preview suggests a decision
-  with a `match` kind: same class, exact name, case or spacing difference,
-  merged class, prompt-pack synonym, the region class, or none.
-  `accept_suggestions: true` fills in only the safe matches (same class,
-  exact name, case or spacing difference, region class). Synonym, merged and
-  create suggestions always need an explicit decision.
-  `index_would_have_mapped_to` shows what an index-based mapping would have
-  done wrong.
-- **Idempotent.** `import_key` hashes the source, mapping and the options
-  that change what is written. Repeating a completed import returns the
-  finished job with `reused: true`.
-- **Chunked and resumable.** Imports are persisted per chunk. One import
-  runs per project at a time.
-- **Human edits win.** A label or box a person set between preview and write
-  is not overwritten. Such conflicts are counted as `label_conflicts_locked`.
-- **Undo.** Restores class snapshots and box history, deletes the items and
-  images the import created, and deprecates classes it created. Items
-  edited by a person or shared with another import are kept.
+| Format | Layout |
+|---|---|
+| `yolo` | `data.yaml` (or `classes.txt`, `obj.names`, `names.txt`) plus `images/` and `labels/` per split. Rows with more than five columns (polygon, oriented box) import as their bounding box. |
+| `coco` | A directory with `images/` and `annotations/*.json` (pass the directory, not `images/` or a JSON file). Segmentation-only files are not read. |
+| `voc` | `Annotations/*.xml`, images in `JPEGImages/` (else `images/`), optional `ImageSets/Main/*.txt` splits. Objects marked `difficult` are skipped. |
+| `openimages` | `class-descriptions-boxable.csv`, `*-annotations-bbox.csv` (split from the file name), images named `<ImageID>.<ext>`. Group boxes skipped; images with no box row are not imported. |
+| `cvat`, `labelstudio`, `kitti`, `createml`, `labelme` | CVAT "for images 1.1" `annotations.xml`; Label Studio full JSON (not `JSON_MIN`) with `rectanglelabels`; KITTI `label_2/`; CreateML; LabelMe `rectangle` shapes. Non-box shapes are skipped (`shape_not_box_skipped`). CVAT video tracks are not read. |
+| `openprocessor_export` | An export written by this system, re-importable where it was written. |
+
+`auto` tries, first match wins: export, YOLO with a `data.yaml`, COCO, VOC, Open Images,
+CVAT, Label Studio, CreateML, LabelMe, KITTI, then YOLO from an `images/` directory. A
+`data.yaml` always wins. Force a format with `source.format`. An image with no objects is a
+verified negative in the formats that can say so. A reference that leaves the dataset (`..`,
+an absolute path, a link out, a URL) is never followed (`image_file_missing`). A declared
+image size that disagrees with the image skips it (`image_size_mismatch`).
+
+## How an import works
+
+- **Allowed paths.** `source.path` is absolute and, after symlinks, under an image source
+  root (`OP_SOURCE_ROOT`, `OP_SOURCE_PATH_ALIASES`), the project's upload root or export
+  root. Everything the dataset names must stay inside it. There is no `root` request field.
+- **Preview, then import.** A preview writes nothing and returns the format, totals,
+  splits, a decision row per class, issues and an `import_key`. The import re-scans and is
+  authoritative. It runs as a background job (202) in persisted chunks; one import per
+  project at a time.
+- **Class mapping.** Each class with boxes needs one decision: `map` to an existing
+  `class_id`, `create` (`new_class_name`, optional `new_class_group`), `skip` (frames stay
+  unlabeled) or `region` (a region of its parent item; needs an active region profile).
+  The preview suggests a decision with a `match` kind. `accept_suggestions: true` fills only
+  the safe matches (same class, exact name, case or spacing difference, region class);
+  synonym, merged and create suggestions need an explicit decision.
+  `index_would_have_mapped_to` shows what index-based mapping would have got wrong.
+- **Idempotent.** `import_key` hashes the source, mapping and the options that change what
+  is written. Repeating a completed import returns the finished job with `reused: true`.
+- **Human edits win.** A label or box a person set meanwhile is not overwritten
+  (`label_conflicts_locked`).
+- **Undo** restores class snapshots and box history, deletes the items and images the
+  import created and deprecates classes it created. Items a person edited or another import
+  shares are kept.
 
 ## Routes
 
+All under `/curation/projects/{project}/datasets`:
+
 | Call | Purpose |
 |---|---|
-| `POST /curation/projects/{project}/datasets/uploads` | Upload a dataset archive |
-| `GET /curation/projects/{project}/datasets/formats` | Formats, choices, issue catalog, upload limits |
-| `POST /curation/projects/{project}/datasets/preview` | Preview; writes nothing |
-| `POST /curation/projects/{project}/datasets/imports` | Start an import |
-| `GET /curation/projects/{project}/datasets/imports` | List imports (`page`, `page_size`, `status`) |
-| `GET /curation/projects/{project}/datasets/imports/{import_id}` | Status and report |
-| `GET /curation/projects/{project}/datasets/imports/{import_id}/entries` | Per-image rows |
-| `GET /curation/projects/{project}/datasets/imports/{import_id}/issues` | Issues with samples |
-| `POST /curation/projects/{project}/datasets/imports/{import_id}/cancel` | Stop a running import |
-| `POST /curation/projects/{project}/datasets/imports/{import_id}/resume` | Continue an interrupted, failed or cancelled import |
-| `POST /curation/projects/{project}/datasets/imports/{import_id}/undo` | Dry run or real undo |
+| `POST /uploads` | Upload a dataset archive |
+| `GET /formats` | Formats, issue catalog, upload limits |
+| `POST /preview` | Preview; writes nothing |
+| `POST`/`GET /imports` | Start / list (`page`, `page_size`, `status`) |
+| `GET /imports/{import_id}` | Status and report |
+| `GET /imports/{import_id}/entries`, `/issues` | Per-image rows (filters `split`, `label_state`, `status`) / issues with samples |
+| `POST /imports/{import_id}/cancel`, `/resume`, `/undo` | Stop; continue an interrupted, failed or cancelled import (re-checks the source); dry run or real undo |
 
 ## Upload an archive
 
-If the dataset is not already under a source root, upload it. One `.zip`,
-`.tar` or `.tar.gz`, as multipart form data with the field `file`:
+If the dataset is not under a source root, upload one `.zip`, `.tar` or `.tar.gz` (multipart
+field `file`):
 
 ```bash
-curl -s -X POST "$API/curation/projects/cars/datasets/uploads" \
-  -F 'file=@my_dataset.zip'
+curl -s -X POST "$API/curation/projects/cars/datasets/uploads" -F 'file=@my_dataset.zip'
 ```
 
-The answer is 201 with `upload_id`, `dataset_path`, `files` and `bytes`.
-Use `dataset_path` as `source.path`. Extraction is content addressed and
-safe: only regular files and directories are extracted, a symlink or device
-file fails the whole archive, and member count, written bytes and
-compression ratio are capped. Limits come from `OP_DATASET_UPLOAD_MAX_BYTES`
-(default 2 GiB), `OP_DATASET_UPLOAD_MAX_FILES` and `OP_DATASET_UPLOAD_TTL_H`
-(uploads are swept after the TTL). `GET .../datasets/formats` returns the
-live limits as `upload_limits`.
+The 201 answer has `upload_id`, `dataset_path`, `files`, `bytes`; use `dataset_path` as
+`source.path`. Extraction accepts only regular files and directories (a symlink or device
+fails the archive) and caps member count, bytes and compression ratio.
+`OP_DATASET_UPLOAD_MAX_BYTES` (default 2 GiB), `OP_DATASET_UPLOAD_MAX_FILES` and
+`OP_DATASET_UPLOAD_TTL_H` set the limits and the sweep; `GET .../formats` returns them as
+`upload_limits`.
 
 ## Preview
 
 ```bash
 curl -s -X POST "$API/curation/projects/cars/datasets/preview" \
   -H 'Content-Type: application/json' \
-  -d '{
-        "source": {"path": "/data/source/my_dataset", "format": "auto"},
-        "mapping": [],
-        "accept_suggestions": false,
-        "options": {"processing": "none", "label_trust": "validated"}
-      }'
+  -d '{"source": {"path": "/data/source/my_dataset", "format": "auto"},
+       "mapping": [], "accept_suggestions": false,
+       "options": {"processing": "none", "label_trust": "validated"}}'
 ```
 
-The response has `format`, `root`, `source_sha`, `import_key`, `splits`
-(images, labeled, negatives, unlabeled, boxes), `totals` (images, boxes,
-already indexed, to ingest), `classes` (one row per dataset class with
-`boxes`, `images`, `suggestion`, `resolved`, `merged_from`), `region`
-(when region classes are mapped), `issues`, `blocking`, `force_allowed` and
-`estimate` (detector images and embeddings). For an OpenProcessor export it
-also carries `op_export`.
-
-For a COCO dataset with explicit files, give `source.coco_annotations`:
-
-```json
-{
-  "source": {
-    "path": "/data/source/coco_set",
-    "format": "coco",
-    "coco_annotations": [
-      {"path": "annotations/instances_train.json", "images_dir": "images/train", "split": "train"}
-    ]
-  }
-}
-```
+The response has `format`, `root`, `source_sha`, `import_key`, `splits`, `totals`,
+`classes` (per class: `boxes`, `images`, `suggestion`, `resolved`), `region`, `issues`,
+`blocking`, `force_allowed` and `estimate`. For COCO with explicit files add
+`"coco_annotations": [{"path": "annotations/instances_train.json", "images_dir": "images/train", "split": "train"}]`
+to `source`.
 
 ## Options
 
 | Option | Default | Meaning |
 |---|---|---|
-| `processing` | `none` | `none` imports as-is. `propose` also runs the detector to find what the labels missed |
-| `label_trust` | `validated` | `validated`: imported labels count as ground truth. `suggestion`: imported boxes are proposals a reviewer confirms |
-| `parents` | `auto` | For region classes: take parent items from the labels, or run the detector (`detect`) |
-| `freeze_test_split` | null | Freeze the dataset's test split as the project's held-out set. Null means false, except for an OpenProcessor export that was itself frozen |
-| `missing_label` | `unlabeled` | An image with no label file is `unlabeled`, or `negative` (no object) |
-| `region_negatives` | true | On labeled or negative frames, parent items with no region box are recorded as having no region |
-| `region_containment` | 0.9 | 0.5 to 1.0. Containment threshold for assigning a region box to a parent item |
-| `name` | `dataset_import` | Label of the job, 1 to 120 characters |
-| `source_tag` | `dataset_import` | Tag stored on imported items, 1 to 120 characters |
-| `force` | false | Start despite blocking issues that are bypassable |
+| `processing` | `none` | `propose` also runs the detector to find what the labels missed |
+| `label_trust` | `validated` | `validated`: imported labels are ground truth. `suggestion`: boxes are proposals a reviewer confirms |
+| `parents` | `auto` | For region classes: parent items from the labels, or run the detector (`detect`) |
+| `freeze_test_split` | null | Freeze the dataset's test split as the held-out set (null is false, except for an export that was itself frozen) |
+| `missing_label` | `unlabeled` | An image with no label file is `unlabeled` or `negative` |
+| `region_negatives` | true | Parent items with no region box on labeled frames are recorded as having none |
+| `region_containment` | 0.9 | 0.5 to 1.0; threshold for assigning a region box to a parent |
+| `name`, `source_tag` | `dataset_import` | Job label and tag on imported items (1 to 120 characters) |
+| `force` | false | Start despite bypassable blocking issues |
 
 `name`, `source_tag` and `force` do not change `import_key`.
 
@@ -199,24 +120,21 @@ For a COCO dataset with explicit files, give `source.coco_annotations`:
 ```bash
 curl -s -X POST "$API/curation/projects/cars/datasets/imports" \
   -H 'Content-Type: application/json' \
-  -d '{
-        "source": {"path": "/data/source/my_dataset"},
-        "mapping": [
-          {"dataset_class": "car", "action": "map", "class_id": 0},
-          {"dataset_class": "wheel", "action": "region"},
-          {"dataset_class": "bus", "action": "create", "new_class_name": "bus", "new_class_group": null},
-          {"dataset_class": "other", "action": "skip"}
-        ],
-        "options": {"name": "my_dataset", "freeze_test_split": true},
-        "expected_import_key": "<import_key from the preview>"
-      }'
+  -d '{"source": {"path": "/data/source/my_dataset"},
+       "mapping": [
+         {"dataset_class": "car", "action": "map", "class_id": 0},
+         {"dataset_class": "wheel", "action": "region"},
+         {"dataset_class": "bus", "action": "create", "new_class_name": "bus", "new_class_group": null},
+         {"dataset_class": "other", "action": "skip"}],
+       "options": {"name": "my_dataset", "freeze_test_split": true},
+       "expected_import_key": "<import_key from the preview>"}'
 ```
 
-`expected_import_key` makes the call fail with 409 `dataset_changed` if the
-dataset or mapping changed since the preview. The answer is 202 with the
-job. A repeat of a completed import answers 200 with `reused: true`.
+`expected_import_key` makes the call 409 `dataset_changed` if the dataset or mapping changed
+since the preview. The answer is 202 with the job; a repeat of a completed import is 200 with
+`reused: true`.
 
-## Follow, inspect, control
+## Follow and control
 
 ```bash
 curl -s "$API/curation/projects/cars/datasets/imports/IMPORT_ID"
@@ -226,27 +144,15 @@ curl -s -X POST "$API/curation/projects/cars/datasets/imports/IMPORT_ID/cancel"
 curl -s -X POST "$API/curation/projects/cars/datasets/imports/IMPORT_ID/resume"
 ```
 
-The job has `status` (`queued`, `running`, `paused_backpressure`,
-`completed`, `completed_with_errors`, `failed`, `cancelled`,
-`interrupted`, `undoing`, `undone`), `progress` (images and chunks done,
-images per second, `eta_s`), `waiting_for`, `poll_after_s`, `report`,
-`mapping`, `options`, `source`, `issues_summary`, `undo`, `next_steps` and
-`error`. `paused_backpressure` means the region worker queue is full
-(`OP_DATASET_IMPORT_MAX_PENDING`); the import continues by itself.
-
-`report` counts `images_created`, `images_reused`, `images_failed`,
-`images_skipped`, `items_created`, `items_updated`, `items_noop`,
-`labels_written`, `boxes_written`, `standalone_regions`, `negatives`,
-`unlabeled`, `parents_detected`, `proposals_created`, `proposals_merged`,
-`holdout_frozen`, `label_conflicts_locked`, `items_reconciled_removed` and
-`disagreements` (counts and samples where the dataset label differs from
-the existing label). `next_steps` lists calls worth making next, each with
-`action`, `method`, `path` and `reason`.
-
-Entry filters are `split`, `label_state` and `status`. Resume only works for
-an interrupted, failed or cancelled import and re-checks the source. A
-dataset updated over an earlier import removes the items the new version no
-longer has, except those a person or a held-out freeze touched.
+`status` is one of `queued`, `running`, `paused_backpressure`, `completed`,
+`completed_with_errors`, `failed`, `cancelled`, `interrupted`, `undoing`, `undone`. The job
+also has `progress` (with `eta_s`), `poll_after_s`, `report`, `issues_summary`, `next_steps`
+and `error`. `paused_backpressure` means the region worker queue is full
+(`OP_DATASET_IMPORT_MAX_PENDING`); the import continues by itself. `report` counts images,
+items, labels and boxes created, updated, reused, failed or skipped, `negatives`,
+`unlabeled`, `holdout_frozen`, `label_conflicts_locked` and `disagreements` (dataset label
+differs from the existing one). A dataset updated over an earlier import removes items the
+new version lacks, except those a person or a held-out freeze touched.
 
 ## Undo
 
@@ -258,37 +164,30 @@ curl -s -X POST "$API/curation/projects/cars/datasets/imports/IMPORT_ID/undo" \
   -d '{"dry_run": true, "remove_images": true, "deprecate_created_classes": true}'
 ```
 
-It returns the report: `items_deleted`, `items_restored`, `items_reinstated`,
-`items_kept_human_edited`, `items_kept_shared`, `class_labels_removed`,
-`boxes_removed`, `boxes_kept_human_edited`, `holdout_flags_cleared`,
-`images_deleted`, `images_kept`, `classes_deprecated` and `samples`. With
-`"dry_run": false` the undo runs in the background and the call returns the
-job. Poll it until `undone`.
+The report counts items deleted, restored and kept (human-edited or shared), boxes removed,
+images deleted or kept and classes deprecated. With `"dry_run": false` the undo runs in the
+background; poll until `undone`.
 
 ## Issues
 
-`GET .../datasets/formats` serves the full catalog (`code`, `severity`,
-`blocking`, `bypassable`, `label`). Blocking issues refuse the import with
-422 `import_blocked`. Only issues marked bypassable can be bypassed with
-`force`. The only bypassable one is `test_split_changed`: the frozen test
-split no longer matches `TEST_FROZEN.json`. Frequent blocking codes:
+`GET .../datasets/formats` serves the catalog (`code`, `severity`, `blocking`, `bypassable`).
+Blocking issues refuse the import with 422 `import_blocked`; `force` bypasses only
+`test_split_changed` (the frozen test split no longer matches `TEST_FROZEN.json`).
 
-| Code | Meaning |
+| Blocking code | Meaning |
 |---|---|
 | `dataset_path_not_allowed`, `format_undetected` | Path outside the allowed roots, or no layout found |
-| `data_yaml_invalid`, `data_yaml_names_missing`, `coco_json_invalid`, `coco_category_duplicate_name`, `openimages_csv_invalid`, `openimages_class_duplicate_name` | Unreadable or ambiguous class list |
-| `dataset_too_large`, `dataset_file_too_large` | Over the preview file limit or a file size cap |
+| `data_yaml_invalid`, `data_yaml_names_missing`, `yolo_names_file_invalid`, `coco_json_invalid`, `coco_category_duplicate_name`, `openimages_csv_invalid`, `openimages_class_duplicate_name` | Unreadable or ambiguous class list |
+| `dataset_too_large`, `dataset_file_too_large` | Over the preview file limit or a size cap |
 | `class_unmapped`, `class_mapping_conflict`, `class_name_exists`, `class_mapped_to_deprecated` | Mapping problems |
 | `region_profile_required` | A `region` mapping with no active region profile |
-| `names_mismatch`, `manifest_unreadable` | An OpenProcessor export that does not match its registry |
+| `names_mismatch`, `manifest_unreadable` | An export that does not match its registry |
 
-Common warnings: `label_file_missing`, `label_row_malformed`,
-`label_class_out_of_range`, `label_coords_out_of_range`,
-`label_box_degenerate`, `image_unreadable`, `image_size_mismatch`,
-`coco_bbox_out_of_image`, `voc_xml_invalid`, `openimages_class_unknown`,
-`openimages_image_split_conflict`, `image_file_missing`,
-`labelstudio_task_skipped`, `labelme_json_invalid`, `shape_not_box_skipped`,
-`label_conflicts_locked`.
+Common warnings: `label_file_missing`, `label_row_malformed`, `label_class_out_of_range`,
+`label_coords_out_of_range`, `label_box_degenerate`, `image_unreadable`,
+`image_size_mismatch`, `coco_bbox_out_of_image`, `voc_xml_invalid`,
+`openimages_class_unknown`, `image_file_missing`, `labelstudio_task_skipped`,
+`labelme_json_invalid`, `shape_not_box_skipped`.
 
 ## Errors
 
@@ -298,14 +197,12 @@ Common warnings: `label_file_missing`, `label_row_malformed`,
 | 409 | `dataset_changed` | `expected_import_key` no longer matches |
 | 409 | `import_busy` | Another import or undo is running in the project |
 | 409 | `import_resumable` | An interrupted import of this dataset exists; resume it |
-| 409 | `import_not_resumable` | Resume of an import in another state |
-| 409 | `import_not_undoable` | Undo of a running import |
+| 409 | `import_not_resumable`, `import_not_undoable` | Wrong state for resume / undo of a running import |
 | 413 | `upload_too_large` | Archive over the limit |
 | 422 | `archive_invalid` | Not a readable, safe archive |
-| 422 | `dataset_path_not_allowed`, `format_undetected` | See above |
-| 422 | `class_mapping_incomplete` | A dataset class with boxes has no mapping; `unmapped` lists them |
-| 422 | `class_mapping_invalid` | Bad mapping, or a class could not be created; `issues` lists them |
-| 422 | `import_blocked` | Blocking issues; `issues` lists them |
+| 422 | `class_mapping_incomplete` | A class with boxes has no mapping (`unmapped` lists them) |
+| 422 | `class_mapping_invalid` | Bad mapping or a class could not be created |
+| 422 | `import_blocked` | Blocking issues (`issues` lists them) |
 | 503 | `config_store_unavailable` | The encoder or ingest is not ready |
 
 ## Cropwright
@@ -313,19 +210,17 @@ Common warnings: `label_file_missing`, `label_row_malformed`,
 <Screenshot
   name="import-wizard-1600.png"
   alt="Dataset import wizard with the source path field"
-  caption="The import wizard's source step (captured from Cropwright against the public COCO sample projects)"
+  caption="The import wizard's source step"
 />
 
 <Screenshot
   name="import-job-1600.png"
   alt="Completed import job with progress bar, report counts and class mapping"
-  caption="A completed import job: progress, report and the class mapping (captured from Cropwright against the public COCO sample projects)"
+  caption="A completed import job"
 />
 
 ## See also
 
-- [Use your own domain](./use-your-own-domain.mdx)
-- [Projects](./projects.mdx)
-- [Region profiles](./region-profiles.mdx)
-- [Combine projects](./combine-projects.mdx)
-- [Reprocess](./reprocess.mdx)
+[Use your own domain](./use-your-own-domain.mdx), [Projects](./projects.mdx),
+[Region profiles](./region-profiles.mdx), [Combine projects](./combine-projects.mdx),
+[Reprocess](./reprocess.mdx)
