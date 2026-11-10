@@ -22,6 +22,7 @@ from .conftest import (
     crop_ids_in,
     get_doc,
     refresh,
+    run_near_duplicates,
     search,
     wait_job,
 )
@@ -132,15 +133,9 @@ def test_settings_put_then_get_round_trips(api_client: Any) -> None:
 
 
 def test_freeze_test_holdout_selects_a_deterministic_cohort(
-    api_client: Any, opensearch: Any
+    api: Any, api_client: Any, opensearch: Any
 ) -> None:
-    # The first freeze needs a current item-level near-duplicate run (contract: "Near-duplicates"),
-    # and the item level takes its scope from a current image run, so the image level runs first.
-    for level in ('image', 'item'):
-        started = api_client.post('/near_duplicates/runs', json={'level': level, 'mode': 'full'})
-        assert started.status_code == 202, started.text
-        run = wait_job(api_client, started.json()['job_id'])
-        assert run['status'] == 'completed', run
+    run_near_duplicates(api)
 
     resp = api_client.post('/test_holdout/freeze', json={'percent': 10})
     assert resp.status_code == 200, resp.text

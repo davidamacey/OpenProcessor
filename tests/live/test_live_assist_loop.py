@@ -19,7 +19,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from .conftest import API_PREFIX, compose, refresh, search, wait_until
+from .conftest import (
+    API_PREFIX,
+    compose,
+    create_project,
+    refresh,
+    run_near_duplicates,
+    search,
+    wait_until,
+)
 
 
 if TYPE_CHECKING:
@@ -125,10 +133,7 @@ def _serve_partition(api: Any, opensearch: Any) -> list[str]:
 @pytest.fixture(scope='module')
 def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[dict[str, Any]]:
     """A fresh project holding the seeded cohorts, with seven human labels, some of them frozen."""
-    created = api.post(
-        f'{API_PREFIX}/projects', json={'slug': PROJECT, 'display_name': 'Loop live'}
-    )
-    assert created.status_code in (200, 201), created.text
+    create_project(api, PROJECT, 'Loop live')
     proc = compose(
         'exec',
         '-T',
@@ -176,6 +181,7 @@ def loop_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[
         assert r.status_code == 200, r.text
     # The freeze takes a share of the labels that exist now; the three below are labeled
     # afterwards, so the cluster holds both locked-and-held-out and only-locked items.
+    run_near_duplicates(api, PREFIX)
     frozen = api.post(f'{PREFIX}/test_holdout/freeze', json={'percent': 50})
     assert frozen.status_code == 200, frozen.text
     for crop_id in humans[4:]:

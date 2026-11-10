@@ -154,6 +154,47 @@ def wait_job(api_client: Any, job_id: str, *, timeout: float = 120.0) -> dict[st
     return wait_for_state(fetch, lambda job: job['status'] in JOB_TERMINAL, timeout=timeout)
 
 
+def run_near_duplicates(api: Any, prefix: str = PROJECT_PREFIX) -> None:
+    """Build the image- then item-level near-duplicate groups and wait for both runs.
+
+    The first holdout freeze needs a current item-level run, and the item level takes its scope
+    from a current image run (docs/design/curation_api_contract.md, "Near-duplicates").
+    """
+    for level in ('image', 'item'):
+        started = api.post(f'{prefix}/near_duplicates/runs', json={'level': level, 'mode': 'full'})
+        assert started.status_code == 202, started.text
+        job_id = started.json()['job_id']
+
+        def fetch(job_id: str = job_id) -> dict[str, Any]:
+            resp = api.get(f'{prefix}/jobs/{job_id}')
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        job = wait_for_state(fetch, lambda j: j['status'] in JOB_TERMINAL, timeout=180.0)
+        assert job['status'] == 'completed', job
+
+
+def create_project(api: Any, slug: str, display_name: str, *, timeout: float = 180.0) -> None:
+    """Create a project and wait until it is ``active``.
+
+    ``POST /projects`` claims the slug and answers 202 with the ``building`` record and the
+    ``job_id`` of the create job (docs/design/curation_api_contract.md, "Create and clone").
+    """
+    created = api.post(f'{API_PREFIX}/projects', json={'slug': slug, 'display_name': display_name})
+    assert created.status_code == 202, created.text
+    job_id = created.json()['job_id']
+
+    def fetch() -> dict[str, Any]:
+        resp = api.get(f'{API_PREFIX}/jobs/{job_id}')
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    job = wait_for_state(fetch, lambda j: j['status'] in JOB_TERMINAL, timeout=timeout)
+    assert job['status'] == 'completed', job
+    listed = api.get(f'{API_PREFIX}/projects').json()['projects']
+    assert next(p for p in listed if p['slug'] == slug)['status'] == 'active', listed
+
+
 # Indexes OpenSearch itself creates (system, plugin bookkeeping). Anything
 # else that is not `verify_`-prefixed means this is somebody's real cluster.
 _INTERNAL_INDEX_PREFIXES = (

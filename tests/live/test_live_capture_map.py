@@ -27,7 +27,7 @@ import pytest
 from exiftool import ExifToolHelper
 from PIL import Image
 
-from .conftest import API_PREFIX, VERIFY_DATA_DIR, refresh, wait_until
+from .conftest import API_PREFIX, VERIFY_DATA_DIR, create_project, refresh, wait_until
 
 
 if TYPE_CHECKING:
@@ -101,10 +101,7 @@ def _set_policy(api: Any, policy: str) -> dict[str, Any]:
 
 @pytest.fixture(scope='module')
 def capture_project(api: Any, opensearch: Any, seeded: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    created = api.post(
-        f'{API_PREFIX}/projects', json={'slug': PROJECT, 'display_name': 'Capture map live'}
-    )
-    assert created.status_code in (200, 201), created.text
+    create_project(api, PROJECT, 'Capture map live')
     assert wait_until(lambda: opensearch.head(f'/{IMAGES}').status_code == 200, timeout=60)
 
     # The host path under the harness data mount is /verify-data/images in the API container.
