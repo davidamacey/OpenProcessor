@@ -22,4 +22,5 @@ ROUTES: dict[str, str] = {
     'op.periodic.near_dup_rescore': TaskQueues.PERIODIC,
     'op.periodic.near_dup_core_group': TaskQueues.PERIODIC,
     'op.periodic.near_dup_full_build': TaskQueues.PERIODIC,
+    'op.periodic.region_text_consensus_sweep': TaskQueues.PERIODIC,
 }

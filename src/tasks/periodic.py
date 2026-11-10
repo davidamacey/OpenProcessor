@@ -16,6 +16,7 @@ from src.services.periodic import (
     job_stats,
     near_dup_ticks,
     open_vocab_sweep,
+    region_text_sweep,
     reload_promoted,
     resource_reachability,
     serving_inventory,
@@ -112,3 +113,9 @@ def db_backup_tick() -> None:
 def gpu_arbiter_tick() -> None:
     """Stop the GPU-resident services the running claims need and start the ones they freed."""
     run_periodic('gpu_arbiter', gpu_arbiter.tick())
+
+
+@app.task(name='op.periodic.region_text_consensus_sweep', **_TICK)
+def region_text_consensus_sweep_tick() -> None:
+    """Start a consensus for each project whose new plate readings have settled."""
+    run_periodic('region_text_consensus_sweep', region_text_sweep.tick())

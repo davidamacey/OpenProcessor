@@ -27,6 +27,7 @@ RELOAD_PROMOTED_INTERVAL_S = 15
 SERVING_INVENTORY_INTERVAL_S = 60
 NEAR_DUP_FULL_BUILD_INTERVAL_S = 7 * 24 * 60 * 60
 GPU_ARBITER_INTERVAL_S = 15
+REGION_TEXT_SWEEP_INTERVAL_S = 60
 RESOURCE_REACHABILITY_INTERVAL_S = 30
 
 
@@ -58,6 +59,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     refresh = env_int(REFRESH_INTERVAL_ENV, DEFAULT_REFRESH_INTERVAL_S, minimum=0)
     if refresh > 0:
         schedule['cluster_refresh'] = _every('op.periodic.cluster_refresh', refresh)
+    schedule['region_text_consensus_sweep'] = _every(
+        'op.periodic.region_text_consensus_sweep', REGION_TEXT_SWEEP_INTERVAL_S
+    )
     backup_hours = env_float('OP_DB_BACKUP_INTERVAL_H', 0.0, minimum=0.0)
     if backup_hours > 0:
         schedule['db_backup'] = _every('op.periodic.db_backup', backup_hours * 3600)
