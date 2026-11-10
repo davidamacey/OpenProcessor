@@ -58,3 +58,20 @@ def test_fold_is_idempotent() -> None:
 )
 def test_confusables_validation(confusables: dict[str, str], charset: str, bad: bool) -> None:
     assert (confusables_issue(confusables, charset) is not None) is bad
+
+
+@pytest.mark.parametrize(('raw', 'analyzed'), EXPECTED)
+def test_the_key_is_stable_under_respacing_and_recasing(raw: str, analyzed: str) -> None:
+    assert normalize(normalize(raw)) == analyzed
+    assert normalize(raw.lower()) == normalize(raw.upper()) == analyzed
+    assert normalize(' '.join(raw)) == analyzed
+    assert analyzed.isalnum()
+    assert analyzed == analyzed.upper()
+    assert len(analyzed) == 12
+
+
+def test_a_confusable_variant_folds_to_the_same_key_as_the_original() -> None:
+    confusables = {'O': '0', 'I': '1'}
+
+    assert fold('QWO-4I6 RTY 012', confusables) == fold('QW0-416 RTY 012', confusables)
+    assert fold('QWO-4I6 RTY 012', {}) != fold('QW0-416 RTY 012', {})
