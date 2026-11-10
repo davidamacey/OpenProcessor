@@ -344,6 +344,9 @@ class Stub:
         # keeps the button as before, so the default is a 404.
         self.on('GET', r'/vlm/endpoints/active(\?|$)', (404, {'detail': 'Not Found'}))
         self.on('GET', r'/audit/(report|queue)(\?|$)', (404, {'detail': 'Not Found'}))
+        # The project layout reads `GET {prefix}/map` on every page to show the
+        # Map link; a failed read hides it. test_map_page.py overrides it.
+        self.on('GET', r'/map(\?|$)', (404, {'detail': 'Not Found'}))
 
         page.route(f'**{api_prefix}/**', self._dispatch)
 
