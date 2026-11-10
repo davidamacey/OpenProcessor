@@ -276,6 +276,7 @@ COPY --chown=appuser:appuser scripts/curation/ ./scripts/curation/
 # the Celery pool healthcheck and the Flower config. tests/test_dockerfile_hygiene.py derives
 # this set from docker-compose.yml.
 COPY --chown=appuser:appuser scripts/db/ ./scripts/db/
+COPY --chown=appuser:appuser scripts/opensearch/ ./scripts/opensearch/
 COPY --chown=appuser:appuser scripts/healthcheck/ ./scripts/healthcheck/
 COPY --chown=appuser:appuser scripts/flower/ ./scripts/flower/
 COPY --chown=appuser:appuser alembic.ini ./alembic.ini
