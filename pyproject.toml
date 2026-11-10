@@ -464,6 +464,7 @@ timeout = 400
 faulthandler_timeout = 300
 markers = [
     "integration: tests that exercise several components together (no live stack required)",
+    "gpu: parity tests that drive a running Triton with GPU models from the host venv (docker/test/README.md, GPU tier); an unreachable Triton fails them; run with -m gpu",
     "live: write-path tests that require the docker/test/ verification harness to be running",
     "families: tests that need the official Ultralytics weights or the official YOLOv5 ONNX (CI job `families`); run with -m families",
     "unbound: opt out of the autouse `default` project binding (tests/conftest.py)",

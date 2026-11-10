@@ -3,7 +3,7 @@
 Run as ``celery -A celery_tasks:app worker -Q gpu_train -c 1 --max-tasks-per-child=1``: every run
 gets a fresh pool child, so GPU memory is released when it ends. The job runtime
 (``src/tasks/runtime``) claims the row, heartbeats and writes the terminal state; this module
-turns the run's ``training_runs`` row into a :class:`~job_spec.JobSpec`, runs the blocking fit in
+turns the run's ``training_runs`` row into a :class:`~job_spec.JobSpec`, runs the blocking fit (a non-daemonic child process, `fit_process`) in
 a worker thread and, meanwhile, publishes progress, the run log and the cancel check from the
 event loop. Cancel is cooperative: ``ctx.cancelled()`` is polled here and set on the run's
 state, which the epoch callback reads at the next epoch boundary.
@@ -27,13 +27,13 @@ from typing import TYPE_CHECKING, Any
 from campaign import maybe_handle_campaign, write_quant_bakeoff_job
 from celery.signals import worker_init
 from dataset_prep import read_class_remap
+from fit_process import run_fit
 from job_manifest import build_manifest
 from job_spec import JobSpec, parse_and_validate_spec
 from job_status import StatusState, progress_counters
 from logutil import get_logger
 from run_log import RunLog, tee_to_run_log
 from sqlalchemy.exc import SQLAlchemyError
-from trainer import run_training
 
 from src.clients.storage.roots import build_rooted_store
 from src.config.storage import storage_root_paths
@@ -180,7 +180,7 @@ async def train(ctx: JobContext) -> dict[str, Any]:
         with tee_to_run_log(log.scratch):
             if await _reserve_cards(ctx, spec):
                 await wait_for_arbiter(ctx)  # services on these cards are stopped before the fit
-            fit = asyncio.ensure_future(asyncio.to_thread(run_training, spec, state))
+            fit = asyncio.ensure_future(asyncio.to_thread(run_fit, spec, state))
             await _publish_until_done(ctx, fit, state, log)
             fit.result()
     finally:

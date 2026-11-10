@@ -185,7 +185,7 @@ def _fake_fit(
 
 def test_a_fake_fit_completes_with_progress_per_epoch(world, monkeypatch) -> None:
     ctx, store, run, stored = world
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(publish_to=ctx))
+    monkeypatch.setattr(celery_tasks, 'run_fit', _fake_fit(publish_to=ctx))
 
     result = asyncio.run(celery_tasks.train(ctx))
 
@@ -202,7 +202,7 @@ def test_a_fake_fit_completes_with_progress_per_epoch(world, monkeypatch) -> Non
 def test_a_cancel_stops_at_an_epoch_boundary_and_the_handler_returns(world, monkeypatch) -> None:
     ctx, _store, _run, stored = world
     # The cancel arrives after epoch 1; the fit stops at that epoch's boundary.
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(hold_at=(1, ctx.cancel.set)))
+    monkeypatch.setattr(celery_tasks, 'run_fit', _fake_fit(hold_at=(1, ctx.cancel.set)))
 
     result = asyncio.run(celery_tasks.train(ctx))
 
@@ -213,7 +213,7 @@ def test_a_cancel_stops_at_an_epoch_boundary_and_the_handler_returns(world, monk
 
 def test_an_exception_fails_the_job_with_its_message_and_keeps_the_log(world, monkeypatch) -> None:
     ctx, store, run, stored = world
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(fail_at=2))
+    monkeypatch.setattr(celery_tasks, 'run_fit', _fake_fit(fail_at=2))
 
     with pytest.raises(RuntimeError, match='CUDA exploded'):
         asyncio.run(celery_tasks.train(ctx))
@@ -237,7 +237,7 @@ def test_the_cards_are_held_by_uuid_during_the_fit_and_released_after_it(
         seen['released_during_fit'] = stored['held']['released']
         base_fit(spec, state)
 
-    monkeypatch.setattr(celery_tasks, 'run_training', fit)
+    monkeypatch.setattr(celery_tasks, 'run_fit', fit)
 
     asyncio.run(celery_tasks.train(ctx))
 
@@ -250,7 +250,7 @@ def test_the_cards_are_held_by_uuid_during_the_fit_and_released_after_it(
 def test_the_cards_are_released_when_the_fit_fails(world, monkeypatch) -> None:
     ctx, _store, run, stored = world
     run.spec['cuda_visible_devices'] = '0'
-    monkeypatch.setattr(celery_tasks, 'run_training', _fake_fit(fail_at=1))
+    monkeypatch.setattr(celery_tasks, 'run_fit', _fake_fit(fail_at=1))
 
     with pytest.raises(RuntimeError, match='CUDA exploded'):
         asyncio.run(celery_tasks.train(ctx))
@@ -265,7 +265,7 @@ def test_a_card_the_container_is_not_attached_to_fails_the_run_before_the_fit(
     run.spec['cuda_visible_devices'] = '1'
     monkeypatch.setenv('OP_TRAIN_GPU_ORDER', '0,2')
     fitted = []
-    monkeypatch.setattr(celery_tasks, 'run_training', lambda *_a: fitted.append(True))
+    monkeypatch.setattr(celery_tasks, 'run_fit', lambda *_a: fitted.append(True))
 
     with pytest.raises(ValueError, match='not attached'):
         asyncio.run(celery_tasks.train(ctx))

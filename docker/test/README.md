@@ -159,3 +159,23 @@ problem for the non-root user fails here. `OP_TEST_IMAGE_TAG` selects the
 export OP_TEST_IMAGE_TAG=b4-9629e5c VERIFY_CONTAINER_PREFIX=op-live-built VERIFY_COMPOSE_PROJECT=op-live-built
 docker compose -p op-live-built -f docker/test/compose.yml -f docker/test/compose.built.yml up -d --no-build --wait
 ```
+
+## GPU tier: decode and prep parity
+
+`tests/gpu/` drives the real `gpu_image_prep` model on a running Triton from the host venv
+(`tritonclient`) and compares its answers with the CPU ingest path on the same bytes: oriented size,
+detector letterbox, frame Laplacian variance (the decode check), whole-frame PE embedding and
+detections, each with an explicit tolerance named at the top of
+`tests/gpu/test_gpu_decode_parity.py`. It is the parity guard the nvImageCodec + CV-CUDA rewrite
+(#40) must keep green. The tests carry the `gpu` marker; `tests/gpu/conftest.py` deselects them unless `-m gpu` is given, and an
+unreachable Triton fails them (they never skip).
+
+Needs a Triton (the compose project's `triton-server`, GPU 0 or 2, never a project name that is
+live) with `gpu_image_prep`, `pe_image_encoder` and `yolov11_small_trt_end2end` loadable:
+
+```bash
+OP_TEST_TRITON_GRPC=127.0.0.1:4601 .venv/bin/python -m pytest tests/gpu -q --no-cov -m gpu
+```
+
+The pure-geometry checks (`tests/models/test_gpu_image_prep_*`) stay in the offline suite; they
+import `src.*` and run in the host venv, not in the Triton image.
