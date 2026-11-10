@@ -29,7 +29,7 @@ in `docker-compose.yml`:
 
 | Model | Purpose |
 |---|---|
-| `yolov11_small_trt_end2end` | Object detection (TensorRT + EfficientNMS, normalized boxes) |
+| `yolov11_small_trt_end2end` | Object detection (TensorRT, fused `[300, 6]` output in letterboxed pixels) |
 | `scrfd_10g_bnkps` | Face detection + 5-point landmarks |
 | `arcface_w600k_r50` | Face embedding, 512-dim |
 | `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder` | CLIP image/text embeddings, 512-dim |

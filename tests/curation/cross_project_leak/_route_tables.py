@@ -56,7 +56,10 @@ SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] 
 PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
     ('GET', '/assist/loops/{loop_id}'): {'loop_id': 'loop_id'},
     ('GET', '/assist/loops/{loop_id}/nodes'): {'loop_id': 'loop_id'},
-    ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'): {'loop_id': 'loop_id'},
+    ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'): {
+        'loop_id': 'loop_id',
+        'node_path': 'loop_node_path',
+    },
     ('GET', '/assist/runs/{run_id}'): {'run_id': 'assist_run_id'},
     **{
         ('GET', f'/bakeoff/{what}/{{job_id}}'): {'job_id': 'bakeoff_job_id'}
@@ -89,13 +92,7 @@ PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
 # Scoped routes that may answer 4xx in the sweep without it being a gap, and why. A route that
 # neither answers below 400 nor wrote nor is listed here (or in NO_WRITE / UNSEEDED_WRITES, which
 # carry their own reasons) fails the sweep: the request never reached the handler.
-UNREACHED_OK: dict[tuple[str, str], str] = {
-    ('GET', '/assist/loops/{loop_id}/nodes/{node_path}/members'): (
-        'the members of a node are read from the loop snapshot blob of a node that ran; the sweep '
-        "runs no loop level, so the node is not there (404). Another project's loop is a 404 "
-        'before the node is looked up (test_assist_loop_isolation)'
-    ),
-}
+UNREACHED_OK: dict[tuple[str, str], str] = {}
 
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must

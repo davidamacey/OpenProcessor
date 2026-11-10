@@ -231,7 +231,9 @@ def leak_env(
     env.events = captured_events
     env.pg_ids = seed_pg_rows(pg, records, tmp_path)
     for slug, record in records.items():
-        seed_world_files(record, env.pg_ids[slug]['train_job_id'], tmp_path)
+        seed_world_files(
+            record, env.pg_ids[slug]['train_job_id'], tmp_path, env.pg_ids[slug]['loop_id']
+        )
 
     def _no_network(*_a: Any, **_k: Any) -> Any:
         raise httpx.ConnectError('network disabled in the leak test')

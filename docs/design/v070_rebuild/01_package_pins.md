@@ -28,7 +28,7 @@ few that deliberately stay below the newest release are listed with the reason a
 | `onnxruntime` / `onnxruntime-gpu` | `1.30.0` | 1.31.1 | `nvidia-modelopt` 0.48.0 requires `onnxruntime-gpu<1.31,>=1.29` on Linux x86_64; runtime and export images must resolve one version |
 | `numpy` in the segmenter image only | `1.26.4` | 2.5.4 | Upstream SAM 3 declares `numpy>=1.26,<2` |
 | `opencv-python-headless` in the segmenter image only | `4.11.0.86` | 5.0.0.93 | OpenCV 4.12 and later need `numpy>=2` |
-| `torch` / `torchvision` in the segmenter image | base image: `2.14.1` | 2.15.0 / 0.29.2 | Not a pip pin: the `pytorch/pytorch:2.14.1-cuda12.6` base ships it. Moves only with a base image bump |
+| `torch` / `torchvision` in the segmenter image | base image: `2.15.0` | 2.15.0 / 0.29.2 | Not a pip pin: the `pytorch/pytorch:2.15.0-cuda13.2-cudnn9-runtime` base (Python 3.12, digest-pinned) ships it. Moves only with a base image bump |
 
 Findings worth knowing before reading the tables:
 
@@ -271,7 +271,7 @@ same value), plus the two new lines `pydantic==2.14.3` and `Pillow==13.0.0`. Row
 | | scikit-image | `>=0.24` | 0.26.0 | `==0.26.0` | |
 | | huggingface-hub | `>=0.24` | 2.4.0 | `==2.4.0` | resolves with SAM 3's `timm` 1.0.31; the segmenter does download weights, so run its start-up test |
 | | einops, pycocotools | floors | 0.8.2, 2.0.11 | exact | |
-| | torch | base image `2.14.1` | 2.15.0 | unchanged | base image tag, not a pip pin |
+| | torch | base image `2.15.0` | 2.15.0 | base `pytorch/pytorch:2.15.0-cuda13.2-cudnn9-runtime` | base image tag, not a pip pin; build + smoke in the compute window |
 
 Recommendation for the inline pins: move each into a requirements file the Dockerfile copies
 (`docker/segmenter/requirements.txt`, `docker/triton/requirements.txt`, mlflow into the bakeoff file), so

@@ -975,8 +975,8 @@ applies to automated writers.
 | PUT | `/crops/batch_label` | `CropBatchLabelRequest`: `crop_ids`, `class_id`, `label_source` | `{updated, updated_ids, conflicts[], op_id}` | `conflicts` is `[{crop_id, current_source}]`, not written. `op_id` names the recorded [label operation](#label-operations) (`null` when nothing was selected; a dry run has no `op_id`) |
 | POST | `/crops/move` | `CropMoveRequest`: `cluster_uid`, `crop_ids` or a `selection`, `dry_run` | `202` with `{op_id, job_id}`; follow `GET /curation/projects/{project}/jobs/{job_id}` | placement only: the crops join a cluster of the serving partition (`cluster_assigned_by: edit`), a human-owned class is cleared, a machine suggestion is kept, nothing is validated. `400` when `cluster_uid` is not a cluster of the serving partition; nothing is written |
 | POST | `/crops/flag_new_class` | `{crop_ids, note}` | `{flagged, errors}` | sets `needs_new_class` |
-| POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, moves the item to cluster `-2`, clears `class_validated` and records the prior state |
-| POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded state: a validated item returns to `cluster_id == class_id`, an unvalidated one to the residual pool. Items that are not excluded are untouched |
+| POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, clears `class_validated` and records the prior validation (`excluded_prior_class_validated`); the item keeps its place in the serving partition and every cluster reader skips it |
+| POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded validation (`class_validated`); the item never left its cluster. An item excluded before the prior state was recorded is validated again only when its class is human-sourced. Items that are not excluded are untouched |
 | POST | `/crops/{crop_id}/discard` | `{clear_class: true, dismiss_from_review: false}`, `422` if both false | the item | clears class, provenance and validation and drops the item to the residual pool, and/or hides it from every review tab. Recorded and undoable |
 | POST | `/crops/discard_batch` | `{crop_ids, clear_class, dismiss_from_review}` | `{items[], discarded, conflicts, not_found}` | |
 | POST | `/crops/{crop_id}/review_dismiss` | | `{crop_id, dismissed}` | one-way review hide, not recorded. Prefer `discard` with `clear_class: false` and `dismiss_from_review: true` |
@@ -998,9 +998,7 @@ applies to automated writers.
   `label_source`, `confidence`, `class_detector`, `class_detector_version`,
   `class_labeler`, `class_labeled_at` and `class_validated`. Repeated undo steps back
   through successive human writes.
-  A restored validated class sits in its class cluster
-  (`cluster_id == class_id`); anything else returns to the cluster recorded
-  before the write (`null` is the residual pool). Undo on an excluded item
+  A restore returns `class_validated` and the class fields as recorded; the item's place in the serving partition (`cluster_uid` and the rest of `cluster_*`) is not touched by a label undo. Undo on an excluded item
   keeps it excluded.
 - A region snapshot holds `region_boxes` with its summaries,
   `region_status`, `region_verified*`, `region_verifier*`,
