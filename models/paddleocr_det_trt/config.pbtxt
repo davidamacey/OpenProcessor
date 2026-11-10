@@ -1,9 +1,9 @@
-# PP-OCRv5 Text Detection Model (TensorRT)
+# PP-OCRv6 Text Detection Model (TensorRT)
 #
 # DB++ architecture for text region detection
 #
 # Input:
-#   - x: [B, 3, H, W] FP32, preprocessed (x / 127.5 - 1), BGR
+#   - x: [B, 3, H, W] FP32, preprocessed ((x / 255 - mean) / std, ImageNet), BGR
 #        H,W must be multiples of 32, max 960
 #
 # Output:

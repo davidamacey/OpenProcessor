@@ -120,7 +120,7 @@ class TestExplicitBatchAcrossTrtVersions:
     def test_builds_when_explicit_batch_flag_is_absent_trt11(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        onnx_path = tmp_path / 'ppocr_rec_v5_mobile.onnx'
+        onnx_path = tmp_path / 'ppocrv6_rec_small.onnx'
         onnx_path.write_bytes(b'fake-onnx-bytes')
         plan_path = tmp_path / 'models' / 'paddleocr_rec_trt' / '1' / 'model.plan'
         _install_fake_tensorrt(
@@ -135,7 +135,7 @@ class TestExplicitBatchAcrossTrtVersions:
     def test_builds_when_explicit_batch_flag_is_present_trt10(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        onnx_path = tmp_path / 'ppocr_rec_v5_mobile.onnx'
+        onnx_path = tmp_path / 'ppocrv6_rec_small.onnx'
         onnx_path.write_bytes(b'fake-onnx-bytes')
         plan_path = tmp_path / 'models' / 'paddleocr_rec_trt' / '1' / 'model.plan'
         _install_fake_tensorrt(
@@ -152,7 +152,7 @@ class TestConvertToTensorrtViaPythonApi:
     def test_builds_the_engine_with_no_docker_dependency(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        onnx_path = tmp_path / 'ppocr_rec_v5_mobile.onnx'
+        onnx_path = tmp_path / 'ppocrv6_rec_small.onnx'
         onnx_path.write_bytes(b'fake-onnx-bytes')
         plan_path = tmp_path / 'models' / 'paddleocr_rec_trt' / '1' / 'model.plan'
 
@@ -278,7 +278,7 @@ def test_main_fails_loudly_when_tensorrt_conversion_fails(
     """Fail-open half: main() used to always return 0, even when
     the whole point of the run (an installed model.plan) never happened."""
     monkeypatch.setattr(rec_export, 'check_onnx_exists', lambda: True)
-    monkeypatch.setattr(rec_export, 'ONNX_PATH', tmp_path / 'ppocr_rec_v5_mobile.onnx')
+    monkeypatch.setattr(rec_export, 'ONNX_PATH', tmp_path / 'ppocrv6_rec_small.onnx')
     rec_export.ONNX_PATH.write_bytes(b'fake-onnx-bytes')
     monkeypatch.setattr(rec_export, 'verify_onnx_model', lambda _p: {'ok': True})
     monkeypatch.setattr(rec_export, 'test_onnx_inference', lambda _p: True)

@@ -1,6 +1,6 @@
-# PP-OCRv5 OCR Documentation
+# PP-OCRv6 OCR Documentation
 
-Complete guide for deploying and using PP-OCRv5 text detection and recognition on NVIDIA Triton Inference Server.
+Complete guide for deploying and using PP-OCRv6 text detection and recognition on NVIDIA Triton Inference Server.
 
 ---
 
@@ -48,7 +48,7 @@ The OCR pipeline consists of three Triton models working together:
 ### Data Flow
 
 1. **Input**: Raw image bytes (JPEG/PNG), decoded once by the API; the same oriented frame is sent to Triton and reported as `image_size`
-2. **Preprocessing**: Decode with EXIF orientation applied (transparency composited onto white), scale so the long side is 640 to 960 px, then stretch each axis to its own multiple of 32 (no padding, as PaddleOCR's `DetResizeForTest`); the BLS normalizes (x/127.5 - 1)
+2. **Preprocessing**: Decode with EXIF orientation applied (transparency composited onto white), scale so the long side is 640 to 960 px, then stretch each axis to its own multiple of 32 (no padding, as PaddleOCR's `DetResizeForTest`); the BLS normalizes with the ImageNet mean and std (`(x/255 - mean) / std`, the detector's `inference.yml`)
 3. **Detection**: Probability map identifying text regions
 4. **Post-processing**: Threshold, contour detection, box expansion (unclip) with `pyclipper`, which is required: the `ocr_pipeline` model fails to load without it (`Dockerfile.triton` installs it)
 5. **Cropping**: Perspective transform to extract text crops
@@ -63,10 +63,10 @@ The OCR pipeline consists of three Triton models working together:
 
 | Property | Value |
 |----------|-------|
-| **Model** | PP-OCRv5 Mobile Detection |
+| **Model** | PP-OCRv6 Small Detection |
 | **Architecture** | DB++ (Differentiable Binarization) |
 | **Input Shape** | `[B, 3, H, W]` where H,W are multiples of 32, max 960 |
-| **Input Format** | FP32, BGR, normalized (x/127.5 - 1); the `ocr_pipeline` BLS builds this from the uint8 pixels it receives |
+| **Input Format** | FP32, BGR, normalized `(x/255 - mean) / std` with the ImageNet mean/std; the `ocr_pipeline` BLS builds this from the uint8 pixels it receives |
 | **Output Shape** | `[B, 1, H, W]` probability map |
 | **Output Range** | [0, 1] sigmoid probabilities |
 | **Max Batch Size** | 4 |
@@ -75,18 +75,18 @@ The OCR pipeline consists of three Triton models working together:
 
 | Property | Value |
 |----------|-------|
-| **Model** | PP-OCRv5 Mobile Recognition (Multilingual) |
+| **Model** | PP-OCRv6 Small Recognition (Multilingual) |
 | **Architecture** | SVTR-LCNet |
 | **Input Shape** | `[B, 3, 48, W]` where W is 48-2048 (dynamic) |
 | **Input Format** | FP32, BGR, normalized (x/127.5 - 1) |
-| **Output Shape** | `[B, T, 18385]` character probabilities |
+| **Output Shape** | `[B, T, 18710]` character probabilities |
 | **Output Format** | Softmax probabilities for CTC decoding |
-| **Character Set** | 18385 characters (18383 from dict + blank + space) |
+| **Character Set** | 18710 classes (18708 from dict + blank + space) |
 | **Max Batch Size** | 64 |
 
 ### Dictionary Configuration
 
-The recognition model uses `ppocrv5_dict.txt` with 18383 characters:
+The recognition model uses `ppocrv6_dict.txt` with 18708 characters:
 
 - Chinese, Japanese, Korean characters
 - English uppercase/lowercase letters
@@ -125,7 +125,7 @@ does this for a normal install. To build the OCR engines by hand:
 ./scripts/export_paddleocr.sh download   # ONNX files only (also: trt, det, rec, status, clean)
 ```
 
-or run the Python exporters directly, as in [export/README.md](../export/README.md#pp-ocrv5-text-recognition).
+or run the Python exporters directly, as in [export/README.md](../export/README.md#pp-ocrv6-text-recognition).
 The builds use TensorRT 11 strongly-typed mode and the `--memPoolSize`-style workspace
 (`export/trt_build_settings.py`: detection 4 GB, recognition 8 GB). The dynamic shapes are
 detection `1x3x32x32` to `4x3x960x960` (opt `736x736`) and recognition `1x3x48x48` to
@@ -137,11 +137,11 @@ detection `1x3x32x32` to `4x3x960x960` (opt `736x736`) and recognition `1x3x48x4
 The dictionary file must be in the recognition model directory:
 
 ```bash
-# Verify dictionary exists (should have 18383 lines, plus blank+space = 18385 total)
-wc -l models/paddleocr_rec_trt/ppocrv5_dict.txt
+# Verify dictionary exists (should have 18708 lines, plus blank+space = 18710 total)
+wc -l models/paddleocr_rec_trt/ppocrv6_dict.txt
 
-# Expected output: 18383 lines
-# Total classes: 18385 (18383 dict + blank token + space token)
+# Expected output: 18708 lines
+# Total classes: 18710 (18708 dict + blank token + space token)
 ```
 
 ### Step 4: Deploy and Test
@@ -194,7 +194,7 @@ itself, no dynamic batching). The recognizer ships one instance as a baseline fo
 The pipeline takes `ocr_images` (the resized UINT8 BGR frame), `original_image` (the full-size UINT8
 frame the crops are cut from) and `orig_shape`. It returns up to 128 texts per image:
 `num_texts`, `text_boxes` (`[128, 8]` quadrilaterals), `text_boxes_normalized` (`[128, 4]`),
-`texts`, `text_scores` (detection) and `rec_scores` (recognition). An FP32 pipeline config is
+`texts`, `text_scores` (detection), `rec_scores` (recognition, the mean over a line's characters) and `rec_char_min` (the lowest single-character probability of each line; 0.0 for padded or empty slots, -1.0 when recognition failed). An FP32 pipeline config is
 refused at request time with the `./openprocessor models repair` hint
 (`src/clients/triton_ocr.py`). The installer GPU profiles set the instance counts.
 
@@ -376,7 +376,7 @@ rm models/paddleocr_rec_trt/1/model.plan
    ```
 2. Check preprocessing:
    - Input should be BGR, not RGB
-   - Normalization: (x / 127.5) - 1 = range [-1, 1]
+   - Normalization: the detector uses the ImageNet mean/std, `(x / 255 - mean) / std`
    - Each axis stretched to a multiple of 32 (boxes are mapped back as original size over map size, so the map must cover the whole image)
 
 #### GPU Out of Memory
@@ -404,7 +404,7 @@ models/
 ├── paddleocr_rec_trt/
 │   ├── 1/model.plan              # TensorRT recognition engine
 │   ├── config.pbtxt              # Triton config
-│   └── ppocrv5_dict.txt          # Character dictionary (18383 chars, multilingual)
+│   └── ppocrv6_dict.txt          # Character dictionary (18708 chars, multilingual)
 └── ocr_pipeline/
     ├── 1/model.py                # Python BLS orchestrator
     └── config.pbtxt              # Triton config
@@ -444,3 +444,4 @@ src/
 | 1.1 | 2025-01-10 | Added workspace memory fix documentation |
 | 2.0 | 2026-01-26 | Consolidated documentation |
 | 3.0 | 2026-01-27 | Switched to multilingual model (18385 classes), removed PaddleX dependency |
+| 4.0 | 2026-11-10 | Switched to PP-OCRv6 small (18710 classes), ImageNet detector normalisation, added `rec_char_min` |

@@ -254,7 +254,7 @@ test_embed() {
 # =============================================================================
 test_ocr() {
     echo ""
-    echo "=== OCR (PP-OCRv5) ==="
+    echo "=== OCR (PP-OCRv6) ==="
 
     if [ ! -f "$TEST_IMAGE_OCR" ]; then
         skip "ocr: $TEST_IMAGE_OCR not found"

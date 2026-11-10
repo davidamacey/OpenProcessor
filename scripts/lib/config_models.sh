@@ -302,7 +302,7 @@ generate_paddleocr_det_config() {
     local instance_count="$PROFILE_INSTANCE_COUNT"
 
     cat > "$config_file" << EOF
-# PP-OCRv5 Text Detection Model (TensorRT)
+# PP-OCRv6 Text Detection Model (TensorRT)
 name: "paddleocr_det_trt"
 platform: "tensorrt_plan"
 max_batch_size: 4
@@ -353,8 +353,8 @@ generate_paddleocr_rec_config() {
     local instance_count="$PROFILE_INSTANCE_COUNT"
 
     cat > "$config_file" << EOF
-# PP-OCRv5 Text Recognition Model (TensorRT)
-# Multilingual model: Chinese + English + symbols (18385 character classes)
+# PP-OCRv6 Text Recognition Model (TensorRT)
+# Multilingual model: Chinese + English + symbols (18710 character classes)
 # TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 name: "paddleocr_rec_trt"
 platform: "tensorrt_plan"
@@ -372,7 +372,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 18385 ]
+    dims: [ -1, 18710 ]
   }
 ]
 

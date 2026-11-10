@@ -17,7 +17,7 @@
   {
     "title": "OCR",
     "icon": "text",
-    "desc": "PP-OCRv5 text detection and recognition behind a Triton Python-backend (BLS) pipeline: POST /ocr/predict and /ocr/batch, plus text search over ingested images."
+    "desc": "PP-OCRv6 text detection and recognition behind a Triton Python-backend (BLS) pipeline: POST /ocr/predict and /ocr/batch, plus text search over ingested images."
   },
   {
     "title": "Combined analysis and ingest",

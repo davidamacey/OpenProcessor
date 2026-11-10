@@ -118,6 +118,8 @@ class OcrLine:
     box: tuple[float, float, float, float]
     score: float
     det_score: float = 1.0
+    # Lowest single-character probability of the line; None when the pipeline did not report it.
+    char_min: float | None = None
 
     @property
     def height(self) -> float:

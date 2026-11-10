@@ -1,4 +1,4 @@
-"""OCR through Triton's ``ocr_pipeline`` BLS model (PP-OCRv5 detection and recognition).
+"""OCR through Triton's ``ocr_pipeline`` BLS model (PP-OCRv6 detection and recognition).
 
 :func:`infer_ocr` is what :meth:`src.clients.triton_client.TritonClient.infer_ocr` delegates to;
 ``infer`` is the client's retrying ``(model_name, inputs, outputs)`` call.
@@ -57,7 +57,7 @@ def infer_ocr(
     datatype_of: Callable[[str], str],
 ) -> dict[str, Any]:
     """
-    OCR inference: PP-OCRv5 text detection and recognition via BLS pipeline.
+    OCR inference: PP-OCRv6 text detection and recognition via BLS pipeline.
 
     Args:
         image: an already decoded, EXIF-oriented BGR array (the frame the caller reports
@@ -66,7 +66,7 @@ def infer_ocr(
 
     Returns:
         Dict with num_texts, texts, text_boxes, text_boxes_normalized,
-        text_scores, rec_scores
+        text_scores, rec_scores, rec_char_min
     """
     import cv2
 
@@ -84,6 +84,7 @@ def infer_ocr(
                 'text_boxes_normalized': np.array([]),
                 'text_scores': np.array([]),
                 'rec_scores': np.array([]),
+                'rec_char_min': [],
             }
 
     img_array = _bgr_frame(img_array)
@@ -112,7 +113,7 @@ def infer_ocr(
 
     resized = cv2.resize(img_array, (resize_w, resize_h), interpolation=cv2.INTER_LINEAR)
 
-    # The BLS normalizes ((x / 127.5) - 1 for the detector) and crops from the raw pixels.
+    # The BLS normalizes (ImageNet mean/std for the detector) and crops from the raw pixels.
     with stage_timer('triton_request', nbytes=resized.nbytes + img_array.nbytes):
         ocr_input = np.ascontiguousarray(resized.transpose(2, 0, 1))
         orig_chw = np.ascontiguousarray(img_array.transpose(2, 0, 1))
@@ -132,6 +133,7 @@ def infer_ocr(
         InferRequestedOutput('texts'),
         InferRequestedOutput('text_scores'),
         InferRequestedOutput('rec_scores'),
+        InferRequestedOutput('rec_char_min'),
     ]
 
     response = infer(TritonModelConfig.OCR_PIPELINE_MODEL, inputs, outputs)
@@ -143,6 +145,7 @@ def infer_ocr(
     text_boxes_norm = response.as_numpy('text_boxes_normalized')[:num_texts]
     text_scores = response.as_numpy('text_scores')[:num_texts]
     rec_scores_raw = response.as_numpy('rec_scores')[:num_texts]
+    rec_char_min_raw = response.as_numpy('rec_char_min')[:num_texts]
 
     texts_raw = response.as_numpy('texts')[:num_texts]
     texts = []
@@ -161,7 +164,10 @@ def infer_ocr(
     # instead, so a served field can never read as a fake low score.
     rec_scores: list[float | None] = []
     rec_errors: list[str | None] = []
-    for s in rec_scores_raw:
+    rec_char_min: list[float | None] = []
+    for s, c in zip(rec_scores_raw, rec_char_min_raw, strict=True):
+        # rec_char_min carries the same -1.0 failure sentinel as rec_scores.
+        rec_char_min.append(None if float(c) < 0.0 else float(c))
         if float(s) < 0.0:
             rec_scores.append(None)
             rec_errors.append('recognition_failed')
@@ -176,6 +182,7 @@ def infer_ocr(
         'text_boxes_normalized': text_boxes_norm,
         'text_scores': text_scores,
         'rec_scores': rec_scores,
+        'rec_char_min': rec_char_min,
         'rec_errors': rec_errors,
         'image_width': orig_w,
         'image_height': orig_h,

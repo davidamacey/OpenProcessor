@@ -58,7 +58,7 @@ run_test() {
 show_status() {
     echo ""
     echo "=========================================="
-    echo "PP-OCRv5 Model Status"
+    echo "PP-OCRv6 Model Status"
     echo "=========================================="
     echo ""
 

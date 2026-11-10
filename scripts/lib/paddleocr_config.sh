@@ -28,17 +28,10 @@ setup_dictionary() {
         return 0
     fi
 
-    # Copy multilingual dictionary from downloaded models
-    # The download_paddleocr.py script downloads ppocr_keys_v1.txt (6623 chars)
-    # but the multilingual PP-OCRv5 model uses ppocrv5_dict.txt (18383 chars).
-    # Check for ppocrv5_dict.txt first, then fall back to ppocr_keys_v1.txt.
+    # The PP-OCRv6 dictionary (ppocrv6_dict.txt, 18708 chars) is committed in the model repo.
     local dict_source=""
-    if [ -f "$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt" ]; then
-        dict_source="$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt"
-    elif [ -f "$PYTORCH_MODELS_DIR/ppocrv5_dict.txt" ]; then
-        dict_source="$PYTORCH_MODELS_DIR/ppocrv5_dict.txt"
-    elif [ -f "$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt" ]; then
-        dict_source="$PYTORCH_MODELS_DIR/ppocr_keys_v1.txt"
+    if [ -f "$MODELS_DIR/paddleocr_rec_trt/ppocrv6_dict.txt" ]; then
+        dict_source="$MODELS_DIR/paddleocr_rec_trt/ppocrv6_dict.txt"
     fi
 
     if [ -n "$dict_source" ]; then
@@ -49,7 +42,7 @@ setup_dictionary() {
         log_success "Dictionary created: $char_count characters (from $dict_source)"
     else
         log_warn "Dictionary not found in downloaded models"
-        log_info "Please place ppocrv5_dict.txt in $MODELS_DIR/paddleocr_rec_trt/"
+        log_info "Please place ppocrv6_dict.txt in $MODELS_DIR/paddleocr_rec_trt/"
     fi
 }
 
@@ -58,12 +51,12 @@ create_configs() {
 
     # Detection config
     cat > "$MODELS_DIR/paddleocr_det_trt/config.pbtxt" << 'EOF'
-# PP-OCRv5 Text Detection Model (TensorRT)
+# PP-OCRv6 Text Detection Model (TensorRT)
 #
 # DB++ architecture for text region detection
 #
 # Input:
-#   - x: [B, 3, H, W] FP32, preprocessed (x / 127.5 - 1), BGR
+#   - x: [B, 3, H, W] FP32, preprocessed ((x / 255 - mean) / std, ImageNet), BGR
 #        H,W must be multiples of 32, max 960
 #
 # Output:
@@ -105,7 +98,7 @@ EOF
 
     # Recognition config
     cat > "$MODELS_DIR/paddleocr_rec_trt/config.pbtxt" << 'EOF'
-# PP-OCRv5 Text Recognition Model (TensorRT)
+# PP-OCRv6 Text Recognition Model (TensorRT)
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
@@ -115,8 +108,8 @@ EOF
 #        Text crops with height=48, width=48-2048
 #
 # Output:
-#   - fetch_name_0: [B, T, 18385] FP32, character probabilities
-#        T timesteps (dynamic), 18385 character classes (multilingual dict)
+#   - fetch_name_0: [B, T, 18710] FP32, character probabilities
+#        T timesteps (dynamic), 18710 character classes (multilingual dict)
 #
 # TensorRT engine exported with dynamic batch (max=64) and dynamic width.
 
@@ -136,7 +129,7 @@ output [
   {
     name: "fetch_name_0"
     data_type: TYPE_FP32
-    dims: [ -1, 18385 ]
+    dims: [ -1, 18710 ]
   }
 ]
 

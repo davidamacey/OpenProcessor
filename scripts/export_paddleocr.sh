@@ -1,9 +1,9 @@
 #!/bin/bash
 # =============================================================================
-# PP-OCRv5 Model Export Script for Triton Inference Server
+# PP-OCRv6 Model Export Script for Triton Inference Server
 # =============================================================================
 #
-# This script automates the full export pipeline for PP-OCRv5 OCR models:
+# This script automates the full export pipeline for PP-OCRv6 OCR models:
 # 1. Download ONNX models (detection + recognition)
 # 2. Convert to TensorRT engines with optimal settings
 # 3. Setup dictionary files
@@ -56,11 +56,11 @@ API_PORT="$(env_port API_PORT 4603)"
 TRITON_HTTP_PORT="$(env_port TRITON_HTTP_PORT 4600)"
 
 # Model paths
-DET_ONNX_NAME="ppocr_det_v5_mobile.onnx"
-REC_ONNX_NAME="ppocr_rec_v5_mobile.onnx"
+DET_ONNX_NAME="ppocrv6_det_small.onnx"
+REC_ONNX_NAME="ppocrv6_rec_small.onnx"
 DET_PLAN="$MODELS_DIR/paddleocr_det_trt/1/model.plan"
 REC_PLAN="$MODELS_DIR/paddleocr_rec_trt/1/model.plan"
-DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/ppocrv5_dict.txt"
+DICT_FILE="$MODELS_DIR/paddleocr_rec_trt/ppocrv6_dict.txt"
 
 # TensorRT configuration
 # Workspace per model: trt_workspace_gb (scripts/lib/trt_settings.sh), used with the
@@ -92,7 +92,7 @@ source "${SCRIPT_DIR}/lib/paddleocr_ops.sh"
 run_full_pipeline() {
     echo ""
     echo "=========================================="
-    echo "PP-OCRv5 Full Export Pipeline"
+    echo "PP-OCRv6 Full Export Pipeline"
     echo "=========================================="
     echo ""
 
@@ -127,7 +127,7 @@ run_full_pipeline() {
 # =============================================================================
 
 show_help() {
-    echo "PP-OCRv5 Model Export Script"
+    echo "PP-OCRv6 Model Export Script"
     echo ""
     echo "Usage: $0 [command]"
     echo ""

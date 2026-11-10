@@ -64,7 +64,7 @@ def analyze_image(
     1. YOLO object detection (fused TensorRT detector)
     2. SCRFD face detection + ArcFace embedding extraction
     3. MobileCLIP global image embedding
-    4. PP-OCRv5 text detection and recognition
+    4. PP-OCRv6 text detection and recognition
 
     All models run in parallel where possible for optimal performance.
 

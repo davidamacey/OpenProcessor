@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Changed
+
+- **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 3 (the new `rec_char_min` output, the lowest single-character probability of each line, next to `rec_scores`): rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
+
 ### Fixed
 
 - The GPU letterbox and the CPU letterbox un-map with the pad they paste at: a frame whose margin is odd (for example a 101x61 photo into a 640 square) was un-mapped half a pixel off, now the pad is the integer paste offset on both paths. The geometry is one module, `src/domain/image_geometry.py`, copied into the GPU image-prep model directory (`models/gpu_image_prep/1/image_geometry.py`, held byte-identical by a test); the model version is 2, so an upgrade replaces the model files.

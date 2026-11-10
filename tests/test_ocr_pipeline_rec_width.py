@@ -70,7 +70,7 @@ def _make_recognizer(model_module):
     """Build a TritonPythonModel instance without running initialize()."""
     obj: Any = model_module.TritonPythonModel.__new__(model_module.TritonPythonModel)
     obj.rec_height = model_module.REC_HEIGHT
-    obj.ctc_decode = lambda _output: [('x', 0.9)]
+    obj.ctc_decode = lambda _output: [('x', 0.9, 0.9)]
     # _triton_to_numpy just needs to pass the mocked response array through.
     obj._triton_to_numpy = lambda tensor: tensor.array
     return obj
@@ -87,7 +87,7 @@ def test_narrow_crop_clamped_to_engine_min_width(model_module, monkeypatch):
     # well below 48 before clamping.
     crop = np.zeros((48, 4, 3), dtype=np.uint8)
 
-    texts, scores = recognizer._call_recognition([crop])
+    texts, scores, _char_mins = recognizer._call_recognition([crop])
 
     assert FakeInferenceRequest.last_shape is not None
     assert FakeInferenceRequest.last_shape[-1] >= _Engine.MIN_WIDTH
@@ -113,7 +113,7 @@ def test_genuine_backend_failure_is_not_silently_scored_zero(model_module):
     recognizer = _make_recognizer(model_module)
 
     crop = np.zeros((48, 200, 3), dtype=np.uint8)
-    texts, scores = recognizer._call_recognition([crop])
+    texts, scores, _char_mins = recognizer._call_recognition([crop])
 
     assert texts == ['']
     assert scores == [-1.0]

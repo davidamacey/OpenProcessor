@@ -81,7 +81,7 @@ ONNX_OF_ENGINE = {
     'scrfd_10g_bnkps': 'pytorch_models/scrfd_10g_bnkps.onnx',
     'arcface_w600k_r50': 'pytorch_models/arcface_w600k_r50.onnx',
     'paddleocr_det_trt': 'pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx',
-    'paddleocr_rec_trt': 'pytorch_models/paddleocr/ppocr_rec_v5_mobile.onnx',
+    'paddleocr_rec_trt': 'pytorch_models/paddleocr/ppocrv6_rec_small.onnx',
 }
 
 

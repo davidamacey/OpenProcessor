@@ -180,7 +180,13 @@ def _unframe_line(
     )
     if bx[2] <= bx[0] or bx[3] <= bx[1]:
         return None
-    return OcrLine(text=line.text, box=bx, score=line.score, det_score=line.det_score)
+    return OcrLine(
+        text=line.text,
+        box=bx,
+        score=line.score,
+        det_score=line.det_score,
+        char_min=line.char_min,
+    )
 
 
 def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
@@ -199,6 +205,7 @@ def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
     texts = result.as_numpy('texts')
     det_scores = result.as_numpy('text_scores')
     rec_scores = result.as_numpy('rec_scores')
+    rec_char_min = result.as_numpy('rec_char_min')
     if boxes is None or texts is None or det_scores is None or rec_scores is None:
         return []
     lines: list[OcrLine] = []
@@ -228,6 +235,7 @@ def _parse_ocr_pipeline_result(result: Any) -> list[OcrLine]:
                 box=(x1, y1, x2, y2),
                 score=rec_score,
                 det_score=float(det_scores[i]),
+                char_min=None if rec_char_min is None else float(rec_char_min[i]),
             )
         )
     return lines
