@@ -138,3 +138,25 @@ def test_the_catalog_lists_it_with_its_own_role() -> None:
 def test_a_non_propagated_machine_kind_is_not_confused_with_it() -> None:
     with pytest.raises(TypeError):
         ItemLabel.propagated(class_id=1, class_name='x', writer='w')  # type: ignore[call-arg]
+
+
+def test_a_propagated_write_is_tagged_with_its_operation_so_a_rollback_restores_it() -> None:
+    """The loop's rollback is the label-operation undo, which restores an item only while it
+    still carries the operation's tag (`label_op_id`) and fingerprint."""
+    import dataclasses
+
+    from src.domain.label_ops import UndoOutcome, propagated_fingerprint, undo_outcome
+
+    op = '01a1b00f-8d37-77d2-a545-50e87fe15f52'
+    before = _vlm_item()
+    update = class_label_update(before, dataclasses.replace(_label(), op_id=op))
+    assert update['label_op_id'] == op
+
+    after = {**before, **update}
+    fp = propagated_fingerprint(
+        op_id=op, writer=f'assist_loop:{RUN}', at='2026-11-10T00:00:00+00:00', class_name='widget'
+    )
+    outcome = undo_outcome(
+        after, fp, prior=update['class_id_history'][-1], registry_name=lambda _cid: 'gadget'
+    )
+    assert outcome is UndoOutcome.RESTORE

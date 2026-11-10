@@ -199,6 +199,9 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     fields = class_label_fields(label)
     fields['class_id_history'] = history
     fields['updated_at'] = now_iso()
+    if label.source == 'propagated':
+        # The tag the operation's undo looks for; None clears a stale one, as a human label does.
+        fields['label_op_id'] = label.op_id
     if label.source == 'human' and label.validated:
         fields.update(audit_outcome_fields(current, label.class_name))
     return fields
