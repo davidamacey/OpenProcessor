@@ -112,6 +112,10 @@ class CurationConfig:
     # One cap over every project's directory under crop_cache_dir; an evicted
     # crop is a cache miss (re-cropped from the source image), not an error.
     crop_cache_max_bytes: int = 3 * 1024**3
+    # Long-side caps in pixels. 0 = off (the crop at source size, the VLM payload at
+    # crop_bytes.VLM_CROP_SIZE).
+    crop_max_side: int = 0
+    vlm_crop_max_side: int = 0
     # BA-1: server-managed, content-addressed root for uploaded image
     # bytes (POST /ingest/upload). Added to _configured_roots() (see
     # image_serving.py) so the path guards accept it. Default lives
@@ -319,6 +323,8 @@ class CurationConfig:
             state_dir=_path('STATE_DIR', defaults.state_dir),
             crop_cache_dir=_path('CROP_CACHE_DIR', defaults.crop_cache_dir),
             crop_cache_max_bytes=_int('CROP_CACHE_MAX_BYTES', defaults.crop_cache_max_bytes),
+            crop_max_side=_int('CROP_MAX_SIDE', defaults.crop_max_side),
+            vlm_crop_max_side=_int('VLM_CROP_MAX_SIDE', defaults.vlm_crop_max_side),
             upload_max_images_per_request=_int(
                 'UPLOAD_MAX_IMAGES_PER_REQUEST', defaults.upload_max_images_per_request
             ),

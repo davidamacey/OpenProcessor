@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from src.config.project_context import current_project
+from src.services.detection.crop_sizing import cap_crop
 from src.utils.stage_timing import add_stage_bytes, stage_timer
 
 
@@ -75,6 +76,7 @@ def write_crop_cache(
     cache_dir: str | Path,
     *,
     quality: int = DEFAULT_CROP_CACHE_QUALITY,
+    max_side: int = 0,
 ) -> None:
     """Write one item crop's JPEG bytes to the tmpfs crop cache.
 
@@ -89,6 +91,7 @@ def write_crop_cache(
         cache_dir: The project's cache directory (:func:`project_crop_cache_dir`).
             A falsy value disables the cache entirely (no-op).
         quality: JPEG encode quality.
+        max_side: Long-side cap for a decoded crop (0 = none); encoded bytes are written as is.
     """
     if not cache_dir:
         return
@@ -103,7 +106,7 @@ def write_crop_cache(
             tmp.write_bytes(crop)
         else:
             with stage_timer('jpeg_encode'):
-                crop.save(tmp, format='JPEG', quality=quality)
+                cap_crop(crop, max_side).save(tmp, format='JPEG', quality=quality)
         tmp.replace(out)
         add_stage_bytes('jpeg_encode', out.stat().st_size)
     except (OSError, ValueError) as exc:

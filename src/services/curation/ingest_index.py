@@ -233,6 +233,7 @@ async def _cache_crops(
                 cid,
                 crop,
                 project_dir,
+                max_side=service.config.crop_max_side,
                 nbytes=len(crop) if isinstance(crop, bytes) else crop.width * crop.height * 3,
             )
             for cid, crop in zip(cids, crops, strict=True)
