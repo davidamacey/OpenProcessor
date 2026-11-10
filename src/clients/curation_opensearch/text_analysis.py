@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.domain.region_text import NON_ALNUM_PATTERN
+
 
 NORMALIZER_NAME = 'op_text_compact'
 CHAR_FILTER_NAME = 'op_alnum_only'
@@ -22,7 +24,7 @@ ITEMS_ANALYSIS: dict[str, Any] = {
     'char_filter': {
         CHAR_FILTER_NAME: {
             'type': 'pattern_replace',
-            'pattern': '[^\\p{L}\\p{Nd}]',
+            'pattern': NON_ALNUM_PATTERN,
             'replacement': '',
         }
     },

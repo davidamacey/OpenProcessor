@@ -24928,6 +24928,13 @@
             "title": "Text Charset",
             "type": "string"
           },
+          "text_confusables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Text Confusables",
+            "type": "object"
+          },
           "text_crop_margin": {
             "default": 0.05,
             "title": "Text Crop Margin",
@@ -35073,6 +35080,7 @@
               "region_class_name_invalid",
               "text_reader_invalid",
               "text_regex_invalid",
+              "text_confusables_invalid",
               "detector_model_not_found",
               "detector_model_not_ready",
               "detector_model_unusable",

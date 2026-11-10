@@ -140,6 +140,8 @@ def region_profile_from_dict(data: dict[str, Any], *, source: str = 'file') -> D
             kwargs[key] = tuple(value)
         elif annotation.startswith('frozenset'):
             kwargs[key] = frozenset(value)
+        elif annotation.startswith('dict'):
+            kwargs[key] = dict(value)
         else:
             kwargs[key] = value
     return DetectionProfile(**kwargs)  # type: ignore[arg-type]
