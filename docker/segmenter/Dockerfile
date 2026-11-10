@@ -46,6 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
 COPY --from=sam3-src /src/sam3 /opt/sam3
 COPY requirements.txt /tmp/requirements.txt
 
+# These four are deleted from the base's system site in the runtime stage, so they must exist in the
+# user site even when the base already ships the pinned version (pip would skip them as satisfied).
+RUN grep -E '^(pillow|certifi|filelock|dnspython)==' /tmp/requirements.txt > /tmp/shadow.txt \
+    && pip install --user --no-cache-dir --no-warn-script-location --no-deps --ignore-installed -r /tmp/shadow.txt
+
 # The exact set first, so SAM 3's own looser requirements find them already satisfied.
 RUN pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt \
     && pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
