@@ -7,10 +7,11 @@ from typing import Annotated, Any
 from fastapi import Query
 
 from src.routers.curation._common import router
+from src.schemas.curation.cohorts import TrainingCohortList
 from src.services.curation.training_cohorts import cohort_catalog
 
 
-@router.get('/training_cohorts')
+@router.get('/training_cohorts', response_model=TrainingCohortList)
 async def training_cohorts(
     class_id: Annotated[int | None, Query(description='Fold into every cohort query.')] = None,
 ) -> dict[str, Any]:

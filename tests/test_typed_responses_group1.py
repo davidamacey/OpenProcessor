@@ -12,6 +12,7 @@ CONTRACT = Path(__file__).resolve().parents[1] / 'contracts' / 'openapi' / 'cura
 PREFIX = '/curation/projects/{project}'
 
 TYPED = [
+    ('get', '/training_cohorts', 'TrainingCohortList'),
     ('get', '/class_sources', 'ClassSourceList'),
     ('post', '/classes', 'ClassCreated'),
     ('put', '/classes/{class_id}', 'RegistryClassEntry'),

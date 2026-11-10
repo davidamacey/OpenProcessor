@@ -73,7 +73,6 @@ LEGACY_DICT = frozenset(
         'GET /select/status',
         'GET /stats/classes',
         'GET /test_holdout/stats',
-        'GET /training_cohorts',
         'POST /viz/projection/cancel',
         'GET /viz/projection/status',
     }

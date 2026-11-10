@@ -34878,6 +34878,73 @@
         "title": "TrainedModelList",
         "type": "object"
       },
+      "TrainingCohort": {
+        "properties": {
+          "cutoffs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Cutoffs",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "row_kind": {
+            "enum": [
+              "crop",
+              "region"
+            ],
+            "title": "Row Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "cutoffs",
+          "endpoint",
+          "params",
+          "row_kind"
+        ],
+        "title": "TrainingCohort",
+        "type": "object"
+      },
+      "TrainingCohortList": {
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingCohort"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohorts"
+        ],
+        "title": "TrainingCohortList",
+        "type": "object"
+      },
       "TriggersWire": {
         "additionalProperties": false,
         "properties": {
@@ -64279,9 +64346,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Training Cohorts Curation Projects  Project  Training Cohorts Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/TrainingCohortList"
                 }
               }
             },
