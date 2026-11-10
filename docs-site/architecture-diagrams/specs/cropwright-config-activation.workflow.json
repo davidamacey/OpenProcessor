@@ -2,6 +2,7 @@
   "schema_version": 2,
   "diagram_type": "workflow",
   "meta": {
+    "output": "cropwright-config-activation.html",
     "title": "Cropwright — Edit, Test and Activate a Config Revision",
     "quality_profile": "showcase",
     "views": [

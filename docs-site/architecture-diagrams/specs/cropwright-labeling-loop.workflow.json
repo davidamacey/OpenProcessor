@@ -2,6 +2,7 @@
   "schema_version": 2,
   "diagram_type": "workflow",
   "meta": {
+    "output": "cropwright-labeling-loop.html",
     "title": "Cropwright \u2014 Labeling Loop",
     "quality_profile": "showcase",
     "views": [
