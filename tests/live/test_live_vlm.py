@@ -30,6 +30,7 @@ from .conftest import (
     crop_ids_in,
     get_doc,
     refresh,
+    wait_job,
     wait_until,
 )
 
@@ -38,6 +39,19 @@ pytestmark = pytest.mark.live
 
 FAKE_CLASS = 'box'
 FAKE_REGION_TEXT = 'FAKE-LABEL-0042'
+
+
+def _batch(api_client: Any, route: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Start a VLM batch (202 with the job id) and return the finished job's ``result``.
+
+    The outcome is on ``GET /jobs/{job_id}`` (docs/design/curation_api_contract.md, VLM routes).
+    """
+    resp = api_client.post(route, json=payload)
+    assert resp.status_code == 202, resp.text
+    job = wait_job(api_client, resp.json()['job_id'])
+    assert job['status'] == 'completed', job
+    result: dict[str, Any] = job['result']
+    return result
 
 
 def _source(opensearch: Any, crop_id: str) -> dict[str, Any]:
@@ -62,9 +76,7 @@ def test_vlm_label_batch_persists_the_exact_fake_answer(
     crop_ids = crop_ids_in(opensearch, 'cnd10001', limit=4)
     assert len(crop_ids) == 4
 
-    resp = api_client.post('/vlm/label_batch', json={'crop_ids': crop_ids})
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
+    body = _batch(api_client, '/vlm/label_batch', {'crop_ids': crop_ids})
     assert body['predicted'] == len(crop_ids), body
     assert body['updated'] == len(crop_ids), body
     assert body['new_class_proposals'] == []
@@ -102,9 +114,8 @@ def test_vlm_label_batch_leaves_human_owned_crops_alone(api_client: Any, opensea
     assert human_ids, 'precondition: human-labelled crops must exist'
     before = {cid: _source(opensearch, cid)['class_id'] for cid in human_ids}
 
-    resp = api_client.post('/vlm/label_batch', json={'crop_ids': human_ids})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()['updated'] == 0, resp.text
+    body = _batch(api_client, '/vlm/label_batch', {'crop_ids': human_ids})
+    assert body['updated'] == 0, body
 
     for cid, class_id in before.items():
         assert _source(opensearch, cid)['class_id'] == class_id
@@ -133,7 +144,7 @@ def test_assist_verify_persists_the_verdict(
             'dry_run': False,
         },
     )
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 202, resp.text
     run_id = resp.json()['run_id']
     for _ in range(120):
         state = api_client.get(f'/assist/runs/{run_id}').json()
@@ -163,9 +174,7 @@ def test_vlm_verify_region_batch_returns_ordered_verdicts(
             for i, crop_id in enumerate(crop_ids)
         ]
     }
-    resp = api_client.post('/vlm/verify_region_batch', json=payload)
-    assert resp.status_code == 200, resp.text
-    results = resp.json()['results']
+    results = _batch(api_client, '/vlm/verify_region_batch', payload)['results']
     assert [r['crop_id'] for r in results] == crop_ids
     for i, result in enumerate(results):
         assert result['is_region'] is True, result
@@ -208,16 +217,15 @@ def test_vlm_verdict_key_matches_the_shipped_prompt(
     """
     fake_vlm.post('/__control', json={'region_verdict_key': 'is_region'})
     crop_ids = crop_ids_in(opensearch, 'rgnfp', limit=2)
-    resp = api_client.post(
+    results = _batch(
+        api_client,
         '/vlm/verify_region_batch',
-        json={
+        {
             'items': [
                 {'crop_id': crop_id, 'region_image_b64': sample_jpeg_b64} for crop_id in crop_ids
             ]
         },
-    )
-    assert resp.status_code == 200, resp.text
-    results = resp.json()['results']
+    )['results']
     assert all(r['is_region'] is True for r in results), results
 
 

@@ -1516,8 +1516,8 @@ open-vocabulary profiles add `clone`, `revisions`, `revisions/{revision}` and `a
 
 | Method | Path | Body or query | Response |
 |---|---|---|---|
-| POST | `/vlm/label_batch` | `{crop_ids}` (at most 64), `vlm`, `acknowledge_external` | label results |
-| POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `{results[]}`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` |
+| POST | `/vlm/label_batch` | `{crop_ids}` (at most 64), `vlm`, `acknowledge_external` | `202 {job_id, status}`; the label results (`predicted`, `updated`, `new_class_proposals`) are the job's `result` at `GET /jobs/{job_id}` |
+| POST | `/vlm/verify_region_batch` | `{items: [{crop_id, region_image_b64, candidate_text}]}` (at most 64) | `202 {job_id, status}`; the job's `result.results[]`: `crop_id`, `is_region`, `confidence`, `reason`, `candidate_text` (a `crop_id` missing from it got no verdict) |
 | POST | `/vlm/region_visible_batch` | `{items: [{crop_id, image_b64}]}` (at most 64) | `{visible: {crop_id: bool}}` |
 | POST | `/pipeline/auto_label` | query parameters | runs the pipeline in the request and returns each stage's counts. Idempotent |
 | POST | `/pipeline/auto_label/start` | query parameters | starts a background job and returns at once; poll the status routes. One job at a time (`409` otherwise) |
@@ -1562,7 +1562,7 @@ its class), and the answers, including a locked item's, are kept in the item's
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/assist/runs` | `AssistRunRequest` | `AssistRunState`; `dry_run` (the default) plans and writes nothing |
+| POST | `/assist/runs` | `AssistRunRequest` | `202 AssistRunState`; `dry_run` (the default) plans and writes nothing |
 | GET | `/assist/runs` | `cluster_uid`, `limit` (1 to 100, default 20) | `{runs: AssistRunState[]}`, newest first: the runs whose target or context names that cluster; all runs without `cluster_uid` |
 | GET | `/assist/runs/{run_id}` | | `AssistRunState`; `404 not_found` for an unknown id |
 | POST | `/assist/runs/{run_id}/cancel` | | `AssistRunState`; the run stops after its current chunk |
