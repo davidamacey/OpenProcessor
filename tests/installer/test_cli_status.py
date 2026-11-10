@@ -47,7 +47,7 @@ def test_status_probes_the_ports_in_this_installs_env(shimmed: Shimmed, inst: Pa
 
 def test_a_service_outside_the_installed_tiers_is_not_probed(shimmed: Shimmed, inst: Path) -> None:
     # compose lists only the services of the active profiles and overlays; a
-    # control-plane-only install has no Triton and a core install has no Grafana
+    # core install has no Grafana
     shimmed.flag('services', 'opensearch\napi\n')
     done = cli(shimmed, inst, 'status')
     assert done.returncode == 0, done.stderr

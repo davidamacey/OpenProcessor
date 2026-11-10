@@ -102,3 +102,14 @@ def test_cropwright_entrypoint_refuses_a_retired_name(old: str) -> None:
     )
     assert result.returncode == 2
     assert f'{old} was renamed to OP_{old}' in result.stderr
+
+
+def test_cli_refuses_an_install_made_with_the_retired_control_plane_only_mode(
+    shimmed: Shimmed,
+) -> None:
+    inst = _install(shimmed)
+    (inst / 'docker-compose.cpu.yml').write_text('services: {}\n')
+    result = _cli(shimmed, inst, 'status')
+    assert result.returncode == 2, result.stderr
+    assert 'control-plane-only' in result.stdout + result.stderr
+    assert 'Triton' in result.stdout + result.stderr

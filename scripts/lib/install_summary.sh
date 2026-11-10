@@ -32,12 +32,8 @@ print_summary() {
     echo ""
     echo "  URLs:"
     echo "    API docs    http://${h}:${api}/docs"
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        echo "    API alive   http://${h}:${api}/   (/health answers 503 by design: there is no Triton)"
-    else
-        echo "    API health  http://${h}:${api}/health"
-    fi
-    [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo "    Triton      http://${h}:${tri}/v2/health/ready"
+    echo "    API health  http://${h}:${api}/health"
+    echo "    Triton      http://${h}:${tri}/v2/health/ready"
     if _has_tier segmenter; then seg="$(read_env_var "$ENV_FILE" SEGMENTER_PORT)"; echo "    Segmenter   http://${h}:${seg}/health"; fi
     if _has_tier vlm; then vlmp="$(read_env_var "$ENV_FILE" VLM_PORT)"; echo "    VLM         http://${h}:${vlmp}/v1/models (${VLM_PICK})"; fi
     if _has_tier trainer; then ml="$(read_env_var "$ENV_FILE" MLFLOW_PORT)"; echo "    MLflow      http://${h}:${ml}"; fi
@@ -64,9 +60,6 @@ print_summary() {
     fi
     [[ -n "$OP_DOCS_URL" ]] && echo "    Docs        ${OP_DOCS_URL}"
     echo ""
-    if [[ "$OP_CONTROL_PLANE_ONLY" == 1 ]]; then
-        echo "  NOTE: control-plane-only install: NOT a functional inference install (no Triton)."
-    fi
     if ! is_loopback_ipv4 "$OP_BIND_ADDRESS"; then
         log_warn "SECURITY: services are published on ${OP_BIND_ADDRESS} with NO authentication. See SECURITY.md."
     elif _has_tier cropwright && ! is_loopback_ipv4 "${OP_CROPWRIGHT_BIND:-127.0.0.1}"; then
@@ -91,7 +84,7 @@ print_summary() {
     echo ""
     echo "  Manage: cd ${OP_REAL_DIR} && ./openprocessor status|logs|health|stop|start"
     echo "          ./setup-openprocessor.sh --repair   (also --rollback, --uninstall)"
-    [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start$([[ "$OP_CONTROL_PLANE_ONLY" == 1 ]] || echo ", then ./openprocessor models install")"
+    [[ "$OP_NO_START" == 1 ]] && echo "  Nothing was started (--no-start): run ./openprocessor start, then ./openprocessor models install"
     return 0
 }
 

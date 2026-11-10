@@ -44,9 +44,7 @@ if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
 else
     IS_CHECKOUT=0
 fi
-if [[ -f "$PROJECT_DIR/docker-compose.cpu.yml" ]]; then
-    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.cpu.yml")
-fi
+refuse_control_plane_only_install "$PROJECT_DIR"
 _env_value() {
     local key="$1" file="${2:-$PROJECT_DIR/.env}"
     [[ -f "$file" ]] || return 0
@@ -352,9 +350,8 @@ cmd_status() {
     echo ""
 
     # Health checks. Only services this install runs are probed: compose lists
-    # the services of the active profiles and overlays, so a control-plane-only
-    # install has no Triton and a core install has no Grafana. If compose cannot
-    # say, probe everything rather than hide a service.
+    # the services of the active profiles and overlays, so a core install has no
+    # Grafana. If compose cannot say, probe everything rather than hide a service.
     echo -e "${BOLD}Health Checks:${NC}"
 
     local active
