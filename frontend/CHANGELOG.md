@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Discard, new-class resolve and assist apply show items the server could not write (`failed`) apart from conflicts, instead of reporting them as someone else's edit.
+
 ### Added
 
 - Map page (`/map`): where the project's photos were taken, drawn with MapLibre GL JS from the server's grid cells (`GET /map/cells`, GeoJSON). The nav link shows only when `GET /map` says the project has stored positions and its location policy serves them; under `drop` the page says so. Filters are the shared item filter plus the capture days (`taken_from`, `taken_to`); a click on a cell of at most 200 photos lists them (the Matching items view) and a larger cell zooms in. Basemap tiles come from the served `tile_url` (`OP_MAP_TILE_URL`, OpenStreetMap by default), fetched by the browser. The shared filter also takes `taken_from` / `taken_to` / `image_id`.

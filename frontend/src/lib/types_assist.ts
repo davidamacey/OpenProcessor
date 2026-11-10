@@ -214,6 +214,12 @@ export interface AssistApplyRequest {
   dry_run?: boolean;
 }
 
+/** An item the apply write errored on, apart from a concurrent edit. */
+export interface AssistApplyFailure {
+  crop_id: string;
+  reason: 'write_failed';
+}
+
 export interface AssistApplyConflict {
   crop_id: string;
   current_source?: string | null;
@@ -227,6 +233,7 @@ export interface AssistApplyResponse {
   updated?: number;
   updated_ids?: string[];
   conflicts?: AssistApplyConflict[];
+  failed?: AssistApplyFailure[];
   scope_now: AssistScopeNow;
 }
 

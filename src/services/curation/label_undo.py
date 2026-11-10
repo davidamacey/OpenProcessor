@@ -160,7 +160,8 @@ async def discard_many(
     opensearch: Any, crop_ids: list[str], *, clear_class: bool, dismiss_from_review: bool
 ) -> dict[str, list[str]]:
     """Discard each item in one conditional bulk; the ids per outcome: ``discarded``,
-    ``conflicts`` (a concurrent write outlasted the retries) and ``not_found``."""
+    ``conflicts`` (a concurrent write outlasted the retries), ``not_found`` and ``failed``
+    (the write errored for another reason)."""
     merge = discard_merger(clear_class=clear_class, dismiss_from_review=dismiss_from_review)
     status = await occ_update_bulk(
         opensearch,
@@ -171,8 +172,8 @@ async def discard_many(
         max_retries=5,
         refresh='wait_for',
     )
-    by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': []}
-    outcome_of = {'updated': 'discarded', 'not-found': 'not_found'}
+    by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': [], 'failed': []}
+    outcome_of = {'updated': 'discarded', 'not-found': 'not_found', 'error': 'failed'}
     for crop_id in crop_ids:
         by[outcome_of.get(status.get(crop_id, ''), 'conflicts')].append(crop_id)
     return by

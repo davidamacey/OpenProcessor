@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Fixed
+
+- A batch write that errors on an item (a failed bulk request, a mapping error) is reported in that item's `failed` entry (`reason: write_failed`) on `POST /crops/discard_batch`, the new-class resolve and the assist apply, not as a `conflicts` entry that says someone else edited it. A 4xx bulk error is no longer retried. Label operations and the assist loop fail the job on an unwritable item.
+
 ### Added
 
 - **Embedding spaces.** A project can hold more than one embedding of its items, boxes, frames and item text. `GET /curation/projects/{project}/embedding/spaces` lists them and `GET /curation/embedding/models` lists the encoder versions the deployment can serve. `POST .../embedding/spaces` registers a candidate space and `POST .../spaces/{space_key}/build` fills it in the background (a reindex run, cancellable at `POST .../embedding/reindex-runs/{run_id}/cancel`) while the primary keeps serving; `POST .../spaces/{space_key}/promote` swaps it in as the primary in one step (a promote also starts a cluster run and a near-duplicate score on the new vectors) and `POST .../spaces/{space_key}/retire` removes it. A build checks the storage estimate first. New error codes: `embedding_space_exists`, `embedding_space_not_found`, `embedding_space_not_ready`, `embedding_model_unavailable`, `embedding_insufficient_storage`, `embedding_capacity_unknown`, `embedding_evaluation_missing`, `embedding_run_not_found`. A project's existing PE-Core vectors are its default spaces under their old field names, so nothing moves on upgrade. `docs/ARCHITECTURE.md` and `docs/CURATION.md` describe the model.

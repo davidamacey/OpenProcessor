@@ -80,6 +80,7 @@ describe('/classes Proposals section', () => {
     expect(fn).toMatch(/undoStore\.recordWrites\(res\.updated_ids\)/);
     expect(fn).toMatch(/res\.updated/);
     expect(fn).toMatch(/res\.conflicts\.length/);
+    expect(fn).toMatch(/res\.failed\.length/);
     expect(fn).toMatch(/res\.skipped\.length/);
   });
 

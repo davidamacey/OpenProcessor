@@ -29,6 +29,8 @@ class ClassWrite:
     updated_ids: list[str]
     conflicts: list[dict[str, Any]]
     """Items the OCC write could not land after its retries."""
+    failed: list[dict[str, str]]
+    """Items whose write errored for a reason other than a concurrent edit."""
     skipped_locked: list[str]
     """Items locked or validated by the time of the write."""
     skipped_changed: list[str]
@@ -63,6 +65,7 @@ async def write_class_to_ids(
     return ClassWrite(
         updated_ids=[i for i in written['updated_ids'] if i not in skipped],
         conflicts=list(written['conflicts']),
+        failed=list(written['failed']),
         skipped_locked=[i for i in ids if i in locked],
         skipped_changed=[i for i in ids if i in changed],
     )

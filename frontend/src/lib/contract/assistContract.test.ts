@@ -223,6 +223,7 @@ const CASES: [string, string[]][] = [
       updated: true,
       updated_ids: true,
       conflicts: true,
+      failed: true,
       scope_now: true,
     } satisfies Record<keyof T.AssistApplyResponse, true>),
   ],

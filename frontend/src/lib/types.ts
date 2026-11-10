@@ -454,6 +454,12 @@ export interface ClusterFilter
   representatives_limit?: number;
 }
 
+/** An item a batch write errored on for a reason other than a concurrent edit. */
+export interface WriteFailure {
+  crop_id: string;
+  reason: 'write_failed';
+}
+
 export interface BulkLabelConflict {
   crop_id: string;
   current_source: string | null;

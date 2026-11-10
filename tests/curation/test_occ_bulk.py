@@ -12,7 +12,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from opensearchpy.exceptions import OpenSearchException
+from opensearchpy.exceptions import (
+    ConnectionError as OsConnectionError,
+    OpenSearchException,
+    RequestError,
+)
 
 from curation.occ_fakes import (
     VECTOR_EXCLUDES,
@@ -128,15 +132,57 @@ class TestOccUpdateBulk:
         )
         assert status['a'] == 'conflict-exhausted'
 
+    @pytest.mark.asyncio
+    async def test_non_409_item_error_is_error_not_conflict(self) -> None:
+        client = FakeOccOpenSearch(
+            {'a': {'class_id': 1}}, bulk_status={'a': (400, 'mapper_parsing_exception')}
+        )
+        status = await occ_update_bulk(
+            client,
+            vector_excludes=VECTOR_EXCLUDES,
+            index='op_prj_default__items',
+            ids=['a'],
+            merge_fn=lambda _i, _s: {'class_id': 2},
+        )
+        assert status['a'] == 'error'
+
+    @pytest.mark.asyncio
+    async def test_whole_request_400_is_error_not_conflict(self) -> None:
+        client = _AlwaysConflict(
+            transport_error=True, error=RequestError(400, 'mapper_parsing_exception', {})
+        )
+        status = await occ_update_bulk(
+            client,
+            vector_excludes=VECTOR_EXCLUDES,
+            index='op_prj_default__items',
+            ids=['a'],
+            merge_fn=lambda _i, _s: {'class_id': 2},
+            max_retries=3,
+        )
+        assert status['a'] == 'error'
+        assert len(client.bulk_calls) == 1
+
+
+def test_raise_on_failed_names_the_failed_ids() -> None:
+    from src.clients.occ_bulk import BulkWriteError, failed_entry, raise_on_failed
+
+    raise_on_failed([])
+    with pytest.raises(BulkWriteError) as info:
+        raise_on_failed([failed_entry('b')])
+    assert info.value.doc_ids == ['b']
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
 class _AlwaysConflict(FakeOccOpenSearch):
-    def __init__(self, *, transport_error: bool = False) -> None:
+    def __init__(
+        self, *, transport_error: bool = False, error: OpenSearchException | None = None
+    ) -> None:
         super().__init__({'a': {'class_id': 1, 'label_source': 'human'}})
         self.transport_error = transport_error
+        self.error = error
 
     async def bulk(
         self,
@@ -146,7 +192,7 @@ class _AlwaysConflict(FakeOccOpenSearch):
     ) -> dict[str, Any]:
         self.bulk_calls.append(body)
         if self.transport_error:
-            raise OpenSearchException('boom')
+            raise self.error or OsConnectionError('N/A', 'boom', Exception('x'))
         return make_bulk_response(
             [make_bulk_update_item('a', status=409, error_type='version_conflict_engine_exception')]
         )
@@ -187,3 +233,76 @@ class TestOccBulkRounds:
         seen = await _run_rounds(client, max_retries=3, retry_transport=False)
         assert [s[:3] for s in seen] == [('failed', 'a', 'transport')]
         assert len(client.bulk_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_request_error_400_is_not_retried(self) -> None:
+        client = _AlwaysConflict(
+            transport_error=True, error=RequestError(400, 'mapper_parsing_exception', {})
+        )
+        seen = await _run_rounds(client, max_retries=3)
+        assert [s[:3] for s in seen] == [('failed', 'a', 'transport')]
+        assert len(client.bulk_calls) == 1
+
+
+@pytest.fixture
+def _items(monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.services.curation import crop_bulk, label_undo, new_class_resolve
+
+    async def _no_excludes() -> list[str]:
+        return VECTOR_EXCLUDES
+
+    for mod in (crop_bulk, label_undo, new_class_resolve):
+        monkeypatch.setattr(mod, 'vector_source_excludes', _no_excludes)
+        monkeypatch.setattr(mod, 'items_index', lambda: 'op_prj_default__items')
+
+
+def _bad_client() -> FakeOccOpenSearch:
+    return FakeOccOpenSearch(
+        {'a': {'class_id': 1}}, bulk_status={'a': (400, 'mapper_parsing_exception')}
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_relabel_reports_a_non_409_item_error_as_failed_not_conflict() -> None:
+    from src.services.curation import crop_bulk
+
+    out = await crop_bulk.occ_bulk_human_relabel(
+        _bad_client(), ['a'], lambda _s: {'class_id': 2}, writer_id='t', max_retries=1
+    )
+    assert out['conflicts'] == []
+    assert out['failed'] == [{'crop_id': 'a', 'reason': 'write_failed'}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_discard_many_reports_failed_apart_from_conflicts() -> None:
+    from src.services.curation import label_undo
+
+    by = await label_undo.discard_many(
+        _bad_client(), ['a'], clear_class=True, dismiss_from_review=False
+    )
+    assert by['failed'] == ['a']
+    assert by['conflicts'] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_items')
+async def test_resolve_reports_failed_apart_from_conflicts() -> None:
+    from src.services.curation.new_class_resolve import resolve_pending_proposals
+
+    client = FakeOccOpenSearch(
+        {
+            'a': {
+                'class_source': 'vlm_new_class_pending',
+                'vlm_proposed_class': 'sidecar',
+                'needs_new_class': True,
+            }
+        },
+        bulk_status={'a': (400, 'mapper_parsing_exception')},
+    )
+    out = await resolve_pending_proposals(
+        client, ['a'], label='sidecar', class_id=1, class_name='widget', label_source='human'
+    )
+    assert out.conflicts == []
+    assert out.failed == [{'crop_id': 'a', 'reason': 'write_failed'}]

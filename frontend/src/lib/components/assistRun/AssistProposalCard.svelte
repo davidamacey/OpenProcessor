@@ -152,7 +152,8 @@
         data-testid="proposal-applied"
       >
         Labeled {ctl.applied.updated ?? 0} crops as {ctl.applied.class_name}; {ctl.applied
-          .skipped_locked} left alone (locked or validated).
+          .skipped_locked} left alone (locked or validated).{#if ctl.applied.failed?.length}
+          {ctl.applied.failed.length} could not be written.{/if}
       </p>
     {:else}
       {#if ctl.error}

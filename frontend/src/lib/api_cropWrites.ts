@@ -9,6 +9,7 @@ import type {
   Crop,
   CropRegionUndoBatchResult,
   CropUndoBatchResult,
+  WriteFailure,
 } from '$lib/types';
 import type { SlotSpec } from '$lib/annotations/types';
 import type { SelectionExcludeResult } from '$lib/types_itemFilter';
@@ -126,6 +127,7 @@ export interface DiscardBatchResult {
   discarded: number;
   conflicts: BulkLabelConflict[];
   not_found: string[];
+  failed: WriteFailure[];
 }
 
 /** Bulk variant of `discardCrop`. `items` carries only the crops actually
@@ -141,12 +143,13 @@ export async function discardCropsBatch(
     discarded: number;
     conflicts: BulkLabelConflict[];
     not_found: string[];
+    failed?: WriteFailure[];
   }>(
     `${scoped()}/crops/discard_batch`,
     { method: 'POST', body: JSON.stringify({ crop_ids: cropIds, ...opts }) },
     signal,
   );
-  return { ...raw, items: raw.items.map(mapRawCrop) };
+  return { ...raw, failed: raw.failed ?? [], items: raw.items.map(mapRawCrop) };
 }
 
 /**

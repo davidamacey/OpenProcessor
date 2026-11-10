@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import OCC_BULK_PAGE_SIZE
+from src.clients.occ_bulk import raise_on_failed
 from src.config.project_context import current_project_id
 from src.core.logging import get_logger
 from src.db.repos import job_items
@@ -114,6 +115,7 @@ async def recorded_relabel(
         )
         await write_members(record, [(i, priors[i]) for i in result['updated_ids'] if i in priors])
         priors.clear()
+        raise_on_failed(result['failed'])
         updated_ids += result['updated_ids']
         conflicts += result['conflicts']
     record.status = 'written'
@@ -185,6 +187,7 @@ async def run_relabel(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
         result = await occ_bulk_human_relabel(opensearch, page, merge, writer_id=params['writer'])
         await write_members(record, [(i, priors[i]) for i in result['updated_ids'] if i in priors])
         priors.clear()
+        raise_on_failed(result['failed'])
         done += len(page)
         updated += len(result['updated_ids'])
         conflicts += len(result['conflicts'])

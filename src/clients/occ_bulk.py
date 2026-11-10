@@ -14,7 +14,11 @@ import asyncio
 import random
 from typing import TYPE_CHECKING, Any, Literal
 
-from opensearchpy.exceptions import OpenSearchException
+from opensearchpy.exceptions import (
+    ConnectionError as OpenSearchConnectionError,
+    OpenSearchException,
+    TransportError,
+)
 
 from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.config.curation_accessors import items_index
@@ -32,6 +36,44 @@ logger = get_logger(__name__)
 BulkFailure = Literal['conflict', 'transport', 'error']
 """Why a doc was not written: a 409 that outlasted the retries, a bulk request
 that failed as a whole, or a non-409 error on the item."""
+
+
+_TRANSIENT_STATUSES = frozenset({429, 502, 503, 504})
+
+
+def _is_transient(exc: OpenSearchException) -> bool:
+    """Only a failure a later attempt can fix: ``ConnectionError`` (which includes
+    ``ConnectionTimeout``) or an overload / gateway status. A 4xx ``RequestError``
+    (e.g. ``mapper_parsing_exception``) fails the same way every time."""
+    if isinstance(exc, OpenSearchConnectionError):
+        return True
+    return isinstance(exc, TransportError) and exc.status_code in _TRANSIENT_STATUSES
+
+
+class BulkWriteError(Exception):
+    """A write left items unwritten for a reason that is not a concurrent edit,
+    raised only where the caller has no per-item result to carry it (a job or
+    recorded operation that reports counts)."""
+
+    def __init__(self, doc_ids: list[str]) -> None:
+        self.doc_ids = doc_ids
+        super().__init__(f'bulk write failed for {len(doc_ids)} item(s): {doc_ids[:5]}')
+
+
+WRITE_FAILED = 'write_failed'
+"""Per-item reason code on the wire for a doc that was not written and did not conflict."""
+
+
+def failed_entry(doc_id: str) -> dict[str, str]:
+    """The per-item wire entry for an id whose write failed for a reason other than a 409."""
+    return {'crop_id': doc_id, 'reason': WRITE_FAILED}
+
+
+def raise_on_failed(failed: list[dict[str, str]]) -> None:
+    """For a count-only caller (a job or recorded operation) with no per-item result
+    shape: raise :class:`BulkWriteError` when any entry in ``failed`` exists."""
+    if failed:
+        raise BulkWriteError([entry['crop_id'] for entry in failed])
 
 
 def _bulk_body(
@@ -94,7 +136,8 @@ async def occ_bulk_rounds(
     itself (missing, no-op, invalid) and recorded that outcome. ``on_written``
     fires for each applied update. ``on_failed(doc_id, doc, why)`` fires once
     for an id that will not be written: ``doc`` is the last hit read.
-    ``retry_transport`` retries the ids of a bulk request that raised.
+    ``retry_transport`` retries the ids of a bulk request that raised a transient
+    error (:func:`_is_transient`); any other error fails them at once.
     """
     from src.clients.curation_opensearch.crops import mget_crops
 
@@ -131,7 +174,7 @@ async def occ_bulk_rounds(
             except OpenSearchException as exc:
                 logger.warning('curation_occ_update_bulk_transport_error', error=str(exc))
                 for doc_id, _update_doc in pending:
-                    if retry_transport and not final:
+                    if retry_transport and not final and _is_transient(exc):
                         next_round.append(doc_id)
                     else:
                         on_failed(doc_id, docs[doc_id], 'transport')
@@ -185,8 +228,9 @@ async def occ_update_bulk(
             each round (``True`` / ``False`` / ``'wait_for'``).
 
     Returns:
-        Per-id status: ``'updated'``, ``'not-found'``, or
-        ``'conflict-exhausted'``.
+        Per-id status: ``'updated'``, ``'not-found'``, ``'conflict-exhausted'``
+        (a 409 that outlasted the retries) or ``'error'`` (a failed bulk request
+        or a non-409 item error).
     """
     status: dict[str, str] = {}
 
@@ -203,8 +247,8 @@ async def occ_update_bulk(
     def on_written(doc_id: str) -> None:
         status[doc_id] = 'updated'
 
-    def on_failed(doc_id: str, _doc: dict[str, Any] | None, _why: BulkFailure) -> None:
-        status[doc_id] = 'conflict-exhausted'
+    def on_failed(doc_id: str, _doc: dict[str, Any] | None, why: BulkFailure) -> None:
+        status[doc_id] = 'conflict-exhausted' if why == 'conflict' else 'error'
 
     await occ_bulk_rounds(
         client,
@@ -220,4 +264,11 @@ async def occ_update_bulk(
     return status
 
 
-__all__ = ['BulkFailure', 'occ_bulk_rounds', 'occ_update_bulk']
+__all__ = [
+    'BulkFailure',
+    'BulkWriteError',
+    'failed_entry',
+    'occ_bulk_rounds',
+    'occ_update_bulk',
+    'raise_on_failed',
+]

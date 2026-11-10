@@ -978,7 +978,7 @@ applies to automated writers.
 | POST | `/crops/batch_exclude` | `{crop_ids, reason}` or a `selection`; `dry_run` | `{excluded, updated_ids, errors}` (dry run: `{dry_run, selected}`) | sets `class_excluded`, clears `class_validated` and records the prior validation (`excluded_prior_class_validated`); the item keeps its place in the serving partition and every cluster reader skips it |
 | POST | `/crops/batch_unexclude` | `{crop_ids}` or a `selection`; `dry_run` | `{unexcluded, updated_ids, errors}` | `updated_ids` are the items actually restored (an item that was not excluded is in neither the count nor the ids). Restores the recorded validation (`class_validated`); the item never left its cluster. An item excluded before the prior state was recorded is validated again only when its class is human-sourced. Items that are not excluded are untouched |
 | POST | `/crops/{crop_id}/discard` | `{clear_class: true, dismiss_from_review: false}`, `422` if both false | the item | clears class, provenance and validation and drops the item to the residual pool, and/or hides it from every review tab. Recorded and undoable |
-| POST | `/crops/discard_batch` | `{crop_ids, clear_class, dismiss_from_review}` | `{items[], discarded, conflicts, not_found}` | |
+| POST | `/crops/discard_batch` | `{crop_ids, clear_class, dismiss_from_review}` | `{items[], discarded, conflicts, not_found, failed}` | `failed` lists `{crop_id, reason: "write_failed"}` for items the write errored on (not a concurrent edit) |
 | POST | `/crops/{crop_id}/review_dismiss` | | `{crop_id, dismissed}` | one-way review hide, not recorded. Prefer `discard` with `clear_class: false` and `dismiss_from_review: true` |
 | POST | `/crops/{crop_id}/review_undismiss` | | the item | clears `review_dismissed_at` |
 | POST | `/crops/{crop_id}/vlm_dismiss` | | the item | rejects the VLM's class suggestion. While the VLM's suggestion is that one the suggestion keys are `null`. A different later suggestion shows again. `409` when there is no suggestion |
@@ -1334,6 +1334,12 @@ and the resolve route share one selection, so counts agree. Each term is
 | `non_object` | the name or one of its `_` tokens matches `OP_NEW_CLASS_NON_OBJECT_TERMS` (supports `prefix_*` and `*_suffix`) | discard or exclude |
 
 Both term lists are empty by default. `term_rules` serves the active rules.
+
+A write that errors on an item for any reason other than a `409` (a failed bulk request, a
+mapping error) is reported in that item's `failed` entry (`{crop_id, reason: "write_failed"}`) on
+`POST /crops/discard_batch`, `POST /review/new_class_proposals/resolve` and the assist apply, next to
+`conflicts`; `conflicts` is only a real concurrent edit. A job that reports counts only (label
+operations, the assist loop) fails when an item cannot be written.
 
 `POST /review/new_class_proposals/resolve` takes `{label, class_id | create:
 {class_name, group, notes}, label_source}`. Exactly one of `class_id` and

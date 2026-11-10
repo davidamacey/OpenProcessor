@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from src.services.curation.assist.apply_write import ClassWrite, write_class_to_ids
 from src.services.curation.assist.proposal_models import (
     ApplyConflict,
+    ApplyFailure,
     AssistApplyRequest,
     AssistApplyResponse,
     ScopeNow,
@@ -120,6 +121,7 @@ def _response(
         updated=len(written.updated_ids) if written else 0,
         updated_ids=list(written.updated_ids) if written else [],
         conflicts=[ApplyConflict(**c) for c in written.conflicts] if written else [],
+        failed=[ApplyFailure(**c) for c in written.failed] if written else [],
         scope_now=now,
     )
 

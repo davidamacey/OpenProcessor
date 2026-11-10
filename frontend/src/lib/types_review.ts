@@ -2,7 +2,7 @@
  * Review wire types: tabs, queue items, search hits, diverse selection and
  * new-class resolution.
  */
-import type { BulkLabelConflict, Crop } from '$lib/types';
+import type { BulkLabelConflict, Crop, WriteFailure } from '$lib/types';
 
 // 'outliers' was retired from the UI in the 2026-09 tab consolidation
 // (3 live rows, functionally identical to the `atypicality` sort already
@@ -155,7 +155,7 @@ export interface ResolveNewClassRequest {
 /** `POST {API_PREFIX}/review/new_class_proposals/resolve` response.
  *  `class_id` is null only under `?dry_run=true` when `create` was
  *  given (nothing was created yet to have an id). `?dry_run=true` also
- *  leaves `updated`/`updated_ids`/`conflicts`/`skipped` at their empty
+ *  leaves `updated`/`updated_ids`/`conflicts`/`failed`/`skipped` at their empty
  *  defaults — only `matched`/`matched_ids` are meaningful for a dry run. */
 export interface ResolveNewClassResponse {
   class_id: number | null;
@@ -167,5 +167,6 @@ export interface ResolveNewClassResponse {
   updated: number;
   updated_ids: string[];
   conflicts: BulkLabelConflict[];
+  failed: WriteFailure[];
   skipped: string[];
 }

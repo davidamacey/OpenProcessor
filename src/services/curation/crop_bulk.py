@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.occ_bulk import occ_update_bulk
+from src.clients.occ_bulk import failed_entry, occ_update_bulk
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.services.embedding_spaces.readers import vector_source_excludes
@@ -30,7 +30,8 @@ async def occ_bulk_human_relabel(
     ``current_source`` on each conflict entry is looked up with one
     follow-up ``mget`` restricted to the (normally empty) conflict set,
     to preserve the pre-existing response shape without re-adding a
-    per-crop read.
+    per-crop read. A failed bulk request or non-409 item error is a ``failed``
+    entry (``{crop_id, reason}``), not a conflict.
     """
     status_map = await occ_update_bulk(
         opensearch,
@@ -42,7 +43,8 @@ async def occ_bulk_human_relabel(
         refresh='wait_for',
     )
     updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
-    conflict_ids = [cid for cid in crop_ids if status_map.get(cid) != 'updated']
+    failed = [failed_entry(cid) for cid in crop_ids if status_map.get(cid) == 'error']
+    conflict_ids = [cid for cid in crop_ids if status_map.get(cid) not in ('updated', 'error')]
 
     conflicts: list[dict[str, Any]] = []
     if conflict_ids:
@@ -59,4 +61,9 @@ async def occ_bulk_human_relabel(
             conflicts.append({'crop_id': cid, 'current_source': source.get('class_source')})
             logger.warning(f'{writer_id}_update_failed', crop_id=cid)
 
-    return {'updated': len(updated_ids), 'updated_ids': updated_ids, 'conflicts': conflicts}
+    return {
+        'updated': len(updated_ids),
+        'updated_ids': updated_ids,
+        'conflicts': conflicts,
+        'failed': failed,
+    }

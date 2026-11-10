@@ -341,8 +341,6 @@ def _record_update_status(
         if filled:
             result['filled_absent'] += 1
     elif status == 'conflict-exhausted':
-        # occ_update_bulk folds genuine (non-conflict) item errors into this
-        # same status — logged distinctly there via curation_occ_update_bulk_item_error.
         OP_INGEST_OCC_FINAL_CONFLICT.inc()
         result['final_conflicts'] += 1
         if outcomes is not None:

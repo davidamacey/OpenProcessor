@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ import OCC_BULK_PAGE_SIZE
-from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
+from src.clients.occ_bulk import BulkFailure, failed_entry, occ_bulk_rounds
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.db.repos import job_items
@@ -49,6 +49,7 @@ class ResolveOutcome:
     updated_ids: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     conflicts: list[dict[str, Any]] = field(default_factory=list)
+    failed: list[dict[str, str]] = field(default_factory=list)
 
 
 async def resolve_pending_proposals(
@@ -63,8 +64,8 @@ async def resolve_pending_proposals(
     """Label every crop in ``crop_ids`` that is still an open proposal for ``label``.
 
     A crop that is gone or no longer pending this proposal is ``skipped`` and not written; one
-    whose write kept conflicting (or failed) is a ``conflicts`` entry carrying its current
-    ``class_source``. Every write records a restorable ``class_id_history`` snapshot.
+    whose write kept conflicting is a ``conflicts`` entry carrying its current
+    ``class_source``; one whose write errored is a ``failed`` entry. Every write records a restorable ``class_id_history`` snapshot.
     """
     out = ResolveOutcome()
     human = ItemLabel.human(
@@ -84,7 +85,10 @@ async def resolve_pending_proposals(
     def on_written(doc_id: str) -> None:
         out.updated_ids.append(doc_id)
 
-    def on_failed(doc_id: str, doc: dict[str, Any] | None, _why: BulkFailure) -> None:
+    def on_failed(doc_id: str, doc: dict[str, Any] | None, why: BulkFailure) -> None:
+        if why != 'conflict':
+            out.failed.append(failed_entry(doc_id))
+            return
         source = (doc or {}).get('_source') or {}
         out.conflicts.append({'crop_id': doc_id, 'current_source': source.get('class_source')})
 
@@ -120,6 +124,7 @@ def response_body(params: dict[str, Any], matched: int, outcome: ResolveOutcome)
         'updated': len(outcome.updated_ids),
         'updated_ids': outcome.updated_ids,
         'conflicts': outcome.conflicts,
+        'failed': outcome.failed,
         'skipped': outcome.skipped,
     }
 
@@ -157,6 +162,7 @@ async def run_resolve_job(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
         updated_ids=list(cursor.get('updated_ids', [])),
         skipped=list(cursor.get('skipped', [])),
         conflicts=list(cursor.get('conflicts', [])),
+        failed=list(cursor.get('failed', [])),
     )
     while done < total and not ctx.cancelled():
         async with ctx.session() as session:
@@ -176,6 +182,7 @@ async def run_resolve_job(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
         out.updated_ids += part.updated_ids
         out.skipped += part.skipped
         out.conflicts += part.conflicts
+        out.failed += part.failed
         done += len(page)
         await ctx.checkpoint(
             {
@@ -183,6 +190,7 @@ async def run_resolve_job(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
                 'updated_ids': out.updated_ids,
                 'skipped': out.skipped,
                 'conflicts': out.conflicts,
+                'failed': out.failed,
             }
         )
         await ctx.progress(done, total, 'writing', {'updated': len(out.updated_ids)})

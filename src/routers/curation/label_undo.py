@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException
 
 from src.clients.occ import OCCFinalConflictError
+from src.clients.occ_bulk import failed_entry
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._crop_write_models import (
@@ -153,8 +154,8 @@ async def discard_crops(
     payload: CropDiscardBatchRequest, opensearch: OpenSearchDep
 ) -> dict[str, Any]:
     """Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``
-    (post-write wire items), ``discarded``, and ``conflicts`` /
-    ``not_found`` id lists. Undo with ``POST /crops/label/undo_batch``
+    (post-write wire items), ``discarded``, ``conflicts`` / ``not_found`` id lists and
+    ``failed`` (``{crop_id, reason: 'write_failed'}`` per item the write errored on). Undo with ``POST /crops/label/undo_batch``
     passing the discarded ids."""
     _require_effect(payload)
     by = await svc.discard_many(
@@ -168,6 +169,7 @@ async def discard_crops(
         'discarded': len(by['discarded']),
         'conflicts': by['conflicts'],
         'not_found': by['not_found'],
+        'failed': [failed_entry(i) for i in by['failed']],
     }
 
 

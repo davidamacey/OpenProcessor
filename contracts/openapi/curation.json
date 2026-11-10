@@ -473,6 +473,25 @@
         "title": "ApplyConflict",
         "type": "object"
       },
+      "ApplyFailure": {
+        "description": "An item the write errored on (not a concurrent edit): ``reason`` is ``write_failed``.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "reason"
+        ],
+        "title": "ApplyFailure",
+        "type": "object"
+      },
       "ArchiveRequest": {
         "properties": {
           "expected_revision": {
@@ -535,6 +554,13 @@
           "dry_run": {
             "title": "Dry Run",
             "type": "boolean"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/ApplyFailure"
+            },
+            "title": "Failed",
+            "type": "array"
           },
           "scope_now": {
             "$ref": "#/components/schemas/ScopeNow"
@@ -29301,6 +29327,13 @@
             "title": "Created",
             "type": "boolean"
           },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/WriteFailure"
+            },
+            "title": "Failed",
+            "type": "array"
+          },
           "label": {
             "title": "Label",
             "type": "string"
@@ -37320,6 +37353,25 @@
         "title": "WatchTriggerWire",
         "type": "object"
       },
+      "WriteFailure": {
+        "description": "An item the write errored on (not a concurrent edit): ``reason`` is ``write_failed``.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "reason"
+        ],
+        "title": "WriteFailure",
+        "type": "object"
+      },
       "_PathLookupRequest": {
         "description": "Bulk path-existence check input. Capped client-side to 10k paths.",
         "properties": {
@@ -44072,7 +44124,7 @@
     },
     "/curation/projects/{project}/crops/discard_batch": {
       "post": {
-        "description": "Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``\n(post-write wire items), ``discarded``, and ``conflicts`` /\n``not_found`` id lists. Undo with ``POST /crops/label/undo_batch``\npassing the discarded ids.",
+        "description": "Batch form of ``POST /crops/{crop_id}/discard``. Returns ``items``\n(post-write wire items), ``discarded``, ``conflicts`` / ``not_found`` id lists and\n``failed`` (``{crop_id, reason: 'write_failed'}`` per item the write errored on). Undo with ``POST /crops/label/undo_batch``\npassing the discarded ids.",
         "operationId": "discard_crops_curation_projects__project__crops_discard_batch_post",
         "parameters": [
           {

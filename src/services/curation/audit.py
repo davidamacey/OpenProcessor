@@ -136,9 +136,11 @@ async def start_audit(
         return _marker(batch_id, stamp, source)
 
     if chosen:
-        await occ_update_bulk(
+        status = await occ_update_bulk(
             opensearch, vector_excludes=await vector_source_excludes(), ids=chosen, merge_fn=merge
         )
+        # A marker that did not land (conflict, error, item gone) is not part of the sample.
+        marked.difference_update(i for i, v in status.items() if v != 'updated')
     per_stratum = [
         {
             'detector_class': name,
