@@ -80,6 +80,9 @@ event.listen(Session, 'after_begin', _reapply_scope)
 
 def _caller_is_allowed(frame: FrameType, allowed: tuple[str, ...]) -> bool:
     module = frame.f_globals.get('__name__', '')
+    spec = frame.f_globals.get('__spec__')
+    if module == '__main__' and spec is not None:
+        module = spec.name  # ``python -m pkg.mod`` keeps the import name only on the spec
     if any(fnmatchcase(module, p) or module.startswith(p + '.') for p in allowed):
         return True
     try:
