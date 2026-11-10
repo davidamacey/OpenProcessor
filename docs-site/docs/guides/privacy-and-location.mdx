@@ -1,0 +1,76 @@
+---
+sidebar_position: 14
+title: Capture metadata, location and privacy
+---
+
+# Capture metadata, location and privacy
+
+## What ingest reads
+
+ExifTool (one long-lived process per worker) reads the capture time (local and
+UTC), camera make, model and lens, orientation and the GPS fix. A missing tag
+leaves the field empty; if ExifTool is down the image is stored with
+`exif_status: unknown` and no coordinates. Fill images ingested before 0.7.0 with
+`POST /curation/projects/{project}/source_backfill/runs` and the `capture` step.
+
+Coordinates live in the images index only. Items carry the two capture times and
+`has_location`, never a position, and no coordinate reaches a label, manifest,
+training file, VLM request or log. Filter by day with `taken_from` and `taken_to`
+on `GET /crops`.
+
+## Location policy
+
+`GET` and `PUT /curation/projects/{project}/location_policy` set what a project
+keeps:
+
+| Policy | Stored | Served |
+|---|---|---|
+| `store` | the fix as read | the Map page |
+| `store_coarse` | latitude and longitude rounded to 0.01 degree (about 1 km) | the Map page, cells no finer than about 1 km |
+| `drop` | no coordinate | nothing; the Map page is absent |
+
+Default `store`; a project upgraded from 0.6.0 starts at `drop`.
+
+```bash
+curl -X PUT $API/curation/projects/demo/location_policy \
+  -H 'content-type: application/json' -d '{"location_policy": "drop"}'
+```
+
+A change that keeps less starts the `location_purge` backfill step and answers
+its `purge_job_id`. If a backfill is already running the call answers
+`409 job_busy`; start the purge later with `POST .../source_backfill/runs` and
+`{"steps": ["location_purge"]}`. Loosening restores nothing: re-ingest.
+
+A `drop` project's exports strip the GPS tags from the copied image files
+losslessly; the stored originals keep their bytes. A combine keeps a copied
+position only as far as the target project's policy allows.
+
+## The Map page
+
+When a project stores positions and its policy serves them, Cropwright shows a
+Map page (MapLibre). The server aggregates positions in OpenSearch (a
+`geotile_grid`, at most 5000 cells per response), so a large project never ships
+its points: `GET /map/cells` answers GeoJSON for a zoom and bounding box and
+`GET /map/images` lists the photos of one cell. Both take the shared item filter.
+
+The browser draws the basemap from `OP_MAP_TILE_URL` (OpenStreetMap by default;
+`OP_MAP_TILE_ATTRIBUTION` sets the credit). Each tile request tells that server
+which area is on screen. Point it at your own tile server to keep locations on
+your network.
+
+## Purge commands
+
+Stored faces and recognized text are label data that anyone who can reach the API
+can read. Two command-line purges empty them; there is no purge route, because
+the API has no authentication:
+
+```bash
+./openprocessor faces purge --dry-run     # counts
+./openprocessor faces purge --yes         # needs OP_FACES_ENABLED=false first
+./openprocessor ocr purge --dry-run
+./openprocessor ocr purge --yes
+```
+
+`ocr purge` empties the core text index. Both write a counts-only record to the
+`privacy_purges` table. They do not reach OpenSearch snapshots or backups you
+took yourself. Details: `SECURITY.md` in the repository.
