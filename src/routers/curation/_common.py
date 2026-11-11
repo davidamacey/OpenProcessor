@@ -103,16 +103,15 @@ async def _require_region_profile_dep() -> Any:
 
     "None" from this worker's snapshot is not final: an activation made through another API
     worker is only here after the next poll tick, so the store's epoch is checked first
-    (``ConfigStore.refresh``, one indexed read, only on this path). 409 only when the store
+    (``confirmed_active_region_profile``). 409 only when the store
     agrees; an unreadable store is 503, never a guess."""
-    from src.services.config_store import get_config_store
-    from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.config_store.store import ConfigStoreUnavailableError
+    from src.services.detection.profile_registry import confirmed_active_region_profile
 
-    profile = get_active_region_profile()
-    if profile is None:
-        if (await get_config_store().refresh()).stale:
-            raise api_error(503, 'config_store_unavailable', 'the config store could not be read')
-        profile = get_active_region_profile()
+    try:
+        profile = await confirmed_active_region_profile()
+    except ConfigStoreUnavailableError as exc:
+        raise api_error(503, 'config_store_unavailable', str(exc)) from exc
     if profile is None:
         raise api_error(409, 'no_active_profile', 'no region profile is configured')
     return profile

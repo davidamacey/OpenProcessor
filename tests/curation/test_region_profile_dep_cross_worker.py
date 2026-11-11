@@ -118,3 +118,25 @@ async def test_an_unreadable_store_is_503_not_a_guess(
         await _require_region_profile_dep()
 
     assert err.value.status_code == 503
+
+
+async def test_assist_segment_check_sees_an_activation_made_on_another_worker(
+    db: _Db, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from src.services.curation.assist.prepare import _check_segment
+    from src.services.rejections import RequestRejectedError
+
+    worker_a, worker_b = ConfigStore(label='p'), ConfigStore(label='p')
+    await worker_a.refresh()
+    await worker_b.refresh()
+    db.activate()  # the profile has no segmenter prompt, so the next refusal is a different one
+    await worker_a.refresh()
+    _serve_from(monkeypatch, worker_b)
+    request = SimpleNamespace(actions=['segment'], segment=object())
+
+    with pytest.raises(RequestRejectedError) as err:
+        await _check_segment(request, object())  # type: ignore[arg-type]
+
+    assert 'no_segmenter_leg' in str(err.value.detail)

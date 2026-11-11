@@ -325,6 +325,27 @@ def get_active_region_profile() -> DetectionProfile | None:
     return _REGISTRY.get(_DEFAULT_NAME) if _DEFAULT_NAME is not None else None
 
 
+async def confirmed_active_region_profile() -> DetectionProfile | None:
+    """The active profile, with "none" confirmed against the config store first.
+
+    A request-path caller that is about to refuse because no profile is active must use this,
+    not :func:`get_active_region_profile`: an activation made through another API worker is only
+    in this worker's snapshot after the next poll tick, so a "none" is re-checked with
+    ``ConfigStore.refresh`` (one indexed epoch read, only on this path). Raises
+    :class:`~src.services.config_store.store.ConfigStoreUnavailableError` when the store cannot
+    be read, so the caller refuses instead of guessing."""
+    profile = get_active_region_profile()
+    if profile is not None:
+        return profile
+    from src.services.config_store import get_config_store
+    from src.services.config_store.store import ConfigStoreUnavailableError
+
+    if (await get_config_store().refresh()).stale:
+        msg = 'the config store could not be read'
+        raise ConfigStoreUnavailableError(msg)
+    return get_active_region_profile()
+
+
 def region_profile_or_neutral() -> DetectionProfile:
     """The active profile, or a neutral one (no detector model, generic
     name) for call sites that only need profile-independent identity
@@ -346,6 +367,7 @@ def _reset_registry_for_tests() -> None:
 
 __all__ = [
     'REGION_DETECTION_ENV_PREFIX',
+    'confirmed_active_region_profile',
     'ensure_env_region_profile',
     'get_active_region_profile',
     'get_default_profile_name',
