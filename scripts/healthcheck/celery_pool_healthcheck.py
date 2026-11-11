@@ -86,7 +86,8 @@ def _accepted_task_count(stats: dict) -> int:
 
 def _fetch_stats(worker_name: str, app: str) -> tuple[dict | None, str]:
     """The worker's ``inspect stats`` reply, or ``(None, why it could not be read)``."""
-    celery = shutil.which('celery')
+    # The entry point sits beside the interpreter (container image or venv), whether or not that bin dir is on PATH.
+    celery = shutil.which('celery', path=str(Path(sys.executable).parent)) or shutil.which('celery')
     if celery is None:
         return None, 'the celery executable is not on PATH'
     try:
