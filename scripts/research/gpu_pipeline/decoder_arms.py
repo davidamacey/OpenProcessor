@@ -15,7 +15,6 @@ from typing import Any, Protocol
 import harness_common as common
 
 
-# ruff: noqa: E402
 common.use_shipped_prep_modules()
 
 import cupy as cp

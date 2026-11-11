@@ -53,7 +53,7 @@ def numpy_resample(
 
 def cpu_letterbox(frame: np.ndarray, net: int = 640, fill: int = 114) -> np.ndarray:
     common.use_shipped_prep_modules()
-    from prep_geometry import letterbox_geometry
+    from image_geometry import letterbox_geometry
 
     lb = letterbox_geometry(frame.shape[1], frame.shape[0], net)
     canvas = np.full((net, net, 3), fill, np.uint8)

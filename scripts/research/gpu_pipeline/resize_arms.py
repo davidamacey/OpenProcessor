@@ -14,12 +14,11 @@ from typing import Any
 import harness_common as common
 
 
-# ruff: noqa: E402
 common.use_shipped_prep_modules()
 
 import cupy as cp
 import nvtx
-from prep_geometry import letterbox_geometry, whole_square_geometry
+from image_geometry import letterbox_geometry, whole_square_geometry
 from prep_kernels import PrepKernels
 
 

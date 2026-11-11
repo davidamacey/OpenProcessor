@@ -17,23 +17,15 @@ from typing import TYPE_CHECKING, Any
 import harness_common as common
 
 
-# ruff: noqa: E402
 common.use_shipped_prep_modules()
 
 import cupy as cp
 import cv2
 import numpy as np
 import nvtx
+from image_geometry import crop_rect, letterbox_geometry, undo_letterbox, whole_square_geometry
 from nvjpeg_lanes import NvJpegLanes
-from prep_geometry import (
-    blur_rect,
-    crop_rect,
-    letterbox_geometry,
-    oriented_size,
-    route,
-    undo_letterbox,
-    whole_square_geometry,
-)
+from prep_geometry import blur_rect, oriented_size, route
 from prep_kernels import PrepKernels
 
 

@@ -33,7 +33,7 @@ class _Ctx:
     def __init__(self, engine: Any) -> None:
         self.context = engine.create_execution_context()
         # no per-layer NVTX ranges, so an nsys trace attributes the kernels to the caller's stage range
-        setattr(self.context, 'nvtx_verbosity', trt.ProfilingVerbosity.NONE)  # noqa: B010  # attribute write only; static analysis sees no reader
+        self.context.nvtx_verbosity = trt.ProfilingVerbosity.NONE
         self.stream = cp.cuda.Stream(non_blocking=True)
 
 
