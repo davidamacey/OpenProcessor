@@ -107,7 +107,7 @@ repos:
         files: ^benchmarks/.*\.go$
         types: [go]
       - id: max-file-size
-        name: File size ratchet (700 lines; CLAUDE.md 400)
+        name: File size (warn 700, fail 1000 unless cohesive; CLAUDE.md 400)
         entry: python3 scripts/codegen/check_file_size.py
         language: system
         pass_filenames: false
