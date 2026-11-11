@@ -264,3 +264,28 @@ def test_crops_needs_new_class_and_source_filters() -> None:
         assert [c['crop_id'] for c in r.json()['crops']] == ['f']
         r = client.get('/curation/projects/default/crops', params={'source': 'disk_b'})
         assert [c['crop_id'] for c in r.json()['crops']] == ['n']
+
+
+# --------------------------------------------------------------- display name
+
+
+def test_display_name_is_the_class_name_when_the_item_has_a_class() -> None:
+    item = _item(class_id=1, class_name='person', proposal_name='man', detector_class_name='man')
+    assert (item['display_name'], item['display_name_kind']) == ('person', 'class')
+
+
+def test_display_name_falls_back_to_the_proposed_class() -> None:
+    item = _item(class_source='vlm_unmatched', vlm_raw_class='mystery')
+    assert (item['display_name'], item['display_name_kind']) == ('mystery', 'proposed')
+
+
+def test_display_name_falls_back_to_the_detectors_own_name() -> None:
+    item = _item(class_source='item_proposal', proposal_name='stop sign')
+    assert (item['display_name'], item['display_name_kind']) == ('stop sign', 'detector')
+    item = _item(class_source='item_proposal', detector_class_name='truck')
+    assert (item['display_name'], item['display_name_kind']) == ('truck', 'detector')
+
+
+def test_display_name_is_empty_when_nothing_names_the_item() -> None:
+    item = _item(class_source='item_proposal')
+    assert (item['display_name'], item['display_name_kind']) == ('', 'none')

@@ -15564,6 +15564,22 @@
             ],
             "title": "Detector Confidence"
           },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "embedding_states": {
             "additionalProperties": {
               "enum": [
@@ -28555,6 +28571,22 @@
             ],
             "title": "Detector Confidence"
           },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "embedding_states": {
             "additionalProperties": {
               "enum": [
@@ -32717,6 +32749,22 @@
             ],
             "title": "Detector Confidence"
           },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "embedding_states": {
             "additionalProperties": {
               "enum": [
@@ -34626,6 +34674,22 @@
               }
             ],
             "title": "Detector Confidence"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
           },
           "embedding_states": {
             "additionalProperties": {
