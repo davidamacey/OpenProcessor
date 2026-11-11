@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MapController, OPEN_CELL_MAX, type MapDeps } from './mapController.svelte';
+import { mapMeta } from '$lib/test/fixtures/mapMeta';
 import type { MapCellCollection, MapMeta, MapTileImages } from '$lib/types_map';
 
-const META: MapMeta = {
-  available: true,
-  location_policy: 'store',
-  n_located: 3,
+const META: MapMeta = mapMeta({
   bounds: { west: 7, south: 46, east: 9, north: 48 },
   tile_url: 'https://tiles.example/{z}/{x}/{y}.png',
   tile_attribution: 'osm',
-  max_zoom: 12,
-};
+});
 const CELLS: MapCellCollection = {
   type: 'FeatureCollection',
   features: [],

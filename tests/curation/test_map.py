@@ -27,12 +27,14 @@ class FakeSearch:
         joined: list[str] | None = None,
         other_docs: int = 0,
         located: int = 3,
+        unlocated: int = 4,
     ) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._buckets = buckets or []
         self._joined = joined or []
         self._other = other_docs
         self._located = located
+        self._unlocated = unlocated
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((index, body))
@@ -60,12 +62,21 @@ class FakeSearch:
                     }
                 },
             }
+        if body.get('size') == 0 and 'must_not' in json.dumps(body.get('query')):
+            return {'hits': {'total': {'value': self._unlocated}, 'hits': []}}
         ids = self._joined or ['i1', 'i2']
         return {'hits': {'total': {'value': 250}, 'hits': [{'_id': i} for i in ids]}}
 
 
-def _bucket(key: str, count: int, lon: float, lat: float) -> dict[str, Any]:
-    return {'key': key, 'doc_count': count, 'centre': {'location': {'lon': lon, 'lat': lat}}}
+def _bucket(key: str, count: int, lon: float, lat: float, pin: str | None = None) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        'key': key,
+        'doc_count': count,
+        'centre': {'location': {'lon': lon, 'lat': lat}},
+    }
+    if pin is not None:
+        out['pin'] = {'hits': {'hits': [{'_id': pin}]}}
+    return out
 
 
 BUCKETS = [_bucket('9/267/179', 12, 8.123456789, 47.987654321), _bucket('9/268/179', 1, 9.5, 47.5)]
@@ -92,7 +103,8 @@ async def test_cells_are_a_geojson_feature_collection_with_lon_lat_points() -> N
     first = got['features'][0]
     assert first['type'] == 'Feature'
     assert first['geometry'] == {'type': 'Point', 'coordinates': [8.123457, 47.987654]}
-    assert first['properties'] == {'count': 12, 'tile': '9/267/179'}
+    props = first['properties']
+    assert (props['count'], props['tile']) == (12, '9/267/179')
     index, body = os.calls[0]
     grid = body['aggs']['cells']['geotile_grid']
     assert (grid['field'], grid['precision']) == ('capture.location', 9)
@@ -109,11 +121,11 @@ async def test_drop_serves_nothing_and_asks_the_index_nothing() -> None:
     got = await _cells(os, 'drop')
     assert got.features == []
     assert os.calls == []
-    meta = await map_cells.map_meta(os, 'drop', tile_url='u/{z}/{x}/{y}', tile_attribution='a')
-    assert (meta.available, meta.n_located, meta.bounds) == (False, 0, None)
     tiles = await map_cells.tile_images(os, 'drop', ItemFilter(), DEFAULT_WRITE_FIELDS, '3/4/2')
     assert (tiles.count, tiles.image_ids) == (0, [])
     assert os.calls == []
+    meta = await map_cells.map_meta(os, 'drop', tile_url='u/{z}/{x}/{y}', tile_attribution='a')
+    assert (meta.available, meta.n_located, meta.bounds) == (False, 0, None)
 
 
 @pytest.mark.asyncio
@@ -149,7 +161,7 @@ def test_a_bad_bbox_is_refused(raw: str) -> None:
 
 @pytest.mark.asyncio
 async def test_a_large_project_ships_a_capped_number_of_cells() -> None:
-    many = [_bucket(f'9/{n}/1', 1, 8.0, 47.0) for n in range(map_cells.MAX_CELLS + 1)]
+    many = [_bucket(f'13/{n}/1', 1, 8.0, 47.0) for n in range(map_cells.MAX_CELLS + 1)]
     got = await _cells(FakeSearch(buckets=many), 'store')
     assert len(got.features) == map_cells.MAX_CELLS
     assert got.truncated is True
@@ -250,3 +262,45 @@ def test_the_tile_template_is_validated_and_defaults_to_openstreetmap() -> None:
     assert _tile_url('https://tiles.lan/{z}/{x}/{y}.png') == 'https://tiles.lan/{z}/{x}/{y}.png'
     with pytest.raises(ValueError, match='OP_MAP_TILE_URL'):
         _tile_url('https://tiles.lan/tiles.png')
+
+
+@pytest.mark.asyncio
+async def test_cell_serves_its_bounds() -> None:
+    got = (await _cells(FakeSearch(buckets=BUCKETS), 'store')).model_dump(mode='json')
+    served = got['features'][0]['properties']['bounds']
+    assert served == map_cells.tile_box('9/267/179').model_dump()
+    coarse = (await _cells(FakeSearch(buckets=BUCKETS), 'store_coarse')).model_dump(mode='json')
+    # Rounded outward to 0.01 degree, never finer than the policy serves.
+    edge = coarse['features'][0]['properties']['bounds']
+    assert all(round(v, 2) == v for v in edge.values())
+    box = map_cells.tile_box('9/267/179')
+    assert edge['west'] <= box.west
+    assert edge['east'] >= box.east
+
+
+@pytest.mark.asyncio
+async def test_single_photo_cell_at_max_precision_serves_its_image() -> None:
+    lone = [_bucket('22/1/1', 1, 8.0, 47.0, pin='img-9'), _bucket('22/2/1', 3, 8.1, 47.0, pin='x')]
+    os = FakeSearch(buckets=lone)
+    got = (await _cells(os, 'store', zoom=19)).model_dump(mode='json')
+    one, many = (f['properties'] for f in got['features'])
+    assert one['image_id'] == 'img-9'
+    assert one['thumbnail_url'].endswith('/images/img-9/thumbnail')
+    assert (many['image_id'], many['thumbnail_url']) == (None, None)
+    assert 'pin' in os.calls[0][1]['aggs']['cells']['aggs']
+    coarse_os = FakeSearch(buckets=BUCKETS)
+    await _cells(coarse_os, 'store', zoom=6)
+    assert 'pin' not in coarse_os.calls[0][1]['aggs']['cells']['aggs']
+
+
+@pytest.mark.asyncio
+async def test_meta_counts_images_without_location() -> None:
+    meta = await map_cells.map_meta(
+        FakeSearch(located=3, unlocated=4), 'store', tile_url='u', tile_attribution='a'
+    )
+    assert meta.n_without_location == 4
+    dropped = await map_cells.map_meta(
+        FakeSearch(unlocated=9), 'drop', tile_url='u', tile_attribution='a'
+    )
+    # Under `drop` no image has a served position.
+    assert (dropped.n_located, dropped.n_without_location) == (0, 250)

@@ -23,8 +23,9 @@ import datetime as dt
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 from src.config.curation_accessors import images_index
+from src.config.project_context import project_api_base
 from src.domain.geo_box import GeoBox
-from src.domain.location_policy import COARSE_DECIMALS
+from src.domain.location_policy import COARSE_DECIMALS, snap_box
 from src.schemas.curation.map import (
     MapCellCollection,
     MapCellFeature,
@@ -33,6 +34,7 @@ from src.schemas.curation.map import (
     MapMeta,
     MapTileImages,
 )
+from src.services.curation.image_facts import thumbnail_url
 from src.services.curation.image_join import (
     LOCATION_FIELD,
     geo_box_query,
@@ -118,6 +120,13 @@ def _round_coarse(value: float) -> float:
     return round(value, COARSE_DECIMALS)
 
 
+async def _count_images(opensearch: Any, query: dict[str, Any]) -> int:
+    resp = await opensearch.search(
+        index=images_index(), body={'size': 0, 'track_total_hits': True, 'query': query}
+    )
+    return int(resp['hits']['total']['value'])
+
+
 async def map_meta(
     opensearch: Any, policy: str, *, tile_url: str, tile_attribution: str
 ) -> MapMeta:
@@ -127,6 +136,7 @@ async def map_meta(
             available=False,
             location_policy='drop',
             n_located=0,
+            n_without_location=await _count_images(opensearch, {'match_all': {}}),
             tile_url=tile_url,
             tile_attribution=tile_attribution,
             max_zoom=0,
@@ -141,6 +151,9 @@ async def map_meta(
         },
     )
     n_located = int(resp['hits']['total']['value'])
+    n_without_location = await _count_images(
+        opensearch, {'bool': {'must_not': {'exists': {'field': LOCATION_FIELD}}}}
+    )
     bounds = None
     box = (resp.get('aggregations') or {}).get('extent', {}).get('bounds')
     if n_located and box:
@@ -154,10 +167,26 @@ async def map_meta(
         available=n_located > 0,
         location_policy=cast('Literal["drop", "store_coarse", "store"]', policy),
         n_located=n_located,
+        n_without_location=n_without_location,
         bounds=bounds,
         tile_url=tile_url,
         tile_attribution=tile_attribution,
         max_zoom=max_precision(policy) - CELL_ZOOM_OFFSET,
+    )
+
+
+def _cell_properties(bucket: dict[str, Any], policy: str, prefix: str) -> MapCellProperties:
+    tile = str(bucket['key'])
+    box = snap_box(tile_box(tile), policy)
+    assert box is not None  # `drop` serves no cells at all
+    pins = ((bucket.get('pin') or {}).get('hits') or {}).get('hits') or []
+    image_id = str(pins[0]['_id']) if int(bucket['doc_count']) == 1 and pins else None
+    return MapCellProperties(
+        count=int(bucket['doc_count']),
+        tile=tile,
+        bounds=box,
+        image_id=image_id,
+        thumbnail_url=None if image_id is None else thumbnail_url(prefix, image_id),
     )
 
 
@@ -189,12 +218,21 @@ async def map_cells(
             'aggs': {
                 'cells': {
                     'geotile_grid': grid,
-                    'aggs': {'centre': {'geo_centroid': {'field': LOCATION_FIELD}}},
+                    'aggs': {
+                        'centre': {'geo_centroid': {'field': LOCATION_FIELD}},
+                        # A pin never reveals a finer position than the policy serves.
+                        **(
+                            {'pin': {'top_hits': {'size': 1, '_source': False}}}
+                            if precision == max_precision(policy)
+                            else {}
+                        ),
+                    },
                 }
             },
         },
     )
     buckets = resp['aggregations']['cells']['buckets']
+    prefix = project_api_base()
     features: list[MapCellFeature] = []
     for bucket in buckets[:MAX_CELLS]:
         centre = bucket['centre']['location']
@@ -204,9 +242,7 @@ async def map_cells(
         features.append(
             MapCellFeature(
                 geometry=MapCellGeometry(coordinates=(round(lon, 6), round(lat, 6))),
-                properties=MapCellProperties(
-                    count=int(bucket['doc_count']), tile=str(bucket['key'])
-                ),
+                properties=_cell_properties(bucket, policy, prefix),
             )
         )
     return MapCellCollection(

@@ -16,6 +16,9 @@ class MapMeta(BaseModel):
     available: bool
     location_policy: Literal['drop', 'store_coarse', 'store']
     n_located: int = Field(description='Images with a stored position.')
+    n_without_location: int = Field(
+        description='Images with no stored position, or one the location policy does not serve.'
+    )
     bounds: GeoBox | None = Field(
         default=None, description='The box around every stored position; null when there is none.'
     )
@@ -37,6 +40,14 @@ class MapCellGeometry(BaseModel):
 class MapCellProperties(BaseModel):
     count: int = Field(description='Images in the cell.')
     tile: str = Field(description='The cell as `z/x/y` (web mercator tile).')
+    bounds: GeoBox = Field(
+        description='The cell as a degrees box, rounded outward under a coarse location policy.'
+    )
+    image_id: str | None = Field(
+        default=None,
+        description='The photo, when the cell holds exactly one at the finest zoom the policy allows.',
+    )
+    thumbnail_url: str | None = Field(default=None, description='Thumbnail of `image_id`.')
 
 
 class MapCellFeature(BaseModel):

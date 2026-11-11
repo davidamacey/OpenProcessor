@@ -20590,10 +20590,38 @@
       },
       "MapCellProperties": {
         "properties": {
+          "bounds": {
+            "$ref": "#/components/schemas/GeoBox",
+            "description": "The cell as a degrees box, rounded outward under a coarse location policy."
+          },
           "count": {
             "description": "Images in the cell.",
             "title": "Count",
             "type": "integer"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The photo, when the cell holds exactly one at the finest zoom the policy allows.",
+            "title": "Image Id"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Thumbnail of `image_id`.",
+            "title": "Thumbnail Url"
           },
           "tile": {
             "description": "The cell as `z/x/y` (web mercator tile).",
@@ -20603,7 +20631,8 @@
         },
         "required": [
           "count",
-          "tile"
+          "tile",
+          "bounds"
         ],
         "title": "MapCellProperties",
         "type": "object"
@@ -20645,6 +20674,11 @@
             "title": "N Located",
             "type": "integer"
           },
+          "n_without_location": {
+            "description": "Images with no stored position, or one the location policy does not serve.",
+            "title": "N Without Location",
+            "type": "integer"
+          },
           "tile_attribution": {
             "title": "Tile Attribution",
             "type": "string"
@@ -20659,6 +20693,7 @@
           "available",
           "location_policy",
           "n_located",
+          "n_without_location",
           "tile_url",
           "tile_attribution",
           "max_zoom"
