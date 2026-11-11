@@ -64,10 +64,23 @@ def fill(schema_name: str, **over: Any) -> dict[str, Any]:
     return out
 
 
+def box_view(crop_id: str, label: str, **over: Any) -> dict[str, Any]:
+    """One served ``BoxView``: the box an image view draws, with its label and tone."""
+    base = {
+        'crop_id': crop_id,
+        'kind': 'item',
+        'bbox_norm': [0.1, 0.1, 0.3, 0.3],
+        'label': label,
+        'label_kind': 'class',
+        'tone': 'validated',
+    }
+    return fill('BoxView', **{**base, **over})
+
+
 def image_detail(
-    image_id: str = 'stub-image', items: Any = (), **image_over: Any
+    image_id: str = 'stub-image', items: Any = (), boxes: Any = (), **image_over: Any
 ) -> dict[str, Any]:
-    """One ``GET /images/{id}`` body: the image, its counts and the items on it."""
+    """One ``GET /images/{id}`` body: the image, its counts, the items on it and the boxes drawn."""
     image = fill(
         'ImageInfo',
         image_id=image_id,
@@ -75,7 +88,13 @@ def image_detail(
         file_url=f'/images/{image_id}/file',
         **image_over,
     )
-    return fill('ImageDetail', image=image, counts=fill('ImageCounts'), items=list(items))
+    return fill(
+        'ImageDetail',
+        image=image,
+        counts=fill('ImageCounts'),
+        items=list(items),
+        boxes=list(boxes),
+    )
 
 
 def label_op_accepted(op_id: str = 'op-1', job_id: str = 'job-1') -> dict[str, Any]:

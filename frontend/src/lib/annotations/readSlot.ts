@@ -107,6 +107,7 @@ export function mapRegionBoxWire(el: unknown): SlotBox | null {
     textDisagreement: asBoolean(r.text_disagreement),
     textChoice: asString(r.text_choice),
     textVlmInvalid: asString(r.text_vlm_invalid),
+    displayName: asString(r.display_name),
     clusterUid: asString(r.cluster_uid),
     clusterScore: asNumber(r.cluster_score),
     detectedAt: asString(r.detected_at),

@@ -1,6 +1,6 @@
 <script module lang="ts">
   import { apiErrorText } from '$lib/api_errors';
-  import type { ImageDetailResponse, Crop } from '$lib/types';
+  import type { ImageDetailResponse } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
 
@@ -32,20 +32,15 @@
 
 <script lang="ts">
   /**
-   * Draws every box/label a source image needs, client-side, from
-   * `GET {API_PREFIX}/images/{id}` — the clean pixels come from
-   * `GET {API_PREFIX}/images/{id}/file`, nothing is burned in. Domain-neutral
-   * by construction: every region box/color/label comes from the
-   * matching registered `SlotSpec`, never a hardcoded noun.
+   * Draws the boxes `GET {API_PREFIX}/images/{id}` serves (`boxes`: coordinates, label, tone)
+   * over the clean pixels of `GET {API_PREFIX}/images/{id}/file`; nothing is burned in and no
+   * label or colour is derived here (see `BoxLayer`).
    */
   import { getImage, getImageFileUrl } from '$lib/api_cropRead';
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
   import SourceMissingBadge from './SourceMissingBadge.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
-  import { slotRegistry } from '$lib/annotations/registeredSlots';
-  import { slotOf, subBoxSlotFor } from '$lib/annotations/cropSlots';
-  import type { XYXY } from '$lib/annotations/types';
-  import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
+  import BoxLayer from './boxes/BoxLayer.svelte';
 
   interface Props {
     /** Which image (its pixels and every item detected on it) to draw. */
@@ -127,135 +122,6 @@
     return w && h ? `${w} / ${h}` : null;
   });
 
-  /** A box stored relative to its parent crop, as source-image xyxy. */
-  function parentToSource(box: XYXY, parent: XYXY): XYXY {
-    const pw = parent[2] - parent[0];
-    const ph = parent[3] - parent[1];
-    return [
-      parent[0] + box[0] * pw,
-      parent[1] + box[1] * ph,
-      parent[0] + box[2] * pw,
-      parent[1] + box[3] * ph,
-    ];
-  }
-
-  function bboxToXyxy(b: { cx: number; cy: number; w: number; h: number }): XYXY {
-    return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
-  }
-
-  /** Multi-box: per-box state -> ring color/dash. The ring color reads
-   *  the served box_states `tone` via
-   *  `toneBorderClass(boxStateTone(state))` — 'neutral' on a pre-tone
-   *  backend or an unrecognized state, matching `+page.svelte`'s
-   *  `multiBoxRingColor`. */
-  function multiBoxRingColorClass(state: string): string {
-    return toneBorderClass(regionStatusesStore.boxStateTone(state));
-  }
-  function multiBoxDashed(state: string): boolean {
-    return (
-      regionStatusesStore.boxStateInfo(state)?.dashed ??
-      (state === 'rejected' || state === 'false_positive')
-    );
-  }
-
-  interface DrawBox {
-    kind: 'item' | 'region' | 'region-box';
-    cropId: string;
-    xyxy: XYXY;
-    dashed: boolean;
-    colorClass: string;
-    label: string;
-    tooltip: string;
-    selected: boolean;
-    clickable: boolean;
-  }
-
-  /** The label is the served `display_name`; only its source (class, proposed, detector) is
-   *  styled here. */
-  function itemLabelInfo(item: Crop): { label: string; colorClass: string } {
-    switch (item.display_name_kind) {
-      case 'class':
-        return { label: item.display_name, colorClass: 'border-emerald-400' };
-      case 'proposed':
-        return {
-          label: `${item.display_name} (proposed)`,
-          colorClass: 'border-amber-400',
-        };
-      case 'detector':
-        return {
-          label: `${item.display_name} (detector)`,
-          colorClass: 'border-amber-400',
-        };
-      default:
-        return { label: 'unlabeled', colorClass: 'border-zinc-500' };
-    }
-  }
-
-  const boxes = $derived.by<DrawBox[]>(() => {
-    const items = context?.items ?? [];
-    const out: DrawBox[] = [];
-    for (const item of items) {
-      const selected = item.id === selectedCropId;
-      const { label, colorClass } = itemLabelInfo(item);
-      const itemXyxy = bboxToXyxy(item.bbox_norm);
-      out.push({
-        kind: 'item',
-        cropId: item.id,
-        xyxy: itemXyxy,
-        dashed: false,
-        colorClass,
-        label,
-        tooltip: `${label}${item.id === selectedCropId ? ' (this crop)' : ''}`,
-        selected,
-        clickable: !selected && !!onselect,
-      });
-
-      const slot = subBoxSlotFor(item, slotRegistry.all);
-      if (!slot?.capabilities.subBox) continue;
-      const data = slotOf(item, slot);
-      const sub = data?.subBox;
-      const boxList = data?.subBoxes ?? [];
-      const ring = slot.capabilities.subBox.ring;
-
-      // A read-only scalar-box slot (tier 2): one box, stored in either
-      // frame.
-      if (sub?.rawXyxy) {
-        out.push({
-          kind: 'region',
-          cropId: item.id,
-          xyxy:
-            sub.frame === 'source' ? sub.rawXyxy : parentToSource(sub.rawXyxy, itemXyxy),
-          dashed: false,
-          colorClass: ring.confirmed,
-          label: slot.label.title,
-          tooltip: `${slot.label.title}${sub.score != null ? ` · ${(sub.score * 100).toFixed(0)}%` : ''}`,
-          selected: false,
-          clickable: false,
-        });
-      }
-
-      // Multi-box slot: every served box, in the source image's frame
-      // already (`bbox_norm`), numbered by position.
-      boxList.forEach((b, i) => {
-        if (!b.rawXyxy) return;
-        out.push({
-          kind: 'region-box',
-          cropId: item.id,
-          xyxy: b.rawXyxy,
-          dashed: multiBoxDashed(b.state),
-          colorClass: multiBoxRingColorClass(b.state),
-          label: `${slot.label.title} ${i + 1}`,
-          tooltip: `${slot.label.title} ${i + 1} · ${b.state}${
-            b.score != null ? ` · ${(b.score * 100).toFixed(0)}%` : ''
-          }`,
-          selected: false,
-          clickable: false,
-        });
-      });
-    }
-    return out;
-  });
-
   function pct(n: number): string {
     return `${(n * 100).toFixed(3)}%`;
   }
@@ -298,52 +164,8 @@
         }}
       />
       {#if showBoxes && context}
-        {#snippet boxLabel(b: DrawBox)}
-          {#if b.selected || b.kind !== 'item'}
-            <span
-              class="pointer-events-none absolute -top-4 left-0 whitespace-nowrap rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none text-zinc-100"
-            >
-              {b.label}
-            </span>
-          {/if}
-        {/snippet}
         <div class="pointer-events-none absolute inset-0" data-testid="overlay-layer">
-          {#each boxes as b, i (`${b.kind}-${b.cropId}-${i}`)}
-            {@const [x1, y1, x2, y2] = b.xyxy}
-            {@const boxClass = `absolute border-2 ${b.colorClass} ${b.dashed ? 'border-dashed' : ''} ${
-              b.selected
-                ? 'z-10 ring-2 ring-white/80'
-                : b.kind === 'item'
-                  ? 'opacity-60'
-                  : ''
-            }`}
-            {@const boxStyle = `left:${pct(x1)}; top:${pct(y1)}; width:${pct(x2 - x1)}; height:${pct(y2 - y1)};`}
-            {#if b.clickable}
-              <button
-                type="button"
-                class="pointer-events-auto cursor-pointer {boxClass}"
-                style={boxStyle}
-                data-testid="overlay-box"
-                data-kind={b.kind}
-                data-crop-id={b.cropId}
-                title={b.tooltip}
-                onclick={() => onselect?.(b.cropId)}
-              >
-                {@render boxLabel(b)}
-              </button>
-            {:else}
-              <div
-                class={boxClass}
-                style={boxStyle}
-                data-testid="overlay-box"
-                data-kind={b.kind}
-                data-crop-id={b.cropId}
-                title={b.tooltip}
-              >
-                {@render boxLabel(b)}
-              </div>
-            {/if}
-          {/each}
+          <BoxLayer boxes={context.boxes} {selectedCropId} {onselect} />
           {#each extraShapes as s (s.key)}
             {#if s.kind === 'box'}
               {@const [x1, y1, x2, y2] = s.box}

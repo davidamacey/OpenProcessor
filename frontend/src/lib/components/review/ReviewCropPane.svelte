@@ -18,6 +18,7 @@
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
   import SourceMissingBadge from '$lib/components/SourceMissingBadge.svelte';
   import { slotOf } from '$lib/annotations/cropSlots';
+  import { toCanvasBoxes } from '$lib/annotations/multiBox';
   import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
   import { kg } from '$lib/review/reviewKeys';
@@ -151,14 +152,7 @@
       <MultiBoxCanvas
         bind:this={edit.slotCanvas}
         cropId={current.id}
-        boxes={multiBox.boxes
-          .filter((b) => b.box != null)
-          .map((b) => ({
-            box: b.box!,
-            state: b.state,
-            label: `${activeSlot!.label.title} (${multiBoxStateLabel(b.state)})`,
-            locked: b.boxId != null && lockedBoxIds.has(b.boxId),
-          }))}
+        boxes={toCanvasBoxes(multiBox.boxes, activeSlot!.label.title, lockedBoxIds)}
         selectedIndex={multiBox.selectedIndex}
         busy={multiBox.busy}
         readonly={!editMode}

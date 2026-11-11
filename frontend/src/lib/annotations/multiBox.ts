@@ -22,6 +22,8 @@ export interface EditableBox {
    *  session, vs. loaded unchanged from the server. Drives whether the
    *  PUT body sends `bbox_norm` for this element at all. */
   dirty: boolean;
+  /** The served name; null for a box not saved yet. */
+  displayName: string | null;
 }
 
 /** Converts served `SlotBox`es (source + server-projected parent frame)
@@ -31,7 +33,30 @@ export interface EditableBox {
 export function toEditableBoxes(boxes: SlotBox[]): EditableBox[] {
   return boxes
     .filter((b) => b.parent != null)
-    .map((b) => ({ boxId: b.boxId, state: b.state, box: b.parent, dirty: false }));
+    .map((b) => ({
+      boxId: b.boxId,
+      state: b.state,
+      box: b.parent,
+      dirty: false,
+      displayName: b.displayName,
+    }));
+}
+
+/** What the canvas draws for each working box: the served display name (the region name alone for
+ *  a box not saved yet) and the served lock. */
+export function toCanvasBoxes(
+  boxes: EditableBox[],
+  regionName: string,
+  lockedBoxIds: ReadonlySet<string>,
+): { box: BBoxNormLike; state: string; label: string; locked: boolean }[] {
+  return boxes
+    .filter((b) => b.box != null)
+    .map((b) => ({
+      box: b.box!,
+      state: b.state,
+      label: b.displayName ?? regionName,
+      locked: b.boxId != null && lockedBoxIds.has(b.boxId),
+    }));
 }
 
 /** Cycles the selected index forward through `boxes` (Tab / `box_edit.next_box`).
@@ -64,7 +89,9 @@ export function addBox(
   box: BBoxNormLike,
   state = 'accepted',
 ): { boxes: EditableBox[]; selected: number } {
-  const next = boxes.concat([{ boxId: null, state, box, dirty: true }]);
+  const next = boxes.concat([
+    { boxId: null, state, box, dirty: true, displayName: null },
+  ]);
   return { boxes: next, selected: next.length - 1 };
 }
 
