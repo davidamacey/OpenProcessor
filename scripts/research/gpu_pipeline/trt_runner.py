@@ -3,8 +3,8 @@
 TensorRT Python API: ``Runtime.deserialize_cuda_engine``, ``IExecutionContext.set_input_shape``,
 ``set_tensor_address`` and ``execute_async_v3`` (NVIDIA TensorRT developer guide, "Python API").
 A pool of execution contexts, each with its own CUDA stream, stands in for the instance and dynamic
-batcher of the Triton model repository. Plans that use ``EfficientNMS_TRT`` need the plugin library
-registered first.
+batcher of the Triton model repository. Plans with built-in post-processing layers need the TensorRT
+plugin library registered first (``init_libnvinfer_plugins``).
 """
 
 from __future__ import annotations
