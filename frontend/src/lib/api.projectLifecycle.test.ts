@@ -122,8 +122,8 @@ describe('lifecycle wrappers hit the global /projects routes', () => {
 
   it('getProjects passes the picker filter and page size to the server', async () => {
     const sent = capture({ projects: [] });
-    await getProjects(undefined, false, { q: 'cars', limit: 25 });
-    expect(sent().url).toBe(`${API_PREFIX}/projects?q=cars&limit=25`);
+    await getProjects(undefined, false, { q: 'cars', limit: 25, selectable: true });
+    expect(sent().url).toBe(`${API_PREFIX}/projects?q=cars&limit=25&selectable=true`);
   });
 });
 

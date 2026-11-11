@@ -70,9 +70,10 @@ export class ProjectPickerController {
       const res = await getProjects(abort.signal, false, {
         q: this.query.trim(),
         limit: PICKER_PAGE,
+        selectable: true,
       });
       if (abort.signal.aborted) return;
-      this.projects = res.projects.filter((p) => p.selectable);
+      this.projects = res.projects;
       this.total = res.total;
       this.active = 0;
     } catch (e) {

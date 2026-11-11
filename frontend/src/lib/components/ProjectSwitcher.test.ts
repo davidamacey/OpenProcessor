@@ -18,11 +18,19 @@ vi.mock('$lib/api_projects', async (orig) => ({
   ...(await orig<typeof import('$lib/api_projects')>()),
   // A stand-in server: filters by `q`, cuts to `limit`, reports `total`, like GET /projects.
   getProjects: vi.fn(
-    async (_s: unknown, _a: boolean, f: { q?: string; limit?: number } = {}) => {
+    async (
+      _s: unknown,
+      _a: boolean,
+      f: { q?: string; limit?: number; selectable?: boolean } = {},
+    ) => {
       served.calls.push(f);
       const q = (f.q ?? '').toLowerCase();
-      const hit = (served.all as { slug: string; display_name: string }[]).filter(
-        (p) => p.slug.includes(q) || p.display_name.toLowerCase().includes(q),
+      const hit = (
+        served.all as { slug: string; display_name: string; selectable: boolean }[]
+      ).filter(
+        (p) =>
+          (!f.selectable || p.selectable) &&
+          (p.slug.includes(q) || p.display_name.toLowerCase().includes(q)),
       );
       return { projects: hit.slice(0, f.limit ?? hit.length), total: hit.length };
     },
@@ -167,21 +175,23 @@ describe('ProjectSwitcher', () => {
     ];
     render();
     await open();
-    expect(served.calls[0]).toEqual({ q: '', limit: 25 });
+    expect(served.calls[0]).toEqual({ q: '', limit: 25, selectable: true });
     const list = target.querySelector('[data-testid="project-switcher-list"]')!;
     expect(list.className).toContain('overflow-y-auto');
     expect(list.className).toContain('max-h-');
-    expect(list.querySelectorAll('[role="option"]').length).toBe(24); // the stand-in's 25-row page holds one non-selectable project
+    expect(list.querySelectorAll('[role="option"]').length).toBe(25);
     expect(
       target.querySelector('[data-testid="project-switcher-more"]')!.textContent,
-    ).toContain('of 44');
+    ).toContain('of 43');
 
     const input = target.querySelector<HTMLInputElement>(
       '[data-testid="project-switcher-filter"]',
     )!;
     input.value = 'alp';
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    await vi.waitFor(() => expect(served.calls.at(-1)).toEqual({ q: 'alp', limit: 25 }));
+    await vi.waitFor(() =>
+      expect(served.calls.at(-1)).toEqual({ q: 'alp', limit: 25, selectable: true }),
+    );
     await Promise.resolve();
     flushSync();
     expect([...list.querySelectorAll('[role="option"]')].map((o) => o.id)).toEqual([

@@ -25,13 +25,14 @@ import type {
 export function getProjects(
   signal?: AbortSignal,
   includeArchived = false,
-  filter: { q?: string; limit?: number } = {},
+  filter: { q?: string; limit?: number; selectable?: boolean } = {},
 ): Promise<ProjectsResponse> {
   return apiFetch<ProjectsResponse>(
     `${globalApi()}/projects${qs({
       include_archived: includeArchived ? true : undefined,
       q: filter.q || undefined,
       limit: filter.limit,
+      selectable: filter.selectable ? true : undefined,
     })}`,
     {},
     signal,

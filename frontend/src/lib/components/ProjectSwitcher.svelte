@@ -212,15 +212,15 @@
               project matches "{picker.query}".{/if}
           </p>
         {/each}
-        {#if picker.total > picker.projects.length && picker.projects.length > 0}
-          <p
-            class="px-3 py-1 text-[11px] text-zinc-500"
-            data-testid="project-switcher-more"
-          >
-            Showing {picker.projects.length} of {picker.total}; type to narrow.
-          </p>
-        {/if}
       </div>
+      {#if picker.total > picker.projects.length && picker.projects.length > 0}
+        <p
+          class="px-3 py-1 text-[11px] text-zinc-500"
+          data-testid="project-switcher-more"
+        >
+          Showing {picker.projects.length} of {picker.total}; type to narrow.
+        </p>
+      {/if}
       <div class="my-1 border-t border-zinc-800"></div>
       <a
         href={resolve('/projects')}
