@@ -327,3 +327,16 @@ def test_no_q_or_limit_lists_everything(monkeypatch: pytest.MonkeyPatch) -> None
     _many(monkeypatch)
     result = asyncio.run(projects_router.list_projects(include_archived=False))
     assert len(result.projects) == result.total == 7
+
+
+def test_selectable_filter_counts_only_openable_projects(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(
+        _record('default'),
+        _record('building-one', status='building'),
+        _record('deleting-one', status='deleting'),
+        _record('cars'),
+    )
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+    result = asyncio.run(projects_router.list_projects(include_archived=False, selectable=True))
+    assert [p.slug for p in result.projects] == ['cars', 'default']
+    assert result.total == 2

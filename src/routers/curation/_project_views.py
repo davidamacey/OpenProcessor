@@ -23,6 +23,10 @@ _ALWAYS_LISTED_STATUSES = frozenset({'active', 'building', 'failed', 'deleting'}
 _ARCHIVED_STATUS = 'archived'
 
 
+# Statuses a project can be opened in; the picker asks for exactly these.
+SELECTABLE_STATUSES = ('active', 'archived')
+
+
 def list_membership(status: str, *, include_archived: bool) -> bool:
     """Whether a project of this ``status`` appears in ``GET /projects``'s
     ``projects[]`` (§4 delta 3)."""
@@ -48,7 +52,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         prefix=prefix,
         status=record.status,
         writable=record.status == 'active',
-        selectable=record.status in ('active', 'archived'),
+        selectable=record.status in SELECTABLE_STATUSES,
         is_default=is_default,
         deletable=not is_default,
         archivable=record.status in ARCHIVABLE_STATUSES,

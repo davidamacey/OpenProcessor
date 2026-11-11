@@ -41216,6 +41216,18 @@
             }
           },
           {
+            "description": "Only projects that can be opened (the picker); `total` counts the same set.",
+            "in": "query",
+            "name": "selectable",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only projects that can be opened (the picker); `total` counts the same set.",
+              "title": "Selectable",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "At most this many projects, in slug order.",
             "in": "query",
             "name": "limit",

@@ -25,6 +25,7 @@ from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
 from src.routers.curation._project_deps import bind_path_project
 from src.routers.curation._project_views import (
+    SELECTABLE_STATUSES,
     capacity_wire,
     list_membership,
     resources_wire,
@@ -128,6 +129,12 @@ async def list_projects(
         str | None,
         Query(description='Case-insensitive substring of the slug or display name.'),
     ] = None,
+    selectable: Annotated[
+        bool,
+        Query(
+            description='Only projects that can be opened (the picker); `total` counts the same set.'
+        ),
+    ] = False,
     limit: Annotated[
         int | None,
         Query(ge=1, le=500, description='At most this many projects, in slug order.'),
@@ -143,6 +150,8 @@ async def list_projects(
         if list_membership(record.status, include_archived=include_archived)
     }
 
+    if selectable:
+        listed = {s: r for s, r in listed.items() if r.status in SELECTABLE_STATUSES}
     needle = (q or '').strip().lower()
     if needle:
         listed = {
