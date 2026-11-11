@@ -32,8 +32,6 @@ from tests.live.conftest import API_PREFIX, VERIFY_DATA_DIR, create_project
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-pytestmark = pytest.mark.live
-
 COUNT = int(os.environ.get('VERIFY_LOAD_JOBS', '1000'))
 REPLICAS = 2
 PROJECTS = 10
@@ -44,6 +42,16 @@ KIND = 'vlm_label_batch'
 BOUND_S_PER_JOB = 1.2
 ACTIVE = ('queued', 'running', 'cancelling')
 CONNECTION_RESERVE = 13
+SCALE_S = 240  # the bound of each `compose up --scale` call (fixture setup and teardown)
+LOGS_S = 300  # the bound of the worker-log read
+PROJECT_SETUP_S = 120  # ten projects created and a VLM endpoint activated on each
+# pytest-timeout covers setup + call + teardown of the item, so the item budget is the sum of the
+# bounds inside it. At the default 400 s a 224 s run was cut short inside the scale-down, which
+# left the second jobs-worker replica running for every later test.
+ITEM_TIMEOUT_S = int(
+    SCALE_S + PROJECT_SETUP_S + max(120.0, COUNT * BOUND_S_PER_JOB) + LOGS_S + SCALE_S
+)
+pytestmark = [pytest.mark.live, pytest.mark.timeout(ITEM_TIMEOUT_S)]
 
 
 class _ConnectionSampler:
