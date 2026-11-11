@@ -652,3 +652,8 @@ Run on `coco-e2e` (read-only) and on a fresh public COCO project for the write s
 2. Should the Images view be the default Workspace view after ingest (default: yes when no partition serves,
    Clusters when one does)?
 3. "Label this whole duplicate group" from a near-dup representative: in Wave 3 (default: later, P2)?
+
+**Owner answers (2026-11-11):**
+1. The merged page is named **Workspace**.
+2. The default view is smart: Images until a partition serves, then Clusters.
+3. **Waves 1 to 4 all ship before the speed review.** "Label this whole duplicate group" goes in with wave 4 polish.
