@@ -118,7 +118,7 @@
       class="btn"
       type="button"
       onclick={view.deselectAll}
-      title={actions.kg('cluster.cancel')}
+      title={actions.kg('workspace.escape')}
     >
       Deselect
     </button>

@@ -26,10 +26,10 @@ afterEach(() => {
 });
 
 describe('FALLBACK_KEYMAP', () => {
-  it('declares the 46 action ids of plan §1.1, each once', () => {
+  it('declares every action id once', () => {
     const ids = FALLBACK_KEYMAP.actions.map((a) => a.id);
-    expect(ids).toHaveLength(46);
-    expect(new Set(ids).size).toBe(46);
+    expect(ids).toHaveLength(55);
+    expect(new Set(ids).size).toBe(55);
   });
 
   it("reproduces today's default keys", () => {
@@ -58,20 +58,21 @@ describe('FALLBACK_KEYMAP', () => {
       'box_edit.shrink_right': ['['],
       'box_edit.grow_right': [']'],
       'box_edit.delete_box': ['backspace'],
-      'cluster.confirm': ['enter'],
-      'cluster.accept_all_vlm': ['shift+enter'],
+      'cluster.confirm': ['shift+enter'],
+      'cluster.accept_all_vlm': ['shift+g'],
+      'workspace.escape': ['escape'],
+      'workspace.open_review': ['enter'],
       'cluster.accept_vlm': ['g'],
       'cluster.skip': ['n'],
       'cluster.flag_new_class': ['shift+n'],
       'cluster.discard': ['d'],
-      'cluster.undo': ['z'],
+      'cluster.undo': ['z', 'ctrl+z', 'meta+z'],
       'cluster.ignore': ['x'],
       'cluster.unignore': ['u'],
-      'cluster.select_all': ['a'],
+      'cluster.select_all': ['a', 'ctrl+a', 'meta+a'],
       'cluster.prev': ['arrowleft'],
       'cluster.next': ['arrowright'],
       'cluster.move': ['m'],
-      'cluster.cancel': ['escape'],
       'clusters_search.select_all': ['a'],
       'clusters_search.cancel': ['escape'],
       'clusters_search.ignore': ['x'],
@@ -101,7 +102,7 @@ describe('resolving an action id', () => {
 
   it('has a compact glyph for tight spaces', () => {
     expect(keymapStore.compactGlyph('cluster.flag_new_class')).toBe('⇧N');
-    expect(keymapStore.compactGlyph('cluster.accept_all_vlm')).toBe('⇧↵');
+    expect(keymapStore.compactGlyph('cluster.confirm')).toBe('⇧↵');
     expect(keymapStore.compactGlyph('box_edit.delete_box')).toBe('⌫');
     expect(keymapStore.compactGlyph('box_edit.cancel')).toBe('Esc');
   });

@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation._cropwright_action_ids import CROPWRIGHT_ACTION_IDS
+from curation._keymap_expectations import DEFAULT_RESERVED_HOTKEYS
 from src.services.curation.keymap import (
     combo_grammar_error,
     effective_keys,
@@ -20,9 +21,6 @@ from src.services.curation.keymap import (
     reserved_hotkeys,
 )
 from src.services.curation.keymap_validator import validate_keymap
-
-
-LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 # --------------------------------------------------------------- registry
@@ -108,7 +106,7 @@ def test_validator_warns_focus_key() -> None:
 
 def test_derived_default_equals_legacy_set_plus_box_keys_and_overlay() -> None:
     """The derived default = the legacy hardcoded set UNION {y, r, backtick}."""
-    assert set(reserved_hotkeys({})) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
+    assert set(reserved_hotkeys({})) == DEFAULT_RESERVED_HOTKEYS
 
 
 def test_moving_an_override_leaves_shared_letter_reserved_and_adds_new_one() -> None:
@@ -317,7 +315,7 @@ def test_get_keymap_no_doc_serves_defaults(client: TestClient) -> None:
     assert body['is_default'] is True
     assert body['revision'] == 0
     assert body['overrides'] == {}
-    assert set(body['reserved_hotkeys']) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
+    assert set(body['reserved_hotkeys']) == DEFAULT_RESERVED_HOTKEYS
     action_ids = {a['id'] for a in body['actions']}
     assert 'review.region.accept_box' in action_ids
     assert 'box_edit.next_box' in action_ids
@@ -432,7 +430,7 @@ def test_reset_specific_action_then_reset_all(client: TestClient) -> None:
 
 def test_classes_route_serves_derived_reserved_hotkeys(client: TestClient) -> None:
     body = client.get(f'{PREFIX}/classes').json()
-    assert set(body['reserved_hotkeys']) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
+    assert set(body['reserved_hotkeys']) == DEFAULT_RESERVED_HOTKEYS
 
 
 def test_class_put_rejects_reserved_hotkey_as_config_error_detail(client: TestClient) -> None:

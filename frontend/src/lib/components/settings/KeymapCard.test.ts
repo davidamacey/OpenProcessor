@@ -258,9 +258,9 @@ describe('KeymapCard', () => {
     instance = mount(KeymapCard, { target });
     flushSync();
 
-    // 'undo' spans review / cluster / clusters_search / region_gallery.
+    // 'discard' spans review.queue and cluster.
     const groupSummary = [...target.querySelectorAll('summary')].find((s) =>
-      s.textContent?.includes('Undo'),
+      s.textContent?.includes('Discard'),
     );
     expect(groupSummary).toBeTruthy();
     const groupRow = groupSummary!.closest('details') as HTMLElement;
@@ -279,10 +279,8 @@ describe('KeymapCard', () => {
     expect(putKeymap).toHaveBeenCalledWith(
       expect.objectContaining({
         overrides: expect.objectContaining({
-          'review.undo': expect.arrayContaining(['y']),
-          'cluster.undo': expect.arrayContaining(['y']),
-          'clusters_search.undo': expect.arrayContaining(['y']),
-          'region_gallery.undo': expect.arrayContaining(['y']),
+          'review.queue.discard': expect.arrayContaining(['y']),
+          'cluster.discard': expect.arrayContaining(['y']),
         }),
       }),
     );
@@ -292,21 +290,23 @@ describe('KeymapCard', () => {
     instance = mount(KeymapCard, { target });
     flushSync();
 
-    // Expand "Customize per page" for the undo group.
+    // Expand "Customize per page" for the discard group.
     const customizeSummary = [...target.querySelectorAll('summary')].find(
       (s) => s.textContent?.trim() === 'Customize per page',
     );
     expect(customizeSummary).toBeTruthy();
 
-    memberChangeButton('cluster.undo').dispatchEvent(
+    memberChangeButton('cluster.discard').dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
     flushSync();
-    pressKeyOnCaptureIn(memberRow('cluster.undo'), 'y');
+    pressKeyOnCaptureIn(memberRow('cluster.discard'), 'y');
 
     // Detached marker on the edited member, not on its siblings.
-    expect(target.querySelector('[data-testid="detached-cluster.undo"]')).toBeTruthy();
-    expect(target.querySelector('[data-testid="detached-review.undo"]')).toBeNull();
+    expect(target.querySelector('[data-testid="detached-cluster.discard"]')).toBeTruthy();
+    expect(
+      target.querySelector('[data-testid="detached-review.queue.discard"]'),
+    ).toBeNull();
 
     saveButton().click();
     flushSync();
@@ -314,27 +314,27 @@ describe('KeymapCard', () => {
     flushSync();
 
     const call = putKeymap.mock.calls.at(-1)?.[0];
-    expect(call.overrides['cluster.undo']).toEqual(expect.arrayContaining(['y']));
-    expect(call.overrides['review.undo']).toBeUndefined();
+    expect(call.overrides['cluster.discard']).toEqual(expect.arrayContaining(['y']));
+    expect(call.overrides['review.queue.discard']).toBeUndefined();
   });
 
   it('"reset to group" clears a detached member back to the shared value', () => {
     instance = mount(KeymapCard, { target });
     flushSync();
 
-    memberChangeButton('cluster.undo').dispatchEvent(
+    memberChangeButton('cluster.discard').dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     );
     flushSync();
-    pressKeyOnCaptureIn(memberRow('cluster.undo'), 'y');
-    expect(target.querySelector('[data-testid="detached-cluster.undo"]')).toBeTruthy();
+    pressKeyOnCaptureIn(memberRow('cluster.discard'), 'y');
+    expect(target.querySelector('[data-testid="detached-cluster.discard"]')).toBeTruthy();
 
-    const resetBtn = [...memberRow('cluster.undo').querySelectorAll('button')].find(
+    const resetBtn = [...memberRow('cluster.discard').querySelectorAll('button')].find(
       (b) => b.textContent?.trim() === 'reset to group',
     ) as HTMLElement;
     resetBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     flushSync();
 
-    expect(target.querySelector('[data-testid="detached-cluster.undo"]')).toBeNull();
+    expect(target.querySelector('[data-testid="detached-cluster.discard"]')).toBeNull();
   });
 });

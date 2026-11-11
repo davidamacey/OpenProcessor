@@ -91,11 +91,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -110,7 +140,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -119,7 +151,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -129,9 +163,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -255,11 +286,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -274,7 +335,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -283,7 +346,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -293,9 +358,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -419,11 +481,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -438,7 +530,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -447,7 +541,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -457,9 +553,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -584,11 +677,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -603,7 +726,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -612,7 +737,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -622,9 +749,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -753,11 +877,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -772,7 +926,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -781,7 +937,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -791,9 +949,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -929,11 +1084,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -948,7 +1133,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -957,7 +1144,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -967,9 +1156,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1081,11 +1267,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1100,7 +1316,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1109,7 +1327,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1119,9 +1339,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1245,11 +1462,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1264,7 +1511,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1273,7 +1522,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1283,9 +1534,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1409,11 +1657,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1428,7 +1706,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1437,7 +1717,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1447,9 +1729,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1577,11 +1856,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1596,7 +1905,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1605,7 +1916,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1615,9 +1928,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1741,11 +2051,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1760,7 +2100,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1769,7 +2111,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1779,9 +2123,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -1912,11 +2253,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -1931,7 +2302,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -1940,7 +2313,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -1950,9 +2325,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2065,11 +2437,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -2084,7 +2486,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -2093,7 +2497,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -2103,9 +2509,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2250,11 +2653,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -2269,7 +2702,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -2278,7 +2713,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -2288,9 +2725,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2499,11 +2933,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -2518,7 +2982,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -2527,7 +2993,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -2537,9 +3005,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2658,11 +3123,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -2677,7 +3172,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -2686,7 +3183,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -2696,9 +3195,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2822,11 +3318,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -2841,7 +3367,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -2850,7 +3378,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -2860,9 +3390,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -2982,11 +3509,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3001,7 +3558,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -3010,7 +3569,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3020,9 +3581,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -3169,11 +3727,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3188,7 +3776,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -3197,7 +3787,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3207,9 +3799,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -3360,11 +3949,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3379,7 +3998,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -3388,7 +4009,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3398,9 +4021,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -3512,11 +4132,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3531,7 +4181,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -3540,7 +4192,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3550,9 +4204,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -3672,11 +4323,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3691,7 +4372,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -3700,7 +4383,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3710,9 +4395,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -3844,11 +4526,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -3863,7 +4575,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "ctrl+i"
@@ -3872,7 +4586,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -3882,9 +4598,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -4016,11 +4729,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -4035,7 +4778,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "x"
@@ -4044,7 +4789,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -4054,9 +4801,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -4188,11 +4932,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -4207,7 +4981,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -4216,7 +4992,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -4226,9 +5004,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"
@@ -4340,11 +5115,41 @@
    "box_edit.next_box": [
     "tab"
    ],
-   "cluster.confirm": [
+   "workspace.view_prev": [
+    "["
+   ],
+   "workspace.view_next": [
+    "]"
+   ],
+   "workspace.scope_prev": [
+    ","
+   ],
+   "workspace.scope_next": [
+    "."
+   ],
+   "workspace.toggle_details": [
+    "\\"
+   ],
+   "workspace.open_editor": [
+    "shift+o"
+   ],
+   "workspace.class_picker": [
+    "/"
+   ],
+   "workspace.escape": [
+    "escape"
+   ],
+   "workspace.select_toggle": [
+    "space"
+   ],
+   "workspace.open_review": [
     "enter"
    ],
-   "cluster.accept_all_vlm": [
+   "cluster.confirm": [
     "shift+enter"
+   ],
+   "cluster.accept_all_vlm": [
+    "shift+g"
    ],
    "cluster.accept_vlm": [
     "g"
@@ -4359,7 +5164,9 @@
     "d"
    ],
    "cluster.undo": [
-    "z"
+    "z",
+    "ctrl+z",
+    "meta+z"
    ],
    "cluster.ignore": [
     "i"
@@ -4368,7 +5175,9 @@
     "u"
    ],
    "cluster.select_all": [
-    "a"
+    "a",
+    "ctrl+a",
+    "meta+a"
    ],
    "cluster.prev": [
     "arrowleft"
@@ -4378,9 +5187,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "cluster.cancel": [
-    "escape"
    ],
    "clusters_search.select_all": [
     "a"

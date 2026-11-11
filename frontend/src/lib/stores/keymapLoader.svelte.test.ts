@@ -84,7 +84,7 @@ describe('loadKeymap / keymapAvailability', () => {
     };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(served)));
     await loadKeymap();
-    expect(keymapStore.keysFor('cluster.undo')).toEqual(['z']);
+    expect(keymapStore.keysFor('cluster.undo')).toEqual(['z', 'ctrl+z', 'meta+z']);
   });
 
   // The fail-open rule every other availability probe in this codebase

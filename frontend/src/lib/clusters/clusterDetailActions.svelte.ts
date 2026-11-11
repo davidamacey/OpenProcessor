@@ -317,7 +317,7 @@ export function createClusterDetailActions(view: ClusterDetailController) {
       if (next === ids.length - 1 && cropPager.hasMore) void loadMore();
     });
     reg('cluster.move', () => void openMovePicker());
-    reg('cluster.cancel', () => {
+    reg('workspace.escape', () => {
       if (movePickerOpen) {
         cancelMovePicker();
         return;

@@ -21,10 +21,8 @@ from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._keymap_expectations import DEFAULT_RESERVED_HOTKEYS
 from src.services.curation.keymap import reserved_hotkeys
-
-
-LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 @pytest.fixture
@@ -72,7 +70,7 @@ def app_client(
 # =============================================================================
 
 
-@pytest.mark.parametrize('letter', sorted(LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}))
+@pytest.mark.parametrize('letter', sorted(DEFAULT_RESERVED_HOTKEYS))
 def test_put_class_rejects_reserved_hotkey(
     app_client: TestClient, registry: InMemoryRegistry, letter: str
 ) -> None:
@@ -103,7 +101,7 @@ def test_put_class_accepts_nonreserved_hotkey(
 def test_reserved_set_covers_every_single_key_labeler_action() -> None:
     """The derived default equals the legacy hardcoded set plus
     'y'/'r' (per-box accept/reject) and the overlay's backtick."""
-    assert set(reserved_hotkeys({})) == LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'}
+    assert set(reserved_hotkeys({})) == DEFAULT_RESERVED_HOTKEYS
 
 
 # =============================================================================
