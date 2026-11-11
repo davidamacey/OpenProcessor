@@ -1,7 +1,8 @@
 """Curation router sub-module: near-duplicate status, runs, groups and decisions.
 
 Thin adapters over ``services/near_duplicates/status.py``. A run is a job: ``POST .../runs``
-answers 202 with the job id (409 ``job_busy`` while one is active for that level). Group ids on
+answers 202 with the job id (409 ``job_busy`` while one is active for that level; 409 ``no_image_run`` for an item run
+while the project has no current image run). Group ids on
 the wire are lineage ids. The profile routes are the ``near_dup_profiles`` family of
 ``research_configs.py``.
 """
