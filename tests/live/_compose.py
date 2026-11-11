@@ -44,6 +44,18 @@ def service_states() -> dict[str, dict[str, Any]]:
     return {row['Service']: row for row in rows}
 
 
+def service_hostnames(service: str) -> set[str]:
+    """The hostname of every running container of the service (all replicas)."""
+    ids = compose('ps', '-q', service).stdout.split()
+    if not ids:
+        raise AssertionError(f'no running container for service {service}')
+    out = subprocess.run(  # nosec B603 B607 - fixed argv, no shell
+        ['docker', 'inspect', '--format', '{{.Config.Hostname}}', *ids],
+        check=True, capture_output=True, text=True, timeout=DEFAULT_TIMEOUT_S,
+    ).stdout  # fmt: skip
+    return set(out.split())
+
+
 def kill(service: str) -> None:
     """``docker kill`` every container of the service (SIGKILL: no soft shutdown, no lease release)."""
     compose('kill', service)
