@@ -213,9 +213,7 @@ and warns. A live combine marks its sources and target `project_busy`.
 | GET | `/crops` | Browse and filter items, including `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import`. `n_unembedded` is returned only for `order=diverse` or `core_first` (null otherwise; use `GET /stats/dataset` `embedding` to watch an embed drain) |
 | GET | `/crops/{crop_id}` | One item |
 | GET | `/crops/{crop_id}/thumbnail` | Item crop thumbnail |
-| GET | `/crops/{crop_id}/image` | The clean source image of the item's frame |
 | GET | `/crops/{crop_id}/region_thumbnail` | One region box's crop; `box_id` is required |
-| GET | `/crops/{crop_id}/context` | The item's source image and the other items on it |
 | GET | `/crops/{crop_id}/history` | Label/edit history |
 | PUT | `/crops/{crop_id}/label` | Set the class (`class_id`, `label_source` `human` or `human_confirmed`) |
 | DELETE | `/crops/{crop_id}/label` | Clear a human label |
@@ -515,6 +513,8 @@ hyperparameters from `GET /train/profiles` into the request's own
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/images/serve` | Serve a source image by path (confined to configured roots, and only an image this project ingested) |
-| GET | `/images/root/{alias}` | Serve from a named extra root (`OP_SOURCE_PATH_ALIASES`), only an image this project ingested |
+| GET | `/images` | Page the project's images: the shared item filter (an image matches when one of its items does), `source`, `has_location`, `geo_bbox`, `in_holdout`, `near_dup`, `label_state`, a served `sort` and `cursor`. Each card carries its served counts, near-duplicate group and the boxes to draw |
+| GET | `/images/{image_id}` | One image with its facts, every item on it (wire items) and the boxes to draw, in image coordinates |
+| GET | `/images/{image_id}/file` | The clean source pixels (EXIF applied, optional `max_dim`), nothing drawn on them |
+| GET | `/images/{image_id}/thumbnail` | The whole frame shrunk to `size`, aspect kept |
 | GET | `/images/cache/stats` | Thumbnail cache stats |

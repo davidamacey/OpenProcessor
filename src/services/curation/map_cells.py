@@ -71,7 +71,7 @@ def parse_bbox(raw: str) -> MapBounds:
     return MapBounds(west=west, south=south, east=east, north=north)
 
 
-def _box_query(box: MapBounds) -> dict[str, Any]:
+def geo_box_query(box: MapBounds) -> dict[str, Any]:
     return {
         'geo_bounding_box': {
             LOCATION_FIELD: {
@@ -134,7 +134,7 @@ async def image_query(
     predicate goes through the items that match it."""
     filters: list[dict[str, Any]] = [{'exists': {'field': LOCATION_FIELD}}]
     if box is not None:
-        filters.append(_box_query(box))
+        filters.append(geo_box_query(box))
     joined = f.model_copy(update={'taken_from': None, 'taken_to': None})
     truncated = False
     if joined.is_empty():

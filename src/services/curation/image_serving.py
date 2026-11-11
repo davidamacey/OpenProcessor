@@ -43,7 +43,6 @@ from cachetools import LRUCache
 from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
-from src.config.curation_accessors import images_index
 from src.core.exceptions import RequestRejectedError
 from src.utils.cpu_pool import run_cpu
 
@@ -271,25 +270,6 @@ def resolve_safe_path(
 
 
 # =============================================================================
-# Source-image media type
-# =============================================================================
-
-_SOURCE_MEDIA_TYPES = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.webp': 'image/webp',
-    '.heic': 'image/heic',
-    '.heif': 'image/heif',
-}
-
-
-def source_media_type(path: Path) -> str:
-    """Best-effort media type of a source image from its suffix."""
-    return _SOURCE_MEDIA_TYPES.get(path.suffix.lower(), 'application/octet-stream')
-
-
-# =============================================================================
 # Thumbnail Cache (LRU 2000 entries)
 # =============================================================================
 
@@ -467,7 +447,7 @@ def _render_source_image(image_path: Path, max_dim: int | None) -> bytes:
     """Render the clean source image as JPEG bytes: EXIF-transpose,
     RGB-convert, optionally downscale, re-encode. No box, label or other
     overlay is ever drawn — the frontend draws every box itself from
-    the geometry ``GET {prefix}/crops/{id}/context`` serves.
+    the geometry ``GET {prefix}/images/{image_id}`` serves.
 
     Pass ``max_dim`` to cap the longest side so the labeler can pull a
     review-friendly preview (~1024px) instead of the full-resolution
@@ -595,31 +575,6 @@ def resolve_crop_root(image_path: str, config: CurationConfig | None = None) -> 
         if head == alias_lower or head.startswith(alias_lower):
             return alias_root
     return cfg.source_root
-
-
-async def project_owns_image_path(opensearch: Any, path: str, root: Path) -> bool:
-    """Whether the bound project's images index holds ``path`` as an ``image_path``.
-
-    A project serves only the images it ingested, never any file the shared source roots
-    happen to hold (object-level authorization, OWASP API1:2023). One exact ``terms`` lookup
-    on the indexed path: the string as sent, and a relative one joined to ``root`` (ingest
-    stores absolute paths). No filesystem access: the caller reads the file only after this
-    answers yes.
-    """
-    normalized = path.replace('\\', '/')
-    candidates = [normalized]
-    if not normalized.startswith('/'):
-        candidates.append(f'{str(root).rstrip("/")}/{normalized}')
-    resp = await opensearch.search(
-        index=images_index(),
-        body={
-            'size': 1,
-            '_source': False,
-            'terminate_after': 1,
-            'query': {'terms': {'image_path': candidates}},
-        },
-    )
-    return bool((resp.get('hits') or {}).get('hits'))
 
 
 SOURCE_MISSING = 'source_missing'

@@ -8,14 +8,12 @@ project's markers in the body.
 
 from __future__ import annotations
 
-import types
 from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
 
 from curation.cross_project_leak._constants import SCOPED
-from curation.cross_project_leak._seeded_files import own_image_path
 
 
 if TYPE_CHECKING:
@@ -104,33 +102,21 @@ def test_a_run_log_tail_names_only_the_projects_own_run(
 
 @pytest.mark.parametrize(('slug', 'other'), PAIRS)
 def test_images_are_served_to_the_project_that_ingested_them_only(
-    leak_env: LeakEnv, slug: str, other: str, monkeypatch: pytest.MonkeyPatch
+    leak_env: LeakEnv, slug: str, other: str
 ) -> None:
-    """Both projects ingest from one shared source root. Asking project ``slug`` for a file only
-    ``other`` ingested is a 404 with no bytes, by absolute path, by relative path and through the
-    named alias root (OWASP API1:2023: object-level authorization)."""
-    from src.routers.curation import images as images_router
-
-    aliases = {f'{name}-source': leak_env.root / 'images' / name for name in (slug, other)}
-    monkeypatch.setattr(images_router, 'config', types.SimpleNamespace(source_path_aliases=aliases))
+    """Asking project ``slug`` for an image only ``other`` ingested, by id, is a 404 with no bytes
+    on the file, the thumbnail and the detail route, the same answer an unknown id gets (OWASP
+    API1:2023: object-level authorization). Its own image is served."""
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     base = SCOPED.format(project=slug)
-    foreign = own_image_path(other)
-    attempts = [
-        ('/images/serve', foreign),
-        ('/images/serve', f'{other}/{other}-lab-0001.jpg'),
-        (f'/images/root/{other}-source', f'{other}-lab-0001.jpg'),
-    ]
-    own = [
-        ('/images/serve', own_image_path(slug)),
-        (f'/images/root/{slug}-source', f'{slug}-lab-0001.jpg'),
-    ]
-    for route, path in own:
-        found = client.get(base + route, params={'path': path})
-        assert found.status_code == 200, f'{route}: {found.status_code} {found.text[:200]}'
-    for route, path in attempts:
-        refused = client.get(base + route, params={'path': path})
-        assert refused.status_code == 404, (
-            f"{slug} fetched {other}'s image via {route}?path={path}: {refused.status_code}"
+    for suffix in ('/file', '/thumbnail', ''):
+        found = client.get(f'{base}/images/{slug}-img-0002{suffix}')
+        assert found.status_code == 200, f'{suffix!r}: {found.status_code} {found.text[:200]}'
+        refused = client.get(f'{base}/images/{other}-img-0002{suffix}')
+        unknown = client.get(f'{base}/images/no-such-image{suffix}')
+        assert refused.status_code == unknown.status_code == 404, (
+            f"{slug} read {other}'s image {suffix!r}: {refused.status_code}"
         )
         assert refused.headers['content-type'].startswith('application/json'), refused.headers
+        assert refused.json() == {**unknown.json(), 'detail': refused.json()['detail']}
+        assert other not in refused.text

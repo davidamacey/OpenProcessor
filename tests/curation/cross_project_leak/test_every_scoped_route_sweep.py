@@ -41,7 +41,6 @@ import collections
 import hashlib
 import inspect
 import re
-import types
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -58,6 +57,7 @@ from curation.cross_project_leak._route_tables import (
     PG_ROW_IDS,
     POSTGRES_BACKED_PREFIXES,
     READ_CROP_FOR,
+    READ_IMAGE_FOR,
     READ_QUERIES,
     SLUG_QUERIES,
     STREAMING_ROUTES,
@@ -109,6 +109,8 @@ def _fill(
         params[param] = (pg_ids or {})[row]
     if key in CROP_FOR or key in READ_CROP_FOR:
         params['crop_id'] = f'{slug}-{(CROP_FOR | READ_CROP_FOR)[key]}'
+    if key in READ_IMAGE_FOR:
+        params['image_id'] = f'{slug}-{READ_IMAGE_FOR[key]}'
     if key in NAME_FOR:
         params['name'] = NAME_FOR[key]
     if key in UUID_JOB_ID:
@@ -332,12 +334,6 @@ def test_every_scoped_route_stays_inside_the_bound_project(
     monkeypatch.setattr(
         'src.services.curation.clustering.embedding_reduce.embedding_space', item_space
     )
-    # `images` reads its config once at import; give it the per-project alias roots a deployment
-    # would set with OP_SOURCE_PATH_ALIASES so `/images/root/{alias}` reaches the file.
-    from src.routers.curation import images as images_router
-
-    aliases = {f'{slug}-source': leak_env.root / 'images' / slug for slug in SLUGS}
-    monkeypatch.setattr(images_router, 'config', types.SimpleNamespace(source_path_aliases=aliases))
     app = leak_env.app
     routes = _scoped_routes(app)
     assert len(routes) > 100, f'expected the full scoped surface, got {len(routes)} routes'
@@ -353,6 +349,7 @@ def test_every_scoped_route_stays_inside_the_bound_project(
         | (set(SLUG_QUERIES) - every)
         | (set(PG_ROW_IDS) - every)
         | (set(READ_CROP_FOR) - every)
+        | (set(READ_IMAGE_FOR) - every)
         | (set(UNREACHED_OK) - every)
         | (set(PREPARE) - every)
     )
