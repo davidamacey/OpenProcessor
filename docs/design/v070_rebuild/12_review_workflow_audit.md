@@ -657,3 +657,17 @@ Run on `coco-e2e` (read-only) and on a fresh public COCO project for the write s
 1. The merged page is named **Workspace**.
 2. The default view is smart: Images until a partition serves, then Clusters.
 3. **Waves 1 to 4 all ship before the speed review.** "Label this whole duplicate group" goes in with wave 4 polish.
+
+**Owner feedback from a hands-on look (2026-11-11), binding for all waves:**
+- **The goal is the loop:** ingest, sort, label, build a dataset, train a model, then repeat by improving the model
+  (or by other methods). Every page must serve a step of that loop, and the next step must be obvious.
+- **The project picker** (top left) lists every project in one long dropdown that runs off the page. It needs to
+  scroll and be searchable (bug now; full project search stays in 4C).
+- **The map** says "3 items" but shows no points. This is a bug; root-cause it.
+- **Review overwhelms:** too many tabs and "types" of review items. Wave 3B must cut the queue set to a few
+  plain-named queues (the rest become filters on the Detections query), not just move the 12 tabs into a rail.
+- **Review pages do not show the proper object (class) name.** This is a bug; root-cause it (class identity is the
+  name).
+- **Label ops:** it is the history of bulk label operations (bulk relabel, merge, reclassify) with undo. It moves
+  into Quality as "Label history", as planned.
+- **Every lane checks its pages visually** against what the page is for, at desktop and 430 px.
