@@ -234,7 +234,7 @@ run and the project setting stays `off`:
 
 ```bash
 curl -s -X POST "$API/assist/runs" -H 'content-type: application/json' \
-  -d '{"target":{"kind":"cluster","cluster_id":10000},"actions":["classify"],"vlm":"env","dry_run":false}'
+  -d '{"target":{"kind":"cluster","cluster_uid":"CLUSTER_UUID"},"actions":["classify"],"vlm":"env","dry_run":false}'
 curl -s "$API/assist/runs/RUN_ID"
 ```
 
