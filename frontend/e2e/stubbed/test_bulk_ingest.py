@@ -32,6 +32,8 @@ def _progress(**over):
         'n_not_embedded': 0,
         'n_embed_failed': 0,
         'in_flight': 0,
+        'unreadable': 0,
+        'unreadable_samples': [],
         'images_per_s': None,
         'images_per_s_recent': None,
         'eta_s': None,
@@ -267,6 +269,35 @@ def test_a_manifest_run_sends_the_manifest(stub, page, app_url):
     assert started == [
         {'manifest': '/data/archive/list.txt', 'source': 'bulk_ingest', 'batch_size': 8}
     ]
+
+
+def test_unreadable_entries_warn_with_samples_at_desktop_and_430px(stub, page, app_url):
+    run = _run(
+        'completed',
+        _progress(
+            discovery_complete=True,
+            unreadable=2,
+            unreadable_samples=['links/dead_one.jpg', 'links/dead_two.jpg'],
+            elapsed_s=0.1,
+        ),
+    )
+    stub.on('POST', r'/ingest/bulk$', (202, run))
+    stub.on('GET', rf'/ingest/bulk/{RUN_ID}$', run)
+    _open(stub, page, app_url)
+    page.get_by_test_id('bulk-path').fill('/data/archive/links')
+    page.get_by_test_id('bulk-start').click()
+
+    warning = page.get_by_test_id('bulk-unreadable')
+    warning.wait_for(timeout=ACTION_TIMEOUT_MS)
+    expect(warning).to_contain_text('2 entries could not be read')
+    expect(warning).to_contain_text('links/dead_one.jpg')
+    page.screenshot(path='/tmp/fix1111_unreadable_desktop.png', full_page=True)
+    page.set_viewport_size(NARROW)
+    page.screenshot(path='/tmp/fix1111_unreadable_430.png', full_page=True)
+    width = page.evaluate(
+        '() => ({sw: document.documentElement.scrollWidth, iw: window.innerWidth})'
+    )
+    assert width['sw'] <= width['iw'], width
 
 
 def test_no_horizontal_overflow_at_430px_with_a_live_run(stub, page, app_url):
