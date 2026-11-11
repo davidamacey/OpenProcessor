@@ -12,13 +12,11 @@ v0.4.0 backend deltas §7.2).
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import shot
 from playwright.sync_api import expect
 
-
-SHOTS = Path(__file__).resolve().parents[2] / 'artifacts_local' / 'v040-ui' / 'detector'
 
 DETECTOR = {
     'model': 'widget_detector_v1',
@@ -94,14 +92,6 @@ def _ingest_config(policy):
     }
 
 
-def _shots(page, name: str) -> None:
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    for width in (1600, 800):
-        page.set_viewport_size({'width': width, 'height': 1000})
-        page.screenshot(path=str(SHOTS / f'{name}-{width}.png'), full_page=True)
-    page.set_viewport_size({'width': 1280, 'height': 720})
-
-
 def _stub_policy(stub, put_handler):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/ingest/config(\?|$)', _ingest_config(POLICY))
@@ -130,7 +120,7 @@ def test_load_edit_preview_and_save_behind_a_confirm(stub, page, app_url):
         'Estimated from 800 detections'
     )
     expect(page.get_by_test_id('policy-preview')).to_contain_text('changes only future ingests')
-    _shots(page, 'ingest-policy-preview')
+    shot(page, 'ingest-policy-preview', widths=(1600, 800))
 
     puts = [c for c in stub.calls if c[0] == 'PUT']
     assert not puts, 'nothing may be saved before the confirm'
@@ -140,7 +130,7 @@ def test_load_edit_preview_and_save_behind_a_confirm(stub, page, app_url):
     expect(page.get_by_test_id('policy-unknown-names')).to_contain_text(
         'gizmo', timeout=ACTION_TIMEOUT_MS
     )
-    _shots(page, 'ingest-policy-unknown-names')
+    shot(page, 'ingest-policy-unknown-names', widths=(1600, 800))
 
     puts = [c for c in stub.calls if c[0] == 'PUT']
     assert len(puts) == 1
@@ -159,13 +149,7 @@ def test_detection_only_mode_and_clustering_off_are_saved(stub, page, app_url):
     page.get_by_test_id('policy-mode').select_option('none')
     expect(page.get_by_test_id('ingest-policy-form')).to_contain_text('Detection only')
     automatic.uncheck()
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    for width in (1600, 430):
-        page.set_viewport_size({'width': width, 'height': 1000})
-        page.screenshot(
-            path=str(SHOTS / f'ingest-policy-detection-only-{width}.png'), full_page=True
-        )
-    page.set_viewport_size({'width': 1280, 'height': 720})
+    shot(page, 'ingest-policy-detection-only', widths=(1600, 430))
 
     page.get_by_test_id('policy-save').click()
     page.get_by_role('dialog').get_by_role('button', name='Save policy').click()
@@ -203,7 +187,7 @@ def test_a_409_offers_reload_and_keep_my_edits(stub, page, app_url):
     )
     expect(page.get_by_test_id('policy-reload')).to_be_visible()
     expect(page.get_by_test_id('policy-keep')).to_be_visible()
-    _shots(page, 'ingest-policy-conflict')
+    shot(page, 'ingest-policy-conflict', widths=(1600, 800))
 
     page.get_by_test_id('policy-reload').click()
     expect(page.get_by_test_id('policy-mode')).to_have_value('all')
