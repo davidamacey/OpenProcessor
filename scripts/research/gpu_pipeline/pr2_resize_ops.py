@@ -77,7 +77,7 @@ def downstream(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Boxes in frame pixels (from the arm's letterbox) and PE vectors (from the arm's squares)."""
     import cupy as cp
-    from prep_geometry import letterbox_geometry, undo_letterbox
+    from image_geometry import letterbox_geometry, undo_letterbox
 
     out = detector.run(canvas)
     n = int(out['num_dets'][0][0])
@@ -178,7 +178,7 @@ def run_gpu(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
     import cupy as cp
     import resize_arms
     from decoder_arms import ShippedLanes
-    from prep_geometry import crop_rect, letterbox_geometry, undo_letterbox
+    from image_geometry import crop_rect, letterbox_geometry, undo_letterbox
     from trt_runner import TrtModel
 
     detector, encoder = TrtModel(args.det_plan), TrtModel(args.pe_plan)

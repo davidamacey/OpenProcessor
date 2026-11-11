@@ -114,3 +114,4 @@ _.__qualname__  # src/tasks/runtime/register.py; assigned so Celery names the ta
 _.registry_sha  # src/services/training/jobs.py; stored in training_runs.spec, read by name in docker/trainer/job_manifest.py
 _.tb  # src/utils/stage_timing.py; the __exit__ signature of the context manager protocol
 _.whole_square_geometry  # src/domain/image_geometry.py; called by models/gpu_image_prep/1/model.py through the byte-identical copy and by tests/models/test_gpu_image_prep_geometry.py
+_.nvtx_verbosity  # scripts/research/gpu_pipeline/trt_runner.py; a TensorRT IExecutionContext property the runtime reads, assigned to drop per-layer NVTX ranges

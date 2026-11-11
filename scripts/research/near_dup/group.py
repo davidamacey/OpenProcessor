@@ -3,7 +3,7 @@
 Edges are exact (blocked matmul over unit-norm rows). Three rules, each returning ``labels`` (one group id
 per row, singletons included):
 
-* ``single``: connected components, today's rule (``frame_dedup.near_dup_groups`` computes the same
+* ``single``: connected components, the product's component rule (``near_dup.connected_components`` computes the same
   components; :func:`product_groups` runs the product function so the control rows are its numbers);
 * ``single_guard``: components larger than ``guard`` are re-split by complete linkage at the same cut;
 * ``complete``: complete linkage inside every component.
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -101,10 +102,13 @@ def group_labels(
 
 
 def product_groups(x: np.ndarray, cut: float) -> list[list[int]]:
-    """Today's product function, unchanged, on the same vectors (the control rows)."""
-    from src.services.detection.frame_dedup import near_dup_groups
+    """The product grouping (``src.domain.near_dup.group_members``) on the same vectors (the control rows)."""
+    from src.domain.near_dup import group_members
 
-    return near_dup_groups(x, threshold=cut)
+    i, j = edges_from_vectors(x, floor=cut).at(cut)
+    edges = {(f'{a:09d}', f'{b:09d}'): 1.0 for a, b in zip(i.tolist(), j.tolist(), strict=True)}
+    found = group_members(edges, max_group_size=x.shape[0]).groups
+    return [[int(m) for m in g] for g in found]
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -120,7 +124,7 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 def evaluate(
     labels: np.ndarray, family: np.ndarray, transform: np.ndarray, original_index: dict[int, int]
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Copy recall per transform, false-group rate, BCubed and group sizes.
 
     ``original_index[family]`` is the row of the original of each family; ``transform == 'orig'`` marks it.
