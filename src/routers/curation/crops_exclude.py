@@ -15,8 +15,15 @@ from src.routers.curation._selection_write_models import (
     BatchUnexcludeResponse,
     SelectionDryRunResponse,
 )
+from src.schemas.curation.exclusion import ExcludeReasonList, exclude_reason_list
 from src.services.curation.exclusion import exclude_items, unexclude_items
 from src.services.curation.label_undo import CropNotFoundError, review_dismiss
+
+
+@router.get('/exclude_reasons', response_model=ExcludeReasonList, tags=['Crops'])
+async def list_exclude_reasons() -> ExcludeReasonList:
+    """The reasons an item can be excluded for, in display order, with their labels."""
+    return exclude_reason_list()
 
 
 @router.post(

@@ -8155,7 +8155,7 @@
         "type": "object"
       },
       "CropExcludeRequest": {
-        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'``; the UI can\npass a more specific tag (``'blurry'``, ``'unidentifiable'``,\n``'wrong_class'``, ``'partial_crop'``) when the operator wants to\nrecord why (e.g. a whole cluster of blurry items).",
+        "description": "Exclude crops from training + clustering (reversible).\n\nBlurry / unidentifiable / partial crops the human doesn't want in\nthe training set. ``reason`` defaults to ``'ignore'`` and is one of the\nserved ``GET /exclude_reasons`` ids; ``'not_an_object'`` is a person's soft\ndelete of a box that was never an object (the document stays, and the\ngeometry lock keeps a re-detect from creating the box again).",
         "properties": {
           "crop_ids": {
             "anyOf": [
@@ -8179,6 +8179,14 @@
           },
           "reason": {
             "default": "ignore",
+            "enum": [
+              "ignore",
+              "blurry",
+              "unidentifiable",
+              "not_the_subject",
+              "partial_crop",
+              "not_an_object"
+            ],
             "title": "Reason",
             "type": "string"
           },
@@ -11870,6 +11878,48 @@
           "ignored"
         ],
         "title": "EventsAccepted",
+        "type": "object"
+      },
+      "ExcludeReasonEntry": {
+        "properties": {
+          "id": {
+            "enum": [
+              "ignore",
+              "blurry",
+              "unidentifiable",
+              "not_the_subject",
+              "partial_crop",
+              "not_an_object"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "ExcludeReasonEntry",
+        "type": "object"
+      },
+      "ExcludeReasonList": {
+        "properties": {
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ExcludeReasonEntry"
+            },
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reasons"
+        ],
+        "title": "ExcludeReasonList",
         "type": "object"
       },
       "ExportClassSplitCounts": {
@@ -52871,6 +52921,50 @@
         "summary": "Curation Events Stats",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/exclude_reasons": {
+      "get": {
+        "description": "The reasons an item can be excluded for, in display order, with their labels.",
+        "operationId": "list_exclude_reasons_curation_projects__project__exclude_reasons_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExcludeReasonList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Exclude Reasons",
+        "tags": [
+          "Curation",
+          "Crops"
         ]
       }
     },
