@@ -5,18 +5,27 @@ A client reads the global event stream from replica 1, drops, and reconnects to 
 replay exactly the events after that id: none missing, none repeated, and no ``reset``. Spec:
 https://html.spec.whatwg.org/multipage/server-sent-events.html#the-last-event-id-header
 
-Needs the scale overlay (``docker/test/compose.scale.yml``, two api replicas); see ``_scale.py``.
+The module fixture brings up the scale overlay (``docker/test/compose.scale.yml``, two api replicas)
+itself and restores the base stack after, so the check does not depend on an earlier file leaving
+the stack scaled; see ``_scale.py``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
 from tests.live import _compose
 from tests.live._jobs import start_infra_job, wait_for_job
-from tests.live._scale import REPLICA1_URL, REPLICA2_URL, require_replicas
+from tests.live._scale import (
+    REPLICA1_URL,
+    REPLICA2_URL,
+    reconfigure,
+    require_replicas,
+    restore_base_stack,
+)
 from tests.live._sse import SseCollector
 from tests.live.conftest import API_PREFIX
 
@@ -36,7 +45,18 @@ def _seq(event_id: str) -> int:
     return int(event_id.split('-')[1])
 
 
-def test_resume_on_the_other_replica_has_no_gap_and_no_duplicate(api: Any) -> None:
+@pytest.fixture(scope='module')
+def two_api_replicas() -> Iterator[None]:
+    try:
+        reconfigure(workers=1, api_replicas=2, jobs_replicas=1)
+        yield
+    finally:
+        restore_base_stack()
+
+
+def test_resume_on_the_other_replica_has_no_gap_and_no_duplicate(
+    api: Any, two_api_replicas: None
+) -> None:
     require_replicas()
     events_a = f'{REPLICA1_URL}{API_PREFIX}/events'
     events_b = f'{REPLICA2_URL}{API_PREFIX}/events'
