@@ -212,3 +212,4 @@ def test_back_to_clusters_fits_at_430(stub, page, app_url):
     box = back.bounding_box()
     assert box is not None
     assert box['x'] >= 0 and box['x'] + box['width'] <= 430, box
+    shoot(page, 'back-button')
