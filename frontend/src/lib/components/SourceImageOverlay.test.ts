@@ -35,6 +35,8 @@ function item(overrides: Partial<Crop> = {}): Crop {
     id: 'crop-1',
     class_name: null,
     proposed_class_name: null,
+    display_name: '',
+    display_name_kind: 'none',
     bbox_norm: { cx: 0.3, cy: 0.3, w: 0.2, h: 0.2 },
     ...overrides,
   } as unknown as Crop;
@@ -83,7 +85,7 @@ describe('SourceImageOverlay', () => {
       items: [
         item({
           id: 'crop-pos',
-          class_name: 'widget_a',
+          display_name: 'widget_a',
           bbox_norm: { cx: 0.5, cy: 0.4, w: 0.2, h: 0.1 },
         }),
       ],
@@ -113,9 +115,10 @@ describe('SourceImageOverlay', () => {
         indexed_at: null,
       },
       items: [
-        item({ id: 'lbl-a', class_name: 'widget_a' }),
-        item({ id: 'lbl-b', class_name: null, proposed_class_name: 'widget_b' }),
-        item({ id: 'lbl-c', class_name: null, proposed_class_name: null }),
+        item({ id: 'lbl-a', display_name: 'widget_a', display_name_kind: 'class' }),
+        item({ id: 'lbl-b', display_name: 'widget_b', display_name_kind: 'proposed' }),
+        item({ id: 'lbl-c', display_name: '', display_name_kind: 'none' }),
+        item({ id: 'lbl-d', display_name: 'stop sign', display_name_kind: 'detector' }),
       ],
     };
     vi.mocked(getCropContext).mockResolvedValue(ctx);
@@ -136,6 +139,10 @@ describe('SourceImageOverlay', () => {
 
     expect(byId('lbl-c').className).toContain('border-zinc-500');
     expect(byId('lbl-c').getAttribute('title')).toContain('unlabeled');
+
+    // Named by the detector only: the served name, marked as the detector's, never "unlabeled".
+    expect(byId('lbl-d').className).toContain('border-amber-400');
+    expect(byId('lbl-d').getAttribute('title')).toContain('stop sign (detector)');
   });
 
   it('draws every served box at its source-frame position, solid or dashed by state', async () => {

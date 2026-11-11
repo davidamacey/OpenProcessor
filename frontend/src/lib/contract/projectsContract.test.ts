@@ -64,6 +64,7 @@ const CASES: [string, string[]][] = [
       limits: true,
       labels: true,
       include_archived: true,
+      total: true,
     } satisfies Record<keyof T.ProjectsResponse, true>),
   ],
   [

@@ -100,6 +100,7 @@ export function testProjectsResponse(
       },
     },
     include_archived: false,
+    total: projects.length,
     ...over,
   };
 }

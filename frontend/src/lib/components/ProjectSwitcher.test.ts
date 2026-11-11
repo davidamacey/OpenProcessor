@@ -13,6 +13,22 @@ vi.mock('$app/state', () => ({
   page: { url: new URL('http://x/p/default/review?tab=regions&crop_id=c9') },
 }));
 
+const served = vi.hoisted(() => ({ all: [] as unknown[], calls: [] as unknown[] }));
+vi.mock('$lib/api_projects', async (orig) => ({
+  ...(await orig<typeof import('$lib/api_projects')>()),
+  // A stand-in server: filters by `q`, cuts to `limit`, reports `total`, like GET /projects.
+  getProjects: vi.fn(
+    async (_s: unknown, _a: boolean, f: { q?: string; limit?: number } = {}) => {
+      served.calls.push(f);
+      const q = (f.q ?? '').toLowerCase();
+      const hit = (served.all as { slug: string; display_name: string }[]).filter(
+        (p) => p.slug.includes(q) || p.display_name.toLowerCase().includes(q),
+      );
+      return { projects: hit.slice(0, f.limit ?? hit.length), total: hit.length };
+    },
+  ),
+}));
+
 import ProjectSwitcher from './ProjectSwitcher.svelte';
 import { API_PREFIX } from '$lib/api';
 import { FALLBACK_KEYMAP } from '$lib/keymapFallback';
@@ -38,10 +54,18 @@ function render(): void {
   flushSync();
 }
 
-function open(): void {
+async function open(): Promise<void> {
   target
     .querySelector<HTMLButtonElement>('[data-testid="project-switcher-trigger"]')!
     .click();
+  flushSync();
+  await vi.waitFor(() => {
+    expect(
+      target.querySelector('[data-testid="project-switcher-filter"]'),
+    ).not.toBeNull();
+  });
+  await Promise.resolve();
+  await Promise.resolve();
   flushSync();
 }
 
@@ -64,6 +88,8 @@ beforeEach(() => {
     }),
   ]);
   projectsStore.list = res.projects;
+  served.all = res.projects;
+  served.calls = [];
   projectsStore.labels = res.labels!;
   projectsStore.select(DEFAULT);
 });
@@ -79,12 +105,12 @@ afterEach(() => {
 });
 
 describe('ProjectSwitcher', () => {
-  it('shows the active project and lists only served selectable projects', () => {
+  it('shows the active project and lists only served selectable projects', async () => {
     render();
     expect(
       target.querySelector('[data-testid="project-switcher-current"]')!.textContent,
     ).toBe('Default');
-    open();
+    await open();
     const options = [...target.querySelectorAll('[role="option"]')].map((o) =>
       o.getAttribute('data-testid'),
     );
@@ -95,9 +121,9 @@ describe('ProjectSwitcher', () => {
     ]);
   });
 
-  it('badges a non-active status with the served label', () => {
+  it('badges a non-active status with the served label', async () => {
     render();
-    open();
+    await open();
     const old = target.querySelector('[data-testid="project-option-old"]')!;
     expect(old.textContent).toContain('Archived');
     const alpha = target.querySelector('[data-testid="project-option-alpha"]')!;
@@ -112,9 +138,9 @@ describe('ProjectSwitcher', () => {
     ).toBe('Archived');
   });
 
-  it('navigates to the same section under the new slug, dropping crop ids', () => {
+  it('navigates to the same section under the new slug, dropping crop ids', async () => {
     render();
-    open();
+    await open();
     target
       .querySelector<HTMLButtonElement>('[data-testid="project-option-alpha"]')!
       .click();
@@ -123,13 +149,70 @@ describe('ProjectSwitcher', () => {
     expect(target.querySelector('[data-testid="project-switcher-menu"]')).toBeNull();
   });
 
-  it('does not navigate when the active project is picked', () => {
+  it('does not navigate when the active project is picked', async () => {
     render();
-    open();
+    await open();
     target
       .querySelector<HTMLButtonElement>('[data-testid="project-option-default"]')!
       .click();
     expect(goto).not.toHaveBeenCalled();
+  });
+
+  it('asks the server for one bounded page and filters there as the operator types', async () => {
+    served.all = [
+      ...(served.all as object[]),
+      ...Array.from({ length: 40 }, (_, i) =>
+        testProject({ slug: `cars-${i}`, display_name: `Cars ${i}` }),
+      ),
+    ];
+    render();
+    await open();
+    expect(served.calls[0]).toEqual({ q: '', limit: 25 });
+    const list = target.querySelector('[data-testid="project-switcher-list"]')!;
+    expect(list.className).toContain('overflow-y-auto');
+    expect(list.className).toContain('max-h-');
+    expect(list.querySelectorAll('[role="option"]').length).toBe(24); // the stand-in's 25-row page holds one non-selectable project
+    expect(
+      target.querySelector('[data-testid="project-switcher-more"]')!.textContent,
+    ).toContain('of 44');
+
+    const input = target.querySelector<HTMLInputElement>(
+      '[data-testid="project-switcher-filter"]',
+    )!;
+    input.value = 'alp';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => expect(served.calls.at(-1)).toEqual({ q: 'alp', limit: 25 }));
+    await Promise.resolve();
+    flushSync();
+    expect([...list.querySelectorAll('[role="option"]')].map((o) => o.id)).toEqual([
+      'project-option-alpha',
+    ]);
+  });
+
+  it('is a combobox over a listbox: arrows move the active option, Enter picks it', async () => {
+    render();
+    await open();
+    const input = target.querySelector<HTMLInputElement>(
+      '[data-testid="project-switcher-filter"]',
+    )!;
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(input.getAttribute('aria-controls')).toBe('project-switcher-listbox');
+    expect(input.getAttribute('aria-activedescendant')).toBe('project-option-default');
+    const key = (k: string) => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+      flushSync();
+    };
+    key('ArrowDown');
+    expect(input.getAttribute('aria-activedescendant')).toBe('project-option-alpha');
+    expect(
+      target.querySelector('#project-option-alpha')!.getAttribute('aria-selected'),
+    ).toBe('true');
+    key('End');
+    expect(input.getAttribute('aria-activedescendant')).toBe('project-option-old');
+    key('Home');
+    key('ArrowDown');
+    key('Enter');
+    expect(goto).toHaveBeenCalledWith('/p/alpha/review?tab=regions');
   });
 
   it('shows "custom keys" only for a served non-default keymap', () => {
@@ -144,9 +227,9 @@ describe('ProjectSwitcher', () => {
     ).not.toBeNull();
   });
 
-  it('links to the project management page', () => {
+  it('links to the project management page', async () => {
     render();
-    open();
+    await open();
     expect(
       target
         .querySelector('[data-testid="project-switcher-manage"]')!

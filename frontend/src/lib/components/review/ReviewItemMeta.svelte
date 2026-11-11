@@ -84,11 +84,18 @@
   {/if}
 
   <dt class="text-zinc-500">Current label</dt>
-  <dd class="text-zinc-200">
+  <dd class="text-zinc-200" data-testid="current-label">
     <!-- R6 (visual audit 2026-09-24): a class-less item used to
          read "Current label (vlm)" with a blank value. -->
-    {#if current.class_name}
-      {current.class_name}
+    {#if current.display_name_kind === 'class'}
+      {current.display_name}
+    {:else if current.display_name}
+      <span class="italic text-zinc-300">{current.display_name}</span>
+      <span class="text-[10px] text-zinc-500"
+        >({current.display_name_kind === 'detector'
+          ? "detector's label, not classed yet"
+          : 'proposed, not classed yet'})</span
+      >
     {:else}
       <span class="italic text-zinc-500">{NO_CLASS_YET}</span>
     {/if}
