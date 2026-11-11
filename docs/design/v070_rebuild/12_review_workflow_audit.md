@@ -1264,3 +1264,13 @@ step at 1600 and 430 px kept under `artifacts_local/`. Every number on screen is
 5. Deleting a box in the editor is a soft delete (`not_an_object`, undoable, kept so a re-detect does not
    bring it back) rather than removing the item (default: soft).
 6. Embedding view in wave 4 (default: yes, after the six core views).
+
+**Owner answers to 4 to 6 (2026-11-11):**
+4. **Editor keys are customisable** through the existing keymap system (`keymapFallback.ts`, scope `editor.*`).
+   - Defaults follow common practice in Label Studio and CVAT: select, draw and pan on single keys.
+   - A class hotkey that clashes with an editor key is refused at assignment with a clear message; the user can
+     rebind either. Letters are not hard-reserved.
+5. **Soft delete,** as proposed.
+6. **The Embedding view is the existing scatter plot** (`EmbeddingPlot.svelte` inside the Clusters page). Wave 4
+   moves it into the Workspace as its own view and makes it follow the shared filter. A box drawn on it becomes a
+   filter for every other view. No new plot is built.
