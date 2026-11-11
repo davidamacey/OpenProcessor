@@ -75,16 +75,20 @@ def _check_pack(request: AssistRunRequest, pack: PromptPack) -> None:
         )
 
 
-def _check_segment(request: AssistRunRequest, vlm: RunVlm) -> None:
+async def _check_segment(request: AssistRunRequest, vlm: RunVlm) -> None:
     """The `segment` action needs a region worker that can do the work, and an endpoint
     the worker can verify with."""
     if 'segment' not in request.actions or request.segment is None:
         return
+    from src.services.config_store.store import ConfigStoreUnavailableError
     from src.services.curation.region_stage_control import is_region_stage_paused
-    from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.detection.profile_registry import confirmed_active_region_profile
     from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError, active_vlm_endpoint
 
-    profile = get_active_region_profile()
+    try:
+        profile = await confirmed_active_region_profile()
+    except ConfigStoreUnavailableError as exc:
+        raise rejection(503, 'config_store_unavailable', str(exc)) from exc
     if profile is None:
         raise rejection(
             409,
@@ -151,7 +155,7 @@ async def _resolve_inputs(
         acknowledge_external=request.acknowledge_external,
     )
     require_run_vlm(vlm)
-    _check_segment(request, vlm)
+    await _check_segment(request, vlm)
     return pack_name, pack_revision, pack, vlm
 
 

@@ -103,8 +103,13 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
 
     result: dict[str, ProjectCounts] = {}
     for slug, record in snapshot.items():
-        images_idx = record.resources.indexes[IndexRole.IMAGES]
-        items_idx = record.resources.indexes[IndexRole.ITEMS]
+        indexes = record.resources.indexes
+        if IndexRole.IMAGES not in indexes or IndexRole.ITEMS not in indexes:
+            # A delete in flight has already dropped the index entries: unknown, not a 500.
+            result[slug] = UNKNOWN_COUNTS
+            continue
+        images_idx = indexes[IndexRole.IMAGES]
+        items_idx = indexes[IndexRole.ITEMS]
         with bind_project(record, read_only=True):
             images = await index_count(client, images_idx)
             items = await index_count(client, items_idx)
