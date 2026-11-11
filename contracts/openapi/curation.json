@@ -44992,25 +44992,6 @@
             }
           },
           {
-            "description": "Return only the card of this cluster (its identity in the served partition).",
-            "in": "query",
-            "name": "cluster_uid",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return only the card of this cluster (its identity in the served partition).",
-              "title": "Cluster Uid"
-            }
-          },
-          {
             "in": "query",
             "name": "min_blur_ratio",
             "required": false,
@@ -45943,6 +45924,73 @@
           }
         },
         "summary": "Start Cluster Run",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/clusters/{cluster_uid}": {
+      "get": {
+        "description": "The served card of one cluster: the item shape of ``GET /clusters`` with its\n``representatives``. 404 ``cluster_not_found`` when the serving partition has no such\ncluster, or none of its members is workable (frozen test holdout and excluded items are\nnever counted).",
+        "operationId": "get_cluster_card_curation_projects__project__clusters__cluster_uid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_uid",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Cluster Uid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Representative crops",
+            "in": "query",
+            "name": "per_cluster",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "description": "Representative crops",
+              "maximum": 10,
+              "minimum": 0,
+              "title": "Per Cluster",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterCard"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cluster Card",
         "tags": [
           "Curation"
         ]

@@ -27,10 +27,23 @@ def _script_twins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(twins, review_tab_clauses.DETECTOR_DISAGREES_SCRIPT, lambda _doc: False)
 
 
+def _only_the_bound_project(leak_env: LeakEnv, slug: str, body: dict) -> None:
+    """The response names no other project's data and OpenSearch saw only the bound project's indexes."""
+    text = json.dumps(body)
+    for other in (s for s in SLUGS if s != slug):
+        assert CLASS_NAMES[other] not in text
+        assert f'{other}-item' not in text
+    own = {str(i) for i in leak_env.records[slug].resources.indexes.values()}
+    # The deployment-wide config index is shared by design (the project guard allows it).
+    touched = {idx for _b, _m, _u, idx in leak_env.accesses if idx} - {'op_global_configs'}
+    assert touched, 'the route reached OpenSearch'
+    assert touched <= own, f'touched foreign indexes: {touched - own}'
+    assert {bound for bound, *_ in leak_env.accesses} == {slug}
+
+
 @pytest.mark.parametrize('slug', SLUGS)
 def test_cluster_list_serves_only_the_bound_projects_data(leak_env: LeakEnv, slug: str) -> None:
     client = TestClient(leak_env.app, raise_server_exceptions=False)
-    others = [s for s in SLUGS if s != slug]
     leak_env.accesses.clear()
 
     resp = client.get(
@@ -43,17 +56,8 @@ def test_cluster_list_serves_only_the_bound_projects_data(leak_env: LeakEnv, slu
     assert body['items'], 'the seeded project has clustered items'
     assert body['truncated'] is False
     assert all(card['review_counts'] for card in body['items'])
-    text = json.dumps(body)
-    assert f'{slug}-item' in text  # representatives are this project's crops
-    for other in others:
-        assert f'{other}-item' not in text
-        assert CLASS_NAMES[other] not in text
-    own = {str(i) for i in leak_env.records[slug].resources.indexes.values()}
-    # The deployment-wide config index is shared by design (the project guard allows it).
-    touched = {idx for bound, _m, _u, idx in leak_env.accesses if idx} - {'op_global_configs'}
-    assert touched, 'the route reached OpenSearch'
-    assert touched <= own, f'touched foreign indexes: {touched - own}'
-    assert {bound for bound, *_ in leak_env.accesses} == {slug}
+    assert f'{slug}-item' in json.dumps(body)  # representatives are this project's crops
+    _only_the_bound_project(leak_env, slug, body)
 
 
 @pytest.mark.parametrize('slug', SLUGS)
@@ -66,12 +70,28 @@ def test_cluster_facets_serve_only_the_bound_projects_data(leak_env: LeakEnv, sl
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['total'] > 0, 'the seeded project has members in the seeded cluster'
-    text = json.dumps(body)
-    for other in (s for s in SLUGS if s != slug):
-        assert CLASS_NAMES[other] not in text
-        assert f'{other}-item' not in text
-    own = {str(i) for i in leak_env.records[slug].resources.indexes.values()}
-    touched = {idx for _b, _m, _u, idx in leak_env.accesses if idx} - {'op_global_configs'}
-    assert touched
-    assert touched <= own, f'touched foreign indexes: {touched - own}'
-    assert {bound for bound, *_ in leak_env.accesses} == {slug}
+    _only_the_bound_project(leak_env, slug, body)
+
+
+@pytest.mark.parametrize('slug', SLUGS)
+def test_cluster_card_serves_only_the_bound_projects_data(leak_env: LeakEnv, slug: str) -> None:
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    leak_env.accesses.clear()
+
+    resp = client.get(f'{SCOPED.format(project=slug)}/clusters/{cluster_uid(slug)}')
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body['cluster_uid'] == cluster_uid(slug)
+    assert body['size'] > 0
+    assert f'{slug}-item' in json.dumps(body)  # representatives are this project's crops
+    _only_the_bound_project(leak_env, slug, body)
+
+
+def test_a_foreign_projects_cluster_is_not_found(leak_env: LeakEnv) -> None:
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+
+    resp = client.get(f'{SCOPED.format(project="alpha")}/clusters/{cluster_uid("beta")}')
+
+    assert resp.status_code == 404
+    assert resp.json()['detail']['error'] == 'cluster_not_found'

@@ -274,7 +274,7 @@ describe('getCluster cluster_uid param', () => {
       'cluster_uid=0b9f9a38-0000-4000-8000-000000000017',
     );
     expect(urlOf(fetchMock, `${API_PREFIX}/clusters`)).toContain(
-      'cluster_uid=0b9f9a38-0000-4000-8000-000000000017',
+      '/clusters/0b9f9a38-0000-4000-8000-000000000017',
     );
     expect(urlOf(fetchMock, `${API_PREFIX}/crops`)).not.toContain('cluster_id');
     expect(urlOf(fetchMock, `${API_PREFIX}/crops`)).not.toContain('cluster_subid');

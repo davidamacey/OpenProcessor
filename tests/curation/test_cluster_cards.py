@@ -400,9 +400,10 @@ def test_the_route_serves_filtered_sorted_cards(client: TestClient) -> None:
 
 
 def test_one_card_by_cluster_uid_and_a_malformed_uid_is_refused(client: TestClient) -> None:
-    one = client.get(f'{URL}/clusters', params={'per_cluster': 0, 'cluster_uid': uid(2)}).json()
-    assert [c['cluster_uid'] for c in one['items']] == [uid(2)]
-    assert client.get(f'{URL}/clusters', params={'cluster_uid': '7'}).status_code == 422
+    one = client.get(f'{URL}/clusters/{uid(2)}', params={'per_cluster': 0}).json()
+    assert one['cluster_uid'] == uid(2)
+    assert one['display_no'] == 42
+    assert client.get(f'{URL}/clusters/7').status_code == 422
 
 
 @pytest.mark.asyncio

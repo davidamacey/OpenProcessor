@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import pytest
-from fixtures.contract import cluster_facets, embedding_spaces, fill
+from fixtures.contract import cluster_card, cluster_facets, embedding_spaces, fill
 from fixtures.wire import (
     REGION_PROFILE,
     REGION_TAB_LABEL,
@@ -136,6 +136,8 @@ class Stub:
         self.on('GET', r'/embedding/spaces(\?|$)', embedding_spaces())
         # ...and reads its facet counts; a test that checks chips overrides this.
         self.on('GET', r'/clusters/([^/]+)/facets$', self._empty_facets)
+        # The served card of one cluster (the detail header); a test that cares overrides it.
+        self.on('GET', r'/clusters/(?!partitions$|representatives$)([^/]+)$', self._card)
         # S1 fix (visual audit 2026-09-24): `/review` now reads the
         # deployment's pinned curation defaults (`curationSettingsStore`)
         # so StrategyBar can flag a zero-coverage pinned sort — fired on
@@ -366,6 +368,10 @@ class Stub:
     @staticmethod
     def _empty_facets(_request: Any, match: re.Match[str]) -> HandlerResult:
         return (200, cluster_facets(match.group(1)))
+
+    @staticmethod
+    def _card(_request: Any, match: re.Match[str]) -> HandlerResult:
+        return (200, cluster_card(match.group(1)))
 
     @staticmethod
     def _context(_request: Any, _match: re.Match[str]) -> HandlerResult:

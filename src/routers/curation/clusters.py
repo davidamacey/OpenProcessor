@@ -13,6 +13,7 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.clusters import (
+    ClusterCard,
     ClusterFacets,
     ClusterListResponse,
     ClusterRepresentativesPage,
@@ -41,10 +42,6 @@ async def list_clusters(
         ge=1,
         le=10000,
         description='Clusters the aggregation returns; `truncated` says when it was cut here.',
-    ),
-    cluster_uid: uuid.UUID | None = Query(
-        None,
-        description='Return only the card of this cluster (its identity in the served partition).',
     ),
     # Primary-subject grid filters: every card stat (size, reps)
     # reflects only crops passing these.
@@ -92,7 +89,6 @@ async def list_clusters(
             item_filter=gate,
             per_cluster=per_cluster,
             max_clusters=max_clusters,
-            cluster_uid=str(cluster_uid) if cluster_uid is not None else None,
             offset=offset,
             limit=limit,
             sort=sort,
@@ -201,3 +197,33 @@ async def cluster_representatives(
         'offset': offset,
         'max_clusters': max_clusters,
     }
+
+
+# Registered after the literal ``/clusters/representatives``: a path parameter would take it.
+@router.get('/clusters/{cluster_uid}', response_model=None, responses={200: {'model': ClusterCard}})
+async def get_cluster_card(
+    cluster_uid: uuid.UUID,
+    opensearch: OpenSearchDep,
+    session: DbSessionDep,
+    per_cluster: int = Query(4, ge=0, le=10, description='Representative crops'),
+) -> ClusterCard:
+    """The served card of one cluster: the item shape of ``GET /clusters`` with its
+    ``representatives``. 404 ``cluster_not_found`` when the serving partition has no such
+    cluster, or none of its members is workable (frozen test holdout and excluded items are
+    never counted)."""
+    uid = str(cluster_uid)
+    response = await list_cluster_cards(
+        opensearch,
+        ClusterListParams(per_cluster=per_cluster, max_clusters=1, cluster_uid=uid, limit=1),
+    )
+    if not response['items']:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                'error': 'cluster_not_found',
+                'message': f'cluster {uid} is not in the serving partition, '
+                'or has no workable members',
+            },
+        )
+    await attach_display_nos(session, response['items'])
+    return response['items'][0]

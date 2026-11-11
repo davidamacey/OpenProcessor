@@ -160,15 +160,6 @@ describe('getClusters card mapping', () => {
       flags: [],
     });
   });
-
-  it('sends cluster_uid, not a cluster id, to ask for one card', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [], total: 0 }));
-    vi.stubGlobal('fetch', fetchMock);
-    await getClusters({ cluster_uid: UID_A });
-    const url = fetchMock.mock.calls[0][0] as string;
-    expect(url).toContain(`cluster_uid=${UID_A}`);
-    expect(url).not.toContain('cluster_id');
-  });
 });
 
 describe('getCluster', () => {
@@ -187,28 +178,36 @@ describe('getCluster', () => {
     );
   }
 
-  it('reads the card of the uid asked for', async () => {
-    stub(() => jsonResponse({ items: [card({ cluster_uid: UID_B }), card()], total: 2 }));
+  it('reads the served card of the uid from its own route, with no list call', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          url.startsWith(`${API_PREFIX}/crops`)
+            ? jsonResponse({ total: 3, page: 1, page_size: 60, crops: [] })
+            : jsonResponse(card()),
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
     const res = await getCluster(UID_A);
     expect(res.cluster).toMatchObject({ uid: UID_A, dominant_class_name: 'widget_b' });
     expect(res.cardError).toBeNull();
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls.some((u) => u.includes(`/clusters/${UID_A}`))).toBe(true);
+    expect(urls.some((u) => u.includes('max_clusters'))).toBe(false);
   });
 
-  it('falls back to a null-identity stub (no class, unlabeled) when the card lookup fails', async () => {
+  it('has no card, and names the served reason, when the card route refuses', async () => {
     stub(
       () =>
         new Response(JSON.stringify({ detail: 'down' }), {
-          status: 503,
+          status: 404,
           headers: { 'content-type': 'application/json' },
         }),
     );
     const res = await getCluster(UID_A);
-    expect(res.cluster).toMatchObject({
-      uid: UID_A,
-      size: 3,
-      dominant_class_name: null,
-      is_unlabeled: true,
-    });
+    expect(res.cluster).toBeNull();
+    expect(res.crops.total).toBe(3);
     expect(res.cardError).toContain('down');
   });
 });

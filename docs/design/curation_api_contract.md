@@ -1409,7 +1409,8 @@ no longer exist.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `cluster_uid`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class`, `min_size`, `max_size`, `validation_state`, `flag` (repeatable) and `needs_review`, plus the shared item filter |
+| GET | `/clusters/{cluster_uid}` | the served card of one cluster (the item shape of `/clusters` with its `representatives`; query `per_cluster`); `404 cluster_not_found` when the serving partition has no such cluster or none of its members is workable |
+| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class`, `min_size`, `max_size`, `validation_state`, `flag` (repeatable) and `needs_review`, plus the shared item filter |
 | GET | `/clusters/{cluster_uid}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing` |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters` (max 1000), `class_id`, `offset` (max 64535, so `offset + max_clusters` stays within OpenSearch `search.max_buckets`; above it `422`) |
 | POST | `/clusters/runs` | `ClusterRunRequest` (`target`, optional `level`); `202` `{job_id}`. Writes a new partition with the active `cluster_profile`; the serving partition keeps serving |

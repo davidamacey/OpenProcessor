@@ -130,7 +130,6 @@ export async function getClusters(
       taken_from: filter.taken_from ?? undefined,
       taken_to: filter.taken_to ?? undefined,
       image_id: filter.image_id,
-      cluster_uid: filter.cluster_uid ?? undefined,
       // Enough buckets to return every cluster in one call; `truncated` says when not.
       max_clusters: 2000,
       sort: filter.sort,
@@ -221,13 +220,14 @@ export async function getCluster(
     sort?: string | null;
   } = {},
 ): Promise<{
-  cluster: Cluster;
+  /** The served card (`GET /clusters/{uid}`); null when the server refused it, see `cardError`. */
+  cluster: Cluster | null;
   crops: PaginatedResponse<Crop>;
   /** Why the cluster card could not be read (the crops still render), or null. */
   cardError: string | null;
 }> {
   // Two parallel calls: paginated crops + the authoritative cluster
-  // card from {API_PREFIX}/clusters (server-computed). The page no longer
+  // card from {API_PREFIX}/clusters/{uid} (server-computed). The page no longer
   // derives any of the cluster's identity fields client-side.
   //
   // `classSource` narrows the crop grid to one source bucket
@@ -271,10 +271,10 @@ export async function getCluster(
   if (opts.labelValidated != null) cropQuery.label_validated = opts.labelValidated;
   if (opts.sort) cropQuery.sort = opts.sort;
   let cardError: string | null = null;
-  const [cropPage, clustersResp] = await Promise.all([
+  const [cropPage, card] = await Promise.all([
     apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),
-    apiFetch<RawClustersResp>(
-      `${scoped()}/clusters${qs({ per_cluster: 4, max_clusters: 1, cluster_uid: uid })}`,
+    apiFetch<RawCluster>(
+      `${scoped()}/clusters/${encodeURIComponent(uid)}${qs({ per_cluster: 4 })}`,
       {},
       signal,
     ).catch((e: unknown) => {
@@ -284,21 +284,7 @@ export async function getCluster(
     }),
   ]);
   const items = cropPage.crops.map(mapRawCrop);
-  const found = clustersResp?.items?.find((c) => c.cluster_uid === uid) ?? null;
-  const cluster: Cluster = found
-    ? _rawClusterToCluster(found)
-    : {
-        // Fallback only if the cluster card lookup failed — leaves
-        // identity fields null but lets the crop grid render.
-        uid,
-        size: cropPage.total,
-        validated_count: 0,
-        dominant_class_name: null,
-        dominant_pct: null,
-        is_unlabeled: true,
-        representative_crop_ids: items.slice(0, 4).map((c) => c.id),
-        updated_at: null,
-      };
+  const cluster = card ? _rawClusterToCluster(card) : null;
   return {
     cluster,
     cardError,
