@@ -53,10 +53,6 @@ def test_every_queue_is_covered_by_this_file_or_a_named_one() -> None:
     assert set(TICK_QUEUES) == NON_JOB_QUEUES
 
 
-def _hostname(service: str) -> str:
-    return _compose.compose('exec', '-T', service, 'hostname').stdout.strip()
-
-
 @pytest.mark.parametrize('queue', sorted(JOB_QUEUES))
 def test_a_job_on_each_queue_is_claimed_and_finished_by_its_own_worker(queue: str) -> None:
     service, kind, params = JOB_QUEUES[queue]
@@ -77,7 +73,7 @@ def test_a_job_on_each_queue_is_claimed_and_finished_by_its_own_worker(queue: st
     status, attempt, result_queue = row.split('|')
     assert (status, attempt) == ('completed', '1'), row
     owners = _compose.psql(f"SELECT owner FROM job_attempts WHERE job_id = '{job_id}'")
-    assert owners.split(':')[0] == _hostname(service), (
+    assert owners.split(':')[0] in _compose.service_hostnames(service), (
         f'queue {queue}: claimed by {owners}, expected a {service} container'
     )
     if queue != TaskQueues.JOBS:
