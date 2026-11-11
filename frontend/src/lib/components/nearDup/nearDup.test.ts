@@ -108,6 +108,8 @@ describe('NearDupStatusCard', () => {
     expect(q('near-dup-stale-image')?.textContent).toContain('not yet grouped (7)');
     expect(q('near-dup-no-run-item')).not.toBeNull();
     expect(q('near-dup-stale-item')?.textContent).toContain('never been built');
+    expect(q('near-dup-run-full-item')?.textContent?.trim()).toBe('Build');
+    expect(q('near-dup-run-full-image')?.textContent?.trim()).toBe('Full rebuild');
 
     (q('near-dup-run-incremental-image') as HTMLButtonElement).click();
     await settle(() =>

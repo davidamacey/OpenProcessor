@@ -94,7 +94,11 @@
             disabled={ctl.busyLevel !== null}
             data-testid="near-dup-run-full-{lv.level}"
             onclick={() => void ctl.startRun(lv.level, 'full')}
-            >{ctl.busyLevel === lv.level ? 'Running…' : 'Full rebuild'}</button
+            >{ctl.busyLevel === lv.level
+              ? 'Running…'
+              : lv.current_run
+                ? 'Full rebuild'
+                : 'Build'}</button
           >
         </div>
       </div>

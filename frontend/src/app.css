@@ -190,6 +190,12 @@ button {
   .btn-sm:hover {
     background-color: rgb(var(--bg-hover));
   }
+  /* A pressed toggle reads as selected in every toggle group, not just by its border. */
+  .btn-sm[aria-pressed='true'] {
+    border-color: rgb(59 130 246);
+    background-color: rgb(59 130 246 / 0.3);
+    color: rgb(191 219 254);
+  }
   .btn-sm:disabled,
   .btn-sm[aria-disabled='true'] {
     opacity: 0.6;

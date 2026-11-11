@@ -174,6 +174,14 @@ def test_status_groups_runs_and_pair_decisions(stub, page, app_url):
     expect(groups).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     expect(groups.nth(1)).to_contain_text('In test holdout')
     expect(groups.first.get_by_test_id('near-dup-thumb')).to_be_visible()
+    pressed = page.get_by_test_id('near-dup-level-tab-image')
+    idle = page.get_by_test_id('near-dup-level-tab-item')
+    expect(pressed).to_have_attribute('aria-pressed', 'true')
+    expect(idle).to_have_attribute('aria-pressed', 'false')
+    # The selected toggle must look selected, not only carry the attribute.
+    assert pressed.evaluate('e => getComputedStyle(e).backgroundColor') != idle.evaluate(
+        'e => getComputedStyle(e).backgroundColor'
+    )
     _shot(page, 'overview')
 
     groups.first.click()
