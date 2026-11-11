@@ -1,0 +1,169 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+
+const nav = vi.hoisted(() => ({ goto: vi.fn() }));
+vi.mock('$app/state', async () => await import('$lib/test/pageState.svelte'));
+vi.mock('$app/navigation', () => ({ goto: nav.goto }));
+vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
+vi.mock('$lib/projectPaths', () => ({ projectHref: (p: string) => `/p/default${p}` }));
+
+import { visit as visitUrl } from '$lib/test/pageState.svelte';
+import { nextStepsStore } from '$stores/nextSteps.svelte';
+import {
+  createWorkspaceController,
+  type WorkspaceController,
+} from './workspaceController.svelte';
+
+let ws: WorkspaceController | null = null;
+
+function visit(search: string): void {
+  visitUrl(`/p/default/workspace${search}`);
+}
+
+function make(): WorkspaceController {
+  ws = createWorkspaceController();
+  flushSync();
+  return ws;
+}
+
+function lastGoto(): { href: string; opts: Record<string, unknown> } {
+  const [href, opts] = nav.goto.mock.calls.at(-1)!;
+  return { href, opts };
+}
+
+beforeEach(() => {
+  nav.goto.mockReset();
+  visit('');
+  nextStepsStore.reset();
+});
+
+afterEach(() => {
+  ws?.dispose();
+  ws = null;
+});
+
+describe('WorkspaceController', () => {
+  it('switching views keeps filter, queue, scope and selection', () => {
+    visit('?view=clusters&class_name=car&queue=to_label&scope=cluster%3Au1');
+    const c = make();
+    c.select({ kind: 'clusters', clusterUids: ['u1'] });
+    const selection = c.selection;
+    const before = JSON.stringify(c.itemQuery());
+
+    c.setView('detections');
+    const { href, opts } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+
+    expect(c.view).toBe('detections');
+    expect(JSON.stringify(c.itemQuery())).toBe(before);
+    expect(c.url.scope).toEqual({ kind: 'cluster', id: 'u1' });
+    expect(c.selection).toBe(selection);
+    expect(opts).toMatchObject({ replace: false, reset: false });
+  });
+
+  it('back restores the previous view and filter', () => {
+    visit('?view=clusters&class_name=car');
+    const c = make();
+    expect(c.view).toBe('clusters');
+    expect(c.itemQuery().class_name).toEqual(['car']);
+
+    visit('?view=detections&class_name=bus');
+    flushSync();
+    expect(c.view).toBe('detections');
+    expect(c.itemQuery().class_name).toEqual(['bus']);
+    expect(c.filter.classNames).toEqual(['bus']);
+
+    visit('?view=clusters&class_name=car');
+    flushSync();
+    expect(c.view).toBe('clusters');
+    expect(c.itemQuery().class_name).toEqual(['car']);
+    expect(c.filter.classNames).toEqual(['car']);
+  });
+
+  it('uses the served default view when the URL has none', () => {
+    nextStepsStore.defaultView = 'clusters';
+    const c = make();
+    expect(c.view).toBe('clusters');
+    expect(nav.goto).toHaveBeenCalledTimes(1);
+    const { href, opts } = lastGoto();
+    expect(href).toBe('/p/default/workspace?view=clusters');
+    expect(opts.replace).toBe(true);
+  });
+
+  it('falls back to the gallery before the default is served, without a redirect', () => {
+    const c = make();
+    expect(c.view).toBe('gallery');
+    expect(nav.goto).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit view over the served default', () => {
+    nextStepsStore.defaultView = 'clusters';
+    visit('?view=gallery');
+    const c = make();
+    expect(c.view).toBe('gallery');
+    expect(nav.goto).not.toHaveBeenCalled();
+  });
+
+  it('the queue reaches every view as review_tab', () => {
+    const c = make();
+    c.setQueue('to_label');
+    const { href } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+    expect(c.itemQuery().review_tab).toBe('to_label');
+    expect(c.itemBody().review_tab).toBe('to_label');
+  });
+
+  it('cluster scope adds the cluster to the filter', () => {
+    const id = '0c6f5a0e-1111-4222-8333-444455556666';
+    const c = make();
+    c.setScope({ kind: 'cluster', id });
+    const { href } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+    expect(c.itemBody().cluster_uids).toEqual([id]);
+    expect(c.itemQuery().cluster_uid).toEqual([id]);
+  });
+
+  it('an unapplied draft does not change the query', () => {
+    visit('?class_name=car');
+    const c = make();
+    c.filter.classNames = ['bus'];
+    expect(c.itemQuery().class_name).toEqual(['car']);
+    c.applyFilter();
+    expect(lastGoto().href).toContain('class_name=bus');
+  });
+
+  it('removing a chip writes the URL without that value', () => {
+    visit('?class_name=car&class_name=bus&view=gallery');
+    const c = make();
+    c.removeChip('class_name', 'car');
+    const { href } = lastGoto();
+    expect(href).toContain('class_name=bus');
+    expect(href).not.toContain('class_name=car');
+    expect(href).toContain('view=gallery');
+  });
+
+  it('builds the selection body from the current selection kind', () => {
+    visit('?view=clusters&class_name=car');
+    const c = make();
+    c.select({ kind: 'clusters', clusterUids: ['u1'] });
+    expect(c.itemSelection()).toEqual({
+      filter: { class_names: ['car'], cluster_uids: ['u1'] },
+    });
+  });
+
+  it('a second select-all on a full page asks for all matching', () => {
+    visit('?view=detections');
+    const c = make();
+    c.selectAll(['a', 'b'], 50);
+    expect(c.selection).toEqual({ kind: 'items', cropIds: ['a', 'b'] });
+    expect(c.pendingSelectAll).toBeNull();
+    c.selectAll(['a', 'b'], 50);
+    expect(c.pendingSelectAll).toEqual({ total: 50 });
+    c.confirmSelectAllMatching();
+    expect(c.selection).toEqual({ kind: 'matching' });
+    expect(c.pendingSelectAll).toBeNull();
+  });
+});

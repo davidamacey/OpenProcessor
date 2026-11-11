@@ -1,0 +1,207 @@
+/**
+ * The Workspace's one controller. URL state (view, queue, scope, focus,
+ * sort, filter) is derived from `page.url`; nothing copies it into `$state`
+ * except the filter bar's draft, which is re-seeded whenever the URL
+ * changes, so Back and Forward restore view, filter, queue and scope. The
+ * selection lives here, not in the URL, and survives a view switch because
+ * the shell stays mounted.
+ *
+ * `itemQuery()` and `itemBody()` are the only places that combine the
+ * filter, the queue and the scope: views call them and never build a filter.
+ */
+import { SvelteURLSearchParams } from 'svelte/reactivity';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { page } from '$app/state';
+import { projectHref } from '$lib/projectPaths';
+import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
+import { nextStepsStore } from '$stores/nextSteps.svelte';
+import type { ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
+import {
+  NO_SELECTION,
+  pressSelectAll,
+  selectionKindFor,
+  toItemSelection,
+  type SelectionKind,
+  type WorkspaceItemBody,
+  type WorkspaceSelection,
+} from './selection';
+import {
+  parseWorkspaceUrl,
+  writeWorkspaceUrl,
+  type FocusRef,
+  type ScopeRef,
+  type TableRows,
+  type ViewId,
+  type WorkspaceUrlState,
+} from './workspaceUrl';
+
+/** The filter keys the queue and the scope add to the shared item filter. */
+export type WorkspaceItemQuery = ItemFilterQuery & {
+  review_tab?: string | null;
+  cluster_uid?: string[];
+  near_dup_group?: string;
+};
+
+const DETAILS_MEDIA = '(min-width: 1280px)';
+
+function wideScreen(): boolean {
+  return typeof matchMedia === 'function' && matchMedia(DETAILS_MEDIA).matches;
+}
+
+export class WorkspaceController {
+  /** The bar's draft. Applying it writes the URL; the URL re-seeds it. */
+  readonly filter = new ItemFilterState();
+  selection = $state<WorkspaceSelection>(NO_SELECTION);
+  /** Set by a second select-all on a full page: the served total to confirm. */
+  pendingSelectAll = $state<{ total: number } | null>(null);
+  detailsOpen = $state(wideScreen());
+
+  readonly #url = $derived(parseWorkspaceUrl(page.url.searchParams));
+  readonly #applied = $derived.by(() => {
+    const f = new ItemFilterState();
+    f.fromUrl(page.url.searchParams);
+    return f;
+  });
+  readonly #stop: () => void;
+
+  constructor() {
+    this.#stop = $effect.root(() => {
+      $effect(() => {
+        this.filter.fromUrl(page.url.searchParams);
+      });
+      $effect(() => {
+        const served = nextStepsStore.defaultView;
+        if (this.#url.view === null && served) this.#write({ view: served }, true);
+      });
+    });
+  }
+
+  get url(): WorkspaceUrlState {
+    return this.#url;
+  }
+
+  get view(): ViewId {
+    return this.#url.view ?? nextStepsStore.defaultView ?? 'gallery';
+  }
+
+  /** The kind of selection the current view makes. */
+  get selectionKind(): SelectionKind {
+    return selectionKindFor(this.view, this.#url.rows);
+  }
+
+  #write(next: Partial<WorkspaceUrlState>, replace: boolean): void {
+    const params = new SvelteURLSearchParams(page.url.search);
+    writeWorkspaceUrl(params, next);
+    this.#go(params, replace);
+  }
+
+  #go(params: URLSearchParams, replace: boolean): void {
+    const search = params.toString();
+    void goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
+      replace,
+      reset: false,
+    });
+  }
+
+  setView(view: ViewId): void {
+    this.#write({ view }, false);
+  }
+
+  setQueue(id: string | null): void {
+    this.#write({ queue: id }, false);
+  }
+
+  setScope(scope: ScopeRef | null): void {
+    this.#write({ scope }, false);
+  }
+
+  setFocus(focus: FocusRef | null): void {
+    this.#write({ focus }, true);
+  }
+
+  setSort(view: ViewId, sortId: string): void {
+    this.#write({ sort: { [view]: sortId } }, false);
+  }
+
+  setTable(rows: TableRows, columns: string[] | null = null): void {
+    this.#write({ rows, columns }, false);
+  }
+
+  /** Writes the draft to the URL; the filter keys are the draft's own. */
+  applyFilter(): void {
+    const params = new SvelteURLSearchParams(page.url.search);
+    this.filter.toUrl(params);
+    this.#go(params, false);
+  }
+
+  removeChip(param: string, value?: string): void {
+    const params = new SvelteURLSearchParams(page.url.search);
+    const state = new ItemFilterState();
+    state.fromUrl(params);
+    const chip = state
+      .chips()
+      .find((c) => c.param === param && (value === undefined || c.label === value));
+    chip?.clear();
+    state.toUrl(params);
+    this.#go(params, false);
+  }
+
+  /** The applied filter, the queue as `review_tab` and the scope, as query parameters. */
+  itemQuery(): WorkspaceItemQuery {
+    const q: WorkspaceItemQuery = this.#applied.toQuery();
+    const { queue, scope } = this.#url;
+    if (queue) q.review_tab = queue;
+    if (scope?.kind === 'cluster') q.cluster_uid = [scope.id];
+    if (scope?.kind === 'near_dup') q.near_dup_group = scope.id;
+    if (scope?.kind === 'image') q.image_id = [scope.id];
+    return q;
+  }
+
+  /** The same combination in `ItemFilter` body form. */
+  itemBody(): WorkspaceItemBody {
+    const b: WorkspaceItemBody = this.#applied.toBody();
+    const { queue, scope } = this.#url;
+    if (queue) b.review_tab = queue;
+    if (scope?.kind === 'cluster') b.cluster_uids = [scope.id];
+    if (scope?.kind === 'near_dup') b.near_dup_group = scope.id;
+    if (scope?.kind === 'image') b.image_ids = [scope.id];
+    return b;
+  }
+
+  itemSelection(): ItemSelection | null {
+    return toItemSelection(this.selection, this.itemBody());
+  }
+
+  select(selection: WorkspaceSelection): void {
+    this.selection = selection;
+    this.pendingSelectAll = null;
+  }
+
+  clearSelection(): void {
+    this.select(NO_SELECTION);
+  }
+
+  /** Ctrl/Cmd+A over the loaded page; `total` is the served total. */
+  selectAll(pageIds: string[], total: number): void {
+    const r = pressSelectAll(this.selection, this.selectionKind, pageIds, total);
+    this.selection = r.selection;
+    this.pendingSelectAll = r.pending;
+  }
+
+  confirmSelectAllMatching(): void {
+    this.select({ kind: 'matching' });
+  }
+
+  toggleDetails(): void {
+    this.detailsOpen = !this.detailsOpen;
+  }
+
+  dispose(): void {
+    this.#stop();
+  }
+}
+
+export function createWorkspaceController(): WorkspaceController {
+  return new WorkspaceController();
+}

@@ -16,6 +16,7 @@ const PROJECT_SECTIONS = [
   'dashboard',
   'ingest',
   'datasets',
+  'workspace',
   'clusters',
   'review',
   'classes',
