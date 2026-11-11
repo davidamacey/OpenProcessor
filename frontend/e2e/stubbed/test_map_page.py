@@ -164,3 +164,29 @@ def test_the_map_fits_a_430px_screen(stub, page, app_url):
     overflow = page.evaluate('() => document.documentElement.scrollWidth - window.innerWidth')
     assert overflow <= 0
     _shot(page, 'map_430')
+
+
+def test_without_webgl2_the_card_says_so_and_the_page_keeps_working(stub, page, app_url):
+    page.add_init_script(
+        """
+        const getContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+          return type === 'webgl2' ? null : getContext.call(this, type, ...rest);
+        };
+        """
+    )
+    _serve_map(stub, page, app_url, _meta(app_url))
+    page.goto(f'{app_url}/p/default/map')
+    note = page.get_by_test_id('map-webgl-unsupported')
+    note.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert note.inner_text().startswith('Map needs WebGL2')
+    assert '2 photos have GPS' in note.inner_text()
+    assert page.get_by_test_id('map-located').inner_text() == '2 located photos'
+    assert page.get_by_test_id('map-filters').is_visible()
+    assert page.get_by_role('heading', name='Something went wrong').count() == 0
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, errors[:3]
+    _shot(page, 'map_no_webgl')
+    page.set_viewport_size({'width': 430, 'height': 900})
+    wait_for_paint(page)
+    _shot(page, 'map_no_webgl_430')

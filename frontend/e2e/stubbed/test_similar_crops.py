@@ -190,3 +190,26 @@ def test_text_search_in_a_picked_embedding_space_sends_space_and_fuse(stub, page
         '+ pe_core', timeout=ACTION_TIMEOUT_MS
     )
     assert seen[-1]['fuse'] == ['pe_core'], seen[-1]
+
+
+def test_back_to_clusters_fits_at_430(stub, page, app_url):
+    serve_similar(
+        stub,
+        similar={
+            'items': [neighbour(1, 0.91)],
+            'total': 1,
+            'page': 1,
+            'page_size': 200,
+            'unembedded_in_scope': 7,
+        },
+    )
+    page.set_viewport_size({'width': 430, 'height': 932})
+    long_id = '0b9f3c1e-7a42-4d6b-9c58-2e1f6a7d3b90_crop_000123'
+    page.goto(f'{app_url}/p/default/clusters?similar_to={long_id}')
+    back = page.get_by_role('button', name='Back to clusters')
+    expect(back).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
+    box = back.bounding_box()
+    assert box is not None
+    assert box['x'] >= 0 and box['x'] + box['width'] <= 430, box
+    shoot(page, 'back-button')
