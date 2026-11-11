@@ -127,3 +127,13 @@ def test_label_op_tag_is_a_keyword_and_its_migration_is_registered() -> None:
 
     assert _PROPS['label_op_id'] == {'type': 'keyword'}
     assert ensure_items_label_op_field in [m for _, m in index_bootstrap._migrations()]
+
+
+def test_geometry_fields_are_mapped_and_their_migration_is_registered() -> None:
+    from src.clients.curation_opensearch.ensure_fields import ensure_items_geometry_fields
+    from src.services.curation import index_bootstrap
+
+    assert _PROPS['geometry_source'] == {'type': 'keyword'}
+    assert _PROPS['geometry_revision'] == {'type': 'integer'}
+    assert _PROPS['detector_bbox_norm'] == {'type': 'float'}
+    assert ensure_items_geometry_fields in [m for _, m in index_bootstrap._migrations()]

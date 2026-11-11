@@ -22,6 +22,7 @@ from src.clients.curation_opensearch.cluster_fields import ensure_items_cluster_
 from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
+    ensure_items_geometry_fields,
     ensure_items_history_fields,
     ensure_items_label_cluster_fields,
     ensure_items_provenance_fields,
@@ -207,6 +208,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('assist_fields', ensure_assist_fields),
         ('capture_fields', ensure_capture_fields),
         ('label_op_field', ensure_items_label_op_field),
+        ('geometry_fields', ensure_items_geometry_fields),
     )
 
 
