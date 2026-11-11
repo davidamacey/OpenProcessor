@@ -231,18 +231,23 @@
   }
 
   async function submitSingle(): Promise<void> {
-    await onStart(buildSpec(formValues()), false);
+    await onStart(buildSpec(formValues()), force);
   }
 
   async function submitCampaign(): Promise<void> {
-    await onStartCampaign(buildCampaign(formValues()), false);
+    await onStartCampaign(buildCampaign(formValues()), force);
   }
 
   const isBlocked = $derived(!!preflight?.blocked);
   // submit disabled = backend says blocked OR a run is active OR we're
   // mid-flight. Allow the user to still click during preflighting so
   // we don't lose a click between debounce + fetch.
-  const submitDisabled = $derived(disabled || starting || isBlocked);
+  // `force` bypasses the overridable blocking checks only; the server still refuses the rest.
+  let force = $state(false);
+  $effect(() => {
+    if (!isBlocked) force = false;
+  });
+  const submitDisabled = $derived(disabled || starting || (isBlocked && !force));
 </script>
 
 <section class="space-y-3">
@@ -410,6 +415,13 @@
     {/if}
 
     <span class="grow"></span>
+
+    {#if isBlocked}
+      <label class="flex items-center gap-1.5 text-xs text-amber-200">
+        <input type="checkbox" bind:checked={force} data-testid="train-force" />
+        Start anyway (bypass blocking checks)
+      </label>
+    {/if}
 
     {#if campaignMode}
       <button
