@@ -62,7 +62,7 @@ def test_the_shared_filter_applies_to_every_list_route(api_client: Any) -> None:
     classes = api_client.get('/classes').json()['classes']
     name = classes[0]['class_name']
     params = {'class_name': name, 'embedding_state': 'embedded', 'min_area': 0.0}
-    crops = api_client.get('/crops', params={**params, 'page_size': 20})
+    crops = api_client.get('/crops', params={**params, 'limit': 20})
     crops.raise_for_status()
     assert all(c['class_name'] == name for c in crops.json()['crops'] if c.get('class_name'))
     for path in ('/stats/classes', '/stats/dataset', '/clusters', '/detections/summary'):
@@ -115,7 +115,7 @@ def test_embed_missing_dry_run_reports_exact_counts(api_client: Any) -> None:
 
 
 def test_region_box_edit_reports_the_vector_refresh(api_client: Any) -> None:
-    regions = api_client.get('/regions', params={'page_size': 1})
+    regions = api_client.get('/regions', params={'limit': 1})
     if regions.status_code == 409:
         pytest.skip('no region profile is active on this harness')
     regions.raise_for_status()

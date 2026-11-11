@@ -59,3 +59,9 @@ def test_split_page_gives_a_cursor_only_when_more_remain() -> None:
     assert decode_cursor(nxt, sort_id='s') == [1, 'c1']
     assert split_page(hits[:2], sort_id='s', limit=2) == (hits[:2], None)
     assert split_page([], sort_id='s', limit=2) == ([], None)
+
+
+def test_page_body_keeps_a_sort_that_already_ends_on_the_tiebreak() -> None:
+    sort = [{'score': {'order': 'desc'}}, {'crop_id': {'order': 'asc'}}]
+    body = page_body({}, sort=sort, tiebreak='crop_id', cursor=None, sort_id='s', limit=1)
+    assert body['sort'] == sort

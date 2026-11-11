@@ -209,7 +209,7 @@ def test_bulk_region_status_rejects_a_pipeline_only_status(
 
 
 def test_region_browse_reflects_the_human_edits(api_client: Any) -> None:
-    resp = api_client.get('/regions', params={'page_size': 50, 'detector': HUMAN_DETECTOR})
+    resp = api_client.get('/regions', params={'limit': 50, 'detector': HUMAN_DETECTOR})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body['total'] >= 1, body

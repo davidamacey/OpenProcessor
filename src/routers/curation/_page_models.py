@@ -24,8 +24,10 @@ class ReviewQueuePage(BaseModel):
     """``GET /review/{tab}``."""
 
     total: int
-    page: int
-    page_size: int
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page; null on the last page.'
+    )
+    limit: int
     items: list[ReviewItemDoc]
     sort_applied: str
     sort_fallback_reason: str | None = Field(

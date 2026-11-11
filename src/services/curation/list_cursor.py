@@ -48,8 +48,12 @@ def page_body(
     sort_id: str,
     limit: int,
 ) -> dict[str, Any]:
-    """``body`` with ``limit + 1`` rows asked for (the extra one says whether a next page exists)."""
-    out = {**body, 'size': limit + 1, 'sort': [*sort, {tiebreak: {'order': 'asc'}}]}
+    """``body`` with ``limit + 1`` rows asked for (the extra one says whether a next page exists).
+
+    A sort that already ends on ``tiebreak`` is left as it is."""
+    ends_on_tiebreak = bool(sort) and tiebreak in sort[-1]
+    ordered = sort if ends_on_tiebreak else [*sort, {tiebreak: {'order': 'asc'}}]
+    out = {**body, 'size': limit + 1, 'sort': ordered}
     if cursor is not None:
         out['search_after'] = decode_cursor(cursor, sort_id=sort_id)
     return out

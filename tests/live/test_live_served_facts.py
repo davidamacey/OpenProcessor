@@ -47,7 +47,7 @@ def test_viz_projection_distinguishes_not_built_from_unavailable(api_client: Any
 
 
 def test_region_rows_carry_unique_row_keys(api_client: Any) -> None:
-    r = api_client.get('/regions', params={'page_size': 100})
+    r = api_client.get('/regions', params={'limit': 100})
     assert r.status_code == 200, r.text
     keys = [row['row_key'] for row in r.json()['items']]
     assert all(keys)

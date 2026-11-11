@@ -19,7 +19,8 @@ from src.config.curation_accessors import items_index
 from src.config.region_state import RegionStatus, region_status_catalog
 from src.domain.region_boxes import BOX_STATES, box_query
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, RegionProfileDep, guard_page_depth, router
+from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._region_row_models import RegionRowPage
@@ -27,6 +28,7 @@ from src.routers.curation._region_status_models import RegionStatusCatalog
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
 from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import item_filter_clauses
+from src.services.curation.list_cursor import CursorError
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_text_search import TextMatch, region_text_match_clause
 from src.services.curation.region_vocabulary import region_vocabulary_catalog
@@ -141,8 +143,6 @@ def _region_sort(cluster_uid: str | None) -> list[dict[str, Any]]:
                 }
             }
         ]
-    sort.append({'crop_id': {'order': 'asc'}})
-    sort.append({'crop_id': {'order': 'asc'}})
     return sort
 
 
@@ -155,8 +155,8 @@ async def list_regions(
     opensearch: OpenSearchDep,
     profile: RegionProfileDep,
     item_filter: ItemFilterQuery,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    cursor: CursorQ = None,
+    limit: int = Query(50, ge=1, le=200),
     cluster_uid: str | None = Query(
         None, description='Box filter: the box sits in this cluster of the serving partition.'
     ),
@@ -197,7 +197,7 @@ async def list_regions(
     (``status``, ``verified`` and the shared item
     filter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,
     ``max_rank``, ``origin``, ``embedding_state``, ``review_status``)
-    select items. ``page`` / ``page_size`` page items; ``total`` counts
+    select items. ``cursor`` / ``limit`` page items; ``total`` counts
     items, ``total_rows`` rows.
     """
     F = get_region_fields()
@@ -246,7 +246,6 @@ async def list_regions(
         filt.append({'term': {F.verified: verified}})
 
     sort = _region_sort(cluster_uid)
-    guard_page_depth(page, page_size)
     excludes = await region_source_excludes()
     try:
         return await search_region_rows(
@@ -255,11 +254,14 @@ async def list_regions(
             filters=filt,
             must_not=must_not,
             sort=sort,
-            page=page,
-            page_size=page_size,
+            cursor=cursor,
+            limit=limit,
+            sort_id='cluster_score:asc' if cluster_uid is not None else 'detected_at:desc',
             box_clause=_box_clause(parts),
             source_excludes=excludes,
         )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
 
@@ -384,8 +386,8 @@ async def training_candidates(
             'human_corrected | false_positives'
         ),
     ),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
+    cursor: CursorQ = None,
+    limit: int = Query(50, ge=1, le=200),
     class_id: int | None = Query(None),
 ) -> dict[str, Any]:
     """Return regions filtered for the next training cycle.
@@ -402,7 +404,6 @@ async def training_candidates(
     if class_id is not None:
         filters.append({'term': {'class_id': class_id}})
 
-    guard_page_depth(page, page_size)
     sort: list[dict[str, Any]] = [
         # Items order by their most recently detected box (nested, mode max).
         {
@@ -414,7 +415,6 @@ async def training_candidates(
                 'mode': 'max',
             }
         },
-        {'crop_id': {'order': 'asc'}},
     ]
     excludes = await region_source_excludes()
     try:
@@ -424,12 +424,15 @@ async def training_candidates(
             filters=filters,
             must_not=query['bool']['must_not'],
             sort=sort,
-            page=page,
-            page_size=page_size,
+            cursor=cursor,
+            limit=limit,
+            sort_id='detected_at:desc',
             box_clause=box_clause,
             source_excludes=excludes,
             row_keys={'selection_reason': reason},
         )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
     return {**page_body, 'mode': mode, 'selection_reason': reason}

@@ -301,8 +301,11 @@ class ItemDoc(BaseModel):
 
 class CropsPageResponse(BaseModel):
     total: int
-    page: int
-    page_size: int
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page; null on the last page, and for the computed '
+        'orders `outliers` and `diverse`, which serve one bounded page.'
+    )
+    limit: int
     crops: list[ItemDoc]
     sort_applied: str = Field(
         description="The applied sort id, the computed `order` when one ranked the page, or 'ids' for an id lookup."
@@ -310,6 +313,10 @@ class CropsPageResponse(BaseModel):
     sort_options: list[SortOption] = Field(
         description='Every sort id `sort` takes, with its label.'
     )
+    empty_reason: Literal['no_items', 'no_match'] | None = Field(
+        description='Why a zero-result list is empty; null when it has items.'
+    )
+    empty_message: str | None = Field(description='The served sentence for `empty_reason`.')
     # Only set for a pool-scale overlay ordering (order='outliers' /
     # 'diverse') — the operator-facing "from N crops in scope" caption
     # needs to know it's looking at a ranked overlay rather than the

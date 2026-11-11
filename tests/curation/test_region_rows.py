@@ -88,12 +88,12 @@ def test_each_matching_box_is_its_own_row_and_total_counts_items() -> None:
         'none': _item('none', [_box('b1', 'rejected')]),
     }
 
-    body = _get(docs, '/regions', page_size=50)
+    body = _get(docs, '/regions', limit=50)
 
     assert sorted(_rows(body)) == [('one', 'b1'), ('two', 'b1'), ('two', 'b2')]
     assert body['total'] == 2
     assert body['total_rows'] == 3
-    assert body['page_size'] == 50
+    assert body['limit'] == 50
 
 
 def test_box_filters_select_the_same_box_not_any_box() -> None:
@@ -276,7 +276,7 @@ async def test_an_item_with_150_matching_boxes_returns_150_rows_once_the_window_
     await ensure_items_inner_result_window(fake)
     client = _client(fake)
 
-    resp = client.get(f'{PREFIX}/regions', params={'page_size': 10})
+    resp = client.get(f'{PREFIX}/regions', params={'limit': 10})
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
@@ -295,7 +295,7 @@ def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation(
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     client = _client(QueryFakeOpenSearch({ITEMS: _many_boxes_doc(150)}))
 
-    resp = client.get(f'{PREFIX}/regions', params={'page_size': 10})
+    resp = client.get(f'{PREFIX}/regions', params={'limit': 10})
 
     assert resp.status_code == 200, resp.text
     body = resp.json()

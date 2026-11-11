@@ -131,7 +131,7 @@ Use Cropwright or the routes:
 
 ```bash
 curl -s "$API/review/tabs"                 # every tab with its filters
-curl -s "$API/review/<tab>?page_size=50"
+curl -s "$API/review/<tab>?limit=50"
 curl -s -X PUT "$API/crops/CROP_ID/label" -H 'Content-Type: application/json' -d '{"class_id": 0}'
 ```
 

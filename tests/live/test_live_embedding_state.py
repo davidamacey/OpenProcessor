@@ -13,7 +13,7 @@ pytestmark = pytest.mark.live
 def test_item_reads_carry_embedding_states(api_client: Any) -> None:
     # An item reports `embedding_states` per space (docs/design/curation_api_contract.md,
     # Embedding spaces); the seed stores vectors without a recorded state, so each map is empty.
-    resp = api_client.get('/crops', params={'page_size': 5})
+    resp = api_client.get('/crops', params={'limit': 5})
     resp.raise_for_status()
     crops = resp.json()['crops']
     assert crops

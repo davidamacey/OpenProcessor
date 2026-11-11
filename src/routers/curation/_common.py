@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from src.config import get_curation_config
 from src.core.dependencies import get_curation_opensearch
@@ -46,29 +46,6 @@ router = APIRouter(
 
 # Index names are resolved per bound project at call time -- see
 # src.config.curation_accessors.items_index() and friends (re-exported here).
-
-
-# OpenSearch's index.max_result_window default. from+size past this 500s
-# ("Result window is too large") instead of paging -- reject it explicitly
-# with a 422 before it ever reaches OpenSearch.
-MAX_RESULT_WINDOW = 10_000
-
-
-def guard_page_depth(page: int, page_size: int) -> None:
-    """Raise ``HTTPException(422)`` when ``(page-1)*page_size + page_size``
-    would exceed :data:`MAX_RESULT_WINDOW` -- otherwise OpenSearch 500s past
-    ``index.max_result_window`` and the app would surface that as a bare
-    503/500 instead of a clear, cheap client-side rejection. Cursor-based
-    pagination (``search_after``) is the documented way past this limit;
-    This route doesn't add a cursor param, so depth is capped instead."""
-    if (page - 1) * page_size + page_size > MAX_RESULT_WINDOW:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f'page {page} at page_size {page_size} exceeds the {MAX_RESULT_WINDOW} '
-                'result-window depth limit; use a smaller page_size or narrow the filter'
-            ),
-        )
 
 
 def is_not_found(exc: BaseException) -> bool:

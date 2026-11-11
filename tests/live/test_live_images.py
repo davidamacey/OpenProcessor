@@ -88,7 +88,7 @@ def test_image_detail_items_equal_the_crops_listing(api_client: Any) -> None:
                 'image_id': image_id,
                 'include_test': True,
                 'include_excluded': True,
-                'page_size': 500,
+                'limit': 500,
             },
         ).json()['crops']
         assert {i['crop_id'] for i in body['items']} == {c['crop_id'] for c in listed}, image_id
@@ -115,7 +115,7 @@ def test_pixels_are_served_by_image_id(api_client: Any) -> None:
 
 
 def test_the_crop_anchored_image_routes_are_gone(api_client: Any, opensearch: Any) -> None:
-    crop_id = api_client.get('/crops', params={'page_size': 1}).json()['crops'][0]['crop_id']
+    crop_id = api_client.get('/crops', params={'limit': 1}).json()['crops'][0]['crop_id']
     assert api_client.get(f'/crops/{crop_id}/context').status_code == 404
     assert api_client.get(f'/crops/{crop_id}/image').status_code == 404
     assert api_client.get('/images/serve', params={'path': 'x.jpg'}).status_code == 404

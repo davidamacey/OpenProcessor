@@ -88,8 +88,12 @@ every save is a new revision number, numbers are never reused, and
 
 ### Paging and ordering
 
-- Lists page with `page` (from 1) and `page_size`. A page past the 10,000th
-  result is `422`.
+- `GET /crops`, `GET /review/{tab}`, `GET /regions`, `GET /regions/training_candidates`,
+  `GET /classes/{class_id}/crops` and `GET /audit/queue` page with `cursor` and `limit`. A page
+  carries `total`, `limit` and `next_cursor` (`null` on the last page). Pass `next_cursor` back
+  as `cursor` to read the next page, as deep as the list goes. A cursor belongs to the sort that
+  served it: another sort refuses it with `400 cursor_invalid`. The `outliers` and `diverse`
+  orders of `GET /crops` rank in memory and serve one bounded page with `next_cursor: null`.
 - Every queue ends in a `crop_id` ascending tie-break, so pages are stable.
 - Read endpoints fail closed: a backend outage is `503`, never an empty or
   zero answer.
@@ -937,18 +941,18 @@ default state of a new box.
 
 | Method | Path | Response |
 |---|---|---|
-| GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `page`, `page_size`, `method`, `version`, `n_pool` |
+| GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `limit`, `next_cursor`, `sort_applied`, `sort_options[]`, `empty_reason`, `empty_message`, `method`, `version`, `n_pool` |
 | GET | `/crops/{crop_id}` | item (`404` when unknown) |
 | GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500. Items carry `mask_polygon` here (lists send it as null), so one call draws every sibling outline |
 | GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
-| GET | `/classes/{class_id}/crops` | `CropsPageResponse` (`page`, `page_size`, `include_test`) |
+| GET | `/classes/{class_id}/crops` | `CropsPageResponse` (`cursor`, `limit`, `include_test`) |
 
 `GET /crops` query parameters:
 
 | Parameter | Meaning |
 |---|---|
-| `page`, `page_size` (1 to 500, default 50), `limit` | paging. `limit` is an alias of `page_size` and wins when both are set |
-| `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. Fields: `updated_at`, `created_at`, `confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_distance`, `mistakenness_score`, `uniqueness_score`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
+| `cursor`, `limit` (1 to 500, default 50) | paging, see Paging and ordering |
+| `sort` | `<field>[:asc\|desc]`, default `updated_at:desc`. The response's `sort_options` lists every id with its label: `updated_at`, `created_at`, `confidence`, `detector_confidence`, `crop_rank_in_image`, `crop_area_norm`, `blur_lap_ratio`, `cluster_score`, `mistakenness_score`, `uniqueness_score`, `class_name`, `detector_class_name`, `validated`, each `:asc` or `:desc`. Anything else is `400`. Ignored by `order=outliers` and `order=diverse` |
 | `cluster_uid`, `label_source`, `class_source`, `label_validated`, `source` | exact filters. A class is filtered by name (`class_name`, repeatable; the shared item filter): `class_id` is not a query parameter. `GET /classes/{class_id}/crops` is the by-id listing |
 | `needs_new_class`, `review_dismissed` | boolean filters |
 | `ids` | comma-separated, at most 500. Returns exactly those items in that order, drops missing ids and ignores every other filter |
@@ -1150,7 +1154,7 @@ and `false_positive`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/regions` | `RegionRowPage`. Filters: `page`, `page_size` (max 200), `cluster_uid` (the item cluster), `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
+| GET | `/regions` | `RegionRowPage`. Filters: `cursor`, `limit` (max 200), `cluster_uid` (the item cluster), `max_rank`, `min_score`, `max_score`, `verified`, `detector`, `text`, `box_state`, `status`, `include_test` |
 | GET | `/regions/statuses` | the lifecycle vocabulary (see above) |
 | GET | `/regions/vocabulary` | `RegionVocabularyResponse`: `detectors[]` (`id`, `label`, `role`, `filterable`), `region_sources[]`, `chain_actors[]`, `rejection_reasons[]`, `text_rules`, `text_choices`, `region_profile` summary. Built from the active profile, the ingest profiles and the VLM registry, never from a fixed model id |
 | GET | `/regions/training_candidates` | `RegionRowPage`, `mode` required |
@@ -1264,8 +1268,8 @@ while a region profile is active.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/review/tabs` | `ReviewTabsResponse` |
-| GET | `/review/{tab}` | `ReviewQueuePage`: `items[]` (item plus `reason`), `total`, `page`, `page_size`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
-| GET | `/review/{tab}/locate` | `ReviewLocateResponse`: where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue plus `page_size` |
+| GET | `/review/{tab}` | `ReviewQueuePage`: `items[]` (item plus `reason`), `total`, `limit`, `next_cursor`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
+| GET | `/review/{tab}/locate` | `ReviewLocateResponse`: where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue |
 | GET | `/review/new_class_proposals/summary` | `size`, `samples`. Counts and terms behind the `new_class_proposals` tab |
 | POST | `/review/new_class_proposals/resolve` | bulk-resolve every item proposing one name. `dry_run` query |
 | GET | `/review/raw_label_clusters` | `size`, `samples_per_cluster`. Groups of unmatched raw VLM answers |

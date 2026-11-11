@@ -14,7 +14,7 @@ matched is asked of OpenSearch itself -- the nested clause carries
 ``inner_hits`` -- so the predicate is never re-implemented in Python and a
 multi-filter request always means the *same* box.
 
-``page`` / ``page_size`` page **items** (the unit OpenSearch paginates); a
+``cursor`` / ``limit`` page **items** (the unit OpenSearch paginates); a
 page returns every row of its items. ``total`` counts items, ``total_rows``
 counts rows.
 """
@@ -27,6 +27,7 @@ from src.clients.curation_opensearch.ensure_overlay_fields import inner_result_w
 from src.config import get_region_fields
 from src.config.curation_accessors import get_curation_config
 from src.core.logging import get_logger
+from src.services.curation.list_cursor import page_body, split_page
 from src.services.curation.wire import serialize_item
 from src.services.embedding_spaces.readers import item_state_fields
 
@@ -189,8 +190,9 @@ async def search_region_rows(
     filters: Sequence[dict[str, Any]],
     must_not: Sequence[dict[str, Any]],
     sort: Sequence[dict[str, Any]],
-    page: int,
-    page_size: int,
+    cursor: str | None,
+    limit: int,
+    sort_id: str,
     box_clause: dict[str, Any] | None,
     source_excludes: Sequence[str],
     row_keys: dict[str, Any] | None = None,
@@ -202,20 +204,24 @@ async def search_region_rows(
     """
     F = get_region_fields()
     query_filters = list(filters)
-    body: dict[str, Any] = {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        '_source': {'excludes': list(source_excludes)},
-        'sort': list(sort),
-        'track_total_hits': True,
-    }
+    body = page_body(
+        {
+            '_source': {'excludes': list(source_excludes)},
+            'track_total_hits': True,
+        },
+        sort=list(sort),
+        tiebreak='crop_id',
+        cursor=cursor,
+        sort_id=sort_id,
+        limit=limit,
+    )
     if box_clause is not None:
         query_filters.append(box_selector(box_clause, index=index, F=F))
         body['aggs'] = rows_aggs(box_clause, F)
     body['query'] = {'bool': {'filter': query_filters, 'must_not': list(must_not)}}
     resp = await client.search(index=index, body=body)
     hits_block = resp.get('hits') or {}
-    hits = hits_block.get('hits') or []
+    hits, next_cursor = split_page(hits_block.get('hits') or [], sort_id=sort_id, limit=limit)
     total = int((hits_block.get('total') or {}).get('value', 0))
     rows = region_rows(
         hits,
@@ -239,8 +245,8 @@ async def search_region_rows(
         'total': total,
         'total_rows': total_rows,
         'rows_truncated': truncated,
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
     }
 
 

@@ -10,7 +10,6 @@ stack under test, never an index of another project).
 from __future__ import annotations
 
 import hashlib
-import math
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
     import httpx
 
 # The list routes refuse to page past this many rows, so wider result sets are split in bands.
-RESULT_WINDOW = 10_000
 PAGE_SIZE = 500
 MGET_CHUNK = 200
 EMBED_ROUTE = '/embed/image'
@@ -96,28 +94,24 @@ def _crops_page(client: httpx.Client, base: str, params: dict[str, Any]) -> dict
 
 
 def fetch_items(
-    client: httpx.Client, base: str, *, window: int = RESULT_WINDOW, page_size: int = PAGE_SIZE
+    client: httpx.Client, base: str, *, page_size: int = PAGE_SIZE
 ) -> list[dict[str, Any]]:
-    """Every item of the project through ``GET .../crops``.
+    """Every item of the project through ``GET .../crops``, page by page by ``next_cursor``.
 
-    A result set wider than the API's paging window is split by confidence band, recursively;
-    items on a band edge appear in both and are de-duplicated by id. The union must equal the
-    unfiltered total, otherwise the capture aborts (unstable paging or a missed band).
+    The union must equal the unfiltered total, otherwise the capture aborts (unstable paging).
     """
-    total = int(_crops_page(client, base, {'page_size': 1})['total'])
+    total = int(_crops_page(client, base, {'limit': 1})['total'])
     items: dict[str, dict[str, Any]] = {}
-    bands = [(0.0, 1.0)]
-    while bands:
-        low, high = bands.pop()
-        band = {'conf_min': low, 'conf_max': high}
-        count = int(_crops_page(client, base, {**band, 'page_size': 1})['total'])
-        if count > window and high - low > 1e-6:
-            mid = (low + high) / 2
-            bands += [(low, mid), (mid, high)]
-            continue
-        for page in range(1, math.ceil(count / page_size) + 1):
-            body = _crops_page(client, base, {**band, 'page': page, 'page_size': page_size})
-            items.update({c['id']: c for c in body['crops']})
+    cursor: str | None = None
+    while True:
+        params: dict[str, Any] = {'limit': page_size}
+        if cursor is not None:
+            params['cursor'] = cursor
+        body = _crops_page(client, base, params)
+        items.update({c['id']: c for c in body['crops']})
+        cursor = body['next_cursor']
+        if cursor is None:
+            break
     if len(items) != total:
         raise CaptureError(f'read {len(items)} items but the project reports {total}')
     return list(items.values())

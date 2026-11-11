@@ -58,23 +58,22 @@ class EvalSetError(Exception):
 
 
 def fetch_crops(client: httpx.Client, base: str) -> Iterator[dict[str, Any]]:
-    page = 1
+    cursor: str | None = None
     while True:
-        resp = client.get(
-            f'{base}/crops',
-            params={
-                'page': page,
-                'page_size': PAGE_SIZE,
-                'include_test': 'true',
-                'include_excluded': 'true',
-            },
-        )
+        params: dict[str, Any] = {
+            'limit': PAGE_SIZE,
+            'include_test': 'true',
+            'include_excluded': 'true',
+        }
+        if cursor is not None:
+            params['cursor'] = cursor
+        resp = client.get(f'{base}/crops', params=params)
         resp.raise_for_status()
         body = resp.json()
         yield from body['crops']
-        if page * PAGE_SIZE >= int(body['total']):
+        cursor = body['next_cursor']
+        if cursor is None:
             return
-        page += 1
 
 
 def load_coco(path: Path) -> dict[str, Any]:

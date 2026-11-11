@@ -141,13 +141,28 @@ def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
     }
 
 
+EMPTY_MESSAGES: dict[str, str] = {
+    'no_items': 'No detections yet. Ingest images to create some.',
+    'no_match': 'No detections match this filter.',
+}
+
+
+def empty_state(total: int, *, narrowed: bool) -> tuple[str | None, str | None]:
+    """``(empty_reason, empty_message)`` for a list that matched ``total`` items."""
+    if total:
+        return None, None
+    reason = 'no_match' if narrowed else 'no_items'
+    return reason, EMPTY_MESSAGES[reason]
+
+
 def crops_page(
     *,
     total: int,
-    page: int,
-    page_size: int,
+    next_cursor: str | None,
+    limit: int,
     crops: list[dict[str, Any]],
     sort_applied: str,
+    narrowed: bool = False,
     method: str | None = None,
     version: str | None = None,
     n_pool: int | None = None,
@@ -157,13 +172,16 @@ def crops_page(
     join_truncated: bool = False,
 ) -> dict[str, Any]:
     """``CropsPageResponse``-shaped envelope around serialized items."""
+    reason, message = empty_state(total, narrowed=narrowed)
     return {
         'total': total,
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
         'crops': crops,
         'sort_applied': sort_applied,
         'sort_options': CROP_SORT_OPTIONS,
+        'empty_reason': reason,
+        'empty_message': message,
         'method': method,
         'version': version,
         'n_pool': n_pool,

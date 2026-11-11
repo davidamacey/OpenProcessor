@@ -15,13 +15,8 @@ from fastapi import Depends, HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    guard_page_depth,
-    is_not_found,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, is_not_found, router
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueuePage
 from src.routers.curation._review_params import (
@@ -44,6 +39,7 @@ from src.services.curation import review_empty_reason, review_reasons
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import item_filter_clauses
+from src.services.curation.list_cursor import CursorError, page_body, split_page
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
     ReviewFilters,
@@ -164,8 +160,8 @@ async def review_queue(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     opensearch: OpenSearchDep,
     filters: ReviewFiltersDep,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=200)] = 30,
+    cursor: CursorQ = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 30,
     sort: SortQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
@@ -179,12 +175,11 @@ async def review_queue(
     class validation. Order: the applied sort (``sort_applied``), then
     ``crop_id``.
     """
-    guard_page_depth(page, page_size)
     if review_empty_reason.region_queue_is_off(tab):
         return {
             'total': 0,
-            'page': page,
-            'page_size': page_size,
+            'next_cursor': None,
+            'limit': limit,
             'items': [],
             'sort_applied': sort or 'default',
             'sort_fallback_reason': None,
@@ -195,17 +190,24 @@ async def review_queue(
         }
     req = await _request(tab, filters, sort, opensearch)
     excludes = await vector_source_excludes()
-    body = {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        'query': req.query,
-        'sort': req.sort,
-        # Exact totals: the default 10k cap makes large queues look smaller.
-        'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors or class_id_history to
-        # the review grid (history is undo-only).
-        '_source': {'excludes': item_list_source_excludes(excludes)},
-    }
+    try:
+        body = page_body(
+            {
+                'query': req.query,
+                # Exact totals: the default 10k cap makes large queues look smaller.
+                'track_total_hits': True,
+                # Never ship the 1024-d embedding vectors or class_id_history to
+                # the review grid (history is undo-only).
+                '_source': {'excludes': item_list_source_excludes(excludes)},
+            },
+            sort=req.sort,
+            tiebreak='crop_id',
+            cursor=cursor,
+            sort_id=req.sort_applied,
+            limit=limit,
+        )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
     hidden = await _hidden(opensearch, filters, req.image_join)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
@@ -214,7 +216,9 @@ async def review_queue(
 
     total_obj = (resp.get('hits') or {}).get('total') or {}
     total = int(total_obj.get('value', 0))
-    hits = (resp.get('hits') or {}).get('hits') or []
+    hits, next_cursor = split_page(
+        (resp.get('hits') or {}).get('hits') or [], sort_id=req.sort_applied, limit=limit
+    )
     registry_names: frozenset[str] = frozenset()
     if tab == 'mismatches':
         from src.services.curation.new_class_terms import normalize_term
@@ -248,8 +252,8 @@ async def review_queue(
     )
     return {
         'total': int(total),
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
         'items': items,
         'sort_applied': req.sort_applied,
         # Set when the default sort's field has 0% coverage and

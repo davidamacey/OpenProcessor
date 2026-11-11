@@ -6,7 +6,6 @@ in the serving partition: one page of documents, never the whole cluster.
 
 from __future__ import annotations
 
-import copy
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
 
@@ -14,7 +13,8 @@ import numpy as np
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.query_fakes import QueryFakeOpenSearch, matches
+from curation.paging_fakes import PagingOpenSearch
+from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
 
 
@@ -27,9 +27,8 @@ N = 4221
 DIM = 8
 
 
-class _CountingFake(QueryFakeOpenSearch):
-    """Adds numeric multi-key sort + ``from`` + guarded script updates, and
-    counts the documents each call scans or returns."""
+class _CountingFake(PagingOpenSearch):
+    """Counts the documents each call scans or returns."""
 
     def __init__(self, docs: dict[str, dict[str, Any]]) -> None:
         super().__init__({ITEMS: docs})
@@ -38,28 +37,14 @@ class _CountingFake(QueryFakeOpenSearch):
 
     async def search(self, *, index: str, body: dict[str, Any], scroll: str | None = None, **kw):
         self.search_calls += 1
-        sort = body.get('sort')
-        if scroll is not None or not sort:
-            resp = await super().search(index=index, body=body, scroll=scroll, **kw)
-            self.scanned += len(resp['hits']['hits'])
-            return resp
-        pool = [(i, d) for i, d in self.docs(index).items() if matches(d, body.get('query'))]
-        for spec in reversed(sort):
-            ((field, opts),) = spec.items()
-
-            def _key(kv: tuple[str, dict[str, Any]], f: str = field) -> Any:
-                return kv[1].get(f, kv[0])
-
-            pool.sort(key=_key, reverse=opts['order'] == 'desc')
-        start = body.get('from', 0)
-        page = pool[start : start + body.get('size', 10)]
-        self.scanned += len(page)
-        return {
-            'hits': {
-                'total': {'value': len(pool)},
-                'hits': [{'_id': i, '_source': copy.deepcopy(d)} for i, d in page],
-            }
-        }
+        if scroll is not None or not body.get('sort'):
+            resp = await QueryFakeOpenSearch.search(
+                self, index=index, body=body, scroll=scroll, **kw
+            )
+        else:
+            resp = await super().search(index=index, body=body)
+        self.scanned += len(resp['hits']['hits'])
+        return resp
 
 
 def _docs(n: int = N) -> dict[str, dict[str, Any]]:
@@ -102,11 +87,11 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(app)
 
 
-def _get(client: TestClient, page: int, size: int = 60) -> dict[str, Any]:
-    r = client.get(
-        '/curation/projects/default/crops',
-        params={'cluster_uid': UID, 'order': 'core_first', 'page': page, 'page_size': size},
-    )
+def _get(client: TestClient, cursor: str | None, size: int = 60) -> dict[str, Any]:
+    params: dict[str, Any] = {'cluster_uid': UID, 'order': 'core_first', 'limit': size}
+    if cursor:
+        params['cursor'] = cursor
+    r = client.get('/curation/projects/default/crops', params=params)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -118,15 +103,18 @@ def test_core_first_pages_best_scored_members_without_a_cluster_scan(
     fake = _CountingFake(docs)
     client = _client(fake, monkeypatch)
 
-    p1 = _get(client, 1)
-    assert fake.scanned <= 120  # router page + ordered page, not the 4k-member cluster
-    assert fake.search_calls == 3  # hidden counts, router page, ordered page
+    p1 = _get(client, None)
+    assert fake.scanned <= 61  # one page and its look-ahead row, not the 4k-member cluster
+    assert fake.search_calls == 2  # hidden counts, the ordered page
     assert p1['total'] == N
 
     ids = [i for i, d in docs.items() if d['cluster_uid'] == UID]
     want = sorted(ids, key=lambda i: (-docs[i]['cluster_score'], i))
     got: list[str] = [c['crop_id'] for c in p1['crops']]
-    for page in (2, 3):
-        got += [c['crop_id'] for c in _get(client, page)['crops']]
+    cursor = p1['next_cursor']
+    for _ in (2, 3):
+        page = _get(client, cursor)
+        got += [c['crop_id'] for c in page['crops']]
+        cursor = page['next_cursor']
     assert got == want[:180]
     assert 'other' not in got

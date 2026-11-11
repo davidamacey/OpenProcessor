@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation_accessors import items_index
 from src.services.curation.crop_browse import parse_crop_sort
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
+from src.services.curation.list_cursor import page_body
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
@@ -33,6 +34,8 @@ class CropListQuery:
     query_clause: dict[str, Any]
     filter_clauses: list[dict[str, Any]]
     """The clauses of the item filter alone, without the visibility clauses."""
+    image_join: ImageJoin | None = None
+    """The image-level join the area, location and group predicates resolved to."""
 
 
 def build_crop_list_query(
@@ -75,28 +78,34 @@ def build_crop_list_query(
         item_filter=flt,
         query_clause=query_clause,
         filter_clauses=filter_clauses,
+        image_join=image_join,
     )
 
 
 def crop_list_body(
-    query: CropListQuery, *, page: int, page_size: int, vector_excludes: Sequence[str]
+    query: CropListQuery, *, cursor: str | None, limit: int, vector_excludes: Sequence[str]
 ) -> dict[str, Any]:
-    """The paginated search body for ``query``."""
-    return {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        'query': query.query_clause,
+    """The search body for one page of ``query``.
+
+    Raises :class:`~src.services.curation.list_cursor.CursorError` for a cursor of another sort."""
+    return page_body(
+        {
+            'query': query.query_clause,
+            # Exact total (not the default 10k cap) so the labeler shows real
+            # queue sizes for filtered views.
+            'track_total_hits': True,
+            # Never ship the 1024-d embedding vectors or class_id_history
+            # to the card grid (history is undo-only).
+            '_source': {'excludes': item_list_source_excludes(vector_excludes)},
+        },
+        sort=query.sort_clause,
         # crop_id is a mapped keyword equal to _id; sorting on _id would need fielddata, which
         # these indexes disable. Last, so ties on the sort key never repeat or skip a row.
-        'sort': [*query.sort_clause, {'crop_id': {'order': 'asc'}}],
-        # Exact total (not the default 10k cap) so the labeler shows real
-        # queue sizes for filtered views — one count pass per query, fine at
-        # this scale and matches the /curation/review endpoint.
-        'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors or class_id_history
-        # to the card grid (history is undo-only).
-        '_source': {'excludes': item_list_source_excludes(vector_excludes)},
-    }
+        tiebreak='crop_id',
+        cursor=cursor,
+        sort_id=query.sort_id,
+        limit=limit,
+    )
 
 
 async def crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:
