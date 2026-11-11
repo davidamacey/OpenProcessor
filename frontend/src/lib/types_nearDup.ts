@@ -61,3 +61,108 @@ export interface NearDupStaleLevel {
   stale_reasons: NearDupStaleReason[];
   pending_count: number;
 }
+
+export const NEAR_DUP_PURPOSES = ['dedup', 'leak'] as const;
+export type NearDupPurpose = (typeof NEAR_DUP_PURPOSES)[number];
+
+export const NEAR_DUP_DECISIONS = ['same', 'different'] as const;
+export type NearDupDecision = (typeof NEAR_DUP_DECISIONS)[number];
+
+export interface NearDupRunPage {
+  items: NearDupRunView[];
+}
+
+export interface NearDupGroupSummary {
+  /** The lineage id: stable while the group keeps its members. */
+  group_id: string;
+  purpose: NearDupPurpose;
+  size: number;
+  representative_id: string;
+  min_edge_cosine: number;
+  min_cosine_to_rep: number;
+  has_holdout: boolean;
+}
+
+export interface NearDupGroupPage {
+  items: NearDupGroupSummary[];
+  next_cursor: string | null;
+}
+
+export interface NearDupMemberView {
+  /** An image id at the image level, an item id at the item level. */
+  member_id: string;
+  is_representative: boolean;
+  cosine_to_rep: number;
+}
+
+export interface NearDupGroupDetail {
+  group: NearDupGroupSummary;
+  members: NearDupMemberView[];
+}
+
+export interface NearDupDecisionIn {
+  level: NearDupLevel;
+  a_id: string;
+  b_id: string;
+  decision: NearDupDecision;
+}
+
+export interface NearDupDecisionView extends NearDupDecisionIn {
+  id: string;
+  decided_by: string;
+  decided_at: string;
+}
+
+export interface NearDupGroupQuery {
+  level: NearDupLevel;
+  purpose?: NearDupPurpose;
+  min_size?: number;
+  has_holdout?: boolean;
+  cursor?: string;
+  limit?: number;
+}
+
+/** `ResearchActive` of `GET /near_dup_profiles/active`. */
+export interface NearDupActiveProfile {
+  axis: string;
+  state: 'none' | 'active' | 'off';
+  name?: string | null;
+  revision?: number | null;
+  activated_at?: string | null;
+}
+
+/** The cuts both levels share (`NearDupProfileBody.image` / `.item`). */
+export interface NearDupLevelCuts {
+  space_key?: string | null;
+  dedup_cosine: number;
+  leak_cosine: number;
+  max_group_size: number;
+  [key: string]: unknown;
+}
+
+export interface NearDupImageCuts extends NearDupLevelCuts {
+  k: number;
+}
+
+export interface NearDupItemCuts extends NearDupLevelCuts {
+  scope: string;
+  same_detector_class: boolean;
+}
+
+export interface NearDupProfileBody {
+  version: number;
+  image: NearDupImageCuts;
+  item: NearDupItemCuts;
+}
+
+/** `ResearchConfigDoc` of a `near_dup_profile`. */
+export interface NearDupProfileDoc {
+  kind: string;
+  name: string;
+  revision: number;
+  description: string;
+  body: NearDupProfileBody;
+  created_at: string;
+  updated_at: string;
+  updated_by: string;
+}

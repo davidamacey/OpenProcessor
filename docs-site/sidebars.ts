@@ -142,6 +142,7 @@ const sidebars: SidebarsConfig = {
         'cropwright/user-guide/embedding-state',
         'cropwright/user-guide/dataset-import',
         'cropwright/user-guide/clusters',
+        'cropwright/user-guide/near-duplicates',
         'cropwright/user-guide/assist',
         'cropwright/user-guide/item-filter',
         'cropwright/user-guide/review',

@@ -25,6 +25,7 @@ const PROJECT_SECTIONS = [
   'train',
   'bakeoff',
   'label-ops',
+  'near-duplicates',
   'map',
   'settings',
 ] as const;
@@ -33,6 +34,7 @@ export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 /** Breadcrumb text for a section whose own id does not read as a label. */
 export const SECTION_LABELS: Partial<Record<ProjectSection, string>> = {
   'label-ops': 'Label ops',
+  'near-duplicates': 'Near-duplicates',
 };
 
 /** A path inside a project: a known section, plus any sub-path, query

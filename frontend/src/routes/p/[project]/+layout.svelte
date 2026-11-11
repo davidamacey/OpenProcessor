@@ -405,6 +405,11 @@
           class={navLinkClass('label-ops')}
           aria-current={navCurrent('label-ops')}>Label ops</a
         >
+        <a
+          href={resolve(projectHref('/near-duplicates'))}
+          class={navLinkClass('near-duplicates')}
+          aria-current={navCurrent('near-duplicates')}>Near-duplicates</a
+        >
         {#if mapAvailabilityStore.availableFor(slug)}
           <a
             href={resolve(projectHref('/map'))}

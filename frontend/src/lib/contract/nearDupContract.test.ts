@@ -6,7 +6,9 @@ import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_nearDup';
 import type { TestHoldoutFreezeResult } from '$lib/types_export';
 import {
+  NEAR_DUP_DECISIONS,
   NEAR_DUP_LEVELS,
+  NEAR_DUP_PURPOSES,
   NEAR_DUP_RUN_MODES,
   NEAR_DUP_STALE_REASONS,
 } from '$lib/types_nearDup';
@@ -88,5 +90,97 @@ describe('near-duplicate contract', () => {
         'near_dup_is_representative',
       ]),
     );
+  });
+
+  it('the group, member, decision and profile types have the served keys', () => {
+    expect(served('NearDupGroupSummary')).toEqual(
+      keys<keyof T.NearDupGroupSummary>({
+        group_id: true,
+        purpose: true,
+        size: true,
+        representative_id: true,
+        min_edge_cosine: true,
+        min_cosine_to_rep: true,
+        has_holdout: true,
+      }),
+    );
+    expect(served('NearDupGroupPage')).toEqual(['items', 'next_cursor']);
+    expect(served('NearDupGroupDetail')).toEqual(['group', 'members']);
+    expect(served('NearDupMemberView')).toEqual(
+      keys<keyof T.NearDupMemberView>({
+        member_id: true,
+        is_representative: true,
+        cosine_to_rep: true,
+      }),
+    );
+    expect(served('NearDupDecisionIn')).toEqual(
+      keys<keyof T.NearDupDecisionIn>({
+        level: true,
+        a_id: true,
+        b_id: true,
+        decision: true,
+      }),
+    );
+    expect(served('NearDupDecisionView')).toEqual(
+      keys<keyof T.NearDupDecisionView>({
+        id: true,
+        level: true,
+        a_id: true,
+        b_id: true,
+        decision: true,
+        decided_by: true,
+        decided_at: true,
+      }),
+    );
+    expect(served('ResearchConfigDoc')).toEqual(
+      keys<keyof T.NearDupProfileDoc>({
+        kind: true,
+        name: true,
+        revision: true,
+        description: true,
+        body: true,
+        created_at: true,
+        updated_at: true,
+        updated_by: true,
+      }),
+    );
+    expect(served('ResearchActive')).toEqual(
+      keys<keyof T.NearDupActiveProfile>({
+        axis: true,
+        state: true,
+        name: true,
+        revision: true,
+        activated_at: true,
+      }),
+    );
+  });
+
+  it('the purpose and decision ids are the served enums', () => {
+    expect(schemas.NearDupGroupSummary!.properties!.purpose!.enum).toEqual([
+      ...NEAR_DUP_PURPOSES,
+    ]);
+    expect(schemas.NearDupDecisionIn!.properties!.decision!.enum).toEqual([
+      ...NEAR_DUP_DECISIONS,
+    ]);
+  });
+
+  it('every route the page calls is in the contract', () => {
+    const paths = Object.keys(
+      (spec as unknown as { paths: Record<string, unknown> }).paths,
+    );
+    const base = '/curation/projects/{project}';
+    for (const p of [
+      'near_duplicates/status',
+      'near_duplicates/runs',
+      'near_duplicates/groups',
+      'near_duplicates/groups/{group_id}',
+      'near_duplicates/decisions',
+      'near_duplicates/decisions/{decision_id}',
+      'near_dup_profiles/active',
+      'near_dup_profiles/{name}',
+      'near_dup_profiles/{name}/activate',
+    ]) {
+      expect(paths, p).toContain(`${base}/${p}`);
+    }
   });
 });
