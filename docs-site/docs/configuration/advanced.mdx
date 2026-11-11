@@ -344,6 +344,9 @@ writes `secrets/vlm/<slug>` and an endpoint references it as `secret:<slug>`.
 | `OP_VLM_URL` | unset | OpenAI-compatible base, e.g. `http://vlm:8000/v1` (in-compose) or `http://host.docker.internal:<port>/v1` (a VLM on the host) |
 | `OP_VLM_MODEL` | none | Required whenever `OP_VLM_URL` is set |
 | `OP_VLM_API_KEY` | `EMPTY` | Key for the `env` endpoint |
+| `OP_VLM_PROVIDER` | `vllm` | `vllm`, `ollama`, `anthropic` or `openai_compatible` for the `env` endpoint; see [VLM selection](../guides/vlm-selection.mdx#providers) |
+| `OP_VLM_JSON_MODE` | provider default | `auto`, `on` or `off`: send `response_format: json_object` |
+| `OP_VLM_TEMPERATURE` | provider default | A number from 0 to 2, or `none` to send no temperature |
 | `OP_VLM_EXTERNAL_POLICY` | `ack` | Whether crops may be sent to an endpoint outside this deployment. `ack`: allowed once the operator acknowledges the warning when registering and activating it. `deny`: refused outright |
 | `OP_VLM_SECRETS_DIR` | `/run/secrets/op_vlm` | Where `secret:<slug>` references resolve; a read-only mount of `./secrets/vlm` |
 | `OP_LOCAL_VLM_ENDPOINT` | empty | Name of the registered endpoint that reaches the in-compose vLLM (the installer writes `env`). Empty means there is no in-compose VLM to switch |

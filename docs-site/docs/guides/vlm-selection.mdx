@@ -81,7 +81,9 @@ The response has `validation` (`ok`, `errors`, `warnings`, `force_allowed`), `lo
 | `open_images_per_call` | 3 | 1 to 64; chunk size for open-vocabulary labeling |
 | `timeout_s` | 240 | 5 to 900 |
 | `requests_per_second` | 500 | 0.1 to 10000 |
-| `json_mode` | `auto` | `auto`, `on`, `off` |
+| `provider` | `vllm` | `vllm`, `ollama`, `anthropic`, `openai_compatible`; sets the defaults of the next two fields and the headers sent (see [Providers](#providers)) |
+| `json_mode` | provider default | `auto`, `on`, `off`: send `response_format: json_object` |
+| `temperature` | provider default | 0 to 2, or `null` to send none |
 | `allow_external` | false | Required outside the deployment |
 | `catalog_id` | null | Links to a catalog entry |
 
@@ -213,6 +215,63 @@ Validation issue codes start with `vlm_` (for example `vlm_url_denied_internal_s
 `vlm_unreachable`, `vlm_auth_failed`, `vlm_model_not_listed`, `vlm_no_vision`,
 `vlm_json_mode_unsupported`, `vlm_max_images_exceeds_server`, `vlm_not_probed`,
 `vlm_context_too_small`).
+
+## Providers
+
+`provider` is explicit, not guessed from the host. It sets the defaults for `json_mode` and
+`temperature` (override either per endpoint) and the headers the probe and every call send.
+
+| Provider | `json_mode` | `temperature` | Notes |
+|---|---|---|---|
+| `vllm` (default) | `auto` | `0.0` | Unchanged from earlier releases |
+| `ollama` | `auto` | `0.0` | Images go as base64 data URLs, which is what the labeler sends |
+| `openai_compatible` | `auto` | `0.0` | Any other server that follows the OpenAI chat API |
+| `anthropic` | `off` | none | Adds `anthropic-version: 2023-06-01` |
+
+The probe sends a minimal chat call with the endpoint's own parameters, so a rejected
+parameter shows up as `vlm_http_error` with the provider's message.
+
+**vLLM** (the `vlm` service or your own server). Sources: vLLM "OpenAI-Compatible Server" docs.
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints" -H 'Content-Type: application/json' \
+  -d '{"name": "host-vllm", "body": {"provider": "vllm",
+       "base_url": "http://host.docker.internal:8012/v1", "model": "my-vision-model"}}'
+```
+
+**Ollama** (host or LAN, port 11434). Sources: Ollama "OpenAI compatibility" docs: `/v1/models`,
+`response_format`, `temperature` and base64 images are supported; the API key is ignored, so
+register without `api_key_ref`. Pull the model first (`ollama pull <model>`).
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints" -H 'Content-Type: application/json' \
+  -d '{"name": "ollama-vision", "body": {"provider": "ollama",
+       "base_url": "http://host.docker.internal:11434/v1", "model": "<a vision model you pulled>"}}'
+```
+
+**Anthropic** (cloud). Sources: Anthropic "OpenAI SDK compatibility" docs: `json_object` is
+rejected with 400, `temperature` below 1 is rejected on current models, and `/models` needs the
+`anthropic-version` header. Crops leave your deployment, so `allow_external` is required.
+Write the key with `openprocessor vlm key set anthropic`, never inline.
+
+```bash
+curl -s -X POST "$API/curation/vlm/endpoints" -H 'Content-Type: application/json' \
+  -d '{"name": "claude", "body": {"provider": "anthropic",
+       "base_url": "https://api.anthropic.com/v1", "model": "claude-haiku-5-5",
+       "api_key_ref": "secret:anthropic", "allow_external": true}}'
+```
+
+The same settings for the built-in endpoint: `OP_VLM_PROVIDER`, `OP_VLM_JSON_MODE` and
+`OP_VLM_TEMPERATURE` (`none` sends no temperature); see
+[advanced configuration](../configuration/advanced.mdx).
+
+## Failed label batches
+
+A provider answering HTTP 4xx (a rejected parameter, a bad key, an unknown model) is a
+configuration error: `vlm_label_batch` and `vlm_verify_region_batch` end `failed` with
+`error_code` `vlm_request_rejected` and a message naming the endpoint, the status and the
+provider's text. It is never retried and never `completed`. A 5xx, a timeout or no connection
+stays `vlm_unreachable` (`result.vlm_unreachable`).
 
 ## Scope and budget
 
