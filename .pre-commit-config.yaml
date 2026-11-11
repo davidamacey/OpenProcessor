@@ -257,7 +257,7 @@ repos:
         files: ^(src|scripts|tests)/.*\.py$|^(\.pre-commit-config\.yaml|pyproject\.toml)$
       - id: docs-vs-code
         name: Docs name only routes, OP_* variables and links that exist
-        entry: python3 scripts/docs/check_docs_vs_code.py
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/docs/check_docs_vs_code.py'
         language: system
         pass_filenames: false
         stages: [pre-push]
