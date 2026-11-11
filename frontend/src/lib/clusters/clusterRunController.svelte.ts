@@ -104,7 +104,7 @@ export class ClusterRunController {
     this.message =
       r.activated === true
         ? `Clustered ${String(r.n_items ?? 0)} items into ${String(r.n_clusters ?? 0)} clusters; the new partition is serving.`
-        : `Clustered ${String(r.n_items ?? 0)} items into ${String(r.n_clusters ?? 0)} clusters. The new partition is ready but not serving; review it, then activate it.`;
+        : `Clustered ${String(r.n_items ?? 0)} items into ${String(r.n_clusters ?? 0)} clusters. The new partition is ready but not serving. Activate it to see its clusters.`;
   }
 
   async activate(partition: ClusterPartitionView): Promise<void> {
