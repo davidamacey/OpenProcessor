@@ -143,16 +143,10 @@ def test_region_confirm_then_undo(
     prefix = throwaway_project['prefix']
     bbox = [0.1, 0.1, 0.6, 0.6]
 
-    # Every api worker picks up an activation on its own refresh, so a 409 no_active_profile
-    # right after activating is retried, bounded.
-    def write() -> Any:
-        resp = api.put(
-            f'{prefix}/crops/{ingested_crop_id}/regions',
-            data={'boxes': [{'box_id': None, 'bbox_norm': bbox}], 'region_label_source': 'human'},
-        )
-        return resp if resp.status != 409 else None
-
-    written = _poll('the activated region profile to reach the serving worker', write)
+    written = api.put(
+        f'{prefix}/crops/{ingested_crop_id}/regions',
+        data={'boxes': [{'box_id': None, 'bbox_norm': bbox}], 'region_label_source': 'human'},
+    )
     assert written.status == 200, written.text()
     (box,) = written.json()['item']['region_boxes']
     assert box['state'] == 'accepted'

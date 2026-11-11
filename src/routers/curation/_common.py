@@ -96,13 +96,23 @@ _raw_opensearch_dep = get_curation_opensearch
 OpenSearchDep = Annotated[Any, Depends(_raw_opensearch_dep)]
 
 
-def _require_region_profile_dep() -> Any:
+async def _require_region_profile_dep() -> Any:
     """No-profile gating contract: region data/write routes 409 with a
     clear detail when no region profile is configured, rather than
-    quietly operating on a region concept that cannot exist yet."""
+    quietly operating on a region concept that cannot exist yet.
+
+    "None" from this worker's snapshot is not final: an activation made through another API
+    worker is only here after the next poll tick, so the store's epoch is checked first
+    (``ConfigStore.refresh``, one indexed read, only on this path). 409 only when the store
+    agrees; an unreadable store is 503, never a guess."""
+    from src.services.config_store import get_config_store
     from src.services.detection.profile_registry import get_active_region_profile
 
     profile = get_active_region_profile()
+    if profile is None:
+        if (await get_config_store().refresh()).stale:
+            raise api_error(503, 'config_store_unavailable', 'the config store could not be read')
+        profile = get_active_region_profile()
     if profile is None:
         raise api_error(409, 'no_active_profile', 'no region profile is configured')
     return profile
