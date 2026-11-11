@@ -30,9 +30,10 @@ from src.services.labeling.vlm_client import (
     extract_message_content,
     post_chat_with_retry,
     record_chat_exchange,
+    sampling_kwargs,
 )
 from src.services.labeling.vlm_endpoints import VlmEndpointUnavailableError
-from src.services.labeling.vlm_models import VlmHealth
+from src.services.labeling.vlm_models import VlmHealth, VlmRequestRejectedError
 from src.services.labeling.vlm_prompts import GENERIC_ITEM_PACK, PromptPack
 from src.services.labeling.vlm_usage import record_call
 from src.utils.upstream_errors import describe_upstream_error
@@ -41,6 +42,7 @@ from src.utils.upstream_errors import describe_upstream_error
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from src.services.labeling.vlm_endpoint_body import Provider
     from src.services.labeling.vlm_pinning import AddressPin
 
 
@@ -55,6 +57,9 @@ CHAT_CALL_ERRORS: tuple[type[Exception], ...] = (
     ValueError,
     VlmEndpointUnavailableError,
 )
+
+#: A health probe also reports a provider's 4xx (a bad key, a rejected parameter) as its reason.
+_HEALTH_ERRORS: tuple[type[Exception], ...] = (*CHAT_CALL_ERRORS, VlmRequestRejectedError)
 
 
 # vLLM's ``json_object`` grammar only admits an object, so every batched
@@ -91,6 +96,8 @@ class VlmLabelerCore:
         usage_source: str | None,
         hard_cap: int | None = None,
         json_mode: bool = True,
+        temperature: float | None = 0.0,
+        provider: Provider = 'vllm',
         open_images_per_call: int | None = None,
         identity: VlmIdentity | None = None,
         egress_check: Callable[[], Awaitable[None]] | None = None,
@@ -126,6 +133,8 @@ class VlmLabelerCore:
         # test probe, which is not a workload.
         self.usage_source = usage_source
         self.json_mode = json_mode
+        self.temperature = temperature
+        self.provider = provider
         self.open_images_per_call = (
             DEFAULT_OPEN_IMAGES_PER_CALL if open_images_per_call is None else open_images_per_call
         )
@@ -186,9 +195,14 @@ class VlmLabelerCore:
         The one place that key is added."""
         return {'response_format': {'type': 'json_object'}} if self.json_mode else {}
 
+    def _sampling_kwargs(self) -> dict[str, float]:
+        """The endpoint's ``temperature`` entry (none when it takes none); the one place
+        every payload gets it from."""
+        return sampling_kwargs(self.temperature)
+
     @property
     def _headers(self) -> dict[str, str]:
-        return build_auth_headers(self.api_key)
+        return build_auth_headers(self.api_key, self.provider)
 
     async def _post_chat(
         self,
@@ -238,13 +252,13 @@ class VlmLabelerCore:
             'model': self.model,
             'messages': [{'role': 'user', 'content': 'reply with the single word OK'}],
             'max_tokens': 4,
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
         }
         try:
             resp = await self._post_chat(payload, attempts=1, record_usage=False)
             _ = extract_message_content(resp)
             return VlmHealth(reachable=True, model=self.model, last_error=None)
-        except CHAT_CALL_ERRORS as exc:
+        except _HEALTH_ERRORS as exc:
             logger.warning(
                 'vlm_labeler.health_failed',
                 model=self.model,

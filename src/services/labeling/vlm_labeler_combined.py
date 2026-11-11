@@ -130,7 +130,7 @@ class CombinedOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.combined_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 768 if ask else 256,
             **self._json_mode_kwargs(),
         }
@@ -303,7 +303,7 @@ class CombinedOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.combined_batch_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             # Combined prompt is bigger than batched verify (per-image
             # directive + class catalog + 8-field JSON schema); some
             # VLMs also emit 1000-1500 tokens of chain-of-thought

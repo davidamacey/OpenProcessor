@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from src.services.labeling.vlm_models import VlmRequestRejectedError
+
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Sequence
@@ -29,6 +31,14 @@ async def run_chunks[T](
         async with gate:
             return await call
 
-    async with asyncio.TaskGroup() as group:
-        tasks = [group.create_task(one(c)) for c in calls]
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(one(c)) for c in calls]
+    except ExceptionGroup as group_error:
+        # The group wraps what a chunk raised; a provider's HTTP 4xx must reach the caller as
+        # itself (it is a configuration error), not as an anonymous group.
+        rejected, rest = group_error.split(VlmRequestRejectedError)
+        if rejected is not None and rest is None:
+            raise rejected.exceptions[0] from None
+        raise
     return [t.result() for t in tasks]

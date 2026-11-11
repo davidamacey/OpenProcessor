@@ -9,6 +9,7 @@ Region images reach the job through the storage seam, never through ``jobs.param
 from __future__ import annotations
 
 import uuid
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
@@ -18,6 +19,7 @@ from src.clients.storage.roots import RootedStore
 from src.config import get_curation_config
 from src.config.curation_accessors import base_curation_config, items_index
 from src.core.logging import get_logger
+from src.domain.job_failure import JobFailedError
 from src.domain.storage_keys import make_key
 from src.services.classes.registry import get_class_registry
 from src.services.curation.class_write_guard import (
@@ -31,11 +33,12 @@ from src.services.curation.source_image_cache import crop_cache_file
 from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.labeling.detector_hint import DETECTOR_HINT_FIELDS, hinted_crop
 from src.services.labeling.run_labeler import vlm_stamp
+from src.services.labeling.vlm_models import VlmRequestRejectedError
 from src.utils.timeutil import now_iso
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import AsyncIterator, Sequence
 
 logger = get_logger(__name__)
 
@@ -53,6 +56,18 @@ def unanswered(predictions: Sequence[Any]) -> bool:
     """No crop got an answer: the endpoint is down. Nothing is written, so every crop stays
     pending and the caller backs off instead of retrying hot."""
     return bool(predictions) and all(p.failure == 'request_failed' for p in predictions)
+
+
+@asynccontextmanager
+async def fail_on_rejection(labeler: Any) -> AsyncIterator[None]:
+    """An HTTP 4xx from the provider is a configuration error, not an outage: fail the job with
+    the status, the provider's message and the endpoint, so nothing reports success."""
+    try:
+        yield
+    except VlmRequestRejectedError as exc:
+        slug = labeler.identity.endpoint_ref.rpartition('@')[0] or labeler.identity.endpoint_ref
+        msg = f'endpoint {slug!r} rejected the request (HTTP {exc.status}): {exc.upstream_message}'
+        raise JobFailedError('vlm_request_rejected', msg) from exc
 
 
 def staging_store() -> RootedStore:
@@ -233,7 +248,8 @@ async def run_label_batch(opensearch: Any, labeler: Any, crop_ids: Sequence[str]
         return {'predicted': 0, 'updated': 0}
     # The open-vocabulary path lets the VLM flag genuinely-unknown items instead of
     # silently snapping them to the wrong class.
-    predictions = await labeler.label_or_propose_batch(crops, class_names)
+    async with fail_on_rejection(labeler):
+        predictions = await labeler.label_or_propose_batch(crops, class_names)
     if unanswered(predictions):
         return {
             'vlm_unreachable': True,
@@ -265,7 +281,9 @@ async def run_verify_region_batch(labeler: Any, items: Sequence[dict[str, Any]])
     from src.services.labeling.vlm_models import RegionCrop
 
     crops = [RegionCrop(crop_id=i['crop_id'], jpeg_bytes=read_staged(i['key'])) for i in items]
-    by_id = {v.crop_id: v for v in await labeler.verify_region_batch(crops)}
+    async with fail_on_rejection(labeler):
+        verdicts = await labeler.verify_region_batch(crops)
+    by_id = {v.crop_id: v for v in verdicts}
     results = []
     for item in items:
         verdict = by_id.get(item['crop_id'])

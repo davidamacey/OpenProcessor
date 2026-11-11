@@ -68,7 +68,7 @@ class VerifyOps(VlmLabelerCore):
                     ],
                 },
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             # Reasoning VLMs think out loud before answering, and the
             # verify-and-read prompt is longer than a verify-only ask.
             # 1024 leaves headroom for a long reasoning preamble plus
@@ -166,7 +166,7 @@ class VerifyOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.region_batch_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             # Batched verify-and-read. Per-image output schema is
             # roughly 80 tokens and the reasoning preamble scales with
             # image count. 2048 covers a worst-case 6-image batch;

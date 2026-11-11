@@ -12,10 +12,25 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 JsonMode = Literal['auto', 'on', 'off']
+#: Who serves the endpoint. Each provider has defaults for the request parameters it accepts
+#: (:data:`PROVIDER_DEFAULTS`); every one is overridable per endpoint.
+#: vLLM: vLLM OpenAI-compatible server docs. Ollama: docs.ollama.com/api/openai-compatibility
+#: (``response_format`` and ``temperature`` supported). Anthropic: platform.claude.com/docs/en/api/openai-sdk
+#: (``json_object`` and, on current models, ``temperature`` return 400; ``anthropic-version`` header).
+Provider = Literal['vllm', 'ollama', 'anthropic', 'openai_compatible']
+ANTHROPIC_VERSION = '2023-06-01'
+
+#: ``provider -> {field: default}`` applied to a body that leaves the field out.
+PROVIDER_DEFAULTS: dict[str, dict[str, Any]] = {
+    'vllm': {'json_mode': 'auto', 'temperature': 0.0},
+    'ollama': {'json_mode': 'auto', 'temperature': 0.0},
+    'openai_compatible': {'json_mode': 'auto', 'temperature': 0.0},
+    'anthropic': {'json_mode': 'off', 'temperature': None},
+}
 
 #: ``field -> (min, max)``, inclusive; served in the schema rows too.
 FIELD_RANGES: dict[str, tuple[float, float]] = {
@@ -23,6 +38,7 @@ FIELD_RANGES: dict[str, tuple[float, float]] = {
     'open_images_per_call': (1, 64),
     'timeout_s': (5, 900),
     'requests_per_second': (0.1, 10000),
+    'temperature': (0, 2),
 }
 
 
@@ -40,8 +56,20 @@ class VlmEndpointBody(BaseModel):
     timeout_s: float = 240.0
     requests_per_second: float = 500.0
     json_mode: JsonMode = 'auto'
+    #: Sent on every chat call; ``None`` leaves it out (current Claude models reject it).
+    temperature: float | None = 0.0
+    provider: Provider = 'vllm'
     allow_external: bool = False
     catalog_id: str | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _provider_defaults(cls, data: Any) -> Any:
+        """A body that names a provider but not a parameter gets the provider's default for it."""
+        if isinstance(data, dict):
+            defaults = PROVIDER_DEFAULTS.get(str(data.get('provider', 'vllm')), {})
+            return {**defaults, **data}
+        return data
 
     def normalized(self) -> VlmEndpointBody:
         """``base_url`` without a trailing ``/`` (the stored form)."""
@@ -80,4 +108,12 @@ class VlmProbeRecord(BaseModel):
         return [i['code'] for i in self.issues if i.get('severity') == 'error']
 
 
-__all__ = ['FIELD_RANGES', 'JsonMode', 'VlmEndpointBody', 'VlmProbeRecord']
+__all__ = [
+    'ANTHROPIC_VERSION',
+    'FIELD_RANGES',
+    'PROVIDER_DEFAULTS',
+    'JsonMode',
+    'Provider',
+    'VlmEndpointBody',
+    'VlmProbeRecord',
+]

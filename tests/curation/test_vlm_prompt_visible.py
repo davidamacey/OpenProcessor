@@ -58,6 +58,6 @@ async def test_the_answer_is_read_strictly(content: str, expected: bool | None) 
 @pytest.mark.asyncio
 async def test_a_failed_call_is_no_answer_not_a_no() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(400, json={'error': 'bad'})
+        return httpx.Response(503, json={'error': 'down'})
 
     assert await _labeler(handler).prompt_visible(b'JPEG', 'cup') is None

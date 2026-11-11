@@ -39599,10 +39599,33 @@
             "default": 3,
             "title": "Open Images Per Call"
           },
+          "provider": {
+            "default": "vllm",
+            "enum": [
+              "vllm",
+              "ollama",
+              "anthropic",
+              "openai_compatible"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
           "requests_per_second": {
             "default": 500.0,
             "title": "Requests Per Second",
             "type": "number"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 0.0,
+            "title": "Temperature"
           },
           "timeout_s": {
             "default": 240.0,

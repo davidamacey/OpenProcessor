@@ -22,11 +22,17 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
-from src.config.env import env_int, env_optional_str, env_path, env_str
+from src.config.env import env_choice, env_float, env_int, env_optional_str, env_path, env_str
 from src.core.logging import get_logger
-from src.services.labeling.vlm_endpoint_body import VlmEndpointBody, VlmProbeRecord
+from src.services.labeling.vlm_endpoint_body import (
+    FIELD_RANGES,
+    JsonMode,
+    Provider,
+    VlmEndpointBody,
+    VlmProbeRecord,
+)
 from src.services.labeling.vlm_url_policy import (
     Locality,
     external_warning,
@@ -258,6 +264,27 @@ def resolve_api_key(ref: str | None, *, is_env_builtin: bool = False) -> str | N
 # --- the env built-in -------------------------------------------------------------
 
 
+def _env_request_params() -> dict[str, Any]:
+    """The request parameters ``OP_VLM_JSON_MODE`` / ``OP_VLM_TEMPERATURE`` set; a parameter left
+    unset is absent, so the provider's default applies. ``OP_VLM_TEMPERATURE=none`` sends none."""
+    out: dict[str, Any] = {}
+    if env_optional_str('OP_VLM_JSON_MODE') is not None:
+        out['json_mode'] = env_choice('OP_VLM_JSON_MODE', get_args(JsonMode), 'auto')
+    raw = env_optional_str('OP_VLM_TEMPERATURE')
+    if raw is not None:
+        out['temperature'] = (
+            None
+            if raw.lower() == 'none'
+            else env_float(
+                'OP_VLM_TEMPERATURE',
+                0.0,
+                minimum=FIELD_RANGES['temperature'][0],
+                maximum=FIELD_RANGES['temperature'][1],
+            )
+        )
+    return out
+
+
 def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     """The read-only ``env`` endpoint, or ``None`` when ``OP_VLM_URL`` is
     empty (then no VLM exists unless a stored one is activated).
@@ -283,9 +310,10 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
         open_images_per_call=env_int('OP_VLM_OPEN_IMAGES_PER_CALL', 3, minimum=1),
         timeout_s=240.0,
         requests_per_second=500.0,
-        json_mode='auto',
+        provider=env_choice('OP_VLM_PROVIDER', get_args(Provider), 'vllm'),
         allow_external=True,
         catalog_id=None,
+        **_env_request_params(),
     )
     probe = _matching_probe(base, probe_doc)
     entry = catalog_entry_for_root(probe.root if probe else None)

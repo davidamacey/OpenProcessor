@@ -63,7 +63,7 @@ class VisibilityOps(VlmLabelerCore):
                     ],
                 },
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 1024,
             **self._json_mode_kwargs(),
         }
@@ -145,7 +145,7 @@ class VisibilityOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.region_visible_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             # Reply is a tight array of ~12 tokens per image, but a
             # reasoning model can emit a 200-400 token chain-of-thought
             # preamble on multi-image prompts. 1024 leaves comfortable

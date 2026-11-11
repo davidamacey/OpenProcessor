@@ -45,6 +45,17 @@ def env_str(name: str, default: str = '') -> str:
     return default if value is None else value
 
 
+def env_choice[T: str](name: str, choices: tuple[T, ...], default: T) -> T:
+    """The value, which must be one of ``choices``, or ``default`` when unset or blank."""
+    raw = env_optional_str(name)
+    if raw is None:
+        return default
+    for choice in choices:
+        if raw.lower() == choice:
+            return choice
+    raise EnvError(name, raw, f'must be one of {", ".join(choices)}')
+
+
 def env_path(name: str, default: Path | str) -> Path:
     return Path(env_str(name, str(default)))
 

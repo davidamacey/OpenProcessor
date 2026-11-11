@@ -119,7 +119,7 @@ class AssistOps(ClassifyOps):
                 {'role': 'system', 'content': self._pack.assist_system},
                 {'role': 'user', 'content': _user_content(f'{text}\n{_RESULTS_ENVELOPE}', chunk)},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 1024,
             **self._json_mode_kwargs(),
         }
@@ -164,7 +164,7 @@ class AssistOps(ClassifyOps):
                 {'role': 'system', 'content': self._pack.attributes_system},
                 {'role': 'user', 'content': _user_content(f'{text}\n{_RESULTS_ENVELOPE}', chunk)},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 768,
             **self._json_mode_kwargs(),
         }

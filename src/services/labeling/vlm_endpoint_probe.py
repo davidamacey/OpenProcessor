@@ -28,6 +28,7 @@ from src.services.labeling.vlm_client import (
     build_http_client,
     extract_message_content,
     extract_reasoning_content,
+    sampling_kwargs,
 )
 from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, VlmEndpointBody, VlmProbeRecord
 from src.services.labeling.vlm_pinning import AddressPin
@@ -106,7 +107,7 @@ class _Probe:
         self.body = body
         self.key = api_key
         self.client: httpx.AsyncClient = client  # type: ignore[assignment]  # set before any send
-        self.headers = build_auth_headers(api_key or 'EMPTY')
+        self.headers = build_auth_headers(api_key or 'EMPTY', body.provider)
         self.issues: list[dict[str, Any]] = []
         self.result: dict[str, Any] = {}
         self.image_timeout = min(body.timeout_s, 60.0)
@@ -151,7 +152,7 @@ class _Probe:
         return self.fail(
             'vlm_http_error',
             message=f'{path} answered HTTP {resp.status_code}.',
-            detail={'status': resp.status_code},
+            detail={'status': resp.status_code, 'upstream_message': _mask(resp.text, self.key)},
         )
 
     async def list_models(self) -> None:
@@ -191,7 +192,7 @@ class _Probe:
             'model': self.body.model,
             'messages': [{'role': 'user', 'content': content}],
             'max_tokens': max_tokens,
-            'temperature': 0.0,
+            **sampling_kwargs(self.body.temperature),
         }
         if json_mode:
             payload['response_format'] = {'type': 'json_object'}
@@ -227,10 +228,10 @@ class _Probe:
             'POST',
             '/chat/completions',
             timeout=self.image_timeout,
-            payload=self._chat(content, max_tokens=64, json_mode=True),
+            payload=self._chat(content, max_tokens=64, json_mode=self.body.json_mode != 'off'),
         )
-        self.result['json_mode_supported'] = True
-        if resp.status_code == 400:
+        self.result['json_mode_supported'] = self.body.json_mode != 'off'
+        if resp.status_code == 400 and self.body.json_mode == 'auto':
             text = resp.text.lower()
             if 'response_format' in text or 'json_object' in text:
                 self.result['json_mode_supported'] = False

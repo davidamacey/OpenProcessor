@@ -244,6 +244,8 @@ def _build(endpoint: VlmEndpoint, pack: PromptPack, usage_source: str | None) ->
         pack=pack,
         hard_cap=body.max_images_per_call,
         json_mode=endpoint.json_mode_on,
+        temperature=body.temperature,
+        provider=body.provider,
         open_images_per_call=body.effective_open_images,
         identity=VlmIdentity(endpoint_ref=endpoint.ref, model=endpoint.model_id),
         egress_check=_egress_check(endpoint, pin),
