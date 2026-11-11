@@ -68,7 +68,6 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
                         'hotkey_letter': 'q',
                         'sample_count': 161,
                         'validated_count': validated,
-                        'cluster_size': 161,
                         'deprecated': False,
                     }
                 ],

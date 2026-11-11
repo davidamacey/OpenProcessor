@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from fixtures.contract import auto_label_job
+from fixtures.wire import labeled_stats
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -72,7 +73,7 @@ DATASET_STATS = {
     'validated': 0,
     'test_holdout': 0,
     'by_source': [],
-    'labeled': {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'other': 0},
+    'labeled': labeled_stats(),
     'regions': {'total_detected': 0, 'by_detector': 0, 'by_segmenter': 0},
     'unlabeled': {'pending_detection': 0, 'no_label_source': 0},
     'in_progress': {'region_drain_total_unfinished': 0},

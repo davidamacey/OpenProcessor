@@ -36,12 +36,19 @@ export interface DatasetStats {
     by_human: number;
     by_vlm: number;
     by_classifier: number;
+    by_import: number;
     other: number;
+    /** Every provenance summed; `rows` add up to it. */
+    total: number;
+    /** One row per provenance, in the order to show; `share` is 0 to 1 of `total`. */
+    rows: Array<{ key: string; label: string; count: number; share: number }>;
   };
   regions: {
     /** Crops with a region_bbox_norm right now — the honest "crops with a
      *  region" count (matches the region cluster view). */
     boxed: number;
+    /** Fraction (0 to 1) of all crops that have a box. */
+    coverage_share: number;
     /** Crops the verifier confirmed carry a real region (region_status='detected'). */
     confirmed: number;
     /** Sum of region_detector credit — includes rejected/failed attempts,

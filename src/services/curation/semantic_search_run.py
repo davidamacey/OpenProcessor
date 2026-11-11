@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from src.clients.curation_opensearch.msearch import msearch_checked
 from src.config.project_context import project_api_base
 from src.domain.embedding_spaces import ResolvedSpace, Target, require_query_space
 from src.domain.embedding_state import not_embedded_clause
@@ -120,27 +121,6 @@ def _count_body(
 
 def _total(response: dict[str, Any]) -> int:
     return int(((response.get('hits') or {}).get('total') or {}).get('value', 0))
-
-
-async def _msearch(
-    opensearch: Any, index: str, bodies: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    """One ``_msearch`` for ``bodies`` against ``index``; any failed entry fails the call
-    (OpenSearch answers 200 with a per-entry ``error``).
-
-    OpenSearch multi-search: https://docs.opensearch.org/latest/api-reference/multi-search/"""
-    payload: list[dict[str, Any]] = []
-    for body in bodies:
-        payload.extend(({'index': index}, body))
-    with search_span('knn_page'):
-        resp = await opensearch.msearch(body=payload)
-    responses: list[dict[str, Any]] = resp.get('responses') or []
-    if len(responses) != len(bodies):
-        raise RuntimeError(f'_msearch answered {len(responses)} of {len(bodies)} searches')
-    for entry in responses:
-        if entry.get('error'):
-            raise RuntimeError(f'_msearch entry failed: {entry["error"]}')
-    return responses
 
 
 async def resolve_search_spaces(
@@ -303,9 +283,10 @@ async def run_search(
         )
         bodies.append(body)
         unsearchable = unsearchable or clause
-    responses = await _msearch(
-        opensearch, cfg.items_index, [*bodies, _count_body(filter_clause, unsearchable)]
-    )
+    with search_span('knn_page'):
+        responses = await msearch_checked(
+            opensearch, cfg.items_index, [*bodies, _count_body(filter_clause, unsearchable)]
+        )
     *searches, counted = responses
     search_annotate('os_took_ms', int(searches[0].get('took') or 0))
     per_space = [

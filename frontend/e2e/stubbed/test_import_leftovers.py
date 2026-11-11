@@ -38,7 +38,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 10,
         'validated_count': 5,
-        'cluster_size': 3,
         'deprecated': False,
     },
     {
@@ -49,7 +48,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 4,
         'validated_count': 1,
-        'cluster_size': 4,
         'deprecated': False,
     },
 ]

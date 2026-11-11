@@ -27,6 +27,7 @@ import re
 from urllib.parse import urlsplit
 
 from fixtures.contract import auto_label_job
+from fixtures.wire import labeled_stats
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
@@ -41,7 +42,6 @@ CLASSES = [
         'hotkey_letter': 'p',
         'sample_count': 40,
         'validated_count': 12,
-        'cluster_size': 44,
         'deprecated': False,
     },
     {
@@ -52,7 +52,6 @@ CLASSES = [
         'hotkey_letter': 'f',
         'sample_count': 20,
         'validated_count': 5,
-        'cluster_size': 22,
         'deprecated': False,
     },
 ]
@@ -110,7 +109,7 @@ DATASET_STATS = {
     'validated': 0,
     'test_holdout': 0,
     'by_source': [],
-    'labeled': {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'other': 0},
+    'labeled': labeled_stats(),
     'regions': {'total_detected': 0, 'by_detector': 0, 'by_segmenter': 0},
     'unlabeled': {'pending_detection': 0, 'no_label_source': 0},
     'in_progress': {'region_drain_total_unfinished': 0},

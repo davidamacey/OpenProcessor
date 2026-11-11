@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -21,7 +22,7 @@ def client() -> Any:
     from _curation_app import mount_curation_routers
 
     mount_curation_routers(app, curation_router)
-    fake = AsyncMock()
+    fake = install_msearch(AsyncMock())
     fake.count = AsyncMock(return_value={'count': 0})
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as c:

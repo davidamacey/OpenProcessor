@@ -22,7 +22,6 @@ function makeClass(id: number, name: string, validated: number): RegistryClass {
     group: null,
     count: validated + 10,
     validated_count: validated,
-    cluster_size: 0,
     added_at: '2026-01-01T00:00:00Z',
     adequacy: 'block',
     kind: 'item',

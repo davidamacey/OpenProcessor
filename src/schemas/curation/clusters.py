@@ -72,6 +72,12 @@ class ClusterFlag(TypedDict):
     description: str
 
 
+class PendingPartition(TypedDict):
+    partition_id: str
+    clusters: int
+    items: int
+
+
 class ClusterListResponse(TypedDict):
     items: list[ClusterCard]
     total: Annotated[
@@ -89,6 +95,18 @@ class ClusterListResponse(TypedDict):
                 'The aggregation returned max_clusters buckets, so the list may be '
                 'incomplete: raise max_clusters or narrow the filters.'
             )
+        ),
+    ]
+    empty_reason: Annotated[
+        Literal['no_partition', 'pending_activation', 'filtered_empty'] | None,
+        Field(description='Why `items` is empty; null when cards are served.'),
+    ]
+    empty_message: Annotated[str | None, Field(description='The text to show for `empty_reason`.')]
+    pending_partition: Annotated[
+        PendingPartition | None,
+        Field(
+            description='The newest built partition not serving yet (newer than the serving one); '
+            'activate it with `PUT /clusters/activation`.'
         ),
     ]
 

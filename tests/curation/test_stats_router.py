@@ -122,3 +122,44 @@ async def test_stats_dataset_uses_request_cache() -> None:
     await stats_dataset(os_client)
     assert os_client.search.await_args is not None
     assert os_client.search.await_args.kwargs['request_cache'] is True
+
+
+def test_labeled_rows_cover_every_provenance_and_sum_to_total() -> None:
+    """Served rows include imports (the dashboard once omitted them) and sum to ``total``."""
+    from src.services.curation.stats_dataset import labeled_block
+
+    block = labeled_block(
+        {'by_human': 100, 'by_vlm': 0, 'by_classifier': 5, 'by_import': 185, 'other': 0}
+    )
+    assert block['total'] == 290
+    assert sum(r['count'] for r in block['rows']) == block['total']
+    by_key = {r['key']: r for r in block['rows']}
+    assert by_key['by_import']['label'] == 'Imported'
+    assert by_key['by_import']['share'] == pytest.approx(185 / 290, abs=1e-4)
+    assert block['by_import'] == 185
+
+
+def test_labeled_rows_empty_when_nothing_is_labeled() -> None:
+    from src.services.curation.stats_dataset import labeled_block
+
+    block = labeled_block(
+        {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'by_import': 0, 'other': 0}
+    )
+    assert block['total'] == 0
+    assert all(r['share'] == 0 for r in block['rows'])
+
+
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
+@pytest.mark.asyncio
+async def test_stats_dataset_serves_region_coverage_share() -> None:
+    os_client = AsyncMock()
+    os_client.search = AsyncMock(
+        return_value={
+            'hits': {'total': {'value': 8}},
+            'aggregations': {'region_boxed': {'doc_count': 2}},
+        }
+    )
+    body = await stats_dataset(os_client)
+    assert body['regions']['coverage_share'] == 0.25
+    assert body['labeled']['rows']

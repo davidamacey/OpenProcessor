@@ -29,7 +29,6 @@ _HOLDOUT = {'term': {'test_holdout': True}}
 @dataclass(frozen=True)
 class ImageItemFacts:
     counts: ImageCounts
-    excluded: int
     boxes: list[BoxView]
     boxes_truncated: bool
 
@@ -59,7 +58,6 @@ def _bucket_aggs(include_test: bool, box_limit: int) -> dict[str, Any]:
         }
     shown = {'match_all': {}} if include_test else {'bool': {'must_not': _HOLDOUT}}
     return {
-        'excluded': {'filter': _EXCLUDED},
         'live': {
             'filter': {'bool': {'must_not': _EXCLUDED}},
             'aggs': {
@@ -85,7 +83,6 @@ def _facts(bucket: dict[str, Any]) -> ImageItemFacts:
             unlabeled=items - labeled,
             in_holdout=int(live['holdout']['doc_count']),
         ),
-        excluded=int(bucket['excluded']['doc_count']),
         boxes=boxes_of(pairs),
         boxes_truncated=items > len(pairs),
     )
@@ -93,7 +90,6 @@ def _facts(bucket: dict[str, Any]) -> ImageItemFacts:
 
 _EMPTY = ImageItemFacts(
     counts=ImageCounts(items=0, labeled=0, validated=0, unlabeled=0, in_holdout=0),
-    excluded=0,
     boxes=[],
     boxes_truncated=False,
 )

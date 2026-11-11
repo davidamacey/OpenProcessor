@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
+  import HiddenItemsNote from '$lib/components/itemFilter/HiddenItemsNote.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
   import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
@@ -26,7 +27,6 @@
   const visibleTabs = $derived(tabs.visibleTabs);
   const queue = $derived(loader.queue);
   const currentPosition = $derived(loader.currentPosition);
-  const emptyTabEndpoints = $derived(loader.emptyTabEndpoints);
   const selectTab = (t: ReviewTabDef) => tabs.selectTab(t);
 </script>
 
@@ -46,31 +46,38 @@
     testId="review-tabs"
   >
     {#each visibleTabs as t (t.id)}
-      {@const knownEmpty = emptyTabEndpoints[t.endpointId] === true}
-      <button
-        type="button"
-        data-active={tab === t.id ? 'true' : undefined}
-        class="shrink-0 px-3 py-2.5 text-sm border-b-2 {tab === t.id
+      {@const count = reviewTabsVocabularyStore.countFor(t.endpointId)}
+      {@const unavailable = reviewTabsVocabularyStore.unavailableReasonFor(t.endpointId)}
+      {@const dim = unavailable !== null || count === 0}
+      <!-- The count sits beside the button, not in it, so the button's name stays the tab's label. -->
+      <span
+        class="flex shrink-0 items-baseline border-b-2 {tab === t.id
           ? 'border-blue-500 text-white'
-          : knownEmpty
+          : dim
             ? 'border-transparent text-zinc-600 hover:text-zinc-300'
             : 'border-transparent text-zinc-400 hover:text-zinc-200'}"
-        title={[
-          reviewTabsVocabularyStore.descriptionFor(t.endpointId),
-          knownEmpty ? 'Empty when last loaded.' : null,
-        ]
-          .filter(Boolean)
-          .join(' — ') || undefined}
-        onclick={() => selectTab(t)}
       >
-        {reviewTabsVocabularyStore.labelFor(t.endpointId, t.label)}
-        {#if knownEmpty}
-          <span
-            class="ml-1 font-mono text-[10px] text-zinc-600"
-            data-testid="tab-empty-count">0</span
+        <button
+          type="button"
+          data-active={tab === t.id ? 'true' : undefined}
+          class="py-2.5 pr-1 pl-3 text-sm"
+          title={[reviewTabsVocabularyStore.descriptionFor(t.endpointId), unavailable]
+            .filter(Boolean)
+            .join(' — ') || undefined}
+          onclick={() => selectTab(t)}
+        >
+          {reviewTabsVocabularyStore.labelFor(t.endpointId, t.label)}
+        </button>
+        {#if unavailable !== null}
+          <span class="pr-3 text-[10px] text-zinc-500" data-testid="tab-unavailable"
+            >needs setup</span
+          >
+        {:else if count !== null}
+          <span class="pr-3 font-mono text-[10px] text-zinc-500" data-testid="tab-count"
+            >{count.toLocaleString()}</span
           >
         {/if}
-      </button>
+      </span>
     {/each}
   </ScrollStrip>
   {#if regionProfileStore.unknown}
@@ -89,6 +96,7 @@
     {queue.total}
     total
   </span>
+  <HiddenItemsNote hidden={loader.hidden} />
   <span class="shrink-0 pl-2"><ShortcutsButton /></span>
   <button
     type="button"

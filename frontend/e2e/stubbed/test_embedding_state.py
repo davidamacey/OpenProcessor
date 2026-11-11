@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
-from fixtures.wire import make_item
+from fixtures.wire import labeled_stats, make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 from test_dataset_import import FORMATS
@@ -37,7 +37,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 10,
         'validated_count': 5,
-        'cluster_size': 3,
         'deprecated': False,
     },
 ]
@@ -95,7 +94,7 @@ DATASET_STATS = {
     'validated': 0,
     'test_holdout': 0,
     'by_source': [],
-    'labeled': {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'other': 0},
+    'labeled': labeled_stats(),
     'regions': {},
     'unlabeled': {
         'pending_detection': 0,

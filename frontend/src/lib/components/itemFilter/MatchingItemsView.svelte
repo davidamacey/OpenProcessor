@@ -10,6 +10,7 @@
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
   import AssistRunDialog from '$components/assistRun/AssistRunDialog.svelte';
+  import HiddenItemsNote from './HiddenItemsNote.svelte';
   import SelectionActionDialog from './SelectionActionDialog.svelte';
   import { AssistRunController } from '$lib/assistRun/assistRunController.svelte';
   import { createMatchingItems } from '$lib/itemFilter/matchingItems.svelte';
@@ -76,6 +77,7 @@
     >
     matching item{pager.total === 1 ? '' : 's'}
   </span>
+  <HiddenItemsNote hidden={matching.hidden} />
   <span class="grow"></span>
   {#each ACTIONS as a (a.id)}
     <button

@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Near-duplicates: the selected level and purpose toggles are visibly selected, and a level never built offers "Build" instead of "Full rebuild".
+- Matching items and the review queue say how many test-holdout and ignored items they leave out.
+- Review tab strip shows each tab's served item count, and a tab the project cannot fill yet (Uncertainty without a probe, Imported without imports) reads "needs setup" with the server's reason as its tooltip; the old "empty when last loaded" dimming is gone.
+- Class sidebar and Classes table show each class's item count (`sample_count`) instead of a per-class cluster size the API does not serve (it read 0 for every class); the table column is "Items".
+- Clusters page with no cluster: shows the server's reason and, when a built partition waits or none was served, the cluster run panel with its Activate button in place; the page reloads once a partition serves. The run message no longer says to review the partition first.
+- Dashboard "Labeled by source" shows the served total and rows (imported labels included) and the served box coverage; the browser no longer sums or divides them.
 - Similar-items, item-text and ignored views: the "Back to clusters" button wraps onto its own line on narrow screens instead of being clipped.
 - Map page: without WebGL2 the map card says "Map needs WebGL2 ... N photos have GPS" instead of the page falling to "Something went wrong"; filters and the rest of the page keep working.
 - Map page: points render again. The API client now parses every `+json` response (`/map/cells` answers `application/geo+json`); before, the body arrived as text and MapLibre tried to fetch it as a URL.

@@ -132,6 +132,14 @@ def test_gallery_counts_equal_an_items_aggregate_and_hide_holdout_and_excluded(
     assert body['empty_reason'] is None
 
 
+def test_hidden_counts_follow_the_item_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client(_world(), monkeypatch)
+    sedans = client.get(f'{BASE}/images', params={'class_name': 'sedan', **ASC}).json()
+    trucks = client.get(f'{BASE}/images', params={'class_name': 'truck', **ASC}).json()
+    assert sedans['hidden'] == {'test_holdout': 0, 'excluded': 1}
+    assert trucks['hidden'] == {'test_holdout': 1, 'excluded': 0}
+
+
 def test_include_test_counts_and_draws_the_held_out_items(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -144,10 +152,11 @@ def test_include_test_counts_and_draws_the_held_out_items(
     assert body.json()['hidden']['test_holdout'] == 0
 
 
-def test_a_page_is_two_queries_whatever_its_size(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_page_is_three_queries_whatever_its_size(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _world()
     _client(fake, monkeypatch).get(f'{BASE}/images', params={'limit': 4})
-    assert fake.searched_indexes == [IMAGES, ITEMS]
+    # the images, their item facts, and the hidden counts over the matching items
+    assert fake.searched_indexes == [IMAGES, ITEMS, ITEMS]
 
 
 def test_card_boxes_carry_label_tone_and_image_coordinates(

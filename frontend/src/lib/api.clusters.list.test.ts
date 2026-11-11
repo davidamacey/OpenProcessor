@@ -48,6 +48,9 @@ const LIST = {
   sort_options: [{ id: 'needs_review_desc', label: 'Needs review first' }],
   flag_vocabulary: [{ id: 'mixed_detector_classes', label: 'Mixed', description: 'why' }],
   truncated: true,
+  empty_reason: null,
+  empty_message: null,
+  pending_partition: null,
 };
 
 function stubFetch(body: unknown = LIST) {
@@ -152,5 +155,26 @@ describe('getClusterFacets', () => {
     const res = await getClusterFacets(UID);
     expect(String(m.mock.calls[0]![0])).toBe(`${API_PREFIX}/clusters/${UID}/facets`);
     expect(res).toEqual(facets);
+  });
+});
+
+describe('getClusters empty state', () => {
+  it('passes the served reason, text and pending partition through', async () => {
+    stubFetch({
+      ...LIST,
+      items: [],
+      total: 0,
+      empty_reason: 'pending_activation',
+      empty_message: 'A clustering run finished but is not serving yet.',
+      pending_partition: { partition_id: 'p-1', clusters: 9, items: 120 },
+    });
+    const res = await getClusters();
+    expect(res.empty_reason).toBe('pending_activation');
+    expect(res.empty_message).toBe('A clustering run finished but is not serving yet.');
+    expect(res.pending_partition).toEqual({
+      partition_id: 'p-1',
+      clusters: 9,
+      items: 120,
+    });
   });
 });

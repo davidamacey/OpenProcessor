@@ -400,6 +400,16 @@ and before the terminal ``'recent'`` (``updated_at``, which every item
 has). Entries not currently selectable (shadow/disabled) are skipped."""
 
 
+_FIELD_NEEDS: dict[str, str] = {
+    'cluster_score': 'a clustering run',
+    'probe_pred_entropy': 'a probe run',
+    'mistakenness_score': 'item scores',
+    'uniqueness_score': 'item scores',
+    'vlm_confidence': 'VLM labels',
+}
+"""What produces each sort field, in the words the fallback notice uses."""
+
+
 async def _first_covered(
     primary: str, tab: str, registry: dict[str, ReviewSort], opensearch: Any
 ) -> tuple[str, str | None]:
@@ -429,9 +439,9 @@ async def _first_covered(
     if chosen == primary:
         return primary, None
     field = registry[primary].requires_field
+    needs = _FIELD_NEEDS.get(field or '', f'items that carry {field}')
     return chosen, (
-        f'default sort {primary!r} orders by {field!r}, which no item has yet; '
-        f'using {chosen!r} instead'
+        f'Sorted by {registry[chosen].label}. {registry[primary].label!r} needs {needs}.'
     )
 
 

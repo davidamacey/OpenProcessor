@@ -24,6 +24,7 @@ from src.services.curation.crop_listing import (
 )
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
+from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.region_text_search import TextMatch, same_text_key
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import (
@@ -234,6 +235,12 @@ async def list_crops(
         vector_excludes=await vector_source_excludes(),
     )
     try:
+        hidden = await hidden_counts(
+            opensearch,
+            listing.filter_clauses,
+            include_test=include_test,
+            include_excluded=include_excluded or 'excluded' in listing.item_filter.review_status,
+        )
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
@@ -255,6 +262,7 @@ async def list_crops(
     )
     if ordered is not None:
         await attach_item_display_nos(ordered['crops'])
+        ordered['hidden'] = hidden
         return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
@@ -264,7 +272,7 @@ async def list_crops(
         for h in hits
     ]
     await attach_item_display_nos(crops)
-    return crops_page(total=int(total), page=page, page_size=page_size, crops=crops)
+    return crops_page(total=int(total), page=page, page_size=page_size, crops=crops, hidden=hidden)
 
 
 @router.get('/crops/{crop_id}', response_model=None, responses={200: {'model': ItemDoc}})

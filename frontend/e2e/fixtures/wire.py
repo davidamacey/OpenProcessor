@@ -373,6 +373,9 @@ def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
         'filters': list(REVIEW_FILTER_PARAMS),
         'filter_defaults': {},
         'filter_specs': [],
+        'available': True,
+        'unavailable_reason': None,
+        'count': 0,
         **over,
     }
 
@@ -424,3 +427,24 @@ def make_box(box_id: str = 'b1', **over: Any) -> dict[str, Any]:
     }
     box.update(over)
     return box
+
+
+def labeled_stats(**counts: int) -> dict[str, Any]:
+    """A served `labeled` block: provenance counts, the total and one row per provenance."""
+    keys = (
+        ('by_human', 'Human'),
+        ('by_import', 'Imported'),
+        ('by_vlm', 'VLM suggestions'),
+        ('by_classifier', 'Classifier'),
+        ('other', 'Other'),
+    )
+    full = {k: counts.get(k, 0) for k, _ in keys}
+    total = sum(full.values())
+    return {
+        **full,
+        'total': total,
+        'rows': [
+            {'key': k, 'label': label, 'count': full[k], 'share': full[k] / total if total else 0}
+            for k, label in keys
+        ],
+    }

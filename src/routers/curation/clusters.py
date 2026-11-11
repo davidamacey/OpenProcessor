@@ -26,6 +26,11 @@ from src.services.curation.cluster_cards import (
     fetch_representatives,
     list_cluster_cards,
 )
+from src.services.curation.cluster_empty_state import (
+    empty_reason,
+    has_card_filters,
+    read_partition_state,
+)
 from src.services.curation.cluster_facets import cluster_facets
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
@@ -83,25 +88,30 @@ async def list_clusters(
         item_filter_clauses(gate, embedding=await item_write_fields())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    response = await list_cluster_cards(
-        opensearch,
-        ClusterListParams(
-            item_filter=gate,
-            per_cluster=per_cluster,
-            max_clusters=max_clusters,
-            offset=offset,
-            limit=limit,
-            sort=sort,
-            dominant_class=tuple(dominant_class or ()),
-            detector_class=tuple(detector_class or ()),
-            min_size=min_size,
-            max_size=max_size,
-            validation_state=validation_state,
-            flags=tuple(flag or ()),
-            needs_review=needs_review,
-        ),
+    params = ClusterListParams(
+        item_filter=gate,
+        per_cluster=per_cluster,
+        max_clusters=max_clusters,
+        offset=offset,
+        limit=limit,
+        sort=sort,
+        dominant_class=tuple(dominant_class or ()),
+        detector_class=tuple(detector_class or ()),
+        min_size=min_size,
+        max_size=max_size,
+        validation_state=validation_state,
+        flags=tuple(flag or ()),
+        needs_review=needs_review,
     )
+    response = await list_cluster_cards(opensearch, params)
     await attach_display_nos(session, response['items'])
+    state = await read_partition_state(session)
+    response['pending_partition'] = state.pending
+    response['empty_reason'], response['empty_message'] = empty_reason(
+        state,
+        total=response['total'],
+        filtered=has_card_filters(gate.is_empty(), params),
+    )
     return response
 
 

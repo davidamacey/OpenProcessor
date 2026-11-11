@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -52,7 +53,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr('src.services.curation.index_bootstrap.ensure_indexes', _noop)
-    fake = QueryFakeOpenSearch({ITEMS: dict(SEEDED)})
+    fake = install_msearch(QueryFakeOpenSearch({ITEMS: dict(SEEDED)}))
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake

@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from _msearch_fake import install_msearch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -46,6 +47,7 @@ _QUALIFYING: dict[str, dict[str, Any]] = {
 
 
 def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    install_msearch(fake)
     from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     monkeypatch.setattr(

@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 from src.config.curation_accessors import images_index
 from src.config.project_context import project_api_base
-from src.schemas.curation.images import HiddenCounts, ImageCard, ImagePage, SortOption
+from src.schemas.curation.images import ImageCard, ImagePage, SortOption
+from src.schemas.curation.views import HiddenCounts
+from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_counts import item_facts
 from src.services.curation.image_facts import (
     IMAGE_SOURCE_FIELDS,
@@ -234,8 +236,12 @@ async def image_page(
         sort_applied=q.sort,
         sort_options=SORT_OPTIONS,
         hidden=HiddenCounts(
-            test_holdout=0 if q.include_test else sum(f.counts.in_holdout for f in facts.values()),
-            excluded=sum(f.excluded for f in facts.values()),
+            **await hidden_counts(
+                opensearch,
+                item_filter_clauses(q.item_filter, embedding=embedding),
+                include_test=q.include_test,
+                include_excluded='excluded' in q.item_filter.review_status,
+            )
         ),
         empty_reason=empty,
     )

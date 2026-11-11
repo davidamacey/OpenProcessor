@@ -18,7 +18,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 5,
         'validated_count': 5,
-        'cluster_size': 5,
         'deprecated': False,
     },
 ]

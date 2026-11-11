@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.schemas.curation.views import HiddenCounts
+
 
 BoxTone = Literal['validated', 'machine', 'unlabeled', 'holdout', 'rejected']
 
@@ -52,13 +54,6 @@ class ImageNearDup(BaseModel):
 class SortOption(BaseModel):
     id: str
     label: str
-
-
-class HiddenCounts(BaseModel):
-    """Items the default view leaves out of the matched set, so the page can say so."""
-
-    test_holdout: int
-    excluded: int
 
 
 class ImageCard(BaseModel):

@@ -5,7 +5,7 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { ReprocessRequest } from '$lib/types_import';
-import type { PaginatedResponse } from '$lib/types';
+import type { HiddenCounts, PaginatedResponse } from '$lib/types';
 import type {
   ResolveNewClassRequest,
   ResolveNewClassResponse,
@@ -72,6 +72,12 @@ export interface ReviewTabVocabularyEntry {
   filter_defaults: Record<string, unknown>;
   /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
+  /** False when the project cannot fill this tab yet. */
+  available: boolean;
+  /** What to do to make the tab fill; null when available. */
+  unavailable_reason: string | null;
+  /** Items the tab matches with its default filters; 0 when unavailable. */
+  count: number;
 }
 
 /** `empty_state` on `GET {API_PREFIX}/review/tabs` — whether the
@@ -140,6 +146,7 @@ export async function getReviewQueue(
     sort_applied?: string | null;
     /** Set when total === 0 — see PaginatedResponse.empty_reason (#36 item 9). */
     empty_reason?: string | null;
+    hidden?: HiddenCounts | null;
   };
   const raw = await apiFetch<RawPage>(
     `${scoped()}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
@@ -166,6 +173,7 @@ export async function getReviewQueue(
     sort_fallback_reason: raw.sort_fallback_reason ?? null,
     sort_applied: raw.sort_applied ?? null,
     empty_reason: raw.empty_reason ?? null,
+    hidden: raw.hidden ?? null,
   };
 }
 

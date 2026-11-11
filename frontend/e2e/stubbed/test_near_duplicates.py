@@ -202,6 +202,14 @@ def test_status_groups_runs_and_pair_decisions(stub, page, app_url):
     thumb = groups.first.get_by_test_id('near-dup-thumb')
     expect(thumb).to_be_visible()
     assert thumb.evaluate('img => img.naturalWidth') > 0, 'the served thumbnail did not load'
+    pressed = page.get_by_test_id('near-dup-level-tab-image')
+    idle = page.get_by_test_id('near-dup-level-tab-item')
+    expect(pressed).to_have_attribute('aria-pressed', 'true')
+    expect(idle).to_have_attribute('aria-pressed', 'false')
+    # The selected toggle must look selected, not only carry the attribute.
+    assert pressed.evaluate('e => getComputedStyle(e).backgroundColor') != idle.evaluate(
+        'e => getComputedStyle(e).backgroundColor'
+    )
     save_screens(page, 'workflow_1c', 'overview')
 
     groups.first.click()

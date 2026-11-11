@@ -60,6 +60,13 @@ class ReviewTab(BaseModel):
     filter_specs: list[ReviewFilterSpec] = Field(
         description='Self-describing spec for each honoured filter with a fixed value set.'
     )
+    available: bool = Field(description='False when the project cannot fill this tab yet.')
+    unavailable_reason: str | None = Field(
+        description='What to do to make the tab fill; null when available.'
+    )
+    count: int = Field(
+        description='Items the tab matches with its default filters; 0 when unavailable.'
+    )
 
 
 class ReviewEmptyState(BaseModel):

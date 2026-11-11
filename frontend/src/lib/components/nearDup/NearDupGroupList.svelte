@@ -41,7 +41,7 @@
       {#each LEVELS as l (l.id)}
         <button
           type="button"
-          class="btn-sm {ctl.level === l.id ? 'border-blue-500 text-blue-200' : ''}"
+          class="btn-sm"
           aria-pressed={ctl.level === l.id}
           data-testid="near-dup-level-tab-{l.id}"
           onclick={() => void ctl.showGroups(l.id, ctl.purpose)}>{l.label}</button
@@ -52,7 +52,7 @@
       {#each PURPOSES as p (p.id)}
         <button
           type="button"
-          class="btn-sm {ctl.purpose === p.id ? 'border-blue-500 text-blue-200' : ''}"
+          class="btn-sm"
           aria-pressed={ctl.purpose === p.id}
           data-testid="near-dup-purpose-tab-{p.id}"
           onclick={() => void ctl.showGroups(ctl.level, p.id)}>{p.label}</button

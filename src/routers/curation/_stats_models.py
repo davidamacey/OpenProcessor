@@ -18,6 +18,13 @@ class SourceBucket(BaseModel):
     doc_count: int
 
 
+class LabeledRow(BaseModel):
+    key: str
+    label: str
+    count: int
+    share: float = Field(description='Fraction (0 to 1) of `labeled.total`.')
+
+
 class LabeledStats(BaseModel):
     """Class-label provenance of items that carry a class."""
 
@@ -26,10 +33,13 @@ class LabeledStats(BaseModel):
     by_classifier: int
     by_import: int
     other: int
+    total: int = Field(description='Every provenance summed; the rows add up to it.')
+    rows: list[LabeledRow]
 
 
 class RegionStats(BaseModel):
     boxed: int = Field(description='Items with a region box right now.')
+    coverage_share: float = Field(description='Fraction (0 to 1) of all items that have a box.')
     confirmed: int = Field(description="Items whose region status is 'detected'.")
     total_detected: int = Field(
         description='Detector credit, rejected and failed attempts included; overstates real regions.'

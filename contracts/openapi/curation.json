@@ -5751,6 +5751,35 @@
       },
       "ClusterListResponse": {
         "properties": {
+          "empty_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The text to show for `empty_reason`.",
+            "title": "Empty Message"
+          },
+          "empty_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_partition",
+                  "pending_activation",
+                  "filtered_empty"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why `items` is empty; null when cards are served.",
+            "title": "Empty Reason"
+          },
           "flag_vocabulary": {
             "items": {
               "$ref": "#/components/schemas/ClusterFlag"
@@ -5764,6 +5793,17 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "pending_partition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingPartition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest built partition not serving yet (newer than the serving one); activate it with `PUT /clusters/activation`."
           },
           "representatives_limit": {
             "title": "Representatives Limit",
@@ -5804,7 +5844,10 @@
           "sort",
           "sort_options",
           "flag_vocabulary",
-          "truncated"
+          "truncated",
+          "empty_reason",
+          "empty_message",
+          "pending_partition"
         ],
         "title": "ClusterListResponse",
         "type": "object"
@@ -8376,6 +8419,17 @@
             },
             "title": "Crops",
             "type": "array"
+          },
+          "hidden": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What this page hides; null for an id lookup."
           },
           "method": {
             "anyOf": [
@@ -12984,13 +13038,15 @@
         "type": "object"
       },
       "HiddenCounts": {
-        "description": "Items the default view leaves out of the matched set, so the page can say so.",
+        "description": "Items a list leaves out, counted over the items that match the request's filter.",
         "properties": {
           "excluded": {
+            "description": "Items matching the filter that are ignored (0 when included).",
             "title": "Excluded",
             "type": "integer"
           },
           "test_holdout": {
+            "description": "Items matching the filter that the frozen test holdout hides (0 when included).",
             "title": "Test Holdout",
             "type": "integer"
           }
@@ -18711,6 +18767,35 @@
         "title": "LabeledChoice",
         "type": "object"
       },
+      "LabeledRow": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "share": {
+            "description": "Fraction (0 to 1) of `labeled.total`.",
+            "title": "Share",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "count",
+          "share"
+        ],
+        "title": "LabeledRow",
+        "type": "object"
+      },
       "LabeledStats": {
         "description": "Class-label provenance of items that carry a class.",
         "properties": {
@@ -18733,6 +18818,18 @@
           "other": {
             "title": "Other",
             "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "description": "Every provenance summed; the rows add up to it.",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -18740,7 +18837,9 @@
           "by_vlm",
           "by_classifier",
           "by_import",
-          "other"
+          "other",
+          "total",
+          "rows"
         ],
         "title": "LabeledStats",
         "type": "object"
@@ -24154,6 +24253,29 @@
           "expected_revision"
         ],
         "title": "PatchProjectRequest",
+        "type": "object"
+      },
+      "PendingPartition": {
+        "properties": {
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "items": {
+            "title": "Items",
+            "type": "integer"
+          },
+          "partition_id": {
+            "title": "Partition Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "partition_id",
+          "clusters",
+          "items"
+        ],
+        "title": "PendingPartition",
         "type": "object"
       },
       "PerClassRow": {
@@ -30193,6 +30315,11 @@
             "title": "Confirmed",
             "type": "integer"
           },
+          "coverage_share": {
+            "description": "Fraction (0 to 1) of all items that have a box.",
+            "title": "Coverage Share",
+            "type": "number"
+          },
           "total_detected": {
             "description": "Detector credit, rejected and failed attempts included; overstates real regions.",
             "title": "Total Detected",
@@ -30222,6 +30349,7 @@
         },
         "required": [
           "boxed",
+          "coverage_share",
           "confirmed",
           "total_detected",
           "by_detector",
@@ -34294,6 +34422,10 @@
             "description": "Why a zero-result queue is empty (probe never run, scores never computed, ...); null otherwise.",
             "title": "Empty Reason"
           },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts",
+            "description": "Items this queue hides: the test holdout and ignored items."
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ReviewItemDoc"
@@ -34337,13 +34469,24 @@
           "items",
           "sort_applied",
           "sort_fallback_reason",
-          "empty_reason"
+          "empty_reason",
+          "hidden"
         ],
         "title": "ReviewQueuePage",
         "type": "object"
       },
       "ReviewTab": {
         "properties": {
+          "available": {
+            "description": "False when the project cannot fill this tab yet.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "count": {
+            "description": "Items the tab matches with its default filters; 0 when unavailable.",
+            "title": "Count",
+            "type": "integer"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -34377,6 +34520,18 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to do to make the tab fill; null when available.",
+            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -34385,7 +34540,10 @@
           "description",
           "filters",
           "filter_defaults",
-          "filter_specs"
+          "filter_specs",
+          "available",
+          "unavailable_reason",
+          "count"
         ],
         "title": "ReviewTab",
         "type": "object"

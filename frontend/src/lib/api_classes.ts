@@ -66,7 +66,6 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     group: string;
     sample_count: number;
     validated_count: number;
-    cluster_size: number;
     deprecated: boolean;
     added_at: string | null;
     hotkey_letter: string | null;
@@ -87,7 +86,6 @@ export async function getClasses(signal?: AbortSignal): Promise<ClassesResponse>
     group: c.group || null,
     count: c.sample_count,
     validated_count: c.validated_count,
-    cluster_size: c.cluster_size,
     added_at: c.added_at ?? '',
     color: null,
     deprecated: c.deprecated,
