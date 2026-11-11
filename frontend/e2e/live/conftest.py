@@ -30,9 +30,8 @@ Two hard safety properties, both enforced here, not by test discipline:
      for the disposable-proof runbook) exists to demonstrate; it isn't
      part of the permanent suite.
 
-Chromium launch args (`--disable-gpu`) are inherited from
-`e2e/harness/server.py`'s `browser_type_launch_args` fixture — this directory's
-conftest is layered under the plugins `e2e/conftest.py` loads, so no need to redeclare it here.
+Chromium launch args: this tier overrides the stubbed tier's `--disable-gpu` (see
+`browser_type_launch_args` below) because the map page needs a real WebGL2 context.
 """
 
 from __future__ import annotations
@@ -180,6 +179,25 @@ def live_project(live_url: str) -> dict[str, Any]:
         )
     assert match is not None  # for type-checkers
     return {'slug': match['slug'], 'prefix': match['prefix']}
+
+
+@pytest.fixture(scope='session')
+def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
+    """Headless Chromium with software WebGL2, for the map page (MapLibre needs WebGL2).
+
+    Chromium's GPU docs name ANGLE's SwiftShader backend as the software path
+    (`--use-angle=swiftshader`); since Chrome 139 the software fallback must be opted into with
+    `--enable-unsafe-swiftshader` (https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md).
+    `DISPLAY` is dropped from the browser's environment: headless needs no X server, and a stale
+    one (an XRDP or ssh-forwarded display) makes the GPU process try it and fail to create any
+    WebGL context, which `--disable-gpu` hid for the stubbed tier only by turning WebGL off.
+    """
+    env = {k: v for k, v in os.environ.items() if k != 'DISPLAY'}
+    return {
+        **browser_type_launch_args,
+        'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+        'env': env,
+    }
 
 
 @pytest.fixture(scope='session')
