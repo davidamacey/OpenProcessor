@@ -6,12 +6,7 @@
  * decision list, only the id returned when one is made.
  */
 import { apiErrorText } from '$lib/api_errors';
-import {
-  decideNearDup,
-  getNearDupGroup,
-  previewItemsForImages,
-  undecideNearDup,
-} from '$lib/api_nearDup';
+import { decideNearDup, getNearDupGroup, undecideNearDup } from '$lib/api_nearDup';
 import type {
   NearDupDecision,
   NearDupDecisionView,
@@ -21,7 +16,6 @@ import type {
 
 export function createNearDupGroupController(level: NearDupLevel, groupId: string) {
   let detail = $state<NearDupGroupDetail | null>(null);
-  let previews = $state<Record<string, string>>({});
   let loading = $state(true);
   let error = $state<string | null>(null);
   let decisions = $state<NearDupDecisionView[]>([]);
@@ -34,16 +28,6 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
     error = null;
     try {
       detail = await getNearDupGroup(level, groupId, abort.signal);
-      if (level === 'image') {
-        try {
-          previews = await previewItemsForImages(
-            detail.members.map((m) => m.member_id),
-            abort.signal,
-          );
-        } catch {
-          // A missing thumbnail is cosmetic; the member rows still render.
-        }
-      }
     } catch (e) {
       if (!abort.signal.aborted) error = apiErrorText(e);
     } finally {
@@ -90,9 +74,6 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
   return {
     get detail() {
       return detail;
-    },
-    get previews() {
-      return previews;
     },
     get loading() {
       return loading;

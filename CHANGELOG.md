@@ -11,8 +11,13 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Added
+
+- **Image view model.** `GET /images` pages the project's source images with the shared item filter (an image matches when one of its items does), `source`, `has_location`, `geo_bbox`, `in_holdout`, `near_dup`, `label_state`, a served `sort` and an opaque `cursor`; each card carries served item counts, its near-duplicate group and the boxes to draw (`BoxView`: image coordinates, label and tone decided by the backend), and the page says how many held-out and excluded items it hides and why it is empty. `GET /images/{image_id}` serves one image with its facts, every item on it and its boxes; `GET /images/{image_id}/file?max_dim=` and `/thumbnail?size=` serve the clean pixels by id.
+
 ### Changed
 
+- **Removed** `GET /crops/{id}/context` and `GET /crops/{id}/image` (use `GET /images/{image_id}` and `/file`), and `GET /images/serve` and `GET /images/root/{alias}` (no route takes a file path any more; pixels are served by image id, only for images the project holds).
 - **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 3 (the new `rec_char_min` output, the lowest single-character probability of each line, next to `rec_scores`): rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
 
 ### Fixed

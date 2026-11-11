@@ -5,7 +5,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
-import { getCropHistory, getCropContext, getCrops } from '$lib/api_cropRead';
+import { getCropHistory, getImage, getCrops } from '$lib/api_cropRead';
+import { imageDetail } from '$lib/test/fixtures/imageDetail';
 import { ApiError } from '$lib/api_errors';
 import { makeItem } from './test/makeItem';
 
@@ -38,29 +39,24 @@ describe('getCropHistory', () => {
   });
 });
 
-describe('getCropContext', () => {
-  it('hits GET /crops/{id}/context and maps every sibling through mapRawCrop', async () => {
-    const image = {
-      image_id: 'img-1',
-      image_path: '/nas/img-1.jpg',
-      width: 640,
-      height: 427,
-      source: 'tag_holdout_sample',
-      indexed_at: '2026-09-24T00:00:00Z',
-    };
+describe('getImage', () => {
+  it('hits GET /images/{id} and maps every item through mapRawCrop', async () => {
+    const detail = imageDetail({ image: { image_id: 'img-1', width: 640, height: 427 } });
     const raw = makeItem({ crop_id: 'sibling-1' });
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ image, items: [raw] }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ...detail, items: [raw] }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getCropContext('c1');
+    const res = await getImage('img-1');
 
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_PREFIX}/crops/c1/context`);
-    expect(res.image).toEqual(image);
-    // Sibling went through mapRawCrop, not a raw pass-through — the wire
-    // shape's `class_source` isn't a Crop field name collision, but
-    // `source` (renamed from confidence-adjacent mapping) proves the
-    // mapping actually ran rather than just spreading the raw object.
+    expect(url).toBe(`${API_PREFIX}/images/img-1`);
+    expect(res.image).toEqual(detail.image);
+    expect(res.counts).toEqual(detail.counts);
+    expect(res.boxes).toEqual([]);
+    // The item went through mapRawCrop, not a raw pass-through: `source`
+    // is renamed from the wire shape, so the mapping demonstrably ran.
     expect(res.items[0].id).toBe('sibling-1');
     expect(res.items[0].source).toBe(raw.source);
   });

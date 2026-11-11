@@ -1,23 +1,22 @@
 <script module lang="ts">
   import { apiErrorText } from '$lib/api_errors';
-  import type { CropContextResponse, Crop } from '$lib/types';
+  import type { ImageDetailResponse, Crop } from '$lib/types';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
 
-  // Per-(project, cropId) cache, shared across every mounted instance:
+  // Per-(project, imageId) cache, shared across every mounted instance:
   // several call sites (review, cluster modal, lightbox) can open the
-  // same crop within one session; avoid refetching a 500-item context
-  // payload each time. Crop ids are content-derived (the same image
-  // gets the same crop_id in every project — projects_plan §2.1), so
-  // the cache key is namespaced by the active project too, or switching
-  // projects would show another project's cached context. Not evicted —
-  // bounded by "crops a human actually opened this session", which is
-  // small.
+  // same image within one session; avoid refetching a 500-item payload
+  // each time. Image ids are content-derived (the same image gets the
+  // same id in every project — projects_plan §2.1), so the cache key is
+  // namespaced by the active project too, or switching projects would
+  // show another project's cached detail. Not evicted — bounded by
+  // "images a human actually opened this session", which is small.
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level promise cache, never read reactively by a template/derived; plain Map avoids needless per-entry proxy overhead
-  const contextCache = new Map<string, Promise<CropContextResponse>>();
+  const contextCache = new Map<string, Promise<ImageDetailResponse>>();
 
-  function cacheKey(cropId: string): string {
-    return `${activeProjectKey()}:${cropId}`;
+  function cacheKey(imageId: string): string {
+    return `${activeProjectKey()}:${imageId}`;
   }
 
   /** Clears every cached context. Registered below with the
@@ -34,14 +33,12 @@
 <script lang="ts">
   /**
    * Draws every box/label a source image needs, client-side, from
-   * `GET {API_PREFIX}/crops/{id}/context` metadata — replaces the
-   * server-side burn-in OpenProcessor is removing from
-   * `GET {API_PREFIX}/crops/{id}/image` (K6,
-   * K6 frontend overlay plan). Domain-neutral
+   * `GET {API_PREFIX}/images/{id}` — the clean pixels come from
+   * `GET {API_PREFIX}/images/{id}/file`, nothing is burned in. Domain-neutral
    * by construction: every region box/color/label comes from the
    * matching registered `SlotSpec`, never a hardcoded noun.
    */
-  import { getCropContext, getSourceImageScaled } from '$lib/api_cropRead';
+  import { getImage, getImageFileUrl } from '$lib/api_cropRead';
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
   import SourceMissingBadge from './SourceMissingBadge.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
@@ -51,9 +48,9 @@
   import { regionStatusesStore, toneBorderClass } from '$stores/regionStatuses.svelte';
 
   interface Props {
-    /** Which crop's context (source image + every item cropped from it) to draw. */
-    cropId: string;
-    /** Item highlighted with a thicker ring; defaults to `cropId` itself. */
+    /** Which image (its pixels and every item detected on it) to draw. */
+    imageId: string;
+    /** Item highlighted with a thicker ring; none when absent. */
     selectedCropId?: string | null;
     /** Passed to the image URL — the review page only needs the boxes to
      *  be readable, not pixel-perfect. */
@@ -68,14 +65,14 @@
     align?: 'center' | 'start';
     /** Pre-fetched context (e.g. a caller that already loaded it for its
      *  own purposes) — skips this component's own fetch entirely. */
-    context?: CropContextResponse | null;
+    context?: ImageDetailResponse | null;
     /** Extra shapes in the source-image frame (test-on-crop candidates):
      *  boxes and mask outlines, `dimmed` ones drawn faint. */
     extraShapes?: OverlayShape[];
   }
 
   let {
-    cropId,
+    imageId,
     selectedCropId = null,
     maxDim = 1600,
     onselect,
@@ -85,7 +82,7 @@
     extraShapes = [],
   }: Props = $props();
 
-  let fetchedContext = $state<CropContextResponse | null>(null);
+  let fetchedContext = $state<ImageDetailResponse | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(false);
   let showBoxes = $state(true);
@@ -97,7 +94,7 @@
 
   $effect(() => {
     if (providedContext) return;
-    const id = cropId;
+    const id = imageId;
     fetchedContext = null;
     sourceMissing = null;
     error = null;
@@ -106,7 +103,7 @@
     const key = cacheKey(id);
     let cached = contextCache.get(key);
     if (!cached) {
-      cached = getCropContext(id, controller.signal);
+      cached = getImage(id, controller.signal);
       contextCache.set(key, cached);
     }
     cached
@@ -123,8 +120,6 @@
       });
     return () => controller.abort();
   });
-
-  const effectiveSelected = $derived(selectedCropId ?? cropId);
 
   const aspectRatio = $derived.by(() => {
     const w = context?.image?.width ?? naturalW;
@@ -192,7 +187,7 @@
     const items = context?.items ?? [];
     const out: DrawBox[] = [];
     for (const item of items) {
-      const selected = item.id === effectiveSelected;
+      const selected = item.id === selectedCropId;
       const { label, colorClass } = itemLabelInfo(item);
       const itemXyxy = bboxToXyxy(item.bbox_norm);
       out.push({
@@ -202,7 +197,7 @@
         dashed: false,
         colorClass,
         label,
-        tooltip: `${label}${item.id === effectiveSelected ? ' (this crop)' : ''}`,
+        tooltip: `${label}${item.id === selectedCropId ? ' (this crop)' : ''}`,
         selected,
         clickable: !selected && !!onselect,
       });
@@ -278,7 +273,7 @@
       style={aspectRatio ? `aspect-ratio: ${aspectRatio};` : ''}
     >
       <img
-        src={getSourceImageScaled(cropId, maxDim)}
+        src={getImageFileUrl(imageId, maxDim)}
         alt="source"
         loading="eager"
         decoding="async"

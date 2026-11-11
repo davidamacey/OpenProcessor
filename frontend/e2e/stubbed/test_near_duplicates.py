@@ -21,7 +21,6 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import fill
-from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -136,11 +135,6 @@ def _serve(stub, groups=None, runs=None, status=None):
         items = (groups if groups is not None else GROUPS) if purpose == 'dedup' else []
         return fill('NearDupGroupPage', items=items, next_cursor=None)
 
-    def serve_crops(request, _m):
-        ids = parse_qs(urlparse(request.url).query).get('image_id', [])
-        rows = [make_item(crop_id=f'crop-{i}', image_id=i) for i in ids]
-        return {'total': len(rows), 'page': 1, 'page_size': 200, 'crops': rows}
-
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/near_duplicates/status$', status or _status())
     stub.on(
@@ -150,9 +144,7 @@ def _serve(stub, groups=None, runs=None, status=None):
     )
     stub.on('GET', r'/near_duplicates/groups(\?|$)', serve_groups)
     stub.on('GET', r'/near_duplicates/groups/[^/?]+', DETAIL)
-    stub.on('GET', r'/crops(\?|$)', serve_crops)
-    stub.on('GET', r'/(thumbnail|image)(\?|$)', (200, PHOTO, 'image/jpeg'))
-    stub.on('GET', r'/crops/[^/]+/image(\?|$)', (200, PHOTO, 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/thumbnail(\?|$)', (200, PHOTO, 'image/jpeg'))
     stub.on('GET', r'/crops/[^/]+/thumbnail(\?|$)', (200, PHOTO, 'image/jpeg'))
     stub.on(
         'GET',

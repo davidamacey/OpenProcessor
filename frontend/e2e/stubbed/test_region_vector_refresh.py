@@ -42,7 +42,7 @@ def open_region_review(stub, page, app_url, vector_refresh) -> list[dict]:
     patches: list[dict] = []
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
     stub.on(
         'GET',
         r'/review/(?!tabs)',

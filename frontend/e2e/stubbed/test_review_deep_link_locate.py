@@ -85,7 +85,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     stub.on('GET', r'/methods(\?|$)', METHODS)
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {

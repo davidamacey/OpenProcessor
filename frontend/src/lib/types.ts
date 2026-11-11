@@ -413,20 +413,55 @@ export interface CropHistoryResponse {
   entries: CropHistoryEntry[];
 }
 
-/** `GET {API_PREFIX}/crops/{id}/image` — the shared source image plus every
- *  item cropped from it (siblings, including the requested crop itself). */
-export interface CropImageMeta {
-  image_id: string;
-  image_path: string;
-  width: number | null;
-  height: number | null;
-  source: string | null;
-  indexed_at: string | null;
+/** A box to draw over an image, in image coordinates, with the label and tone the
+ *  backend decided (`BoxView`). */
+export interface ImageBox {
+  crop_id: string;
+  box_id: string | null;
+  kind: 'item' | 'region';
+  bbox_norm: [number, number, number, number];
+  label: string;
+  class_name: string | null;
+  tone: 'validated' | 'machine' | 'unlabeled' | 'holdout' | 'rejected';
+  state: string | null;
 }
 
-export interface CropContextResponse {
-  image: CropImageMeta;
+export interface ImageCounts {
+  items: number;
+  labeled: number;
+  validated: number;
+  unlabeled: number;
+  in_holdout: number;
+}
+
+export interface ImageInfo {
+  image_id: string;
+  file_name: string;
+  file_url: string;
+  width: number | null;
+  height: number | null;
+  source: string;
+  indexed_at: string | null;
+  taken_at: string | null;
+  location: { latitude: number; longitude: number; precision: string | null } | null;
+  dataset_split: string | null;
+  in_holdout: boolean;
+  near_dup: {
+    group_id: string;
+    purpose: 'dedup' | 'leak';
+    size: number | null;
+    is_representative: boolean | null;
+  } | null;
+}
+
+/** `GET {API_PREFIX}/images/{id}` — one source image, its counts, every item
+ *  detected on it and the boxes to draw. */
+export interface ImageDetailResponse {
+  image: ImageInfo;
+  counts: ImageCounts;
   items: Crop[];
+  boxes: ImageBox[];
+  items_truncated: boolean;
 }
 
 export interface ClusterFilter

@@ -2,7 +2,7 @@
  * Mount test for `SourceImageOverlay` (K6,
  * K6 frontend overlay plan) — the boxes/
  * labels this component draws are the ONLY place they exist once the
- * backend stops burning them into `/crops/{id}/image`, so every claim
+ * backend serves only clean pixels at `/images/{id}/file`, so every claim
  * here is pinned against the actual rendered `%` geometry, not just
  * "it mounted".
  *
@@ -11,7 +11,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import type { Crop, CropContextResponse } from '$lib/types';
+import type { Crop } from '$lib/types';
+import { imageDetail } from '$lib/test/fixtures/imageDetail';
 import {
   installDeploymentSlots,
   resetDeploymentSlots,
@@ -23,12 +24,13 @@ import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
 vi.mock('$lib/api_cropRead', () => ({
-  getCropContext: vi.fn(),
-  getSourceImageScaled: (id: string) => `/image/${id}`,
+  getImage: vi.fn(),
+  getImageFileUrl: (id: string) => `/image/${id}`,
 }));
 
-const { getCropContext } = await import('$lib/api_cropRead');
-const { default: SourceImageOverlay } = await import('./SourceImageOverlay.svelte');
+const { getImage } = await import('$lib/api_cropRead');
+const { default: SourceImageOverlay, resetForProjectChange } =
+  await import('./SourceImageOverlay.svelte');
 
 function item(overrides: Partial<Crop> = {}): Crop {
   return {
@@ -52,11 +54,13 @@ afterEach(() => {
   instance = undefined;
   target?.remove();
   resetDeploymentSlots();
-  vi.mocked(getCropContext).mockReset();
+  // The detail cache is keyed by image id and every test draws on the same one.
+  resetForProjectChange();
+  vi.mocked(getImage).mockReset();
 });
 
 async function render(
-  props: { cropId: string } & Record<string, unknown>,
+  props: { imageId: string } & Record<string, unknown>,
 ): Promise<HTMLDivElement> {
   target = document.createElement('div');
   document.body.appendChild(target);
@@ -71,7 +75,7 @@ async function render(
 
 describe('SourceImageOverlay', () => {
   it('positions the item box at the bbox_norm percentages', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'img-1',
         image_path: '/img-1.jpg',
@@ -87,10 +91,10 @@ describe('SourceImageOverlay', () => {
           bbox_norm: { cx: 0.5, cy: 0.4, w: 0.2, h: 0.1 },
         }),
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'crop-pos' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'crop-pos' });
 
     const boxes = el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]');
     expect(boxes.length).toBe(1);
@@ -103,7 +107,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('labels a labelled item, a proposed item, and an unlabeled item distinctly', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -117,10 +121,10 @@ describe('SourceImageOverlay', () => {
         item({ id: 'lbl-b', class_name: null, proposed_class_name: 'widget_b' }),
         item({ id: 'lbl-c', class_name: null, proposed_class_name: null }),
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'lbl-a', selectedCropId: 'lbl-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'lbl-a' });
 
     const boxes = Array.from(
       el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
@@ -163,7 +167,7 @@ describe('SourceImageOverlay', () => {
         tone: 'rejected',
       },
     ];
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -204,10 +208,10 @@ describe('SourceImageOverlay', () => {
           },
         } as unknown as Crop,
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'region-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'region-a' });
 
     const [first, second] = Array.from(
       el.querySelectorAll('[data-testid="overlay-box"][data-kind="region-box"]'),
@@ -225,7 +229,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('draws a read-only scalar-box slot through the item box when it is stored in the parent frame', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -257,11 +261,11 @@ describe('SourceImageOverlay', () => {
           },
         } as unknown as Crop,
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
     installDeploymentSlots([widgetTagSlot, aircraftTailNumberSlot]);
 
-    const el = await render({ cropId: 'tail-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'tail-a' });
     resetDeploymentSlots();
 
     const region = el.querySelector(
@@ -273,7 +277,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('renders the selected item with a highlight ring and dims the rest', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -286,10 +290,10 @@ describe('SourceImageOverlay', () => {
         item({ id: 'sel-a', class_name: 'widget_a' }),
         item({ id: 'sel-b', class_name: 'widget_b' }),
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'sel-a', selectedCropId: 'sel-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'sel-a' });
     const boxes = Array.from(
       el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
     );
@@ -302,7 +306,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('fires onselect when a clickable sibling box is clicked, not for the selected one', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -315,11 +319,11 @@ describe('SourceImageOverlay', () => {
         item({ id: 'click-a', class_name: 'widget_a' }),
         item({ id: 'click-b', class_name: 'widget_b' }),
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
     const onselect = vi.fn();
 
-    const el = await render({ cropId: 'click-a', selectedCropId: 'click-a', onselect });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'click-a', onselect });
     const boxes = Array.from(
       el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
     );
@@ -333,7 +337,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('the boxes toggle hides and re-shows the overlay layer', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -343,10 +347,10 @@ describe('SourceImageOverlay', () => {
         indexed_at: null,
       },
       items: [item({ id: 'toggle-a', class_name: 'widget_a' })],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'toggle-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'toggle-a' });
     expect(el.querySelector('[data-testid="overlay-layer"]')).toBeTruthy();
 
     const toggle = el.querySelector('button') as HTMLButtonElement;
@@ -360,7 +364,7 @@ describe('SourceImageOverlay', () => {
   });
 
   it('skips its own fetch when a pre-fetched context is provided', async () => {
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -370,11 +374,15 @@ describe('SourceImageOverlay', () => {
         indexed_at: null,
       },
       items: [item({ id: 'prefetch-a', class_name: 'widget_a' })],
-    };
+    });
 
-    const el = await render({ cropId: 'prefetch-a', context: ctx });
+    const el = await render({
+      imageId: 'img-1',
+      selectedCropId: 'prefetch-a',
+      context: ctx,
+    });
 
-    expect(getCropContext).not.toHaveBeenCalled();
+    expect(getImage).not.toHaveBeenCalled();
     expect(el.querySelectorAll('[data-testid="overlay-box"]').length).toBe(1);
   });
 
@@ -397,7 +405,7 @@ describe('SourceImageOverlay', () => {
       },
     ];
 
-    const ctx: CropContextResponse = {
+    const ctx = imageDetail({
       image: {
         image_id: 'i',
         image_path: '/i.jpg',
@@ -427,10 +435,10 @@ describe('SourceImageOverlay', () => {
           },
         } as unknown as Crop,
       ],
-    };
-    vi.mocked(getCropContext).mockResolvedValue(ctx);
+    });
+    vi.mocked(getImage).mockResolvedValue(ctx);
 
-    const el = await render({ cropId: 'region-mb' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'region-mb' });
 
     const box = el.querySelector(
       '[data-testid="overlay-box"][data-kind="region-box"]',
@@ -444,17 +452,7 @@ describe('SourceImageOverlay', () => {
 });
 
 describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
-  const ctx = (): CropContextResponse => ({
-    image: {
-      image_id: 'i',
-      image_path: '/i.jpg',
-      width: 100,
-      height: 100,
-      source: null,
-      indexed_at: null,
-    },
-    items: [item({ id: 'crop-1' })],
-  });
+  const ctx = () => imageDetail({ items: [item({ id: 'crop-1' })] });
 
   const shapes = [
     {
@@ -500,8 +498,12 @@ describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
   ];
 
   it('draws extra boxes at the served percentages, dimmed ones faint and dashed', async () => {
-    vi.mocked(getCropContext).mockResolvedValue(ctx());
-    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    vi.mocked(getImage).mockResolvedValue(ctx());
+    const el = await render({
+      imageId: 'img-1',
+      selectedCropId: 'crop-1',
+      extraShapes: shapes,
+    });
     const boxes = [
       ...el.querySelectorAll('[data-testid="overlay-extra-box"]'),
     ] as HTMLElement[];
@@ -520,8 +522,12 @@ describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
   });
 
   it('draws mask outlines as polygons over a unit viewBox, dimmed ones faint', async () => {
-    vi.mocked(getCropContext).mockResolvedValue(ctx());
-    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    vi.mocked(getImage).mockResolvedValue(ctx());
+    const el = await render({
+      imageId: 'img-1',
+      selectedCropId: 'crop-1',
+      extraShapes: shapes,
+    });
     const polys = [
       ...el.querySelectorAll('[data-testid="overlay-extra-polygon"]'),
     ] as SVGPolygonElement[];
@@ -535,15 +541,19 @@ describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
   });
 
   it('draws no extra shapes by default, and hides them with the boxes toggle', async () => {
-    vi.mocked(getCropContext).mockResolvedValue(ctx());
-    const plain = await render({ cropId: 'crop-1' });
+    vi.mocked(getImage).mockResolvedValue(ctx());
+    const plain = await render({ imageId: 'img-1', selectedCropId: 'crop-1' });
     expect(plain.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
     expect(plain.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
     unmount(instance as never);
     instance = undefined;
     plain.remove();
 
-    const el = await render({ cropId: 'crop-1', extraShapes: shapes });
+    const el = await render({
+      imageId: 'img-1',
+      selectedCropId: 'crop-1',
+      extraShapes: shapes,
+    });
     expect(el.querySelector('[data-testid="overlay-extra-box"]')).not.toBeNull();
     const toggle = [...el.querySelectorAll('button')].find((b) =>
       b.textContent?.includes('hide boxes'),

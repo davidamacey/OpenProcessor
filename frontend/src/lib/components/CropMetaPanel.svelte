@@ -68,7 +68,7 @@
 
   // History and source image context: lazy, fetched once per crop.id,
   // never blocking the rest of the panel from rendering.
-  const loader = createCropMetaLoader(() => crop.id);
+  const loader = createCropMetaLoader(() => crop);
 </script>
 
 {#if crop.class_excluded}

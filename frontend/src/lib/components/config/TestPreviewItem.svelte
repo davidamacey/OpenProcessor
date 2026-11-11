@@ -7,11 +7,11 @@
    * region-profile test panels. Nothing is written. `extraShapes` adds
    * overlay shapes (profile-test candidates) in the source-image frame.
    */
-  import { getCropContext } from '$lib/api_cropRead';
+  import { getImage } from '$lib/api_cropRead';
   import { apiErrorText } from '$lib/api_errors';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
-  import type { Crop, CropContextResponse } from '$lib/types';
+  import type { Crop, ImageDetailResponse } from '$lib/types';
 
   interface Props {
     preview: Crop;
@@ -20,7 +20,7 @@
 
   let { preview, extraShapes = [] }: Props = $props();
 
-  let context = $state<CropContextResponse | null>(null);
+  let context = $state<ImageDetailResponse | null>(null);
   let error = $state<string | null>(null);
 
   $effect(() => {
@@ -28,7 +28,11 @@
     const ctl = new AbortController();
     context = null;
     error = null;
-    getCropContext(p.id, ctl.signal)
+    if (!p.image_id) {
+      error = 'the item has no source image';
+      return;
+    }
+    getImage(p.image_id, ctl.signal)
       .then((ctx) => {
         const has = ctx.items.some((i) => i.id === p.id);
         context = {
@@ -51,7 +55,8 @@
     <p class="text-xs text-red-300">Could not load the source image: {error}</p>
   {:else if context}
     <SourceImageOverlay
-      cropId={preview.id}
+      imageId={context.image.image_id}
+      selectedCropId={preview.id}
       {context}
       maxDim={800}
       {extraShapes}

@@ -1,14 +1,13 @@
-"""K6: the backend
-is removing its server-side burned-in box overlay from
-`GET {API_PREFIX}/crops/{id}/image`. `/review`'s source panel now draws
-every box itself from `GET {API_PREFIX}/crops/{id}/context`
-(`SourceImageOverlay.svelte`). This proves the wiring end to end against
-the stub: the context endpoint gets hit, and the overlay renders one box
-per context item, and the "hide boxes" toggle removes them.
+"""`/review`'s source panel draws every box itself, over the clean pixels of
+`GET {API_PREFIX}/images/{image_id}/file`, from `GET {API_PREFIX}/images/{image_id}`
+(`SourceImageOverlay.svelte`). This proves the wiring end to end against the
+stub: the image endpoint gets hit by the crop's image id, and the overlay
+renders one box per item on the image, and the "hide boxes" toggle removes them.
 """
 
 from __future__ import annotations
 
+from fixtures.contract import image_detail
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
@@ -54,7 +53,7 @@ def review_item(i: int) -> dict:
 
 
 def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
-    context_calls: list[str] = []
+    image_calls: list[str] = []
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
@@ -65,27 +64,23 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
 
-    def context_handler(request, match):
-        context_calls.append(match.string)
+    def image_handler(request, match):
+        image_calls.append(match.string)
         return (
             200,
-            {
-                'image': {
-                    'image_id': 'img-shared',
-                    'image_path': '/fixtures/img-shared.jpg',
-                    'width': 640,
-                    'height': 480,
-                    'source': 'fixture',
-                    'indexed_at': None,
-                },
-                'items': [review_item(i) for i in range(3)],
-            },
+            image_detail(
+                'img-shared',
+                [review_item(i) for i in range(3)],
+                width=640,
+                height=480,
+                source='fixture',
+            ),
         )
 
-    stub.on('GET', r'/crops/[^/]+/context$', context_handler)
-    # The clean (no longer server-annotated) source image itself — a real
-    # image response, not JSON, so the <img> element actually loads.
-    stub.on('GET', r'/crops/[^/]+/image(\?|$)', stub._image)
+    stub.on('GET', r'/images/[^/]+$', image_handler)
+    # The clean source image itself — a real image response, not JSON, so the
+    # <img> element actually loads.
+    stub.on('GET', r'/images/[^/]+/file(\?|$)', stub._image)
 
     page.goto(f'{app_url}/p/default/review')
     counter = page.get_by_test_id('queue-counter')
@@ -94,8 +89,9 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
     panel = page.get_by_test_id('review-source-panel')
     overlay_boxes = panel.get_by_test_id('overlay-box')
     overlay_boxes.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert overlay_boxes.count() == 3, 'one overlay box per context item'
-    assert len(context_calls) >= 1, 'the source panel must hit GET .../crops/{id}/context'
+    assert overlay_boxes.count() == 3, 'one overlay box per item on the image'
+    assert image_calls, 'the source panel must hit GET .../images/{image_id}'
+    assert all(c.endswith('/images/img-shared') for c in image_calls), image_calls
 
     toggle = panel.get_by_role('button', name='hide boxes')
     toggle.first.click()

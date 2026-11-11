@@ -15,6 +15,7 @@ ONE_ENTRY_PER_DOC = {
     '/audit/queue',
     '/classes/{class_id}/crops',
     '/crops',
+    '/images/{image_id}',
     '/review/{tab}',
     '/search/similar',
     '/search/text',

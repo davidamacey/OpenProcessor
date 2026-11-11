@@ -86,12 +86,7 @@
             data-testid="near-dup-group"
             onclick={() => onopen(g)}
           >
-            <NearDupThumb
-              level={ctl.level}
-              memberId={g.representative_id}
-              previews={ctl.previews}
-              size="sm"
-            />
+            <NearDupThumb level={ctl.level} memberId={g.representative_id} size="sm" />
             <span class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">
               <span class="text-sm font-medium text-zinc-100">{g.size} members</span>
               <span>Lowest edge cosine {cos(g.min_edge_cosine)}</span>
