@@ -29,26 +29,24 @@ class _FakeUltralyticsTrainer:
 
 
 def test_on_fit_epoch_end_tells_the_best_checkpoint_revalidation_apart_from_a_real_epoch() -> None:
-    """Ultralytics' final_eval() re-validates best.pt and fires
-    on_fit_epoch_end once more after training, WITHOUT advancing
-    trainer.epoch. Before the fix, this call silently overwrote
-    last_epoch_metric with the best checkpoint's own metrics (not the true
-    last epoch's) -- live evidence: last_metric mAP50-95 0.857 vs
-    results.csv's actual last-epoch row of 0.855. It must instead land in
-    a distinct, single coherent best_checkpoint_metric row."""
+    """Ultralytics' final_eval() re-validates best.pt and fires on_fit_epoch_end once more after
+    training, with ``trainer.epoch`` advanced by one (8.4.208 trainer.py: "log best metrics at step
+    epochs+1"), and with no epoch start before it. It must land in the distinct
+    best_checkpoint_metric row, not overwrite last_epoch_metric or push current_epoch past
+    total_epochs (live evidence: a 1-epoch run reported current_epoch 2 of 1 and no
+    best_checkpoint_metric)."""
     state = job_status.StatusState(job_id='x', state='running')
-    _, _, on_fit_epoch_end = trainer_callbacks._make_ultralytics_callbacks(
+    on_start, _, on_fit_epoch_end = trainer_callbacks._make_ultralytics_callbacks(
         cast('Any', _SpecStub()), state, total_epochs=2
     )
 
-    # Epoch 1 (Ultralytics reports epoch=0).
+    # Epoch 1 (Ultralytics reports epoch=0), then epoch 2, the true LAST epoch (epoch=1).
+    on_start(None)
     on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=0, map50=0.70, map50_95=0.40))
-    # Epoch 2, the true LAST training epoch (Ultralytics reports epoch=1).
+    on_start(None)
     on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.855, map50_95=0.80))
-    # final_eval()'s post-training re-validation of best.pt: same epoch=1,
-    # different (better) metrics because it validates the BEST checkpoint,
-    # not necessarily the last in-training epoch's weights.
-    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=1, map50=0.86, map50_95=0.857))
+    # final_eval(): epoch advanced to 2, metrics of the BEST checkpoint, no epoch start.
+    on_fit_epoch_end(_FakeUltralyticsTrainer(epoch=2, map50=0.86, map50_95=0.857))
 
     assert state.last_epoch_metric == {'epoch': 2, 'map50': 0.855, 'map50_95': 0.80}
     assert state.best_checkpoint_metric == {'epoch': 2, 'map50': 0.86, 'map50_95': 0.857}

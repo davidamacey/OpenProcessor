@@ -49,9 +49,9 @@ def _make_ultralytics_callbacks(
 
         Ultralytics' ``BaseTrainer.final_eval()`` re-validates the best
         checkpoint after training completes and fires this same callback
-        one more time -- but does not advance ``trainer.epoch``. So a
-        repeated epoch number (same as the previous call) is the signal
-        that this call is the best checkpoint's own metrics, not a new
+        one more time, with ``trainer.epoch`` advanced by one. Every real epoch is preceded by
+        ``on_train_epoch_start`` (which sets ``t0``); the re-validation is not. So a call with
+        no pending ``t0`` is the best checkpoint's own metrics, not a new
         training epoch; only that call updates ``best_checkpoint_metric``.
         Every other call is a real epoch and updates ``last_epoch_metric``.
         This keeps both as one coherent row (map50 + map50_95 from the SAME
@@ -65,17 +65,16 @@ def _make_ultralytics_callbacks(
             metrics = getattr(trainer, 'metrics', None) or {}
             map50 = metrics.get('metrics/mAP50(B)') or metrics.get('metrics/mAP_0.5')
             map5095 = metrics.get('metrics/mAP50-95(B)') or metrics.get('metrics/mAP_0.5:0.95')
+            revalidation = t0 is None and state.last_epoch_metric is not None
+            if revalidation and state.last_epoch_metric is not None:
+                epoch = int(state.last_epoch_metric['epoch'])
             row: dict[str, Any] = {'epoch': epoch}
             if map50 is not None:
                 row['map50'] = float(map50)
             if map5095 is not None:
                 row['map50_95'] = float(map5095)
             with state.lock:
-                is_best_checkpoint_revalidation = (
-                    state.last_epoch_metric is not None
-                    and state.last_epoch_metric.get('epoch') == epoch
-                )
-                if is_best_checkpoint_revalidation:
+                if revalidation:
                     state.best_checkpoint_metric = row
                 else:
                     state.current_epoch = epoch
