@@ -8,8 +8,6 @@ class ImageEmbeddingResponse(BaseModel):
 
     embedding: list[float] = Field(..., description='512-dim L2-normalized embedding')
     embedding_norm: float = Field(..., description='L2 norm (should be ~1.0)')
-    indexed: bool = Field(default=False, description='Whether image was stored')
-    image_id: str | None = Field(default=None, description='ID if indexed')
     status: str = Field(default='success')
 
 

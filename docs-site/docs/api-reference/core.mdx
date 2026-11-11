@@ -43,7 +43,7 @@ curl -X POST "http://localhost:4603/detect?confidence=0.3" -F "image=@photo.jpg"
 
 | Method | Path | Inputs | Returns |
 |---|---|---|---|
-| POST | `/embed/image` | `image`; `use_cache`, `index`, `image_id` | 512-dim MobileCLIP image embedding |
+| POST | `/embed/image` | `image`; `use_cache` | 512-dim MobileCLIP image embedding |
 | POST | `/embed/text` | JSON `{"text": "..."}`; `use_cache` | 512-dim text embedding (77-token limit) |
 | POST | `/embed/batch` | `images` | One embedding per image |
 | POST | `/embed/boxes` | `image`, `boxes` (JSON `[[x1,y1,x2,y2], ...]`, normalized) | One embedding per crop |
@@ -148,7 +148,7 @@ cannot be decoded, `503` when the face models fail (the Triton call, or a landma
 not match the boxes), `400 faces_disabled` while `OP_FACES_ENABLED=false`. They used to answer `500`
 with `status: error` for the first two.
 
-`POST /embed/image`: `{"embedding": [...512 floats], "embedding_norm": 1.0, "indexed": false, "status": "success"}`.
+`POST /embed/image`: `{"embedding": [...512 floats], "embedding_norm": 1.0, "status": "success"}`.
 
 `POST /search/text` and the other search routes: `{"status": "success", "query_type": "text",
 "results": [{"image_id": "...", "image_path": "...", "score": 0.31}], "total_results": 1, "search_time_ms": 8.2}`.

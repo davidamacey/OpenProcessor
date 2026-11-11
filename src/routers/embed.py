@@ -9,7 +9,6 @@ Provides endpoints for MobileCLIP embeddings:
 """
 
 import logging
-import uuid
 from functools import lru_cache
 
 import numpy as np
@@ -57,8 +56,6 @@ def get_inference_service() -> InferenceService:
 def embed_image(
     image: UploadFile = File(..., description='Image file (JPEG/PNG)'),
     use_cache: bool = Query(True, description='Use embedding cache'),
-    index: bool = Query(False, description='Store embedding for later retrieval'),
-    image_id: str | None = Query(None, description='Custom ID (auto-generated if not provided)'),
 ) -> ImageEmbeddingResponse:
     """
     Generate MobileCLIP embedding for an image.
@@ -71,8 +68,7 @@ def embed_image(
     **Caching**: Embeddings are cached by content hash. Identical images return
     cached embeddings instantly.
 
-    **Indexing**: Set `index=true` to store the embedding in OpenSearch for
-    later similarity search via `/search/image` endpoint.
+    Nothing is stored; to index an image use `/ingest`.
     """
     service = get_inference_service()
 
@@ -84,24 +80,11 @@ def embed_image(
         embedding = service.encode_image(image_bytes, use_cache=use_cache)
         embedding_norm = float(np.linalg.norm(embedding))
 
-        response = ImageEmbeddingResponse(
+        return ImageEmbeddingResponse(
             embedding=embedding.tolist(),
             embedding_norm=embedding_norm,
-            indexed=False,
-            image_id=None,
             status='success',
         )
-
-        # Handle indexing if requested
-        if index:
-            actual_image_id = image_id or str(uuid.uuid4())
-            # Note: Actual indexing to OpenSearch would require VisualSearchService
-            # This is a placeholder - indexing should be done via /ingest endpoint
-            response.indexed = True
-            response.image_id = actual_image_id
-            logger.info(f'Image embedding generated (indexed={index}, id={actual_image_id})')
-
-        return response
 
     except HTTPException:
         raise
