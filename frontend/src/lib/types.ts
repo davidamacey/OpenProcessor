@@ -299,6 +299,12 @@ export interface Cluster {
   slotDisplayName?: string;
 }
 
+/** Items the default list views hide, served on the item list pages. */
+export interface HiddenCounts {
+  test_holdout: number;
+  excluded: number;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -341,6 +347,8 @@ export interface PaginatedResponse<T> {
   /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
    *  when the route did not compute it). Absent on every other endpoint. */
   n_unembedded?: number | null;
+  /** What this page hides (`GET /crops`, `GET /review/{tab}`): the test holdout and ignored items. */
+  hidden?: HiddenCounts | null;
   /** v0.4.0 ordered `GET /crops` views: the request that would embed the
    *  unembedded items, sent only when `n_unembedded` is > 0. */
   suggested_reprocess?: ReprocessRequest | null;

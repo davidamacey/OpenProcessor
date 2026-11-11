@@ -4,6 +4,7 @@
 -->
 <script lang="ts">
   import ScrollStrip from '$lib/components/ScrollStrip.svelte';
+  import HiddenItemsNote from '$lib/components/itemFilter/HiddenItemsNote.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
   import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
@@ -95,6 +96,7 @@
     {queue.total}
     total
   </span>
+  <HiddenItemsNote hidden={loader.hidden} />
   <span class="shrink-0 pl-2"><ShortcutsButton /></span>
   <button
     type="button"

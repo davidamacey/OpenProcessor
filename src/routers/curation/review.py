@@ -40,6 +40,8 @@ from src.routers.curation._review_params import (
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_empty_reason, review_reasons
+from src.services.curation.hidden_counts import hidden_counts
+from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
     ReviewFilters,
@@ -50,7 +52,11 @@ from src.services.curation.review_request import (
 from src.services.curation.review_tab_status import tab_counts, unavailable_reason
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
+from src.services.embedding_spaces.readers import (
+    item_state_fields,
+    item_write_fields,
+    vector_source_excludes,
+)
 
 
 if TYPE_CHECKING:
@@ -96,6 +102,17 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
         return await build_review_request(tab, filters, sort, opensearch)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+async def _hidden(opensearch: Any, filters: ReviewFilters) -> dict[str, int]:
+    """Review queues never show ignored items; the test holdout only with ``include_test``."""
+    try:
+        clauses = item_filter_clauses(filters.item, embedding=await item_write_fields())
+        return await hidden_counts(
+            opensearch, clauses, include_test=filters.include_test, include_excluded=False
+        )
+    except Exception as exc:
+        raise server_error(503, 'opensearch unavailable', exc) from exc
 
 
 @router.get('/review/tabs', response_model=ReviewTabsResponse)
@@ -176,6 +193,8 @@ async def review_queue(
             'sort_applied': sort or 'default',
             'sort_fallback_reason': None,
             'empty_reason': review_empty_reason.REGION_PROFILE_OFF_REASON,
+            # The off profile serves no queue, so nothing is hidden from it.
+            'hidden': {'test_holdout': 0, 'excluded': 0},
         }
     filters = _filters(
         include_test,
@@ -204,6 +223,7 @@ async def review_queue(
         # the review grid (history is undo-only).
         '_source': {'excludes': item_list_source_excludes(excludes)},
     }
+    hidden = await _hidden(opensearch, filters)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
@@ -253,6 +273,7 @@ async def review_queue(
         # sort_applied is its fallback.
         'sort_fallback_reason': req.sort_fallback_reason,
         'empty_reason': empty_reason,
+        'hidden': hidden,
     }
 
 

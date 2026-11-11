@@ -120,7 +120,7 @@ def test_core_first_pages_best_scored_members_without_a_cluster_scan(
 
     p1 = _get(client, 1)
     assert fake.scanned <= 120  # router page + ordered page, not the 4k-member cluster
-    assert fake.search_calls == 2
+    assert fake.search_calls == 3  # hidden counts, router page, ordered page
     assert p1['total'] == N
 
     ids = [i for i, d in docs.items() if d['cluster_uid'] == UID]

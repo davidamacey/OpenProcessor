@@ -29,6 +29,8 @@ class CropListQuery:
     sort_clause: list[dict[str, Any]]
     item_filter: ItemFilter
     query_clause: dict[str, Any]
+    filter_clauses: list[dict[str, Any]]
+    """The clauses of the item filter alone, without the visibility clauses."""
 
 
 def build_crop_list_query(
@@ -52,8 +54,9 @@ def build_crop_list_query(
     )
     # Every clause is a pure predicate (term/exists/range/must_not), none
     # scores, so all of it lives in filter context, not must.
+    filter_clauses = item_filter_clauses(flt, embedding=embedding)
     filt = [
-        *item_filter_clauses(flt, embedding=embedding),
+        *filter_clauses,
         *visibility_clauses(
             include_test=include_test,
             include_excluded=include_excluded or 'excluded' in flt.review_status,
@@ -63,7 +66,12 @@ def build_crop_list_query(
     if filt:
         bool_q['filter'] = filt
     query_clause: dict[str, Any] = {'bool': bool_q} if bool_q else {'match_all': {}}
-    return CropListQuery(sort_clause=sort_clause, item_filter=flt, query_clause=query_clause)
+    return CropListQuery(
+        sort_clause=sort_clause,
+        item_filter=flt,
+        query_clause=query_clause,
+        filter_clauses=filter_clauses,
+    )
 
 
 def crop_list_body(

@@ -17,6 +17,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- `GET /crops` and `GET /review/{tab}` serve `hidden` (`test_holdout`, `excluded`), the items the page leaves out, so a total lower than the dashboard's explains itself.
 - `GET /review/tabs` serves `available`, `unavailable_reason` and `count` per tab (the counts come from one `_msearch`), and the sort-fallback note reads "Sorted by X. 'Y' needs a clustering run." instead of naming the index field.
 - `GET /clusters` serves `empty_reason`, `empty_message` and `pending_partition` so an empty list says whether no run was served, a built partition waits for activation, or a filter matched nothing.
 - `GET /stats/dataset` serves `labeled.total` and `labeled.rows` (key, label, count, share) for every provenance including imported labels, and `regions.coverage_share`; the dashboard summed the counts itself and left imports out, so it showed fewer labels than the project holds.

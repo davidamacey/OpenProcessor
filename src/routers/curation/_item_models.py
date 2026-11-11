@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
 from src.domain.embedding_state import EmbeddingState
+from src.schemas.curation.views import HiddenCounts
 from src.services.curation.reprocess_models import ReprocessRequest
 
 
@@ -312,6 +313,9 @@ class CropsPageResponse(BaseModel):
     # With n_unembedded > 0: the embed request to POST to /reprocess (dry run first)
     # for the items the ordering could not rank; reads never embed. Null otherwise.
     suggested_reprocess: ReprocessRequest | None = None
+    hidden: HiddenCounts | None = Field(
+        default=None, description='What this page hides; null for an id lookup.'
+    )
 
 
 __all__ = [

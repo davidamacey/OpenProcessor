@@ -8411,6 +8411,17 @@
             "title": "Crops",
             "type": "array"
           },
+          "hidden": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HiddenCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What this page hides; null for an id lookup."
+          },
           "method": {
             "anyOf": [
               {
@@ -13015,6 +13026,27 @@
           "region_profile"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HiddenCounts": {
+        "description": "Items a list leaves out, counted over the items that match the request's filter.",
+        "properties": {
+          "excluded": {
+            "description": "Items matching the filter that are ignored (0 when included).",
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "test_holdout": {
+            "description": "Items matching the filter that the frozen test holdout hides (0 when included).",
+            "title": "Test Holdout",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "test_holdout",
+          "excluded"
+        ],
+        "title": "HiddenCounts",
         "type": "object"
       },
       "HoldoutClassBucket": {
@@ -33750,6 +33782,10 @@
             "description": "Why a zero-result queue is empty (probe never run, scores never computed, ...); null otherwise.",
             "title": "Empty Reason"
           },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts",
+            "description": "Items this queue hides: the test holdout and ignored items."
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ReviewItemDoc"
@@ -33793,7 +33829,8 @@
           "items",
           "sort_applied",
           "sort_fallback_reason",
-          "empty_reason"
+          "empty_reason",
+          "hidden"
         ],
         "title": "ReviewQueuePage",
         "type": "object"

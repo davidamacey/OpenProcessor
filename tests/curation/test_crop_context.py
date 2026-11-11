@@ -227,6 +227,8 @@ def test_context_items_carry_their_outline_while_lists_do_not() -> None:
     real_search = fake.search
 
     async def _record(**kwargs: Any) -> Any:
+        if '_source' not in kwargs['body']:  # the hidden-count aggregation, not a page
+            return await real_search(**kwargs)
         label = 'context' if kwargs['body']['query'].get('term') else 'list'
         excludes[label] = kwargs['body']['_source']['excludes']
         return await real_search(**kwargs)

@@ -9,6 +9,7 @@ import type {
   CropContextResponse,
   CropFilter,
   CropHistoryResponse,
+  HiddenCounts,
   PaginatedResponse,
 } from '$lib/types';
 import type { SearchCrop } from '$lib/types_review';
@@ -24,6 +25,7 @@ export async function getCrops(
     page_size: number;
     crops: RawCrop[];
     n_unembedded?: number | null;
+    hidden?: HiddenCounts | null;
     suggested_reprocess?: ReprocessRequest | null;
   };
   const raw = await apiFetch<Raw>(`${scoped()}/crops${qs({ ...filter })}`, {}, signal);
@@ -33,6 +35,7 @@ export async function getCrops(
     page: raw.page,
     page_size: raw.page_size,
     n_unembedded: raw.n_unembedded ?? null,
+    hidden: raw.hidden ?? null,
     suggested_reprocess: raw.suggested_reprocess ?? null,
   };
 }

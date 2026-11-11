@@ -7,19 +7,31 @@
  */
 import { getCrops } from '$lib/api_cropRead';
 import { createPager, type Pager } from '$lib/pager.svelte';
-import type { Crop } from '$lib/types';
+import type { Crop, HiddenCounts } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 const MATCHING_PAGE_SIZE = 48;
 
 export interface MatchingItems {
   readonly pager: Pager<Crop>;
+  /** What the list hides, as the last page served it. */
+  readonly hidden: HiddenCounts | null;
 }
 
 export function createMatchingItems(query: () => ItemFilterQuery): MatchingItems {
+  let hidden = $state<HiddenCounts | null>(null);
   const pager = createPager<Crop>({
-    fetchPage: async (page) => getCrops({ ...query(), page, limit: MATCHING_PAGE_SIZE }),
+    fetchPage: async (page) => {
+      const res = await getCrops({ ...query(), page, limit: MATCHING_PAGE_SIZE });
+      hidden = res.hidden ?? null;
+      return res;
+    },
     keyOf: (c) => c.id,
   });
-  return { pager };
+  return {
+    pager,
+    get hidden() {
+      return hidden;
+    },
+  };
 }

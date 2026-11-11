@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.routers.curation._item_models import ItemDoc
+from src.schemas.curation.views import HiddenCounts
 
 
 class ReviewItemDoc(ItemDoc):
@@ -32,6 +33,9 @@ class ReviewQueuePage(BaseModel):
     )
     empty_reason: str | None = Field(
         description='Why a zero-result queue is empty (probe never run, scores never computed, ...); null otherwise.'
+    )
+    hidden: HiddenCounts = Field(
+        description='Items this queue hides: the test holdout and ignored items.'
     )
 
 

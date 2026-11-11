@@ -5,7 +5,7 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { ReprocessRequest } from '$lib/types_import';
-import type { PaginatedResponse } from '$lib/types';
+import type { HiddenCounts, PaginatedResponse } from '$lib/types';
 import type {
   ResolveNewClassRequest,
   ResolveNewClassResponse,
@@ -146,6 +146,7 @@ export async function getReviewQueue(
     sort_applied?: string | null;
     /** Set when total === 0 — see PaginatedResponse.empty_reason (#36 item 9). */
     empty_reason?: string | null;
+    hidden?: HiddenCounts | null;
   };
   const raw = await apiFetch<RawPage>(
     `${scoped()}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
@@ -172,6 +173,7 @@ export async function getReviewQueue(
     sort_fallback_reason: raw.sort_fallback_reason ?? null,
     sort_applied: raw.sort_applied ?? null,
     empty_reason: raw.empty_reason ?? null,
+    hidden: raw.hidden ?? null,
   };
 }
 

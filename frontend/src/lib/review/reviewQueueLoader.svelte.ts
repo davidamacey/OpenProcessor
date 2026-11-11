@@ -30,6 +30,7 @@ import {
 import { endpointForTab } from '$lib/reviewTabs';
 import type { SemanticSearchResult } from '$lib/searchBox.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
+import type { HiddenCounts } from '$lib/types';
 import type { ReviewItem, ReviewTab } from '$lib/types_review';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
@@ -77,6 +78,8 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
   // #36 item 9: the server's own explanation for an empty queue (e.g. "no
   // probe predictions — run a probe"), distinct from sortFallbackReason.
   let emptyReason = $state<string | null>(null);
+  // What the queue hides (test holdout, ignored items), as the last page served it.
+  let hidden = $state<HiddenCounts | null>(null);
   // The sort id the backend actually applied (item 10, 2026-09-24
   // logic-moves) — passed to StrategyBar so its summary chip can show
   // it next to whatever the operator picked (or didn't).
@@ -100,6 +103,7 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       sortFallbackReason = res.sort_fallback_reason ?? null;
       sortApplied = res.sort_applied ?? null;
       emptyReason = res.empty_reason ?? null;
+      hidden = res.hidden ?? null;
       return res;
     },
     keyOf: (i) => i.id,
@@ -422,6 +426,9 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     },
     get emptyReason() {
       return emptyReason;
+    },
+    get hidden() {
+      return hidden;
     },
     get sortApplied() {
       return sortApplied;
