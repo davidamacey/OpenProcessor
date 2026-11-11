@@ -11,6 +11,7 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._image_view_models import ImageDetail
 from src.routers.curation._item_filter_params import ItemFilterQuery
@@ -26,6 +27,7 @@ from src.services.curation.image_view import (
     NearDupFilter,
     image_page,
 )
+from src.services.curation.list_cursor import CursorError
 from src.services.curation.location_policy_store import get_location_policy
 from src.services.embedding_spaces.readers import item_write_fields
 
@@ -84,6 +86,8 @@ async def list_images(
             await item_write_fields(),
             await get_location_policy(),
         )
+    except CursorError as exc:
+        raise api_error(400, 'cursor_invalid', str(exc)) from exc
     except ImageQueryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

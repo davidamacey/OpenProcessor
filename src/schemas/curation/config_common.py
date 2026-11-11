@@ -68,6 +68,7 @@ ErrorCode = Literal[
     'read_only',
     'name_conflict',
     'invalid_transition',
+    'cursor_invalid',
     'export_outside_project',
     'empty_val_split',
     'model_not_found',

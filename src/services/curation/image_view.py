@@ -12,9 +12,6 @@ uses. Counts and card boxes for the page then come from one items aggregation (`
 
 from __future__ import annotations
 
-import base64
-import binascii
-import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
@@ -40,6 +37,7 @@ from src.services.curation.image_join import (
     without_image_predicates,
 )
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
+from src.services.curation.list_cursor import page_body, split_page
 
 
 if TYPE_CHECKING:
@@ -66,7 +64,7 @@ _UNLABELED = {'bool': {'must_not': {'exists': {'field': 'class_id'}}}}
 
 
 class ImageQueryError(ValueError):
-    """The request names a sort, cursor or combination the route does not serve."""
+    """The request names a sort or combination the route does not serve."""
 
 
 @dataclass(frozen=True)
@@ -91,25 +89,6 @@ class ImageQuery:
                 self.label_state,
             )
         )
-
-
-def _encode_cursor(sort: str, after: list[Any]) -> str:
-    raw = json.dumps({'sort': sort, 'after': after}, separators=(',', ':')).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def _decode_cursor(cursor: str, sort: str) -> list[Any]:
-    try:
-        body = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-        after = body['after']
-        cursor_sort = body['sort']
-    except (binascii.Error, ValueError, KeyError, TypeError) as exc:
-        msg = 'cursor is not one this route served'
-        raise ImageQueryError(msg) from exc
-    if cursor_sort != sort or not isinstance(after, list):
-        msg = 'cursor belongs to a different sort'
-        raise ImageQueryError(msg)
-    return after
 
 
 def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
@@ -194,19 +173,20 @@ async def image_page(
         msg = f'sort must be one of {sorted(_SORTS)}'
         raise ImageQueryError(msg)
     query, join_truncated = await _image_query(opensearch, q, embedding, policy)
-    body: dict[str, Any] = {
-        'size': q.limit + 1,
-        'track_total_hits': True,
-        'query': query,
-        'sort': [*_SORTS[q.sort][1], {'image_id': {'order': 'asc'}}],
-        '_source': {'includes': list(IMAGE_SOURCE_FIELDS)},
-    }
-    if q.cursor is not None:
-        body['search_after'] = _decode_cursor(q.cursor, q.sort)
+    body = page_body(
+        {
+            'track_total_hits': True,
+            'query': query,
+            '_source': {'includes': list(IMAGE_SOURCE_FIELDS)},
+        },
+        sort=_SORTS[q.sort][1],
+        tiebreak='image_id',
+        cursor=q.cursor,
+        sort_id=q.sort,
+        limit=q.limit,
+    )
     resp = await opensearch.search(index=images_index(), body=body)
-    hits = resp['hits']['hits']
-    kept = hits[: q.limit]
-    next_cursor = _encode_cursor(q.sort, kept[-1]['sort']) if len(hits) > q.limit and kept else None
+    kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.sort, limit=q.limit)
     ids = [str(h['_source']['image_id']) for h in kept]
     facts = await item_facts(opensearch, ids, include_test=q.include_test)
     prefix = project_api_base()
