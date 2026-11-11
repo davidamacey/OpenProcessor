@@ -421,9 +421,7 @@ def test_fetch_crop_uses_source_includes_covering_every_caller_field() -> None:
     # image_path: all three crops_router routes.
     # bbox_norm: crop_thumbnail.
     # region box list: crop_region_thumbnail (renders one box by id).
-    # K6: crop_full_image no longer reads bbox_norm/class_name/region bbox
-    # (it only resolves image_path and serves the clean source) so
-    # class_name is deliberately NOT in this list any more.
+    # class_name is deliberately NOT in this list: no crop route draws a label.
     for field in ('image_path', 'bbox_norm', get_region_fields().boxes):
         assert field in includes, f'{field!r} missing from _source_includes: {includes}'
     assert 'class_name' not in includes

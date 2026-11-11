@@ -37,7 +37,14 @@
            boxes off the picture. No stretched background either — a flex-1 box
            taller than the image read as black bars under it. -->
     <div class="h-[50vh] w-full lg:h-[62vh]" data-testid="source-box">
-      <SourceImageOverlay cropId={crop.id} align="start" class="h-full w-full" />
+      {#if crop.image_id}
+        <SourceImageOverlay
+          imageId={crop.image_id}
+          selectedCropId={crop.id}
+          align="start"
+          class="h-full w-full"
+        />
+      {/if}
     </div>
     <div class="flex items-center gap-3">
       <div class="text-xs text-zinc-500">Crop</div>

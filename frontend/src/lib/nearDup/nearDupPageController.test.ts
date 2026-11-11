@@ -3,7 +3,6 @@ import {
   getNearDupStatus,
   listNearDupGroups,
   listNearDupRuns,
-  previewItemsForImages,
   startNearDupRun,
 } from '$lib/api_nearDup';
 import { ApiError } from '$lib/api_errors';
@@ -16,7 +15,6 @@ vi.mock('$lib/api_nearDup', () => ({
   getNearDupStatus: vi.fn(),
   listNearDupGroups: vi.fn(),
   listNearDupRuns: vi.fn(),
-  previewItemsForImages: vi.fn(),
   startNearDupRun: vi.fn(),
 }));
 vi.mock('$lib/jobs/followJob', () => ({ followJob: vi.fn() }));
@@ -36,7 +34,6 @@ beforeEach(() => {
   vi.mocked(getNearDupStatus).mockResolvedValue({ profile: null, levels: [] });
   vi.mocked(listNearDupRuns).mockResolvedValue({ items: [] });
   vi.mocked(listNearDupGroups).mockResolvedValue({ items: [], next_cursor: null });
-  vi.mocked(previewItemsForImages).mockResolvedValue({});
 });
 
 describe('createNearDupPageController', () => {
@@ -59,37 +56,20 @@ describe('createNearDupPageController', () => {
     c.dispose();
   });
 
-  it('pages groups with the cursor and looks up image previews for the representatives', async () => {
+  it('pages groups with the cursor', async () => {
     vi.mocked(listNearDupGroups)
       .mockResolvedValueOnce({ items: [group('a')], next_cursor: 'c1' })
       .mockResolvedValueOnce({ items: [group('b')], next_cursor: null });
-    vi.mocked(previewItemsForImages).mockResolvedValue({ 'rep-a': 'item-a' });
     const c = createNearDupPageController();
     await c.showGroups('image', 'dedup');
     expect(c.groups.map((g) => g.group_id)).toEqual(['a']);
     expect(c.hasMore).toBe(true);
-    expect(c.previews).toEqual({ 'rep-a': 'item-a' });
     await c.loadGroups(true);
     expect(vi.mocked(listNearDupGroups).mock.calls[1]![0]).toMatchObject({
       cursor: 'c1',
     });
     expect(c.groups.map((g) => g.group_id)).toEqual(['a', 'b']);
     expect(c.hasMore).toBe(false);
-    c.dispose();
-  });
-
-  it('does not look up previews at the item level, where members are item ids', async () => {
-    vi.mocked(listNearDupGroups).mockResolvedValue({
-      items: [group('a')],
-      next_cursor: null,
-    });
-    const c = createNearDupPageController();
-    await c.showGroups('item', 'leak');
-    expect(previewItemsForImages).not.toHaveBeenCalled();
-    expect(vi.mocked(listNearDupGroups).mock.calls[0]![0]).toMatchObject({
-      level: 'item',
-      purpose: 'leak',
-    });
     c.dispose();
   });
 

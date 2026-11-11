@@ -26,7 +26,7 @@ vi.mock('$lib/api_cropRead', () => ({
       },
     ],
   })),
-  getCropContext: vi.fn(async () => ({ image: null, items: [] })),
+  getImage: vi.fn(async () => ({ image: null, items: [] })),
   getThumbUrl: (id: string) => `/thumb/${id}`,
 }));
 vi.mock('$lib/api_errors', () => ({ apiErrorText: (e: unknown) => String(e) }));

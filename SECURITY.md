@@ -32,10 +32,10 @@ control: any caller can address any project.
 
 Within that boundary, image bytes are authorized per object (OWASP API1:2023,
 [broken object level authorization](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)).
-`GET /curation/projects/{project}/images/serve` and `images/root/{alias}` stream a
-file only when that project's own images index holds its path; any other path under
-the shared source roots answers the same 404 as a missing file, so one project cannot
-read, or probe for, what another ingested. What stays deployment-level is the list of
+`GET /curation/projects/{project}/images/{image_id}/file` and `/thumbnail` serve pixels
+by image id, and only when that project's own images index holds the id; any other id
+answers the same 404 as an unknown one, and no route takes a file path, so one project
+cannot read, or probe for, what another ingested. What stays deployment-level is the list of
 mounted source roots and the folder walk an ingest source or bulk preview does to
 choose what to ingest: they report the names and files the operator mounted and never
 return file bytes.

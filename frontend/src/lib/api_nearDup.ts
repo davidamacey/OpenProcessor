@@ -162,25 +162,3 @@ export function activateNearDupProfile(
     signal,
   );
 }
-
-/**
- * One item per image id, for a thumbnail: group members at the image level are
- * image ids and no route serves an image by id, so the first item standing on
- * each image stands in for it. One request for the whole page of ids.
- */
-export async function previewItemsForImages(
-  imageIds: string[],
-  signal?: AbortSignal,
-): Promise<Record<string, string>> {
-  if (imageIds.length === 0) return {};
-  const page = await apiFetch<{ crops: { id: string; image_id?: string }[] }>(
-    `${scoped()}/crops${qs({ image_id: imageIds, include_test: true, page_size: 200 })}`,
-    {},
-    signal,
-  );
-  const out: Record<string, string> = {};
-  for (const crop of page.crops) {
-    if (crop.image_id && !(crop.image_id in out)) out[crop.image_id] = crop.id;
-  }
-  return out;
-}

@@ -94,7 +94,7 @@
           class="flex items-start gap-3 rounded border border-zinc-800 p-2"
           data-testid="near-dup-member"
         >
-          <NearDupThumb {level} memberId={m.member_id} previews={ctl.previews} />
+          <NearDupThumb {level} memberId={m.member_id} />
           <div class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">
             <span class="break-all font-mono text-zinc-100">{m.member_id}</span>
             {#if m.is_representative}

@@ -118,7 +118,7 @@ def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> 
     return {region_wire_key(a): src.get(getattr(f, a)) for a in REGION_WIRE_ATTRS}
 
 
-def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
+def parse_xyxy(value: Any) -> tuple[float, float, float, float] | None:
     if not isinstance(value, list | tuple) or len(value) != 4:
         return None
     try:
@@ -131,7 +131,7 @@ def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
 
 
 def _source_to_parent(src: dict[str, Any], region: tuple[float, float, float, float]) -> Any:
-    parent = _xyxy(src.get('bbox_norm'))
+    parent = parse_xyxy(src.get('bbox_norm'))
     if parent is None:
         return None
     px1, py1, px2, py2 = parent

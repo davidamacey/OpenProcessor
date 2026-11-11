@@ -1,18 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
-import {
-  decideNearDup,
-  getNearDupGroup,
-  previewItemsForImages,
-  undecideNearDup,
-} from '$lib/api_nearDup';
+import { decideNearDup, getNearDupGroup, undecideNearDup } from '$lib/api_nearDup';
 import { createNearDupGroupController } from './nearDupGroupController.svelte';
 import type { NearDupDecisionView, NearDupGroupDetail } from '$lib/types_nearDup';
 
 vi.mock('$lib/api_nearDup', () => ({
   decideNearDup: vi.fn(),
   getNearDupGroup: vi.fn(),
-  previewItemsForImages: vi.fn(),
   undecideNearDup: vi.fn(),
 }));
 
@@ -44,22 +38,19 @@ const made: NearDupDecisionView = {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getNearDupGroup).mockResolvedValue(detail);
-  vi.mocked(previewItemsForImages).mockResolvedValue({ a: 'ia', b: 'ib' });
 });
 
 describe('createNearDupGroupController', () => {
-  it('loads the members and, at the image level, their preview items', async () => {
+  it('loads the members', async () => {
     const c = createNearDupGroupController('image', 'g1');
     await c.load();
     expect(getNearDupGroup).toHaveBeenCalledWith('image', 'g1', expect.anything());
     expect(c.detail?.members).toHaveLength(2);
-    expect(previewItemsForImages).toHaveBeenCalledWith(['a', 'b'], expect.anything());
-    expect(c.previews).toEqual({ a: 'ia', b: 'ib' });
     expect(c.loading).toBe(false);
     c.dispose();
   });
 
-  it('names a failed read and loads no previews at the item level', async () => {
+  it('names a failed read', async () => {
     vi.mocked(getNearDupGroup).mockRejectedValue(
       new ApiError(404, '/x', { detail: { error: 'group_not_found', message: 'gone' } }),
     );
@@ -67,7 +58,6 @@ describe('createNearDupGroupController', () => {
     await c.load();
     expect(c.error).toBe('gone');
     expect(c.detail).toBeNull();
-    expect(previewItemsForImages).not.toHaveBeenCalled();
     c.dispose();
   });
 

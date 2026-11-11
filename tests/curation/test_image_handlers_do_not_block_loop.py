@@ -38,6 +38,12 @@ def handlers(monkeypatch: pytest.MonkeyPatch, big_image: Path) -> None:
 
     monkeypatch.setattr(images_router, '_fetch_crop', fetch_crop)
     monkeypatch.setattr(images_router, '_resolve_image_for_crop', lambda _crop: big_image)
+
+    async def image_path(_opensearch: Any, _image_id: str) -> str:
+        return str(big_image)
+
+    monkeypatch.setattr(images_router, '_image_path', image_path)
+    monkeypatch.setattr(images_router, 'resolve_or_source_missing', lambda _path, _root: big_image)
     monkeypatch.setattr(
         images_router,
         'read_boxes',
@@ -85,7 +91,14 @@ async def test_region_thumbnail_does_not_block_the_loop(handlers: None) -> None:
 
 @pytest.mark.asyncio
 async def test_full_image_does_not_block_the_loop(handlers: None) -> None:
-    lag = await _max_lag(lambda: images_router.crop_full_image('c1', None, max_dim=None))
+    lag = await _max_lag(lambda: images_router.image_file('i1', None, max_dim=None))
+
+    assert lag < MAX_LAG_S
+
+
+@pytest.mark.asyncio
+async def test_image_thumbnail_does_not_block_the_loop(handlers: None) -> None:
+    lag = await _max_lag(lambda: images_router.image_thumbnail('i1', None, size=128))
 
     assert lag < MAX_LAG_S
 

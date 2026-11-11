@@ -18,7 +18,7 @@ import type {
 vi.mock('$lib/api_nearDup');
 vi.mock('$lib/api_cropRead', () => ({
   getThumbUrl: (id: string) => `/thumb/${id}`,
-  getSourceImageScaled: (id: string) => `/frame/${id}`,
+  getImageThumbUrl: (id: string) => `/frame/${id}`,
 }));
 
 let target: HTMLDivElement;
@@ -151,7 +151,6 @@ describe('NearDupGroupList', () => {
       items: [group('a', { has_holdout: true })],
       next_cursor: null,
     });
-    vi.mocked(api.previewItemsForImages).mockResolvedValue({ 'img-a': 'item-a' });
     const { ctl, onopen } = await render();
     await settle(() => expect(qa('near-dup-group')).toHaveLength(1));
     const card = q('near-dup-group') as HTMLButtonElement;
@@ -159,7 +158,7 @@ describe('NearDupGroupList', () => {
     expect(card.textContent).toContain('0.991');
     expect(card.textContent).toContain('In test holdout');
     expect((q('near-dup-thumb') as HTMLImageElement).getAttribute('src')).toBe(
-      '/frame/item-a',
+      '/frame/img-a',
     );
     card.click();
     expect(onopen).toHaveBeenCalledWith(expect.objectContaining({ group_id: 'a' }));
@@ -216,7 +215,6 @@ describe('NearDupGroupModal', () => {
 
   it('pins a member apart from the representative, offers undo, and takes it back', async () => {
     vi.mocked(api.getNearDupGroup).mockResolvedValue(detail);
-    vi.mocked(api.previewItemsForImages).mockResolvedValue({});
     vi.mocked(api.decideNearDup).mockResolvedValue({
       id: 'd1',
       level: 'image',

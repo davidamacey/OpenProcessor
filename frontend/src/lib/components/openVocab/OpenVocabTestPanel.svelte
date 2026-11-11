@@ -225,8 +225,8 @@
       {/if}
 
       <div class="max-w-xl">
-        {#if t.ranOnCropId}
-          <SourceImageOverlay cropId={t.ranOnCropId} extraShapes={shapes} />
+        {#if t.ranOnImageId}
+          <SourceImageOverlay imageId={t.ranOnImageId} extraShapes={shapes} />
         {:else if uploadUrl}
           <HitOverlay src={uploadUrl} {shapes} />
         {/if}

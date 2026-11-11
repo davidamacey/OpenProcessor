@@ -27,7 +27,7 @@ beforeEach(() => {
     vi.fn(async (url: string) => {
       const u = String(url);
       urls.push(u);
-      const body = u.endsWith('/context')
+      const body = u.endsWith('/images/img-1')
         ? { image: { width: 800, height: 600, source: 'src' }, items: [] }
         : u.endsWith('/history')
           ? { crop_id: 'crop-1', entries: [] }
@@ -49,6 +49,7 @@ afterEach(() => {
 async function render(over: Partial<Crop>) {
   const crop = {
     id: 'crop-1',
+    image_id: 'img-1',
     source_image_path: '/img.jpg',
     bbox_norm: { cx: 0.5, cy: 0.5, w: 0.5, h: 0.5 },
     class_id: 3,
@@ -65,7 +66,7 @@ async function render(over: Partial<Crop>) {
   document.body.appendChild(target);
   instance = mount(CropMetaPanel, { target, props: { crop } } as never);
   await vi.waitFor(() =>
-    expect(urls.some((u) => u.endsWith('/crops/crop-1/context'))).toBe(true),
+    expect(urls.some((u) => u.endsWith('/images/img-1'))).toBe(true),
   );
   await new Promise((r) => setTimeout(r, 0));
   flushSync();

@@ -8,7 +8,6 @@ import {
   getNearDupStatus,
   listNearDupGroups,
   listNearDupRuns,
-  previewItemsForImages,
   startNearDupRun,
 } from '$lib/api_nearDup';
 import { followJob } from '$lib/jobs/followJob';
@@ -37,8 +36,6 @@ export function createNearDupPageController() {
   let groupsLoaded = $state(false);
   let groupsLoading = $state(false);
   let groupsError = $state<string | null>(null);
-  /** Image id -> an item standing on it, for thumbnails at the image level. */
-  let previews = $state<Record<string, string>>({});
 
   let busyLevel = $state<NearDupLevel | null>(null);
   let runMessage = $state<string | null>(null);
@@ -66,17 +63,6 @@ export function createNearDupPageController() {
     }
   }
 
-  async function addPreviews(page: NearDupGroupSummary[], forLevel: NearDupLevel) {
-    if (forLevel !== 'image' || !abort) return;
-    const ids = page.map((g) => g.representative_id).filter((id) => !(id in previews));
-    if (ids.length === 0) return;
-    try {
-      previews = { ...previews, ...(await previewItemsForImages(ids, abort.signal)) };
-    } catch {
-      // A missing thumbnail is cosmetic; the group row still renders its ids and figures.
-    }
-  }
-
   async function loadGroups(append = false): Promise<void> {
     if (append && !nextCursor) return;
     const token = ++groupsToken;
@@ -98,7 +84,6 @@ export function createNearDupPageController() {
       groups = append ? [...groups, ...page.items] : page.items;
       nextCursor = page.next_cursor;
       groupsLoaded = true;
-      await addPreviews(page.items, forLevel);
     } catch (e) {
       if (token === groupsToken && !abort.signal.aborted) groupsError = apiErrorText(e);
     } finally {
@@ -190,9 +175,6 @@ export function createNearDupPageController() {
     },
     get groupsError() {
       return groupsError;
-    },
-    get previews() {
-      return previews;
     },
     get busyLevel() {
       return busyLevel;

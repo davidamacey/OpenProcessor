@@ -6,7 +6,7 @@ import { apiBase, apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type {
   Crop,
-  CropContextResponse,
+  ImageDetailResponse,
   CropFilter,
   CropHistoryResponse,
   PaginatedResponse,
@@ -56,27 +56,21 @@ export function getCropHistory(
 }
 
 /**
- * `GET {API_PREFIX}/crops/{id}/context` — the crop's shared source image
- * metadata plus every item cropped from it (siblings, including the
- * requested crop). The image itself is served by `/crops/{id}/image`
- * (`getSourceImageScaled`) — as of K6 this is a
- * clean image with no server-drawn boxes; `SourceImageOverlay.svelte`
- * draws every box/label from this response's `items`.
+ * `GET {API_PREFIX}/images/{id}` — one source image: its facts, its counts,
+ * every item detected on it (siblings included) and the boxes to draw. The
+ * pixels are `getImageFileUrl`; `SourceImageOverlay` draws over them.
  */
-export async function getCropContext(
-  cropId: string,
+export async function getImage(
+  imageId: string,
   signal?: AbortSignal,
-): Promise<CropContextResponse> {
-  type Raw = {
-    image: CropContextResponse['image'];
-    items: RawCrop[];
-  };
+): Promise<ImageDetailResponse> {
+  type Raw = Omit<ImageDetailResponse, 'items'> & { items: RawCrop[] };
   const raw = await apiFetch<Raw>(
-    `${scoped()}/crops/${encodeURIComponent(cropId)}/context`,
+    `${scoped()}/images/${encodeURIComponent(imageId)}`,
     {},
     signal,
   );
-  return { image: raw.image, items: raw.items.map(mapRawCrop) };
+  return { ...raw, items: raw.items.map(mapRawCrop) };
 }
 
 /**
@@ -267,14 +261,15 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
 }
 
 /**
- * Source image downscaled to ~`maxDim`px on the longest side — plenty
- * for `SourceImageOverlay`'s client-drawn boxes to be readable without
- * pushing 2+ MB per open. K6 (docs/design/
- * k6-frontend-overlay-plan-2026-09-24.md): the backend no longer burns
- * any box/label into this image (`getSourceImageWithBbox` — the
- * server-overlay-era name — is retired; `SourceImageOverlay` draws
- * everything itself from `getCropContext`).
+ * The clean source pixels of an image, shrunk to ~`maxDim`px on the longest
+ * side so a review view does not pull 2+ MB per open. Nothing is drawn on
+ * them: `SourceImageOverlay` draws the served boxes.
  */
-export function getSourceImageScaled(cropId: string, maxDim: number = 1280): string {
-  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/image?max_dim=${maxDim}`;
+export function getImageFileUrl(imageId: string, maxDim: number = 1280): string {
+  return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/file?max_dim=${maxDim}`;
+}
+
+/** The whole frame as a thumbnail (aspect kept, longest edge `size`). */
+export function getImageThumbUrl(imageId: string, size: number = 256): string {
+  return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/thumbnail?size=${size}`;
 }

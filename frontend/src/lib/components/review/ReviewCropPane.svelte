@@ -97,10 +97,18 @@
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
   <div class="flex min-h-0 flex-1 items-start justify-center bg-zinc-950">
-    <!-- K6: boxes/labels are drawn client-side from
-         GET {API_PREFIX}/crops/{id}/context — the server no longer
-         burns an overlay into this image. -->
-    <SourceImageOverlay cropId={current.id} maxDim={1280} align="start" />
+    <!-- Boxes/labels are drawn client-side from
+         GET {API_PREFIX}/images/{image_id} over the clean pixels. -->
+    {#if current.image_id}
+      <SourceImageOverlay
+        imageId={current.image_id}
+        selectedCropId={current.id}
+        maxDim={1280}
+        align="start"
+      />
+    {:else}
+      <p class="text-xs text-zinc-500">No source image is recorded for this item.</p>
+    {/if}
   </div>
 </div>
 

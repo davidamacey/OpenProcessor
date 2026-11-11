@@ -36,7 +36,7 @@ SIZES = {
 
 def serve_missing_thumbnails(stub) -> None:
     stub.on('GET', r'/crops/[^/]+/thumbnail(\?|$)', (404, SOURCE_MISSING))
-    stub.on('GET', r'/crops/[^/]+/image(\?|$)', (404, SOURCE_MISSING))
+    stub.on('GET', r'/images/[^/]+/file(\?|$)', (404, SOURCE_MISSING))
 
 
 def serve_cluster_grid(stub) -> None:

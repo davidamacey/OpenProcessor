@@ -45,9 +45,9 @@ export class OpenVocabTest {
   error = $state<string | null>(null);
   /** The error is the 502 `segmenter_error` (shown as a segmenter failure). */
   segmenterError = $state(false);
-  /** The image the last successful run used, for the overlay: the crop id
-   *  whose image it was, or null for an upload. */
-  ranOnCropId = $state<string | null>(null);
+  /** The image the last successful run used, for the overlay: its id, or
+   *  null for an upload. */
+  ranOnImageId = $state<string | null>(null);
 
   #deps: OpenVocabTestDeps;
   #abort: AbortController | null = null;
@@ -74,12 +74,12 @@ export class OpenVocabTest {
     this.segmenterError = false;
     try {
       const req: OpenVocabTestRequest = { target: ctx.target };
-      let cropId: string | null = null;
+      let ranOn: string | null = null;
       if (this.source === 'crop') {
-        cropId = this.cropId.trim();
-        const imageId = await this.#imageIdOf(cropId, ctl.signal);
+        const imageId = await this.#imageIdOf(this.cropId.trim(), ctl.signal);
         if (imageId == null) return;
         req.image_id = imageId;
+        ranOn = imageId;
       } else {
         req.image_base64 = this.upload!.base64;
       }
@@ -89,7 +89,7 @@ export class OpenVocabTest {
       const res = await this.#deps.testOpenVocab(req, ctl.signal);
       if (ctl.signal.aborted) return;
       this.result = res;
-      this.ranOnCropId = cropId;
+      this.ranOnImageId = ranOn;
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.result = null;

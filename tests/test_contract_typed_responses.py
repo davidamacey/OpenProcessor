@@ -20,13 +20,12 @@ PROJECT_PREFIX = '/curation/projects/{project}'
 STREAM_OR_FILE = frozenset(
     {
         'GET /curation/events',
-        'GET /crops/{crop_id}/image',
         'GET /crops/{crop_id}/region_thumbnail',
         'GET /crops/{crop_id}/thumbnail',
         'GET /events',
         'GET /export/registry/{artifact}',
-        'GET /images/root/{alias}',
-        'GET /images/serve',
+        'GET /images/{image_id}/file',
+        'GET /images/{image_id}/thumbnail',
         'GET /pipeline/events',
         'GET /train/artifacts/{job_id}/{name}',
     }

@@ -64,6 +64,20 @@ def fill(schema_name: str, **over: Any) -> dict[str, Any]:
     return out
 
 
+def image_detail(
+    image_id: str = 'stub-image', items: Any = (), **image_over: Any
+) -> dict[str, Any]:
+    """One ``GET /images/{id}`` body: the image, its counts and the items on it."""
+    image = fill(
+        'ImageInfo',
+        image_id=image_id,
+        file_name=f'{image_id}.jpg',
+        file_url=f'/images/{image_id}/file',
+        **image_over,
+    )
+    return fill('ImageDetail', image=image, counts=fill('ImageCounts'), items=list(items))
+
+
 def label_op_accepted(op_id: str = 'op-1', job_id: str = 'job-1') -> dict[str, Any]:
     return fill('LabelOpAccepted', op_id=op_id, job_id=job_id)
 
