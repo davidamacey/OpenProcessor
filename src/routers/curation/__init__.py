@@ -49,6 +49,7 @@ import src.routers.curation.assist
 import src.routers.curation.assist_loop
 import src.routers.curation.health
 import src.routers.curation.images_view
+import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_bulk_preview
 import src.routers.curation.ingest_objects
 import src.routers.curation.ingest_policy
@@ -65,7 +66,6 @@ import src.routers.curation.models
 import src.routers.curation.near_duplicates
 import src.routers.curation.open_vocab
 import src.routers.curation.open_vocab_test
-import src.routers.curation.selection_summary
 
 
 import src.routers.curation.pipeline_start  # isort: skip
