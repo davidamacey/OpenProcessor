@@ -1,0 +1,228 @@
+{
+ "blur_rel_diff_max": {
+  "K-a": 0.0,
+  "K-b": 0.0,
+  "K-b-fused": 0.0,
+  "K-c": null
+ },
+ "environment": {
+  "commit": "13dd96e59051ef1da86cd7d355a7b52f7f0284e6",
+  "compute_processes_at_start": 1,
+  "cuda_visible_devices": "0",
+  "gpu": "NVIDIA RTX A6000, GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5, 620.70.06, 2100 MHz, 300.00 W, 49140 MiB",
+  "host_load_1m": 12.91259765625,
+  "packages": {
+   "PyYAML": "6.0.3",
+   "Pygments": "2.21.0",
+   "astunparse": "1.6.3",
+   "cupy-cuda13x": "13.6.0",
+   "cvcuda-cu13": "0.19.0",
+   "fastrlock": "0.8.4",
+   "gast": "0.7.0",
+   "iniconfig": "2.3.1",
+   "libcst": "1.9.0",
+   "makefun": "1.16.0",
+   "numpy": "2.5.4",
+   "nvidia-dali-cuda130": "2.4.0",
+   "nvidia-libnvcomp-cu13": "5.3.0.16",
+   "nvidia-ml-py": "13.615.71",
+   "nvidia-nvimgcodec-cu13": "0.9.0.20",
+   "nvidia-nvjpeg": "13.3.2.43",
+   "nvidia-nvjpeg2k-cu13": "0.12.0.58",
+   "nvidia-nvtiff-cu13": "0.9.0.86",
+   "nvtx": "0.2.17",
+   "opencv-python-headless": "4.13.0.92",
+   "optree": "0.20.0",
+   "packaging": "26.3",
+   "pillow": "13.0.0",
+   "pip": "24.0",
+   "pluggy": "1.7.0",
+   "pytest": "9.2.0",
+   "simplejpeg": "1.9.0",
+   "six": "1.17.0",
+   "tensorrt_cu13": "11.1.0.106",
+   "tensorrt_cu13_bindings": "11.1.0.106",
+   "tensorrt_cu13_libs": "11.1.0.106",
+   "typing_extensions": "4.16.0",
+   "wheel": "0.48.0"
+  },
+  "python": "3.12.3",
+  "time_utc": "2026-11-06T04:33:39Z"
+ },
+ "errors": {
+  "K-c": "blur_sums:K-c has no Laplacian operator; the blur sums stay on K-a;"
+ },
+ "images": 200,
+ "load_1m_end": 12.91259765625,
+ "p_box": {
+  "K-a": 0.99079754601227,
+  "K-b": 0.6288343558282209,
+  "K-b-fused": 0.6257668711656442,
+  "K-c": 0.7085889570552147
+ },
+ "p_item": {
+  "K-a": 1.0,
+  "K-b": 0.975,
+  "K-b-fused": 0.975,
+  "K-c": 0.995
+ },
+ "pe_cosine": {
+  "K-a": {
+   "median": 1.0,
+   "n": 526,
+   "p01": 0.9999998807907104
+  },
+  "K-b": {
+   "median": 0.9999600350856781,
+   "n": 526,
+   "p01": 0.9991135448217392
+  },
+  "K-b-fused": {
+   "median": 0.9999582767486572,
+   "n": 526,
+   "p01": 0.9122816771268845
+  },
+  "K-c": {
+   "median": 0.9999606609344482,
+   "n": 526,
+   "p01": 0.9929362535476685
+  }
+ },
+ "reps": 3,
+ "set": "B",
+ "tensor_gate": {
+  "K-a": {
+   "crop_squares": {
+    "max_abs_max": 3,
+    "mean_abs_max": 0.16223485922146635,
+    "n": 326,
+    "passed": 326
+   },
+   "letterbox": {
+    "max_abs_max": 2,
+    "mean_abs_max": 0.08307373046875,
+    "n": 200,
+    "passed": 200
+   },
+   "whole_square": {
+    "max_abs_max": 2,
+    "mean_abs_max": 0.08643353174603174,
+    "n": 200,
+    "passed": 200
+   }
+  },
+  "K-b": {
+   "crop_squares": {
+    "max_abs_max": 3,
+    "mean_abs_max": 0.16222304894179895,
+    "n": 326,
+    "passed": 326
+   },
+   "letterbox": {
+    "max_abs_max": 2,
+    "mean_abs_max": 0.04127197265625,
+    "n": 200,
+    "passed": 200
+   },
+   "whole_square": {
+    "max_abs_max": 2,
+    "mean_abs_max": 0.09607662509448224,
+    "n": 200,
+    "passed": 200
+   }
+  },
+  "K-b-fused": {
+   "crop_squares": {
+    "max_abs_max": 3,
+    "mean_abs_max": 0.16222304894179895,
+    "n": 326,
+    "passed": 326
+   },
+   "letterbox": {
+    "max_abs_max": 2,
+    "mean_abs_max": 0.04127197265625,
+    "n": 200,
+    "passed": 200
+   },
+   "whole_square": {
+    "max_abs_max": 217,
+    "mean_abs_max": 32.11318676776266,
+    "n": 200,
+    "passed": 0
+   }
+  },
+  "K-c": {
+   "crop_squares": {
+    "max_abs_max": 88,
+    "mean_abs_max": 0.3338382227891156,
+    "n": 326,
+    "passed": 197
+   },
+   "letterbox": {
+    "max_abs_max": 27,
+    "mean_abs_max": 0.10165608723958333,
+    "n": 200,
+    "passed": 91
+   },
+   "whole_square": {
+    "max_abs_max": 28,
+    "mean_abs_max": 0.1224312641723356,
+    "n": 200,
+    "passed": 120
+   }
+  }
+ },
+ "tier": 1,
+ "wall_ms_per_op": {
+  "K-a": {
+   "blur_sums": 1.1738245011656545,
+   "crop_squares": 0.43056050344603136,
+   "letterbox": 0.6594844962819479,
+   "whole_square": 0.4845654984819703
+  },
+  "K-b": {
+   "blur_sums": 2.8997619992878754,
+   "crop_squares": 0.37643300311174244,
+   "letterbox": 0.7431660014844965,
+   "whole_square": 0.5382509989431128
+  },
+  "K-b-fused": {
+   "blur_sums": 2.771866504190257,
+   "crop_squares": 0.3700995002873242,
+   "letterbox": 0.6543065028381534,
+   "whole_square": 0.21648300025844947
+  },
+  "K-c": {
+   "blur_sums": null,
+   "crop_squares": 1.13500999941607,
+   "letterbox": 1.8455419995007105,
+   "whole_square": 1.3975375004520174
+  }
+ },
+ "wall_ms_per_op_p90": {
+  "K-a": {
+   "blur_sums": 1.4931800978956746,
+   "crop_squares": 2.4128017023031147,
+   "letterbox": 0.7714548009971623,
+   "whole_square": 1.7767705983715132
+  },
+  "K-b": {
+   "blur_sums": 6.029015501553659,
+   "crop_squares": 1.8442201006109828,
+   "letterbox": 0.9400007023941725,
+   "whole_square": 0.7002752987318672
+  },
+  "K-b-fused": {
+   "blur_sums": 6.0977610984991815,
+   "crop_squares": 1.8232752030598938,
+   "letterbox": 0.9589791974576656,
+   "whole_square": 0.33353910330333747
+  },
+  "K-c": {
+   "blur_sums": null,
+   "crop_squares": 5.389069099328481,
+   "letterbox": 2.3033664023387246,
+   "whole_square": 1.8538554999395274
+  }
+ }
+}

@@ -617,6 +617,15 @@ Mapping of the earlier H-n: H-1 PR-3/PR-4; H-2 5b-W1; H-3 PR-1; H-4 5b-C1; H-5 P
 (conditional); H-7 PR-5; H-8 5a-S5; H-9 PR-9; H-10 PR-6 and 5c-O1; H-11 PR-8; H-12 closed (X-g);
 H-13 PR-3; H-14 the image move (D-38), rows only.
 
+**PW-1 outcomes (tier 1, 2026-11-06; [results](../../research/gpu_pipeline_prototypes.md)).** About 1.2 GPU hours
+on GPU 0. Every decision stays on today's approach:
+
+| ID | Outcome | Feeds |
+|---|---|---|
+| PR-0 | harness reproduces the shipped kernels inside the tensor gate, two runs byte-identical; PE is 91 % of GPU kernel ms on set A, 72 % on set B; SM active not measurable on this host (profiler counters restricted), the kernel-busy upper bound is below 85 % on photos, so the stop rule does **not** stop the photo work | 5a-R0 |
+| PR-1 | keep the shipped nvJPEG lanes for 12-24 MP (nvImageCodec batch 64 a near miss on the GPU-ms clause); the sub-megapixel DALI arm is not taken to tier 2 because the CPU route already decodes set A at about 2,700 images/s with no GPU time; the router declines 7 % of set B photos as progressive that the shipped lanes decode within the gate (a 5a/5b input); every GPU decoder accepts truncated files silently, only the router guards | 5a-S4 |
+| PR-2 | the custom CuPy kernels stay: CV-CUDA passes the tensor gate but costs more GPU ms and misses the box bar; the replaceable operations are 0.25-6 % of a photo's GPU kernel ms | 5b-G2 |
+
 ## 7. Production design for the winners on the new foundation
 
 What ships once the prototypes have decided; boxes that depend on a prototype say which, and keep

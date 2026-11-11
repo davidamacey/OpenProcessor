@@ -1,0 +1,228 @@
+{
+ "arms": {
+  "control": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.06060752219531248,
+   "images_per_s_median": 201.1841004567963,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "rep_medians": [
+    176.3725247892548,
+    209.4045096566221,
+    216.54677779597426
+   ],
+   "spread": 0.19184998963296682
+  },
+  "dali:0:64": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.0706234177734375,
+   "images_per_s_median": 130.7591076568477,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "ratio_vs_control": {
+    "hi": 0.9073433136575619,
+    "lo": 0.34103652545850993,
+    "pairs": 6.0,
+    "ratio": 0.6257802373662888
+   },
+   "rep_medians": [
+    82.5779604716267,
+    172.9127988541153,
+    162.38106088396978
+   ],
+   "spread": 0.556313882239246
+  },
+  "dali:default:64": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.06623268608593746,
+   "images_per_s_median": 161.3272123590992,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "ratio_vs_control": {
+    "hi": 0.9734771943539324,
+    "lo": 0.598761715823076,
+    "pairs": 6.0,
+    "ratio": 0.7509334867150647
+   },
+   "rep_medians": [
+    118.03029255189878,
+    193.24302454765984,
+    161.3272123590992
+   ],
+   "spread": 0.4662123078674699
+  },
+  "nvimgcodec:hybrid:1": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.04968085088541674,
+   "images_per_s_median": 20.85417758621047,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "ratio_vs_control": {
+    "hi": 0.11981157949432394,
+    "lo": 0.09666462134396908,
+    "pairs": 6.0,
+    "ratio": 0.10668304898371864
+   },
+   "rep_medians": [
+    20.85417758621047,
+    20.854608672841657,
+    22.251719325403855
+   ],
+   "spread": 0.0670135681334248
+  },
+  "nvimgcodec:hybrid:64": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.06378932203385416,
+   "images_per_s_median": 205.784975128658,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "ratio_vs_control": {
+    "hi": 1.1230173731496436,
+    "lo": 0.9822767960991232,
+    "pairs": 6.0,
+    "ratio": 1.0219136219572311
+   },
+   "rep_medians": [
+    177.5171471047505,
+    205.784975128658,
+    228.45708580057646
+   ],
+   "spread": 0.24753964017041577
+  },
+  "nvimgcodec:hybrid:8": {
+   "blocks": 6,
+   "cpu_s_per_image": 0.06383002706249996,
+   "images_per_s_median": 66.01513040585247,
+   "parity": {
+    "decode_errors": 0,
+    "gate_fail": 0,
+    "gate_pass": 185,
+    "worst_max_abs": 3,
+    "worst_mean_abs": 0.048926041016596686
+   },
+   "ratio_vs_control": {
+    "hi": 0.3890238296421378,
+    "lo": 0.2869007933088241,
+    "pairs": 6.0,
+    "ratio": 0.33728679595045774
+   },
+   "rep_medians": [
+    66.01513040585247,
+    73.41932512155022,
+    70.33805910934483
+   ],
+   "spread": 0.10526583771934149
+  }
+ },
+ "cpu_columns": {
+  "pillow_draft640": {
+   "blocks": 2,
+   "cpu_s_per_image": 0.1873450351328123,
+   "images_per_s_median": 73.37911062412266
+  },
+  "simplejpeg": {
+   "blocks": 2,
+   "cpu_s_per_image": 0.22350324723437498,
+   "images_per_s_median": 59.78430690801406
+  }
+ },
+ "decline_reasons": {
+  "gpu": 185,
+  "progressive": 14,
+  "truncated": 1
+ },
+ "declined": 15,
+ "decoded_images_per_arm": 448,
+ "environment": {
+  "commit": "13dd96e59051ef1da86cd7d355a7b52f7f0284e6",
+  "compute_processes_at_start": 1,
+  "cuda_visible_devices": "0",
+  "gpu": "NVIDIA RTX A6000, GPU-2ca96ee7-c611-0ddb-8797-36b18f42f6d5, 620.70.06, 2100 MHz, 300.00 W, 49140 MiB",
+  "host_load_1m": 8.66943359375,
+  "packages": {
+   "PyYAML": "6.0.3",
+   "Pygments": "2.21.0",
+   "astunparse": "1.6.3",
+   "cupy-cuda13x": "13.6.0",
+   "cvcuda-cu13": "0.19.0",
+   "fastrlock": "0.8.4",
+   "gast": "0.7.0",
+   "iniconfig": "2.3.1",
+   "libcst": "1.9.0",
+   "makefun": "1.16.0",
+   "numpy": "2.5.4",
+   "nvidia-dali-cuda130": "2.4.0",
+   "nvidia-libnvcomp-cu13": "5.3.0.16",
+   "nvidia-ml-py": "13.615.71",
+   "nvidia-nvimgcodec-cu13": "0.9.0.20",
+   "nvidia-nvjpeg": "13.3.2.43",
+   "nvidia-nvjpeg2k-cu13": "0.12.0.58",
+   "nvidia-nvtiff-cu13": "0.9.0.86",
+   "nvtx": "0.2.17",
+   "opencv-python-headless": "4.13.0.92",
+   "optree": "0.20.0",
+   "packaging": "26.3",
+   "pillow": "13.0.0",
+   "pip": "24.0",
+   "pluggy": "1.7.0",
+   "pytest": "9.2.0",
+   "simplejpeg": "1.9.0",
+   "six": "1.17.0",
+   "tensorrt_cu13": "11.1.0.106",
+   "tensorrt_cu13_bindings": "11.1.0.106",
+   "tensorrt_cu13_libs": "11.1.0.106",
+   "typing_extensions": "4.16.0",
+   "wheel": "0.48.0"
+  },
+  "python": "3.12.3",
+  "time_utc": "2026-11-06T04:56:52Z"
+ },
+ "images": 200,
+ "load_1m_each_run": [
+  14.36767578125,
+  14.36767578125,
+  13.60888671875,
+  13.880859375,
+  13.880859375,
+  13.56982421875,
+  13.9248046875,
+  13.9248046875,
+  14.57177734375,
+  14.57177734375,
+  15.7275390625,
+  16.01025390625,
+  16.01025390625,
+  16.01025390625,
+  14.40380859375,
+  13.890625,
+  13.890625,
+  13.41845703125
+ ],
+ "set": "B",
+ "tier": 1
+}
