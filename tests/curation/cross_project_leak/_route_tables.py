@@ -109,6 +109,7 @@ UNREACHED_OK: dict[tuple[str, str], str] = {
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
+    ('POST', '/selection/summary'): 'counts a selection read-only; writes nothing',
     ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
     ('POST', '/datasets/imports'): (
         'the sweep sends no mapping, so it is refused before anything is queued; the '

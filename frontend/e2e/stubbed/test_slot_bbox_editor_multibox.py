@@ -13,9 +13,10 @@ or `page.expect_request`.
 
 from __future__ import annotations
 
-from fixtures.contract import cluster_card, cluster_list, item_cluster
+from fixtures.contract import box_view, cluster_card, cluster_list, image_detail, item_cluster
 from fixtures.wire import REGION_CLASS, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
+from harness.screens import save_screens
 from harness.waits import expect_handled
 
 
@@ -39,6 +40,7 @@ CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=1, dominant_class_name=RE
 def _box(box_id: str, bbox: list[float]) -> dict:
     return {
         'box_id': box_id,
+        'display_name': 'Tag 1',
         'state': 'accepted',
         'bbox_norm': bbox,
         'bbox_in_parent': bbox,
@@ -165,4 +167,53 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(s
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'no pageerror expected in the multi-box editor flow: {errors[:3]}'
 
+    stub.assert_fail_closed()
+
+
+def test_region_edit_and_crop_dialog_draw_the_served_names(stub, page, app_url):
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
+    stub.on('GET', r'/crops(\?|$)', {'total': 1, 'page': 1, 'page_size': 60, 'crops': [tag_item()]})
+    stub.on(
+        'GET',
+        r'/images/img-1$',
+        image_detail(
+            'img-1',
+            [tag_item()],
+            boxes=[
+                box_view('tag-1', REGION_CLASS, bbox_norm=[0.1, 0.1, 0.5, 0.5]),
+                box_view(
+                    'tag-1',
+                    'Tag 1',
+                    box_id='b1',
+                    kind='region',
+                    label_kind='region',
+                    bbox_norm=[0.15, 0.15, 0.3, 0.3],
+                    state='accepted',
+                ),
+            ],
+            width=640,
+            height=480,
+        ),
+    )
+    stub.on('GET', r'/images/[^/]+/file(\?|$)', (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
+    stub.on('GET', r'/crops/[^/]+/history$', {'crop_id': 'tag-1', 'entries': []})
+
+    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
+    page.locator('img').first.hover()
+    page.locator('button[aria-label="Edit widget tag"]').click()
+    canvas = page.get_by_test_id('multibox-canvas')
+    canvas.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert canvas.locator('[aria-label="Tag 1"]').count() == 1, 'the served region name'
+    save_screens(page, 'workflow_2c', 'region-edit')
+    page.keyboard.press('Escape')
+
+    page.locator('img').first.hover()
+    page.locator('button[aria-label="Show crop details"]').click()
+    source = page.get_by_test_id('source-box')
+    source.get_by_test_id('overlay-box').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    titles = [source.get_by_test_id('overlay-box').nth(i).get_attribute('title') for i in range(2)]
+    assert titles == [REGION_CLASS, 'Tag 1'], titles
+    save_screens(page, 'workflow_2c', 'crop-dialog')
     stub.assert_fail_closed()

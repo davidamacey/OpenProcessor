@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fixtures.contract import box_view, image_detail
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
 from harness.screens import save_screens
 from playwright.sync_api import expect
 
@@ -89,7 +89,7 @@ def test_review_source_panel_draws_the_served_boxes(stub, page, app_url):
     stub.on('GET', r'/images/[^/]+$', image_handler)
     # The clean source image itself — a real image response, not JSON, so the
     # <img> element actually loads.
-    stub.on('GET', r'/images/[^/]+/file(\?|$)', stub._image)
+    stub.on('GET', r'/images/[^/]+/file(\?|$)', (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
 
     page.goto(f'{app_url}/p/default/review')
     counter = page.get_by_test_id('queue-counter')
