@@ -76,8 +76,7 @@ async def test_zero_coverage_tab_default_falls_back_with_reason() -> None:
     assert applied == 'atypicality'
     assert clause == review_sorts.get_review_sorts()['atypicality'].clause
     assert reason is not None
-    assert 'uncertainty_entropy' in reason
-    assert 'probe_pred_entropy' in reason
+    assert 'Uncertainty (probe entropy)' in reason
 
 
 @pytest.mark.asyncio
@@ -132,7 +131,7 @@ async def test_zero_coverage_pinned_default_falls_back(monkeypatch: pytest.Monke
     )
     assert applied == 'recent'
     assert reason is not None
-    assert 'uncertainty_entropy' in reason
+    assert 'Uncertainty (probe entropy)' in reason
 
 
 @pytest.mark.asyncio
@@ -167,14 +166,16 @@ def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['sort_applied'] == 'atypicality'
-    assert 'uncertainty_entropy' in body['sort_fallback_reason']
+    assert body['sort_fallback_reason'] == (
+        "Sorted by Atypicality (outlier-first). 'Uncertainty (probe entropy)' needs a probe run."
+    )
 
     r = review_client.get(
         '/curation/projects/default/review/uncertainty/locate', params={'crop_id': 'a'}
     )
     assert r.status_code == 200, r.text
     assert r.json()['sort_applied'] == 'atypicality'
-    assert 'uncertainty_entropy' in r.json()['sort_fallback_reason']
+    assert r.json()['sort_fallback_reason'].startswith('Sorted by Atypicality')
 
 
 class _SettingsWithCoverage:
