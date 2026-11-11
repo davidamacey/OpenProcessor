@@ -207,3 +207,24 @@ async def test_a_project_without_a_primary_space_lists_with_an_unknown_embedded_
     assert alpha.counts.images == 7
     assert alpha.counts.items == 7
     assert alpha.counts.items_embedded is None
+
+
+@pytest.mark.asyncio
+async def test_counts_are_unknown_while_the_indexes_are_being_deleted() -> None:
+    """Found live: GET /projects/{slug} answered 500 (KeyError IndexRole.IMAGES) for ~2 s
+    while a delete had already removed the project's index entries."""
+    import dataclasses
+
+    from src.routers.curation.projects import _fetch_counts
+
+    record = _record('gone')
+    deleting = dataclasses.replace(
+        record,
+        status='deleting',
+        resources=dataclasses.replace(record.resources, indexes={}),
+    )
+
+    counts = await _fetch_counts(_Down(), {'gone': deleting})
+
+    assert counts['gone'].images is None
+    assert counts['gone'].items is None
