@@ -218,6 +218,15 @@ repos:
         pass_filenames: false
         files: ^frontend/(src|scripts|static)/|^frontend/(knip\.json|package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$
 
+      # jscpd clone detector over src, scripts and frontend/src (~1.5 s). Whole-project
+      # because a clone is a pair of files, so it takes no filenames.
+      - id: check-duplication
+        name: No new duplicated code (jscpd ratchet)
+        entry: python3 scripts/codegen/check_duplication.py
+        language: system
+        pass_filenames: false
+        files: ^(src|scripts)/.*\.py$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
+
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)
         entry: python3 scripts/codegen/check_naming_leaks.py
