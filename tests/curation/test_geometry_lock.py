@@ -294,3 +294,33 @@ async def test_reingest_keeps_a_human_deleted_and_a_moved_item() -> None:
     gone = docs(fake)['deleted']
     assert gone['class_excluded'] is True
     assert gone['excluded_reason'] == 'not_an_object'
+
+
+def test_a_combine_copy_keeps_the_geometry_of_a_moved_item() -> None:
+    """The copy gets a new crop_id from its box in the new project, and the facts about who set
+    that box travel with it."""
+    from curation.test_embedding_state_surfaces import _space_copy
+    from src.config.region_fields import get_region_fields
+    from src.services.projects.combine.copy_docs import transform_item
+
+    moved = {
+        'crop_id': 'c',
+        'bbox_norm': [0.62, 0.62, 0.95, 0.95],
+        'geometry_source': 'human',
+        'geometry_revision': 2,
+        'detector_bbox_norm': [0.05, 0.05, 0.6, 0.6],
+    }
+    doc, _dropped = transform_item(
+        moved,
+        target_image_id='i',
+        target_image_path_='/p',
+        target_class=None,
+        job_id='j',
+        origin_project='o',
+        now='n',
+        spaces=_space_copy(2),
+        fields=get_region_fields(),
+    )
+    assert doc['crop_id'] != 'c'
+    assert (doc['geometry_source'], doc['geometry_revision']) == ('human', 2)
+    assert doc['detector_bbox_norm'] == moved['detector_bbox_norm']
