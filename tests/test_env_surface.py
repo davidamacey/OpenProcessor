@@ -35,7 +35,7 @@ from src.config.region_fields import RegionFields
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _DIRECT_ENV_RE = re.compile(
-    r'(?:os\.(?:environ\.get|getenv)|env_(?:str|optional_str|int|float|bool|path|optional_path|raw|is_set))'
+    r'(?:os\.(?:environ\.get|getenv)|env_(?:str|optional_str|int|float|bool|path|optional_path|raw|is_set|choice))'
     r"\(\s*['\"](OP_[A-Z0-9_]+)['\"]"
 )
 

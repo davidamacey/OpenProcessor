@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from src.db.engine import bind_async_engine, get_sync_engine, new_task_async_engine
 from src.db.repos import job_events, jobs as repo
 from src.domain import job_perf, job_states as js, job_timing
+from src.domain.job_failure import JobFailedError
 from src.tasks.runtime import hooks, job_metrics
 from src.tasks.runtime.context import JobContext, JobResult, Paused, Yield
 from src.tasks.runtime.event_wakeup import wake
@@ -294,6 +295,10 @@ def _write_terminal(
     if ran.how == 'cancelled':
         return repo.finish(session, job.id, token, status=js.CANCELLED, outcome='cancelled'), False
     if ran.how == 'error':
+        if isinstance(ran.error, JobFailedError):
+            return _fail(
+                session, job, ran.error.code, str(ran.error)[:_MESSAGE_CHARS], 'failed'
+            ), False
         message = f'{type(ran.error).__name__}: {ran.error}'[:_MESSAGE_CHARS]
         return _fail(session, job, 'handler_error', message, 'failed'), False
     return _write_returned(session, kind, claim, beat, ran.value)

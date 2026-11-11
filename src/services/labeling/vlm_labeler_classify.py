@@ -95,7 +95,7 @@ class ClassifyOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.class_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 512,
             # Same grammar constraint as the combined call: without it a
             # server-side reasoning parser can route the whole answer to
@@ -363,7 +363,7 @@ class ClassifyOps(VlmLabelerCore):
                 {'role': 'system', 'content': self._pack.open_class_system},
                 {'role': 'user', 'content': user_content},
             ],
-            'temperature': 0.0,
+            **self._sampling_kwargs(),
             'max_tokens': 768,
             **self._json_mode_kwargs(),
         }

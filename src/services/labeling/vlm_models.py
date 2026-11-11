@@ -236,6 +236,17 @@ class VlmTransportError(Exception):
     """
 
 
+class VlmRequestRejectedError(Exception):
+    """The provider answered a chat call with an HTTP 4xx: the request or the endpoint's
+    configuration is wrong (a rejected parameter, a bad key, an unknown model), so retrying or
+    calling the endpoint unreachable would both be false. 5xx and timeouts are not this."""
+
+    def __init__(self, status: int, upstream_message: str) -> None:
+        super().__init__(f'HTTP {status}: {upstream_message}')
+        self.status = status
+        self.upstream_message = upstream_message
+
+
 class CombinedTransportError(CombinedParseFailure, VlmTransportError):
     """The combined call itself failed (HTTP / transport): no reply at all.
 

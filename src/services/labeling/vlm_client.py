@@ -34,6 +34,8 @@ from tenacity import (
 
 from src.config.env import env_int, env_str
 from src.core.logging import get_logger
+from src.services.labeling.vlm_endpoint_body import ANTHROPIC_VERSION, Provider
+from src.services.labeling.vlm_models import VlmRequestRejectedError
 from src.services.labeling.vlm_pinning import PinnedTransport
 
 
@@ -180,7 +182,7 @@ def build_http_client(
     return httpx.AsyncClient(timeout=timeout_s, limits=limits, follow_redirects=False)
 
 
-def build_auth_headers(api_key: str) -> dict[str, str]:
+def build_auth_headers(api_key: str, provider: Provider = 'vllm') -> dict[str, str]:
     """Build the ``/chat/completions`` request headers for ``api_key``.
 
     OpenAI-compatible servers (OpenWebUI / vLLM) accept any non-empty
@@ -190,7 +192,14 @@ def build_auth_headers(api_key: str) -> dict[str, str]:
     headers = {'Content-Type': 'application/json'}
     if api_key:
         headers['Authorization'] = f'Bearer {api_key}'
+    if provider == 'anthropic':
+        headers['anthropic-version'] = ANTHROPIC_VERSION
     return headers
+
+
+def sampling_kwargs(temperature: float | None) -> dict[str, float]:
+    """The ``temperature`` payload entry, or nothing when the endpoint takes none."""
+    return {} if temperature is None else {'temperature': temperature}
 
 
 _RETRYABLE_HTTPX_EXCEPTIONS: tuple[type[Exception], ...] = (
@@ -202,6 +211,20 @@ _RETRYABLE_HTTPX_EXCEPTIONS: tuple[type[Exception], ...] = (
     httpx.ReadTimeout,
     httpx.ConnectTimeout,
 )
+
+
+_RETRYABLE_4XX = frozenset({408, 429})
+_UPSTREAM_MESSAGE_CHARS = 500
+
+
+def _upstream_message(resp: httpx.Response) -> str:
+    """The provider's own error text: OpenAI-shaped ``error.message`` when present."""
+    try:
+        error = resp.json().get('error')
+    except (ValueError, AttributeError):
+        error = None
+    text = error.get('message') if isinstance(error, dict) else None
+    return str(text or resp.text)[:_UPSTREAM_MESSAGE_CHARS]
 
 
 @dataclass(frozen=True)
@@ -257,9 +280,10 @@ async def post_chat_with_retry(
     async def _attempt() -> dict[str, Any]:
         await bucket.acquire()
         resp = await client.post(url, headers=headers, json=payload)
-        if 500 <= resp.status_code < 600:
-            # Trip retry by raising HTTPStatusError.
-            resp.raise_for_status()
+        if 400 <= resp.status_code < 500 and resp.status_code not in _RETRYABLE_4XX:
+            # The provider refused this request: say so, and do not retry it.
+            raise VlmRequestRejectedError(resp.status_code, _upstream_message(resp))
+        # 5xx and 429 raise HTTPStatusError, which the retry below picks up.
         resp.raise_for_status()
         typed: dict[str, Any] = resp.json()
         return typed
@@ -345,4 +369,5 @@ __all__ = [
     'extract_message_content',
     'extract_reasoning_content',
     'post_chat_with_retry',
+    'sampling_kwargs',
 ]
