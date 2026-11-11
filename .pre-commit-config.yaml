@@ -218,6 +218,14 @@ repos:
         pass_filenames: false
         files: ^frontend/(src|scripts|static)/|^frontend/(knip\.json|package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$
 
+      # Frontend twin of the Python complexity ratchet. Scans only the staged files (~2 s)
+      # and checks only their baseline entries; the config adds ESLint's `complexity` (15).
+      - id: check-frontend-complexity
+        name: Frontend per-function complexity ratchet (staged files)
+        entry: python3 scripts/codegen/check_frontend_complexity.py
+        language: system
+        files: ^frontend/src/.*\.(js|ts|svelte)$
+
       # jscpd clone detector over src, scripts and frontend/src (~1.5 s). Whole-project
       # because a clone is a pair of files, so it takes no filenames.
       - id: check-duplication
