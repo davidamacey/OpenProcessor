@@ -9,6 +9,7 @@ from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.domain.region_boxes import read_boxes
 from src.schemas.curation.images import BoxTone, BoxView
+from src.services.curation.wire import parse_xyxy
 
 
 if TYPE_CHECKING:
@@ -17,16 +18,6 @@ if TYPE_CHECKING:
     from src.config import RegionFields
 
 UNLABELED_LABEL: Final = 'unlabeled'
-
-
-def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
-    if not isinstance(value, list | tuple) or len(value) != 4:
-        return None
-    try:
-        x1, y1, x2, y2 = (float(v) for v in value)
-    except (TypeError, ValueError):
-        return None
-    return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
 
 
 def is_labeled(src: dict[str, Any]) -> bool:
@@ -57,7 +48,7 @@ def item_box_views(
     class_name = str(src['class_name']) if is_labeled(src) and src.get('class_name') else None
     tone = item_tone(src)
     views: list[BoxView] = []
-    if (item_box := _xyxy(src.get('bbox_norm'))) is not None:
+    if (item_box := parse_xyxy(src.get('bbox_norm'))) is not None:
         views.append(
             BoxView(
                 crop_id=crop_id,
@@ -69,7 +60,7 @@ def item_box_views(
             )
         )
     for box in read_boxes(src, f):
-        if (region_box := _xyxy(list(box.bbox_norm))) is None:
+        if (region_box := parse_xyxy(list(box.bbox_norm))) is None:
             continue
         box_tone: BoxTone = tone
         if box.state == 'rejected':

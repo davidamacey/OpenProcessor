@@ -109,15 +109,13 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     ]
 
 
-async def _joined_image_ids(
-    opensearch: Any, f: ItemFilter, embedding: WriteFields
-) -> tuple[list[str], bool]:
-    """The images that have an item matching ``f`` and whether there were more than we use."""
+async def item_image_ids(opensearch: Any, query: dict[str, Any]) -> tuple[list[str], bool]:
+    """The images that have an item matching ``query`` and whether there were more than we use."""
     resp = await opensearch.search(
         index=items_index(),
         body={
             'size': 0,
-            'query': item_filter_query(f, embedding=embedding),
+            'query': query,
             'aggs': {'images': {'terms': {'field': 'image_id', 'size': JOIN_MAX_IMAGES}}},
         },
     )
@@ -140,7 +138,7 @@ async def image_query(
     if joined.is_empty():
         filters.extend(_date_clauses(f))
     else:
-        ids, truncated = await _joined_image_ids(opensearch, f, embedding)
+        ids, truncated = await item_image_ids(opensearch, item_filter_query(f, embedding=embedding))
         filters.append({'terms': {'image_id': ids}})
     return {'bool': {'filter': filters}}, truncated
 
@@ -298,6 +296,7 @@ __all__ = [
     'JOIN_MAX_IMAGES',
     'MAX_CELLS',
     'MapQueryError',
+    'item_image_ids',
     'map_cells',
     'map_meta',
     'parse_bbox',

@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from src.config.curation_accessors import images_index, items_index
+from src.config.curation_accessors import images_index
 from src.config.project_context import project_api_base
 from src.schemas.curation.images import HiddenCounts, ImageCard, ImagePage, SortOption
 from src.services.curation.image_counts import item_facts
@@ -31,7 +31,7 @@ from src.services.curation.image_facts import (
     thumbnail_url,
 )
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
-from src.services.curation.map_cells import JOIN_MAX_IMAGES, LOCATION_FIELD, geo_box_query
+from src.services.curation.map_cells import LOCATION_FIELD, geo_box_query, item_image_ids
 
 
 if TYPE_CHECKING:
@@ -110,20 +110,6 @@ def _decode_cursor(cursor: str, sort: str) -> list[Any]:
     return after
 
 
-async def _item_image_ids(opensearch: Any, clauses: list[dict[str, Any]]) -> tuple[list[str], bool]:
-    """The images with an item matching ``clauses`` and whether there were more than we use."""
-    resp = await opensearch.search(
-        index=items_index(),
-        body={
-            'size': 0,
-            'query': {'bool': {'filter': clauses}} if clauses else {'match_all': {}},
-            'aggs': {'images': {'terms': {'field': 'image_id', 'size': JOIN_MAX_IMAGES}}},
-        },
-    )
-    agg = resp['aggregations']['images']
-    return [b['key'] for b in agg['buckets']], int(agg.get('sum_other_doc_count', 0)) > 0
-
-
 def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if q.source is not None:
@@ -179,11 +165,11 @@ async def _image_query(
     must_not: list[dict[str, Any]] = []
     truncated = False
     for clauses in positive:
-        ids, more = await _item_image_ids(opensearch, clauses)
+        ids, more = await item_image_ids(opensearch, {'bool': {'filter': clauses}})
         filters.append({'terms': {'image_id': ids}})
         truncated = truncated or more
     for clauses in negative:
-        ids, more = await _item_image_ids(opensearch, clauses)
+        ids, more = await item_image_ids(opensearch, {'bool': {'filter': clauses}})
         must_not.append({'terms': {'image_id': ids}})
         truncated = truncated or more
     body: dict[str, Any] = {'filter': filters, 'must_not': must_not}
