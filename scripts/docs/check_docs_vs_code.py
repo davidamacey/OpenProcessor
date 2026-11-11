@@ -149,7 +149,7 @@ def doc_files() -> list[Path]:
             # Diagram specs are the only json that carries prose.
             if 'architecture-diagrams' not in rel.parts:
                 continue
-        elif path.name in _EXCLUDED_FILES and len(rel.parts) == 1:
+        elif path.name in _EXCLUDED_FILES:
             continue
         if rel.parts[0] == 'tests' or rel.parts[:2] == ('docs', 'security'):
             continue

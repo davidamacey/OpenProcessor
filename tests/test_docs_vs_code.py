@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -169,17 +170,23 @@ def test_slugify_matches_github_rules() -> None:
     assert checker.slugify('The `lock` rule (v2)') == 'the-lock-rule-v2'
 
 
+def _temp_git_repo(root: Path) -> Callable[..., None]:
+    """Init a git repo at ``root`` and return a runner for git commands inside it."""
+    import subprocess  # nosec B404 - fixed git invocation in a temp repo
+
+    def git(*args: str) -> None:
+        subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)  # nosec B603 B607
+
+    git('init', '-q')
+    return git
+
+
 def test_doc_files_skip_untracked_local_notes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Untracked local files (private notes, gitignored artifacts) are not published
     docs, so a bogus route in one must not fail the checks."""
-    import subprocess  # nosec B404 - fixed git invocation in a temp repo
-
-    def git(*args: str) -> None:
-        subprocess.run(['git', *args], cwd=tmp_path, check=True, capture_output=True)  # nosec B603 B607
-
-    git('init', '-q')
+    git = _temp_git_repo(tmp_path)
     (tmp_path / 'docs').mkdir()
     (tmp_path / 'docs' / 'tracked.md').write_text('# tracked\n', encoding='utf-8')
     (tmp_path / 'docs' / 'local_note.md').write_text('POST /no_such_route\n', encoding='utf-8')
@@ -189,6 +196,21 @@ def test_doc_files_skip_untracked_local_notes(
     names = {p.name for p in checker.doc_files()}
 
     assert names == {'tracked.md'}
+
+
+def test_doc_files_skip_every_changelog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A changelog records routes that were removed, so no CHANGELOG.md (root or package) is checked."""
+    git = _temp_git_repo(tmp_path)
+    (tmp_path / 'frontend').mkdir()
+    (tmp_path / 'README.md').write_text('# readme\n', encoding='utf-8')
+    (tmp_path / 'CHANGELOG.md').write_text('GET /gone\n', encoding='utf-8')
+    (tmp_path / 'frontend' / 'CHANGELOG.md').write_text('GET /gone\n', encoding='utf-8')
+    git('add', '.')
+    monkeypatch.setattr(checker, 'REPO_ROOT', tmp_path)
+
+    names = {p.relative_to(tmp_path).as_posix() for p in checker.doc_files()}
+
+    assert names == {'README.md'}
 
 
 def test_cli_check_rejects_an_unknown_subcommand_and_flag(tmp_path: Path) -> None:

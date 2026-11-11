@@ -36,8 +36,11 @@ is complete and evaluated; `force` waives only the missing evaluation. The prima
 ## Presets
 
 Presets are revisioned config documents (same revision and `expected_revision` rules as
-[Settings and config](./settings-and-config.mdx)). Each has `GET` (list), `GET /{name}`,
-`PUT /{name}`, `DELETE /{name}`, `POST /{name}/activate` and `GET .../active`.
+[Settings and config](./settings-and-config.mdx)). Each kind has the same six routes. For the
+near-duplicate presets they are `GET /near_dup_profiles` (list), `GET /near_dup_profiles/{name}`,
+`PUT /near_dup_profiles/{name}`, `DELETE /near_dup_profiles/{name}`,
+`POST /near_dup_profiles/{name}/activate` and `GET /near_dup_profiles/active`; the other kinds swap the
+collection name.
 
 | Preset | Path | Scope | What it holds |
 |---|---|---|---|
