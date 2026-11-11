@@ -249,7 +249,11 @@ class TestPipelineBLS:
         with pytest.raises(_StopError):
             model._process_request(_request(model_module, u8, np.zeros((3, 4, 4), np.uint8)))
         assert model.seen['det_in'].dtype == np.float32
-        assert np.array_equal(model.seen['det_in'], u8.astype(np.float32) / 127.5 - 1.0)
+        # PP-OCRv6 det inference.yml NormalizeImage: (x / 255 - mean) / std, ImageNet mean/std.
+        mean = np.array([0.485, 0.456, 0.406], np.float32).reshape(3, 1, 1)
+        std = np.array([0.229, 0.224, 0.225], np.float32).reshape(3, 1, 1)
+        want = (u8.astype(np.float32) / 255.0 - mean) / std
+        assert np.allclose(model.seen['det_in'], want, atol=1e-5)
 
     def test_crop_source_is_the_uint8_hwc_array(self, model_module: Any) -> None:
         model = _bls(model_module)
