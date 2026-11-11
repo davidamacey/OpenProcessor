@@ -191,9 +191,9 @@ repos:
         files: ^(pyproject\.toml|scripts/codegen/check_mypy_tests\.py|scripts/codegen/baselines/mypy_tests\.txt|tests/.*\.py)$
 
       # Lean frontend gate: only the staged frontend files, through the app's own
-      # node_modules (npm ci in frontend/). svelte-check and vitest stay in CI and the
-      # lane checks, they are too slow for a commit hook. A missing node_modules fails
-      # the hook instead of passing vacuously.
+      # node_modules (npm ci in frontend/). svelte-check (~30 s) runs at pre-push and
+      # vitest stays in CI and the lane checks, both too slow for a commit hook. A missing
+      # node_modules fails the hook instead of passing vacuously.
       - id: frontend-prettier
         name: frontend prettier --check (staged files)
         entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --check --ignore-unknown "${@#frontend/}"' --
@@ -234,6 +234,34 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src|scripts)/.*\.py$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
+
+      # Whole-project type check, too slow (~30 s) for every commit: runs on git push.
+      - id: frontend-svelte-check
+        name: frontend svelte-check (0 errors)
+        entry: bash -c 'cd frontend && node_modules/.bin/svelte-kit sync && exec node_modules/.bin/svelte-check --tsconfig ./tsconfig.json --threshold error'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^frontend/(src|static)/|^frontend/(package(-lock)?\.json|svelte\.config\.js|sveltekit\.options\.js|vite\.config\.ts|tsconfig\.json)$
+
+      # Standards that live in tests rather than scripts (config paths exist, no
+      # single-box region scalars, no request fan-out, the guards' own tests). ~1 min,
+      # so pre-push; the docs-vs-code check (routes, OP_* vars, links) is ~1.5 min and
+      # runs here for the same reason.
+      - id: standards-guard-tests
+        name: Standards guard tests (tooling config, region scalars, fan-out, codegen)
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m pytest tests/codegen tests/test_tooling_config.py tests/test_no_legacy_region_scalars.py tests/test_no_request_fan_out.py -q --no-cov -n 4 -p no:cacheprovider'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^(src|scripts|tests)/.*\.py$|^(\.pre-commit-config\.yaml|pyproject\.toml)$
+      - id: docs-vs-code
+        name: Docs name only routes, OP_* variables and links that exist
+        entry: python3 scripts/docs/check_docs_vs_code.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: \.md$|^contracts/|^env\.template$|^docker-compose.*\.yml$
 
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)
@@ -279,8 +307,8 @@ repos:
 default_language_version:
   python: python3.12
 
-# `pre-commit install` installs both hook types.
-default_install_hook_types: [pre-commit, commit-msg]
+# `pre-commit install` installs all three hook types.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 fail_fast: false
 
