@@ -83,7 +83,7 @@ of those guards:
 |---|---|---|---|
 | venv | CONTRIBUTING "Dev setup" | `python3 -m venv .venv`; `.venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision`; `.venv/bin/pip install -r requirements-test.txt pre-commit pytest-xdist` | yes. CI installs the same (`.github/workflows/ci.yml` job `pytest`), without `pytest-xdist` |
 | never install `requirements.txt` in the venv | CONTRIBUTING, CLAUDE.md | (rule) | yes: `faiss-gpu-cu12` in `requirements.txt` breaks `faiss-cpu` |
-| hooks | CONTRIBUTING | `.venv/bin/pre-commit install` | yes: `default_install_hook_types: [pre-commit, commit-msg]` in `.pre-commit-config.yaml`. There are no pre-push hooks |
+| hooks | CONTRIBUTING | `.venv/bin/pre-commit install` | yes: `default_install_hook_types: [pre-commit, commit-msg, pre-push]` in `.pre-commit-config.yaml`; pre-push runs svelte-check |
 | worktree lanes | `docs/design/engineering_standards.md` 4.4 step 2 only | `git worktree add ...`; `ln -s <main>/.venv <worktree>/.venv`; one `npm ci` per worktree | yes (this worktree's `.venv` is such a symlink). Not in CONTRIBUTING (ENV-9) |
 | Node for `frontend/` | `frontend/.nvmrc` (26), CI `actions/setup-node` with `node-version-file` | `cd frontend && npm ci` | yes. One `npm ci` per worktree: a shared `node_modules` symlink breaks `svelte-kit sync` (engineering_standards 5.12) |
 | GPU placement | CLAUDE.md "Services and compose" | `TRITON_GPU_ID`, `API_GPU_ID`, `SEGMENTER_GPU_ID`, `EVALUATOR_GPU_ID`, `VLM_GPU_ID` | partly: compose also reads `OP_TRAIN_GPU_ORDER` (trainer) and `OP_CLUSTER_GPU_DEVICE` (`docker-compose.gpu-clustering.yml`); `GPU_ID` is a fourth, legacy name (ENV-3) |

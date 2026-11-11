@@ -15,6 +15,11 @@ python3 -m venv .venv
 .venv/bin/pre-commit install
 ```
 
+The install line sets up all three hook types (pre-commit, commit-msg, pre-push) from
+`default_install_hook_types`. Frontend hooks also need `npm ci` in `frontend/`. Commit-time
+gates include the duplication and frontend complexity ratchets; `svelte-check` (about 30 s)
+runs at pre-push. Both ratchets have baselines in `scripts/codegen/baselines/` that only shrink.
+
 `requirements-test.txt` is the CPU-installable set CI uses. Do not also install
 `requirements.txt` into this venv: it is the container image's list and carries
 `faiss-gpu-cu12`, which overwrites `faiss-cpu` and breaks the faiss tests.
@@ -247,7 +252,9 @@ Never add a line to hide a new finding; fix it.
 
 | Guard | Rule |
 |---|---|
-| `check_file_size.py` | 700 lines per first-party file (`CLAUDE.md` 400) is a guide, not a target. A file in the 640-700 band is split by concern when you touch it, never by collapsing lines and never to dodge the number. A file that is one cohesive concern may exceed it with a `cohesive: <reason>` entry in `scripts/codegen/baselines/file_size.txt`, reviewed at merge; existing baselines otherwise only shrink |
+| `check_file_size.py` | File size is a guide to separation of concerns, not a hard cap. Application code (`src`, `models`, `docker`, `export` Python and `frontend/src` `.ts .svelte .js`): 700 to 1000 lines warns and asks for a split by concern, over 1000 fails. Test code (`tests`, `frontend/e2e`, `*.test.ts`): same warning from 700, fails over 1500. `scripts/`, shell, the root CLI and vendored files are out of scope; `CLAUDE.md` is capped at 400. Split by concern when you touch a warned file, never by collapsing lines. A file over the hard cap that is one cohesive concern needs a reviewed `cohesive: <one-line reason>` entry in `scripts/codegen/baselines/file_size.txt`; the baseline only shrinks |
+| `check_duplication.py` | jscpd clones (12 lines, 100 tokens) over `src`, `scripts`, `frontend/src`; per file pair, baseline only shrinks. Extract a shared function or component instead |
+| `check_frontend_complexity.py` | ESLint `complexity` (15) per function in `frontend/src`, staged files only; baseline only shrinks |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
 | `check_ruff_ratchet.py` | no function above complexity 15, no new `except Exception` |
 | `check_file_locks.py` | no `fcntl.flock`, `exclusive_*_lock`, `filelock` or `portalocker` anywhere under `src`, `scripts`, `export` or `docker`, and no baseline: claim cross-process state with the fenced claim of a `jobs` row (`src/db/repos/jobs.py`) or a Postgres advisory lock (`src/config/advisory_locks.py`) |

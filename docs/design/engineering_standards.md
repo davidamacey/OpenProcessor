@@ -18,11 +18,13 @@ Contents: 1 principles, 2 config that worked, 3 guards, 4 port checklist, 5 pitf
    make the guard fail on growth, on a recorded value higher than reality, and on an entry with no
    finding left. Never add a blanket `noqa`, exclude a directory, or raise a threshold. Each later
    change deletes its own lines (`--tighten`), so the debt is visible and ends at zero.
-2. **Split by concern; never trim to fit.** A size ceiling (700 lines) is enforced, but the answer
-   to a long file is a split along its responsibilities, with the code moved verbatim first, then
+2. **Split by concern; never trim to fit.** File size is a guide, not a hard cap: application code
+   warns from 700 lines and fails over 1000, test code warns from 700 and fails over 1500, and
+   `scripts/` and shell are out of scope. The answer to a long file is a split along its responsibilities, with the code moved verbatim first, then
    importers repointed. Collapsing lines, deleting comments or minifying to get under the cap is
-   rejected. A cohesive file may keep a reasoned baseline entry (one remains: a single-function
-   installer whose truncated download must be a syntax error).
+   rejected. A cohesive file over the hard cap needs a reviewed baseline entry whose reason starts with
+   `cohesive:` (the one that existed, a single-function installer whose truncated download must be a
+   syntax error, is now out of scope as a root program).
 3. **Fail closed.** An outage must not look like an empty answer. A handler that catches a broad
    exception and returns `None`, `False`, `[]` or `0` is a bug unless the fallback is the feature.
    Counts become nullable and render as unknown; an unreadable job-state file counts as "busy"; a
@@ -257,7 +259,7 @@ golangci-lint 1.64.8 (a v1 bump; v2 needs a config migration).
   functions that only look alike (here `log_success` printed a different tag and `dc()` differed).
 - **gitleaks** builds from source in CI, which needs a Go new enough for its `go.mod`.
 - **conventional-pre-commit** at the `commit-msg` stage, scope optional, with
-  `default_install_hook_types: [pre-commit, commit-msg]`. A merge commit still passes (proven with a
+  `default_install_hook_types: [pre-commit, commit-msg, pre-push]`. A merge commit still passes (proven with a
   real `git merge --no-ff` in a clone). The global `exclude` must not match `.git/`: pre-commit
   applies it to the message file `.git/COMMIT_EDITMSG` and silently drops the file argument.
 - **Global exclude** narrowed to caches and binary engine files, so `models/`, `scripts/` and
@@ -328,7 +330,10 @@ failure through the real hook, remove). The plants were run with `pre-commit run
 
 | Guard (script) | Checks | Baseline | Plant and observed result |
 |---|---|---|---|
-| File size (`check_file_size.py`) | 700 lines per first-party file (`.py .ts .svelte .js .mjs .sh`) in `src scripts export docker models tests frontend/src frontend/e2e frontend/scripts` plus root shell programs; every `CLAUDE.md` capped at 400; the 640 to 700 band is printed as a warning only; vendored bundles out of scope | `file_size.txt`: `path`, current lines, reason naming the split | 701 lines in `export/_probe.py`, `frontend/src/lib/_probe.ts`, `tests/_probe.py`: failed for each (none was in scope before). One extra line added to a baselined 739-line file: failed |
+| File size (`check_file_size.py`) | warn from 700 lines, fail over 1000 for application code (`src models docker export` Python, `frontend/src` `.ts .svelte .js`) and over 1500 for test code (`tests`, `frontend/e2e`, `*.test.ts`); every `CLAUDE.md` capped at 400; `scripts/`, `.sh`, the root CLI and vendored bundles out of scope. Over the hard cap needs a baseline entry whose reason starts `cohesive:` | `file_size.txt`: `path`, current lines, `cohesive: reason` (empty today) | 1001 lines in `src/_probe.py`, `frontend/src/lib/_probe.ts`: failed; 1000 lines warned only; 5000 lines in `scripts/` and a root CLI: passed; a reason without `cohesive:`: failed |
+| Duplication (`check_duplication.py`) | jscpd (12 lines, 100 tokens) over `src scripts frontend/src` Python/TS/Svelte, `*.test.ts` excluded; key = sorted file pair, value = duplicated lines | `duplication.txt` (37 pairs, 1099 lines, 0.31% at introduction) | a 200-line copy of an existing module: `... <-> src/zz_dup_probe.py: 200 duplicated lines (new violation, not in the baseline)` |
+| Frontend complexity (`check_frontend_complexity.py`) | ESLint core `complexity` at 15 (`eslint.complexity.config.js`), per function in `frontend/src`, staged files only at commit | `frontend_complexity.txt` (33 functions, max 68 at introduction) | a 21-branch function: `frontend/src/lib/zzProbe.ts::zz: 21 CC (new violation, not in the baseline)` |
+| Frontend types (`svelte-check`, pre-push) | 0 errors over the whole app (~30 s) | none | `let n: number = "oops"` in a `.svelte` file: `Type 'string' is not assignable to type 'number'` |
 | Layering (`check_layering.py`) | AST walk of every `import` and `from ... import`, module level and inside functions (lazy imports hide the cycles). Routers may import services and clients; services, clients, `core`, `config`, `domain`, `utils`, `schemas` and `scripts` must not import routers; clients must not import services; everything below routers must not import `fastapi`/`starlette`; `config`, `domain`, `utils`, `schemas` must not import services or clients | none: starts with a baseline, ended at zero; the guard then **deleted its baseline file**. Permanent exceptions are a dict in the script with a reason; an exception whose import is gone fails as stale | function-level `from src.routers.curation import _common` in a service: `src/services/_probe.py -> src.routers.curation: 1 import(s) (new violation, not in the baseline)`; later four plants in one run (client importing a service, domain importing a service, service importing `fastapi` and a router) all reported |
 | Complexity (`check_ruff_ratchet.py`) | `C901` at 15, ruff run with `--isolated` so a per-file ignore cannot hide a finding. Key `path::function` (`#2`, `#3` for repeats), value = McCabe score | `complexity.txt` | 16-branch function: `src/_probe.py::f: 17 CC (new violation, not in the baseline)` |
 | Broad except (same script) | `BLE001` count per file, ruff isolated. A new handler, or a handler moved to a new file without moving its baseline line, fails | `broad_except.txt`: key `path`, value = count, reason `ratchet: may only go down` | extra `except Exception:` in a baselined file: `src/utils/cpu_pool.py: 2 handler(s) grew past the baseline 1` |
@@ -352,6 +357,29 @@ How to read a failure: the message is `key: value unit (reason)`. "new violation
 baseline" means fix the code (never add the line); "grew past the baseline" means you made it
 worse; "is below the baseline ... --tighten" means good news, lower the file; "stale baseline
 entry" means delete the line or run `--tighten`.
+
+### 3.3 Where each standard is enforced
+
+Hooks install for pre-commit, commit-msg and pre-push (`pre-commit install`); fast checks run at commit,
+the slower whole-project ones at push (measured on a loaded host).
+
+| Standard | Hook | Stage |
+|---|---|---|
+| Python format, lint, typing, security, secrets | ruff-format, ruff-check, mypy, bandit, gitleaks, pygrep checks | commit |
+| Shell, Docker, Go | shellcheck, hadolint, golangci-lint | commit |
+| Baselines that only shrink: size, layering, complexity, broad except, noqa, process ids, file locks, process state, cited paths, vulture, mypy tests | `scripts/codegen/check_*.py` | commit |
+| No duplicated code | check-duplication (~1.4 s) | commit |
+| Frontend format, lint, unused code | prettier, eslint, knip | commit |
+| Frontend complexity | check-frontend-complexity (~1.7 s, staged files) | commit |
+| Frontend types | svelte-check (~31 s) | push |
+| Naming leaks, conventional commits, contract drift | check-naming-leaks, conventional-pre-commit, drift hooks | commit / commit-msg |
+| Config paths exist, no single-box region scalars, no request fan-out, the guards' own tests | standards-guard-tests (~1 min) | push |
+| Docs match code | docs-vs-code (~1.5 min) | push |
+
+Not enforced by a hook, by design: vitest and the full pytest suite, coverage floor, pytest timeout
+(CI and the test sweep); changelog entry (CI); Dockerfile digest pinning and version consistency
+(tests in the suite); fail-closed behavior, "comments say why", evidence-first tests and review depth
+(judgment, covered by review; vulture and the broad-except ratchet catch the mechanical part).
 
 ## 4. Port checklist for the sister repo
 

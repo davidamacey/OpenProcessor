@@ -1,1 +1,0 @@
-setup-openprocessor.sh	3028	cohesive: one __op_define function so a truncated curl-to-bash download is a syntax error; pre-install code cannot source libraries
