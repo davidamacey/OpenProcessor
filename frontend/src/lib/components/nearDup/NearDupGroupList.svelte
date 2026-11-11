@@ -73,8 +73,7 @@
     <p class="text-xs text-zinc-500">Loading groups…</p>
   {:else if ctl.groups.length === 0}
     <p class="text-sm text-zinc-400" data-testid="near-dup-groups-empty">
-      No {ctl.purpose === 'dedup' ? 'duplicate' : 'leak'} groups at the {ctl.level} level. Either
-      nothing is at or above the cut, or the level has no current run yet.
+      {ctl.emptyReason}
     </p>
   {:else}
     <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -87,9 +86,8 @@
             onclick={() => onopen(g)}
           >
             <NearDupThumb
-              level={ctl.level}
-              memberId={g.representative_id}
-              previews={ctl.previews}
+              url={g.representative_thumbnail_url}
+              label={`${ctl.level} ${g.representative_id}`}
               size="sm"
             />
             <span class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">

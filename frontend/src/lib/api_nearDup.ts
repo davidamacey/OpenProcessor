@@ -8,6 +8,8 @@ import { apiFetch, qs, scoped } from '$lib/api';
 import type {
   NearDupActiveProfile,
   NearDupDecisionIn,
+  NearDupDecisionPage,
+  NearDupDecisionQuery,
   NearDupDecisionView,
   NearDupGroupDetail,
   NearDupGroupPage,
@@ -70,7 +72,7 @@ export function listNearDupGroups(
   );
 }
 
-/** `GET /near_duplicates/groups/{id}`: the members with their cosine to the representative. */
+/** `GET /near_duplicates/groups/{id}`: the members with their picture, class, holdout state and pin. */
 export function getNearDupGroup(
   level: NearDupLevel,
   groupId: string,
@@ -91,6 +93,23 @@ export function decideNearDup(
   return apiFetch<NearDupDecisionView>(
     `${scoped()}/near_duplicates/decisions`,
     { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `GET /near_duplicates/decisions`: the pinned pairs, newest first. */
+export function listNearDupDecisions(
+  query: NearDupDecisionQuery = {},
+  signal?: AbortSignal,
+): Promise<NearDupDecisionPage> {
+  return apiFetch<NearDupDecisionPage>(
+    `${scoped()}/near_duplicates/decisions${qs({
+      level: query.level,
+      member_id: query.member_id,
+      cursor: query.cursor,
+      limit: query.limit,
+    })}`,
+    {},
     signal,
   );
 }
@@ -161,26 +180,4 @@ export function activateNearDupProfile(
     },
     signal,
   );
-}
-
-/**
- * One item per image id, for a thumbnail: group members at the image level are
- * image ids and no route serves an image by id, so the first item standing on
- * each image stands in for it. One request for the whole page of ids.
- */
-export async function previewItemsForImages(
-  imageIds: string[],
-  signal?: AbortSignal,
-): Promise<Record<string, string>> {
-  if (imageIds.length === 0) return {};
-  const page = await apiFetch<{ crops: { id: string; image_id?: string }[] }>(
-    `${scoped()}/crops${qs({ image_id: imageIds, include_test: true, page_size: 200 })}`,
-    {},
-    signal,
-  );
-  const out: Record<string, string> = {};
-  for (const crop of page.crops) {
-    if (crop.image_id && !(crop.image_id in out)) out[crop.image_id] = crop.id;
-  }
-  return out;
 }

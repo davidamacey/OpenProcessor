@@ -21273,14 +21273,50 @@
         "title": "NearDupDecisionIn",
         "type": "object"
       },
+      "NearDupDecisionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NearDupDecisionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "NearDupDecisionPage",
+        "type": "object"
+      },
       "NearDupDecisionView": {
         "properties": {
           "a_id": {
             "title": "A Id",
             "type": "string"
           },
+          "a_thumbnail_url": {
+            "title": "A Thumbnail Url",
+            "type": "string"
+          },
           "b_id": {
             "title": "B Id",
+            "type": "string"
+          },
+          "b_thumbnail_url": {
+            "title": "B Thumbnail Url",
             "type": "string"
           },
           "decided_at": {
@@ -21319,7 +21355,9 @@
           "b_id",
           "decision",
           "decided_by",
-          "decided_at"
+          "decided_at",
+          "a_thumbnail_url",
+          "b_thumbnail_url"
         ],
         "title": "NearDupDecisionView",
         "type": "object"
@@ -21346,6 +21384,18 @@
       },
       "NearDupGroupPage": {
         "properties": {
+          "empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a first page is empty (the cut and the number scored), else null.",
+            "title": "Empty Reason"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/NearDupGroupSummary"
@@ -21367,7 +21417,8 @@
         },
         "required": [
           "items",
-          "next_cursor"
+          "next_cursor",
+          "empty_reason"
         ],
         "title": "NearDupGroupPage",
         "type": "object"
@@ -21403,6 +21454,11 @@
             "title": "Representative Id",
             "type": "string"
           },
+          "representative_thumbnail_url": {
+            "description": "The representative's picture: an image thumbnail at the image level, an item crop thumbnail at the item level.",
+            "title": "Representative Thumbnail Url",
+            "type": "string"
+          },
           "size": {
             "title": "Size",
             "type": "integer"
@@ -21415,7 +21471,8 @@
           "representative_id",
           "min_edge_cosine",
           "min_cosine_to_rep",
-          "has_holdout"
+          "has_holdout",
+          "representative_thumbnail_url"
         ],
         "title": "NearDupGroupSummary",
         "type": "object"
@@ -21468,9 +21525,61 @@
       },
       "NearDupMemberView": {
         "properties": {
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item's class; null at the image level.",
+            "title": "Class Name"
+          },
           "cosine_to_rep": {
             "title": "Cosine To Rep",
             "type": "number"
+          },
+          "crop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item: the member itself at the item level.",
+            "title": "Crop Id"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NearDupPin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The pin between this member and the representative, if one exists."
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The image: the member itself at the image level.",
+            "title": "Image Id"
+          },
+          "in_holdout": {
+            "description": "Frozen into the test holdout (an image: any item standing on it is).",
+            "title": "In Holdout",
+            "type": "boolean"
           },
           "is_representative": {
             "title": "Is Representative",
@@ -21479,14 +21588,47 @@
           "member_id": {
             "title": "Member Id",
             "type": "string"
+          },
+          "thumbnail_url": {
+            "title": "Thumbnail Url",
+            "type": "string"
           }
         },
         "required": [
           "member_id",
           "is_representative",
-          "cosine_to_rep"
+          "cosine_to_rep",
+          "thumbnail_url",
+          "image_id",
+          "crop_id",
+          "class_name",
+          "in_holdout",
+          "decision"
         ],
         "title": "NearDupMemberView",
+        "type": "object"
+      },
+      "NearDupPin": {
+        "properties": {
+          "id": {
+            "description": "The decision id: `DELETE .../decisions/{id}` undoes it.",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "same",
+              "different"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "NearDupPin",
         "type": "object"
       },
       "NearDupRunPage": {
@@ -55455,6 +55597,116 @@
       }
     },
     "/curation/projects/{project}/near_duplicates/decisions": {
+      "get": {
+        "description": "The pinned pairs, newest first.",
+        "operationId": "list_near_duplicate_decisions_curation_projects__project__near_duplicates_decisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "image",
+                    "item"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level"
+            }
+          },
+          {
+            "description": "Only pins naming this member.",
+            "in": "query",
+            "name": "member_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only pins naming this member.",
+              "title": "Member Id"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_cursor` of the previous page.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NearDupDecisionPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Near Duplicate Decisions",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      },
       "post": {
         "description": "Pin two members together (`same`) or apart (`different`) for every later run.",
         "operationId": "decide_near_duplicates_curation_projects__project__near_duplicates_decisions_post",
@@ -55684,6 +55936,7 @@
     },
     "/curation/projects/{project}/near_duplicates/groups/{group_id}": {
       "get": {
+        "description": "One group with each member's picture, class, holdout state and pin to the representative.",
         "operationId": "get_near_duplicate_group_curation_projects__project__near_duplicates_groups__group_id__get",
         "parameters": [
           {

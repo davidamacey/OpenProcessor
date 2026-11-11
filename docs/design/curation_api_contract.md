@@ -1504,8 +1504,9 @@ The search routes take `space` and `fuse`, and echo the `space` they ranked in; 
 | POST | `/near_duplicates/runs` | `NearDupRunRequest` (`level`, `mode` `full` or `incremental`); `202` `{job_id, kind}`; 409 `job_busy`, or `no_image_run` for an item run with no current image run |
 | GET | `/near_duplicates/runs` | runs, newest first; query `level`, `limit` |
 | GET | `/near_duplicates/runs/{run_id}` | one run: space, algorithm version, profile revision, parameters, members scored, group counts |
-| GET | `/near_duplicates/groups` | groups; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit` |
-| GET | `/near_duplicates/groups/{group_id}` | one group with its members and representative |
+| GET | `/near_duplicates/groups` | groups, each with `representative_thumbnail_url`; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit`; an empty first page carries `empty_reason` (the cut and the number scored) |
+| GET | `/near_duplicates/groups/{group_id}` | one group; each member carries `thumbnail_url`, `image_id`, `crop_id`, `class_name`, `in_holdout` and `decision` (the pin to the representative: `{id, kind}`) |
+| GET | `/near_duplicates/decisions` | the pinned pairs, newest first; query `level`, `member_id`, `cursor`, `limit`; each with both members' thumbnail URLs |
 | POST | `/near_duplicates/decisions` | `same` or `different` for a pair; `201` |
 | DELETE | `/near_duplicates/decisions/{decision_id}` | `204` |
 

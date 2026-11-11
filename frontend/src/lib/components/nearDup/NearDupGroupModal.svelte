@@ -1,7 +1,7 @@
 <!--
-  One group: members with their cosine to the representative, and the pair
-  decisions. A decision applies at the next run; undo is offered for the ones
-  made in this dialog.
+  One group: members with their picture, class, holdout state and cosine to
+  the representative, and the pair decisions. A decision applies at the next
+  run; every served pin can be undone.
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
@@ -33,12 +33,6 @@
   });
 
   const rep = $derived(ctl.detail?.members.find((m) => m.is_representative) ?? null);
-
-  function decisionFor(memberId: string, kind: string) {
-    return ctl.decisions.find(
-      (d) => d.decision === kind && (d.a_id === memberId || d.b_id === memberId),
-    );
-  }
 
   async function decide(memberId: string, kind: 'same' | 'different'): Promise<void> {
     if (!rep) return;
@@ -88,35 +82,40 @@
     {/if}
     <ul class="flex flex-col gap-3">
       {#each ctl.detail.members as m (m.member_id)}
-        {@const different = decisionFor(m.member_id, 'different')}
-        {@const same = decisionFor(m.member_id, 'same')}
+        {@const pin = m.decision}
         <li
           class="flex items-start gap-3 rounded border border-zinc-800 p-2"
           data-testid="near-dup-member"
         >
-          <NearDupThumb {level} memberId={m.member_id} previews={ctl.previews} />
+          <NearDupThumb url={m.thumbnail_url} label={`${level} ${m.member_id}`} />
           <div class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">
             <span class="break-all font-mono text-zinc-100">{m.member_id}</span>
+            {#if m.class_name}<span>{m.class_name}</span>{/if}
+            {#if m.in_holdout}
+              <span class="chip w-fit border-amber-700 text-amber-300"
+                >In test holdout</span
+              >
+            {/if}
             {#if m.is_representative}
               <span class="chip w-fit">Representative</span>
             {:else}
               <span>Cosine to representative {m.cosine_to_rep.toFixed(3)}</span>
               <div class="flex flex-wrap gap-2">
-                {#if different}
+                {#if pin?.kind === 'different'}
                   <button
                     type="button"
                     class="btn-sm"
                     disabled={ctl.busy}
                     data-testid="near-dup-undo"
-                    onclick={() => void undo(different.id)}>Undo "not a duplicate"</button
+                    onclick={() => void undo(pin.id)}>Undo "not a duplicate"</button
                   >
-                {:else if same}
+                {:else if pin?.kind === 'same'}
                   <button
                     type="button"
                     class="btn-sm"
                     disabled={ctl.busy}
                     data-testid="near-dup-undo"
-                    onclick={() => void undo(same.id)}>Undo "keep together"</button
+                    onclick={() => void undo(pin.id)}>Undo "keep together"</button
                   >
                 {:else}
                   <button
@@ -141,10 +140,10 @@
         </li>
       {/each}
     </ul>
-    {#if ctl.decisions.length > 0}
+    {#if ctl.pinned > 0}
       <p class="mt-3 text-xs text-amber-300" data-testid="near-dup-decided-note">
-        {ctl.decisions.length} decision{ctl.decisions.length === 1 ? '' : 's'} saved; run the
-        level again to apply {ctl.decisions.length === 1 ? 'it' : 'them'}.
+        {ctl.pinned} decision{ctl.pinned === 1 ? '' : 's'} saved; run the level again to apply
+        {ctl.pinned === 1 ? 'it' : 'them'}.
       </p>
     {/if}
   {/if}

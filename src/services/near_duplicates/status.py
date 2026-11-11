@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import datetime as dt
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.db.repos import near_dup as repo
 from src.db.session import project_tx
@@ -19,7 +20,7 @@ from src.domain.embedding_spaces import Target
 from src.schemas.curation import near_duplicates as wire
 from src.services.embedding_spaces.resolve import embedding_space
 from src.services.jobs.service import rejection, start_job
-from src.services.near_duplicates import pending
+from src.services.near_duplicates import member_views, pending
 from src.services.near_duplicates.profiles import NoActiveProfileError, active_profile
 
 
@@ -117,8 +118,9 @@ async def run(session: AsyncSession, project: uuid.UUID, run_id: uuid.UUID) -> w
         return run_view(found)
 
 
-def _summary_view(row: repo.GroupSummaryRow) -> wire.NearDupGroupSummary:
+def _summary_view(level: wire.Level, row: repo.GroupSummaryRow) -> wire.NearDupGroupSummary:
     return wire.NearDupGroupSummary(
+        representative_thumbnail_url=member_views.thumbnail_url(level, row.representative_id),
         group_id=str(row.lineage_id), purpose=row.purpose,
         size=row.member_count, representative_id=row.representative_id,
         min_edge_cosine=row.min_edge_cosine, min_cosine_to_rep=row.min_cosine_to_rep,
@@ -126,18 +128,29 @@ def _summary_view(row: repo.GroupSummaryRow) -> wire.NearDupGroupSummary:
     )  # fmt: skip
 
 
-def _decode_cursor(cursor: str | None) -> tuple[int, uuid.UUID] | None:
-    if cursor is None:
-        return None
+def _parse_cursor(cursor: str) -> list[str]:
     try:
-        size, lineage = base64.urlsafe_b64decode(cursor.encode()).decode().split(':')
-        return int(size), uuid.UUID(lineage)
+        return base64.urlsafe_b64decode(cursor.encode()).decode().split('|')
     except (ValueError, binascii.Error):
         raise rejection(422, 'cursor_invalid', 'the cursor is not one this route issued') from None  # type: ignore[arg-type]
 
 
+def _make_cursor(*parts: object) -> str:
+    return base64.urlsafe_b64encode('|'.join(map(str, parts)).encode()).decode()
+
+
+def _decode_cursor(cursor: str | None) -> tuple[int, uuid.UUID] | None:
+    if cursor is None:
+        return None
+    try:
+        size, lineage = _parse_cursor(cursor)
+        return int(size), uuid.UUID(lineage)
+    except ValueError:
+        raise rejection(422, 'cursor_invalid', 'the cursor is not one this route issued') from None  # type: ignore[arg-type]
+
+
 def _encode_cursor(row: repo.GroupSummaryRow) -> str:
-    return base64.urlsafe_b64encode(f'{row.member_count}:{row.lineage_id}'.encode()).decode()
+    return _make_cursor(row.member_count, row.lineage_id)
 
 
 async def groups(
@@ -155,7 +168,11 @@ async def groups(
     async with project_tx(session, project):
         current = await repo.current_run(session, project, level)
         if current is None:
-            return wire.NearDupGroupPage(items=[], next_cursor=None)
+            return wire.NearDupGroupPage(
+                items=[],
+                next_cursor=None,
+                empty_reason=f'no {level}-level run yet: build it to find near-duplicates',
+            )
         rows = await repo.page_groups(
             session, current.id, purpose=purpose, min_size=min_size, has_holdout=has_holdout,
             after=after, limit=limit + 1,
@@ -163,13 +180,24 @@ async def groups(
     page = rows[:limit]
     more = len(rows) > limit
     return wire.NearDupGroupPage(
-        items=[_summary_view(r) for r in page],
+        items=[_summary_view(level, r) for r in page],
         next_cursor=_encode_cursor(page[-1]) if more else None,
+        empty_reason=None if rows or cursor else _empty_reason(current, level, purpose),
     )
 
 
+def _empty_reason(run: repo.RunRow, level: wire.Level, purpose: wire.Purpose) -> str:
+    cut = run.params.get('dedup_cosine' if purpose == 'dedup' else 'leak_cosine')
+    noun = 'images' if level == 'image' else 'items'
+    return f'0 {purpose} groups at cosine {cut} among {run.members_scored} {noun}'
+
+
 async def group(
-    session: AsyncSession, project: uuid.UUID, level: wire.Level, group_id: uuid.UUID
+    session: AsyncSession,
+    project: uuid.UUID,
+    opensearch: Any,
+    level: wire.Level,
+    group_id: uuid.UUID,
 ) -> wire.NearDupGroupDetail:
     async with project_tx(session, project):
         current = await repo.current_run(session, project, level)
@@ -177,15 +205,15 @@ async def group(
         for purpose in ('dedup', 'leak'):
             if current is not None and found is None:
                 found = await repo.group_with_members(session, current.id, group_id, purpose)
-    if found is None:
-        raise rejection(404, 'group_not_found', f'no current {level} group {group_id}')  # type: ignore[arg-type]
-    summary, members = found
+        if found is None:
+            raise rejection(404, 'group_not_found', f'no current {level} group {group_id}')  # type: ignore[arg-type]
+        summary, members = found
+        decisions = await repo.decisions_with(session, project, level, summary.representative_id)
+    facts = await member_views.item_facts(opensearch, level, [m for m, _rep, _c in members])
+    pins = member_views.pins_to(summary.representative_id, decisions)
     return wire.NearDupGroupDetail(
-        group=_summary_view(summary),
-        members=[
-            wire.NearDupMemberView(member_id=m, is_representative=rep, cosine_to_rep=c)
-            for m, rep, c in members
-        ],
+        group=_summary_view(level, summary),
+        members=[member_views.member_view(level, m, facts, pins) for m in members],
     )
 
 
@@ -193,7 +221,42 @@ def _decision_view(row: repo.DecisionRow) -> wire.NearDupDecisionView:
     return wire.NearDupDecisionView(
         id=str(row.id), level=row.level, a_id=row.a_id, b_id=row.b_id,
         decision=row.decision, decided_by=row.decided_by, decided_at=row.decided_at.isoformat(),
+        a_thumbnail_url=member_views.thumbnail_url(row.level, row.a_id),  # type: ignore[arg-type]
+        b_thumbnail_url=member_views.thumbnail_url(row.level, row.b_id),  # type: ignore[arg-type]
     )  # fmt: skip
+
+
+def _decode_decision_cursor(cursor: str | None) -> tuple[dt.datetime, uuid.UUID] | None:
+    if cursor is None:
+        return None
+    try:
+        when, decision_id = _parse_cursor(cursor)
+        return dt.datetime.fromisoformat(when), uuid.UUID(decision_id)
+    except ValueError:
+        raise rejection(422, 'cursor_invalid', 'the cursor is not one this route issued') from None  # type: ignore[arg-type]
+
+
+async def decisions(
+    session: AsyncSession,
+    project: uuid.UUID,
+    *,
+    level: wire.Level | None,
+    member_id: str | None,
+    cursor: str | None,
+    limit: int,
+) -> wire.NearDupDecisionPage:
+    """The pinned pairs, newest first."""
+    after = _decode_decision_cursor(cursor)
+    async with project_tx(session, project):
+        rows = await repo.page_decisions(
+            session, project, level=level, member_id=member_id, after=after, limit=limit + 1
+        )
+    page = rows[:limit]
+    last = page[-1] if len(rows) > limit else None
+    return wire.NearDupDecisionPage(
+        items=[_decision_view(r) for r in page],
+        next_cursor=None if last is None else _make_cursor(last.decided_at.isoformat(), last.id),
+    )
 
 
 async def decide(
