@@ -99,7 +99,8 @@ import src.routers.curation.source_backfill
 import src.routers.curation.stats
 import src.routers.curation.viz
 import src.routers.curation.vlm_activation
-import src.routers.curation.vlm_policy  # noqa: F401 - side-effect import
+import src.routers.curation.vlm_policy
+import src.routers.curation.workflow_steps  # noqa: F401 - side-effect import
 from src.routers.curation._common import _raw_opensearch_dep, router
 from src.routers.curation.images import crops_router as images_crops_router, router as images_router
 from src.services.classes.registry import get_class_registry

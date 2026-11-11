@@ -41745,6 +41745,105 @@
         "title": "WatchTriggerWire",
         "type": "object"
       },
+      "WorkflowStep": {
+        "properties": {
+          "detail": {
+            "description": "A served sentence with the counts behind `done`.",
+            "title": "Detail",
+            "type": "string"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "id": {
+            "enum": [
+              "ingest",
+              "classes",
+              "cluster",
+              "activate",
+              "label",
+              "hotkeys",
+              "near_dups",
+              "export",
+              "train",
+              "review_disagreements"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "What to do, for example \"Create classes from the detector\".",
+            "title": "Label",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional search string for the link.",
+            "title": "Query"
+          },
+          "section": {
+            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, `export` or `train`.",
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "detail",
+          "done",
+          "section"
+        ],
+        "title": "WorkflowStep",
+        "type": "object"
+      },
+      "WorkflowSteps": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first step that is not done."
+          },
+          "steps": {
+            "description": "The loop, in order.",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "workspace_default_view": {
+            "description": "`clusters` when an item partition serves, else `gallery`.",
+            "enum": [
+              "gallery",
+              "clusters"
+            ],
+            "title": "Workspace Default View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "steps",
+          "next",
+          "workspace_default_view"
+        ],
+        "title": "WorkflowSteps",
+        "type": "object"
+      },
       "WriteFailure": {
         "description": "An item the write errored on (not a concurrent edit): ``reason`` is ``write_failed``.",
         "properties": {
@@ -58805,6 +58904,50 @@
         "tags": [
           "Curation",
           "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/next_steps": {
+      "get": {
+        "description": "The curation loop in order, which steps are done, the first one that is not, and the view\nthe Workspace opens on (`clusters` when an item clustering serves, else `gallery`).",
+        "operationId": "get_next_steps_curation_projects__project__next_steps_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowSteps"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Next Steps",
+        "tags": [
+          "Curation",
+          "Workflow"
         ]
       }
     },

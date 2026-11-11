@@ -2616,3 +2616,10 @@ action on it would touch: `detections`, `images`, `clusters`, `locked` (items a 
 `in_holdout`, `by_class` (ten largest, then `unlabeled` and `other`), `taken_from`, `taken_to`,
 `located` (images with a served position), `join_truncated` and the sentence `summary_text`. One
 aggregation on the items index; a selection above the bulk cap (20,000) is refused with `422`.
+
+## Next steps
+
+`GET /next_steps` serves the curation loop in order: `steps[]` (`id`, `label`, `detail`, `done`,
+`section`, `query`), `next` (the first step that is not done) and `workspace_default_view`
+(`clusters` when an item clustering serves, else `gallery`). The default view is decided only
+here. `review_disagreements` appears only after a model is promoted.
