@@ -67,30 +67,25 @@ function withPct(rows: RawRow[], denominator: number): BreakdownRow[] {
   }));
 }
 
-export function labeledTotalOf(stats: DatasetStats | null): number {
-  const l = stats?.labeled;
-  if (!l) return 0;
-  return l.by_human + l.by_vlm + l.by_classifier + l.other;
-}
+const LABELED_TONES: Record<string, string> = {
+  by_human: 'bg-green-500',
+  by_import: 'bg-amber-500',
+  by_vlm: 'bg-blue-500',
+  by_classifier: 'bg-purple-500',
+  other: 'bg-zinc-500',
+};
 
+/** The served `labeled.rows` with a bar colour per provenance; counts, labels and shares are the server's. */
 export function labeledRowsOf(stats: DatasetStats | null): BreakdownRow[] {
   const l = stats?.labeled;
-  const total = labeledTotalOf(stats);
-  if (!l || total === 0) return [];
-  return withPct(
-    [
-      { key: 'by_human', label: 'Human', count: l.by_human, tone: 'bg-green-500' },
-      { key: 'by_vlm', label: 'VLM suggestions', count: l.by_vlm, tone: 'bg-blue-500' },
-      {
-        key: 'by_classifier',
-        label: 'Classifier',
-        count: l.by_classifier,
-        tone: 'bg-purple-500',
-      },
-      { key: 'other', label: 'Other', count: l.other, tone: 'bg-zinc-500' },
-    ],
-    total,
-  );
+  if (!l || l.total === 0) return [];
+  return l.rows.map((r) => ({
+    key: r.key,
+    label: r.label,
+    count: r.count,
+    tone: LABELED_TONES[r.key] ?? 'bg-zinc-500',
+    pct: r.share * 100,
+  }));
 }
 
 /**

@@ -18232,6 +18232,35 @@
         "title": "LabeledChoice",
         "type": "object"
       },
+      "LabeledRow": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "share": {
+            "description": "Fraction (0 to 1) of `labeled.total`.",
+            "title": "Share",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "count",
+          "share"
+        ],
+        "title": "LabeledRow",
+        "type": "object"
+      },
       "LabeledStats": {
         "description": "Class-label provenance of items that carry a class.",
         "properties": {
@@ -18254,6 +18283,18 @@
           "other": {
             "title": "Other",
             "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LabeledRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total": {
+            "description": "Every provenance summed; the rows add up to it.",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -18261,7 +18302,9 @@
           "by_vlm",
           "by_classifier",
           "by_import",
-          "other"
+          "other",
+          "total",
+          "rows"
         ],
         "title": "LabeledStats",
         "type": "object"
@@ -29550,6 +29593,11 @@
             "title": "Confirmed",
             "type": "integer"
           },
+          "coverage_share": {
+            "description": "Fraction (0 to 1) of all items that have a box.",
+            "title": "Coverage Share",
+            "type": "number"
+          },
           "total_detected": {
             "description": "Detector credit, rejected and failed attempts included; overstates real regions.",
             "title": "Total Detected",
@@ -29579,6 +29627,7 @@
         },
         "required": [
           "boxed",
+          "coverage_share",
           "confirmed",
           "total_detected",
           "by_detector",

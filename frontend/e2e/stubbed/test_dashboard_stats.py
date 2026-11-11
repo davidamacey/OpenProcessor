@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 
 from fixtures.contract import auto_label_job
+from fixtures.wire import labeled_stats
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -25,7 +26,6 @@ CLASSES = [
         'hotkey_letter': 'k',
         'sample_count': 10,
         'validated_count': 5,
-        'cluster_size': 12,
         'deprecated': False,
     },
 ]
@@ -64,3 +64,54 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'a stats 503 must not throw a page error: {errors[:3]}'
+
+
+def test_dashboard_labeled_breakdown_shows_the_served_rows_with_imports(stub, page, app_url):
+    """The labeled total and rows are the server's: imported labels count (they once did not)."""
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
+    stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
+    stats = {
+        'as_of': '2026-11-11T00:00:00Z',
+        'total_crops': 502,
+        'validated': 285,
+        'test_holdout': 25,
+        'by_source': [],
+        'labeled': labeled_stats(by_human=100, by_import=185),
+        'regions': {
+            'boxed': 0,
+            'coverage_share': 0,
+            'confirmed': 0,
+            'total_detected': 0,
+            'by_detector': 0,
+            'by_segmenter': 0,
+            'by_human_drew': 0,
+            'verified_by_human': 0,
+            'verified_by_vlm': 0,
+            'validated_by_human': 0,
+        },
+        'unlabeled': {'pending_detection': 0, 'pending_verification': 0, 'no_label_source': 0},
+        'in_progress': {'region_drain_total_unfinished': 0},
+        'clusters': {
+            'last_run_at': None,
+            'cluster_count': 0,
+            'residual_count': 0,
+            'noise_count': 0,
+            'method': None,
+        },
+    }
+    stub.on('GET', r'/stats/dataset(\?|$)', stats)
+    stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
+    stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    snapshot = {'state': {}, 'stats': stats}
+    sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'
+    stub.on('GET', r'/pipeline/events', (200, sse_body, 'text/event-stream'))
+
+    page.goto(f'{app_url}/p/default/dashboard')
+    panel = page.get_by_role('heading', name='Labeled by source').locator('xpath=ancestor::div[1]')
+    expect(panel).to_contain_text('285 total', timeout=ACTION_TIMEOUT_MS)
+    expect(panel).to_contain_text('Imported')
+    expect(panel).to_contain_text('185')
+    errors = [c for c in stub.console_errors if c.startswith('pageerror')]
+    assert not errors, errors[:3]

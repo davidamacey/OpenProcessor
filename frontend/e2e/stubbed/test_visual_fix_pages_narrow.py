@@ -7,7 +7,7 @@ browser: each asserts on measured geometry, not on class names.
 from __future__ import annotations
 
 from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
-from fixtures.wire import REGION_CLASS, make_box, make_item
+from fixtures.wire import REGION_CLASS, labeled_stats, make_box, make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
 
@@ -226,7 +226,7 @@ DASHBOARD_STATS = {
     'validated': 0,
     'test_holdout': 0,
     'by_source': [],
-    'labeled': {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'other': 0},
+    'labeled': labeled_stats(),
     'regions': {'total_detected': 0, 'by_detector': 0, 'by_segmenter': 0},
     'unlabeled': {'pending_detection': 0, 'pending_verification': 0, 'no_label_source': 0},
     'in_progress': {'region_drain_total_unfinished': 0},

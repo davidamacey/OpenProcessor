@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 
-from fixtures.wire import make_item, review_tab, review_tabs
+from fixtures.wire import labeled_stats, make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
 
@@ -414,13 +414,7 @@ def test_dashboard_says_a_label_is_not_ground_truth(stub, page, app_url):
         'validated_by_import': 0,
         'test_holdout': 0,
         'by_source': [{'key': 'vlm', 'doc_count': 11103}],
-        'labeled': {
-            'by_human': 120,
-            'by_vlm': 11103,
-            'by_classifier': 0,
-            'by_import': 0,
-            'other': 0,
-        },
+        'labeled': labeled_stats(by_human=120, by_vlm=11103),
         'regions': {
             'boxed': 0,
             'confirmed': 0,

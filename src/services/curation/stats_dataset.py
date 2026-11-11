@@ -112,6 +112,33 @@ def rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+_LABELED_ROW_LABELS = (
+    ('by_human', 'Human'),
+    ('by_import', 'Imported'),
+    ('by_vlm', 'VLM suggestions'),
+    ('by_classifier', 'Classifier'),
+    ('other', 'Other'),
+)
+
+
+def _share(count: int, whole: int) -> float:
+    return round(count / whole, 4) if whole else 0.0
+
+
+def labeled_block(rollup: dict[str, int]) -> dict[str, Any]:
+    """The ``labeled`` wire block: the provenance counts plus the served ``total`` and one
+    ``rows`` entry per provenance (label, count, share of ``total``), so no client sums."""
+    total = sum(rollup[key] for key, _ in _LABELED_ROW_LABELS)
+    return {
+        **rollup,
+        'total': total,
+        'rows': [
+            {'key': key, 'label': label, 'count': rollup[key], 'share': _share(rollup[key], total)}
+            for key, label in _LABELED_ROW_LABELS
+        ],
+    }
+
+
 def count_by_proposal(buckets: list[dict[str, Any]]) -> int:
     """Sum ``class_source`` buckets that are a detector's "proposed but not
     yet classified" marker (``unlabeled_proposal_class_sources()`` plus the
@@ -291,6 +318,7 @@ async def build_dataset_stats(
     region_deps = await check_region_dependencies(session, repository_index, profile)
     region_stall_reason = stall_reason(region_deps, pending_detection=pending_detection)
 
+    boxed = int((aggs.get('region_boxed') or {}).get('doc_count', 0))
     no_label_source = int((aggs.get('no_label_source') or {}).get('doc_count', 0))
 
     cluster_meta = await read_last_clustering_meta(
@@ -318,7 +346,7 @@ async def build_dataset_stats(
             # by_human counts class_source startswith 'human' — the actual
             # "human labeled the class" signal. Auto-validation (majority
             # agreement) lives in by_classifier, not by_human.
-            **rollup,
+            **labeled_block(rollup),
         },
         # Region-detection provenance (denominator = total_crops).
         #
@@ -338,7 +366,8 @@ async def build_dataset_stats(
             # total_detected sums detector CREDIT and includes
             # rejected/failed attempts, so it overstates real regions —
             # kept for back-compat but no longer the headline number.
-            'boxed': int((aggs.get('region_boxed') or {}).get('doc_count', 0)),
+            'boxed': boxed,
+            'coverage_share': _share(boxed, int(total)),
             'confirmed': region_status_buckets.get(RegionStatus.DETECTED, 0),
             'total_detected': region_total_detected,
             'by_detector': regions_by_detector,

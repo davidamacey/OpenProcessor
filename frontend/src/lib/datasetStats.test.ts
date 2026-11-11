@@ -18,14 +18,21 @@ import {
   summarizeStatsError,
 } from './datasetStats';
 import type { DatasetStats } from '$lib/api_stats';
-import { datasetStatsFixture } from './test/fixtures/datasetStats';
+import { datasetStatsFixture, labeledStatsFixture } from './test/fixtures/datasetStats';
+
+const LABELED = labeledStatsFixture({
+  by_human: 100,
+  by_vlm: 50,
+  by_classifier: 10,
+  by_import: 185,
+});
 
 const GOOD: DatasetStats = datasetStatsFixture({
   total_crops: 422,
   validated: 297,
   test_holdout: 12,
   by_source: [{ key: 'tag_holdout_sample', doc_count: 300 }],
-  labeled: { by_human: 100, by_vlm: 50, by_classifier: 10, other: 0 },
+  labeled: LABELED,
   in_progress: { region_drain_total_unfinished: 3, region_stall_reason: null },
 });
 
@@ -119,18 +126,20 @@ describe('drain rate and breakdown helpers', () => {
     expect(fmtRelative(0, 90_000)).toBe('1m ago');
   });
 
-  it('builds labeled rows with one-decimal percentages and none when empty', () => {
-    const rows = labeledRowsOf(
-      datasetStatsFixture({
-        labeled: { by_human: 1, by_vlm: 3, by_classifier: 0, other: 0 },
-      } as Partial<DatasetStats>),
-    );
-    expect(rows.map((r) => [r.key, r.pct])).toEqual([
-      ['by_human', 25],
-      ['by_vlm', 75],
-      ['by_classifier', 0],
-      ['other', 0],
+  it('shows the served labeled rows, imports included, and none when nothing is labeled', () => {
+    const rows = labeledRowsOf(GOOD);
+    expect(rows.map((r) => [r.key, r.label, r.count])).toEqual([
+      ['by_human', 'Human', 100],
+      ['by_import', 'Imported', 185],
+      ['by_vlm', 'VLM suggestions', 50],
+      ['by_classifier', 'Classifier', 10],
+      ['other', 'Other', 0],
     ]);
+    expect(rows.reduce((n, r) => n + r.count, 0)).toBe(GOOD.labeled.total);
+    expect(rows[1].pct).toBeCloseTo((185 / 345) * 100);
+    expect(
+      labeledRowsOf(datasetStatsFixture({ labeled: labeledStatsFixture() })),
+    ).toEqual([]);
     expect(labeledRowsOf(null)).toEqual([]);
   });
 });

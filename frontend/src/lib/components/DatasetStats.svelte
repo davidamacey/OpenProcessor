@@ -32,7 +32,6 @@
     fmtRelative,
     formatRate,
     labeledRowsOf,
-    labeledTotalOf,
     slotRowsOf,
     summarizeStatsError,
   } from '$lib/datasetStats';
@@ -63,7 +62,7 @@
   const etaSeconds = $derived(feed.etaSeconds);
 
   const stateChips = $derived(embeddingStateChips(stats?.embedding?.by_state));
-  const labeledTotal = $derived(labeledTotalOf(stats));
+  const labeledTotal = $derived(stats?.labeled?.total ?? 0);
   const labeledRows = $derived(labeledRowsOf(stats));
   const slotRows = $derived(slotRowsOf(stats, statsSlot?.stats?.key));
 </script>
@@ -141,7 +140,9 @@
       <div class="surface p-4 lg:col-span-2">
         <header class="mb-3 flex items-center justify-between">
           <h3 class="text-sm font-semibold text-zinc-300">Labeled by source</h3>
-          <span class="text-xs text-zinc-500">{fmt(labeledTotal)} total</span>
+          <span class="text-xs text-zinc-500" data-testid="labeled-total"
+            >{fmt(labeledTotal)} total</span
+          >
         </header>
         <p class="mb-2 text-xs text-zinc-500" data-testid="labeled-not-ground-truth">
           A label is not ground truth until a human validates it. Only {fmt(
@@ -302,7 +303,7 @@
           </h3>
           <div class="flex items-baseline gap-2">
             <span class="font-mono text-2xl text-zinc-100">
-              {(((p?.boxed ?? 0) / Math.max(1, stats.total_crops)) * 100).toFixed(1)}%
+              {((p?.coverage_share ?? 0) * 100).toFixed(1)}%
             </span>
             <span class="text-xs text-zinc-500">of crops have a box</span>
           </div>

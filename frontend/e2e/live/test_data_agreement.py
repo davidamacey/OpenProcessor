@@ -75,6 +75,27 @@ def test_dashboard_cluster_count_agrees_with_stats_dataset(
     )
 
 
+def test_dashboard_labeled_total_is_the_served_total_and_its_rows_add_up(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    served = api_get(live_url, live_project, '/stats/dataset')['labeled']
+    assert sum(r['count'] for r in served['rows']) == served['total'], served
+    page = guarded_page.page
+    page.goto(f'{live_url}{page_path(live_project, "/dashboard")}', wait_until='domcontentloaded')
+    total_el = page.locator('[data-testid="labeled-total"]')
+    total_el.wait_for(timeout=15_000)
+    wait_for_stable_text(page, '[data-testid="labeled-total"]')
+    displayed = int(total_el.inner_text().replace('total', '').strip().replace(',', ''))
+
+    ok, first, second = agrees_with_retry(
+        live_url, live_project, '/stats/dataset', ('labeled', 'total'), displayed
+    )
+    assert ok, (
+        f"dashboard 'Labeled by source' showed {displayed}, but GET {{prefix}}/stats/dataset "
+        f'labeled.total was {first} (and, on retry, {second})'
+    )
+
+
 def test_region_queue_total_agrees_with_review_regions(
     guarded_page: Any,
     live_url: str,

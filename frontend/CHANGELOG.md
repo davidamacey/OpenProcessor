@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Dashboard "Labeled by source" shows the served total and rows (imported labels included) and the served box coverage; the browser no longer sums or divides them.
 - Similar-items, item-text and ignored views: the "Back to clusters" button wraps onto its own line on narrow screens instead of being clipped.
 - Map page: without WebGL2 the map card says "Map needs WebGL2 ... N photos have GPS" instead of the page falling to "Something went wrong"; filters and the rest of the page keep working.
 - Map page: points render again. The API client now parses every `+json` response (`/map/cells` answers `application/geo+json`); before, the body arrived as text and MapLibre tried to fetch it as a URL.
