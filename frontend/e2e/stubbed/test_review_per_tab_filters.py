@@ -56,7 +56,7 @@ def _stub_common(stub):
     stub.on('GET', r'/review/tabs(\?|$)', REVIEW_TABS)
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {

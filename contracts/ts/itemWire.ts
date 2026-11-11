@@ -97,6 +97,8 @@ export interface ItemWire {
   vlm_proposed_class_name: string | null;
   proposed_class_id: number | null;
   proposed_class_name: string;
+  display_name: string;
+  display_name_kind: string;
   needs_new_class: boolean;
   needs_new_class_note: string | null;
   cluster: ClusterRef | null;
@@ -220,6 +222,8 @@ export const ITEM_WIRE_KEYS = [
   'vlm_proposed_class_name',
   'proposed_class_id',
   'proposed_class_name',
+  'display_name',
+  'display_name_kind',
   'needs_new_class',
   'needs_new_class_note',
   'cluster',

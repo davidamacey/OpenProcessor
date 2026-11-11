@@ -560,11 +560,12 @@
     scrim="bg-black/80"
     panelClass="max-h-full max-w-6xl"
   >
-    <SourceImageOverlay
-      cropId={crop.id}
-      class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
-    />
     {#if crop.image_id}
+      <SourceImageOverlay
+        imageId={crop.image_id}
+        selectedCropId={crop.id}
+        class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
+      />
       <div class="mt-2 flex justify-end" data-testid="card-reprocess-image">
         <ReprocessControl
           target={{ kind: 'image', imageId: crop.image_id }}

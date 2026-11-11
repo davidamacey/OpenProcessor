@@ -94,6 +94,7 @@ class ProjectsResponse(BaseModel):
     limits: ProjectLimits
     labels: ProjectLabels = Field(default_factory=ProjectLabels)
     include_archived: bool
+    total: int = Field(description='Projects matching the filters, before `limit` is applied.')
 
 
 class ProjectWarning(BaseModel):

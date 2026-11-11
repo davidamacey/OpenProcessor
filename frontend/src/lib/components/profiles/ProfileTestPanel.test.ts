@@ -76,7 +76,7 @@ function serve(response: () => Response) {
         testBodies.push(JSON.parse(String(init.body)));
         return response();
       }
-      if (u.includes('/context')) {
+      if (u.endsWith('/images/img_1')) {
         return json({
           image: { image_id: 'img_1', width: 100, height: 100 },
           items: [

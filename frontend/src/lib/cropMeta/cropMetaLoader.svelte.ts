@@ -1,20 +1,15 @@
 /**
  * The crop detail panel's two lazy reads: the write history and the source
- * image context (image meta, siblings and the full context response for
- * SourceImageOverlay). Each refetches when the crop id changes, aborts the
- * superseded request, and never blocks the rest of the panel.
+ * image (its facts, siblings and the full response for SourceImageOverlay).
+ * Each refetches when the crop (or its image) changes, aborts the superseded
+ * request, and never blocks the rest of the panel.
  */
 
-import { getCropContext, getCropHistory } from '$lib/api_cropRead';
+import { getCropHistory, getImage } from '$lib/api_cropRead';
 import { apiErrorText } from '$lib/api_errors';
-import type {
-  Crop,
-  CropContextResponse,
-  CropHistoryEntry,
-  CropImageMeta,
-} from '$lib/types';
+import type { Crop, CropHistoryEntry, ImageDetailResponse, ImageInfo } from '$lib/types';
 
-export function createCropMetaLoader(cropId: () => string) {
+export function createCropMetaLoader(crop: () => Pick<Crop, 'id' | 'image_id'>) {
   // -- History (G7) — lazy, fetched once per crop.id, never blocks the
   // rest of the panel from rendering. ------------------------------------
   let historyEntries = $state<CropHistoryEntry[] | null>(null);
@@ -22,16 +17,16 @@ export function createCropMetaLoader(cropId: () => string) {
   let historyLoading = $state(false);
 
   // -- Source image + siblings (G7/G8) — same lazy-on-open pattern. ------
-  let imageMeta = $state<CropImageMeta | null>(null);
+  let imageMeta = $state<ImageInfo | null>(null);
   let siblings = $state<Crop[] | null>(null);
   let imageError = $state<string | null>(null);
   let imageLoading = $state(false);
-  // K6: the full context response, handed straight to SourceImageOverlay
-  // so it doesn't re-fetch what this panel already loaded.
-  let contextRes = $state<CropContextResponse | null>(null);
+  // The full response, handed straight to SourceImageOverlay so it
+  // doesn't re-fetch what this panel already loaded.
+  let contextRes = $state<ImageDetailResponse | null>(null);
 
   $effect(() => {
-    const id = cropId();
+    const id = crop().id;
     historyEntries = null;
     historyError = null;
     historyLoading = true;
@@ -51,14 +46,19 @@ export function createCropMetaLoader(cropId: () => string) {
   });
 
   $effect(() => {
-    const id = cropId();
+    const { id, image_id: imageId } = crop();
     imageMeta = null;
     siblings = null;
     contextRes = null;
     imageError = null;
+    if (!imageId) {
+      imageLoading = false;
+      imageError = 'No source image is recorded for this item.';
+      return;
+    }
     imageLoading = true;
     const controller = new AbortController();
-    getCropContext(id, controller.signal)
+    getImage(imageId, controller.signal)
       .then((res) => {
         imageMeta = res.image;
         siblings = res.items.filter((it) => it.id !== id);

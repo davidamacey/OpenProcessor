@@ -15,14 +15,14 @@ import {
 
 const mocks = vi.hoisted(() => ({
   getCrop: vi.fn(),
-  getCropContext: vi.fn(),
+  getImage: vi.fn(),
   testOpenVocab: vi.fn(),
 }));
 
 vi.mock('$lib/api_cropRead', async (orig) => ({
   ...(await orig<typeof import('$lib/api_cropRead')>()),
   getCrop: mocks.getCrop,
-  getCropContext: mocks.getCropContext,
+  getImage: mocks.getImage,
 }));
 vi.mock('$lib/api_openVocab', () => ({ testOpenVocab: mocks.testOpenVocab }));
 
@@ -33,7 +33,7 @@ let instance: Record<string, unknown> | undefined;
 
 beforeEach(() => {
   mocks.getCrop.mockResolvedValue({ id: 'c1', image_id: 'img-9' });
-  mocks.getCropContext.mockResolvedValue({
+  mocks.getImage.mockResolvedValue({
     image: { width: 800, height: 600 },
     items: [],
   });

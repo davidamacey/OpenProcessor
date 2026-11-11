@@ -3656,6 +3656,106 @@
         "title": "BoxRef",
         "type": "object"
       },
+      "BoxView": {
+        "description": "One box to draw over an image, in image coordinates.",
+        "properties": {
+          "bbox_norm": {
+            "description": "[x1, y1, x2, y2], normalized 0..1 in the source image.",
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "box_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The region box id; null for the item box itself.",
+            "title": "Box Id"
+          },
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "crop_id": {
+            "description": "The item the box belongs to.",
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "item",
+              "region"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "description": "The text to show on the box: the class name, or \"unlabeled\".",
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The region box state; null for an item.",
+            "title": "State"
+          },
+          "tone": {
+            "description": "How the box is drawn: its review state, served.",
+            "enum": [
+              "validated",
+              "machine",
+              "unlabeled",
+              "holdout",
+              "rejected"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "kind",
+          "bbox_norm",
+          "label",
+          "tone"
+        ],
+        "title": "BoxView",
+        "type": "object"
+      },
       "BoxWriteElement": {
         "additionalProperties": false,
         "description": "One element of a ``PUT /crops/{crop_id}/regions`` boxes list.\n\n``box_id: None`` (or omitted) is a new box; a stored box referenced by\n``box_id`` alone (no other keys) is left untouched (sibling-preserving,\nany_domain_plan.md §7.7).",
@@ -7966,97 +8066,6 @@
           "region_status"
         ],
         "title": "CropBatchStatusRequest",
-        "type": "object"
-      },
-      "CropContextImage": {
-        "description": "The source frame's record: ``width`` / ``height`` fall back to the\nimage file header when the images index lacks them.",
-        "properties": {
-          "height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Height"
-          },
-          "image_id": {
-            "title": "Image Id",
-            "type": "string"
-          },
-          "image_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Image Path"
-          },
-          "indexed_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Indexed At"
-          },
-          "source": {
-            "default": "",
-            "title": "Source",
-            "type": "string"
-          },
-          "width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Width"
-          }
-        },
-        "required": [
-          "image_id"
-        ],
-        "title": "CropContextImage",
-        "type": "object"
-      },
-      "CropContextResponse": {
-        "description": "``GET /crops/{id}/context``. Documentation model only (the handler\nreturns plain dicts, so a stored value of an unexpected type never 500s;\na test pins the keys): ``image`` is ``null`` when the images index has no\nrecord of the frame, ``items`` are wire items ordered by\n``crop_rank_in_image``, at most 500.",
-        "properties": {
-          "image": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/CropContextImage"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ItemDoc"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "image",
-          "items"
-        ],
-        "title": "CropContextResponse",
         "type": "object"
       },
       "CropDiscardBatchRequest": {
@@ -12974,6 +12983,25 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HiddenCounts": {
+        "description": "Items the default view leaves out of the matched set, so the page can say so.",
+        "properties": {
+          "excluded": {
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "test_holdout": {
+            "title": "Test Holdout",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "test_holdout",
+          "excluded"
+        ],
+        "title": "HiddenCounts",
+        "type": "object"
+      },
       "HoldoutClassBucket": {
         "additionalProperties": true,
         "properties": {
@@ -13022,6 +13050,441 @@
           "min_test_per_class"
         ],
         "title": "HoldoutStats",
+        "type": "object"
+      },
+      "ImageCard": {
+        "properties": {
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxView"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "boxes_truncated": {
+            "description": "The image has more items than `boxes` draws.",
+            "title": "Boxes Truncated",
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ImageCounts"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "has_location": {
+            "description": "A position is stored and the location policy lets it be served.",
+            "title": "Has Location",
+            "type": "boolean"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "near_dup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageNearDup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The capture time (UTC when the offset is known, else local).",
+            "title": "Taken At"
+          },
+          "thumbnail_url": {
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "image_id",
+          "file_name",
+          "thumbnail_url",
+          "has_location",
+          "counts",
+          "boxes",
+          "boxes_truncated"
+        ],
+        "title": "ImageCard",
+        "type": "object"
+      },
+      "ImageCounts": {
+        "description": "The items on one image, as the default view counts them (excluded items never count;\nheld-out items count only when the request asked for them).",
+        "properties": {
+          "in_holdout": {
+            "description": "Held-out items on the image, whatever the request asked.",
+            "title": "In Holdout",
+            "type": "integer"
+          },
+          "items": {
+            "title": "Items",
+            "type": "integer"
+          },
+          "labeled": {
+            "title": "Labeled",
+            "type": "integer"
+          },
+          "unlabeled": {
+            "title": "Unlabeled",
+            "type": "integer"
+          },
+          "validated": {
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "labeled",
+          "validated",
+          "unlabeled",
+          "in_holdout"
+        ],
+        "title": "ImageCounts",
+        "type": "object"
+      },
+      "ImageDetail": {
+        "description": "One image and everything detected on it. `items` are wire items ordered by\n`crop_rank_in_image` (at most 500, `items_truncated` says when there were more); `boxes` draws\nall of them in image coordinates.",
+        "properties": {
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxView"
+            },
+            "title": "Boxes",
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/ImageCounts"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ImageInfo"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemDoc"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "items_truncated": {
+            "title": "Items Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "image",
+          "counts",
+          "items",
+          "boxes",
+          "items_truncated"
+        ],
+        "title": "ImageDetail",
+        "type": "object"
+      },
+      "ImageInfo": {
+        "properties": {
+          "dataset_split": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Split"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_url": {
+            "description": "The clean source pixels (`GET .../images/{id}/file`).",
+            "title": "File Url",
+            "type": "string"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "in_holdout": {
+            "title": "In Holdout",
+            "type": "boolean"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Indexed At"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageLocation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Served under the project's location policy; null when dropped."
+          },
+          "near_dup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageNearDup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "taken_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken At"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "image_id",
+          "file_name",
+          "file_url",
+          "in_holdout"
+        ],
+        "title": "ImageInfo",
+        "type": "object"
+      },
+      "ImageLocation": {
+        "properties": {
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "ImageLocation",
+        "type": "object"
+      },
+      "ImageNearDup": {
+        "properties": {
+          "group_id": {
+            "title": "Group Id",
+            "type": "string"
+          },
+          "is_representative": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Representative"
+          },
+          "purpose": {
+            "enum": [
+              "dedup",
+              "leak"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          }
+        },
+        "required": [
+          "group_id",
+          "purpose"
+        ],
+        "title": "ImageNearDup",
+        "type": "object"
+      },
+      "ImagePage": {
+        "properties": {
+          "empty_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_images",
+                  "no_match"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why `items` is empty; null when it is not.",
+            "title": "Empty Reason"
+          },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImageCard"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "join_truncated": {
+            "description": "An item-level filter matched more images than the join could use.",
+            "title": "Join Truncated",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; pass back as `cursor`. Null on the last page.",
+            "title": "Next Cursor"
+          },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "join_truncated",
+          "sort_applied",
+          "sort_options",
+          "hidden"
+        ],
+        "title": "ImagePage",
         "type": "object"
       },
       "ImportAction": {
@@ -15563,6 +16026,22 @@
               }
             ],
             "title": "Detector Confidence"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
           },
           "embedding_states": {
             "additionalProperties": {
@@ -25270,6 +25749,11 @@
             },
             "title": "Projects",
             "type": "array"
+          },
+          "total": {
+            "description": "Projects matching the filters, before `limit` is applied.",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -25277,7 +25761,8 @@
           "projects",
           "capacity",
           "limits",
-          "include_archived"
+          "include_archived",
+          "total"
         ],
         "title": "ProjectsResponse",
         "type": "object"
@@ -28696,6 +29181,22 @@
               }
             ],
             "title": "Detector Confidence"
+          },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
           },
           "embedding_states": {
             "additionalProperties": {
@@ -32859,6 +33360,22 @@
             ],
             "title": "Detector Confidence"
           },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "embedding_states": {
             "additionalProperties": {
               "enum": [
@@ -34769,6 +35286,22 @@
             ],
             "title": "Detector Confidence"
           },
+          "display_name": {
+            "default": "",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "default": "none",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "embedding_states": {
             "additionalProperties": {
               "enum": [
@@ -36269,6 +36802,24 @@
           }
         },
         "title": "SkippedCounts",
+        "type": "object"
+      },
+      "SortOption": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "SortOption",
         "type": "object"
       },
       "SourceBackfillRequest": {
@@ -41267,6 +41818,56 @@
               "default": false,
               "title": "Include Archived",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the slug or display name.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring of the slug or display name.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Only projects that can be opened (the picker); `total` counts the same set.",
+            "in": "query",
+            "name": "selectable",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only projects that can be opened (the picker); `total` counts the same set.",
+              "title": "Selectable",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "At most this many projects, in slug order.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "At most this many projects, in slug order.",
+              "title": "Limit"
             }
           }
         ],
@@ -47712,58 +48313,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/crops/{crop_id}/context": {
-      "get": {
-        "description": "The item's source image and every item detected in it.\n\n``{image: {image_id, image_path, width, height, source, indexed_at} |\nnull, items: [wire item, ...]}`` — items ordered by\n``crop_rank_in_image`` (largest first), at most 500. ``image`` is null\nwhen the images index has no record of the frame.",
-        "operationId": "crop_image_context_curation_projects__project__crops__crop_id__context_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "crop_id",
-            "required": true,
-            "schema": {
-              "title": "Crop Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CropContextResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Crop Image Context",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/crops/{crop_id}/discard": {
       "post": {
         "description": "Discard an item, as a recorded human write.\n\n``clear_class`` (default ``true``): the item doesn't belong in its\nclass/cluster — class, provenance and validation are cleared and it\ndrops to the residual pool (no ``cluster_uid``).\n``dismiss_from_review`` (default ``false``): hide it from every\n``/review`` tab (``review_dismissed_at``). The pre-write state is\nsnapshotted, so ``POST /crops/{crop_id}/label/undo`` restores it\nexactly. Returns the post-write item. ``422`` when neither is set.",
@@ -47879,76 +48428,6 @@
         "summary": "Crop History",
         "tags": [
           "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/crops/{crop_id}/image": {
-      "get": {
-        "description": "The clean source image for this crop's parent frame — no box, label\nor other overlay drawn. Only resize, EXIF-transpose and RGB\nconversion apply.\n\nDefaults to full resolution to preserve compatibility with callers\nthat need pixel-accurate frames. Pass ``max_dim`` for the labeler\nreview queue, where the user is glancing at one item at a time and a\nsub-MB preview is plenty. The frontend draws the item box, the\nregion box and any rejected-candidate box itself, from the geometry\n``GET {prefix}/crops/{id}/context`` serves in source-image-normalized\ncoordinates.",
-        "operationId": "crop_full_image_curation_projects__project__crops__crop_id__image_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "crop_id",
-            "required": true,
-            "schema": {
-              "title": "Crop Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Cap longest edge at this many pixels. Omit for full resolution; pass ~1024 for review-friendly previews (drops ~2.2 MB sources to ~200 KB).",
-            "in": "query",
-            "name": "max_dim",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 8192,
-                  "minimum": 128,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Cap longest edge at this many pixels. Omit for full resolution; pass ~1024 for review-friendly previews (drops ~2.2 MB sources to ~200 KB).",
-              "title": "Max Dim"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Crop Full Image",
-        "tags": [
-          "Curation - Crops"
         ]
       }
     },
@@ -51013,6 +51492,583 @@
         ]
       }
     },
+    "/curation/projects/{project}/images": {
+      "get": {
+        "description": "A page of the project's images. An image matches the item filter when at least one of its\nitems does (`join_truncated`: the join used only the first 10,000 matching images). Each card\ncarries its served counts and the boxes to draw; the page costs one query on the images index\nand one aggregation on the items index.",
+        "operationId": "list_images_curation_projects__project__images_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true = a position is stored and may be served.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = a position is stored and may be served.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "west,south,east,north in degrees; west > east crosses the antimeridian.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "west,south,east,north in degrees; west > east crosses the antimeridian.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "true = images with a held-out item; false = none.",
+            "in": "query",
+            "name": "in_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = images with a held-out item; false = none.",
+              "title": "In Holdout"
+            }
+          },
+          {
+            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "in": "query",
+            "name": "near_dup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "member",
+                    "representative",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "title": "Near Dup"
+            }
+          },
+          {
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "has_unlabeled",
+                    "all_labeled",
+                    "no_items"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "title": "Label State"
+            }
+          },
+          {
+            "description": "One of the `sort_options` ids the response serves.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "indexed_at:desc",
+              "description": "One of the `sort_options` ids the response serves.",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page (same sort).",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`next_cursor` of the previous page (same sort).",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 60,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Count and draw held-out test items too.",
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count and draw held-out test items too.",
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+            "in": "query",
+            "name": "image_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImagePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Images",
+        "tags": [
+          "Curation",
+          "Images"
+        ]
+      }
+    },
     "/curation/projects/{project}/images/cache/stats": {
       "get": {
         "description": "Return current thumbnail cache hit/miss counts and size.",
@@ -51060,17 +52116,17 @@
         ]
       }
     },
-    "/curation/projects/{project}/images/root/{alias}": {
+    "/curation/projects/{project}/images/{image_id}": {
       "get": {
-        "description": "Stream an image from an explicitly-named ``source_path_aliases`` root, if the\nbound project ingested it.",
-        "operationId": "serve_aliased_image_curation_projects__project__images_root__alias__get",
+        "description": "One image: its facts, the items detected on it (wire items, at most 500) and the boxes to\ndraw, in image coordinates.",
+        "operationId": "get_image_curation_projects__project__images__image_id__get",
         "parameters": [
           {
             "in": "path",
-            "name": "alias",
+            "name": "image_id",
             "required": true,
             "schema": {
-              "title": "Alias",
+              "title": "Image Id",
               "type": "string"
             }
           },
@@ -51082,21 +52138,17 @@
               "title": "Project",
               "type": "string"
             }
-          },
-          {
-            "description": "Path relative to the named alias root",
-            "in": "query",
-            "name": "path",
-            "required": true,
-            "schema": {
-              "description": "Path relative to the named alias root",
-              "title": "Path",
-              "type": "string"
-            }
           }
         ],
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageDetail"
+                }
+              }
+            },
             "description": "Successful Response"
           },
           "422": {
@@ -51110,17 +52162,27 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Serve Aliased Image",
+        "summary": "Get Image",
         "tags": [
-          "Curation - Images"
+          "Curation",
+          "Images"
         ]
       }
     },
-    "/curation/projects/{project}/images/serve": {
+    "/curation/projects/{project}/images/{image_id}/file": {
       "get": {
-        "description": "Stream a source image, auto-detecting its root.\n\nRoot selection: the longest matching configured root for absolute\npaths, or a ``source_path_aliases`` prefix match on the leading path\nsegment for relative paths — falls back to ``source_root``. See\n``src.services.curation.image_serving.resolve_crop_root``. Only images\nthe bound project ingested are served (404 otherwise).",
-        "operationId": "serve_image_curation_projects__project__images_serve_get",
+        "description": "The clean source pixels of an image: EXIF orientation applied and an optional resize,\nnothing drawn on them. A client draws the boxes `GET .../images/{image_id}` serves in image\ncoordinates. A file that is not reachable answers the typed `source_missing` 404.",
+        "operationId": "image_file_curation_projects__project__images__image_id__file_get",
         "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "project",
@@ -51131,14 +52193,23 @@
             }
           },
           {
-            "description": "Path relative to a configured source root",
+            "description": "Cap the longest edge at this many pixels. Omit for full resolution; about 1280 suits a review view (a 2 MB photo becomes a few hundred KB).",
             "in": "query",
-            "name": "path",
-            "required": true,
+            "name": "max_dim",
+            "required": false,
             "schema": {
-              "description": "Path relative to a configured source root",
-              "title": "Path",
-              "type": "string"
+              "anyOf": [
+                {
+                  "maximum": 8192,
+                  "minimum": 128,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Cap the longest edge at this many pixels. Omit for full resolution; about 1280 suits a review view (a 2 MB photo becomes a few hundred KB).",
+              "title": "Max Dim"
             }
           }
         ],
@@ -51157,7 +52228,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Serve Image",
+        "summary": "Image File",
         "tags": [
           "Curation - Images"
         ]
@@ -51222,6 +52293,65 @@
         "summary": "Reprocess Image",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/images/{image_id}/thumbnail": {
+      "get": {
+        "description": "The whole frame, shrunk to fit `size` with its aspect kept (so a box in image coordinates\nlands on the same place), LRU cached.",
+        "operationId": "image_thumbnail_curation_projects__project__images__image_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Longest edge of the thumbnail, in pixels.",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "schema": {
+              "default": 256,
+              "description": "Longest edge of the thumbnail, in pixels.",
+              "maximum": 512,
+              "minimum": 32,
+              "title": "Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Image Thumbnail",
+        "tags": [
+          "Curation - Images"
         ]
       }
     },

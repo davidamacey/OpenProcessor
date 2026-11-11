@@ -130,11 +130,11 @@ def test_error_handlers_emit_no_deprecation_warning() -> None:
 
 @NO_DEPRECATION
 def test_curation_wire_route_emits_no_deprecation_warning() -> None:
-    from curation.test_crop_context import _client, _fake
+    from curation.test_review_dismissal import _client, _fake
 
-    r = _client(_fake()).get('/curation/projects/default/crops/a1/context')
+    r = _client(_fake()).get('/curation/projects/default/crops')
     assert r.status_code == 200, r.text
-    assert [i['crop_id'] for i in r.json()['items']] == ['a1', 'a2']
+    assert {i['crop_id'] for i in r.json()['crops']} >= {'a1', 'a2'}
     assert r.headers['content-type'] == 'application/json'
 
 

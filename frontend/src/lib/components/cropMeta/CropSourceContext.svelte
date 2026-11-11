@@ -46,7 +46,8 @@
     {#if contextRes}
       <div class="mb-2 h-40 w-full overflow-hidden rounded bg-zinc-950">
         <SourceImageOverlay
-          cropId={crop.id}
+          imageId={contextRes.image.image_id}
+          selectedCropId={crop.id}
           context={contextRes}
           extraShapes={maskShapes}
         />

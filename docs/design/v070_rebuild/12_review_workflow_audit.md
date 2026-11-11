@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **plan only**: nothing implemented. Written 2026-11-11 on `int/b4-stateless` at `634019ded` |
+| Status | **plan only**: wave 1 lanes in progress, waves 2 to 4 not started. Written 2026-11-11 on `int/b4-stateless` at `634019ded`; revised the same day with the owner's Workspace direction (sections 4.6 to 4.9, routes R-14 to R-23, waves 2 to 4 rewritten) |
 | Goal (owner, 2026-11-11) | "easy user workflow and setup such that they can easily sort, review, label, and cluster the detections together" |
 | Owner framing applied | the frontend is dumb: it shows what the backend serves. Sort, filter, group, counts, labels and box coordinates come ready from the API. No client-side joins, no derived business logic, no second source of truth. Routes are shaped as view models for pages. Missing routes are ours to add, never worked around. Reuse the Clusters page patterns; consolidate rather than add surfaces. Target is a production app for thousands to hundreds of thousands of items |
 | Evidence | screenshots under `artifacts_local/screens/ux_audit_1111/` in the main checkout (gitignored), named in the tables below; `file:line` references are at `634019ded` |
@@ -58,6 +58,14 @@ and export, and its revisioned thresholds are sound.
   An **image page** for one picture with all its boxes and crops. A **Quality** page that holds Accuracy
   audit, Near-duplicates and Label history. Old pages are deleted as each step lands; nothing runs in
   parallel.
+- **Revised after the owner's direction (2026-11-11, sections 4.6 to 4.8):** the Workspace is one
+  professional page with six switchable views of the same filtered set (**Gallery, Clusters, Detections,
+  Review, Table, Map**); the filter, the queue, the selection and the focused item carry across views.
+  The core flow is **batch labelling by cluster or group**, which no mainstream tool offers (section 4.9),
+  then per-image work in a real **image annotation editor** (draw, move, resize, delete boxes; class picker
+  with inline create; undo and redo; autosave through OCC). The **Map** becomes a full view with area
+  selection that filters every other view. New backend routes R-14 to R-23 cover human-drawn items, box
+  geometry edits, a table view model, a selection summary, image locate, and map and filter additions.
 
 ---
 
@@ -211,6 +219,10 @@ target:
           the strip of its crops, near-duplicate group and location, previous/next in the Workspace query
 ```
 
+The view list and layout in this sketch are superseded by section 4.6 (Gallery replaces "Images"; Review
+and Table become views), and the image page becomes the annotation editor of section 4.7. The moves and
+deletions below still hold.
+
 What moves where, and what is deleted:
 
 | From | To | Deleted in that step |
@@ -226,7 +238,8 @@ What moves where, and what is deleted:
 No redirects or aliases are kept (the project standard is no shims). Every in-app link and the docs-site
 pages change in the step that deletes a route.
 
-Migration order, each step shippable on its own (section 9 has the lanes):
+Migration order, each step shippable on its own (the original order; section 9 now builds the Workspace
+shell directly in wave 2 instead of growing views inside `/clusters` first, so no view is written twice):
 
 1. Honest numbers and empty states (no layout change).
 2. Image routes, cluster header, near-dup decisions (backend, with the call-site swaps).
@@ -268,6 +281,321 @@ deletes `GET /map/images` and the crop-list side panel.
   detector vocabulary are bounded registries. Client-side sorts of served lists exist in
   `ClassSidebar.svelte:121`, `ExportClassTable.svelte:34-45` and `ClassSubsetPicker.svelte:66` (bounded,
   P2, see section 5).
+
+### 4.6 The Workspace: views, shared filter and selection, differentiator
+
+**In plain words.** One page, `/p/<project>/workspace`, where all sorting, labelling and checking happens.
+The user picks *what set* of objects to work on once (filter, queue, area, cluster), then looks at that same
+set in whichever view suits the job, and acts on a selection that survives a view switch. Everything shown
+comes from the server: lists, sort orders, counts, labels, box coordinates and empty-state text.
+
+**What sets Cropwright apart.** Label Studio, CVAT and Kili label one image or one object at a time; their
+bulk tools stop at whole-image classification (section 4.9). FiftyOne and Encord can select a cluster in an
+embedding plot, but only to tag it or save a collection, then hand off to another tool. Cropwright labels
+**many objects at once by cluster or group**, in review-style batches, then drops to the single image to fix
+what the batch could not. The Workspace is built around that order.
+
+#### Views and their place in the loop
+
+The loop is: ingest, sort, label, build a dataset, train, then repeat with the improved model.
+
+| View | Shows | Step of the loop it serves | Primary actions | Data (route) |
+|---|---|---|---|---|
+| **Gallery** | whole images, boxes drawn from served coordinates, served count chips (items, labelled, unlabelled), near-dup badge | after ingest: see what came in; find images with missed or unlabelled objects; open one to annotate | open the image editor; select images (acts on their matching items) | R-1 |
+| **Clusters** | cluster cards (served size, dominant class, purity, unlabelled share, representatives); a card opens the cluster scope (today's cluster detail grid with facet chips) | **sort and label in batches** (the core) | assign a class to a whole cluster or to a facet slice of it; move, ignore, Assist | `GET /clusters`, R-5, `.../facets` |
+| **Detections** | flat grid of crops (today's Matching items) | label "all N matching" a filter; work a class or a detector-class slice across clusters | bulk assign, confirm, ignore, move; dry run first | `GET /crops` (R-4) |
+| **Review** | one object at a time: the whole image with every box, the crop, reason, confidence, proposal; a filmstrip of neighbours | the leftovers a batch could not settle, and the served queues | confirm, assign, skip, discard, undo (today's keys) | `GET /review/{tab}`, `/locate`, R-2 |
+| **Table** | rows of detections or images, served columns, sort by any served field | auditing and power sorting: "lowest detector confidence first", "largest unlabelled first" | sort, choose columns, multi-select, open | R-18 |
+| **Map** | where photos were taken, server grid cells, single-photo pins at high zoom | location datasets: find thin or noisy areas, label or review by area | select an area (filters every view), open a cell's images | `GET /map`, `/map/cells`, R-1, R-19 (section 4.8) |
+
+Default view after opening the Workspace (owner answer 2): **Gallery** until a partition serves, then
+**Clusters**. An **Embedding** view (the existing UMAP scatter in `EmbeddingPlot.svelte`, with box select
+as a filter, R-23) is planned for wave 4: it earns its place for spotting mislabels that sit inside the
+wrong cloud (the FiftyOne and Encord pattern), but it is not needed for the first full loop.
+
+#### What carries across views
+
+All of it lives in the URL (`$app/state` page URL; view state only, never business data), so a link
+reproduces the screen and Back works.
+
+| State | Carries | Notes |
+|---|---|---|
+| Filter | yes, to every view | the shared item filter (`item_filter.py`), plus `geo_bbox` / `geo_polygon` (R-9, R-20), `cluster_uids` (R-20), `image_id` |
+| Queue | yes | a queue is a **served filter preset** (`review_tab`) with a served count; picking one in the rail filters every view, not only Review |
+| Scope | yes | one cluster, one near-dup group, or one image; shown as a removable chip; the Clusters view in a scope shows that cluster's grid |
+| Sort | per view | each view has its own served `sort_options`; on a switch the server's `sort_applied` says what it used (the client never maps sorts between views) |
+| Selection | yes | always an `ItemSelection` (`src/services/curation/item_selection.py`): explicit crop ids (Detections, Table rows, Review), or a filter: Gallery selection = current filter + `image_id=[...]`; Clusters selection = current filter + `cluster_uids=[...]`; "all matching" = the filter alone. The bulk bar shows the served summary (R-19): "183 detections in 41 images, 7 locked and skipped" |
+| Focused item | yes | the item, image, cluster or map cell under the cursor; drives the details panel; Review opens at it |
+
+#### Layout
+
+```
+┌ app bar: Cropwright · project switcher · nav (Dashboard Ingest Workspace Classes Quality Export Train …) ┐
+├ filter bar: [search: text | similar | picture] [Class ▾] [Status ▾] [Source ▾] [More ▾]  chips…        ┤
+│             "1,240 matching · 25 test-holdout hidden" (served)                         next step chip   │
+├ view bar:   Gallery  Clusters  Detections  Review  Table  Map          sort ▾ (served)   size ▾   ⓘ    ┤
+├ rail 240px ─────────┬ main pane ───────────────────────────────────┬ details 360px (collapsible) ────┤
+│ QUEUES (served)     │ grid | cluster cards | two-pane review |      │ focused image: picture + boxes, │
+│  To label     412   │ table | map                                   │ its items, class, provenance,   │
+│  Check machine 88   │                                               │ history, near-dup, location;    │
+│  Disagreements 12   │                                               │ or focused cluster header; or   │
+│  Audit sample  50   │                                               │ map cell summary; or selection  │
+│ CLASSES (served)    │                                               │ summary (R-19)                  │
+│  car  a  74 ▮▮▮     │                                               │ [Open in editor] [Review these] │
+│  person p 133       │                                               │                                 │
+│  + New class        │                                               │                                 │
+├─────────────────────┴─ bulk bar (when a selection exists) ─────────┴─────────────────────────────────┤
+│ 183 selected (served) · Assign ▾ · Confirm · Move · Ignore · Assist… · Undo                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+- Rail: **Queues** first (owner feedback: a few plain-named queues; section 7, R-10) then **Classes**
+  (served `item_count`, hotkey letter, click = filter, drop target, "+ New class" inline).
+- Details panel: one component per focused kind (image, detection, cluster, map cell, selection), each
+  rendering one served view model. Closed by default under 1280 px.
+- At 430 px: the rail and the details panel become drawers, the view bar becomes a select, the filter bar
+  collapses behind one "Filters" button (G-25), the bulk bar sticks to the bottom.
+- Empty states are served (`empty_reason`, R-8, R-12): an empty Workspace shows the served next steps.
+
+#### Keyboard model
+
+One registry: every key is a keymap action (`lib/keymapFallback.ts` defaults, the served project keymap,
+validated by `POST /keymap/validate`); no new window listener (`keymap.literals.scan.test.ts`). Class
+hotkeys are plain lower-case letters; the new workspace actions use non-letter keys so they never collide;
+the existing letters (Review N, D, Z; cluster grid M move, X ignore, Shift+N flag) and the editor tool
+letters (section 4.7) are reserved in their contexts, and the validator refuses a class letter that
+collides (fail closed, served message).
+
+| Key | Action | Context |
+|---|---|---|
+| `[` `]` | previous / next view | workspace |
+| `,` `.` | previous / next scope item (cluster in a cluster scope, image in the editor) | workspace, editor |
+| arrows | move the focus card or row | grid, table |
+| `Space` | select or unselect the focused card | grid, table |
+| `Shift`+click or `Shift`+arrows | extend the selection | grid, table |
+| `Ctrl/Cmd+A` | select the loaded page; a second press selects all matching (served count, confirm) | grid, table |
+| class letter | assign that class to the selection, else to the focused item | grid, table, Review |
+| `/` | class picker (search, inline create) | everywhere |
+| `Enter` | grid: open Review at the focused item over the same query and order; Review: confirm | grid, Review |
+| `Shift+O` | open the image editor for the focused item's image | grid, table, Review |
+| `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | undo, redo (Review also keeps `Z`) | everywhere |
+| `\` | show or hide the details panel | workspace |
+| `Esc` | clear selection, then leave Review or the scope, then close the panel | everywhere |
+| `?` | shortcut overlay (served keymap) | everywhere |
+
+#### The primary flow: batch labelling, then per image
+
+1. **Clusters view**, served sort "most unlabelled first". Each card shows the served dominant class and
+   purity, so pure clusters are obvious.
+2. Open a cluster (scope). The grid is sorted nearest-to-centre first, outliers last (served sort). Facet
+   chips show the detector-class mix with served counts.
+3. **Pure cluster:** press a class letter with nothing selected; the bar asks "Assign *car* to all 21 in
+   this cluster? 2 locked items are skipped" (served dry run); `Enter` applies; one label op, undoable from
+   Label history.
+4. **Mixed cluster:** click a facet chip (for example detector class *person*), `Ctrl+A`, press `p`; clear
+   the chip, select the rest, press the *motorcycle* letter; outliers go to Ignore (`X`) or Move (`M`).
+5. `.` moves to the next cluster. Several look-alike clusters can be selected in the Clusters view and
+   labelled in one step (`cluster_uids`, R-20).
+6. **Review** the leftovers: the "Check machine labels" queue in Review, one at a time, with the same keys
+   as today.
+7. **Per image:** Gallery with "Has unlabelled objects" (`label_state`, R-1); open an image (`Shift+O`) in
+   the editor (section 4.7); draw missed objects, fix boxes, delete false positives; `.` for the next image.
+8. Then the rest of the loop: Export, Train, promote; the promoted model's re-run feeds the
+   "Disagreements" queue and the next round starts. The served next-step chip (R-12) names the next step.
+
+### 4.7 Image annotation editor
+
+**In plain words.** The page `/p/<project>/images/<image_id>` shows one picture with all its objects and
+lets the user fix it: draw a box around a missed object, move or resize a wrong box, delete a false one,
+change a class, create a new class without leaving the page. Every change is saved at once, can be undone,
+and never overwrites someone else's newer edit. This page is the image page of section 4.3; there is no
+separate view-only version.
+
+**Layout.** Tool strip on the left; the canvas in the centre (zoom and pan); on the right the **object
+list** (every item with thumbnail, class, state, lock glyph, origin; its region boxes nested under it) and
+the class picker; a **filmstrip** of the Workspace query along the bottom (served page around the current
+image, R-17), with `,` and `.` for previous and next. The header shows the served image facts (file, size,
+taken at, location, split, holdout, near-dup group) and the save state ("Saved", "Saving…", "Conflict,
+reloaded").
+
+**Tools** (defaults; every key is a keymap action in a new `image_edit` context):
+
+| Tool or action | Key | Behaviour |
+|---|---|---|
+| Select / move | `V` | click selects; drag the body moves; 8 handles resize; `Tab` / `Shift+Tab` cycle boxes (CVAT); arrows nudge 1 px, `Shift`+arrows 10 px; `Alt`+arrows move the bottom-right corner (resize) |
+| Draw box | `B` | drag, or click two corners (Label Studio, Kili); the draw is clamped to the image; on release the class picker opens at the box with the last-used class pre-selected, so `Enter` repeats it (the CVAT "repeat last" idea, one meaning only); `Shift+B` keeps the draw tool on for several boxes |
+| Pan | `H`, or hold `Space` and drag, or middle drag | |
+| Zoom | wheel at the cursor, `+` `-`, `0` fit, `1` 100 % | the canvas draws the served full-resolution file (`/images/{id}/file?max_dim=`, R-3) at zoom above fit |
+| Delete box | `Delete` / `Backspace` | soft delete (R-16); undoable |
+| Set class | class letter, or `/` | applies to the selected box |
+| Region boxes | `Shift+R` | edits the selected item's region boxes (wheels in a car) with the existing `MultiBoxCanvas` logic, written through `PUT /crops/{crop_id}/regions` with `frame: "source"` |
+| Labels on/off | `Shift+L` | hides box labels on busy images (G-19) |
+| Undo / redo | `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z` | see below |
+| Cancel / deselect | `Esc` | |
+
+`V`, `B` and `H` are reserved in the `image_edit` context; the keymap validator refuses a class letter on
+them. A minimap for very large photos is P2 (wave 4 polish): no surveyed tool documents one, and zoom plus
+fit covers the first loop.
+
+**Class picker with inline create.** One component (`ClassPicker.svelte`, replacing `ClassPickerModal` and
+the editor's need) used by the editor, Review and the bulk bar. Type to filter the served registry (a
+bounded registry, so filtering the served list in the browser is allowed, section 4.5); recent classes from
+this session first; each row shows its hotkey letter and served count. When no class matches, the last row
+is **Create "<typed>"**: it calls `POST /classes`; if the name is not a valid slug the server refuses with
+the reason and a `suggested_name` (R-22, for example `traffic_light` for "Traffic light") and the row turns
+into **Create "traffic_light"**. After creation the class is assigned to the selected box in the same
+gesture. Deprecated classes are not offered (served `deprecated`). "Flag for a new class" stays for an
+object the user cannot name yet (`POST /crops/flag_new_class`).
+
+**How saves reach the backend.** Autosave, one small write per finished gesture (box drawn and class
+chosen, drag released, delete, class change). No Save button. The UI updates at once and shows the box as
+"saving" until the server answers; a refusal puts the box back and shows the served message.
+
+| Gesture | Route | Concurrency |
+|---|---|---|
+| draw a box + class | `POST /images/{image_id}/items` (R-14), with a client `request_id` so a retry is idempotent | creates a new item; nothing to conflict with |
+| move or resize an item box | `PATCH /crops/{crop_id}/geometry` (R-15) with `expected_geometry_revision` | 409 `geometry_conflict` carries the current item; the editor replaces its copy, says "changed by someone else", drops that undo entry |
+| delete an item box | `POST /crops/batch_exclude` with `reason: "not_an_object"` (R-16) | OCC skip-on-conflict, as today |
+| change class | `PUT /crops/{crop_id}/label` (existing; `class_id` from the served registry entry the picker chose) | existing OCC and lock rule |
+| region boxes | `PUT /crops/{crop_id}/regions`, `PATCH .../regions/{box_id}` (existing) | `expected_region_revision`, 409 `region_conflict` |
+
+**The lock rule for geometry.** Today the lock rule protects classes and region boxes. It gains geometry
+(R-16): a new predicate `is_locked_geometry(source)` in `src/clients/occ_locks.py` is true when
+`geometry_source` is `human` or import, the item was deleted by a person (`not_an_object`), or it is in the
+frozen test holdout. Automated writers (the `detect` reprocess scope in `reprocess_detect.py` and
+`item_delete.py`, combine, import re-runs) never move, delete or recreate such an item: a re-detect that
+finds a box matching a human-deleted item leaves it deleted, and one matching a human-drawn item does not
+add a duplicate. Humans can always edit; a frozen test-holdout item shows a "Test set" badge and the
+server's answer stands.
+
+**Undo and redo.** The editor keeps a session stack of commands (view state only). Each entry holds the
+server write it made and its inverse: create ↔ soft delete / un-exclude; move or resize ↔
+`POST /crops/{crop_id}/geometry/undo` (R-15, a new `geometry` kind in `edit_history.py`); class change ↔
+`POST /crops/{crop_id}/label/undo`; region edit ↔ `POST /crops/{crop_id}/region/undo`. Redo re-sends the
+forward write with the fresh revision. Every write is recorded server-side, so history survives a reload
+(`GET /crops/{crop_id}/history`), even though the session stack does not. Moving to another image keeps the
+stack per image for the session.
+
+**What happens after a new box (backend, R-14).**
+
+1. The route validates the box (inside the image, not degenerate, at least the served minimum size),
+   resolves the class **by name** to an active registry entry, and writes one item through the same item
+   builder ingest uses (`build_item_doc` in `src/services/curation/item_doc.py`): `class_source` and
+   `label_source` `human`, `class_validated: true`, `geometry_source: human`, `geometry_revision: 1`,
+   `embedding_state: deferred`, `crop_area_norm`, and the region seed status when a region profile is
+   active (`region_seed_status`), so the region worker picks it up like any new item.
+2. **No crop file is made up front.** The crop and its thumbnail are cut from the source on first request
+   (`crop_bytes.py`, `THUMBNAIL_CACHE`). The served `thumbnail_url` carries `?v=<geometry_revision>`; a
+   geometry change evicts the crop-cache file and the cached thumbnail for that crop id.
+3. **Embedding:** the route enqueues the existing `reprocess` Celery job (`src/tasks/jobs_a.py`) for that
+   image with scope `embed`, which embeds only items without a vector (`embed_image_chunk`), so many boxes
+   drawn in a row cost one real run and the rest are no-ops. A moved item drops its vector and returns to
+   `deferred` (its old vector describes the old crop) and is re-embedded the same way. The response carries
+   the job id; the object list shows the served `embedding_state` until it reads "embedded".
+4. **Near-duplicates:** the item is marked pending like any new item (`near_duplicates.pending`); the
+   periodic `near_dup_rescore` task scores it.
+5. **Clusters:** a new item has no cluster until the next clustering run (the periodic `cluster_refresh`
+   starts one when the pool grows past the profile's rule). It is already a validated label, so it needs
+   none to count in the dataset; the object list shows the served "joins at the next clustering run".
+6. `crop_rank_in_image` is set by area among the image's items at write time; the follow-up re-ranks the
+   image's other items (a machine field, not locked).
+7. The response returns the new item (`serialize_item`) and the image's refreshed `boxes` and `counts`, so
+   the editor and the Gallery card redraw from served data.
+
+Moving an item box that has region boxes now outside it is refused with 422 `regions_outside_item` and the
+box ids; the editor asks "Delete these 2 region boxes too?" and re-sends with `drop_region_box_ids`.
+
+### 4.8 Map as a real view
+
+**What is wrong today.** The map draws cells and lists crops of a small cell; it cannot sort, cannot
+narrow the review set, shows no picture details, and on `coco-e2e` it says "3 items" but draws no points
+(wave 1 bug fix). For datasets taken from vehicles or in the field, location is how users think about
+their data, so the map must be a full Workspace view, not a side page.
+
+**Design.**
+
+- **Same filter, same counts.** `GET /map/cells` already takes the shared item filter; the Map view sends
+  the Workspace filter and queue, so "unlabelled *person* in the To label queue" shows only where those
+  are. The header shows served counts: "1,920 located · 88 without location" (`n_located`,
+  `n_without_location`, R-9); "without location" links to Gallery with `has_location=false`.
+- **Cells and pins.** Server grid cells stay (no shipping of every point). At high zoom a cell holding one
+  photo is served with its `image_id` and `thumbnail_url` (R-21) and is drawn as a photo pin.
+- **Click a cell** (small enough to list, the existing `opensList` rule): the details panel shows the
+  served summary of that cell (R-19 over the filter plus the cell's served `bounds`: images, detections,
+  labelled share, top classes, date range) and the first 12 image cards with boxes (R-1 with `geo_bbox`),
+  in the Gallery's served sort. Buttons: **Show in Gallery** (sets `geo_bbox`, switches view), **Review
+  these** (Review view over that filter). A large cell zooms, as today.
+- **Click a pin:** the details panel shows that image with its boxes (R-2) and **Open in editor**.
+- **Select an area:** `Shift`+drag draws a rectangle (MapLibre's `boxZoom` handler is disabled for this,
+  per its API docs); the lasso tool draws a polygon. The area becomes a filter chip (`geo_bbox` or
+  `geo_polygon`, R-20) that applies to **every** view, until removed. Panning never filters by itself.
+- **Time:** the existing capture-day filter (`taken_from`, `taken_to`) sits in the map toolbar.
+- **Privacy, fail closed.** The location policy limits precision (`max_precision` in `map_cells.py`). The
+  server snaps `geo_bbox` and `geo_polygon` to the policy's grid before querying, so a drawn area can never
+  reveal positions finer than the policy serves.
+- **No external key.** Tiles come from the served `tile_url` (location policy); nothing needs a Mapbox
+  token (a FiftyOne requirement we avoid).
+- **WebGL2 missing:** the existing served fallback message; the live map test runs headed on `DISPLAY=:11`.
+
+### 4.9 Research notes
+
+Checked 2026-11-11 against official docs and product pages (fetched; "unverified" where a page did not
+confirm a detail).
+
+| Tool | What it does | Source |
+|---|---|---|
+| Label Studio | rectangle drawn by drag, double-click or two clicks; Outliner (region list, grouped by label or tool, ordered by score or time) and Details panel, both collapsible and movable; Backspace deletes, Ctrl+D duplicates, Ctrl-click multi-selects | https://labelstud.io/guide/labeling |
+| Label Studio | hotkeys remappable per user and via `EDITOR_KEYMAP` | https://labelstud.io/guide/hotkeys |
+| Label Studio | Data Manager: list and grid views, columns, filters and sorts saved as tabs, "Label Tasks As Displayed" walks the current filter and order | https://labelstud.io/guide/manage_data |
+| Label Studio | bulk labelling supports **only global classification**; a control tag with `perRegion` is not supported, so boxes cannot be bulk labelled | https://docs.humansignal.com/guide/labeling_bulk |
+| Label Studio Enterprise | review stream: Accept, Fix + Accept, Reject; rejected work requeued or dropped by setting; acceptance score | https://docs.humansignal.com/guide/quality |
+| CVAT | rectangles by 2 points or 4 extreme points; label and method chosen before drawing | https://docs.cvat.ai/docs/annotation/manual-annotation/shapes/annotation-with-rectangles/ |
+| CVAT | Attribute Annotation Mode: one object at a time, Tab / Shift+Tab between objects, Up / Down between attributes, number keys set a value, Left / Right to the next frame with annotations, a `label=="Person"` filter | https://docs.cvat.ai/docs/annotation/manual-annotation/modes/attribute-annotation-mode-basics/ |
+| CVAT | navigation: D / F previous and next frame; skip to the next frame with or without objects | https://docs.cvat.ai/docs/annotation/annotation-editor/navbar/ |
+| CVAT | review: job stages annotation, validation, acceptance; issues pinned to a point with quick presets, Resolve / Reopen | https://docs.cvat.ai/docs/qa-analytics/manual-qa/ |
+| CVAT | shortcuts rebindable per scope with conflict warnings | https://docs.cvat.ai/docs/getting_started/shortcuts/ |
+| Kili | boxes by drag or two clicks; per-class shortcuts auto-assigned and overridable; Alt+S lists shortcuts | https://docs.kili-technology.com/docs/bounding-box-tool, https://docs.kili-technology.com/docs/customizing-the-interface-in-kili-ui |
+| Kili | review queue: "Start reviewing" pulls the next asset by priority; reviewers edit then Review, or Send back with issues; no plain Accept | https://docs.kili-technology.com/docs/reviewing-labeled-assets |
+| Encord | Curate: embedding plot, similarity search, Collections sent to Annotate as a batch | https://docs.encord.com/solutions-documentation/applied-ai/annotation-and-curation |
+| Encord | editor keys: Ctrl+Z undo, Ctrl+Shift+Z redo, Ctrl+S save, Backspace delete, N / B approve / reject | https://docs.encord.com/platform-documentation/Annotate/annotate-label-editor/annotate-label-editor-settings-shortcuts |
+| FiftyOne | Embeddings panel: lasso filters the sample grid, two-way sync, legend filters by class; Map panel: lasso filters samples (needs a Mapbox token); Spaces: panels side by side over one view | https://docs.voxel51.com/user_guide/app.html |
+| FiftyOne | annotation is delegated to CVAT or Label Studio through `annotate()`; in-app tagging only (a newer in-app Annotate tab exists, version-gated, unverified for our use) | https://docs.voxel51.com/integrations/cvat.html |
+| OpenSearch | `geo_polygon` query works on `geo_point` fields (our `capture.location`) | https://docs.opensearch.org/latest/query-dsl/geo-and-xy/geopolygon/ |
+| MapLibre GL JS | `BoxZoomHandler` is Shift+drag; `map.boxZoom.disable()` frees the gesture for area selection | https://maplibre.org/maplibre-gl-js/docs/API/classes/BoxZoomHandler/ |
+
+No surveyed tool assigns classes to a whole embedding cluster of detections in one step: FiftyOne and
+Encord select a cluster to tag it or make a collection; Label Studio's bulk labelling is whole-task
+classification only. That is the gap Cropwright fills.
+
+**Adopted.**
+- Box drawing by drag or two clicks, then select / move / resize; label chosen as the box is finished, with
+  the last class pre-selected (Label Studio, Kili, CVAT).
+- Tab / Shift+Tab to cycle objects and one-object-at-a-time keyboard work (CVAT AAM) for the editor's object
+  list and for Review.
+- Undo Ctrl+Z, redo Ctrl+Shift+Z (Encord), alongside Review's existing `Z`.
+- Remappable, scoped keys with conflict refusal and an in-app list (CVAT, Kili, Label Studio); ours are
+  already served and validated per project.
+- "Work in the order displayed" (Label Studio's Data Manager): Review and the filmstrip walk the Workspace
+  query in its served order.
+- Area and embedding selection that filters the grid (FiftyOne Map and Embeddings panels), as filters that
+  carry to every view.
+- Next / previous with "skip to the next image with unlabelled objects" (CVAT navigation) as a served
+  Gallery filter (`label_state`).
+- Accept, Fix + Accept, Reject in review (Label Studio): Confirm, edit-then-confirm, Discard in Review.
+
+**Rejected, with the reason.**
+- Bulk labelling limited to whole-image classification (Label Studio): our core is per-object batches.
+- Hand-off to a separate annotation tool by export and import (FiftyOne): breaks the loop and class
+  identity at a boundary.
+- Review that only edits and re-submits with no explicit accept (Kili): no cheap "looked, fine" signal.
+- Hotkeys documented only in a repository file (Label Studio `keymap.json`): ours are served and shown with
+  `?`.
+- A key whose meaning changed across versions (CVAT `N`): one meaning per key.
+- A map that needs a third-party token (FiftyOne Mapbox): tiles come from the served policy.
+- Job and assignment workflows (CVAT jobs, Kili steps): the project has no user accounts; queues and the
+  lock rule cover the multi-user case. Revisit only with accounts.
+- Minimap and filmstrip have no documented precedent in the surveyed pages; the filmstrip is adopted for
+  our own reason (walking a sorted query), the minimap waits for wave 4 polish.
 
 ---
 
@@ -431,6 +759,13 @@ coordinates, served sort options, an `empty_reason`; the frontend computes none 
 
 - Per tab: `available`, `unavailable_reason`, `count` (one `msearch` server-side), and a new `audit` tab
   (the pending audit sample) so the sample is labelled in the Workspace. DELETE `GET /audit/queue`.
+- **Queue set cut (owner feedback, lane 3B).** The served queues become five plain-named presets, each a
+  `review_tab` filter usable by every Workspace view: **To label** (no class yet), **Check machine labels**
+  (machine class, not validated, lowest confidence first), **Disagreements** (detector, label, VLM or
+  promoted model disagree), **New class proposals**, **Audit sample** (only while a sample is pending).
+  Uncertainty, Classifier blind spots, Imported labels, Objects and the rest stop being tabs and become
+  served filter fields and sorts on `GET /crops` (`review_tab` values stay valid filter values where
+  the filter needs them). A queue that cannot fill is absent, with its served reason in the Next steps.
 
 ### R-11 CHANGED paging (Later, before 100k)
 
@@ -444,6 +779,9 @@ coordinates, served sort options, an `empty_reason`; the frontend computes none 
 - `steps: [{id, label, detail, done, section}]` decided by the backend from counts it has (no classes but
   detector proposals; embedded but no partition; partition pending activation; no hotkeys; near-dups never
   built; validated below the class floor). The Dashboard and an empty Workspace render it.
+- Also serves `workspace_default_view` (`gallery` until a partition serves, then `clusters`; owner
+  answer 2), so the rule lives in the backend, and `next` (the first undone step) for the Workspace's
+  next-step chip. Built in lane 2C.
 
 ### R-13 Per-image label counts (Later)
 
@@ -451,11 +789,136 @@ coordinates, served sort options, an `empty_reason`; the frontend computes none 
   region and exclude writes (enqueued from the OCC write helpers), so `/images` can sort by
   `unlabeled_count` and filter `label_state` without a join at 100k+ images.
 
+### R-14 NEW `POST {prefix}/images/{image_id}/items` (a human-drawn box becomes an item)
+
+- Body `ItemCreateRequest`: `bbox_norm` `[x1,y1,x2,y2]` in image coordinates, `class_name` (identity is the
+  name; resolved to an active registry entry, deprecated or unknown is 422 `unknown_class` with the served
+  text), `request_id` (client UUID; a repeat with the same id returns the first result, so a retry never
+  makes two items).
+- Refusals: 404 image not in the bound project; 422 `box_out_of_image`, `box_too_small` (served minimum
+  from the active region profile limits or a curation constant, named in the body), `degenerate_box`.
+- Writes through `build_item_doc` (section 4.7 lists the fields: human class and label source,
+  `class_validated`, new `geometry_source: human`, `geometry_revision: 1`, `embedding_state: deferred`,
+  region seed). Marks near-dup pending. Enqueues the `reprocess` job, scope `embed`, for the image.
+- Response `ItemCreated`: `item` (`serialize_item`), `image_boxes: BoxView[]`, `image_counts`,
+  `followup_job_id`.
+- New `origin` value `drawn` in the shared filter (`item_filter.py`: `geometry_source` is `human` and the
+  item has no detector fields), so drawn boxes can be found and audited.
+- Files: `src/routers/curation/image_items.py` (new), `src/services/curation/image_item_write.py` (new),
+  `src/schemas/curation/images.py`. Tests: `tests/curation/test_image_items.py` (fields written, class by
+  name, idempotent retry, refusals, cross-project 404, follow-up enqueued), the leak-sweep row.
+
+### R-15 NEW `PATCH {prefix}/crops/{crop_id}/geometry` and `POST {prefix}/crops/{crop_id}/geometry/undo`
+
+- PATCH body: `bbox_norm` (image coordinates), `expected_geometry_revision`, optional
+  `drop_region_box_ids`. Writes through the OCC read/merge/write helper: sets `bbox_norm`,
+  `crop_area_norm`, `geometry_source: human`, `geometry_revision + 1`, snapshots the prior geometry into
+  `edit_history` (new kind `geometry`), drops the item vector and sets `embedding_state: deferred`, evicts
+  the crop-cache file and the cached thumbnail, enqueues the `embed` follow-up.
+- 409 `geometry_conflict` with the current item; 422 `regions_outside_item` with the box ids (unless they
+  are listed in `drop_region_box_ids`); refusals as R-14.
+- Undo restores the last restorable `geometry` snapshot (same pairing rule as `region/undo`); 409 when
+  none is left.
+- CHANGED wire: items and `BoxView` (R-1, R-2) gain `geometry_revision`, `geometry_source`, `locked`
+  (served from the lock predicates) and `lock_label` (served text, for example "Set by a person"); item
+  `thumbnail_url` carries `?v=<geometry_revision>`.
+- Files: `src/routers/curation/crops_geometry.py` (new), `src/services/curation/item_geometry.py` (new),
+  `src/services/curation/edit_history.py`, `src/services/curation/wire.py`. Tests:
+  `tests/curation/test_item_geometry.py` (OCC conflict, undo pairing, vector dropped and state deferred,
+  cache evicted, regions outside refused).
+
+### R-16 CHANGED geometry lock rule and soft delete
+
+- `src/clients/occ_locks.py`: `is_locked_geometry(source)` (human or import geometry, a human
+  `not_an_object` exclusion, or the frozen holdout). Consulted by `reprocess_detect.py` (never moves,
+  deletes or duplicates a locked item; a new detection that matches a locked or human-deleted item by IoU
+  is dropped) and by `item_delete.py` callers.
+- `POST /crops/batch_exclude`: `reason` becomes a served enum (`ignore`, `not_an_object`); the editor's
+  delete is `not_an_object`; un-exclude is the undo. Excluded items stay hidden by default everywhere
+  (`include_excluded`).
+- Tests: `tests/curation/test_geometry_lock.py` (re-detect on an image with a drawn item, a moved item and
+  a human-deleted item: none moved, recreated or duplicated); live harness case in
+  `tests/live/test_live_annotation.py`.
+
+### R-17 NEW `GET {prefix}/images/locate`
+
+- Query: the shared item filter, the `/images` sort and `image_id`. Response: `{index, total,
+  cursor_before, cursor_after}` (like `/review/{tab}/locate`), so the editor's filmstrip and `,` `.` walk
+  the Workspace query from a deep link. 404 when the image does not match the filter (served reason).
+
+### R-18 NEW `GET {prefix}/table` and `GET {prefix}/table/columns`
+
+- `columns?rows=detections|images` → `{columns: [{id, label, sortable, align, kind}], default: [ids]}`.
+- `table?rows=&columns=&sort=&cursor=&limit=` plus the shared item filter → `{columns, rows: [{crop_id |
+  null, image_id, thumbnail_url, cells: {<col id>: {text, value, tone | null}}}], next_cursor, total,
+  sort_applied, sort_options, hidden, empty_reason}`. Cells carry the served display text (class names,
+  formatted confidence, dates); `value` is for alignment and copy only, never re-sorted in the browser.
+- Cursor paging from day one (`search_after` plus a point-in-time), so R-11 does not touch it.
+- Detection columns: thumbnail, class, detector class, detector confidence, label source, validated,
+  cluster, image file, taken at, area, rank, clarity, near-dup, embedding state, updated. Image columns:
+  thumbnail, file, taken at, located, items, labelled, unlabelled, near-dup, split, indexed at.
+- Files: `src/routers/curation/table_view.py`, `src/services/curation/table_view.py`,
+  `src/schemas/curation/table.py` (new), reusing `crop_listing.py` and `image_view.py` queries. Tests:
+  `tests/curation/test_table_view.py` (every served sortable column sorts server-side, cursor stable,
+  cells equal the item wire).
+
+### R-19 NEW `POST {prefix}/selection/summary`
+
+- Body: an `ItemSelection`. Response: `{detections, images, clusters, locked, in_holdout, by_class:
+  [{class_name, count}] (top 10 and "other"), taken_range | null, located}`. One aggregation; refuses like
+  `item_selection.py` above `MAX_BULK_SELECTION`. Feeds the bulk bar, the selection details panel and the
+  Map cell panel (a filter selection with the cell `bounds`).
+- Tests: counts equal a `/crops` count with the same filter; image selection expands to matching items.
+
+### R-20 CHANGED shared item filter
+
+- `cluster_uids` (repeatable) replaces the single `cluster_uid` on the filter and every list route that
+  takes it (one mechanism; call sites swapped in the same change).
+- `geo_polygon=lon,lat;lon,lat;...` (3 to 64 vertices) on the images' `capture.location` (`geo_polygon`
+  query on `geo_point`), joined like `geo_bbox`; both are snapped to the location policy precision.
+- `origin=drawn` (R-14).
+- Tests: `tests/curation/test_item_filter_geo.py` (polygon, snapping, refusal bodies).
+
+### R-21 CHANGED `GET {prefix}/map/cells`
+
+- `MapCellProperties` + `image_id | null` and `thumbnail_url | null` when the cell holds one photo (plus
+  `bounds` from R-9). Test: a single-photo cell at max zoom serves its image.
+
+### R-22 CHANGED `POST {prefix}/classes` refusal
+
+- A 422 for a non-slug name carries `suggested_name` (lower-case, spaces and dashes to `_`, other
+  characters dropped) and the served text, so the inline create row can offer it. The name rule itself is
+  unchanged. Test: "Traffic light" → `traffic_light`.
+
+### R-23 CHANGED `GET {prefix}/viz/projection` (wave 4, Embedding view)
+
+- Accepts the shared item filter (points not matching are served with `matched: false`, drawn dimmed);
+  the shared filter gains `viz_box=x1,y1,x2,y2` on `viz_x` / `viz_y`, so a box drawn on the scatter
+  filters every view. Tests: filter applied; `viz_box` equals a range query count.
+
 ---
 
 ## 8. Frontend changes
 
 All under `frontend/src`; components and controllers are reused, not rewritten.
+
+**File map for the Workspace, editor and Map (sections 4.6 to 4.8; section 9 assigns them to lanes):**
+
+| Path | What |
+|---|---|
+| `routes/p/[project]/workspace/+page.svelte` | the shell: filter bar, view bar, rail, main pane, details panel, bulk bar |
+| `lib/workspace/workspaceState.svelte.ts` | URL state: filter, queue, scope, view, per-view sort, selection, focus (no business data) |
+| `lib/workspace/viewRegistry.ts` | one entry per view (id, served label, component, keymap scope); each view lane adds one line |
+| `lib/workspace/detailsRegistry.ts` | one details component per focused kind (image, detection, cluster, map cell, selection) |
+| `lib/workspace/views/{Gallery,Clusters,Detections,Review,Table,Map}View.svelte` | the six views |
+| `lib/components/workspace/{WorkspaceRail,ViewBar,DetailsPanel,BulkBar}.svelte` | shell parts; `BulkBar` grows from `ClusterDetailToolbar` |
+| `lib/components/images/{ImageCard,ImageGrid}.svelte`, `lib/images/imageGalleryController.svelte.ts` | Gallery |
+| `lib/components/table/{DataTable,ColumnPicker}.svelte`, `lib/table/tableController.svelte.ts` | Table (served columns and cells) |
+| `lib/components/ClassPicker.svelte`, `lib/classes/classPicker.svelte.ts` | one picker with inline create; replaces `review/ClassPickerModal.svelte` and `lib/review/reviewClassPicker.svelte.ts` |
+| `routes/p/[project]/images/[image_id]/+page.svelte` | the image annotation editor |
+| `lib/editor/{editorController,editorCommands,editorKeys}.svelte.ts` | editor state, command stack (undo/redo), keymap context `image_edit` |
+| `lib/components/editor/{EditorCanvas,ObjectList,Filmstrip,ToolStrip}.svelte` | editor parts; `EditorCanvas` (zoom, pan, handles) reuses the pure box helpers in `lib/annotations/multiBox.ts` and mounts `MultiBoxCanvas` for region boxes; `SourceImageOverlay` stays the read-only drawing for Review and the details panel; no box math is duplicated |
+| `lib/map/mapController.svelte.ts`, `lib/components/map/MapView.svelte` | grown into the Map view: area tools, pins, cell panel |
 
 - **Image page** `routes/p/[project]/images/[image_id]/+page.svelte` + `lib/images/imagePageController.svelte.ts`:
   `SourceImageOverlay` at full width drawing served `boxes`; `MultiBoxCanvas` for box edit; a strip of
@@ -544,62 +1007,154 @@ G-15, G-18, G-26)
   controllers; stubbed `test_near_duplicates.py` (decision made, dialog closed, reopened, undo works),
   `test_cluster_header_refresh.py` on the new route.
 
-### Wave 2 (now; after wave 1 merges)
+### Rules for waves 2 to 4
 
-**Lane 2A Images view and image page inside Clusters** (frontend, M-L; G-03, G-06, G-17 now part)
-- New `ImageCard`, `ImageGrid`, `imageGalleryController`, image page; view switch on `/clusters`; crop
-  dialog links; `label_state` filter chip.
-- Tests: vitest for the controller (served order kept, cursor appended, no client sort; add a scan test
-  like `clusterList.scan.test.ts` for the images list); stubbed `test_images_view.py` and
-  `test_image_page.py` (image → crop → image round trip, 430 px), a11y rows; live tier: Images view total
-  equals `GET /images` total on `coco-e2e`, the image page shows as many boxes as served.
+- Waves 1 to 4 all ship before the speed review (owner). One full sweep per wave on the merged tree.
+- **Visual check in every frontend lane:** full-page screenshots at 1600 x 2000 and 430 px of every page
+  and state the lane touches, on `coco-e2e` (read-only) and on the lane's own scratch public COCO project
+  for writes, looked at and judged against the page's purpose (the views table in section 4.6, the editor
+  in 4.7, the map in 4.8). A screen that works but does not serve its purpose is a lane bug.
+- **Shared files:** each view lane adds one line to `lib/workspace/viewRegistry.ts` and one to
+  `lib/workspace/detailsRegistry.ts`; the coordinator resolves these additive conflicts at merge.
+- **Docs read per lane** (cite in commits): Svelte 5 runes and SvelteKit `$app/state` (all frontend
+  lanes); OpenSearch optimistic concurrency (`if_seq_no`), `search_after` with point-in-time, `geo_polygon`
+  and `geo_bounding_box` queries (backend lanes); Celery task idempotency (2D); MapLibre GL JS
+  `BoxZoomHandler` and `queryRenderedFeatures` (3D); Pointer Events (3C).
 
-**Lane 2B Sort options, area filter and map data** (backend, M; G-10, G-13 backend)
-- R-4, R-9 (filter, `bounds`, `n_without_location`, delete `/map/images` and the map side panel's call:
-  the map page keeps working by linking a cell to `/clusters?view=images&geo_bbox=` until 3B).
-- Tests: pytest `geo_bbox` validation and filtering on `/crops`, `/images`, `/map/cells`; sort options
-  served; live harness `test_live_capture_map.py` extended for `geo_bbox` on the e2e GPS photos.
+### Wave 2 (after wave 1 merges): the Workspace shell and the backend for every view, four lanes
 
-### Wave 3 (now; the consolidation)
+**Lane 2A Workspace shell, Clusters and Detections views, class picker** (frontend + R-22, L, 4 to 5
+days; G-05 part, G-25)
+- Shell and state per the section 8 file map: `workspace/+page.svelte`, `workspaceState.svelte.ts`,
+  `viewRegistry.ts` (Clusters, Detections), `detailsRegistry.ts` (cluster, detection), `WorkspaceRail`
+  (Classes with served `item_count`; Queues rendered from the served tabs as they are, 3B cuts them),
+  `ViewBar`, `DetailsPanel`, `BulkBar` (from `ClusterDetailToolbar`, acting on an `ItemSelection`).
+- Move `/clusters` into the Clusters view and `/clusters/[id]` into the cluster scope (`?cluster=`);
+  Matching items becomes the Detections view. Delete both old routes; update every link
+  (`rg -l "projectHref\(.*/clusters"`), the nav, `SECTION_LABELS`, `projectPaths.ts`; docs-site
+  `clusters.md` becomes `workspace.md`.
+- `ClassPicker.svelte` with inline create, used by the rail ("+ New class") and the bulk bar; backend R-22
+  (`suggested_name`) in `src/routers/curation/classes_write.py`. Review keeps its modal until 3B.
+- `workspace.*` keymap actions (`[`, `]`, `,`, `.`, `\`, `Shift+O`, `Space`, `Ctrl+A`) in
+  `keymapFallback.ts`; no new letters.
+- Tests: move and adapt `routes/p/[project]/clusters/**/*.test.ts`; vitest for `workspaceState` (URL round
+  trip, selection survives a view switch, per-view sort taken from served `sort_applied`) and
+  `ClassPicker` (create row, served refusal and suggestion); stubbed: repoint `test_cluster_*.py`,
+  `test_item_filter.py`, `test_selection_actions.py`, `test_keymap.py`; new `test_workspace_shell.py`
+  (switch views keeps filter and selection; drawers at 430 px), a11y rows; pytest for R-22;
+  `projectRouting.test.ts` (old paths are the app's 404); live route sweep.
+- Visual purpose: "label a cluster in one batch": a pure cluster takes one key plus the confirm.
 
-**Lane 3A Workspace replaces Clusters and Cluster detail** (frontend, L)
-- Move `routes/p/[project]/clusters/+page.svelte` to `routes/p/[project]/workspace/+page.svelte`; cluster
-  scope from `routes/p/[project]/clusters/[id]/+page.svelte` folds in as `?cluster=`; delete both old
-  routes and their test files' routes (move the tests); update the 14 link sites
-  (`rg -l "projectHref\(.*/(clusters|review|label-ops|audit|near-duplicates|map)"` lists them), the nav,
-  `SECTION_LABELS`, `projectPaths.ts`; docs-site `clusters.md` → `workspace.md`.
-- Tests: move and adapt `routes/p/[project]/clusters/**/*.test.ts`; stubbed cluster tests repointed;
-  `projectRouting.test.ts` (old paths are 404 under the catch-all, no redirect); live route sweep.
+**Lane 2B Filters, sorts and map data** (backend, M, 2 to 3 days; G-10, G-13)
+- R-4, R-9 (`geo_bbox`, `has_location`, cell `bounds`, `n_without_location`), R-20 (`cluster_uids`,
+  `geo_polygon`, `origin=drawn` clause; snapping to the policy precision), R-21. `GET /map/images` stays
+  until 3D deletes it with its caller.
+- Files: `src/services/curation/item_filter.py`, `src/routers/curation/_item_filter_params.py`,
+  `src/services/curation/map_cells.py`, `src/routers/curation/map.py`, `src/services/curation/crop_listing.py`,
+  every `cluster_uid` caller (swap in the same change); `make contracts`.
+- Tests: pytest `geo_bbox` / `geo_polygon` validation, snapping and filtering on `/crops`, `/images`,
+  `/clusters`, `/map/cells`; `cluster_uids` on every list; sort options served; leak-sweep rows; live
+  harness `test_live_capture_map.py` extended for both area filters on the e2e GPS photos.
 
-**Lane 3B Review folds into Workspace (Queues + Focus), audit becomes a queue** (frontend + small backend, L)
-- Backend: `audit` tab in R-10, delete `GET /audit/queue` and `AuditQueueList.svelte`.
-- Frontend: Queues rail; Focus mode mounting `ReviewCropPane` and the `$lib/review` controllers with the
-  queue or Detections query; deep link `?focus=<crop_id>` via `/review/{tab}/locate`; delete
-  `routes/p/[project]/review/`; move its tests to `lib/review/` or the workspace; keymap scopes unchanged
-  (`review.*`), new `workspace.*` actions in `keymapFallback.ts`.
-- Tests: the 17 `routes/p/[project]/review/*.test.ts` move and still pass against Focus mode; stubbed
-  `test_labeling_flow.py`, `test_region_confirm.py`, `test_keymap.py` repointed; a new stubbed test: grid →
-  Enter → Focus → confirm 3 → Esc back to the same grid position; live tier deep link test.
+**Lane 2C View models: table, selection summary, image locate, next steps** (backend, M, 3 days; G-08
+backend)
+- R-17, R-18, R-19, R-12 (with `workspace_default_view`). Builds on 1B's `image_view.py`.
+- Tests: `tests/curation/test_table_view.py`, `test_selection_summary.py`, `test_images_locate.py`,
+  `test_next_steps.py` (one case per state, default view Gallery without a serving partition and Clusters
+  with one); contract tests; leak-sweep rows.
 
-**Lane 3C Quality page and Map view** (frontend, M)
-- `routes/p/[project]/quality/{audit,near-duplicates,history}`; delete `/audit`, `/near-duplicates`,
-  `/label-ops`, `/map` routes; Map view in Workspace (cell → Images with served `bounds`); Export stale
-  panel and holdout freeze link to Quality › Near-duplicates; "Open in Workspace" from a group.
-- Tests: stubbed `test_near_duplicates.py`, `test_label_ops.py`, `test_map_page.py` repointed; live
-  `test_map_renders.py` repointed (needs a WebGL-capable browser; run headed on `DISPLAY=:11` if headless
-  cannot start WebGL2).
+**Lane 2D Annotation writes** (backend, L, 4 days; **high risk**: data integrity and the lock rule, so
+Sonnet at high effort and an independent review before merge)
+- R-14, R-15, R-16, the wire fields (`geometry_revision`, `geometry_source`, `locked`, `lock_label`,
+  versioned `thumbnail_url`) on items and `BoxView`; `edit_history` kind `geometry`; follow-up `reprocess`
+  enqueue (`embed` scope); crop-cache and thumbnail eviction; `origin=drawn` field write.
+- Tests (watch each fail first): `test_image_items.py`, `test_item_geometry.py`, `test_geometry_lock.py`;
+  live harness `tests/live/test_live_annotation.py` on a public COCO ingest under its own compose project
+  name: draw a box, the item exists with a human class, the follow-up job embeds it, `/images` counts move;
+  move it, the thumbnail bytes change and the vector is rebuilt; re-run detect: drawn and moved boxes are
+  unchanged and a deleted one is not recreated; undo restores the geometry; two writers on one item, the
+  second gets 409.
 
-**Lane 3D Next steps and first run** (backend + frontend, S-M; G-08)
-- R-12; Dashboard card; empty Workspace shows it. Tests: pytest per state; stubbed fresh-project test.
+### Wave 3 (after wave 2 merges): the views and the editor, six lanes
 
-### Wave 4 (later: scale and polish)
+**Lane 3A Gallery view and image details** (frontend, M-L, 3 to 4 days; G-03, G-06, G-17 now part)
+- `ImageCard`, `ImageGrid`, `imageGalleryController`, `GalleryView`, the image details component; chips
+  for `label_state` and `has_location`; Gallery selection as an `ItemSelection` with `image_id`; default
+  view from the served `workspace_default_view`; crop dialog: siblings open their crop, "Open image" goes
+  to the editor route (3C), the duplicate small source is dropped.
+- Tests: vitest (served order kept, cursor appended, no client sort; a scan test like
+  `clusterList.scan.test.ts` for the image list); stubbed `test_gallery_view.py` (filter carries from
+  Clusters, select images, bulk assign uses the served summary, 430 px), a11y rows; live tier: Gallery
+  total equals `GET /images` total on `coco-e2e`, every card draws as many boxes as served.
+- Visual purpose: "see what came in, find images that need work".
 
-- **4A Cursor paging** (L): R-11 across `/crops`, `/review/{tab}`, `/regions`, `/images`; pagers in
-  `lib/` switch to `next_cursor`. Live harness: a public bench project with more than 10,000 items reads
-  past item 10,000 in Workspace and Focus.
-- **4B Per-image counts** (L): R-13 and `unlabeled_count` sort.
+**Lane 3B Review view and the queue cut** (frontend + small backend, L, 4 days)
+- Backend: R-10 (audit queue, the five queues, the rest as filters and sorts); delete `GET /audit/queue`
+  and `AuditQueueList.svelte`.
+- Frontend: `ReviewView` mounting `ReviewCropPane` and the `$lib/review` controllers over the Workspace
+  query; queues in the rail are filter presets for every view; filmstrip; `Enter` from any grid opens
+  Review at the focused item and `Esc` returns to the same card; deep link `?view=review&focus=<crop_id>`
+  via `/review/{tab}/locate`; Review switches to `ClassPicker` and `ClassPickerModal.svelte` and
+  `reviewClassPicker.svelte.ts` are deleted; delete `routes/p/[project]/review/` and move its 17 tests.
+- Tests: the moved tests pass against the view; stubbed `test_labeling_flow.py`, `test_region_confirm.py`,
+  `test_review_*.py` repointed; new stubbed test: grid, `Enter`, confirm 3, `Esc`, same card focused;
+  pytest for the queue set and availability; live tier deep link test.
+- Visual purpose: "settle the leftovers one at a time, fast"; also confirm the class name shows (the wave 1
+  bug stays fixed).
+
+**Lane 3C Image annotation editor** (frontend + keymap context, L, 5 to 6 days, the largest lane)
+- The route and files in the section 8 file map; tools, picker, saves, conflicts, undo and redo exactly as
+  section 4.7; filmstrip via R-17; region layer via `MultiBoxCanvas`; keymap context `image_edit` with the
+  reserved `V`, `B`, `H` (backend: `src/services/curation/keymap_validator.py` and the keymap vocabulary,
+  small).
+- At 430 px: the object list is a drawer; select, class change, delete and touch-drag draw work (Pointer
+  Events).
+- Tests: vitest `editorCommands` (each command and its inverse, a 409 drops the entry, redo sends the fresh
+  revision), `editorController` (draws served boxes only, no class lookup in the browser), key scan;
+  stubbed `test_image_editor.py` (draw, picker, `Enter` saves; inline create with the suggested name;
+  move with a 409 stub; delete then undo; `Tab` cycles; `.` walks the filmstrip; 430 px), a11y row; live
+  tier `test_writes.py` gains draw, move, delete and undo on a scratch public project (never `coco-e2e`).
+- Visual purpose: "fix one image fast": draw 3 boxes and change 2 classes in under a minute by keyboard.
+
+**Lane 3D Map view** (frontend + one deletion, M, 3 days; G-13)
+- Section 4.8: shared filter and queue, served counts, cell panel (R-19 with the cell bounds, R-1 cards),
+  pins (R-21), Shift-drag rectangle with `boxZoom` disabled, polygon lasso, area chips that carry to every
+  view. Delete the `/map` route, the crop side panel, `GET /map/images` and `MapTileImages` (backend, same
+  change).
+- Tests: stubbed `test_map_page.py` repointed (cell click opens the panel; an area becomes a chip; Gallery
+  is filtered); live `test_map_renders.py` headed on `DISPLAY=:11`; `test_live_capture_map.py` polygon.
+- Visual purpose: "find and work data by place"; the "3 items, no points" case must show the points.
+
+**Lane 3E Quality page and Next steps** (frontend, M, 2 to 3 days; G-08 frontend)
+- `routes/p/[project]/quality/{audit,near-duplicates,history}` from the current page bodies; delete
+  `/audit`, `/near-duplicates`, `/label-ops`; Export stale panel and holdout freeze link to Quality ›
+  Near-duplicates; "Open in Workspace" from a group (`?view=gallery&near_dup_group=<id>`). Dashboard Next
+  steps card and the empty Workspace state from R-12.
+- Tests: stubbed `test_near_duplicates.py`, `test_label_ops.py` repointed; fresh-project stubbed test for
+  Next steps; a11y rows.
+
+**Lane 3F Table view** (frontend, M, 2 to 3 days)
+- `TableView`, `DataTable`, `ColumnPicker`, `tableController` on R-18: rows of detections or images, served
+  columns, header click requests a served sort, column choice in the URL, multi-select feeds the bulk bar,
+  `Enter` opens Review, `Shift+O` the editor.
+- Tests: vitest (cells rendered verbatim, no client sort, cursor appended); stubbed `test_table_view.py`
+  (sort by detector confidence, choose columns, select rows, 430 px horizontal scroll), a11y row; live
+  tier: first page equals `GET /table` on `coco-e2e`.
+- Visual purpose: "sort by anything and act on the rows".
+
+### Wave 4 (before the speed review): scale, the Embedding view and polish
+
+- **4A Cursor paging** (L, 4 days): R-11 on `/crops`, `/review/{tab}`, `/regions` (R-1, R-17 and R-18
+  already use cursors); one shared pager helper in `lib/`. Live harness: a public bench project with more
+  than 10,000 items reads past item 10,000 in every view and in Review.
+- **4B Per-image counts** (L, 4 days): R-13; Gallery and Table sort by `unlabeled_count`; `label_state`
+  stops joining.
 - **4C Projects at scale** (M): G-21.
-- **4D Polish** (S each): G-19, G-20, G-22, G-23, G-25, G-27, G-28.
+- **4D Embedding view** (M, 3 days): R-23 and an `EmbeddingView` from `EmbeddingPlot.svelte` (box select
+  becomes a `viz_box` chip, colour by class from the served legend); moved out of `ClustersGrid`.
+- **4E Polish** (S each): G-19, G-20, G-22, G-23, G-27, G-28; the editor minimap for large photos; "label
+  this whole duplicate group" from a near-dup representative (owner answer 3).
+- Then the full-loop acceptance run (section 10, checks 13 to 18) on the merged tree.
 
 ---
 
@@ -625,12 +1180,43 @@ Run on `coco-e2e` (read-only) and on a fresh public COCO project for the write s
 9. Review queue in Focus: Enter confirms, a class letter assigns, N skips, Z undoes, Esc returns to the grid
    at the same card; no new window keydown listener (`keymap.literals.scan.test.ts` and the component
    listener tests pass).
-10. Map (WebGL browser): a cell click opens the Images view with `geo_bbox` equal to the served bounds; the
-    header shows located and not-located counts.
+10. Map (WebGL browser): a cell's "Show in Gallery" opens the Gallery view with `geo_bbox` equal to the
+    served bounds; the header shows located and not-located counts. (Checks 4, 5 and 9 read "Images view"
+    as Gallery and "Focus" as the Review view, per section 4.6.)
 11. Full-page screenshots of every new or changed page at 1600 and 430 px, looked at, with no overlap,
     clipping, `NaN`, `undefined` or console errors; Cropwright's inner scroll area means the screenshot
     viewport must be tall (1600 x 2000) or the capture taken of the scroll container.
 12. Scale (Wave 4): Workspace and Focus read past item 10,000 on a public bench project without a 422.
+
+**The whole loop on a public project (after wave 3, again after wave 4).** One person, one fresh project
+of 200 COCO val images plus the e2e GPS photos, run in a browser on `DISPLAY=:11`, with screenshots of each
+step at 1600 and 430 px kept under `artifacts_local/`. Every number on screen is compared with the API.
+
+13. **Ingest and first look:** create the project, upload, wait for ingest; the Workspace opens on Gallery
+    (served default); Gallery total equals `GET /images` total; Next steps names "create classes" then
+    "cluster".
+14. **Batch labelling:** seed classes from the detector, cluster and activate from the served banner; the
+    default view becomes Clusters. Label five clusters: a pure cluster of 20 or more items takes **at most
+    two keys** (class letter, `Enter`); a mixed cluster is split with facet chips; the labelled count on
+    the Dashboard rises by exactly the served dry-run totals; Label history lists each batch and one undo
+    restores it.
+15. **Views agree:** set a filter (class *person*, To label queue), switch through Gallery, Clusters,
+    Detections, Review, Table and Map; the filter chips, the queue and a 12-item selection stay; each
+    view's served total agrees with its route for the same filter; the bulk bar's summary equals
+    `POST /selection/summary`.
+16. **Per-image annotation:** Gallery with "Has unlabelled objects", open an image; draw 3 missed boxes
+    (one with a new class created inline from "Traffic light", accepted as `traffic_light`), move 2 boxes,
+    delete 1 false positive, undo and redo each once, all by keyboard; reload: every change is there; the
+    new items reach `embedding_state` "embedded" through the follow-up job; a second browser editing the
+    same box gets the conflict message, not a lost write; a `detect` reprocess of the image leaves the
+    drawn, moved and deleted boxes as the person left them.
+17. **Map:** the header counts match `GET /map`; a rectangle drawn on the map adds an area chip and Gallery
+    shows only those photos; a cell click shows its served summary and images; a pin opens the image in the
+    editor.
+18. **Dataset, train, repeat:** Table sorted by detector confidence shows the lowest first; export with
+    "every object labelled" passes; a short training run (public preset, GPUs 0 or 2) completes and is
+    promoted; reprocessing with the promoted model fills the Disagreements queue; working that queue in
+    Review closes the loop. Next steps reflects each stage.
 
 ---
 
@@ -657,3 +1243,34 @@ Run on `coco-e2e` (read-only) and on a fresh public COCO project for the write s
 1. The merged page is named **Workspace**.
 2. The default view is smart: Images until a partition serves, then Clusters.
 3. **Waves 1 to 4 all ship before the speed review.** "Label this whole duplicate group" goes in with wave 4 polish.
+
+**Owner feedback from a hands-on look (2026-11-11), binding for all waves:**
+- **The goal is the loop:** ingest, sort, label, build a dataset, train a model, then repeat by improving the model
+  (or by other methods). Every page must serve a step of that loop, and the next step must be obvious.
+- **The project picker** (top left) lists every project in one long dropdown that runs off the page. It needs to
+  scroll and be searchable (bug now; full project search stays in 4C).
+- **The map** says "3 items" but shows no points. This is a bug; root-cause it.
+- **Review overwhelms:** too many tabs and "types" of review items. Wave 3B must cut the queue set to a few
+  plain-named queues (the rest become filters on the Detections query), not just move the 12 tabs into a rail.
+- **Review pages do not show the proper object (class) name.** This is a bug; root-cause it (class identity is the
+  name).
+- **Label ops:** it is the history of bulk label operations (bulk relabel, merge, reclassify) with undo. It moves
+  into Quality as "Label history", as planned.
+- **Every lane checks its pages visually** against what the page is for, at desktop and 430 px.
+
+**Questions from the Workspace revision (defaults apply if silent):**
+4. Editor tool keys `V` (select), `B` (draw), `H` (pan) are reserved, so classes cannot use those letters
+   (default: yes; the alternative is Shift+letter tools and no reserved letters).
+5. Deleting a box in the editor is a soft delete (`not_an_object`, undoable, kept so a re-detect does not
+   bring it back) rather than removing the item (default: soft).
+6. Embedding view in wave 4 (default: yes, after the six core views).
+
+**Owner answers to 4 to 6 (2026-11-11):**
+4. **Editor keys are customisable** through the existing keymap system (`keymapFallback.ts`, scope `editor.*`).
+   - Defaults follow common practice in Label Studio and CVAT: select, draw and pan on single keys.
+   - A class hotkey that clashes with an editor key is refused at assignment with a clear message; the user can
+     rebind either. Letters are not hard-reserved.
+5. **Soft delete,** as proposed.
+6. **The Embedding view is the existing scatter plot** (`EmbeddingPlot.svelte` inside the Clusters page). Wave 4
+   moves it into the Workspace as its own view and makes it follow the shared filter. A box drawn on it becomes a
+   filter for every other view. No new plot is built.

@@ -32,7 +32,6 @@ import src.routers.curation.clusters
 import src.routers.curation.cohorts
 import src.routers.curation.config_test
 import src.routers.curation.config_vocabulary
-import src.routers.curation.crop_context
 import src.routers.curation.datasets
 import src.routers.curation.detections
 
@@ -49,6 +48,7 @@ import src.routers.curation.vlm  # isort: skip
 import src.routers.curation.assist
 import src.routers.curation.assist_loop
 import src.routers.curation.health
+import src.routers.curation.images_view
 import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_bulk_preview
 import src.routers.curation.ingest_objects

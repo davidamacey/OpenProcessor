@@ -64,7 +64,7 @@ def serve_review(stub) -> None:
     )
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         (
             200,
             {'image': {'path': '/img.jpg', 'width': 640, 'height': 480}, 'items': [review_item(0)]},

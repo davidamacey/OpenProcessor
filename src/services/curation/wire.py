@@ -118,7 +118,7 @@ def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> 
     return {region_wire_key(a): src.get(getattr(f, a)) for a in REGION_WIRE_ATTRS}
 
 
-def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
+def parse_xyxy(value: Any) -> tuple[float, float, float, float] | None:
     if not isinstance(value, list | tuple) or len(value) != 4:
         return None
     try:
@@ -131,7 +131,7 @@ def _xyxy(value: Any) -> tuple[float, float, float, float] | None:
 
 
 def _source_to_parent(src: dict[str, Any], region: tuple[float, float, float, float]) -> Any:
-    parent = _xyxy(src.get('bbox_norm'))
+    parent = parse_xyxy(src.get('bbox_norm'))
     if parent is None:
         return None
     px1, py1, px2, py2 = parent
@@ -157,6 +157,22 @@ def _proposed_class(
         'proposed_class_id': src.get('class_id'),
         'proposed_class_name': src.get('vlm_raw_class') or src.get('class_name') or '',
     }
+
+
+def _display_name(src: dict[str, Any], proposed_name: str) -> dict[str, str]:
+    """The one name a page shows for the item and where it came from, so no page picks its own.
+
+    The class name when the item has a class, else the proposed class, else the detector's own
+    label (an item the detector found but nobody has classed yet). ``none`` when nothing names it.
+    """
+    if src.get('class_name'):
+        return {'display_name': src['class_name'], 'display_name_kind': 'class'}
+    if proposed_name:
+        return {'display_name': proposed_name, 'display_name_kind': 'proposed'}
+    detector = src.get('proposal_name') or src.get('detector_class_name')
+    if detector:
+        return {'display_name': detector, 'display_name_kind': 'detector'}
+    return {'display_name': '', 'display_name_kind': 'none'}
 
 
 def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
@@ -248,6 +264,7 @@ def serialize_item(
     probe_pred_class = src.get('probe_pred_class')
     probe_disagreement = src.get('probe_disagreement')
     probe_in_scope = None if probe_pred_class is None else probe_disagreement is not None
+    proposed = _proposed_class(src, vlm_class_id, vlm_class_name)
     item: dict[str, Any] = {
         'id': crop_id,
         'crop_id': crop_id,
@@ -296,7 +313,8 @@ def serialize_item(
         # The class a one-key confirm would apply: the VLM suggestion when
         # there is one, else the current class (or the raw unmatched VLM
         # answer as the name).
-        **_proposed_class(src, vlm_class_id, vlm_class_name),
+        **proposed,
+        **_display_name(src, proposed['proposed_class_name']),
         # Human flagged "needs a class the registry doesn't have yet".
         'needs_new_class': bool(src.get('needs_new_class', False)),
         'needs_new_class_note': src.get('needs_new_class_note'),

@@ -56,7 +56,7 @@ def test_review_assign_then_undo(stub, page, app_url):
     # The detail lightbox/hover path fetches a crop's full image + siblings.
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {

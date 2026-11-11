@@ -158,6 +158,10 @@ class ItemDoc(BaseModel):
     # class (name falls back to the raw unmatched VLM answer).
     proposed_class_id: int | None = None
     proposed_class_name: str = ''
+    # The one name to show for the item and where it came from (class, proposed class, the
+    # detector's own label, or none).
+    display_name: str = ''
+    display_name_kind: Literal['class', 'proposed', 'detector', 'none'] = 'none'
     needs_new_class: bool = False
     needs_new_class_note: str | None = None
     cluster: ClusterRef | None = None

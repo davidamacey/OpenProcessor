@@ -1,7 +1,7 @@
 """Live: ExifTool capture and the map, end to end, under each location policy.
 
-The harness has no inference (``fake-triton`` answers liveness only), so ``/ingest/image`` cannot
-run here. The images enter the way the 0.6.0 upgrade carries stored images in: a JPEG on the
+The images enter the way the 0.6.0 upgrade carries stored images in (``tests/live/test_live_ingest.py``
+covers the ingest routes themselves): a JPEG on the
 source mount and an images document without a ``capture`` block, then the ``source_backfill``
 job's ``capture`` step reads the file through the API container's own ExifTool process and stores
 the block under the project's ``location_policy``. That is the same ``read_capture_file`` ->
