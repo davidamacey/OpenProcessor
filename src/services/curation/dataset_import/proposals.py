@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
 from src.clients.occ_locks import is_locked_item
+from src.domain.item_geometry import stored_box
 from src.services.curation.proposal_merge import (
     ExistingItem,
     MergePlan,
@@ -71,6 +72,7 @@ def existing_items(docs: list[dict[str, Any]]) -> list[ExistingItem]:
             bbox_norm=tuple(d.get('bbox_norm') or (0.0, 0.0, 0.0, 0.0)),
             class_name=d.get('class_name'),
             locked=is_locked_item(d),
+            detector_bbox_norm=stored_box(d.get('detector_bbox_norm')),
         )
         for d in docs
         if d.get('crop_id')

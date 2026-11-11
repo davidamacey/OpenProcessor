@@ -51,7 +51,10 @@ class ExistingItem:
     bbox_norm: BBox
     class_name: str | None
     locked: bool
-    """The item carries any locked part (class, box, region verdict)."""
+    """The item carries any locked part (class, box, region verdict, geometry)."""
+    detector_bbox_norm: BBox | None = None
+    """The detector's original box of an item a person moved. A locked item also owns this
+    spot, or a re-detect would create the box again beside the moved item."""
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,8 @@ def _candidate_pairs(
     for ei, item in enumerate(existing):
         for pi, prop in enumerate(proposals):
             value = iou(item.bbox_norm, prop.bbox_norm)
+            if item.locked and item.detector_bbox_norm is not None:
+                value = max(value, iou(item.detector_bbox_norm, prop.bbox_norm))
             if value >= LABEL_IOU_MATCH:
                 pairs.append((-value, item.crop_id, pi, ei))
     pairs.sort()
