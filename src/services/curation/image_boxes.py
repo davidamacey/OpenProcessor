@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final
 
-from src.clients.occ_locks import is_locked_box
+from src.clients.occ_locks import is_locked_box, is_locked_geometry
 from src.config import get_region_fields
 from src.domain.region_boxes import read_boxes
 from src.schemas.curation.images import BoxTone, BoxView
+from src.services.curation.geometry_wire import geometry_lock_label, region_box_lock_label
 from src.services.curation.wire import parse_xyxy
 
 
@@ -57,6 +58,9 @@ def item_box_views(
                 label=label,
                 class_name=class_name,
                 tone=tone,
+                locked=is_locked_geometry(src),
+                lock_label=geometry_lock_label(src),
+                geometry_revision=int(src.get('geometry_revision') or 0),
             )
         )
     for box in read_boxes(src, f):
@@ -77,6 +81,8 @@ def item_box_views(
                 class_name=class_name,
                 tone=box_tone,
                 state=box.state,
+                locked=is_locked_box(box),
+                lock_label=region_box_lock_label(box, locked=is_locked_box(box)),
             )
         )
     return views

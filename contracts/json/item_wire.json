@@ -92,6 +92,10 @@
     "near_dup_is_representative",
     "updated_at",
     "thumbnail_url",
+    "geometry_revision",
+    "geometry_source",
+    "geometry_locked",
+    "lock_label",
     "region_status",
     "region_reason",
     "region_rejection_reason",
@@ -1047,6 +1051,26 @@
         "default": null,
         "title": "Excluded Reason"
       },
+      "geometry_locked": {
+        "default": false,
+        "title": "Geometry Locked",
+        "type": "boolean"
+      },
+      "geometry_revision": {
+        "default": 0,
+        "title": "Geometry Revision",
+        "type": "integer"
+      },
+      "geometry_source": {
+        "default": "detector",
+        "enum": [
+          "detector",
+          "human",
+          "import"
+        ],
+        "title": "Geometry Source",
+        "type": "string"
+      },
       "id": {
         "title": "Id",
         "type": "string"
@@ -1113,6 +1137,18 @@
         "default": false,
         "title": "Label Validated",
         "type": "boolean"
+      },
+      "lock_label": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Lock Label"
       },
       "mask_polygon": {
         "anyOf": [

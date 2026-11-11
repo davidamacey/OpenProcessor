@@ -32,6 +32,13 @@ class BoxView(BaseModel):
     class_name: str | None = None
     tone: BoxTone = Field(description='How the box is drawn: its review state, served.')
     state: str | None = Field(default=None, description='The region box state; null for an item.')
+    locked: bool = Field(
+        default=False, description='An automated writer never moves, deletes or re-creates it.'
+    )
+    lock_label: str | None = Field(default=None, description='Served text for why it is locked.')
+    geometry_revision: int | None = Field(
+        default=None, description='The item box revision an edit sends back; null for a region.'
+    )
 
 
 class ImageCounts(BaseModel):

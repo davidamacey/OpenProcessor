@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.config import get_region_fields
+from src.clients.occ_locks import lock_includes
 from src.config.curation_accessors import items_index
 from src.schemas.curation.images import BoxView, ImageCounts
 from src.services.curation.image_boxes import boxes_of
@@ -50,8 +50,8 @@ def _bucket_aggs(include_test: bool, box_limit: int) -> dict[str, Any]:
                         'class_id',
                         'class_name',
                         'class_validated',
-                        'test_holdout',
-                        get_region_fields().boxes,
+                        'geometry_revision',
+                        *lock_includes(),
                     ]
                 },
             }

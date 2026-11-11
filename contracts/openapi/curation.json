@@ -3716,6 +3716,18 @@
             "title": "Crop Id",
             "type": "string"
           },
+          "geometry_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item box revision an edit sends back; null for a region.",
+            "title": "Geometry Revision"
+          },
           "kind": {
             "enum": [
               "item",
@@ -3728,6 +3740,24 @@
             "description": "The text to show on the box: the class name, or \"unlabeled\".",
             "title": "Label",
             "type": "string"
+          },
+          "lock_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Served text for why it is locked.",
+            "title": "Lock Label"
+          },
+          "locked": {
+            "default": false,
+            "description": "An automated writer never moves, deletes or re-creates it.",
+            "title": "Locked",
+            "type": "boolean"
           },
           "state": {
             "anyOf": [
@@ -16611,6 +16641,26 @@
             ],
             "title": "Excluded Reason"
           },
+          "geometry_locked": {
+            "default": false,
+            "title": "Geometry Locked",
+            "type": "boolean"
+          },
+          "geometry_revision": {
+            "default": 0,
+            "title": "Geometry Revision",
+            "type": "integer"
+          },
+          "geometry_source": {
+            "default": "detector",
+            "enum": [
+              "detector",
+              "human",
+              "import"
+            ],
+            "title": "Geometry Source",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -16676,6 +16726,17 @@
             "default": false,
             "title": "Label Validated",
             "type": "boolean"
+          },
+          "lock_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Label"
           },
           "mask_polygon": {
             "anyOf": [
@@ -17722,7 +17783,8 @@
                 "detector",
                 "sam3",
                 "human",
-                "import"
+                "import",
+                "drawn"
               ],
               "type": "string"
             },
@@ -29939,6 +30001,26 @@
             ],
             "title": "Excluded Reason"
           },
+          "geometry_locked": {
+            "default": false,
+            "title": "Geometry Locked",
+            "type": "boolean"
+          },
+          "geometry_revision": {
+            "default": 0,
+            "title": "Geometry Revision",
+            "type": "integer"
+          },
+          "geometry_source": {
+            "default": "detector",
+            "enum": [
+              "detector",
+              "human",
+              "import"
+            ],
+            "title": "Geometry Source",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -30004,6 +30086,17 @@
             "default": false,
             "title": "Label Validated",
             "type": "boolean"
+          },
+          "lock_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Label"
           },
           "mask_polygon": {
             "anyOf": [
@@ -32478,7 +32571,8 @@
                 "detector",
                 "sam3",
                 "human",
-                "import"
+                "import",
+                "drawn"
               ],
               "type": "string"
             },
@@ -34185,6 +34279,26 @@
             ],
             "title": "Excluded Reason"
           },
+          "geometry_locked": {
+            "default": false,
+            "title": "Geometry Locked",
+            "type": "boolean"
+          },
+          "geometry_revision": {
+            "default": 0,
+            "title": "Geometry Revision",
+            "type": "integer"
+          },
+          "geometry_source": {
+            "default": "detector",
+            "enum": [
+              "detector",
+              "human",
+              "import"
+            ],
+            "title": "Geometry Source",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -34250,6 +34364,17 @@
             "default": false,
             "title": "Label Validated",
             "type": "boolean"
+          },
+          "lock_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Label"
           },
           "mask_polygon": {
             "anyOf": [
@@ -36159,6 +36284,26 @@
             ],
             "title": "Excluded Reason"
           },
+          "geometry_locked": {
+            "default": false,
+            "title": "Geometry Locked",
+            "type": "boolean"
+          },
+          "geometry_revision": {
+            "default": 0,
+            "title": "Geometry Revision",
+            "type": "integer"
+          },
+          "geometry_source": {
+            "default": "detector",
+            "enum": [
+              "detector",
+              "human",
+              "import"
+            ],
+            "title": "Geometry Source",
+            "type": "string"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -36224,6 +36369,17 @@
             "default": false,
             "title": "Label Validated",
             "type": "boolean"
+          },
+          "lock_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Label"
           },
           "mask_polygon": {
             "anyOf": [
@@ -47083,7 +47239,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -48133,7 +48290,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -49441,7 +49599,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -51289,6 +51448,24 @@
               "title": "Size",
               "type": "integer"
             }
+          },
+          {
+            "description": "The item `geometry_revision`: a cache key only, the server ignores it.",
+            "in": "query",
+            "name": "v",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The item `geometry_revision`: a cache key only, the server ignores it.",
+              "title": "V"
+            }
           }
         ],
         "responses": {
@@ -52385,7 +52562,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -54126,7 +54304,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -57897,7 +58076,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -58410,7 +58590,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -61626,7 +61807,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -64404,7 +64586,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -66245,7 +66428,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -66989,7 +67173,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -67875,7 +68060,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -68649,7 +68835,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -69365,7 +69552,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -70201,7 +70389,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },
@@ -70701,7 +70890,8 @@
                       "detector",
                       "sam3",
                       "human",
-                      "import"
+                      "import",
+                      "drawn"
                     ],
                     "type": "string"
                   },

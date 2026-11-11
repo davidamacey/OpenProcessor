@@ -69,6 +69,7 @@ ORIGIN_LABELS: dict[str, str] = {
     'detector': 'Ingest detector',
     'sam3': 'Open-vocabulary pass',
     'human': 'A person',
+    'drawn': 'Drawn by a person',
     'import': 'Dataset import',
 }
 TEXT_MATCH_LABELS: dict[str, str] = {

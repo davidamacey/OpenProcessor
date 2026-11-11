@@ -87,15 +87,34 @@ def is_locked_box(box: Any) -> bool:
     return _box_is_human_owned(box) or (box.source == CANDIDATE_IMPORT and box.state != 'proposed')
 
 
-def has_human_geometry(source: Mapping[str, Any]) -> bool:
-    """A person drew the item's box or moved it, or deleted the item as not an
-    object (the document stays so its box keeps blocking a re-create)."""
-    from src.domain.item_geometry import GEOMETRY_SOURCE_HUMAN, NOT_AN_OBJECT
+def is_human_deleted(source: Mapping[str, Any]) -> bool:
+    """A person deleted the item as not an object; the document stays so its box keeps
+    blocking a re-create."""
+    from src.domain.item_geometry import NOT_AN_OBJECT
 
-    return source.get('geometry_source') == GEOMETRY_SOURCE_HUMAN or bool(
+    return bool(
         source.get('class_excluded')
         and source.get('excluded_by') == 'human'
         and source.get('excluded_reason') == NOT_AN_OBJECT
+    )
+
+
+def has_human_geometry(source: Mapping[str, Any]) -> bool:
+    """A person drew the item's box or moved it, or deleted the item as not an object."""
+    from src.domain.item_geometry import GEOMETRY_SOURCE_HUMAN
+
+    return source.get('geometry_source') == GEOMETRY_SOURCE_HUMAN or is_human_deleted(source)
+
+
+def has_import_geometry(source: Mapping[str, Any]) -> bool:
+    """A validated import wrote the item (a ``label_trust: suggestion`` import and a machine
+    proposal an import made stay replaceable, like their class)."""
+    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+
+    return bool(
+        source.get('import_ids')
+        and source.get('class_source') == LABEL_IMPORT_CLASS_SOURCE
+        and source.get('class_validated')
     )
 
 
@@ -108,14 +127,11 @@ def is_locked_geometry(source: Mapping[str, Any]) -> bool:
 
     Re-detect, an open-vocabulary run, import reconcile and re-ingest reach this
     through :func:`is_locked_item`, so none can skip it."""
-    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
-
-    imported = bool(
-        source.get('import_ids')
-        and source.get('class_source') == LABEL_IMPORT_CLASS_SOURCE
-        and source.get('class_validated')
+    return (
+        has_human_geometry(source)
+        or has_import_geometry(source)
+        or bool(source.get('test_holdout'))
     )
-    return has_human_geometry(source) or imported or bool(source.get('test_holdout'))
 
 
 def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
@@ -182,6 +198,8 @@ def lock_includes() -> list[str]:
 __all__ = [
     '_is_locked_marker',
     'has_human_geometry',
+    'has_import_geometry',
+    'is_human_deleted',
     'is_human_marker',
     'is_human_owned_item',
     'is_locked_box',

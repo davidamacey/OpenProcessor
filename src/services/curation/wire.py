@@ -30,6 +30,7 @@ from src.services.curation.class_sources import (
     vlm_suggestion,
     vlm_suggestion_dismissed,
 )
+from src.services.curation.geometry_wire import geometry_wire
 
 
 if TYPE_CHECKING:
@@ -414,7 +415,8 @@ def serialize_item(
         'near_dup_group_size': src.get('near_dup_group_size'),
         'near_dup_is_representative': src.get('near_dup_is_representative'),
         'updated_at': src.get('updated_at') or '',
-        'thumbnail_url': f'{prefix}/crops/{crop_id}/thumbnail',
+        **geometry_wire(src),
+        'thumbnail_url': f'{prefix}/crops/{crop_id}/thumbnail?v={int(src.get("geometry_revision") or 0)}',
         # Every OCR line on the item crop; [] when none / not yet read.
         'item_text_lines': item_text_lines_to_wire(src.get(ITEM_TEXT_LINES_FIELD)),
     }

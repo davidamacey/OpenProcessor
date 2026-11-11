@@ -143,6 +143,10 @@ export interface ItemWire {
   near_dup_is_representative: boolean | null;
   updated_at: string;
   thumbnail_url: string;
+  geometry_revision: number;
+  geometry_source: string;
+  geometry_locked: boolean;
+  lock_label: string | null;
   region_status: string | null;
   region_reason: string | null;
   region_rejection_reason: string | null;
@@ -268,6 +272,10 @@ export const ITEM_WIRE_KEYS = [
   'near_dup_is_representative',
   'updated_at',
   'thumbnail_url',
+  'geometry_revision',
+  'geometry_source',
+  'geometry_locked',
+  'lock_label',
   'region_status',
   'region_reason',
   'region_rejection_reason',
