@@ -36,8 +36,9 @@ class WalkStats:
 
     unreadable_dirs: int = 0
     symlinks: int = 0
-    # The first few unreadable directories, for the message.
+    # The first few unreadable directories and skipped symlinks, for the message.
     unreadable_samples: list[str] = field(default_factory=list)
+    symlink_samples: list[str] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def add_unreadable(self, path: Path) -> None:
@@ -46,9 +47,11 @@ class WalkStats:
             if len(self.unreadable_samples) < UNREADABLE_SAMPLE_LIMIT:
                 self.unreadable_samples.append(str(path))
 
-    def add_symlink(self) -> None:
+    def add_symlink(self, path: Path) -> None:
         with self._lock:
             self.symlinks += 1
+            if len(self.symlink_samples) < UNREADABLE_SAMPLE_LIMIT:
+                self.symlink_samples.append(str(path))
 
 
 class _Walk:
@@ -92,7 +95,7 @@ class _Walk:
     def _visit(self, entry: os.DirEntry[str]) -> None:
         if entry.is_symlink():
             if self._stats is not None:
-                self._stats.add_symlink()
+                self._stats.add_symlink(Path(entry.path))
         elif entry.is_dir(follow_symlinks=False):
             with self._pending_lock:
                 self._pending += 1

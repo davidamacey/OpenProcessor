@@ -255,6 +255,11 @@ def print_summary(run: dict[str, Any], failures: list[dict[str, Any]], failed_to
         f'  crops {p["crops_indexed"]}, embedded {p["n_embedded"]}, '
         f'not embedded {p["n_not_embedded"]} ({p["n_embed_failed"]} encoder failures)'
     )
+    if p['unreadable']:
+        print(
+            f'  warning: {p["unreadable"]} entries could not be read or were not followed '
+            f'(symlinks, unreadable directories or files); first: {", ".join(p["unreadable_samples"])}'
+        )
     if p['n_not_embedded']:
         print(
             f'  warning: {p["n_not_embedded"]} stored items have no embedding (encoder failed, not '

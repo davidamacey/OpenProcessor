@@ -3986,6 +3986,17 @@
           "skipped": {
             "title": "Skipped",
             "type": "integer"
+          },
+          "unreadable": {
+            "title": "Unreadable",
+            "type": "integer"
+          },
+          "unreadable_samples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unreadable Samples",
+            "type": "array"
           }
         },
         "required": [
@@ -4000,7 +4011,9 @@
           "n_embedded",
           "n_not_embedded",
           "n_embed_failed",
-          "in_flight"
+          "in_flight",
+          "unreadable",
+          "unreadable_samples"
         ],
         "title": "BulkIngestProgress",
         "type": "object"

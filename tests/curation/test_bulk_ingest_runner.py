@@ -172,6 +172,7 @@ def _run(
     concurrency: int = 2,
     reporter: MemoryReporter | None = None,
     prior: dict[str, Any] | None = None,
+    **extra: Any,
 ) -> tuple[runner.BulkIngestRun, MemoryReporter]:
     reporter = reporter or MemoryReporter()
     return (
@@ -183,6 +184,7 @@ def _run(
             run_id='run-1',
             prior=prior,
             servers=['triton-a'],
+            **extra,
         ),
         reporter,
     )
@@ -343,3 +345,12 @@ def test_invalid_sources_are_refused_with_the_reason(served: Path, tmp_path: Pat
     with pytest.raises(InvalidSourceError, match='not a file'):
         validate_source(BulkSource('manifest', str(served)))
     validate_source(BulkSource('folder', str(served)))
+
+
+def test_the_run_reports_the_unreadable_entries_discovery_gave_it() -> None:
+    run, _ = _run(MemoryLedger([]), FakeSender(), unreadable=2, unreadable_samples=['a.jpg'])
+    result = asyncio.run(run.run())
+
+    assert result['discovered'] == 0
+    assert result['unreadable'] == 2
+    assert result['unreadable_samples'] == ['a.jpg']

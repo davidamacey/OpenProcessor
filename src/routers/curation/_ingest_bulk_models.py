@@ -86,6 +86,10 @@ class BulkIngestProgress(BaseModel):
     n_not_embedded: int
     n_embed_failed: int
     in_flight: int
+    # Entries discovery could not queue (symlinks not followed, unreadable directories or files),
+    # with a few sample paths relative to the folder; a run with any ends completed_with_errors.
+    unreadable: int
+    unreadable_samples: list[str]
     images_per_s: float | None = None
     # Over the last 30 s; null until two samples exist.
     images_per_s_recent: float | None = None
