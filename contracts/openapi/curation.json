@@ -7254,6 +7254,20 @@
             ],
             "title": "Axis"
           },
+          "box_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box Ids"
+          },
           "capacity": {
             "anyOf": [
               {
@@ -7338,6 +7352,17 @@
                 "type": "null"
               }
             ]
+          },
+          "current_geometry_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Geometry Revision"
           },
           "current_revision": {
             "anyOf": [
@@ -7460,6 +7485,13 @@
               "vlm_catalog_does_not_fit",
               "probe_busy",
               "crop_not_found",
+              "unknown_class",
+              "box_out_of_image",
+              "box_too_small",
+              "degenerate_box",
+              "geometry_conflict",
+              "regions_outside_item",
+              "nothing_to_undo",
               "test_busy",
               "test_timeout",
               "vlm_transport_error",
@@ -7554,6 +7586,18 @@
             ],
             "title": "Issues"
           },
+          "item": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
           "jobs": {
             "anyOf": [
               {
@@ -7604,6 +7648,17 @@
               }
             ],
             "title": "Min Items"
+          },
+          "min_side": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Side"
           },
           "needed": {
             "anyOf": [
@@ -15972,6 +16027,106 @@
           }
         },
         "title": "ItemCapture",
+        "type": "object"
+      },
+      "ItemCreateRequest": {
+        "additionalProperties": false,
+        "description": "Draw a box: it becomes an item with a person's class and a person's geometry.",
+        "properties": {
+          "bbox_norm": {
+            "description": "[x1, y1, x2, y2] in image coordinates, each in [0, 1], x1 < x2 and y1 < y2.",
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "class_name": {
+            "description": "An active registry class.",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Class Name",
+            "type": "string"
+          },
+          "request_id": {
+            "description": "Sent again unchanged, it returns the first item instead of a second.",
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bbox_norm",
+          "class_name",
+          "request_id"
+        ],
+        "title": "ItemCreateRequest",
+        "type": "object"
+      },
+      "ItemCreated": {
+        "properties": {
+          "created": {
+            "description": "False on an idempotent repeat of the same `request_id`.",
+            "title": "Created",
+            "type": "boolean"
+          },
+          "embedding_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Served text when the item is deferred; null otherwise.",
+            "title": "Embedding Message"
+          },
+          "embedding_state": {
+            "enum": [
+              "embedded",
+              "not_selected",
+              "deferred",
+              "failed"
+            ],
+            "title": "Embedding State",
+            "type": "string"
+          },
+          "image_boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxView"
+            },
+            "title": "Image Boxes",
+            "type": "array"
+          },
+          "image_counts": {
+            "$ref": "#/components/schemas/ImageCounts"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          }
+        },
+        "required": [
+          "item",
+          "created",
+          "image_boxes",
+          "image_counts",
+          "embedding_state"
+        ],
+        "title": "ItemCreated",
         "type": "object"
       },
       "ItemDoc": {
@@ -54143,6 +54298,89 @@
         "summary": "Image File",
         "tags": [
           "Curation - Images"
+        ]
+      }
+    },
+    "/curation/projects/{project}/images/{image_id}/items": {
+      "post": {
+        "description": "Create an item from a box a person drew. The class is resolved by name (an unknown or\ndeprecated one is `unknown_class`); the item carries a human class and human geometry, is held\nout when the image is, and is embedded in this request (a failure keeps the item and serves\n`embedding_state: deferred` with a message). Sending the same `request_id` again returns the\nfirst item with `created: false`.",
+        "operationId": "create_item_curation_projects__project__images__image_id__items_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCreated"
+                }
+              }
+            },
+            "description": "A repeat of the same `request_id`."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Item",
+        "tags": [
+          "Curation",
+          "Images"
         ]
       }
     },

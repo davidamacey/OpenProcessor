@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from integration.ingest_fakes import jpeg_bytes
 
-from curation.cross_project_leak._constants import cluster_uid
+from curation.cross_project_leak._constants import CLASS_NAMES, cluster_uid
 from curation.cross_project_leak._seeded_files import _source_root
 from curation.cross_project_leak._seeders import (
     _VLM_ACTIVE,
@@ -191,6 +191,13 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # single forms take their target from the path.
         ('POST', '/reprocess'): {
             'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
+        },
+        ('POST', '/images/{image_id}/items'): {
+            'json': {
+                'bbox_norm': [0.2, 0.2, 0.6, 0.6],
+                'class_name': CLASS_NAMES.get(slug, slug),
+                'request_id': str(uuid.uuid4()),
+            }
         },
         ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},

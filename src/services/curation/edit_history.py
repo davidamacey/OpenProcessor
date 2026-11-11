@@ -48,6 +48,7 @@ class EditKind(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format(
     VLM_DISMISS = 'vlm_dismiss'
 
 
+GEOMETRY_WRITER = 'human:geometry'
 REGION_UNDO_WRITER = 'human:region_undo'
 VLM_DISMISS_UNDO_WRITER = 'human:vlm_dismiss_undo'
 
@@ -157,6 +158,7 @@ def restore_edit_state(
 
 __all__ = [
     'EDIT_HISTORY_FIELD',
+    'GEOMETRY_WRITER',
     'MAX_EDIT_HISTORY_ENTRIES',
     'REGION_UNDO_WRITER',
     'VLM_DISMISS_FIELDS',

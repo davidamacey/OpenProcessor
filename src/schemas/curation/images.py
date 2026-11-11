@@ -6,9 +6,10 @@ here, so the browser computes none of them.
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.schemas.curation.views import HiddenCounts, SortOption
 
@@ -112,3 +113,17 @@ class ImageInfo(BaseModel):
     dataset_split: str | None = None
     in_holdout: bool
     near_dup: ImageNearDup | None = None
+
+
+class ItemCreateRequest(BaseModel):
+    """Draw a box: it becomes an item with a person's class and a person's geometry."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    bbox_norm: tuple[float, float, float, float] = Field(
+        description='[x1, y1, x2, y2] in image coordinates, each in [0, 1], x1 < x2 and y1 < y2.'
+    )
+    class_name: str = Field(min_length=1, max_length=128, description='An active registry class.')
+    request_id: uuid.UUID = Field(
+        description='Sent again unchanged, it returns the first item instead of a second.'
+    )
