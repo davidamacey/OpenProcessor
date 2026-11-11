@@ -97,6 +97,13 @@ class ClusterListResponse(TypedDict):
             )
         ),
     ]
+    join_truncated: Annotated[
+        bool,
+        Field(
+            description='The area, location or group predicates matched more images than the '
+            'join could use, so the list may be incomplete.'
+        ),
+    ]
     empty_reason: Annotated[
         Literal['no_partition', 'pending_activation', 'filtered_empty'] | None,
         Field(description='Why `items` is empty; null when cards are served.'),

@@ -11,7 +11,6 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
-from src.domain.geo_box import parse_geo_box
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._image_view_models import ImageDetail
 from src.routers.curation._item_filter_params import ItemFilterQuery
@@ -36,15 +35,6 @@ async def list_images(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
     source: Annotated[str | None, Query(description='Ingest source tag.')] = None,
-    has_location: Annotated[
-        bool | None, Query(description='true = a position is stored and may be served.')
-    ] = None,
-    geo_bbox: Annotated[
-        str | None,
-        Query(
-            description='west,south,east,north in degrees; west > east crosses the antimeridian.'
-        ),
-    ] = None,
     in_holdout: Annotated[
         bool | None, Query(description='true = images with a held-out item; false = none.')
     ] = None,
@@ -78,14 +68,11 @@ async def list_images(
     carries its served counts and the boxes to draw; the page costs one query on the images index
     and one aggregation on the items index."""
     try:
-        box = None if geo_bbox is None else parse_geo_box(geo_bbox)
         return await image_page(
             opensearch,
             ImageQuery(
                 item_filter=item_filter,
                 source=source,
-                has_location=has_location,
-                geo_box=box,
                 in_holdout=in_holdout,
                 near_dup=near_dup,
                 label_state=label_state,
@@ -97,7 +84,7 @@ async def list_images(
             await item_write_fields(),
             await get_location_policy(),
         )
-    except (ImageQueryError, ValueError) as exc:
+    except ImageQueryError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

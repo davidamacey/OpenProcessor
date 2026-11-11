@@ -117,21 +117,25 @@ def test_box_filters_select_the_same_box_not_any_box() -> None:
     assert body['total_rows'] == 1
 
 
+U7 = '00000000-0000-0000-0000-000000000007'
+U9 = '00000000-0000-0000-0000-000000000009'
+
+
 def test_cluster_filter_and_state_match_the_same_box() -> None:
     docs = {
         'x': _item(
             'x',
-            [_box('b1', cluster_uid='u7'), _box('b2', 'false_positive', cluster_uid='u9')],
+            [_box('b1', cluster_uid=U7), _box('b2', 'false_positive', cluster_uid=U9)],
         ),
     }
 
     client = _client(QueryFakeOpenSearch({ITEMS: docs}))
-    in_cluster = _get(client, '/regions', cluster_uid='u7')
+    in_cluster = _get(client, '/regions', cluster_uid=U7)
     assert _rows(in_cluster) == [('x', 'b1')]
     # b1 is accepted and in u7; the FP box is in u9, so no box is both false_positive and in u7.
-    fp_in_u7 = _get(client, '/regions', cluster_uid='u7', box_state='false_positive')
+    fp_in_u7 = _get(client, '/regions', cluster_uid=U7, box_state='false_positive')
     assert _rows(fp_in_u7) == []
-    fp = _get(client, '/regions', cluster_uid='u9', box_state='false_positive')
+    fp = _get(client, '/regions', cluster_uid=U9, box_state='false_positive')
     assert _rows(fp) == [('x', 'b2')]
 
 

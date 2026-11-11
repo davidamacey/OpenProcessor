@@ -33,5 +33,4 @@ src/routers/curation/search.py <-> src/routers/curation/search.py	39	baseline at
 src/routers/curation/search.py <-> src/routers/curation/search_image.py	13	baseline at introduction; extract a shared helper to shrink
 src/services/config_store/ingest_profiles.py <-> src/services/config_store/open_vocab.py	42	baseline at introduction; extract a shared helper to shrink
 src/services/curation/export_single_class_rows.py <-> src/services/curation/export_single_class_rows.py	13	baseline at introduction; extract a shared helper to shrink
-src/services/curation/semantic_search.py <-> src/services/curation/semantic_search_image.py	17	baseline at introduction; extract a shared helper to shrink
 src/services/curation/stale_label_source_repair.py <-> src/services/curation/unmatched_class_repair.py	60	baseline at introduction; extract a shared helper to shrink

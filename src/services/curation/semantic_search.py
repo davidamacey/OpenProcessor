@@ -51,6 +51,7 @@ from src.utils.search_timing import search_span
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from src.services.curation.image_join import ImageJoin
     from src.services.embedding_spaces.readers import WriteFields
 
 
@@ -75,6 +76,7 @@ def _build_filter(
     hide_near_duplicates: bool,
     include_test: bool,
     item_filter: ItemFilter | None = None,
+    image_join: ImageJoin | None = None,
 ) -> list[dict[str, Any]]:
     """Compose the kNN query's ``filter`` clause.
 
@@ -109,7 +111,9 @@ def _build_filter(
         if max_rank is not None:
             filters.append({'range': {'crop_rank_in_image': {'lte': max_rank}}})
 
-    filters.extend(item_filter_clauses(item_filter or ItemFilter(), embedding=embedding))
+    filters.extend(
+        item_filter_clauses(item_filter or ItemFilter(), embedding=embedding, image_join=image_join)
+    )
     if cluster_uid is not None:
         filters.append({'term': {'cluster_uid': cluster_uid}})
 
@@ -145,6 +149,7 @@ def _filter_for(
     min_blur_ratio: float | None,
     hide_near_duplicates: bool,
     include_test: bool,
+    image_join: ImageJoin | None,
 ) -> list[dict[str, Any]]:
     """The kNN ``filter`` clause both search routes share (one place, so they cannot drift)."""
     item_filter = item_filter or ItemFilter()
@@ -159,6 +164,7 @@ def _filter_for(
         min_blur_ratio=min_blur_ratio,
         hide_near_duplicates=hide_near_duplicates,
         include_test=include_test,
+        image_join=image_join,
     )
 
 
@@ -223,6 +229,7 @@ async def semantic_text_search(
     min_score: float | None = None,
     include_test: bool = False,
     item_filter: ItemFilter | None = None,
+    image_join: ImageJoin | None = None,
     target: SearchTarget = SearchTarget.ITEM,
     space_key: str | None = None,
     fuse: Sequence[str] = (),
@@ -254,6 +261,7 @@ async def semantic_text_search(
         filter_clause = _filter_for(
             embedding=await item_write_fields(),
             item_filter=item_filter,
+            image_join=image_join,
             tab=tab,
             cluster_uid=cluster_uid,
             date_from=date_from,
@@ -302,6 +310,7 @@ async def semantic_similar_search(
     min_score: float | None = None,
     include_test: bool = False,
     item_filter: ItemFilter | None = None,
+    image_join: ImageJoin | None = None,
     space_key: str | None = None,
     fuse: Sequence[str] = (),
     config: CurationConfig | None = None,
@@ -366,6 +375,7 @@ async def semantic_similar_search(
         filter_clause = _filter_for(
             embedding=await item_write_fields(),
             item_filter=item_filter,
+            image_join=image_join,
             tab=tab,
             cluster_uid=cluster_uid,
             date_from=date_from,

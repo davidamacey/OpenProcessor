@@ -19,6 +19,7 @@ from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flag
 from src.services.clustering.partitions import display_numbers
 from src.services.curation import review_queries
 from src.services.curation.cluster_representatives import partition_representatives_body
+from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.class_names import normalize_class_name
@@ -76,6 +77,7 @@ class ClusterListParams:
     validation_state: ValidationFilter | None = None
     flags: tuple[str, ...] = ()
     needs_review: bool | None = None
+    image_join: ImageJoin | None = None
 
 
 def review_aggs(vector_field: str) -> dict[str, Any]:
@@ -100,7 +102,12 @@ def aggregation_body(params: ClusterListParams, embedding: WriteFields) -> dict[
     )
     query = {
         'bool': {
-            'filter': [base_match, *item_filter_clauses(params.item_filter, embedding=embedding)],
+            'filter': [
+                base_match,
+                *item_filter_clauses(
+                    params.item_filter, embedding=embedding, image_join=params.image_join
+                ),
+            ],
             # Human-ignored items left their bucket for good; the frozen test
             # holdout is never part of a cluster the operator works.
             'must_not': [{'term': {'class_excluded': True}}, {'term': {'test_holdout': True}}],
@@ -330,6 +337,7 @@ async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> Clus
         'sort_options': [{'id': i, 'label': label} for i, label in SORT_OPTIONS],
         'flag_vocabulary': list(FLAG_VOCABULARY),
         'truncated': truncated,
+        'join_truncated': join_truncated(params.image_join),
         'empty_reason': None,
         'empty_message': None,
         'pending_partition': None,

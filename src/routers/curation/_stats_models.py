@@ -81,6 +81,10 @@ class ClusterStats(BaseModel):
 
 class DatasetStatsResponse(BaseModel):
     as_of: str
+    join_truncated: bool = Field(
+        description='The area, location or group predicates matched more images than the join '
+        'could use, so the numbers may be incomplete.'
+    )
     total_crops: int
     validated: int
     validated_by_import: int

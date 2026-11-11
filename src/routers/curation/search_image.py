@@ -23,6 +23,7 @@ from src.routers.curation.search import _get_pe_encoder, _semantic_search_enable
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search_image
+from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
 from src.services.rejections import rejection
@@ -102,8 +103,9 @@ async def search_image(
             detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
         )
     try:
+        join = await resolve_filter_join(opensearch, item_filter)
         item_filter_clauses(
-            item_filter, embedding=await item_write_fields()
+            item_filter, embedding=await item_write_fields(), image_join=join
         )  # a malformed band is the caller's 400, not an outage
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -133,6 +135,7 @@ async def search_image(
                 date_from=date_from,
                 date_to=date_to,
                 item_filter=item_filter,
+                image_join=join,
                 min_blur_ratio=min_blur_ratio,
                 hide_near_duplicates=hide_near_duplicates,
                 min_score=min_score,

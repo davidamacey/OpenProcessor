@@ -359,6 +359,25 @@
    }
   }
  ],
+ "cluster_uids": [
+  {
+   "terms": {
+    "cluster_uid": [
+     "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
+    ]
+   }
+  }
+ ],
+ "cluster_uids_many": [
+  {
+   "terms": {
+    "cluster_uid": [
+     "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11",
+     "0b1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b22"
+    ]
+   }
+  }
+ ],
  "dataset_split": [
   {
    "term": {
@@ -603,6 +622,36 @@
    }
   }
  ],
+ "region_text_exact": [
+  {
+   "nested": {
+    "path": "region_boxes",
+    "query": {
+     "term": {
+      "region_boxes.text_fold": "ABC123XYZ"
+     }
+    }
+   }
+  }
+ ],
+ "region_text_fuzzy": [
+  {
+   "nested": {
+    "path": "region_boxes",
+    "query": {
+     "fuzzy": {
+      "region_boxes.text_fold": {
+       "value": "ABC123XYZ",
+       "fuzziness": 1,
+       "transpositions": true,
+       "prefix_length": 0,
+       "max_expansions": 50
+      }
+     }
+    }
+   }
+  }
+ ],
  "detector_class_names": [
   {
    "bool": {
@@ -827,6 +876,58 @@
    }
   }
  ],
+ "geo_bbox": [
+  {
+   "terms": {
+    "image_id": [
+     "img-a",
+     "img-b"
+    ]
+   }
+  }
+ ],
+ "geo_polygon": [
+  {
+   "terms": {
+    "image_id": [
+     "img-a",
+     "img-b"
+    ]
+   }
+  }
+ ],
+ "has_location": [
+  {
+   "terms": {
+    "image_id": [
+     "img-a",
+     "img-b"
+    ]
+   }
+  }
+ ],
+ "near_dup_group": [
+  {
+   "bool": {
+    "should": [
+     {
+      "term": {
+       "near_dup_group_id": "11111111-1111-1111-1111-111111111111"
+      }
+     },
+     {
+      "terms": {
+       "image_id": [
+        "img-a",
+        "img-b"
+       ]
+      }
+     }
+    ],
+    "minimum_should_match": 1
+   }
+  }
+ ],
  "everything": [
   {
    "bool": {
@@ -974,6 +1075,13 @@
    }
   },
   {
+   "terms": {
+    "cluster_uid": [
+     "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
+    ]
+   }
+  },
+  {
    "term": {
     "source": "s"
    }
@@ -981,11 +1089,6 @@
   {
    "term": {
     "class_id": 1
-   }
-  },
-  {
-   "term": {
-    "cluster_uid": "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
    }
   },
   {
@@ -1152,42 +1255,13 @@
      }
     }
    }
-  }
- ],
- "cluster_uid": [
+  },
   {
-   "term": {
-    "cluster_uid": "6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11"
-   }
-  }
- ],
- "region_text_exact": [
-  {
-   "nested": {
-    "path": "region_boxes",
-    "query": {
-     "term": {
-      "region_boxes.text_fold": "ABC123XYZ"
-     }
-    }
-   }
-  }
- ],
- "region_text_fuzzy": [
-  {
-   "nested": {
-    "path": "region_boxes",
-    "query": {
-     "fuzzy": {
-      "region_boxes.text_fold": {
-       "value": "ABC123XYZ",
-       "fuzziness": 1,
-       "transpositions": true,
-       "prefix_length": 0,
-       "max_expansions": 50
-      }
-     }
-    }
+   "terms": {
+    "image_id": [
+     "img-a",
+     "img-b"
+    ]
    }
   }
  ]

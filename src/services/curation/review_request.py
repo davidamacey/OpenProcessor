@@ -18,6 +18,7 @@ from typing import Any
 
 from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
 from src.services.curation import review_queries, review_sorts, review_tabs
+from src.services.curation.image_join import ImageJoin, resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.embedding_spaces.readers import item_write_fields
@@ -53,6 +54,7 @@ class ReviewRequest:
     sort_applied: str
     reason: str
     sort_fallback_reason: str | None = None
+    image_join: ImageJoin | None = None
 
 
 async def build_review_request(
@@ -86,7 +88,8 @@ async def build_review_request(
         must.append({'term': {'import_ids': filters.import_id}})
     if filters.dataset_split and 'dataset_split' in honoured:
         must.append({'term': {'dataset_split': filters.dataset_split}})
-    must.extend(item_filter_clauses(filters.item, embedding=embedding))
+    join = await resolve_filter_join(opensearch, filters.item)
+    must.extend(item_filter_clauses(filters.item, embedding=embedding, image_join=join))
     clause, applied, fallback = await review_sorts.build_sort(
         sort_id, tab=tab, opensearch=opensearch
     )
@@ -96,6 +99,7 @@ async def build_review_request(
         sort_applied=applied,
         reason=reason,
         sort_fallback_reason=fallback,
+        image_join=join,
     )
 
 

@@ -33,7 +33,13 @@ from src.schemas.curation.map import (
     MapMeta,
     MapTileImages,
 )
-from src.services.curation.image_join import LOCATION_FIELD, geo_box_query, item_image_ids
+from src.services.curation.image_join import (
+    LOCATION_FIELD,
+    geo_box_query,
+    image_predicate_clauses,
+    item_image_ids,
+    without_image_predicates,
+)
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 
 
@@ -85,7 +91,7 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
 
 
 async def image_query(
-    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: GeoBox | None
+    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: GeoBox | None, policy: str
 ) -> tuple[dict[str, Any], bool]:
     """The images-index query for a map request and whether the item join was truncated.
 
@@ -94,12 +100,16 @@ async def image_query(
     filters: list[dict[str, Any]] = [{'exists': {'field': LOCATION_FIELD}}]
     if box is not None:
         filters.append(geo_box_query(box))
-    joined = f.model_copy(update={'taken_from': None, 'taken_to': None})
+    filters.extend(image_predicate_clauses(f, policy=policy))
+    rest = without_image_predicates(f)
+    joined = rest.model_copy(update={'taken_from': None, 'taken_to': None})
     truncated = False
     if joined.is_empty():
         filters.extend(_date_clauses(f))
     else:
-        ids, truncated = await item_image_ids(opensearch, item_filter_query(f, embedding=embedding))
+        ids, truncated = await item_image_ids(
+            opensearch, item_filter_query(rest, embedding=embedding)
+        )
         filters.append({'terms': {'image_id': ids}})
     return {'bool': {'filter': filters}}, truncated
 
@@ -164,7 +174,7 @@ async def map_cells(
     precision = min(zoom + CELL_ZOOM_OFFSET, max_precision(policy))
     if policy == 'drop':
         return MapCellCollection(features=[], precision=precision)
-    query, join_truncated = await image_query(opensearch, f, embedding, box)
+    query, join_truncated = await image_query(opensearch, f, embedding, box, policy)
     grid: dict[str, Any] = {'field': LOCATION_FIELD, 'precision': precision, 'size': MAX_CELLS + 1}
     if box is not None:
         grid['bounds'] = {
@@ -236,7 +246,7 @@ async def tile_images(
     box = tile_box(tile)
     if policy == 'drop':
         return MapTileImages(tile=tile, count=0, image_ids=[], truncated=False)
-    query, _ = await image_query(opensearch, f, embedding, box)
+    query, _ = await image_query(opensearch, f, embedding, box, policy)
     resp = await opensearch.search(
         index=images_index(),
         body={

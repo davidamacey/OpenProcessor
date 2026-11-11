@@ -32,6 +32,7 @@ from src.services.curation.cluster_empty_state import (
     read_partition_state,
 )
 from src.services.curation.cluster_facets import cluster_facets
+from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
 
@@ -85,7 +86,8 @@ async def list_clusters(
             min_blur_ratio=min_blur_ratio,
             class_source=class_source,
         )
-        item_filter_clauses(gate, embedding=await item_write_fields())
+        join = await resolve_filter_join(opensearch, gate)
+        item_filter_clauses(gate, embedding=await item_write_fields(), image_join=join)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     params = ClusterListParams(
@@ -102,6 +104,7 @@ async def list_clusters(
         validation_state=validation_state,
         flags=tuple(flag or ()),
         needs_review=needs_review,
+        image_join=join,
     )
     response = await list_cluster_cards(opensearch, params)
     await attach_display_nos(session, response['items'])

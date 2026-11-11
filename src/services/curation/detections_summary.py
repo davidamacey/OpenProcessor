@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from src.domain.embedding_state import DEFERRED, FAILED, NOT_SELECTED
+from src.services.curation.image_join import has_image_predicates, resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 from src.services.curation.reprocess_models import (
     EmbedOptions,
@@ -53,9 +54,12 @@ class DetectionsSummary(BaseModel):
     suggested_reprocess: ReprocessRequest | None
 
 
-def suggested_embed_request(flt: ItemFilter) -> ReprocessRequest:
+def suggested_embed_request(flt: ItemFilter) -> ReprocessRequest | None:
     """The ``embed`` reprocess (dry run, only the missing) for ``flt``'s items
-    that were stored without a vector for a recorded reason."""
+    that were stored without a vector for a recorded reason; ``None`` for a filter with
+    image predicates (a reprocess cannot take them)."""
+    if has_image_predicates(flt):
+        return None
     missing = [NOT_SELECTED, DEFERRED, FAILED]
     selector = flt.model_copy(update={'embedding_state': missing})
     return ReprocessRequest(
@@ -70,10 +74,11 @@ async def detections_summary(
     opensearch: AsyncOpenSearch, index: str, flt: ItemFilter
 ) -> DetectionsSummary:
     embedding = await item_write_fields()
+    join = await resolve_filter_join(opensearch, flt)
     body = {
         'size': 0,
         'track_total_hits': True,
-        'query': item_filter_query(flt, embedding=embedding),
+        'query': item_filter_query(flt, embedding=embedding, image_join=join),
         'aggs': {
             **embedding_aggregations(embedding),
             'by_label': {

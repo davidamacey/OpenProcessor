@@ -16,6 +16,7 @@ from src.services.embedding_spaces.readers import item_state_fields, vector_sour
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from src.services.curation.image_join import ImageJoin
     from src.services.embedding_spaces.readers import WriteFields
 
 MAX_IDS = 500
@@ -41,6 +42,7 @@ def build_crop_list_query(
     route_params: dict[str, Any],
     include_test: bool,
     include_excluded: bool,
+    image_join: ImageJoin | None = None,
 ) -> CropListQuery:
     """Merge the shared filter with the route's own params into one query.
 
@@ -54,7 +56,7 @@ def build_crop_list_query(
     )
     # Every clause is a pure predicate (term/exists/range/must_not), none
     # scores, so all of it lives in filter context, not must.
-    filter_clauses = item_filter_clauses(flt, embedding=embedding)
+    filter_clauses = item_filter_clauses(flt, embedding=embedding, image_join=image_join)
     filt = [
         *filter_clauses,
         *visibility_clauses(

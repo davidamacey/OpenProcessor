@@ -10,7 +10,12 @@ from typing import Final
 from pydantic import BaseModel, model_validator
 
 
+POLYGON_MIN_VERTICES: Final = 3
+POLYGON_MAX_VERTICES: Final = 64
 BOX_MESSAGE: Final = 'geo_bbox needs west,south,east,north in degrees'
+POLYGON_MESSAGE: Final = (
+    f'geo_polygon needs {POLYGON_MIN_VERTICES} to {POLYGON_MAX_VERTICES} lon,lat vertices'
+)
 
 
 class GeoBox(BaseModel):
@@ -38,3 +43,24 @@ def parse_geo_box(raw: str, message: str = BOX_MESSAGE) -> GeoBox:
         return GeoBox(west=west, south=south, east=east, north=north)
     except ValueError as exc:
         raise ValueError(message) from exc
+
+
+def check_polygon(vertices: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """``vertices`` when they are a usable ring; ``ValueError(POLYGON_MESSAGE)`` otherwise."""
+    if not POLYGON_MIN_VERTICES <= len(vertices) <= POLYGON_MAX_VERTICES or any(
+        not (-180 <= lon <= 180 and -90 <= lat <= 90) for lon, lat in vertices
+    ):
+        raise ValueError(POLYGON_MESSAGE)
+    return vertices
+
+
+def parse_geo_polygon(raw: str) -> list[tuple[float, float]]:
+    """``lon,lat;lon,lat;...``; ``ValueError(POLYGON_MESSAGE)`` for anything else."""
+    try:
+        vertices = [
+            (float(lon), float(lat))
+            for lon, lat in (part.split(',') for part in raw.split(';') if part)
+        ]
+    except ValueError as exc:
+        raise ValueError(POLYGON_MESSAGE) from exc
+    return check_polygon(vertices)

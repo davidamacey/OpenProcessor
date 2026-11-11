@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
@@ -25,6 +24,7 @@ from src.services.curation.crop_listing import (
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.hidden_counts import hidden_counts
+from src.services.curation.image_join import join_truncated, resolve_filter_join
 from src.services.curation.region_text_search import TextMatch, same_text_key
 from src.services.curation.wire import item_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import (
@@ -55,11 +55,6 @@ async def list_crops(
                 'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
             )
         ),
-    ] = None,
-    cluster_uid: Annotated[
-        uuid.UUID | None,
-        UnsetIfEmpty,
-        Query(description='Members of this cluster of the served partition.'),
     ] = None,
     label_source: str | None = None,
     class_source: str | None = None,
@@ -185,6 +180,7 @@ async def list_crops(
         page_size = limit
     guard_page_depth(page, page_size)
     embedding = await item_write_fields()
+    join = await resolve_filter_join(opensearch, item_filter)
     if same_text_as is not None:
         if region_text is not None:
             raise HTTPException(
@@ -203,7 +199,6 @@ async def list_crops(
             sort=sort,
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
-                'cluster_uid': None if cluster_uid is None else str(cluster_uid),
                 'label_source': label_source,
                 'class_source': class_source,
                 'label_validated': label_validated,
@@ -224,6 +219,7 @@ async def list_crops(
             },
             include_test=include_test,
             include_excluded=include_excluded,
+            image_join=join,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -252,7 +248,9 @@ async def list_crops(
         index=items_index(),
         order=order,
         query_clause=listing.query_clause,
-        cluster_uid=None if cluster_uid is None else str(cluster_uid),
+        cluster_uid=str(item_filter.cluster_uids[0])
+        if len(item_filter.cluster_uids) == 1
+        else None,
         item_filter=listing.item_filter,
         page=page,
         page_size=page_size,
@@ -263,6 +261,7 @@ async def list_crops(
     if ordered is not None:
         await attach_item_display_nos(ordered['crops'])
         ordered['hidden'] = hidden
+        ordered['join_truncated'] = join_truncated(join)
         return ordered
 
     hits = (resp.get('hits') or {}).get('hits') or []
@@ -272,7 +271,14 @@ async def list_crops(
         for h in hits
     ]
     await attach_item_display_nos(crops)
-    return crops_page(total=int(total), page=page, page_size=page_size, crops=crops, hidden=hidden)
+    return crops_page(
+        total=int(total),
+        page=page,
+        page_size=page_size,
+        crops=crops,
+        hidden=hidden,
+        join_truncated=join_truncated(join),
+    )
 
 
 @router.get('/crops/{crop_id}', response_model=None, responses={200: {'model': ItemDoc}})

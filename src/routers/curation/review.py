@@ -41,6 +41,7 @@ from src.routers.curation._review_params import (
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.services.curation import review_empty_reason, review_reasons
 from src.services.curation.hidden_counts import hidden_counts
+from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.curation.review_request import (
@@ -104,10 +105,14 @@ async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearc
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-async def _hidden(opensearch: Any, filters: ReviewFilters) -> dict[str, int]:
+async def _hidden(
+    opensearch: Any, filters: ReviewFilters, join: ImageJoin | None
+) -> dict[str, int]:
     """Review queues never show ignored items; the test holdout only with ``include_test``."""
     try:
-        clauses = item_filter_clauses(filters.item, embedding=await item_write_fields())
+        clauses = item_filter_clauses(
+            filters.item, embedding=await item_write_fields(), image_join=join
+        )
         return await hidden_counts(
             opensearch, clauses, include_test=filters.include_test, include_excluded=False
         )
@@ -195,6 +200,7 @@ async def review_queue(
             'empty_reason': review_empty_reason.REGION_PROFILE_OFF_REASON,
             # The off profile serves no queue, so nothing is hidden from it.
             'hidden': {'test_holdout': 0, 'excluded': 0},
+            'join_truncated': False,
         }
     filters = _filters(
         include_test,
@@ -223,7 +229,7 @@ async def review_queue(
         # the review grid (history is undo-only).
         '_source': {'excludes': item_list_source_excludes(excludes)},
     }
-    hidden = await _hidden(opensearch, filters)
+    hidden = await _hidden(opensearch, filters, req.image_join)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
@@ -274,6 +280,7 @@ async def review_queue(
         'sort_fallback_reason': req.sort_fallback_reason,
         'empty_reason': empty_reason,
         'hidden': hidden,
+        'join_truncated': join_truncated(req.image_join),
     }
 
 

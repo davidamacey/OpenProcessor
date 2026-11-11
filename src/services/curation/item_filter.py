@@ -22,13 +22,15 @@ import datetime as dt
 import uuid
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.config import get_region_fields
 from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause, state_clause
+from src.domain.geo_box import GeoBox, check_polygon
 from src.domain.item_text import item_text_query
 from src.domain.region_boxes import box_query
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
+from src.services.curation.image_join import ImageJoin, ImageJoinMissingError, has_image_predicates
 from src.services.curation.name_match import DETECTOR_NAME_FIELDS, name_clause
 from src.services.curation.region_text_search import TextMatch, region_text_match_clause
 from src.services.detection.region_text import active_confusables
@@ -45,7 +47,9 @@ HUMAN_CLASS_SOURCES: tuple[str, ...] = ('human', 'human_move')
 # Every item a full-image SAM 3 pass writes carries the prompt set it came from
 # (and keeps it after a human relabels it), so that field is what ``sam3`` means.
 SAM3_ORIGIN_FIELD = 'open_vocab_set'
-IMAGE_IDS_MAX = 200
+# The most image or cluster ids one filter carries in a body; a query string stays at 200.
+MAX_SELECTION_IDS = 5000
+QUERY_IDS_MAX = 200
 
 
 class ItemFilter(BaseModel):
@@ -67,8 +71,8 @@ class ItemFilter(BaseModel):
     # Ingest source tag (not the same thing as ``origin``).
     source: str | None = None
     class_id: int | None = None
-    # The item's cluster in the served partition (a UUID); the facet chips of one cluster open it.
-    cluster_uid: uuid.UUID | None = None
+    # The items' clusters in the served partition (UUIDs, OR); the facet chips of one cluster open it.
+    cluster_uids: list[uuid.UUID] = Field(default_factory=list, max_length=MAX_SELECTION_IDS)
     import_id: str | None = None
     dataset_split: str | None = None
     label_source: str | None = None
@@ -105,7 +109,20 @@ class ItemFilter(BaseModel):
     taken_from: dt.date | None = None
     taken_to: dt.date | None = None
     # Only items on these images (the map opens the list on the images of one cell).
-    image_ids: list[str] = Field(default_factory=list, max_length=IMAGE_IDS_MAX)
+    image_ids: list[str] = Field(default_factory=list, max_length=MAX_SELECTION_IDS)
+    # Predicates about the item's image. Items carry no coordinate, so these are resolved to the
+    # matching images first (``ImageJoin``) and snapped to the project's location policy.
+    geo_bbox: GeoBox | None = None
+    geo_polygon: list[tuple[float, float]] | None = None
+    has_location: bool | None = None
+    near_dup_group: uuid.UUID | None = None
+
+    @field_validator('geo_polygon')
+    @classmethod
+    def _polygon_ring(
+        cls, vertices: list[tuple[float, float]] | None
+    ) -> list[tuple[float, float]] | None:
+        return None if vertices is None else check_polygon(vertices)
 
     def is_empty(self) -> bool:
         return self == type(self)()
@@ -238,10 +255,11 @@ def _term_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if f.image_ids:
         out.append({'terms': {'image_id': f.image_ids}})
+    if f.cluster_uids:
+        out.append({'terms': {'cluster_uid': [str(u) for u in f.cluster_uids]}})
     for field, value in (
         ('source', f.source),
         ('class_id', f.class_id),
-        ('cluster_uid', None if f.cluster_uid is None else str(f.cluster_uid)),
         ('dataset_split', f.dataset_split),
         ('label_source', f.label_source),
         ('class_source', f.class_source),
@@ -346,8 +364,30 @@ def _quality_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     return out
 
 
-def item_filter_clauses(f: ItemFilter, *, embedding: WriteFields) -> list[dict[str, Any]]:
+def _image_clauses(f: ItemFilter, join: ImageJoin | None) -> list[dict[str, Any]]:
+    """The image predicates as item clauses: the items on the joined images. A group alone also
+    matches the items that carry the group id themselves."""
+    if not has_image_predicates(f):
+        return []
+    if join is None:
+        msg = 'the filter has image predicates (area, location, near-duplicate group) but no image join was passed'
+        raise ImageJoinMissingError(msg)
+    on_images: dict[str, Any] = {'terms': {'image_id': list(join.image_ids)}}
+    only_group = f.near_dup_group is not None and not any(
+        (f.geo_bbox, f.geo_polygon, f.has_location is not None)
+    )
+    if only_group:
+        return [_any_of([{'term': {'near_dup_group_id': str(f.near_dup_group)}}, on_images])]
+    return [on_images]
+
+
+def item_filter_clauses(
+    f: ItemFilter, *, embedding: WriteFields, image_join: ImageJoin | None = None
+) -> list[dict[str, Any]]:
     """The filter as AND-ed (filter-context) clauses.
+
+    ``image_join`` is the resolved image predicates (:func:`resolve_image_join`); a filter with
+    image predicates and no join raises :class:`ImageJoinMissingError` instead of ignoring them.
 
     ``embedding`` are the primary item space's vector and state fields (``item_write_fields()``):
     the ``embedding_state`` predicate and the ``all`` review tab read them.
@@ -365,13 +405,16 @@ def item_filter_clauses(f: ItemFilter, *, embedding: WriteFields) -> list[dict[s
         *_flag_clauses(f),
         *_capture_clauses(f),
         *_quality_clauses(f),
+        *_image_clauses(f, image_join),
     ]
 
 
-def item_filter_query(f: ItemFilter, *, embedding: WriteFields) -> dict[str, Any]:
+def item_filter_query(
+    f: ItemFilter, *, embedding: WriteFields, image_join: ImageJoin | None = None
+) -> dict[str, Any]:
     """The filter as one query (``match_all`` when it constrains nothing), for
     routes that count or aggregate over the matching items."""
-    clauses = item_filter_clauses(f, embedding=embedding)
+    clauses = item_filter_clauses(f, embedding=embedding, image_join=image_join)
     return {'bool': {'filter': clauses}} if clauses else {'match_all': {}}
 
 
@@ -388,6 +431,8 @@ def visibility_clauses(*, include_test: bool, include_excluded: bool) -> list[di
 
 __all__ = [
     'HUMAN_CLASS_SOURCES',
+    'MAX_SELECTION_IDS',
+    'QUERY_IDS_MAX',
     'SAM3_ORIGIN_FIELD',
     'ItemFilter',
     'Origin',

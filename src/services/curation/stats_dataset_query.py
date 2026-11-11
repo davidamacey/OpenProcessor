@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import box_query
 from src.services.curation import stats_imports as imp
+from src.services.curation.image_join import join_truncated, resolve_filter_join
 from src.services.curation.item_filter import item_filter_query
 from src.services.curation.region_scope import active_parent_classes, parent_classes_clause
 from src.services.curation.stats_embedding import embedding_aggregations
@@ -27,10 +28,16 @@ class StatsQueryError(Exception):
     """The stats search against the items index failed."""
 
 
-def filter_query(item_filter: ItemFilter, embedding: WriteFields) -> dict[str, Any]:
-    """The query selecting the items ``item_filter`` names."""
+async def filter_query(
+    opensearch: Any, item_filter: ItemFilter, embedding: WriteFields
+) -> tuple[dict[str, Any], bool]:
+    """The query selecting the items ``item_filter`` names and whether its image join was
+    truncated."""
     try:
-        return item_filter_query(item_filter, embedding=embedding)
+        join = await resolve_filter_join(opensearch, item_filter)
+        return item_filter_query(item_filter, embedding=embedding, image_join=join), join_truncated(
+            join
+        )
     except ValueError as exc:
         raise InvalidItemFilterError(str(exc)) from exc
 

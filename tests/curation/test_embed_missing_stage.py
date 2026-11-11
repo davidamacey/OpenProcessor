@@ -199,7 +199,7 @@ def test_the_stage_request_scopes_to_the_cluster_uid() -> None:
     uid = uuid.uuid4()
     flt = stage_request(None, uid, ItemFilter()).targets.filter
     assert flt is not None
-    assert flt.cluster_uid == uid
+    assert flt.cluster_uids == [uid]
     selection = vlm_selection_query(
         embedding=DEFAULT_WRITE_FIELDS,
         class_id=None,

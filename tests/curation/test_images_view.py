@@ -304,7 +304,8 @@ def test_location_filters_follow_the_policy(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert dropped.json()['items'] == []
     bad = _client(fake, monkeypatch).get(f'{BASE}/images', params={'geo_bbox': 'nope'})
-    assert bad.status_code == 400
+    assert bad.status_code == 422
+    assert 'geo_bbox needs west,south,east,north in degrees' in bad.text
 
 
 # --- GET /images/{image_id} -------------------------------------------------------------------
