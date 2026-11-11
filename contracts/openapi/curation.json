@@ -53265,100 +53265,6 @@
             }
           },
           {
-            "description": "Ingest source tag.",
-            "in": "query",
-            "name": "source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Ingest source tag.",
-              "title": "Source"
-            }
-          },
-          {
-            "description": "true = images with a held-out item; false = none.",
-            "in": "query",
-            "name": "in_holdout",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "true = images with a held-out item; false = none.",
-              "title": "In Holdout"
-            }
-          },
-          {
-            "description": "member = in a group and not its representative; representative; none = in no group.",
-            "in": "query",
-            "name": "near_dup",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "member",
-                    "representative",
-                    "none"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "member = in a group and not its representative; representative; none = in no group.",
-              "title": "Near Dup"
-            }
-          },
-          {
-            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
-            "in": "query",
-            "name": "label_state",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "has_unlabeled",
-                    "all_labeled",
-                    "no_items"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
-              "title": "Label State"
-            }
-          },
-          {
-            "description": "One of the `sort_options` ids the response serves.",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "default": "indexed_at:desc",
-              "description": "One of the `sort_options` ids the response serves.",
-              "title": "Sort",
-              "type": "string"
-            }
-          },
-          {
             "description": "`next_cursor` of the previous page (same sort).",
             "in": "query",
             "name": "cursor",
@@ -53386,18 +53292,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Count and draw held-out test items too.",
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Count and draw held-out test items too.",
-              "title": "Include Test",
-              "type": "boolean"
             }
           },
           {
@@ -53855,6 +53749,112 @@
               ],
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
+            }
+          },
+          {
+            "description": "Ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true = images with a held-out item; false = none.",
+            "in": "query",
+            "name": "in_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = images with a held-out item; false = none.",
+              "title": "In Holdout"
+            }
+          },
+          {
+            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "in": "query",
+            "name": "near_dup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "member",
+                    "representative",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "title": "Near Dup"
+            }
+          },
+          {
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "has_unlabeled",
+                    "all_labeled",
+                    "no_items"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "title": "Label State"
+            }
+          },
+          {
+            "description": "One of the `sort_options` ids the response serves.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "indexed_at:desc",
+              "description": "One of the `sort_options` ids the response serves.",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Count and draw held-out test items too.",
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count and draw held-out test items too.",
+              "title": "Include Test",
+              "type": "boolean"
             }
           }
         ],

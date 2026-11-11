@@ -13,18 +13,16 @@ from fastapi import HTTPException, Query
 
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._image_query_params import ImageViewQuery
 from src.routers.curation._image_view_models import ImageDetail
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.images import ImagePage
 from src.services.curation.image_detail import image_detail
 from src.services.curation.image_view import (
-    DEFAULT_SORT,
     LIMIT_DEFAULT,
     LIMIT_MAX,
     ImageQuery,
     ImageQueryError,
-    LabelState,
-    NearDupFilter,
     image_page,
 )
 from src.services.curation.list_cursor import CursorError
@@ -36,34 +34,11 @@ from src.services.embedding_spaces.readers import item_write_fields
 async def list_images(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
-    source: Annotated[str | None, Query(description='Ingest source tag.')] = None,
-    in_holdout: Annotated[
-        bool | None, Query(description='true = images with a held-out item; false = none.')
-    ] = None,
-    near_dup: Annotated[
-        NearDupFilter | None,
-        Query(
-            description='member = in a group and not its representative; representative; '
-            'none = in no group.'
-        ),
-    ] = None,
-    label_state: Annotated[
-        LabelState | None,
-        Query(
-            description='has_unlabeled, all_labeled (has items, none unlabeled) or no_items. '
-            'Resolved by a join on the items.'
-        ),
-    ] = None,
-    sort: Annotated[
-        str, Query(description='One of the `sort_options` ids the response serves.')
-    ] = DEFAULT_SORT,
+    view: ImageViewQuery,
     cursor: Annotated[
         str | None, Query(description='`next_cursor` of the previous page (same sort).')
     ] = None,
     limit: Annotated[int, Query(ge=1, le=LIMIT_MAX)] = LIMIT_DEFAULT,
-    include_test: Annotated[
-        bool, Query(description='Count and draw held-out test items too.')
-    ] = False,
 ) -> ImagePage:
     """A page of the project's images. An image matches the item filter when at least one of its
     items does (`join_truncated`: the join used only the first 10,000 matching images). Each card
@@ -72,17 +47,7 @@ async def list_images(
     try:
         return await image_page(
             opensearch,
-            ImageQuery(
-                item_filter=item_filter,
-                source=source,
-                in_holdout=in_holdout,
-                near_dup=near_dup,
-                label_state=label_state,
-                sort=sort,
-                cursor=cursor,
-                limit=limit,
-                include_test=include_test,
-            ),
+            ImageQuery(item_filter=item_filter, view=view, cursor=cursor, limit=limit),
             await item_write_fields(),
             await get_location_policy(),
         )
