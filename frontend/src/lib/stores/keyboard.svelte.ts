@@ -158,7 +158,7 @@ class KeyboardStore {
     const seen = new Set<string>();
     const out: KeyboardShortcut[] = [];
     for (const r of this.#regs) {
-      if (r.scope !== 'global' && r.scope !== this.scope) continue;
+      if (!this.#active(r)) continue;
       if (!r.description) continue;
       const keys = regKeys(r);
       if (keys.length === 0) continue;
@@ -179,11 +179,7 @@ class KeyboardStore {
    */
   hasActiveBinding(combo: string): boolean {
     const c = combo.toLowerCase();
-    for (const r of this.#regs) {
-      if (r.scope !== 'global' && r.scope !== this.scope) continue;
-      if (regKeys(r).includes(c)) return true;
-    }
-    return false;
+    return this.#regs.some((r) => this.#active(r) && regKeys(r).includes(c));
   }
 
   /**
@@ -237,16 +233,33 @@ class KeyboardStore {
       this.closeOverlay();
       return;
     }
-    for (const r of this.#regs) {
-      if (!regKeys(r).includes(combo)) continue;
-      if (r.scope !== 'global' && r.scope !== this.scope) continue;
-      const result = r.handler(e);
-      // Treat undefined as "consumed".
-      if (result !== false) {
-        e.preventDefault();
-      }
-      return;
+    const r = this.#resolve(combo);
+    if (!r) return;
+    const result = r.handler(e);
+    // Treat undefined as "consumed".
+    if (result !== false) {
+      e.preventDefault();
     }
+  }
+
+  /** The scopes a key can fire in, nearest first: the current scope, then its
+   *  `includes` (transitively, in declared order), then `global`. */
+  #scopeOrder(): string[] {
+    const order = keymapStore.activeSet(this.scope);
+    return order.includes('global') ? order : [...order, 'global'];
+  }
+
+  #active(r: Registration): boolean {
+    return this.#scopeOrder().includes(r.scope);
+  }
+
+  /** The first registration, in the nearest scope, that owns `combo`. */
+  #resolve(combo: string): Registration | null {
+    for (const scope of this.#scopeOrder()) {
+      const hit = this.#regs.find((r) => r.scope === scope && regKeys(r).includes(combo));
+      if (hit) return hit;
+    }
+    return null;
   }
 }
 
