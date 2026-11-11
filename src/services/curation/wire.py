@@ -23,6 +23,7 @@ from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
+from src.domain.region_boxes import region_box_display_name
 from src.services.curation.assist.item_wire import assist_to_wire
 from src.services.curation.capture_wire import item_capture_to_wire
 from src.services.curation.class_sources import (
@@ -145,6 +146,9 @@ def _source_to_parent(src: dict[str, Any], region: tuple[float, float, float, fl
     ]
 
 
+DEFAULT_SLOT_LABEL = 'Region'
+
+
 def _proposed_class(
     src: dict[str, Any], vlm_class_id: int | None, vlm_class_name: str | None
 ) -> dict[str, Any]:
@@ -159,7 +163,7 @@ def _proposed_class(
     }
 
 
-def _display_name(src: dict[str, Any], proposed_name: str) -> dict[str, str]:
+def display_name_of(src: dict[str, Any], proposed_name: str) -> dict[str, str]:
     """The one name a page shows for the item and where it came from, so no page picks its own.
 
     The class name when the item has a class, else the proposed class, else the detector's own
@@ -173,6 +177,25 @@ def _display_name(src: dict[str, Any], proposed_name: str) -> dict[str, str]:
     if detector:
         return {'display_name': detector, 'display_name_kind': 'detector'}
     return {'display_name': '', 'display_name_kind': 'none'}
+
+
+def item_display_name(src: dict[str, Any]) -> dict[str, str]:
+    """``display_name_of`` for a stored item, deriving the proposed class the wire would serve."""
+    vlm_class_id, vlm_class_name = vlm_suggestion(src)
+    proposed = _proposed_class(src, vlm_class_id, vlm_class_name)
+    return display_name_of(src, proposed['proposed_class_name'])
+
+
+def region_box_name(box: RegionBox, ordinal: int) -> str:
+    """``region_box_display_name`` with the slot label of the active region profile (``Region``
+    when it names none), looked up only for a box that has no read text."""
+    if box.text:
+        return box.text
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    label = (profile.display_name_singular if profile else '') or DEFAULT_SLOT_LABEL
+    return region_box_display_name(box, slot_label=label, ordinal=ordinal)
 
 
 def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
@@ -314,7 +337,7 @@ def serialize_item(
         # there is one, else the current class (or the raw unmatched VLM
         # answer as the name).
         **proposed,
-        **_display_name(src, proposed['proposed_class_name']),
+        **display_name_of(src, proposed['proposed_class_name']),
         # Human flagged "needs a class the registry doesn't have yet".
         'needs_new_class': bool(src.get('needs_new_class', False)),
         'needs_new_class_note': src.get('needs_new_class_note'),
@@ -439,7 +462,12 @@ STORAGE_ONLY_BOX_KEYS: tuple[str, ...] = ('text_norm', 'text_fold')
 
 
 def region_box_to_wire(
-    src: dict[str, Any], box: RegionBox, *, crop_id: str = '', prefix: str = ''
+    src: dict[str, Any],
+    box: RegionBox,
+    *,
+    crop_id: str = '',
+    prefix: str = '',
+    ordinal: int = 1,
 ) -> dict[str, Any]:
     """One ``RegionBoxWire`` element: the stored box plus the server-derived
     ``locked``, ``bbox_in_parent`` (item-crop frame, relative to ``src``'s
@@ -450,6 +478,7 @@ def region_box_to_wire(
     for key in STORAGE_ONLY_BOX_KEYS:
         del doc[key]
     doc['locked'] = is_locked_box(box)
+    doc['display_name'] = region_box_name(box, ordinal)
     doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
     doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
     return doc
@@ -471,7 +500,8 @@ def region_boxes_to_wire(
 
     f = storage or get_region_fields()
     boxes = [
-        region_box_to_wire(src, box, crop_id=crop_id, prefix=prefix) for box in read_boxes(src, f)
+        region_box_to_wire(src, box, crop_id=crop_id, prefix=prefix, ordinal=n)
+        for n, box in enumerate(read_boxes(src, f), start=1)
     ]
     return {
         'region_boxes': boxes,
@@ -510,6 +540,7 @@ def region_event_payload(
 
 
 __all__ = [
+    'DEFAULT_SLOT_LABEL',
     'ITEM_WIRE_KEYS',
     'REGION_ROW_EXTRA_KEYS',
     'REGION_WIRE_ATTRS',
@@ -519,9 +550,12 @@ __all__ = [
     'TRAINING_CANDIDATE_EXTRA_KEYS',
     'WIRE_REGION_FIELDS',
     'box_thumbnail_url',
+    'display_name_of',
     'item_context_source_excludes',
+    'item_display_name',
     'item_list_source_excludes',
     'item_source_excludes',
+    'region_box_name',
     'region_box_to_wire',
     'region_boxes_to_wire',
     'region_event_payload',

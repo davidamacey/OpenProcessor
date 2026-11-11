@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from src.schemas.curation.views import HiddenCounts, SortOption
 
 
+BoxLabelKind = Literal['class', 'proposed', 'detector', 'region', 'none']
 BoxTone = Literal['validated', 'machine', 'unlabeled', 'holdout', 'rejected']
 
 
@@ -27,7 +28,10 @@ class BoxView(BaseModel):
     bbox_norm: tuple[float, float, float, float] = Field(
         description='[x1, y1, x2, y2], normalized 0..1 in the source image.'
     )
-    label: str = Field(description='The text to show on the box: the class name, or "unlabeled".')
+    label: str = Field(
+        description='The text to show on the box: the item display name or the region text.'
+    )
+    label_kind: BoxLabelKind = Field(description='Where `label` came from.')
     class_name: str | None = None
     tone: BoxTone = Field(description='How the box is drawn: its review state, served.')
     state: str | None = Field(default=None, description='The region box state; null for an item.')

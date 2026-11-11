@@ -393,6 +393,7 @@ def make_box(box_id: str = 'b1', **over: Any) -> dict[str, Any]:
     per-box thumbnail route."""
     box: dict[str, Any] = {
         'box_id': box_id,
+        'display_name': f'Region {box_id.removeprefix("b")}',
         'state': 'proposed',
         'bbox_norm': [0.1, 0.1, 0.3, 0.3],
         'bbox_in_parent': [0.1, 0.1, 0.3, 0.3],

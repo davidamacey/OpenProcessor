@@ -3725,8 +3725,20 @@
             "type": "string"
           },
           "label": {
-            "description": "The text to show on the box: the class name, or \"unlabeled\".",
+            "description": "The text to show on the box: the item display name or the region text.",
             "title": "Label",
+            "type": "string"
+          },
+          "label_kind": {
+            "description": "Where `label` came from.",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "region",
+              "none"
+            ],
+            "title": "Label Kind",
             "type": "string"
           },
           "state": {
@@ -3759,6 +3771,7 @@
           "kind",
           "bbox_norm",
           "label",
+          "label_kind",
           "tone"
         ],
         "title": "BoxView",
@@ -30915,6 +30928,10 @@
             ],
             "title": "Detector Version"
           },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
           "drop_reason": {
             "anyOf": [
               {
@@ -31209,6 +31226,7 @@
           "cluster_assigned_by",
           "detected_at",
           "locked",
+          "display_name",
           "bbox_in_parent",
           "thumbnail_url",
           "candidate_index",

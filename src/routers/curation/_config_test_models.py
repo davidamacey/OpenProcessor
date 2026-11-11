@@ -160,6 +160,7 @@ class RegionTestCandidate(BaseModel):
     cluster_assigned_by: str | None
     detected_at: str | None
     locked: bool
+    display_name: str
     #: The item-crop frame (what the leg returned); ``bbox_norm`` is the
     #: source-image frame.
     bbox_in_parent: list[float] | None

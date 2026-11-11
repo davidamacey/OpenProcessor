@@ -65,6 +65,7 @@ export function candidateFixture(
     detected_at: null,
     detector: 'tag_detector_v1',
     detector_version: null,
+    display_name: 'Region 1',
     drop_reason: null,
     locked: false,
     mask_iou: null,
