@@ -3881,139 +3881,6 @@
         "title": "BreakdownRow",
         "type": "object"
       },
-      "BulkIngestConfig": {
-        "properties": {
-          "default_batch_size": {
-            "title": "Default Batch Size",
-            "type": "integer"
-          },
-          "default_concurrency": {
-            "title": "Default Concurrency",
-            "type": "integer"
-          },
-          "default_extensions": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Default Extensions",
-            "type": "array"
-          },
-          "max_batch_size": {
-            "title": "Max Batch Size",
-            "type": "integer"
-          },
-          "max_concurrency": {
-            "title": "Max Concurrency",
-            "type": "integer"
-          },
-          "preview": {
-            "$ref": "#/components/schemas/BulkPreviewConfig"
-          },
-          "source_roots": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Roots",
-            "type": "array"
-          }
-        },
-        "required": [
-          "source_roots",
-          "default_extensions",
-          "default_batch_size",
-          "default_concurrency",
-          "max_batch_size",
-          "max_concurrency",
-          "preview"
-        ],
-        "title": "BulkIngestConfig",
-        "type": "object"
-      },
-      "BulkIngestFailure": {
-        "properties": {
-          "error": {
-            "title": "Error",
-            "type": "string"
-          },
-          "error_kind": {
-            "title": "Error Kind",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "path",
-          "error",
-          "error_kind"
-        ],
-        "title": "BulkIngestFailure",
-        "type": "object"
-      },
-      "BulkIngestFailurePage": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/BulkIngestFailure"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "offset": {
-            "title": "Offset",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "offset",
-          "limit"
-        ],
-        "title": "BulkIngestFailurePage",
-        "type": "object"
-      },
-      "BulkIngestList": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/BulkIngestRun"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "page": {
-            "title": "Page",
-            "type": "integer"
-          },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "page_size"
-        ],
-        "title": "BulkIngestList",
-        "type": "object"
-      },
       "BulkIngestProgress": {
         "properties": {
           "crops_indexed": {
@@ -4137,97 +4004,6 @@
           "unreadable_samples"
         ],
         "title": "BulkIngestProgress",
-        "type": "object"
-      },
-      "BulkIngestRequest": {
-        "additionalProperties": false,
-        "description": "Exactly one of ``folder`` and ``manifest`` (a path inside the API container,\nunder a configured source root), ``s3`` (a bucket and prefix inside\n``OP_S3_ALLOWED``) or ``source_id`` (a registered ingest source, whose own options\napply). Starting a source whose earlier run was interrupted, cancelled or finished\nwith failures resumes that run.",
-        "properties": {
-          "batch_size": {
-            "default": 16,
-            "maximum": 64.0,
-            "minimum": 1.0,
-            "title": "Batch Size",
-            "type": "integer"
-          },
-          "concurrency": {
-            "default": 16,
-            "maximum": 32.0,
-            "minimum": 1.0,
-            "title": "Concurrency",
-            "type": "integer"
-          },
-          "extensions": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 32,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extensions"
-          },
-          "folder": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Folder"
-          },
-          "manifest": {
-            "anyOf": [
-              {
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Manifest"
-          },
-          "s3": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/S3Location"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "source": {
-            "default": "bulk_ingest",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Source",
-            "type": "string"
-          },
-          "source_id": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Id"
-          }
-        },
-        "title": "BulkIngestRequest",
         "type": "object"
       },
       "BulkIngestRun": {
@@ -4495,61 +4271,6 @@
         "title": "BulkPreview",
         "type": "object"
       },
-      "BulkPreviewConfig": {
-        "description": "The bounds of a preview and the measured figures its estimate uses, all from\n``docs/PERFORMANCE.md`` (the section is named per figure).",
-        "properties": {
-          "embeddings_per_image": {
-            "$ref": "#/components/schemas/PreviewMeasuredWire"
-          },
-          "gpu_decode": {
-            "title": "Gpu Decode",
-            "type": "boolean"
-          },
-          "gpu_min_megapixels": {
-            "title": "Gpu Min Megapixels",
-            "type": "number"
-          },
-          "header_sample": {
-            "title": "Header Sample",
-            "type": "integer"
-          },
-          "max_files": {
-            "title": "Max Files",
-            "type": "integer"
-          },
-          "max_seconds": {
-            "title": "Max Seconds",
-            "type": "number"
-          },
-          "opensearch_bytes_per_image": {
-            "$ref": "#/components/schemas/PreviewMeasuredWire"
-          },
-          "rates": {
-            "items": {
-              "$ref": "#/components/schemas/PreviewRateWire"
-            },
-            "title": "Rates",
-            "type": "array"
-          },
-          "source_document": {
-            "title": "Source Document",
-            "type": "string"
-          }
-        },
-        "required": [
-          "max_files",
-          "max_seconds",
-          "header_sample",
-          "gpu_decode",
-          "gpu_min_megapixels",
-          "rates",
-          "embeddings_per_image",
-          "opensearch_bytes_per_image",
-          "source_document"
-        ],
-        "title": "BulkPreviewConfig",
-        "type": "object"
-      },
       "BulkPreviewRequest": {
         "additionalProperties": false,
         "description": "Exactly one of ``folder``, ``manifest``, ``s3`` and ``source_id``, as for a start.\nNothing is ingested and nothing is written.",
@@ -4734,6 +4455,25 @@
           "job_id"
         ],
         "title": "CancelResponse",
+        "type": "object"
+      },
+      "ClassCount": {
+        "properties": {
+          "class_name": {
+            "description": "A class name, `unlabeled` or `other` (the rest).",
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "ClassCount",
         "type": "object"
       },
       "ClassCreateRequest": {
@@ -24886,34 +24626,6 @@
         "title": "PreviewExtensionWire",
         "type": "object"
       },
-      "PreviewMeasuredWire": {
-        "properties": {
-          "measured_on": {
-            "title": "Measured On",
-            "type": "string"
-          },
-          "source_section": {
-            "title": "Source Section",
-            "type": "string"
-          },
-          "unit": {
-            "title": "Unit",
-            "type": "string"
-          },
-          "value": {
-            "title": "Value",
-            "type": "number"
-          }
-        },
-        "required": [
-          "value",
-          "unit",
-          "source_section",
-          "measured_on"
-        ],
-        "title": "PreviewMeasuredWire",
-        "type": "object"
-      },
       "PreviewMegapixelsWire": {
         "properties": {
           "gate_megapixels": {
@@ -24954,39 +24666,6 @@
           "gate_megapixels"
         ],
         "title": "PreviewMegapixelsWire",
-        "type": "object"
-      },
-      "PreviewRateWire": {
-        "properties": {
-          "images_per_s": {
-            "title": "Images Per S",
-            "type": "number"
-          },
-          "measured_on": {
-            "title": "Measured On",
-            "type": "string"
-          },
-          "route": {
-            "enum": [
-              "cpu_small",
-              "cpu_large",
-              "gpu_large"
-            ],
-            "title": "Route",
-            "type": "string"
-          },
-          "source_section": {
-            "title": "Source Section",
-            "type": "string"
-          }
-        },
-        "required": [
-          "route",
-          "images_per_s",
-          "source_section",
-          "measured_on"
-        ],
-        "title": "PreviewRateWire",
         "type": "object"
       },
       "ProbeCancelResponse": {
@@ -37224,6 +36903,89 @@
           "selected"
         ],
         "title": "SelectionDryRunResponse",
+        "type": "object"
+      },
+      "SelectionSummary": {
+        "properties": {
+          "by_class": {
+            "description": "The 10 largest classes, then `other`.",
+            "items": {
+              "$ref": "#/components/schemas/ClassCount"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "detections": {
+            "title": "Detections",
+            "type": "integer"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "in_holdout": {
+            "title": "In Holdout",
+            "type": "integer"
+          },
+          "join_truncated": {
+            "description": "More images matched than the position count used.",
+            "title": "Join Truncated",
+            "type": "boolean"
+          },
+          "located": {
+            "description": "Images with a position the location policy lets be served.",
+            "title": "Located",
+            "type": "integer"
+          },
+          "locked": {
+            "description": "Detections a bulk write skips: a person or an import set their class or boxes, or they sit in the test holdout.",
+            "title": "Locked",
+            "type": "integer"
+          },
+          "summary_text": {
+            "description": "\"183 detections in 41 images · 7 locked, skipped\".",
+            "title": "Summary Text",
+            "type": "string"
+          },
+          "taken_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken From"
+          },
+          "taken_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken To"
+          }
+        },
+        "required": [
+          "detections",
+          "images",
+          "clusters",
+          "locked",
+          "in_holdout",
+          "by_class",
+          "located",
+          "join_truncated",
+          "summary_text"
+        ],
+        "title": "SelectionSummary",
         "type": "object"
       },
       "ServingActivateRequest": {
@@ -54244,165 +54006,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/ingest/bulk": {
-      "get": {
-        "operationId": "list_bulk_ingests_curation_projects__project__ingest_bulk_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestList"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Bulk Ingests",
-        "tags": [
-          "Curation"
-        ]
-      },
-      "post": {
-        "description": "Start a run over a folder, manifest, S3 bucket/prefix or registered source, or\nresume the interrupted, cancelled or partly failed run of the same source\n(``resumed: true``). One run per project at a time (409 ``bulk_ingest_busy``).",
-        "operationId": "start_bulk_ingest_curation_projects__project__ingest_bulk_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkIngestRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestRun"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Start Bulk Ingest",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/ingest/bulk/config": {
-      "get": {
-        "description": "The roots a source must lie under and the run-option defaults and bounds.",
-        "operationId": "bulk_ingest_config_curation_projects__project__ingest_bulk_config_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestConfig"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Bulk Ingest Config",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/ingest/bulk/preview": {
       "post": {
         "description": "Count the files, bytes and extensions of a source, sample image sizes, and estimate\nduration and index footprint from measured figures (``GET /ingest/bulk/config``).\nCapped by file count and seconds (``partial: true`` then); a client disconnect stops\nthe walk.",
@@ -54451,184 +54054,6 @@
           }
         },
         "summary": "Preview Bulk Ingest",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/ingest/bulk/{run_id}": {
-      "get": {
-        "operationId": "get_bulk_ingest_curation_projects__project__ingest_bulk__run_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestRun"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Bulk Ingest",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/ingest/bulk/{run_id}/cancel": {
-      "post": {
-        "description": "Stop after the batches in flight; images already stored stay stored and a\nlater start of the same source continues from them.",
-        "operationId": "cancel_bulk_ingest_curation_projects__project__ingest_bulk__run_id__cancel_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestRun"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Cancel Bulk Ingest",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
-    "/curation/projects/{project}/ingest/bulk/{run_id}/failures": {
-      "get": {
-        "description": "The failed images of the run's latest attempt, with the reason for each.",
-        "operationId": "get_bulk_ingest_failures_curation_projects__project__ingest_bulk__run_id__failures_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "title": "Run Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 100,
-              "maximum": 1000,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BulkIngestFailurePage"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Bulk Ingest Failures",
         "tags": [
           "Curation"
         ]
@@ -69176,6 +68601,60 @@
         "summary": "Select Status",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/selection/summary": {
+      "post": {
+        "description": "Detections, images, clusters, locks and classes of a selection, counted in one query on\nthe items index. Refused with 422 when the selection names more than the bulk-write cap.",
+        "operationId": "post_selection_summary_curation_projects__project__selection_summary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Selection Summary",
+        "tags": [
+          "Curation",
+          "Selection"
         ]
       }
     },

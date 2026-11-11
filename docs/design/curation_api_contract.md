@@ -810,6 +810,7 @@ separate single-box shape. Each element:
 | `locked` | server-derived: [the lock rule](#the-lock-rule) for this box |
 | `bbox_in_parent` | server-derived: the box in the item-crop frame, clamped to `[0, 1]`; `null` when the item has no usable `bbox_norm`. Draw it on the item thumbnail as is |
 | `thumbnail_url` | server-derived: `GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>` |
+| `display_name` | server-derived: the box's `text` when read, else the active region profile's name for one region (`Region` when it names none) and the box's 1-based place in the list, for example `Plate 2` |
 
 Item-level summaries: `region_count` counts `accepted` boxes,
 `region_rejected_count` counts `rejected` ones, `region_max_score` is the best
@@ -2607,3 +2608,11 @@ The table lists renamed or restructured wire surfaces.
 - A backend outage is `503`. An empty list always means no matching data.
 - Not on the wire: backend OpenSearch field names, the internal tracking
   host, API keys, and filesystem paths of training artifacts.
+
+## Selection summary
+
+`POST /selection/summary` takes an `ItemSelection` (`crop_ids` xor `filter`) and answers what a bulk
+action on it would touch: `detections`, `images`, `clusters`, `locked` (items a bulk write skips),
+`in_holdout`, `by_class` (ten largest, then `unlabeled` and `other`), `taken_from`, `taken_to`,
+`located` (images with a served position), `join_truncated` and the sentence `summary_text`. One
+aggregation on the items index; a selection above the bulk cap (20,000) is refused with `422`.
