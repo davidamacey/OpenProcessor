@@ -1,6 +1,7 @@
 <script lang="ts">
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
+  import ClusterRunPanel from '$lib/components/clusters/ClusterRunPanel.svelte';
   import ClusterGridCard from '$lib/components/clusters/ClusterGridCard.svelte';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
   import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
@@ -258,9 +259,14 @@
         </button>
       </div>
     {:else}
-      <p class="text-sm text-zinc-500">
-        No clusters yet — ingest some images and run the auto-label pipeline.
-      </p>
+      <div class="space-y-3" data-testid="clusters-empty">
+        <p class="text-sm text-zinc-400" data-testid="clusters-empty-message">
+          {list.emptyMessage ?? 'No clusters to show.'}
+        </p>
+        {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
+          <ClusterRunPanel onserving={() => void list.loadFirst()} />
+        {/if}
+      </div>
     {/if}
   {:else}
     {#if list.truncated}

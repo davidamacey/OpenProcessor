@@ -47,6 +47,9 @@ function response(
     sort_options: [{ id: 'size_desc', label: 'Largest first' }],
     flag_vocabulary: [{ id: 'unvalidated', label: 'Unvalidated', description: 'd' }],
     truncated: false,
+    empty_reason: null,
+    empty_message: null,
+    pending_partition: null,
     ...extra,
   };
 }

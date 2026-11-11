@@ -50,6 +50,15 @@ type RawCluster = {
   flags?: string[];
 };
 
+export type ClusterEmptyReason = 'no_partition' | 'pending_activation' | 'filtered_empty';
+
+/** The newest built partition that is not serving yet. */
+export interface PendingPartition {
+  partition_id: string;
+  clusters: number;
+  items: number;
+}
+
 type RawClustersResp = {
   items: RawCluster[];
   total: number;
@@ -62,6 +71,9 @@ type RawClustersResp = {
   sort_options?: ClusterSortOption[];
   flag_vocabulary?: ClusterFlag[];
   truncated?: boolean;
+  empty_reason?: ClusterEmptyReason | null;
+  empty_message?: string | null;
+  pending_partition?: PendingPartition | null;
 };
 
 function _rawClusterToCluster(c: RawCluster): Cluster {
@@ -104,6 +116,10 @@ export interface ClustersResponse extends PaginatedResponse<Cluster> {
   sort_options: ClusterSortOption[];
   flag_vocabulary: ClusterFlag[];
   truncated: boolean;
+  /** Why `items` is empty, with the served text; null when cards are served. */
+  empty_reason: ClusterEmptyReason | null;
+  empty_message: string | null;
+  pending_partition: PendingPartition | null;
 }
 
 export async function getClusters(
@@ -161,6 +177,9 @@ export async function getClusters(
     sort_options: raw.sort_options ?? [],
     flag_vocabulary: raw.flag_vocabulary ?? [],
     truncated: raw.truncated === true,
+    empty_reason: raw.empty_reason ?? null,
+    empty_message: raw.empty_message ?? null,
+    pending_partition: raw.pending_partition ?? null,
     representatives_offset:
       raw.representatives_offset ?? filter.representatives_offset ?? 0,
     representatives_limit:

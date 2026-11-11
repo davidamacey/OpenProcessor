@@ -13,9 +13,22 @@
   interface Props {
     target?: ClusterTarget;
     ctl?: ClusterRunController;
+    /** Called when a different partition starts serving, so a page can reload what it shows. */
+    onserving?: () => void;
   }
 
-  let { target = 'item', ctl = new ClusterRunController(target) }: Props = $props();
+  let {
+    target = 'item',
+    ctl = new ClusterRunController(target),
+    onserving,
+  }: Props = $props();
+
+  let lastServing: string | null | undefined;
+  $effect(() => {
+    const id = ctl.serving?.id ?? null;
+    if (lastServing !== undefined && id !== lastServing && id !== null) onserving?.();
+    lastServing = id;
+  });
 
   onMount(() => void ctl.load());
 </script>

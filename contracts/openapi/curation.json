@@ -5651,6 +5651,35 @@
       },
       "ClusterListResponse": {
         "properties": {
+          "empty_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The text to show for `empty_reason`.",
+            "title": "Empty Message"
+          },
+          "empty_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_partition",
+                  "pending_activation",
+                  "filtered_empty"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why `items` is empty; null when cards are served.",
+            "title": "Empty Reason"
+          },
           "flag_vocabulary": {
             "items": {
               "$ref": "#/components/schemas/ClusterFlag"
@@ -5664,6 +5693,17 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "pending_partition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingPartition"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest built partition not serving yet (newer than the serving one); activate it with `PUT /clusters/activation`."
           },
           "representatives_limit": {
             "title": "Representatives Limit",
@@ -5704,7 +5744,10 @@
           "sort",
           "sort_options",
           "flag_vocabulary",
-          "truncated"
+          "truncated",
+          "empty_reason",
+          "empty_message",
+          "pending_partition"
         ],
         "title": "ClusterListResponse",
         "type": "object"
@@ -23576,6 +23619,29 @@
           "expected_revision"
         ],
         "title": "PatchProjectRequest",
+        "type": "object"
+      },
+      "PendingPartition": {
+        "properties": {
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "items": {
+            "title": "Items",
+            "type": "integer"
+          },
+          "partition_id": {
+            "title": "Partition Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "partition_id",
+          "clusters",
+          "items"
+        ],
+        "title": "PendingPartition",
         "type": "object"
       },
       "PerClassRow": {

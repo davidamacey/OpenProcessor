@@ -330,4 +330,7 @@ async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> Clus
         'sort_options': [{'id': i, 'label': label} for i, label in SORT_OPTIONS],
         'flag_vocabulary': list(FLAG_VOCABULARY),
         'truncated': truncated,
+        'empty_reason': None,
+        'empty_message': None,
+        'pending_partition': None,
     }

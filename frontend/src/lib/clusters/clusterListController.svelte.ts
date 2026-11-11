@@ -6,7 +6,7 @@
  * window that fetches thumbnails for the cards about to appear.
  */
 import { untrack } from 'svelte';
-import { getClusters } from '$lib/api_clusters';
+import { getClusters, type ClusterEmptyReason } from '$lib/api_clusters';
 import {
   EMPTY_CLUSTER_FILTER,
   clusterFilterFromUrl,
@@ -50,6 +50,8 @@ export function createClusterListController(deps: ClusterListDeps) {
   let sortOptions = $state<ClusterSortOption[]>([]);
   let flagVocabulary = $state<ClusterFlag[]>([]);
   let truncated = $state(false);
+  let emptyReason = $state<ClusterEmptyReason | null>(null);
+  let emptyMessage = $state<string | null>(null);
   let total = $state(0);
   // Detector classes seen on served cards, in served order. Kept across
   // filters so a picker does not lose the values a filter just hid.
@@ -73,6 +75,8 @@ export function createClusterListController(deps: ClusterListDeps) {
       sortOptions = res.sort_options;
       flagVocabulary = res.flag_vocabulary;
       truncated = res.truncated;
+      emptyReason = res.empty_reason;
+      emptyMessage = res.empty_message;
       total = res.total;
       rememberDetectorClasses(res.items);
       return res;
@@ -251,6 +255,12 @@ export function createClusterListController(deps: ClusterListDeps) {
     },
     get truncated() {
       return truncated;
+    },
+    get emptyReason() {
+      return emptyReason;
+    },
+    get emptyMessage() {
+      return emptyMessage;
     },
     get total() {
       return total;

@@ -87,11 +87,16 @@ def curation_client(fake: Any, monkeypatch: Any) -> Any:
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
     from src.core.db_session import get_db
+    from src.services.curation.cluster_empty_state import PartitionState
 
     async def no_database():
         yield None
 
     monkeypatch.setattr('src.routers.curation.clusters.attach_display_nos', AsyncMock())
+    monkeypatch.setattr(
+        'src.routers.curation.clusters.read_partition_state',
+        AsyncMock(return_value=PartitionState(serving=True, pending=None)),
+    )
     app = FastAPI()
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
