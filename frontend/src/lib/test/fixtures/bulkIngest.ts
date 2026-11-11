@@ -114,6 +114,8 @@ export function progressFixture(
     n_not_embedded: 0,
     n_embed_failed: 0,
     in_flight: 0,
+    unreadable: 0,
+    unreadable_samples: [],
     images_per_s: null,
     images_per_s_recent: null,
     eta_s: null,
