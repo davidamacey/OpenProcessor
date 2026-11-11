@@ -8,8 +8,10 @@ field names down (``src/clients`` may not import ``src.services``).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from src.domain.embedding_spaces import EmbeddingSpaceError, Target
+from src.domain.embedding_state import DEFERRED
 from src.services.embedding_spaces.resolve import embedding_space, live_spaces
 
 
@@ -66,6 +68,18 @@ async def item_state_fields() -> dict[str, str]:
         for s in await live_spaces()
         if s.target is Target.ITEM and s.state_field is not None
     }
+
+
+async def item_vector_resets() -> dict[str, Any]:
+    """The update that empties every live item space of a vector it no longer matches: the vector
+    field cleared and the state ``deferred``. A moved box writes it in the same update, so a failed
+    re-embed cannot leave the old box's vector on the new one."""
+    resets: dict[str, Any] = {}
+    for s in await live_spaces():
+        if s.target is Target.ITEM and s.state_field is not None:
+            resets[s.vector_field] = None
+            resets[s.state_field] = DEFERRED
+    return resets
 
 
 async def frame_vector_field() -> str:

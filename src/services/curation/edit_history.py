@@ -46,9 +46,11 @@ matters: an undo record is always newer than the entry it cancels."""
 class EditKind(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     REGION = 'region'
     VLM_DISMISS = 'vlm_dismiss'
+    GEOMETRY = 'geometry'
 
 
 GEOMETRY_WRITER = 'human:geometry'
+GEOMETRY_UNDO_WRITER = 'human:geometry_undo'
 REGION_UNDO_WRITER = 'human:region_undo'
 VLM_DISMISS_UNDO_WRITER = 'human:vlm_dismiss_undo'
 
@@ -57,6 +59,17 @@ VLM_DISMISS_FIELDS: tuple[str, ...] = (
     'vlm_dismissed_class_name',
     'vlm_dismissed_at',
 )
+
+
+GEOMETRY_FIELDS: tuple[str, ...] = (
+    'bbox_norm',
+    'crop_area_norm',
+    'geometry_source',
+    'detector_bbox_norm',
+    'crop_rank_in_image',
+)
+"""What a box edit replaces. ``geometry_revision`` is not one: a restore is itself a change, so it
+moves forward from the stored revision, as ``region_revision`` does."""
 
 
 def region_state_fields() -> tuple[str, ...]:
@@ -90,6 +103,8 @@ def region_state_fields() -> tuple[str, ...]:
 def state_fields(kind: EditKind) -> tuple[str, ...]:
     if kind == EditKind.REGION:
         return region_state_fields()
+    if kind == EditKind.GEOMETRY:
+        return GEOMETRY_FIELDS
     return VLM_DISMISS_FIELDS
 
 
@@ -153,11 +168,14 @@ def restore_edit_state(
     if kind == EditKind.REGION:
         F = get_region_fields()
         restored[F.revision] = int(current.get(F.revision) or 0) + 1
+    elif kind == EditKind.GEOMETRY:
+        restored['geometry_revision'] = int(current.get('geometry_revision') or 0) + 1
     return restored
 
 
 __all__ = [
     'EDIT_HISTORY_FIELD',
+    'GEOMETRY_UNDO_WRITER',
     'GEOMETRY_WRITER',
     'MAX_EDIT_HISTORY_ENTRIES',
     'REGION_UNDO_WRITER',

@@ -192,6 +192,9 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/reprocess'): {
             'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
         },
+        ('PATCH', '/crops/{crop_id}/geometry'): {
+            'json': {'bbox_norm': [0.1, 0.1, 0.5, 0.5], 'expected_geometry_revision': 0}
+        },
         ('POST', '/images/{image_id}/items'): {
             'json': {
                 'bbox_norm': [0.2, 0.2, 0.6, 0.6],

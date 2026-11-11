@@ -13,14 +13,13 @@ turns the delete into a conflict that is re-read, never a lost edit.
 
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
-from src.services.curation.source_image_cache import crop_cache_file
+from src.services.curation.source_image_cache import evict_crop_cache
 from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import content_key, pending as near_dup_pending
 
@@ -112,7 +111,7 @@ async def _delete_round(
     for cid in page:
         if cid not in fresh:
             gone += 1
-            _drop_cached_crop(crop_cache_dir, cid)
+            evict_crop_cache(crop_cache_dir, cid)
             continue
         source, seq_no, term = fresh[cid]
         if not await deletable(cid, source):
@@ -139,7 +138,7 @@ async def _delete_round(
         if status in (200, 404):
             deleted += 1
             removed.append(cid)
-            _drop_cached_crop(crop_cache_dir, cid)
+            evict_crop_cache(crop_cache_dir, cid)
         elif status == 409:
             conflicted.append(cid)
         else:
@@ -147,13 +146,6 @@ async def _delete_round(
     if level == 'image':
         await content_key.release_bound(removed)
     return deleted, gone, conflicted
-
-
-def _drop_cached_crop(cache_dir: str | Path | None, crop_id: str) -> None:
-    if not cache_dir:
-        return
-    with contextlib.suppress(OSError):
-        crop_cache_file(cache_dir, crop_id).unlink()
 
 
 __all__ = ['Deletable', 'delete_items']

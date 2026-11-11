@@ -27,6 +27,7 @@ re-crop rather than losing data.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import stat
@@ -68,6 +69,14 @@ def project_crop_cache_dir(cache_root: str | Path | None) -> Path | None:
 def crop_cache_file(cache_root: str | Path, crop_id: str) -> Path:
     """The bound project's cache file for ``crop_id``."""
     return Path(cache_root) / current_project().record.slug / f'{crop_id}.jpg'
+
+
+def evict_crop_cache(cache_root: str | Path | None, crop_id: str) -> None:
+    """Delete the bound project's cached picture of ``crop_id``; a missing file is the goal."""
+    if not cache_root:
+        return
+    with contextlib.suppress(OSError):
+        crop_cache_file(cache_root, crop_id).unlink()
 
 
 def write_crop_cache(

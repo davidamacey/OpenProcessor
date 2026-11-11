@@ -13181,6 +13181,94 @@
         "title": "GeoBox",
         "type": "object"
       },
+      "GeometryPatchRequest": {
+        "additionalProperties": false,
+        "description": "Move or resize an item's box.",
+        "properties": {
+          "bbox_norm": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Bbox Norm",
+            "type": "array"
+          },
+          "drop_region_box_ids": {
+            "description": "Region boxes that fall outside the new box and may be deleted with it.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Drop Region Box Ids",
+            "type": "array"
+          },
+          "expected_geometry_revision": {
+            "description": "The `geometry_revision` the editor holds; 0 for an item never edited.",
+            "minimum": 0.0,
+            "title": "Expected Geometry Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bbox_norm",
+          "expected_geometry_revision"
+        ],
+        "title": "GeometryPatchRequest",
+        "type": "object"
+      },
+      "GeometryWritten": {
+        "properties": {
+          "embedding_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Message"
+          },
+          "embedding_state": {
+            "enum": [
+              "embedded",
+              "not_selected",
+              "deferred",
+              "failed"
+            ],
+            "title": "Embedding State",
+            "type": "string"
+          },
+          "image_boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxView"
+            },
+            "title": "Image Boxes",
+            "type": "array"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ItemDoc"
+          }
+        },
+        "required": [
+          "item",
+          "image_boxes",
+          "embedding_state"
+        ],
+        "title": "GeometryWritten",
+        "type": "object"
+      },
       "GlobalHealthResponse": {
         "description": "Deployment facts only -- nothing here depends on a project. The\nscoped ``{prefix}/health`` serves the same facts plus the bound\nproject's.",
         "properties": {
@@ -50241,6 +50329,162 @@
         "summary": "Discard Crop",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/{crop_id}/geometry": {
+      "patch": {
+        "description": "Move or resize an item's box. `expected_geometry_revision` is the revision the editor\nholds (0 for an item never edited); a stale one is `409 geometry_conflict` carrying the\ncurrent item. Region boxes the new box would leave outside it are `422 regions_outside_item`\nuntil they are listed in `drop_region_box_ids`. The old vector is dropped and the item\nre-embedded in this request.",
+        "operationId": "patch_geometry_curation_projects__project__crops__crop_id__geometry_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeometryPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeometryWritten"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Geometry",
+        "tags": [
+          "Curation",
+          "Crops"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/{crop_id}/geometry/undo": {
+      "post": {
+        "description": "Put the box back to what it was before the newest edit that is not already undone.\n`409 nothing_to_undo` when none is left; an undo of an undo is not restorable.",
+        "operationId": "undo_crop_geometry_curation_projects__project__crops__crop_id__geometry_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeometryWritten"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Undo Crop Geometry",
+        "tags": [
+          "Curation",
+          "Crops"
         ]
       }
     },

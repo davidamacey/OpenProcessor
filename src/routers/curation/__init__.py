@@ -51,6 +51,7 @@ import src.routers.curation.health
 
 
 import src.routers.curation.image_items  # isort: skip
+import src.routers.curation.crops_geometry  # isort: skip
 import src.routers.curation.images_view
 import src.routers.curation.ingest_bulk
 import src.routers.curation.ingest_bulk_preview

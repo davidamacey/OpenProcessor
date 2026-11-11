@@ -22,3 +22,10 @@ class ItemCreated(BaseModel):
     embedding_message: str | None = Field(
         default=None, description='Served text when the item is deferred; null otherwise.'
     )
+
+
+class GeometryWritten(BaseModel):
+    item: ItemDoc
+    image_boxes: list[BoxView]
+    embedding_state: EmbeddingState
+    embedding_message: str | None = None

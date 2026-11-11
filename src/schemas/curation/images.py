@@ -127,3 +127,18 @@ class ItemCreateRequest(BaseModel):
     request_id: uuid.UUID = Field(
         description='Sent again unchanged, it returns the first item instead of a second.'
     )
+
+
+class GeometryPatchRequest(BaseModel):
+    """Move or resize an item's box."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    bbox_norm: tuple[float, float, float, float]
+    expected_geometry_revision: int = Field(
+        ge=0, description='The `geometry_revision` the editor holds; 0 for an item never edited.'
+    )
+    drop_region_box_ids: list[str] = Field(
+        default_factory=list,
+        description='Region boxes that fall outside the new box and may be deleted with it.',
+    )
