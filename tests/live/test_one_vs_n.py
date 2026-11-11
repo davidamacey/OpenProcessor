@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -30,7 +31,7 @@ import pytest
 
 from tests.live import _compose
 from tests.live._jobs import job_windows_disjoint, start_infra_job, wait_for_job
-from tests.live._scale import exec_json, reconfigure
+from tests.live._scale import exec_json, reconfigure, restore_base_stack
 from tests.live._sse import SseCollector
 from tests.live.conftest import (
     API_PREFIX,
@@ -259,8 +260,18 @@ def _pool_facts(workers: int, replicas: int) -> dict[str, Any]:
 
 
 @pytest.fixture(scope='module')
-def runs() -> dict[tuple[int, int, int], dict[str, Any]]:
+def runs() -> Iterator[dict[tuple[int, int, int], dict[str, Any]]]:
     results: dict[tuple[int, int, int], dict[str, Any]] = {}
+    try:
+        _run_configs(results)
+        yield results
+    finally:
+        # Left scaled, the next file's `exec jobs-worker` names one replica while the other may
+        # claim the job (test_queue_delivery[jobs] failed that way).
+        restore_base_stack()
+
+
+def _run_configs(results: dict[tuple[int, int, int], dict[str, Any]]) -> None:
     for cfg in CONFIGS:
         workers, api_replicas, jobs_replicas = cfg
         reconfigure(workers=workers, api_replicas=api_replicas, jobs_replicas=jobs_replicas)
@@ -280,7 +291,6 @@ def runs() -> dict[tuple[int, int, int], dict[str, Any]]:
             'pool_wait_exposed': 'op_db_pool_wait_seconds_count' in metrics,
             'tag': tag,
         }
-    return results
 
 
 def test_sequential_scenario_has_an_empty_diff(runs: dict[Any, dict[str, Any]]) -> None:
