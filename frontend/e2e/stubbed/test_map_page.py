@@ -4,9 +4,8 @@ nothing to draw (no GPS position, or the `drop` location policy).
 
 The page's JSON comes from the generated contract (`fill`). Basemap tiles are
 requested from a same-origin path that the test answers, so nothing leaves the
-machine. MapLibre needs WebGL2, which headless Chromium only gets with an X server
-behind it: run this file as `xvfb-run -a <python> -m pytest ...` (no display is
-shown).
+machine. MapLibre needs WebGL2; the harness launches Chromium with SwiftShader
+(`harness/server.py`), so no X server is needed.
 
 Waits are real (`expect_request` / visible elements), never a sleep.
 """

@@ -347,7 +347,8 @@ server-side sort and filters, and `.../clusters/{cluster_uid}/facets` counts one
 Exact duplicates are caught at ingest by content. Near-duplicates are found by vector similarity
 and kept as groups, at the image level and the item level: `GET /curation/projects/{project}/near_duplicates/status`
 says whether the groups are current, `POST .../near_duplicates/runs` starts a full run (the
-service also keeps them current in the background), `GET .../near_duplicates/groups` lists them,
+service also keeps them current in the background; an item-level run answers 409 `no_image_run`
+until the image level has a current run), `GET .../near_duplicates/groups` lists them,
 and `POST .../near_duplicates/decisions` records that a pair is `same` or `different` (a decision
 survives re-runs and is removed with `DELETE .../near_duplicates/decisions/{decision_id}`). The
 cuts are a `near_dup_profile`. **The holdout rule:** a frozen test set must not contain

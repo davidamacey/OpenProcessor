@@ -85,6 +85,16 @@ async def start_run(
     session: AsyncSession, project: uuid.UUID, body: wire.NearDupRunRequest, requested_by: str
 ) -> wire.NearDupRunStarted:
     kind = KIND_FOR_MODE[body.mode]
+    if body.level == 'item':
+        async with project_tx(session, project):
+            has_image_run = await repo.current_run(session, project, 'image') is not None
+        if not has_image_run:
+            raise rejection(
+                409,
+                'no_image_run',
+                "the item level groups inside the image level's leak groups: "
+                'run the image level first',
+            )
     result = await start_job(
         session, kind, project, params={'level': body.level}, requested_by=requested_by
     )

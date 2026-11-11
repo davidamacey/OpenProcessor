@@ -22,6 +22,7 @@ JobErrorCode = Literal[
     'queue_unavailable',
     'unknown_job_kind',
     'invalid_cursor',
+    'no_image_run',
 ]
 
 

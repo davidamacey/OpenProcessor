@@ -1500,7 +1500,7 @@ The search routes take `space` and `fuse`, and echo the `space` they ranked in; 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/near_duplicates/status` | `NearDupStatus`: per level (`image`, `item`) the current run, whether the groups are stale and why (`pending`, `rebuild_required`, `no_run`), and the active profile |
-| POST | `/near_duplicates/runs` | `NearDupRunRequest` (`level`, `mode` `full` or `incremental`); `202` `{job_id, kind}` |
+| POST | `/near_duplicates/runs` | `NearDupRunRequest` (`level`, `mode` `full` or `incremental`); `202` `{job_id, kind}`; 409 `job_busy`, or `no_image_run` for an item run with no current image run |
 | GET | `/near_duplicates/runs` | runs, newest first; query `level`, `limit` |
 | GET | `/near_duplicates/runs/{run_id}` | one run: space, algorithm version, profile revision, parameters, members scored, group counts |
 | GET | `/near_duplicates/groups` | groups; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit` |

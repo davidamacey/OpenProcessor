@@ -87,6 +87,18 @@ async def test_a_run_is_a_job_and_a_second_start_is_busy(
     assert (busy.value.status_code, busy.value.detail['error']) == (409, 'job_busy')
 
 
+async def test_an_item_run_without_an_image_run_is_refused_at_the_start(
+    pg, project, job_env, producer
+) -> None:
+    with pytest.raises(RequestRejectedError) as refused:
+        async with async_session_factory()() as session:
+            await service.start_run(
+                session, project, wire.NearDupRunRequest(level='item', mode='full'), 'tester'
+            )
+    assert (refused.value.status_code, refused.value.detail['error']) == (409, 'no_image_run')
+    assert producer.sent() == []
+
+
 async def test_groups_page_by_size_and_open_by_lineage(pg, project) -> None:
     docs = {IMAGES: image_docs({'big': ['a1', 'a2', 'a3'], 'small': ['b1', 'b2']}, ['s1'])}
     env, _ = await make_env(pg, project, docs)
