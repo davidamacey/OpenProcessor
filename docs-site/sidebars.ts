@@ -52,6 +52,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'guides/projects',
             'guides/settings-and-config',
+            'guides/api-only-features',
             'guides/keymaps',
             'guides/reprocess',
             'guides/test-on-crop',
