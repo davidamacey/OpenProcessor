@@ -56,7 +56,7 @@
          grid, not a new page (mirrors showEmbeddingViz's own swap
          above). Infinite scroll is not offered: {API_PREFIX}/search/text isn't
          paginated the way the cluster grid's sentinel expects. -->
-    <div class="mb-3 flex items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <span class="flex items-center gap-2 text-zinc-300" data-testid="search-summary">
         <strong class="text-zinc-100">{modes.searchTotal.toLocaleString()}</strong>
         {#if modes.similarTo}
@@ -133,7 +133,7 @@
   {:else if modes.ignoredModeActive}
     <!-- Ignored bucket (G7): excluded crops, restorable via
          batch_unexclude. Same mode-swap pattern as search above. -->
-    <div class="mb-3 flex items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <span class="text-zinc-300">
         <strong class="text-zinc-100">{modes.ignoredTotal.toLocaleString()}</strong>
         ignored crop{modes.ignoredTotal === 1 ? '' : 's'}
@@ -179,7 +179,7 @@
     {/if}
   {:else if modes.itemTextModeActive}
     <!-- Item-text search results (G8). -->
-    <div class="mb-3 flex items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <span class="text-zinc-300">
         <strong class="text-zinc-100">{modes.itemTextTotal.toLocaleString()}</strong>
         result{modes.itemTextTotal === 1 ? '' : 's'} for

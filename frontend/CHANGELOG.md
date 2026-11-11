@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Similar-items, item-text and ignored views: the "Back to clusters" button wraps onto its own line on narrow screens instead of being clipped.
 - Map page: without WebGL2 the map card says "Map needs WebGL2 ... N photos have GPS" instead of the page falling to "Something went wrong"; filters and the rest of the page keep working.
 - Map page: points render again. The API client now parses every `+json` response (`/map/cells` answers `application/geo+json`); before, the body arrived as text and MapLibre tried to fetch it as a URL.
 - Review sort chip: on narrow screens the sort label keeps a minimum width instead of collapsing, and the button's accessible name carries the sort, any applied fallback and the server's reason.
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Training form: when the served preflight is blocked, a "Start anyway (bypass blocking checks)" box (off by default) sends `force=true` with the start call; the server still refuses non-overridable checks and its message shows verbatim.
 - Map page (`/map`): where the project's photos were taken, drawn with MapLibre GL JS from the server's grid cells (`GET /map/cells`, GeoJSON). The nav link shows only when `GET /map` says the project has stored positions and its location policy serves them; under `drop` the page says so. Filters are the shared item filter plus the capture days (`taken_from`, `taken_to`); a click on a cell of at most 200 photos lists them (the Matching items view) and a larger cell zooms in. Basemap tiles come from the served `tile_url` (`OP_MAP_TILE_URL`, OpenStreetMap by default), fetched by the browser. The shared filter also takes `taken_from` / `taken_to` / `image_id`.
 - Creating a project follows the `project_create` job: `POST /projects` answers 202 with the project in `building`; the list shows `building` until the job ends, a failed build shows the served reason, and the project stays `failed` until it is deleted (#439).
 - Backend v0.7.0 wire: clusters are addressed by `cluster_uid` (a string) everywhere; items carry a nested `cluster` reference and `embedding_states` per embedding space; label operations, crop moves, dataset uploads, cluster runs and partition activation answer 202 and are followed through `GET /jobs/{id}`; undo of a bulk label or move goes through the label operation (`POST /label_ops/{op_id}/undo`).
