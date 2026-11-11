@@ -5825,7 +5825,7 @@
           },
           "sort_options": {
             "items": {
-              "$ref": "#/components/schemas/ClusterSortOption"
+              "$ref": "#/components/schemas/SortOption"
             },
             "title": "Sort Options",
             "type": "array"
@@ -6220,24 +6220,6 @@
           "target"
         ],
         "title": "ClusterRunRequest",
-        "type": "object"
-      },
-      "ClusterSortOption": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "ClusterSortOption",
         "type": "object"
       },
       "ClusterStats": {
@@ -8485,6 +8467,19 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "sort_applied": {
+            "description": "The applied sort id, the computed `order` when one ranked the page, or 'ids' for an id lookup.",
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "description": "Every sort id `sort` takes, with its label.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
           "suggested_reprocess": {
             "anyOf": [
               {
@@ -8515,7 +8510,9 @@
           "total",
           "page",
           "page_size",
-          "crops"
+          "crops",
+          "sort_applied",
+          "sort_options"
         ],
         "title": "CropsPageResponse",
         "type": "object"
@@ -37131,6 +37128,7 @@
         "type": "object"
       },
       "SortOption": {
+        "description": "One order a list serves: ``id`` is what the ``sort`` parameter takes, ``label`` is for people.",
         "properties": {
           "id": {
             "title": "Id",
@@ -47385,7 +47383,7 @@
             }
           },
           {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -47398,7 +47396,7 @@
                   "type": "null"
                 }
               ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
               "title": "Sort"
             }
           },

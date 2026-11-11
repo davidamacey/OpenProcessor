@@ -1,6 +1,7 @@
 /**
  * Cluster cards, one cluster's crops and moving crops between clusters (`/clusters*`).
  */
+import type { SortOption } from '$lib/types_cursor';
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import { apiErrorText } from '$lib/api_errors';
@@ -15,7 +16,6 @@ import type {
   ClusterPartitionList,
   ClusterRunAccepted,
   ClusterTarget,
-  ClusterSortOption,
   ValidationState,
 } from '$lib/types_clusterList';
 
@@ -52,6 +52,47 @@ type RawCluster = {
 
 export type ClusterEmptyReason = 'no_partition' | 'pending_activation' | 'filtered_empty';
 
+/** The shared item-filter parameters of `GET /clusters`. */
+function itemParams(filter: ClusterFilter) {
+  return {
+    class_name: filter.class_name,
+    exclude_class_name: filter.exclude_class_name,
+    conf_min: filter.conf_min ?? undefined,
+    conf_max: filter.conf_max ?? undefined,
+    min_area: filter.min_area ?? undefined,
+    max_area: filter.max_area ?? undefined,
+    origin: filter.origin,
+    embedding_state: filter.embedding_state,
+    review_status: filter.review_status,
+    taken_from: filter.taken_from ?? undefined,
+    taken_to: filter.taken_to ?? undefined,
+    image_id: filter.image_id,
+    // Primary-subject grid filters: card stats reflect only passing crops.
+    max_rank: filter.max_rank ?? undefined,
+    min_blur_ratio: filter.min_blur_ratio ?? undefined,
+    class_source: filter.class_source ?? undefined,
+  };
+}
+
+/** The card filters, sort and representatives window of `GET /clusters`. */
+function cardParams(filter: ClusterFilter) {
+  return {
+    per_cluster: filter.per_cluster ?? 4,
+    // Enough buckets to return every cluster in one call; `truncated` says when not.
+    max_clusters: 2000,
+    sort: filter.sort,
+    dominant_class: filter.dominant_class,
+    detector_class: filter.detector_class,
+    min_size: filter.min_size ?? undefined,
+    max_size: filter.max_size ?? undefined,
+    validation_state: filter.validation_state ?? undefined,
+    flag: filter.flag,
+    needs_review: filter.needs_review ? true : undefined,
+    offset: filter.representatives_offset ?? undefined,
+    limit: filter.representatives_limit ?? undefined,
+  };
+}
+
 /** The newest built partition that is not serving yet. */
 export interface PendingPartition {
   partition_id: string;
@@ -68,7 +109,7 @@ type RawClustersResp = {
   representatives_offset?: number;
   representatives_limit?: number;
   sort?: string;
-  sort_options?: ClusterSortOption[];
+  sort_options?: SortOption[];
   flag_vocabulary?: ClusterFlag[];
   truncated?: boolean;
   empty_reason?: ClusterEmptyReason | null;
@@ -113,7 +154,7 @@ export interface ClustersResponse extends PaginatedResponse<Cluster> {
   /** The sort the server applied, the sorts it offers, the flag
    *  vocabulary, and whether the list was cut at `max_clusters`. */
   sort: string | null;
-  sort_options: ClusterSortOption[];
+  sort_options: SortOption[];
   flag_vocabulary: ClusterFlag[];
   truncated: boolean;
   /** Why `items` is empty, with the served text; null when cards are served. */

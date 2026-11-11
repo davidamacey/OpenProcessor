@@ -384,6 +384,7 @@ exempt-modules = [
     "src.routers.curation._class_models",
     "src.routers.curation._vlm_policy_models",
     "src.routers.curation._item_models",
+    "src.schemas.curation.views",                # TypedDicts that response TypedDicts nest
     "src.routers.curation._common",              # OpenSearchDep
     "src.services.curation.vlm_policy",          # VlmScope query parameter
     "src.services.curation.dataset_import.options",

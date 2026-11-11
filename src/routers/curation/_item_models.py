@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
 from src.domain.embedding_state import EmbeddingState
-from src.schemas.curation.views import HiddenCounts
+from src.schemas.curation.views import HiddenCounts, SortOption
 from src.services.curation.reprocess_models import ReprocessRequest
 
 
@@ -304,6 +304,12 @@ class CropsPageResponse(BaseModel):
     page: int
     page_size: int
     crops: list[ItemDoc]
+    sort_applied: str = Field(
+        description="The applied sort id, the computed `order` when one ranked the page, or 'ids' for an id lookup."
+    )
+    sort_options: list[SortOption] = Field(
+        description='Every sort id `sort` takes, with its label.'
+    )
     # Only set for a pool-scale overlay ordering (order='outliers' /
     # 'diverse') — the operator-facing "from N crops in scope" caption
     # needs to know it's looking at a ranked overlay rather than the

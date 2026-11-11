@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 from src.config.curation_accessors import images_index
 from src.config.project_context import project_api_base
-from src.schemas.curation.images import ImageCard, ImagePage, SortOption
+from src.schemas.curation.images import ImageCard, ImagePage
 from src.schemas.curation.views import HiddenCounts
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_counts import item_facts
@@ -57,7 +57,7 @@ _SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
     'taken_at:asc': ('Oldest captured', [{_TAKEN: {'order': 'asc', 'missing': '_last'}}]),
     'file_name:asc': ('Path (A to Z)', [{'image_path': {'order': 'asc'}}]),
 }
-SORT_OPTIONS: Final = [SortOption(id=k, label=label) for k, (label, _) in _SORTS.items()]
+SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _SORTS.items()]
 
 _HOLDOUT = {'term': {'test_holdout': True}}
 _UNLABELED = {'bool': {'must_not': {'exists': {'field': 'class_id'}}}}

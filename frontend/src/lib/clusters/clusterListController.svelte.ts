@@ -5,6 +5,7 @@
  * the one served list: how many cards are on screen, and the representatives
  * window that fetches thumbnails for the cards about to appear.
  */
+import type { SortOption } from '$lib/types_cursor';
 import { untrack } from 'svelte';
 import { getClusters, type ClusterEmptyReason } from '$lib/api_clusters';
 import {
@@ -22,7 +23,6 @@ import type {
   ClusterFlag,
   ClusterListFilter,
   ClusterSortId,
-  ClusterSortOption,
 } from '$lib/types_clusterList';
 import { projectsStore } from '$stores/projects.svelte';
 import { toastStore } from '$stores/toast.svelte';
@@ -47,7 +47,7 @@ export function createClusterListController(deps: ClusterListDeps) {
   const { slotInventory } = deps;
 
   let appliedSort = $state<string | null>(null);
-  let sortOptions = $state<ClusterSortOption[]>([]);
+  let sortOptions = $state<SortOption[]>([]);
   let flagVocabulary = $state<ClusterFlag[]>([]);
   let truncated = $state(false);
   let emptyReason = $state<ClusterEmptyReason | null>(null);

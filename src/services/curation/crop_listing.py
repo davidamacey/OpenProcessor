@@ -27,6 +27,7 @@ class CropListQuery:
     """The parsed ``GET /crops`` query: sort clause, the merged filter and
     the OpenSearch ``query`` clause built from it."""
 
+    sort_id: str
     sort_clause: list[dict[str, Any]]
     item_filter: ItemFilter
     query_clause: dict[str, Any]
@@ -48,7 +49,7 @@ def build_crop_list_query(
 
     Raises ``ValueError`` for a bad ``sort`` or filter value.
     """
-    sort_clause = parse_crop_sort(sort)
+    sort_id, sort_clause = parse_crop_sort(sort)
     # The route's own params join the shared filter; one builder reads them all.
     flt = ItemFilter(
         **item_filter_params,
@@ -69,6 +70,7 @@ def build_crop_list_query(
         bool_q['filter'] = filt
     query_clause: dict[str, Any] = {'bool': bool_q} if bool_q else {'match_all': {}}
     return CropListQuery(
+        sort_id=sort_id,
         sort_clause=sort_clause,
         item_filter=flt,
         query_clause=query_clause,
@@ -84,7 +86,9 @@ def crop_list_body(
         'from': (page - 1) * page_size,
         'size': page_size,
         'query': query.query_clause,
-        'sort': query.sort_clause,
+        # crop_id is a mapped keyword equal to _id; sorting on _id would need fielddata, which
+        # these indexes disable. Last, so ties on the sort key never repeat or skip a row.
+        'sort': [*query.sort_clause, {'crop_id': {'order': 'asc'}}],
         # Exact total (not the default 10k cap) so the labeler shows real
         # queue sizes for filtered views — one count pass per query, fine at
         # this scale and matches the /curation/review endpoint.

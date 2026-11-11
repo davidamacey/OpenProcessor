@@ -49,10 +49,8 @@ async def list_crops(
         str | None,
         Query(
             description=(
-                "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
-                'updated_at, created_at, confidence, '
-                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, '
-                'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
+                "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` "
+                'lists every id with its label. Ignored by order=outliers|diverse.'
             )
         ),
     ] = None,
@@ -175,7 +173,9 @@ async def list_crops(
         if len(wanted) > MAX_IDS:
             raise HTTPException(status_code=400, detail=f'at most {MAX_IDS} ids per request')
         found = await crops_by_ids(opensearch, wanted)
-        return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
+        return crops_page(
+            total=len(found), page=1, page_size=len(wanted), crops=found, sort_applied='ids'
+        )
     if limit is not None:
         page_size = limit
     guard_page_depth(page, page_size)
@@ -276,6 +276,7 @@ async def list_crops(
         page=page,
         page_size=page_size,
         crops=crops,
+        sort_applied=listing.sort_id,
         hidden=hidden,
         join_truncated=join_truncated(join),
     )
