@@ -128,7 +128,7 @@ async def bulk_ingest_run(ctx: JobContext) -> JobResult:
     from src.services.curation.bulk_ingest.ledger import DbLedger
     from src.services.curation.bulk_ingest.limits import loopback_url
     from src.services.curation.bulk_ingest.runner import BulkIngestRun, BulkOptions
-    from src.services.curation.bulk_ingest.s3_listing import ScanStoppedError
+    from src.services.curation.bulk_ingest.s3_listing import ScanResult, ScanStoppedError
     from src.services.curation.bulk_ingest.sender import url_sender
     from src.services.curation.bulk_ingest.source_scan import scan_source
     from src.services.curation.bulk_ingest.sources import load_source, source_queue
@@ -141,10 +141,11 @@ async def bulk_ingest_run(ctx: JobContext) -> JobResult:
         if ctx.resume_from is None and ctx.params.get('fresh'):
             await asyncio.to_thread(queue.requeue_all)
         await asyncio.to_thread(queue.release_claims)  # the claims of a run that died
+        scanned = ScanResult()
         if ctx.params.get('scan'):
             # a stop request ends the scan early: the files queued so far are still drained
             with contextlib.suppress(ScanStoppedError):
-                await asyncio.to_thread(
+                scanned = await asyncio.to_thread(
                     scan_source, source, should_stop=ctx.cancelled, full=source.one_shot
                 )
         sender = url_sender(
@@ -161,11 +162,13 @@ async def bulk_ingest_run(ctx: JobContext) -> JobResult:
                 options=BulkOptions(**ctx.params['options']),
                 run_id=str(ctx.job_id),
                 prior=ctx.resume_from,
+                unreadable=scanned.unreadable,
+                unreadable_samples=scanned.unreadable_samples,
             )
             result = await run.run()
         finally:
             await sender.aclose()
-    return JobResult(result, with_errors=result['failed'] > 0)
+    return JobResult(result, with_errors=result['failed'] > 0 or result['unreadable'] > 0)
 
 
 async def source_poll(ctx: JobContext) -> dict[str, Any]:

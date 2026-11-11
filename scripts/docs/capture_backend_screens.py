@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 WIDTH = 1600
 MANIFEST = Path(__file__).resolve().parents[1] / 'datasets/manifests/coco_va_200.json'
 COCO_HOST = 'http://images.cocodataset.org'
-# Read-only routes only; /embed/image keeps its default index=false.
+# Read-only routes only; /embed/image is read-only.
 TRAFFIC_ROUTES = [
     '/detect',
     '/embed/image',

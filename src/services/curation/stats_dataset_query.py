@@ -9,6 +9,7 @@ from src.config.region_state import RegionStatus
 from src.domain.region_boxes import box_query
 from src.services.curation import stats_imports as imp
 from src.services.curation.item_filter import item_filter_query
+from src.services.curation.region_scope import active_parent_classes, parent_classes_clause
 from src.services.curation.stats_embedding import embedding_aggregations
 
 
@@ -153,6 +154,13 @@ def build_dataset_query_body(fields: RegionFields, embedding: WriteFields) -> di
             **embedding_aggregations(embedding),
             'region_status': {
                 'terms': {'field': fields.status, 'size': 32},
+            },
+            # Pending work counts only items the active profile's parent_classes put in
+            # scope: the worker never fetches the others, so counting them would keep the
+            # drain from ever finishing after the scope is narrowed.
+            'region_pending_in_scope': {
+                'filter': parent_classes_clause(active_parent_classes()) or {'match_all': {}},
+                'aggs': {'by_status': {'terms': {'field': fields.status, 'size': 32}}},
             },
             # Crops that actually carry a region box right now. This — not
             # total_detected (which sums detector CREDIT, including

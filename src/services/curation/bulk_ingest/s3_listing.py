@@ -19,7 +19,7 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.bulk_ingest.source_queue import QueueEntry
@@ -50,6 +50,10 @@ class ScanResult:
     queued: int = 0
     duplicates: int = 0
     resumed: bool = False
+    # Entries a folder pass could not queue (symlinks not followed, unreadable directories or
+    # files); the run reports them instead of completing clean on an empty queue.
+    unreadable: int = 0
+    unreadable_samples: list[str] = field(default_factory=list)
 
 
 def wanted_extension(key: str, extensions: frozenset[str]) -> bool:

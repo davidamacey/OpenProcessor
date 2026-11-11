@@ -33,6 +33,8 @@ def _run(status: str, **progress: Any) -> dict[str, Any]:
         'n_not_embedded': 0,
         'n_embed_failed': 0,
         'in_flight': 0,
+        'unreadable': 0,
+        'unreadable_samples': [],
         'images_per_s': 12.0,
         'elapsed_s': 1.0,
         **progress,

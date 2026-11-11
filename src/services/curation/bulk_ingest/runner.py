@@ -135,6 +135,8 @@ class BulkIngestRun:
         run_id: str,
         prior: Mapping[str, Any] | None = None,
         servers: Sequence[str] = (),
+        unreadable: int = 0,
+        unreadable_samples: Sequence[str] = (),
     ) -> None:
         self.sender = sender
         self.ledger = ledger
@@ -144,6 +146,9 @@ class BulkIngestRun:
         self.servers = list(servers)
         self.discovered = 0
         self.discovery_complete = False
+        # Entries discovery could not queue (see ScanResult); reported, never silently dropped.
+        self.unreadable = unreadable
+        self.unreadable_samples = list(unreadable_samples)
         self.failed = 0
         self.request_s = 0.0
         self.in_flight = 0
@@ -190,6 +195,8 @@ class BulkIngestRun:
             'discovered': self.discovered,
             'discovery_complete': self.discovery_complete,
             'failed': self.failed,
+            'unreadable': self.unreadable,
+            'unreadable_samples': self.unreadable_samples,
             **self.totals,
             'in_flight': self.in_flight,
             'images_per_s': round(overall, 3),

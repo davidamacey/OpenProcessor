@@ -25,6 +25,7 @@ from src.config.env import env_float, env_int
 from src.config.project_context import current_project_id
 from src.db.repos.records import modify_project_state
 from src.db.session import project_tx
+from src.services.curation.region_scope import active_parent_classes, parent_classes_clause
 
 
 if TYPE_CHECKING:
@@ -48,10 +49,15 @@ async def pending_region_counts(opensearch: Any) -> tuple[int, int]:
     worker, by region status. An OpenSearch failure propagates: never answer zeros on an outage,
     since zero unfinished is the "worker caught up" signal a walker proceeds on."""
     fields = get_region_fields()
-    resp = await opensearch.search(
-        index=items_index(),
-        body={'size': 0, 'aggs': {'by_status': {'terms': {'field': fields.status, 'size': 16}}}},
-    )
+    body: dict[str, Any] = {
+        'size': 0,
+        'aggs': {'by_status': {'terms': {'field': fields.status, 'size': 16}}},
+    }
+    # Only items in the active profile's scope: the worker never picks up the rest.
+    scope = parent_classes_clause(active_parent_classes())
+    if scope is not None:
+        body['query'] = {'bool': {'filter': [scope]}}
+    resp = await opensearch.search(index=items_index(), body=body)
     raw: dict[str, int] = {}
     for bucket in (resp.get('aggregations') or {}).get('by_status', {}).get('buckets', []):
         raw[bucket.get('key', '')] = int(bucket.get('doc_count', 0))

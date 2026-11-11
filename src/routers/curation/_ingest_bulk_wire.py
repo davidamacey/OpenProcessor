@@ -40,6 +40,8 @@ _PROGRESS_KEYS = {
     'n_not_embedded': 0,
     'n_embed_failed': 0,
     'in_flight': 0,
+    'unreadable': 0,
+    'unreadable_samples': [],
 }
 LIVE_STATUSES = ACTIVE_RUN_STATUSES | {'interrupted'}
 

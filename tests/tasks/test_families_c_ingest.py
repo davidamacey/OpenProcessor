@@ -210,6 +210,24 @@ def test_a_run_scans_the_folder_drains_the_queue_and_reports_the_failures(
     assert len(sender.paths) == 4
 
 
+def test_a_folder_of_only_dangling_symlinks_is_not_a_clean_completion(
+    pg, world, sender, worker_app, tmp_path
+) -> None:
+    pid, _ = world
+    (tmp_path / 'in').mkdir()
+    for name in ('x.jpg', 'y.jpg'):
+        (tmp_path / 'in' / name).symlink_to(tmp_path / 'missing.jpg')
+    source = make_source(pg, pid, tmp_path / 'in')
+    job = start(pid, source)
+
+    apply(worker_app, 'bulk_ingest_run', job)
+
+    [(status, result)] = sql(pg, 'SELECT status, result FROM jobs WHERE id = %s', job)
+    assert status == 'completed_with_errors', result
+    assert (result['discovered'], result['unreadable']) == (0, 2)
+    assert sorted(result['unreadable_samples']) == ['x.jpg', 'y.jpg']
+
+
 def test_a_rerun_ingests_only_the_files_that_are_new_and_retries_the_failed_one(
     pg, world, sender, worker_app, tmp_path
 ) -> None:

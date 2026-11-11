@@ -181,6 +181,9 @@ curl -s "$B/<run_id>/failures?offset=0&limit=100"
 - **Progress:** `status`, `progress.discovered`, `progress.discovery_complete`, seconds
   per stage. A folder is scanned while it ingests, so `discovered` grows until
   `discovery_complete` is true.
+- **Unreadable entries:** symlinks (not followed), unreadable directories and unreadable files
+  are counted in `progress.unreadable` with a few relative paths in `progress.unreadable_samples`.
+  A run with any ends `completed_with_errors`, so an all-symlink folder never looks clean.
 - **Cancel:** stops after the batches in flight; stored images stay. In the script,
   Ctrl-C once cancels, twice detaches.
 - **Resume:** start the **same source** again. An interrupted, failed, cancelled or
