@@ -24,7 +24,7 @@
 # OpenAPI contract (contracts/openapi/curation.json) is generated from them and
 # schema naming/shape changes between releases; bump together with
 # `make contracts`.
-fastapi==0.162.0
+fastapi==0.162.2
 pydantic==2.14.3
 uvicorn[standard]==0.54.0
 python-multipart==0.0.33
@@ -57,7 +57,7 @@ pyyaml==6.0.3
 requests==2.34.2
 
 # src/core/logging.py (imported by src/main.py)
-cachetools==7.3.0
+cachetools==8.0.0
 structlog==26.1.0
 
 # src/clients/opensearch/client.py (imported transitively via src/clients/__init__.py
@@ -78,8 +78,8 @@ httpx==0.28.1
 httpcore==1.0.9
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
-boto3==1.43.125
-botocore==1.43.125
+boto3==1.43.126
+botocore==1.43.126
 
 # tests/curation/test_mistakenness.py imports sklearn.metrics directly (not
 # marked live) -- this is the one non-lazy scikit-learn use in the base suite
@@ -103,7 +103,7 @@ vulture==2.16
 types-PyYAML==6.0.12.20261103
 types-requests==2.33.0.20261030
 types-tabulate==0.10.0.20261006
-types-tqdm==4.70.0.20261102
+types-tqdm==4.70.0.20261106
 
 # tests/curation/test_seed_class_registry.py (reads ONNX metadata)
 onnx
