@@ -25144,6 +25144,11 @@
             },
             "title": "Projects",
             "type": "array"
+          },
+          "total": {
+            "description": "Projects matching the filters, before `limit` is applied.",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -25151,7 +25156,8 @@
           "projects",
           "capacity",
           "limits",
-          "include_archived"
+          "include_archived",
+          "total"
         ],
         "title": "ProjectsResponse",
         "type": "object"
@@ -41189,6 +41195,44 @@
               "default": false,
               "title": "Include Archived",
               "type": "boolean"
+            }
+          },
+          {
+            "description": "Case-insensitive substring of the slug or display name.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring of the slug or display name.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "At most this many projects, in slug order.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "At most this many projects, in slug order.",
+              "title": "Limit"
             }
           }
         ],

@@ -296,3 +296,34 @@ def test_lifecycle_envelope_shape() -> None:
 def test_revision_conflict_is_an_error_code() -> None:
     detail = ConfigErrorDetail(error='revision_conflict', message='stale', current_revision=5)
     assert detail.current_revision == 5
+
+
+def _many(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(
+        _record('default'),
+        *(_record(f'cars-{i:02d}') for i in range(5)),
+        _record('faces'),
+    )
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+
+def test_q_filters_by_slug_or_name_on_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    _many(monkeypatch)
+    result = asyncio.run(projects_router.list_projects(include_archived=False, q='CARS'))
+    assert [p.slug for p in result.projects] == [f'cars-{i:02d}' for i in range(5)]
+    assert result.total == 5
+
+
+def test_limit_caps_the_page_and_total_says_how_many_matched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _many(monkeypatch)
+    result = asyncio.run(projects_router.list_projects(include_archived=False, limit=2))
+    assert [p.slug for p in result.projects] == ['cars-00', 'cars-01']
+    assert result.total == 7
+
+
+def test_no_q_or_limit_lists_everything(monkeypatch: pytest.MonkeyPatch) -> None:
+    _many(monkeypatch)
+    result = asyncio.run(projects_router.list_projects(include_archived=False))
+    assert len(result.projects) == result.total == 7
