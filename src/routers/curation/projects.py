@@ -25,6 +25,7 @@ from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
 from src.routers.curation._project_deps import bind_path_project
 from src.routers.curation._project_views import (
+    SELECTABLE_STATUSES,
     capacity_wire,
     list_membership,
     resources_wire,
@@ -124,6 +125,20 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
 @global_router.get('/projects', response_model=ProjectsResponse)
 async def list_projects(
     include_archived: Annotated[bool, Query()] = False,
+    q: Annotated[
+        str | None,
+        Query(description='Case-insensitive substring of the slug or display name.'),
+    ] = None,
+    selectable: Annotated[
+        bool,
+        Query(
+            description='Only projects that can be opened (the picker); `total` counts the same set.'
+        ),
+    ] = False,
+    limit: Annotated[
+        int | None,
+        Query(ge=1, le=500, description='At most this many projects, in slug order.'),
+    ] = None,
 ) -> ProjectsResponse:
     registry = get_project_registry()
     await registry.ensure_fresh()
@@ -134,6 +149,19 @@ async def list_projects(
         for slug, record in snapshot.items()
         if list_membership(record.status, include_archived=include_archived)
     }
+
+    if selectable:
+        listed = {s: r for s, r in listed.items() if r.status in SELECTABLE_STATUSES}
+    needle = (q or '').strip().lower()
+    if needle:
+        listed = {
+            slug: record
+            for slug, record in listed.items()
+            if needle in slug.lower() or needle in record.display_name.lower()
+        }
+    total = len(listed)
+    if limit is not None:
+        listed = dict(sorted(listed.items())[:limit])
 
     client: Any = None
     counts: dict[str, ProjectCounts] = {}
@@ -160,6 +188,7 @@ async def list_projects(
         capacity=capacity,
         limits=ProjectLimits(retired_slugs=retired),
         include_archived=include_archived,
+        total=total,
     )
 
 

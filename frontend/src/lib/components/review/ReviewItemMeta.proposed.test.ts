@@ -60,3 +60,37 @@ describe('ReviewItemMeta Proposed row', () => {
     expect(el.textContent).toContain('hint only');
   });
 });
+
+describe('ReviewItemMeta Current label', () => {
+  it('names an unclassed item by the served display name, not "no class yet"', () => {
+    const el = render({
+      class_id: null,
+      class_name: '',
+      display_name: 'stop sign',
+      display_name_kind: 'detector',
+    });
+    const row = el.querySelector('[data-testid="current-label"]')!;
+    expect(row.textContent).toContain('stop sign');
+    expect(row.textContent).toContain("detector's label");
+    expect(row.textContent).not.toContain('no class yet');
+  });
+
+  it('says "no class yet" only when the server names nothing', () => {
+    const el = render({
+      class_id: null,
+      class_name: '',
+      display_name: '',
+      display_name_kind: 'none',
+    });
+    expect(el.querySelector('[data-testid="current-label"]')!.textContent).toContain(
+      'no class yet',
+    );
+  });
+
+  it('shows the class name of a classed item', () => {
+    const el = render({ display_name: 'widget_a', display_name_kind: 'class' });
+    expect(el.querySelector('[data-testid="current-label"]')!.textContent).toContain(
+      'widget_a',
+    );
+  });
+});

@@ -112,6 +112,8 @@ export interface ProjectsResponse {
   limits: ProjectLimits;
   labels?: ProjectLabels;
   include_archived: boolean;
+  /** Projects matching `q`, before `limit` cut the page. */
+  total: number;
 }
 
 export interface ProjectWarning {

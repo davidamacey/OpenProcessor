@@ -157,6 +157,7 @@ def projects_response(
         },
         'labels': {'status': PROJECT_STATUS_LABELS},
         'include_archived': False,
+        'total': len(projects) if projects is not None else 1,
     }
 
 
@@ -199,6 +200,8 @@ _EXPLICIT: dict[str, Any] = {
     'vlm_proposed_class_name': 'pickup_truck',
     'proposed_class_id': 101,
     'proposed_class_name': 'suv',
+    'display_name': 'sedan',
+    'display_name_kind': 'class',
     'needs_new_class': False,
     'needs_new_class_note': None,
     'cluster': {

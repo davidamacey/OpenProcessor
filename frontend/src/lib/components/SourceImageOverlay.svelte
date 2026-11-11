@@ -175,17 +175,25 @@
     clickable: boolean;
   }
 
+  /** The label is the served `display_name`; only its source (class, proposed, detector) is
+   *  styled here. */
   function itemLabelInfo(item: Crop): { label: string; colorClass: string } {
-    if (item.class_name) {
-      return { label: item.class_name, colorClass: 'border-emerald-400' };
+    switch (item.display_name_kind) {
+      case 'class':
+        return { label: item.display_name, colorClass: 'border-emerald-400' };
+      case 'proposed':
+        return {
+          label: `${item.display_name} (proposed)`,
+          colorClass: 'border-amber-400',
+        };
+      case 'detector':
+        return {
+          label: `${item.display_name} (detector)`,
+          colorClass: 'border-amber-400',
+        };
+      default:
+        return { label: 'unlabeled', colorClass: 'border-zinc-500' };
     }
-    if (item.proposed_class_name) {
-      return {
-        label: `${item.proposed_class_name} (proposed)`,
-        colorClass: 'border-amber-400',
-      };
-    }
-    return { label: 'unlabeled', colorClass: 'border-zinc-500' };
   }
 
   const boxes = $derived.by<DrawBox[]>(() => {

@@ -80,6 +80,8 @@ export type RawCrop = {
    *  item (item 11, 2026-09-24), not just review-queue rows. */
   proposed_class_id?: number | null;
   proposed_class_name?: string | null;
+  display_name?: string;
+  display_name_kind?: 'class' | 'proposed' | 'detector' | 'none';
   // Curation scores (Phase 3, curation strategy plan §4).
   // Optional/forward-tolerant: an un-backfilled pool just omits these.
   mistakenness_score?: number | null;
@@ -184,6 +186,8 @@ export const RAW_CROP_KEYS = [
   'vlm_proposed_class_name',
   'proposed_class_id',
   'proposed_class_name',
+  'display_name',
+  'display_name_kind',
   'mistakenness_score',
   'mistakenness_method',
   'mistakenness_version',
@@ -296,6 +300,8 @@ export function mapRawCrop(c: RawCrop): Crop {
     source: c.source ?? null,
     proposed_class_id: c.proposed_class_id ?? null,
     proposed_class_name: c.proposed_class_name ?? null,
+    display_name: c.display_name ?? '',
+    display_name_kind: c.display_name_kind ?? 'none',
     test_holdout: !!c.test_holdout,
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,

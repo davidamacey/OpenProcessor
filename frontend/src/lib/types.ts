@@ -128,6 +128,10 @@ export interface Crop {
    *  `ReviewItem`. */
   proposed_class_id: number | null;
   proposed_class_name: string | null;
+  /** The one name to show for the item, and where the server took it from: its class, the
+   *  proposed class, the detector's own label, or `none` (empty name). */
+  display_name: string;
+  display_name_kind: 'class' | 'proposed' | 'detector' | 'none';
   test_holdout: boolean;
   // -- Exclude / Ignore (G7) ----------------------------------------------
   /** True when the crop is in the excluded/"Ignored" bucket
