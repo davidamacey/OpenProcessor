@@ -47,6 +47,7 @@ from src.services.curation.review_request import (
     before_query,
     build_review_request,
 )
+from src.services.curation.review_tab_status import tab_counts, unavailable_reason
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
@@ -112,7 +113,26 @@ async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
     ``empty_reason`` uses) without a per-tab round trip.
     """
     empty_state = await review_empty_reason.review_tabs_empty_state(opensearch)
-    return {'tabs': review_tab_catalog(), 'empty_state': empty_state}
+    catalog = review_tab_catalog()
+    reasons = {t['id']: unavailable_reason(t['id'], empty_state) for t in catalog}
+    try:
+        counts = await tab_counts(
+            opensearch, [tab for tab, reason in reasons.items() if reason is None]
+        )
+    except Exception as exc:
+        raise server_error(503, 'opensearch unavailable', exc) from exc
+    return {
+        'tabs': [
+            {
+                **t,
+                'available': reasons[t['id']] is None,
+                'unavailable_reason': reasons[t['id']],
+                'count': counts.get(t['id'], 0),
+            }
+            for t in catalog
+        ],
+        'empty_state': empty_state,
+    }
 
 
 @router.get('/review/{tab}', response_model=None, responses={200: {'model': ReviewQueuePage}})

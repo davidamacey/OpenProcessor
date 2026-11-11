@@ -147,6 +147,11 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
 def test_review_tabs_serves_empty_state_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = AsyncMock()
     fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 7}, {'count': 0}, {'count': 0}])
+
+    async def msearch(*, body: list) -> dict:
+        return {'responses': [{'hits': {'total': {'value': 0}}} for _ in body[::2]]}
+
+    fake.msearch = msearch
     r = _client(fake).get('/curation/projects/default/review/tabs')
     assert r.status_code == 200, r.text
     assert r.json()['empty_state'] == {

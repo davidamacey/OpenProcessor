@@ -72,6 +72,12 @@ export interface ReviewTabVocabularyEntry {
   filter_defaults: Record<string, unknown>;
   /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
+  /** False when the project cannot fill this tab yet. */
+  available: boolean;
+  /** What to do to make the tab fill; null when available. */
+  unavailable_reason: string | null;
+  /** Items the tab matches with its default filters; 0 when unavailable. */
+  count: number;
 }
 
 /** `empty_state` on `GET {API_PREFIX}/review/tabs` — whether the

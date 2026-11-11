@@ -69,6 +69,16 @@ class ReviewTabsVocabularyStore {
     return this.#byId.get(endpointId)?.label ?? fallback;
   }
 
+  /** Served item count of a tab; `null` when the served list has no entry for it. */
+  countFor(endpointId: string): number | null {
+    return this.#byId.get(endpointId)?.count ?? null;
+  }
+
+  /** Why the tab cannot fill in this project yet; `null` when it can (or is unknown). */
+  unavailableReasonFor(endpointId: string): string | null {
+    return this.#byId.get(endpointId)?.unavailable_reason ?? null;
+  }
+
   /** Served description, for use as a tooltip; `null` when empty or unknown. */
   descriptionFor(endpointId: string): string | null {
     return this.#byId.get(endpointId)?.description || null;

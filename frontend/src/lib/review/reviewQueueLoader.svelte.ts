@@ -404,20 +404,6 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       filtersActive: clientFiltersActive,
     }),
   );
-  // Tabs whose last load with no client filters came back empty — dimmed
-  // in the tab strip with a "0" so an operator isn't sent into them
-  // blind (R3). Only ever learned from a real served total.
-  let emptyTabEndpoints = $state<Record<string, boolean>>({});
-  $effect(() => {
-    if (queue.loading || queue.error || diverseMode || searchModeActive) return;
-    if (queue.loadedPages === 0 || clientFiltersActive) return;
-    const id = activeTabEndpointId;
-    const empty = queue.total === 0;
-    if (untrack(() => emptyTabEndpoints[id]) !== empty) {
-      emptyTabEndpoints = { ...untrack(() => emptyTabEndpoints), [id]: empty };
-    }
-  });
-
   return {
     queue,
     handledIds,
@@ -455,9 +441,6 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     loadFirst,
     get emptyMessage() {
       return emptyMessage;
-    },
-    get emptyTabEndpoints() {
-      return emptyTabEndpoints;
     },
   };
 }

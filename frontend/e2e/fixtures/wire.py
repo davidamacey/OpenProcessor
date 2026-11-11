@@ -370,6 +370,9 @@ def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
         'filters': list(REVIEW_FILTER_PARAMS),
         'filter_defaults': {},
         'filter_specs': [],
+        'available': True,
+        'unavailable_reason': None,
+        'count': 0,
         **over,
     }
 

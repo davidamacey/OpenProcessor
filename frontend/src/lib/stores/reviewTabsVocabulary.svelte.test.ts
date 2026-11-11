@@ -38,6 +38,9 @@ function tab(id: string, label: string, over: Record<string, unknown> = {}) {
     filters: [],
     filter_defaults: {},
     filter_specs: [],
+    available: true,
+    unavailable_reason: null,
+    count: 0,
     ...over,
   };
 }
@@ -270,5 +273,32 @@ describe('reviewTabsVocabularyStore.filterSpecsFor', () => {
 
     expect(reviewTabsVocabularyStore.filterSpecsFor('all')).toEqual([]);
     expect(reviewTabsVocabularyStore.filterSpecsFor('nonexistent_tab')).toEqual([]);
+  });
+});
+
+describe('reviewTabsVocabularyStore served tab status', () => {
+  it('serves each tab count and why an unavailable tab cannot fill', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(200, {
+          tabs: [
+            tab('all', 'All', { count: 502 }),
+            tab('uncertainty', 'Uncertainty', {
+              available: false,
+              unavailable_reason: 'No probe predictions yet.',
+            }),
+          ],
+          empty_state: EMPTY_STATE,
+        }),
+      ),
+    );
+    await reviewTabsVocabularyStore.init();
+    expect(reviewTabsVocabularyStore.countFor('all')).toBe(502);
+    expect(reviewTabsVocabularyStore.unavailableReasonFor('all')).toBeNull();
+    expect(reviewTabsVocabularyStore.unavailableReasonFor('uncertainty')).toBe(
+      'No probe predictions yet.',
+    );
+    expect(reviewTabsVocabularyStore.countFor('unknown_tab')).toBeNull();
   });
 });

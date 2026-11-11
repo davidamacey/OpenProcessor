@@ -17,6 +17,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- `GET /review/tabs` serves `available`, `unavailable_reason` and `count` per tab (the counts come from one `_msearch`), and the sort-fallback note reads "Sorted by X. 'Y' needs a clustering run." instead of naming the index field.
 - `GET /clusters` serves `empty_reason`, `empty_message` and `pending_partition` so an empty list says whether no run was served, a built partition waits for activation, or a filter matched nothing.
 - `GET /stats/dataset` serves `labeled.total` and `labeled.rows` (key, label, count, share) for every provenance including imported labels, and `regions.coverage_share`; the dashboard summed the counts itself and left imports out, so it showed fewer labels than the project holds.
 - The GPU letterbox and the CPU letterbox un-map with the pad they paste at: a frame whose margin is odd (for example a 101x61 photo into a 640 square) was un-mapped half a pixel off, now the pad is the integer paste offset on both paths. The geometry is one module, `src/domain/image_geometry.py`, copied into the GPU image-prep model directory (`models/gpu_image_prep/1/image_geometry.py`, held byte-identical by a test); the model version is 2, so an upgrade replaces the model files.

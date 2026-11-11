@@ -58,7 +58,7 @@ class _RecordingOS:
 
     async def msearch(self, *, body: list[dict[str, Any]], **_: Any) -> dict[str, Any]:
         self.bodies.append(json.dumps(body))
-        return {'responses': []}
+        return {'responses': [{'hits': {'total': {'value': 0}}} for _ in body[::2]]}
 
     async def get(self, **_: Any) -> dict[str, Any]:
         return {'found': False}

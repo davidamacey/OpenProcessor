@@ -33800,6 +33800,16 @@
       },
       "ReviewTab": {
         "properties": {
+          "available": {
+            "description": "False when the project cannot fill this tab yet.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "count": {
+            "description": "Items the tab matches with its default filters; 0 when unavailable.",
+            "title": "Count",
+            "type": "integer"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -33833,6 +33843,18 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to do to make the tab fill; null when available.",
+            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -33841,7 +33863,10 @@
           "description",
           "filters",
           "filter_defaults",
-          "filter_specs"
+          "filter_specs",
+          "available",
+          "unavailable_reason",
+          "count"
         ],
         "title": "ReviewTab",
         "type": "object"
