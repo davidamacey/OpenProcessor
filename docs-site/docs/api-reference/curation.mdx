@@ -471,7 +471,7 @@ negative verdict, so the item can be retried.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/export/yolo` | Multi-class YOLO export (always every class); `require_fully_labeled_images`, `seed`, `max_images`, `dedup_threshold` |
+| POST | `/export/yolo` | Multi-class YOLO export (always every class); `require_fully_labeled_images`, `seed`, `max_images`, `collapse_near_duplicates` |
 | POST | `/export/single_class` | Single-class or class-subset export with background and hard-negative frames and `frozen_test_sha` |
 | GET | `/export/status` | Last export |
 | GET | `/export/single_class/status` | Last narrowed export for a profile |
