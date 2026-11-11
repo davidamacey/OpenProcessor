@@ -227,6 +227,16 @@
               : '+ (found before it stopped)'} images
           {#if progress.skipped > 0}· {progress.skipped} already stored by this run{/if}
         </p>
+        {#if progress.unreadable > 0}
+          <div class="text-xs text-amber-200" data-testid="bulk-unreadable">
+            <p>{progress.unreadable} entries could not be read and were skipped.</p>
+            <ul class="mt-1">
+              {#each progress.unreadable_samples as path (path)}
+                <li class="font-mono break-all text-zinc-400">{path}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
         <div class="flex flex-wrap gap-2 text-xs">
           <span class="chip" data-testid="bulk-ingested"
             >ingested {progress.ingested}</span

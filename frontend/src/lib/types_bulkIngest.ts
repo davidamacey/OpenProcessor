@@ -152,6 +152,10 @@ export interface BulkIngestProgress {
   n_not_embedded: number;
   n_embed_failed: number;
   in_flight: number;
+  /** Entries discovery could not read (broken links, unreadable files). */
+  unreadable: number;
+  /** A few relative paths of those entries. */
+  unreadable_samples: string[];
   images_per_s?: number | null;
   images_per_s_recent?: number | null;
   eta_s?: number | null;

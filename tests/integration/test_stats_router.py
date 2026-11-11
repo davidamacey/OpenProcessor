@@ -359,9 +359,10 @@ def test_stats_dataset_surfaces_region_stall_reason(
     monkeypatch.setattr(TritonControlService, 'get_repository_index', _empty_index)
 
     pending_response = _fake_dataset_search_response()
-    pending_response['aggregations']['region_status'] = {
-        'buckets': [{'key': 'pending_detection', 'doc_count': 42}]
-    }
+    pending_buckets = {'buckets': [{'key': 'pending_detection', 'doc_count': 42}]}
+    pending_response['aggregations']['region_status'] = pending_buckets
+    # The stall reason counts the in-scope pending items (the worker never fetches the rest).
+    pending_response['aggregations']['region_pending_in_scope'] = {'by_status': pending_buckets}
     fake_os = AsyncMock()
     fake_os.search = AsyncMock(return_value=pending_response)
     cast('FastAPI', app_client.app).dependency_overrides[_raw_opensearch_dep] = lambda: fake_os

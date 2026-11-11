@@ -132,6 +132,21 @@ describe('BulkIngestPanel', () => {
     ctl.stop();
   });
 
+  it('warns with the unreadable count and sample paths, and stays quiet at zero', async () => {
+    const run = runFixture({
+      progress: progressFixture({
+        unreadable: 3,
+        unreadable_samples: ['a/dead.jpg', 'b/dead.png'],
+      }),
+    });
+    const { ctl } = controller(run);
+    await render(ctl);
+    await vi.waitFor(() => expect(byId('bulk-unreadable')).toBeTruthy());
+    expect(byId('bulk-unreadable')?.textContent).toContain('3 entries could not be read');
+    expect(byId('bulk-unreadable')?.textContent).toContain('a/dead.jpg');
+    ctl.stop();
+  });
+
   it('offers resume only when the run says it can be resumed, and lists failures', async () => {
     const run = runFixture({
       status: 'completed_with_errors',
