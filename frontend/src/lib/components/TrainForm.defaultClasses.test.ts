@@ -17,7 +17,6 @@ function cls(id: number, gap: number): RegistryClass {
     group: null,
     count: 0,
     validated_count: 0,
-    cluster_size: 0,
     added_at: '2026-01-01T00:00:00Z',
     adequacy: 'block',
     kind: 'item',

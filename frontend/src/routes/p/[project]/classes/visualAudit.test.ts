@@ -22,7 +22,6 @@ const CLASSES = {
       group: 'cars',
       sample_count: 271,
       validated_count: 35,
-      cluster_size: 270,
       deprecated: false,
       hotkey_letter: null,
       adequacy: 'warn',
@@ -34,7 +33,6 @@ const CLASSES = {
       group: 'cars',
       sample_count: 12,
       validated_count: 0,
-      cluster_size: 12,
       deprecated: false,
       hotkey_letter: null,
       adequacy: 'block',
@@ -122,13 +120,13 @@ async function render(): Promise<HTMLDivElement> {
   return target;
 }
 
-describe('L1: Total (in cluster) is cluster_size', () => {
-  it('shows 270 (cluster_size), not 271 (sample_count)', async () => {
+describe('L1: the Items column is the served item count', () => {
+  it('shows 271 (sample_count): the API serves no per-class cluster size', async () => {
     const el = await render();
     const cell = el.querySelector(
-      '[data-testid="class-row-5"] [data-testid="in-cluster"]',
+      '[data-testid="class-row-5"] [data-testid="item-count"]',
     );
-    expect(cell?.textContent?.trim()).toBe('270');
+    expect(cell?.textContent?.trim()).toBe('271');
   });
 });
 

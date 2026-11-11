@@ -56,7 +56,6 @@ CLASSES = [
         'hotkey_letter': 'l',
         'sample_count': 40,
         'validated_count': 12,
-        'cluster_size': 44,
         'deprecated': False,
     },
     {
@@ -67,7 +66,6 @@ CLASSES = [
         'hotkey_letter': 'w',
         'sample_count': 20,
         'validated_count': 5,
-        'cluster_size': 22,
         'deprecated': False,
     },
 ]

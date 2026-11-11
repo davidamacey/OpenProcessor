@@ -19,15 +19,16 @@ const src = readFileSync(
   'utf-8',
 );
 
-describe('the /classes Total column is labeled as the cluster bucket size', () => {
-  it('the column header says "Total (in cluster)", not a bare "Total"', () => {
-    expect(src).toMatch(/Total \(in cluster\)/);
-    expect(src).not.toMatch(/<th class="px-3 py-2 text-right font-medium">Total<\/th>/);
+describe('the /classes item-count column is labeled as the served item count', () => {
+  it('the column header says "Items", not the cluster bucket size', () => {
+    expect(src).toMatch(/>\s*Items\s*</);
+    expect(src).not.toMatch(/in cluster/i);
+    expect(src).not.toMatch(/cluster_size/);
   });
 
   it("carries a tooltip distinguishing it from /export's Total column", () => {
-    const idx = src.indexOf('Total (in cluster)');
+    const idx = src.indexOf('Items\n');
     const before = src.slice(Math.max(0, idx - 400), idx);
-    expect(before).toMatch(/title="Class-cluster size \(cluster_size\)/);
+    expect(before).toMatch(/title="Items carrying this class/);
   });
 });

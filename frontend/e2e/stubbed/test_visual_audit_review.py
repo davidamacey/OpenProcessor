@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import copy
+import re
 import struct
 import zlib
 
@@ -28,6 +29,7 @@ from fixtures.wire import (
 )
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import wait_for_paint
+from playwright.sync_api import expect
 from test_dataset_import import FORMATS
 
 
@@ -40,7 +42,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 5614,
         'validated_count': 163,
-        'cluster_size': 5614,
         'deprecated': False,
     },
     {
@@ -51,7 +52,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 35,
         'validated_count': 35,
-        'cluster_size': 35,
         'deprecated': False,
     },
     {
@@ -62,7 +62,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 3,
         'validated_count': 0,
-        'cluster_size': 3,
         'deprecated': False,
     },
     {
@@ -73,7 +72,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 0,
         'validated_count': 0,
-        'cluster_size': 0,
         'deprecated': True,
     },
 ]
@@ -84,8 +82,10 @@ TABS = review_tabs(
         'uncertainty',
         'Uncertainty',
         description='High active-learning probe entropy',
+        available=False,
+        unavailable_reason='No probe predictions yet. Run a probe from the Dashboard to fill this tab.',
     ),
-    review_tab('new_class_proposals', 'New class proposals'),
+    review_tab('new_class_proposals', 'New class proposals', count=7),
 )
 
 
@@ -235,7 +235,12 @@ def test_empty_queue_explains_itself_and_dims_the_tab(stub, page, app_url):
     assert 'High active-learning probe entropy' in text, text
     assert "no item has 'probe_pred_entropy' yet" in text, text
     assert 'Queue empty.' not in text
-    page.get_by_test_id('tab-empty-count').first.wait_for(timeout=5000)
+    unavailable = page.get_by_test_id('tab-unavailable')
+    expect(unavailable).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_role('button', name='Uncertainty')).to_have_attribute(
+        'title', re.compile('Run a probe')
+    )
+    expect(page.get_by_test_id('tab-count').first).to_have_text('7')
 
 
 def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(stub, page, app_url):

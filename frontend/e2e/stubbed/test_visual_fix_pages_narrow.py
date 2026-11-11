@@ -25,7 +25,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 641,
         'validated_count': 0,
-        'cluster_size': 616,
         'deprecated': False,
     },
     {
@@ -36,7 +35,6 @@ CLASSES = [
         'hotkey_letter': None,
         'sample_count': 40,
         'validated_count': 0,
-        'cluster_size': 44,
         'deprecated': False,
     },
 ]

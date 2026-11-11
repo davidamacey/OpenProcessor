@@ -8,14 +8,6 @@ export interface RegistryClass {
   group: string | null;
   count: number;
   validated_count: number;
-  /**
-   * Size of the FAISS cluster bucket whose id == this class id. Includes
-   * unlabeled candidates the operator hasn't triaged yet — i.e. matches
-   * what the operator sees when they open /clusters/{id}. The sidebar
-   * chip displays this; the cluster-page banner breaks out validated /
-   * labeled / total side-by-side.
-   */
-  cluster_size: number;
   /** Single-character keyboard shortcut, persisted in the registry. */
   hotkey_letter?: string | null;
   added_at: string;

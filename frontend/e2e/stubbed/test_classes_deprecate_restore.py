@@ -26,7 +26,6 @@ CLASSES_LIVE = [
         'hotkey_letter': 'c',
         'sample_count': 0,
         'validated_count': 0,
-        'cluster_size': 0,
         'deprecated': False,
     },
     {
@@ -36,7 +35,6 @@ CLASSES_LIVE = [
         'hotkey_letter': 's',
         'sample_count': 40,
         'validated_count': 30,
-        'cluster_size': 41,
         'deprecated': False,
     },
 ]
@@ -50,7 +48,6 @@ CLASSES_WITH_DEPRECATED = [
         'hotkey_letter': None,
         'sample_count': 0,
         'validated_count': 0,
-        'cluster_size': 0,
         'deprecated': True,
     },
 ]

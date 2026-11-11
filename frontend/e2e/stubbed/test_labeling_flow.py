@@ -42,7 +42,6 @@ CLASSES = [
         'hotkey_letter': 'k',
         'sample_count': 10,
         'validated_count': 5,
-        'cluster_size': 12,
         'deprecated': False,
     },
     {
@@ -53,7 +52,6 @@ CLASSES = [
         'hotkey_letter': 'j',
         'sample_count': 8,
         'validated_count': 3,
-        'cluster_size': 9,
         'deprecated': False,
     },
 ]

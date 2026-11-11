@@ -22,7 +22,6 @@ CLASSES = [
         'hotkey_letter': 'l',
         'sample_count': 40,
         'validated_count': 12,
-        'cluster_size': 44,
         'deprecated': False,
     },
 ]

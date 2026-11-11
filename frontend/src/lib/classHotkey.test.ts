@@ -23,7 +23,6 @@ function cls(over: Partial<RegistryClass> & { id: number; name: string }): Regis
     group: null,
     count: 0,
     validated_count: 0,
-    cluster_size: 0,
     added_at: '2026-01-01',
     hotkey_letter: null,
     deprecated: false,

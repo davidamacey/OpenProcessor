@@ -53,7 +53,6 @@ describe('ClassRegistryTable row controls are named for assistive tech', () => {
       group: 'tools',
       count: 1,
       validated_count: 0,
-      cluster_size: 1,
       hotkey_letter: null,
       added_at: '2026-10-01T00:00:00Z',
     } as never;

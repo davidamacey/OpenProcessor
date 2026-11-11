@@ -66,20 +66,11 @@
           >
             Validated
           </th>
-          <!-- DQ-m9: this
-               "Total" is `cluster_size` from GET /classes — the
-               class-cluster bucket size (what /clusters/{id} shows as
-               "in cluster"), NOT the same number as /export's "Total"
-               column (GET /stats/classes, every crop with that
-               class_id). They can legitimately disagree a lot — a
-               region-bound class can count region boxes (sub-boxes
-               counted in the cluster bucket) here but 0 on /export (no
-               crop's own class_id is the region class). -->
           <th
             class="px-2 py-2 lg:px-3 text-right font-medium"
-            title="Class-cluster size (cluster_size) — the same number the cluster page and sidebar show as &quot;in cluster&quot;. Not the same as /export's Total column."
+            title="Items carrying this class (GET /classes sample_count). Not the same as /export's Total column."
           >
-            Total (in cluster)
+            Items
           </th>
           <th class="hidden px-2 py-2 lg:px-3 font-medium lg:table-cell">Added</th>
           <th class="px-2 py-2 lg:px-3"><span class="sr-only">Actions</span></th>
@@ -171,12 +162,9 @@
                 >
               {/if}
             </td>
-            <!-- L1 (visual audit 2026-09-24): this showed sample_count
-                 (271 for one live class) under a header promising the cluster page's
-                 "in cluster" number (270) — it now shows cluster_size. -->
             <td
               class="px-2 py-1.5 lg:px-3 text-right font-mono text-zinc-400"
-              data-testid="in-cluster">{cls.cluster_size ?? 0}</td
+              data-testid="item-count">{cls.count}</td
             >
             <td class="hidden px-2 py-1.5 lg:px-3 text-xs text-zinc-500 lg:table-cell">
               {formatDateOnly(cls.added_at)}

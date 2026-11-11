@@ -116,9 +116,8 @@
             c.name.toLowerCase().includes(q) || (c.group ?? '').toLowerCase().includes(q),
         )
       : active;
-    // Sort by cluster bucket size desc — matches what the chip shows so
-    // operators can scan top-down to find the biggest backlog.
-    return [...list].sort((a, b) => (b.cluster_size ?? 0) - (a.cluster_size ?? 0));
+    // Largest class first, matching the item count the chip shows.
+    return [...list].sort((a, b) => b.count - a.count);
   });
 
   // Chip color/threshold logic lives in $lib/adequacy so /classes,
@@ -235,12 +234,12 @@
                     class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
                       cls.adequacy,
                     )}"
-                    title="Cluster bucket size — total crops on /clusters/{cls.id}.&#10;{cls.validated_count ??
+                    title="{cls.count.toLocaleString()} items carry this class.&#10;{cls.validated_count ??
                       0} of {cls.count ??
-                      0} labeled crops are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??
+                      0} are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??
                       'unknown'})."
                   >
-                    {(cls.cluster_size ?? 0).toLocaleString()}
+                    {cls.count.toLocaleString()}
                   </span>
                 </button>
               </div>

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Class sidebar and Classes table show each class's item count (`sample_count`) instead of a per-class cluster size the API does not serve (it read 0 for every class); the table column is "Items".
 - Clusters page with no cluster: shows the server's reason and, when a built partition waits or none was served, the cluster run panel with its Activate button in place; the page reloads once a partition serves. The run message no longer says to review the partition first.
 - Dashboard "Labeled by source" shows the served total and rows (imported labels included) and the served box coverage; the browser no longer sums or divides them.
 - Similar-items, item-text and ignored views: the "Back to clusters" button wraps onto its own line on narrow screens instead of being clipped.
