@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import served from '$contracts/json/keymap_actions.json';
 import { FALLBACK_KEYMAP } from '$lib/keymapFallback';
 
+type Row = [id: string, context: string, keys: string[]];
+
 describe('FALLBACK_KEYMAP parity with the served vocabulary', () => {
   it('has the same contexts, with the same includes', () => {
     expect(FALLBACK_KEYMAP.contexts.map((c) => [c.id, c.includes])).toEqual(
@@ -26,13 +28,12 @@ describe('FALLBACK_KEYMAP parity with the served vocabulary', () => {
   it('has the same actions, contexts and default keys', () => {
     // The fallback lists `~` first so the overlay prints "~"; the served default omits it.
     const OVERLAY = 'global.shortcuts_overlay';
-    const pick = (a: { id: string; context: string; default: string[] }) => [
+    const pick = (a: { id: string; context: string; default: string[] }): Row => [
       a.id,
       a.context,
       [...a.default].sort(),
     ];
-    const byId = (x: unknown[][], y: unknown[][]) =>
-      String(x[0]).localeCompare(String(y[0]));
+    const byId = (x: Row, y: Row) => x[0].localeCompare(y[0]);
     const rows = (actions: Array<{ id: string; context: string; default: string[] }>) =>
       actions
         .filter((a) => a.id !== OVERLAY)
