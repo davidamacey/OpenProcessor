@@ -118,5 +118,7 @@ def test_images_are_served_to_the_project_that_ingested_them_only(
             f"{slug} read {other}'s image {suffix!r}: {refused.status_code}"
         )
         assert refused.headers['content-type'].startswith('application/json'), refused.headers
-        assert refused.json() == {**unknown.json(), 'detail': refused.json()['detail']}
-        assert other not in refused.text
+        # The 404 only echoes the id asked for: the same body an unknown id gets.
+        assert refused.json()['detail'] == unknown.json()['detail'].replace(
+            'no-such-image', f'{other}-img-0002'
+        )
