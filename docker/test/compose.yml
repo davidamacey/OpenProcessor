@@ -34,8 +34,9 @@ x-process-env: &process-env
   # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
   OPENSEARCH_URL: http://opensearch:9200
   # The API refuses to start without a live Triton (no degraded mode), so
-  # fake-triton answers liveness and readiness only: every inference call
-  # stays unimplemented, which still proves no verified path needs Triton.
+  # fake-triton answers liveness and readiness, and serves the four
+  # deterministic models of fake_triton.py; every other inference call stays
+  # unimplemented, so a path that needs another model still fails loudly.
   TRITON_URL: fake-triton:8001
   # Serve byte-identical paths to what an existing labeler frontend
   # already calls, so it can be pointed at the harness without a
@@ -50,6 +51,8 @@ x-process-env: &process-env
   # Writable, host-visible filesystem roots.
   OP_PROJECTS_DATA_ROOT: /verify-data/projects
   OP_SOURCE_ROOT: /verify-data/images
+  # A second named root, so the live ingest test imports from an alias as well as the primary root.
+  OP_SOURCE_PATH_ALIASES: archive=/verify-data/archive
   OP_STATE_DIR: /verify-data/state
   OP_CROP_CACHE_DIR: /verify-data/crop_cache
   # OpenAI-compatible endpoint (src/services/labeling/vlm_client.py).
@@ -60,6 +63,9 @@ x-process-env: &process-env
   # classifier class_source (the seeded cls* rows carry it); no model is
   # ever called.
   OP_INGEST_SECONDARY_DETECTOR_MODEL: seeded_classifier
+  # A bulk-ingest run in the jobs worker sends its batches to the API over HTTP at this address
+  # (as docker-compose.yml sets for the real worker).
+  OP_API_LOOPBACK_URL: http://api:8000
   # Region routes 409 without an active region profile, and the text
   # routes need a text-bearing one.
   OP_REGION_PROFILE_PATH: /region_profile.json
@@ -465,6 +471,29 @@ services:
     depends_on: *worker-deps
     healthcheck:
       test: ["CMD-SHELL", "celery -A fake_consumers:app inspect ping --timeout 10 -d \"gpu_export@$$(hostname)\" > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    networks:
+      - verify_net
+
+  # The region cascade (detector leg, text read), as `curation-detection-worker` runs it in a
+  # deployment: it claims items awaiting detection, calls Triton (the fake serves the detector and
+  # OCR) and writes the boxes and their text. Not part of the default stack: it would also work the
+  # seeded `default` project's pending items under every other test. A test that needs it starts one
+  # bound to its own project (`run -d ... --project <slug>`, tests/live/test_live_region_text.py).
+  detection-worker:
+    profiles: ["region-worker"]
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment:
+      <<: *process-env
+      OP_EVENT_API_URL: http://api:8000
+    command: python -m scripts.curation.worker --continuous
+    depends_on: *worker-deps
+    healthcheck:
+      test: ["CMD-SHELL", "python /app/src/services/curation/worker_liveness.py check detection_worker --max-age 120"]
       interval: 15s
       timeout: 15s
       start_period: 60s

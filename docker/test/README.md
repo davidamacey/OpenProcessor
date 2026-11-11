@@ -35,10 +35,11 @@ ordinary `pytest tests/` never touches any of this.
 | `opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
 | `api` | 14701 | this repo's API image, `--workers=1` |
 | `fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
-| `fake-triton` | — | answers Triton's gRPC liveness and readiness only (the API refuses to start without a live Triton); every inference call is unimplemented (`docker/test/fake_triton.py`) |
+| `fake-triton` | — | answers Triton's liveness and readiness (the API refuses to start without a live Triton), lists its models in the repository index, and serves four deterministic models over gRPC: the fused detector `yolov11_small_trt_end2end` (one box per picture), `pe_image_encoder` (a vector from the picture's coarse colour layout), `pe_text_encoder` (a vector from the token ids) and `ocr_pipeline` (one fixed line, `FAKE-PLATE-0042`); every other model call is unimplemented (`docker/test/fake_triton.py`) |
 | `jobs-worker`, `periodic-worker`, `jobs-beat` | — | the Celery consumers and the one beat (same image, mounts and environment as the API); scale with `--scale jobs-worker=2` |
 | `assist-loop-worker` | — | the `assist_loop` queue consumer |
 | `trainer` | — | the fake `gpu_train` consumer (`fake_trainer.py`) |
+| `detection-worker` | — (profile `region-worker`) | the region cascade, bound to one project by a test (`run -d --no-deps detection-worker python -m scripts.curation.worker --continuous --project <slug>`, see `tests/live/test_live_region_text.py`); not in the default stack because it would also work the seeded `default` project's pending items |
 
 Design choices that are not arbitrary:
 
@@ -93,7 +94,7 @@ are the only ones that are:
 
 | Endpoint | Why |
 |---|---|
-| `POST {prefix}/train/promote/{job_id}` | needs a real exported ONNX checkpoint and a live Triton to load it into |
+| the success path of `POST {prefix}/train/promote/{job_id}` | needs a real exported ONNX checkpoint, the TensorRT build and a live Triton to load it into; the gate, the forced refusal and the failed job are exercised in `tests/live/test_live_models_promote.py` |
 | `DELETE {prefix}/models/{model_name}` | unloads a model from a live Triton |
 | `POST {prefix}/pipeline/auto_label` and `/auto_label/start` | run the detector cascade, i.e. real inference |
 | the evaluation half of `POST {prefix}/bakeoff/run` | runs a model over an eval dataset |

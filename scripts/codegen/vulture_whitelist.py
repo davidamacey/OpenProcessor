@@ -110,6 +110,9 @@ _.delete_one  # src/routers/curation/research_configs.py; route handler (DELETE 
 _.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py; PEP 562 module attribute hook
 _.ServerLive  # docker/test/fake_triton.py; called by gRPC by Triton's method name
 _.ServerReady  # docker/test/fake_triton.py; called by gRPC by Triton's method name
+_.ModelReady  # docker/test/fake_triton.py; called by gRPC by Triton's method name
+_.RepositoryModelLoad  # docker/test/fake_triton.py; called by gRPC by Triton's method name
+_.ModelInfer  # docker/test/fake_triton.py; called by gRPC by Triton's method name
 _.__qualname__  # src/tasks/runtime/register.py; assigned so Celery names the task by it
 _.registry_sha  # src/services/training/jobs.py; stored in training_runs.spec, read by name in docker/trainer/job_manifest.py
 _.tb  # src/utils/stage_timing.py; the __exit__ signature of the context manager protocol
