@@ -34,6 +34,8 @@ export function bodyFixture(over: Partial<VlmEndpointBody> = {}): VlmEndpointBod
     catalog_id: null,
     allow_external: false,
     json_mode: 'auto',
+    provider: 'vllm',
+    temperature: 0,
     max_images_per_call: 8,
     open_images_per_call: 3,
     requests_per_second: 500,
@@ -145,6 +147,10 @@ export function schemaFixture(): VlmEndpointSchema {
       { id: 'connection', label: 'Connection' },
       { id: 'limits', label: 'Limits' },
     ],
+    provider_defaults: {
+      vllm: { json_mode: 'auto', temperature: 0 },
+      anthropic: { json_mode: 'off', temperature: null },
+    },
     fields: [
       {
         field: 'base_url',
@@ -190,6 +196,30 @@ export function schemaFixture(): VlmEndpointSchema {
         type: 'bool',
         default: false,
         help: '',
+      },
+      {
+        field: 'provider',
+        label: 'Provider',
+        group: 'limits',
+        type: 'enum',
+        default: 'vllm',
+        enum: [
+          { id: 'vllm', label: 'vLLM (local)' },
+          { id: 'anthropic', label: 'Anthropic (cloud, OpenAI-compatible endpoint)' },
+        ],
+        help: '',
+        advanced: true,
+      },
+      {
+        field: 'temperature',
+        label: 'Temperature',
+        group: 'limits',
+        type: 'float',
+        default: 0,
+        min: 0,
+        max: 2,
+        help: 'Sent on every call; empty sends none.',
+        advanced: true,
       },
       {
         field: 'json_mode',

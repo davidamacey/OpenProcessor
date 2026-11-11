@@ -237,3 +237,12 @@ def test_every_new_route_is_in_the_openapi_document() -> None:
         '/curation/projects/{project}/vlm/endpoints/{name}/activate',
     ):
         assert path in paths, path
+
+
+def test_endpoint_schema_serves_the_per_provider_defaults() -> None:
+    from src.routers.curation._vlm_endpoint_views import endpoint_schema
+    from src.services.labeling.vlm_endpoint_body import PROVIDER_DEFAULTS
+
+    served = endpoint_schema().model_dump()['provider_defaults']
+    assert served == PROVIDER_DEFAULTS
+    assert served['anthropic'] == {'json_mode': 'off', 'temperature': None}

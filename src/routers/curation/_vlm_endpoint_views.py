@@ -18,8 +18,9 @@ from src.routers.curation._vlm_endpoint_models import (
     VlmEndpointSchema,
     VlmEndpointSummary,
     VlmProbeResult,
+    VlmProviderDefaults,
 )
-from src.services.labeling.vlm_endpoint_body import FIELD_RANGES
+from src.services.labeling.vlm_endpoint_body import FIELD_RANGES, PROVIDER_DEFAULTS
 from src.services.labeling.vlm_endpoints import api_key_present, list_secret_refs
 from src.services.labeling.vlm_url_policy import (
     Locality,
@@ -263,6 +264,7 @@ def endpoint_schema() -> VlmEndpointSchema:
             VlmEndpointGroup(id='limits', label='Limits'),
             VlmEndpointGroup(id='behavior', label='Behavior'),
         ],
+        provider_defaults={k: VlmProviderDefaults(**v) for k, v in PROVIDER_DEFAULTS.items()},
     )
 
 

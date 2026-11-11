@@ -220,9 +220,16 @@ class VlmEndpointGroup(BaseModel):
     label: str
 
 
+class VlmProviderDefaults(BaseModel):
+    json_mode: Literal['auto', 'on', 'off']
+    temperature: float | None
+
+
 class VlmEndpointSchema(BaseModel):
     fields: list[VlmEndpointFieldSchema]
     groups: list[VlmEndpointGroup]
+    #: ``provider -> defaults`` a body gets when it leaves the field out.
+    provider_defaults: dict[str, VlmProviderDefaults]
 
 
 # --- catalog and local model --------------------------------------------------------

@@ -53,6 +53,8 @@
   const fieldIds = $derived(schema.fields.map((f) => f.field));
   const advancedCount = $derived(schema.fields.filter((f) => f.advanced).length);
 
+  const providerDefaults = $derived(schema.provider_defaults[body.provider]);
+
   function keyPresent(): boolean | null {
     const ref = body.api_key_ref;
     if (ref == null) return null;
@@ -87,6 +89,12 @@
             {readonly}
             onchange={(v) => onchange(f.field, v)}
           />
+          {#if f.field === 'provider' && providerDefaults}
+            <p class="-mt-2 text-xs text-zinc-500" data-testid="vlm-provider-defaults">
+              Provider defaults: JSON mode {providerDefaults.json_mode}, temperature
+              {providerDefaults.temperature ?? 'none (not sent)'}.
+            </p>
+          {/if}
           {#if f.field === 'api_key_ref' && body.api_key_ref != null}
             <p class="-mt-2 text-xs text-zinc-500" data-testid="vlm-key-present">
               {keyPresent() === true

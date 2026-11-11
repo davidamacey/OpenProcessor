@@ -40492,11 +40492,19 @@
             },
             "title": "Groups",
             "type": "array"
+          },
+          "provider_defaults": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VlmProviderDefaults"
+            },
+            "title": "Provider Defaults",
+            "type": "object"
           }
         },
         "required": [
           "fields",
-          "groups"
+          "groups",
+          "provider_defaults"
         ],
         "title": "VlmEndpointSchema",
         "type": "object"
@@ -41132,6 +41140,36 @@
           "probed_at"
         ],
         "title": "VlmProbeResult",
+        "type": "object"
+      },
+      "VlmProviderDefaults": {
+        "properties": {
+          "json_mode": {
+            "enum": [
+              "auto",
+              "on",
+              "off"
+            ],
+            "title": "Json Mode",
+            "type": "string"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          }
+        },
+        "required": [
+          "json_mode",
+          "temperature"
+        ],
+        "title": "VlmProviderDefaults",
         "type": "object"
       },
       "VlmRegionVisibleBatchItem": {

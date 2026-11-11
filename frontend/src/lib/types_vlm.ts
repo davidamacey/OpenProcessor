@@ -22,6 +22,7 @@ export type VlmLocality = 'compose' | 'host' | 'private' | 'external' | 'unknown
 export type VlmEndpointSource = 'env' | 'stored';
 export type VlmEndpointStatus = 'ready' | 'unprobed' | 'probe_failed' | 'unreachable';
 export type VlmJsonMode = 'auto' | 'on' | 'off';
+export type VlmProvider = 'vllm' | 'ollama' | 'anthropic' | 'openai_compatible';
 
 /** `VlmEndpointBody` (strict). `api_key_ref` names a secret, never a key. */
 export type VlmEndpointBody = {
@@ -31,6 +32,9 @@ export type VlmEndpointBody = {
   catalog_id: string | null;
   allow_external: boolean;
   json_mode: VlmJsonMode;
+  provider: VlmProvider;
+  /** `null` sends no temperature. */
+  temperature: number | null;
   max_images_per_call: number;
   open_images_per_call: number | null;
   requests_per_second: number;
@@ -101,9 +105,16 @@ export interface VlmEndpointGroup {
   label: string;
 }
 
+export interface VlmProviderDefaults {
+  json_mode: VlmJsonMode;
+  temperature: number | null;
+}
+
 export interface VlmEndpointSchema {
   fields: VlmEndpointFieldSchema[];
   groups: VlmEndpointGroup[];
+  /** `provider -> defaults` the server applies when the field is left out. */
+  provider_defaults: Record<string, VlmProviderDefaults>;
 }
 
 /** `POST /vlm/endpoints/{name}/probe` and `validate?probe=true`. */

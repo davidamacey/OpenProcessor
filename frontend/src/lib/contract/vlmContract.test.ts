@@ -58,6 +58,8 @@ const CASES: [string, string[]][] = [
       catalog_id: true,
       allow_external: true,
       json_mode: true,
+      provider: true,
+      temperature: true,
       max_images_per_call: true,
       open_images_per_call: true,
       requests_per_second: true,
@@ -135,7 +137,7 @@ const CASES: [string, string[]][] = [
   ],
   [
     'VlmEndpointSchema',
-    keys({ fields: true, groups: true } satisfies Record<
+    keys({ fields: true, groups: true, provider_defaults: true } satisfies Record<
       keyof T.VlmEndpointSchema,
       true
     >),
