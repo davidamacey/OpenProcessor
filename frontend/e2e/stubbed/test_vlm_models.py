@@ -117,6 +117,10 @@ def listing() -> dict[str, Any]:
 
 
 SCHEMA = {
+    'provider_defaults': {
+        'vllm': {'json_mode': 'auto', 'temperature': 0.0},
+        'anthropic': {'json_mode': 'off', 'temperature': None},
+    },
     'groups': [{'id': 'connection', 'label': 'Connection'}, {'id': 'limits', 'label': 'Limits'}],
     'fields': [
         {
@@ -154,6 +158,41 @@ SCHEMA = {
             'help': '',
         },
         {
+            'field': 'provider',
+            'label': 'Provider',
+            'group': 'limits',
+            'type': 'enum',
+            'default': 'vllm',
+            'enum': [
+                {'id': 'vllm', 'label': 'vLLM (local)'},
+                {'id': 'anthropic', 'label': 'Anthropic (cloud)'},
+            ],
+            'help': '',
+        },
+        {
+            'field': 'json_mode',
+            'label': 'JSON mode',
+            'group': 'limits',
+            'type': 'enum',
+            'default': 'auto',
+            'enum': [
+                {'id': 'auto', 'label': 'Automatic'},
+                {'id': 'on', 'label': 'Always on'},
+                {'id': 'off', 'label': 'Off'},
+            ],
+            'help': '',
+        },
+        {
+            'field': 'temperature',
+            'label': 'Temperature',
+            'group': 'limits',
+            'type': 'float',
+            'default': 0.0,
+            'min': 0,
+            'max': 2,
+            'help': 'Sent on every call; empty sends none.',
+        },
+        {
             'field': 'max_images_per_call',
             'label': 'Images per call',
             'group': 'limits',
@@ -173,6 +212,8 @@ BODY = {
     'catalog_id': None,
     'allow_external': False,
     'json_mode': 'auto',
+    'provider': 'vllm',
+    'temperature': 0.0,
     'max_images_per_call': 8,
     'open_images_per_call': 3,
     'requests_per_second': 500.0,
@@ -462,6 +503,48 @@ def test_create_an_endpoint_validate_and_test_connection(stub, page, app_url):
         'revision 1', timeout=ACTION_TIMEOUT_MS
     )
     assert page.url.endswith('/settings/models/vlm/new_vlm')
+
+
+def test_register_an_anthropic_endpoint_with_a_secret_reference(stub, page, app_url):
+    serve_registry(stub)
+    stub.on(
+        'POST',
+        r'/vlm/endpoints/validate$',
+        {
+            'validation': CLEAN,
+            'locality': 'external',
+            'sends_images_externally': True,
+            'probe': None,
+        },
+    )
+    created: list[Any] = []
+
+    def create(request: Any, _m: Any):
+        body = request.post_data_json
+        created.append(body)
+        return (201, doc(name=body['name'], revision=1, body=body['body'], active_in=[]))
+
+    stub.on('POST', r'/vlm/endpoints$', create)
+    stub.on('GET', r'/vlm/endpoints/claude_vlm$', doc(name='claude_vlm', revision=1, active_in=[]))
+    stub.on('GET', r'/vlm/endpoints/claude_vlm/revisions$', {'name': 'claude_vlm', 'revisions': []})
+
+    page.goto(f'{app_url}/p/default/settings/models/new-endpoint')
+    page.get_by_test_id('vlm-new-name').fill('claude_vlm')
+    page.locator('[data-field="base_url"] input').fill('https://api.anthropic.com/v1')
+    page.locator('[data-field="model"] input').fill('claude-sonnet-5-5')
+    page.locator('[data-field="api_key_ref"] select').select_option('CLOUD_VLM_KEY')
+    page.locator('[data-field="provider"] select').select_option('anthropic')
+    expect(page.get_by_test_id('vlm-provider-defaults')).to_contain_text('temperature none')
+    page.locator('[data-field="json_mode"] select').select_option('off')
+    page.locator('[data-field="temperature"] input').fill('')
+
+    with expect_handled(page, lambda r: r.method == 'POST' and r.url.endswith('/vlm/endpoints')):
+        page.get_by_test_id('vlm-create').click()
+    body = created[0]['body']
+    assert body['provider'] == 'anthropic'
+    assert body['json_mode'] == 'off'
+    assert body['temperature'] is None
+    assert body['api_key_ref'] == 'CLOUD_VLM_KEY'
 
 
 def test_activate_an_external_endpoint_needs_the_acknowledgement(stub, page, app_url):
