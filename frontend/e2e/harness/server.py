@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import socket
 import subprocess
 import time
@@ -17,17 +18,20 @@ from harness.constants import ROOT
 
 @pytest.fixture(scope='session')
 def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
-    """Force software rendering off entirely.
+    """Headless Chromium with software WebGL2, for the map page (MapLibre needs WebGL2).
 
-    On this machine, headless chromium's default GPU-process init
-    (`--use-gl=disabled`'s ANGLE/EGL path) crash-loops the GPU process
-    repeatedly, pinning the renderer at ~100% CPU for a couple of minutes
-    before `Browser.new_page()` itself raises `TargetClosedError` —
-    `--disable-gpu` on top of pytest-playwright's own `--headless=new`
-    sidesteps the crash loop entirely (verified: `new_page()` returns in
-    under a second with it, hangs for minutes without it).
+    Same launch as the live tier (`live/conftest.py`): ANGLE's SwiftShader backend
+    (`--use-angle=swiftshader`), opted into with `--enable-unsafe-swiftshader` since Chrome 139
+    (https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md). `DISPLAY` is
+    dropped so a stale X display cannot break GPU-process init, which `--disable-gpu` used to
+    hide by turning WebGL off.
     """
-    return {**browser_type_launch_args, 'args': ['--disable-gpu']}
+    env = {k: v for k, v in os.environ.items() if k != 'DISPLAY'}
+    return {
+        **browser_type_launch_args,
+        'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+        'env': env,
+    }
 
 
 def _free_port() -> int:
