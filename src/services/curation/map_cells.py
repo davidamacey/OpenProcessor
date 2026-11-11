@@ -23,9 +23,9 @@ import datetime as dt
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 from src.config.curation_accessors import images_index
+from src.domain.geo_box import GeoBox
 from src.domain.location_policy import COARSE_DECIMALS
 from src.schemas.curation.map import (
-    MapBounds,
     MapCellCollection,
     MapCellFeature,
     MapCellGeometry,
@@ -57,19 +57,6 @@ def max_precision(policy: str) -> int:
     return COARSE_MAX_PRECISION if policy == 'store_coarse' else MAX_PRECISION
 
 
-def parse_bbox(raw: str) -> MapBounds:
-    """``west,south,east,north`` in degrees; west may exceed east (a box across the antimeridian)."""
-    try:
-        west, south, east, north = (float(part) for part in raw.split(','))
-    except ValueError as exc:
-        msg = 'bbox must be west,south,east,north in degrees'
-        raise MapQueryError(msg) from exc
-    if not (-90 <= south <= north <= 90 and -180 <= west <= 180 and -180 <= east <= 180):
-        msg = 'bbox is outside -180..180 longitude and -90..90 latitude'
-        raise MapQueryError(msg)
-    return MapBounds(west=west, south=south, east=east, north=north)
-
-
 def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     """``taken_from`` / ``taken_to`` on the images index (the item copies' twin fields)."""
     if f.taken_from is None and f.taken_to is None:
@@ -98,7 +85,7 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
 
 
 async def image_query(
-    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: MapBounds | None
+    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: GeoBox | None
 ) -> tuple[dict[str, Any], bool]:
     """The images-index query for a map request and whether the item join was truncated.
 
@@ -147,7 +134,7 @@ async def map_meta(
     bounds = None
     box = (resp.get('aggregations') or {}).get('extent', {}).get('bounds')
     if n_located and box:
-        bounds = MapBounds(
+        bounds = GeoBox(
             west=box['top_left']['lon'],
             south=box['bottom_right']['lat'],
             east=box['bottom_right']['lon'],
@@ -171,7 +158,7 @@ async def map_cells(
     embedding: WriteFields,
     *,
     zoom: int,
-    box: MapBounds | None,
+    box: GeoBox | None,
 ) -> MapCellCollection:
     """The grid cells of the matching images at ``zoom`` as a GeoJSON FeatureCollection."""
     precision = min(zoom + CELL_ZOOM_OFFSET, max_precision(policy))
@@ -220,7 +207,7 @@ async def map_cells(
     )
 
 
-def tile_box(tile: str) -> MapBounds:
+def tile_box(tile: str) -> GeoBox:
     """The degrees box of a `z/x/y` web-mercator tile."""
     import math
 
@@ -237,7 +224,7 @@ def tile_box(tile: str) -> MapBounds:
     def lat(row: int) -> float:
         return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * row / n))))
 
-    return MapBounds(
+    return GeoBox(
         west=x / n * 360 - 180, east=(x + 1) / n * 360 - 180, north=lat(y), south=lat(y + 1)
     )
 
@@ -271,7 +258,6 @@ __all__ = [
     'MapQueryError',
     'map_cells',
     'map_meta',
-    'parse_bbox',
     'tile_box',
     'tile_images',
 ]

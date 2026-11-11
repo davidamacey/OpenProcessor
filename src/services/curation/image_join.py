@@ -19,7 +19,7 @@ from src.config.curation_accessors import items_index
 
 
 if TYPE_CHECKING:
-    from src.schemas.curation.map import MapBounds
+    from src.domain.geo_box import GeoBox
 
 LOCATION_FIELD: Final = 'capture.location'
 JOIN_MAX_IMAGES: Final = 10_000
@@ -27,7 +27,7 @@ JOIN_MAX_IMAGES: Final = 10_000
 NearDupFilter = Literal['member', 'representative', 'none']
 
 
-def geo_box_query(box: MapBounds) -> dict[str, Any]:
+def geo_box_query(box: GeoBox) -> dict[str, Any]:
     return {
         'geo_bounding_box': {
             LOCATION_FIELD: {
@@ -39,7 +39,7 @@ def geo_box_query(box: MapBounds) -> dict[str, Any]:
 
 
 def location_clauses(
-    has_location: bool | None, box: MapBounds | None, policy: str
+    has_location: bool | None, box: GeoBox | None, policy: str
 ) -> list[dict[str, Any]]:
     """Images-index clauses for "has a served position" and "inside ``box``" under ``policy``."""
     out: list[dict[str, Any]] = []

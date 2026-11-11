@@ -1,7 +1,7 @@
 // Wire types of the project map. Pinned to the generated contract by
 // `contract/mapContract.test.ts`.
 
-export interface MapBounds {
+export interface GeoBox {
   west: number;
   south: number;
   east: number;
@@ -13,7 +13,7 @@ export interface MapMeta {
   available: boolean;
   location_policy: 'drop' | 'store_coarse' | 'store';
   n_located: number;
-  bounds: MapBounds | null;
+  bounds: GeoBox | null;
   tile_url: string;
   tile_attribution: string;
   max_zoom: number;

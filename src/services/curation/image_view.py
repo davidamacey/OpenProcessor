@@ -42,7 +42,7 @@ from src.services.curation.item_filter import ItemFilter, item_filter_clauses, v
 
 
 if TYPE_CHECKING:
-    from src.schemas.curation.map import MapBounds
+    from src.domain.geo_box import GeoBox
     from src.services.embedding_spaces.readers import WriteFields
 
 LabelState = Literal['has_unlabeled', 'all_labeled', 'no_items']
@@ -74,7 +74,7 @@ class ImageQuery:
     item_filter: ItemFilter
     source: str | None = None
     has_location: bool | None = None
-    geo_box: MapBounds | None = None
+    geo_box: GeoBox | None = None
     in_holdout: bool | None = None
     near_dup: NearDupFilter | None = None
     label_state: LabelState | None = None

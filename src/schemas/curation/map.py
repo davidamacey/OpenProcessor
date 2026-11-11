@@ -6,12 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
-class MapBounds(BaseModel):
-    west: float
-    south: float
-    east: float
-    north: float
+from src.domain.geo_box import GeoBox
 
 
 class MapMeta(BaseModel):
@@ -21,7 +16,7 @@ class MapMeta(BaseModel):
     available: bool
     location_policy: Literal['drop', 'store_coarse', 'store']
     n_located: int = Field(description='Images with a stored position.')
-    bounds: MapBounds | None = Field(
+    bounds: GeoBox | None = Field(
         default=None, description='The box around every stored position; null when there is none.'
     )
     tile_url: str = Field(

@@ -26,10 +26,7 @@ const CASES: [string, string[]][] = [
       max_zoom: true,
     }),
   ],
-  [
-    'MapBounds',
-    keys<keyof T.MapBounds>({ west: true, south: true, east: true, north: true }),
-  ],
+  ['GeoBox', keys<keyof T.GeoBox>({ west: true, south: true, east: true, north: true })],
   [
     'MapCellCollection',
     keys<keyof T.MapCellCollection>({

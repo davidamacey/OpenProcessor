@@ -12892,6 +12892,34 @@
         "title": "FilterTarget",
         "type": "object"
       },
+      "GeoBox": {
+        "properties": {
+          "east": {
+            "title": "East",
+            "type": "number"
+          },
+          "north": {
+            "title": "North",
+            "type": "number"
+          },
+          "south": {
+            "title": "South",
+            "type": "number"
+          },
+          "west": {
+            "title": "West",
+            "type": "number"
+          }
+        },
+        "required": [
+          "west",
+          "south",
+          "east",
+          "north"
+        ],
+        "title": "GeoBox",
+        "type": "object"
+      },
       "GlobalHealthResponse": {
         "description": "Deployment facts only -- nothing here depends on a project. The\nscoped ``{prefix}/health`` serves the same facts plus the bound\nproject's.",
         "properties": {
@@ -20397,34 +20425,6 @@
         "title": "ManifestSpec",
         "type": "object"
       },
-      "MapBounds": {
-        "properties": {
-          "east": {
-            "title": "East",
-            "type": "number"
-          },
-          "north": {
-            "title": "North",
-            "type": "number"
-          },
-          "south": {
-            "title": "South",
-            "type": "number"
-          },
-          "west": {
-            "title": "West",
-            "type": "number"
-          }
-        },
-        "required": [
-          "west",
-          "south",
-          "east",
-          "north"
-        ],
-        "title": "MapBounds",
-        "type": "object"
-      },
       "MapCellCollection": {
         "description": "A GeoJSON FeatureCollection (RFC 7946): one Point per grid cell, at the centroid of the\nimages in it. `truncated` is true when more cells matched than the response carries (zoom\nin); `join_truncated` when an item filter matched more images than the join could use.",
         "properties": {
@@ -20546,7 +20546,7 @@
           "bounds": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MapBounds"
+                "$ref": "#/components/schemas/GeoBox"
               },
               {
                 "type": "null"

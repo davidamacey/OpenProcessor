@@ -11,11 +11,11 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
 
+from src.domain.geo_box import parse_geo_box
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._image_view_models import ImageDetail
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.images import ImagePage
-from src.services.curation import map_cells
 from src.services.curation.image_detail import image_detail
 from src.services.curation.image_view import (
     DEFAULT_SORT,
@@ -78,7 +78,7 @@ async def list_images(
     carries its served counts and the boxes to draw; the page costs one query on the images index
     and one aggregation on the items index."""
     try:
-        box = None if geo_bbox is None else map_cells.parse_bbox(geo_bbox)
+        box = None if geo_bbox is None else parse_geo_box(geo_bbox)
         return await image_page(
             opensearch,
             ImageQuery(
@@ -97,7 +97,7 @@ async def list_images(
             await item_write_fields(),
             await get_location_policy(),
         )
-    except (ImageQueryError, map_cells.MapQueryError) as exc:
+    except (ImageQueryError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

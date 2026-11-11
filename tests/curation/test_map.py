@@ -11,6 +11,7 @@ from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
 from src.config import CurationConfig
 from src.config.curation import _tile_url
+from src.domain.geo_box import parse_geo_box
 from src.routers.curation import map as route
 from src.services.curation import image_join, map_cells
 from src.services.curation.item_filter import ItemFilter
@@ -129,7 +130,7 @@ async def test_store_coarse_caps_the_cell_size_and_rounds_the_markers() -> None:
 @pytest.mark.asyncio
 async def test_a_box_limits_the_query_and_the_grid_and_may_cross_the_antimeridian() -> None:
     os = FakeSearch(buckets=BUCKETS)
-    box = map_cells.parse_bbox('170,-10,-170,10')
+    box = parse_geo_box('170,-10,-170,10')
     await _cells(os, 'store', box=box)
     _, body = os.calls[0]
     corner = {
@@ -142,8 +143,8 @@ async def test_a_box_limits_the_query_and_the_grid_and_may_cross_the_antimeridia
 
 @pytest.mark.parametrize('raw', ['1,2,3', 'a,b,c,d', '0,-91,10,10', '0,10,10,5', '-181,0,10,10'])
 def test_a_bad_bbox_is_refused(raw: str) -> None:
-    with pytest.raises(map_cells.MapQueryError):
-        map_cells.parse_bbox(raw)
+    with pytest.raises(ValueError, match='geo_bbox needs'):
+        parse_geo_box(raw)
 
 
 @pytest.mark.asyncio
