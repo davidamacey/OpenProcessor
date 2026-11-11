@@ -33,6 +33,26 @@ export function hotkeyReservedDetail(e: unknown): HotkeyReservedDetail | null {
   };
 }
 
+/** `POST /classes` 422 `invalid_class_name`: the slug the refused name most
+ *  likely meant, when the server found one. */
+export interface InvalidClassNameDetail {
+  message: string;
+  suggested_name: string | null;
+}
+
+export function invalidClassNameDetail(e: unknown): InvalidClassNameDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 422) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const d = detail as Record<string, unknown>;
+  if (d.error !== 'invalid_class_name') return null;
+  return {
+    message:
+      typeof d.message === 'string' ? d.message : 'That is not a valid class name.',
+    suggested_name: typeof d.suggested_name === 'string' ? d.suggested_name : null,
+  };
+}
+
 /** `PUT /classes/{id}` 409 `hotkey_taken` (plan §4.5). */
 export interface HotkeyTakenDetail {
   message: string;

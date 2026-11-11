@@ -61,7 +61,7 @@ export interface ClassesResponse {
 /** Payload for `POST {API_PREFIX}/classes`. */
 export interface RegistryClassCreate {
   name: string;
-  group: string;
+  group?: string;
   notes?: string;
 }
 
