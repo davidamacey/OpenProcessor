@@ -7,6 +7,7 @@
    */
   import { onMount } from 'svelte';
   import {
+    GPUInitializationError,
     Map as MapLibreMap,
     NavigationControl,
     Popup,
@@ -37,6 +38,11 @@
   let container: HTMLDivElement;
   let map: MapLibreMap | null = null;
   let ready = false;
+  /** Set when MapLibre cannot get a WebGL2 context; the card then explains instead of drawing. */
+  let noWebgl = $state(false);
+  const gpsNote = $derived(
+    `${meta.n_located} photo${meta.n_located === 1 ? ' has' : 's have'} GPS`,
+  );
 
   const EMPTY: MapCellCollection = {
     type: 'FeatureCollection',
@@ -75,31 +81,38 @@
   onMount(() => {
     setWorkerUrl(workerUrl);
     const bounds = meta.bounds;
-    map = new MapLibreMap({
-      container,
-      style: {
-        version: 8,
-        sources: {
-          basemap: {
-            type: 'raster',
-            tiles: [meta.tile_url],
-            tileSize: 256,
-            attribution: meta.tile_attribution,
+    try {
+      map = new MapLibreMap({
+        container,
+        style: {
+          version: 8,
+          sources: {
+            basemap: {
+              type: 'raster',
+              tiles: [meta.tile_url],
+              tileSize: 256,
+              attribution: meta.tile_attribution,
+            },
           },
+          layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
         },
-        layers: [{ id: 'basemap', type: 'raster', source: 'basemap' }],
-      },
-      bounds: bounds
-        ? [
-            [bounds.west, bounds.south],
-            [bounds.east, bounds.north],
-          ]
-        : undefined,
-      fitBoundsOptions: { padding: 48, maxZoom: Math.max(1, meta.max_zoom - 2) },
-      center: bounds ? undefined : [0, 20],
-      zoom: bounds ? undefined : 1,
-      maxZoom: meta.max_zoom + 3,
-    });
+        bounds: bounds
+          ? [
+              [bounds.west, bounds.south],
+              [bounds.east, bounds.north],
+            ]
+          : undefined,
+        fitBoundsOptions: { padding: 48, maxZoom: Math.max(1, meta.max_zoom - 2) },
+        center: bounds ? undefined : [0, 20],
+        zoom: bounds ? undefined : 1,
+        maxZoom: meta.max_zoom + 3,
+      });
+    } catch (err) {
+      // MapLibre throws GPUInitializationError from the constructor when no WebGL2 context exists.
+      if (!(err instanceof GPUInitializationError)) throw err;
+      noWebgl = true;
+      return;
+    }
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
 
     map.on('load', () => {
@@ -149,6 +162,9 @@
       emitView();
     });
     map.on('moveend', emitView);
+    map.on('error', (e) => {
+      if (e.error instanceof GPUInitializationError) noWebgl = true;
+    });
 
     const popup = new Popup({ closeButton: false, closeOnClick: false });
     map.on('mouseenter', 'cells', (e) => {
@@ -197,8 +213,19 @@
   });
 </script>
 
+{#if noWebgl}
+  <p
+    class="surface p-6 text-sm text-amber-300"
+    role="status"
+    data-testid="map-webgl-unsupported"
+  >
+    Map needs WebGL2, which this browser could not start; {gpsNote}. The rest of the page
+    still works.
+  </p>
+{/if}
 <div
   bind:this={container}
+  class:hidden={noWebgl}
   class="h-full min-h-[320px] w-full rounded border border-zinc-800"
   data-testid="map-canvas"
   role="application"
