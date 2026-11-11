@@ -12,7 +12,7 @@ from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 from src.config import CurationConfig
 from src.config.curation import _tile_url
 from src.routers.curation import map as route
-from src.services.curation import map_cells
+from src.services.curation import image_join, map_cells
 from src.services.curation.item_filter import ItemFilter
 
 
@@ -178,7 +178,7 @@ async def test_an_item_filter_is_resolved_to_images_first_and_says_when_it_was_c
     assert items_index.endswith('items')
     assert items_body['aggs']['images']['terms'] == {
         'field': 'image_id',
-        'size': map_cells.JOIN_MAX_IMAGES,
+        'size': image_join.JOIN_MAX_IMAGES,
     }
     assert {'terms': {'image_id': ['img1', 'img2']}} in images_body['query']['bool']['filter']
 

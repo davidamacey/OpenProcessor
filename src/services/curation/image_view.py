@@ -32,15 +32,19 @@ from src.services.curation.image_facts import (
     taken_at,
     thumbnail_url,
 )
+from src.services.curation.image_join import (
+    NearDupFilter,
+    item_image_ids,
+    location_clauses,
+    near_dup_clauses,
+)
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
-from src.services.curation.map_cells import LOCATION_FIELD, geo_box_query, item_image_ids
 
 
 if TYPE_CHECKING:
     from src.schemas.curation.map import MapBounds
     from src.services.embedding_spaces.readers import WriteFields
 
-NearDupFilter = Literal['member', 'representative', 'none']
 LabelState = Literal['has_unlabeled', 'all_labeled', 'no_items']
 
 DEFAULT_SORT: Final = 'indexed_at:desc'
@@ -116,22 +120,8 @@ def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if q.source is not None:
         out.append({'term': {'source': q.source}})
-    located = {'exists': {'field': LOCATION_FIELD}}
-    if q.has_location is not None:
-        if policy == 'drop':
-            out.append({'match_all': {}} if not q.has_location else {'match_none': {}})
-        else:
-            out.append(located if q.has_location else {'bool': {'must_not': located}})
-    if q.geo_box is not None:
-        out.append({'match_none': {}} if policy == 'drop' else geo_box_query(q.geo_box))
-    group = {'exists': {'field': 'near_dup_group_id'}}
-    representative = {'term': {'near_dup_is_representative': True}}
-    if q.near_dup == 'member':
-        out.append({'bool': {'filter': [group], 'must_not': [representative]}})
-    elif q.near_dup == 'representative':
-        out.append(representative)
-    elif q.near_dup == 'none':
-        out.append({'bool': {'must_not': [group]}})
+    out.extend(location_clauses(q.has_location, q.geo_box, policy))
+    out.extend(near_dup_clauses(q.near_dup))
     return out
 
 

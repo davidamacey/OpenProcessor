@@ -22,7 +22,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
-from src.config.curation_accessors import images_index, items_index
+from src.config.curation_accessors import images_index
 from src.domain.location_policy import COARSE_DECIMALS
 from src.schemas.curation.map import (
     MapBounds,
@@ -33,20 +33,19 @@ from src.schemas.curation.map import (
     MapMeta,
     MapTileImages,
 )
+from src.services.curation.image_join import LOCATION_FIELD, geo_box_query, item_image_ids
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 
 
 if TYPE_CHECKING:
     from src.services.embedding_spaces.readers import WriteFields
 
-LOCATION_FIELD: Final = 'capture.location'
 MAX_CELLS: Final = 5000
 #: Cells per tile at the requested zoom: a map tile is 256 px, a cell 2^3 times finer than a tile.
 CELL_ZOOM_OFFSET: Final = 3
 MAX_PRECISION: Final = 22
 #: A coarse policy keeps about 1 km: tiles at zoom 15 are about 1.2 km wide at the equator.
 COARSE_MAX_PRECISION: Final = 15
-JOIN_MAX_IMAGES: Final = 10_000
 TILE_IMAGES_MAX: Final = 200
 
 
@@ -69,17 +68,6 @@ def parse_bbox(raw: str) -> MapBounds:
         msg = 'bbox is outside -180..180 longitude and -90..90 latitude'
         raise MapQueryError(msg)
     return MapBounds(west=west, south=south, east=east, north=north)
-
-
-def geo_box_query(box: MapBounds) -> dict[str, Any]:
-    return {
-        'geo_bounding_box': {
-            LOCATION_FIELD: {
-                'top_left': {'lat': box.north, 'lon': box.west},
-                'bottom_right': {'lat': box.south, 'lon': box.east},
-            }
-        }
-    }
 
 
 def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
@@ -107,20 +95,6 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
             }
         }
     ]
-
-
-async def item_image_ids(opensearch: Any, query: dict[str, Any]) -> tuple[list[str], bool]:
-    """The images that have an item matching ``query`` and whether there were more than we use."""
-    resp = await opensearch.search(
-        index=items_index(),
-        body={
-            'size': 0,
-            'query': query,
-            'aggs': {'images': {'terms': {'field': 'image_id', 'size': JOIN_MAX_IMAGES}}},
-        },
-    )
-    agg = resp['aggregations']['images']
-    return [b['key'] for b in agg['buckets']], int(agg.get('sum_other_doc_count', 0)) > 0
 
 
 async def image_query(
@@ -293,10 +267,8 @@ async def tile_images(
 
 __all__ = [
     'CELL_ZOOM_OFFSET',
-    'JOIN_MAX_IMAGES',
     'MAX_CELLS',
     'MapQueryError',
-    'item_image_ids',
     'map_cells',
     'map_meta',
     'parse_bbox',
