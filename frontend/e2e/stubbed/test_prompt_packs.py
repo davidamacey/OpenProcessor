@@ -513,7 +513,11 @@ def test_test_on_crop_sends_the_draft_and_shows_the_reply(stub, page, app_url):
                         'box_id': None,
                         'parsed': {'class_name': 'widget', 'confidence': 0.91},
                         'skipped': None,
-                        'preview_item': {'crop_id': 'c_123', 'bbox_norm': [0.1, 0.1, 0.5, 0.5]},
+                        'preview_item': {
+                            'crop_id': 'c_123',
+                            'image_id': 'img_1',
+                            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+                        },
                     }
                 ],
             },

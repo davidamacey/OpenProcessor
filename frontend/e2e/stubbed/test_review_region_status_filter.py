@@ -181,7 +181,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/review/tabs(\?|$)', REVIEW_TABS)
     stub.on('GET', r'/regions/vocabulary(\?|$)', VOCABULARY)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
 
     def review_handler(request, _match):
         region_calls.append(request.url)
@@ -241,7 +241,7 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/review/tabs(\?|$)', REVIEW_TABS)
     stub.on('GET', r'/regions/vocabulary(\?|$)', VOCABULARY)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
 
     def review_handler(request, _match):
         region_calls.append(request.url)

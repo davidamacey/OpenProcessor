@@ -105,7 +105,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     )
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480}, 'items': [crop(0)]},

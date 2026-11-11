@@ -93,5 +93,4 @@ def has_card_filters(item_filter_empty: bool, params: Any) -> bool:
         or params.validation_state is not None
         or params.flags
         or params.needs_review is not None
-        or params.cluster_uid is not None
     )

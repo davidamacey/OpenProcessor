@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import pytest
-from fixtures.contract import cluster_facets, embedding_spaces, fill
+from fixtures.contract import cluster_card, cluster_facets, embedding_spaces, fill, image_detail
 from fixtures.wire import (
     REGION_PROFILE,
     REGION_TAB_LABEL,
@@ -115,15 +115,14 @@ class Stub:
         )
         self.on('GET', r'/health$', {'status': 'ok', 'region_profile': REGION_PROFILE})
         self.on('GET', r'(thumbnail|region_thumbnail|/source)(/|$|\?)', self._image)
-        # K6:
         # `/review`'s source panel (SourceImageOverlay.svelte) fetches
-        # `/crops/{id}/context` and then the now-unannotated
-        # `/crops/{id}/image` on every visit — same "every test needs
-        # this" rationale as the four defaults above. A test that cares
-        # about the overlay's actual boxes registers its own, more
-        # specific `.on(...)` for `/context` (later registration wins).
-        self.on('GET', r'/crops/[^/]+/context$', self._context)
-        self.on('GET', r'/crops/[^/]+/image(/|$|\?)', self._image)
+        # `/images/{id}` and then the clean `/images/{id}/file` on every
+        # visit — same "every test needs this" rationale as the four
+        # defaults above. A test that cares about the overlay's actual
+        # boxes registers its own, more specific `.on(...)` for the detail
+        # (later registration wins).
+        self.on('GET', r'/images/[^/]+$', self._image_detail)
+        self.on('GET', r'/images/[^/]+/file(/|$|\?)', self._image)
         self.on('GET', r'(/events|/stream)(/|$|\?)', (204, '', 'text/plain'))
         self.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
         # /clusters/[id] lists the assist runs for the viewed cluster on every visit.
@@ -136,6 +135,8 @@ class Stub:
         self.on('GET', r'/embedding/spaces(\?|$)', embedding_spaces())
         # ...and reads its facet counts; a test that checks chips overrides this.
         self.on('GET', r'/clusters/([^/]+)/facets$', self._empty_facets)
+        # The served card of one cluster (the detail header); a test that cares overrides it.
+        self.on('GET', r'/clusters/(?!partitions$|representatives$)([^/]+)$', self._card)
         # S1 fix (visual audit 2026-09-24): `/review` now reads the
         # deployment's pinned curation defaults (`curationSettingsStore`)
         # so StrategyBar can flag a zero-coverage pinned sort — fired on
@@ -368,25 +369,15 @@ class Stub:
         return (200, cluster_facets(match.group(1)))
 
     @staticmethod
-    def _context(_request: Any, _match: re.Match[str]) -> HandlerResult:
-        # Minimal-but-valid `{API_PREFIX}/crops/{id}/context` default: no
-        # items, so SourceImageOverlay renders the (stubbed) image with
-        # zero boxes — a test asserting real box geometry registers its
-        # own `.on("GET", r"/crops/[^/]+/context$", ...)` instead.
-        return (
-            200,
-            {
-                'image': {
-                    'image_id': 'stub-image',
-                    'image_path': '/fixtures/stub-image.jpg',
-                    'width': None,
-                    'height': None,
-                    'source': None,
-                    'indexed_at': None,
-                },
-                'items': [],
-            },
-        )
+    def _card(_request: Any, match: re.Match[str]) -> HandlerResult:
+        return (200, cluster_card(match.group(1)))
+
+    @staticmethod
+    def _image_detail(_request: Any, match: re.Match[str]) -> HandlerResult:
+        # Minimal-but-valid `{API_PREFIX}/images/{id}` default: no items, so
+        # SourceImageOverlay renders the (stubbed) image with zero boxes — a
+        # test asserting real box geometry registers its own handler instead.
+        return (200, image_detail(match.string.rsplit('/', 1)[-1]))
 
     def _dispatch(self, route: Any, request: Any) -> None:
         # Every branch below MUST end in a `route.fulfill`/`route.abort` —

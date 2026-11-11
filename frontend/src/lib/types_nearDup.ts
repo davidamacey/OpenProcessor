@@ -81,11 +81,21 @@ export interface NearDupGroupSummary {
   min_edge_cosine: number;
   min_cosine_to_rep: number;
   has_holdout: boolean;
+  /** The representative's served picture. */
+  representative_thumbnail_url: string;
 }
 
 export interface NearDupGroupPage {
   items: NearDupGroupSummary[];
   next_cursor: string | null;
+  /** Why a first page is empty (the cut and the number scored); null otherwise. */
+  empty_reason: string | null;
+}
+
+/** The pin between a member and the representative; `id` undoes it. */
+export interface NearDupPin {
+  id: string;
+  kind: NearDupDecision;
 }
 
 export interface NearDupMemberView {
@@ -93,6 +103,12 @@ export interface NearDupMemberView {
   member_id: string;
   is_representative: boolean;
   cosine_to_rep: number;
+  thumbnail_url: string;
+  image_id: string | null;
+  crop_id: string | null;
+  class_name: string | null;
+  in_holdout: boolean;
+  decision: NearDupPin | null;
 }
 
 export interface NearDupGroupDetail {
@@ -111,6 +127,20 @@ export interface NearDupDecisionView extends NearDupDecisionIn {
   id: string;
   decided_by: string;
   decided_at: string;
+  a_thumbnail_url: string;
+  b_thumbnail_url: string;
+}
+
+export interface NearDupDecisionPage {
+  items: NearDupDecisionView[];
+  next_cursor: string | null;
+}
+
+export interface NearDupDecisionQuery {
+  level?: NearDupLevel;
+  member_id?: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface NearDupGroupQuery {

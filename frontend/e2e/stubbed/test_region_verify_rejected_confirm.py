@@ -92,7 +92,7 @@ def multibox_item(boxes: list[dict], region_status: str = 'pending_verification'
 def _setup(stub, items_provider):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
     stub.on(
         'GET',
         r'/review/(?!tabs)',

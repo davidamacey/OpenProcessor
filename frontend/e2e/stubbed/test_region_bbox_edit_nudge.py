@@ -89,7 +89,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
     stub.on(
         'GET',
         r'/review/(?!tabs)',

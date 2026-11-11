@@ -231,6 +231,9 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.per-file-ignores]
+# The fake Triton implements Triton's gRPC service, whose method names (ServerLive, ModelInfer, ...)
+# are fixed by its proto.
+"docker/test/fake_triton.py" = ["N802"]
 # Entry-point scripts that must run before their imports are valid: the seed scripts put the
 # repo root on sys.path first.
 "scripts/curation/seed_docs_run_results.py" = ["E402"]

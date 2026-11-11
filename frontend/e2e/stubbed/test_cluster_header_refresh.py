@@ -13,17 +13,18 @@ picks up the server's new count with no navigation/reload.
 
 from __future__ import annotations
 
-from fixtures.contract import cluster_card, cluster_list
+from fixtures.contract import cluster_card
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.label_ops import stub_label_op
+from harness.screens import save_screens
 from playwright.sync_api import expect
 
 
 CLASS_ID = 44
 
 CLUSTER_UID = 'cl-fixture-0044'
-CLUSTERS = cluster_list(cluster_card(CLUSTER_UID, size=2, dominant_class_name='mustang'))
+CARD = cluster_card(CLUSTER_UID, size=2, dominant_class_name='mustang')
 
 
 def crop(i: int) -> dict:
@@ -82,7 +83,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
         )
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', classes_handler)
-    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
+    stub.on('GET', rf'/clusters/{CLUSTER_UID}$', CARD)
     stub.on(
         'GET',
         r'/crops(\?|$)',
@@ -125,15 +126,15 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
     text = ' '.join(header.inner_text().split())
     assert 'class-wide: 34 validated · 161 labeled' in text, text
     assert '2 in this cluster' in text, text
+    save_screens(page, 'workflow_1c', 'cluster-header')
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'no pageerror expected in the label/header-refresh flow: {errors[:3]}'
 
 
 def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
-    """The cluster card read failing (the crops still load) used to render
-    "Cluster #N" with no sign that anything was wrong; the served reason is
-    shown instead of a silent unlabeled identity."""
+    """The card route refusing (the crops still load) shows the served reason,
+    not an invented unlabeled identity."""
     stub.on(
         'GET',
         r'(?<!/stats)/classes(\?|$)',
@@ -149,7 +150,19 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
             'reserved_hotkeys': [],
         },
     )
-    stub.on('GET', r'/clusters(\?|$)', (400, {'detail': 'aggregation unavailable'}))
+    stub.on(
+        'GET',
+        rf'/clusters/{CLUSTER_UID}$',
+        (
+            404,
+            {
+                'detail': {
+                    'error': 'cluster_not_found',
+                    'message': 'cluster is not in the serving partition',
+                }
+            },
+        ),
+    )
     stub.on(
         'GET',
         r'/crops(\?|$)',
@@ -157,5 +170,6 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
     )
     page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
     expect(page.get_by_test_id('cluster-card-error')).to_contain_text(
-        'aggregation unavailable', timeout=ACTION_TIMEOUT_MS
+        'not in the serving partition', timeout=ACTION_TIMEOUT_MS
     )
+    save_screens(page, 'workflow_1c', 'cluster-header-refused')

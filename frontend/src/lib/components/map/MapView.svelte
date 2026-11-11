@@ -40,6 +40,8 @@
   let ready = false;
   /** Set when MapLibre cannot get a WebGL2 context; the card then explains instead of drawing. */
   let noWebgl = $state(false);
+  /** MapLibre's own words when the worker or style fails to load; the canvas stays blank then. */
+  let loadError = $state<string | null>(null);
   const gpsNote = $derived(
     `${meta.n_located} photo${meta.n_located === 1 ? ' has' : 's have'} GPS`,
   );
@@ -164,6 +166,8 @@
     map.on('moveend', emitView);
     map.on('error', (e) => {
       if (e.error instanceof GPUInitializationError) noWebgl = true;
+      // A failed tile is routine (offline, 404) and carries `tile`; anything else blanks the map.
+      else if (!('tile' in e)) loadError = e.error?.message ?? 'unknown error';
     });
 
     const popup = new Popup({ closeButton: false, closeOnClick: false });
@@ -221,6 +225,15 @@
   >
     Map needs WebGL2, which this browser could not start; {gpsNote}. The rest of the page
     still works.
+  </p>
+{/if}
+{#if loadError}
+  <p
+    class="surface p-6 text-sm text-amber-300"
+    role="status"
+    data-testid="map-load-error"
+  >
+    Map could not load: {loadError}
   </p>
 {/if}
 <div

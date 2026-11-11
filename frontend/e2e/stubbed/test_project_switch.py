@@ -107,7 +107,7 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     # network quiet, which a slow main thread satisfies before the next crop
     # has even rendered) so those requests are not counted as post-switch.
     with (
-        page.expect_response(lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/crops/crop-1/context'),
+        page.expect_response(lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/images/img-1'),
         expect_handled(page, lambda r: r.method == 'PUT' and _path(r.url).endswith('/label')),
     ):
         page.keyboard.press('Enter')

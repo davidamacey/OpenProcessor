@@ -46,6 +46,8 @@
     "vlm_proposed_class_name",
     "proposed_class_id",
     "proposed_class_name",
+    "display_name",
+    "display_name_kind",
     "needs_new_class",
     "needs_new_class_note",
     "cluster",
@@ -991,6 +993,22 @@
         ],
         "default": null,
         "title": "Detector Confidence"
+      },
+      "display_name": {
+        "default": "",
+        "title": "Display Name",
+        "type": "string"
+      },
+      "display_name_kind": {
+        "default": "none",
+        "enum": [
+          "class",
+          "proposed",
+          "detector",
+          "none"
+        ],
+        "title": "Display Name Kind",
+        "type": "string"
       },
       "embedding_states": {
         "additionalProperties": {

@@ -116,7 +116,7 @@ def multibox_item() -> dict:
 def test_review_region_tab_tolerates_a_served_region_boxes_list(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
 
     def review_handler(_request, _match):
         return (

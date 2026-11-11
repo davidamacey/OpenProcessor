@@ -375,6 +375,15 @@ def _aggregate(docs: list[dict[str, Any]], aggs: dict[str, Any]) -> dict[str, An
         if 'geotile_grid' in spec:
             out[name] = _geotile_grid(docs, spec)
             continue
+        if 'filters' in spec:
+            named = spec['filters']['filters']
+            out[name] = {
+                'buckets': {
+                    key: {'doc_count': sum(1 for d in docs if matches(d, clause))}
+                    for key, clause in named.items()
+                }
+            }
+            continue
         if 'terms' not in spec:
             raise NotImplementedError(f'agg not supported by fake: {spec}')
         field = spec['terms']['field']

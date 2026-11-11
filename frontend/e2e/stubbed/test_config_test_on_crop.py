@@ -21,6 +21,7 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+from fixtures.contract import image_detail
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
 from playwright.sync_api import expect
@@ -161,7 +162,11 @@ def test_pack_test_sends_the_draft_and_renders_the_contract_response(stub, page,
                         'box_id': None,
                         'parsed': {'class_name': 'widget', 'confidence': 0.91},
                         'skipped': None,
-                        'preview_item': {'crop_id': 'c_123', 'bbox_norm': [0.1, 0.1, 0.5, 0.5]},
+                        'preview_item': {
+                            'crop_id': 'c_123',
+                            'image_id': 'img_1',
+                            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+                        },
                     },
                     {
                         'crop_id': 'c_456',
@@ -359,7 +364,7 @@ def real_png(width: int, height: int) -> bytes:
 
 def serve_real_image(stub, width: int, height: int) -> None:
     png = real_png(width, height)
-    stub.on('GET', r'/crops/[^/]+/image(/|$|\?)', (200, png, 'image/png'))
+    stub.on('GET', r'/images/[^/]+/file(/|$|\?)', (200, png, 'image/png'))
     stub.on('GET', r'(thumbnail|region_thumbnail)(/|$|\?)', (200, real_png(256, 256), 'image/png'))
     item = {
         'crop_id': 'c_123',
@@ -370,21 +375,8 @@ def serve_real_image(stub, width: int, height: int) -> None:
     }
     stub.on(
         'GET',
-        r'/crops/[^/]+/context$',
-        (
-            200,
-            {
-                'image': {
-                    'image_id': 'img_1',
-                    'image_path': '/fixtures/img.png',
-                    'width': width,
-                    'height': height,
-                    'source': None,
-                    'indexed_at': None,
-                },
-                'items': [item],
-            },
-        ),
+        r'/images/img_1$',
+        (200, image_detail('img_1', [item], width=width, height=height)),
     )
 
 

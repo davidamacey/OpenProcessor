@@ -2,11 +2,10 @@
 
 Exposes:
 
-- ``GET {prefix}/images/serve``                — stream a source JPEG (auto root detection)
-- ``GET {prefix}/images/root/{alias}``          — stream an image from a named source-path alias
+- ``GET {prefix}/images/{image_id}/file``       — clean source pixels of an image (no overlay)
+- ``GET {prefix}/images/{image_id}/thumbnail``  — whole-frame thumbnail of an image (LRU cached)
 - ``GET {prefix}/images/cache/stats``           — thumbnail cache hit/miss stats
 - ``GET {prefix}/crops/{id}/thumbnail``         — 128px item-crop thumbnail (LRU cached)
-- ``GET {prefix}/crops/{id}/image``             — clean full source image (no overlay)
 - ``GET {prefix}/crops/{id}/region_thumbnail``  — region-of-interest sub-bbox thumbnail
 
 Exports **two** routers — ``router`` (images) and ``crops_router``
@@ -20,7 +19,7 @@ import hashlib
 from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 from src.config import get_curation_config, get_region_fields
 from src.core.dependencies import get_curation_opensearch as _raw_opensearch_dep
@@ -28,14 +27,13 @@ from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.region_boxes import read_boxes
 from src.routers._errors import server_error
+from src.services.curation.image_detail import image_source
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
     _fetch_crop,
-    project_owns_image_path,
     render_source_image,
     resolve_crop_root,
     resolve_safe_path,
-    source_media_type,
     source_missing_detail,
 )
 
@@ -60,6 +58,7 @@ router = APIRouter(
 
 # Shared headers for image responses — 1h cache, public.
 _IMAGE_CACHE_HEADERS = {'Cache-Control': 'public, max-age=3600'}
+_WHOLE_FRAME = (0.0, 0.0, 1.0, 1.0)
 
 
 def _region_thumbnail_headers(image_path: Any, bbox: Any, size: int) -> dict[str, str]:
@@ -73,7 +72,7 @@ def _region_thumbnail_headers(image_path: Any, bbox: Any, size: int) -> dict[str
     return {'Cache-Control': 'no-cache', 'ETag': f'"{tag}"'}
 
 
-def _resolve_or_source_missing(path: str, root: Path) -> Path:
+def resolve_or_source_missing(path: str, root: Path) -> Path:
     """``resolve_safe_path`` with a not-found answer turned into the typed
     ``source_missing`` body so the frontend can name the unreachable root."""
     try:
@@ -84,60 +83,72 @@ def _resolve_or_source_missing(path: str, root: Path) -> Path:
         raise
 
 
-async def serve_source_image(path: str, root: Path, opensearch: Any) -> FileResponse:
-    """Stream a source image under ``root`` via ``FileResponse`` (zero-copy), with
-    its media type and a 1h Cache-Control.
+async def _image_path(opensearch: Any, image_id: str) -> str:
+    """The stored path of the bound project's image ``image_id`` (404 for any other id, so an
+    image another project ingested is neither readable nor distinguishable from a missing one)."""
+    src = await image_source(opensearch, image_id, ['image_path'])
+    if src is None or not src.get('image_path'):
+        raise HTTPException(status_code=404, detail=f'image not found: {image_id}')
+    return str(src['image_path'])
 
-    Only an image the bound project's images index holds is served; any other
-    path answers the same ``source_missing`` 404 as an absent file, before the
-    filesystem is touched, so a file another project ingested from the shared
-    root is neither readable nor distinguishable from a missing one."""
-    if not await project_owns_image_path(opensearch, path, root):
-        raise HTTPException(status_code=404, detail=source_missing_detail(root, path))
-    safe_path = _resolve_or_source_missing(path, root)
-    media_type = source_media_type(safe_path)
-    logger.debug('serve_source_image', path=path, resolved=str(safe_path), media_type=media_type)
-    return FileResponse(
-        path=str(safe_path),
-        media_type=media_type,
-        headers=_IMAGE_CACHE_HEADERS,
+
+def _source_missing(image_path: str) -> HTTPException:
+    return HTTPException(
+        status_code=404, detail=source_missing_detail(resolve_crop_root(image_path), image_path)
     )
 
 
-# =============================================================================
-# /images/serve — auto-detect root
-# =============================================================================
-
-
-@router.get('/serve', response_class=FileResponse)
-async def serve_image(
-    path: Annotated[str, Query(description='Path relative to a configured source root')],
+@router.get('/{image_id}/file', response_class=Response)
+async def image_file(
+    image_id: str,
     opensearch: OpenSearchDep,
-) -> FileResponse:
-    """Stream a source image, auto-detecting its root.
+    max_dim: Annotated[
+        int | None,
+        Query(
+            ge=128,
+            le=8192,
+            description=(
+                'Cap the longest edge at this many pixels. Omit for full resolution; '
+                'about 1280 suits a review view (a 2 MB photo becomes a few hundred KB).'
+            ),
+        ),
+    ] = None,
+) -> Response:
+    """The clean source pixels of an image: EXIF orientation applied and an optional resize,
+    nothing drawn on them. A client draws the boxes `GET .../images/{image_id}` serves in image
+    coordinates. A file that is not reachable answers the typed `source_missing` 404."""
+    image_path = await _image_path(opensearch, image_id)
+    path = resolve_or_source_missing(image_path, resolve_crop_root(image_path))
+    try:
+        jpeg = await render_source_image(path, max_dim=max_dim)
+    except FileNotFoundError as exc:
+        raise _source_missing(image_path) from exc
+    except Exception as exc:
+        logger.error('image_file_failed', image_id=image_id, error=str(exc))
+        raise server_error(500, 'image render failed', exc) from exc
+    return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 
-    Root selection: the longest matching configured root for absolute
-    paths, or a ``source_path_aliases`` prefix match on the leading path
-    segment for relative paths — falls back to ``source_root``. See
-    ``src.services.curation.image_serving.resolve_crop_root``. Only images
-    the bound project ingested are served (404 otherwise).
-    """
-    root = resolve_crop_root(path)
-    return await serve_source_image(path, root, opensearch)
 
-
-@router.get('/root/{alias}', response_class=FileResponse)
-async def serve_aliased_image(
-    alias: str,
-    path: Annotated[str, Query(description='Path relative to the named alias root')],
+@router.get('/{image_id}/thumbnail', response_class=Response)
+async def image_thumbnail(
+    image_id: str,
     opensearch: OpenSearchDep,
-) -> FileResponse:
-    """Stream an image from an explicitly-named ``source_path_aliases`` root, if the
-    bound project ingested it."""
-    alias_root = config.source_path_aliases.get(alias)
-    if alias_root is None:
-        raise HTTPException(status_code=404, detail=f'unknown source root alias: {alias}')
-    return await serve_source_image(path, alias_root, opensearch)
+    size: Annotated[
+        int, Query(ge=32, le=512, description='Longest edge of the thumbnail, in pixels.')
+    ] = 256,
+) -> Response:
+    """The whole frame, shrunk to fit `size` with its aspect kept (so a box in image coordinates
+    lands on the same place), LRU cached."""
+    image_path = await _image_path(opensearch, image_id)
+    path = resolve_or_source_missing(image_path, resolve_crop_root(image_path))
+    try:
+        jpeg = await THUMBNAIL_CACHE.get_or_compute_offloaded(path, _WHOLE_FRAME, size=size)
+    except FileNotFoundError as exc:
+        raise _source_missing(image_path) from exc
+    except Exception as exc:
+        logger.error('image_thumbnail_failed', image_id=image_id, error=str(exc))
+        raise server_error(500, 'thumbnail render failed', exc) from exc
+    return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 
 
 # =============================================================================
@@ -168,7 +179,7 @@ def _resolve_image_for_crop(crop_doc: dict[str, Any]) -> Path:
     if not image_path:
         raise HTTPException(status_code=500, detail='crop is missing image_path')
     root = resolve_crop_root(image_path)
-    return _resolve_or_source_missing(image_path, root)
+    return resolve_or_source_missing(image_path, root)
 
 
 def _source_missing_error(crop_doc: dict[str, Any]) -> HTTPException:
@@ -207,49 +218,6 @@ async def crop_thumbnail(
     except Exception as exc:
         logger.error('crop_thumbnail_failed', crop_id=crop_id, error=str(exc))
         raise server_error(500, 'thumbnail render failed', exc) from exc
-
-    return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
-
-
-@crops_router.get('/{crop_id}/image')
-async def crop_full_image(
-    crop_id: str,
-    opensearch: OpenSearchDep,
-    max_dim: Annotated[
-        int | None,
-        Query(
-            ge=128,
-            le=8192,
-            description=(
-                'Cap longest edge at this many pixels. Omit for full '
-                'resolution; pass ~1024 for review-friendly previews '
-                '(drops ~2.2 MB sources to ~200 KB).'
-            ),
-        ),
-    ] = None,
-) -> Response:
-    """The clean source image for this crop's parent frame — no box, label
-    or other overlay drawn. Only resize, EXIF-transpose and RGB
-    conversion apply.
-
-    Defaults to full resolution to preserve compatibility with callers
-    that need pixel-accurate frames. Pass ``max_dim`` for the labeler
-    review queue, where the user is glancing at one item at a time and a
-    sub-MB preview is plenty. The frontend draws the item box, the
-    region box and any rejected-candidate box itself, from the geometry
-    ``GET {prefix}/crops/{id}/context`` serves in source-image-normalized
-    coordinates.
-    """
-    crop = await _fetch_crop(crop_id, opensearch)
-    image_path = _resolve_image_for_crop(crop)
-
-    try:
-        jpeg = await render_source_image(image_path, max_dim=max_dim)
-    except FileNotFoundError as exc:
-        raise _source_missing_error(crop) from exc
-    except Exception as exc:
-        logger.error('crop_full_image_failed', crop_id=crop_id, error=str(exc))
-        raise server_error(500, 'image render failed', exc) from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
 

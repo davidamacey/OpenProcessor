@@ -95,7 +95,7 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(s
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
     stub.on('GET', r'/crops(\?|$)', {'total': 1, 'page': 1, 'page_size': 60, 'crops': [tag_item()]})
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
 
     def region_put(request, _match):
         body = request.post_data_json or {}

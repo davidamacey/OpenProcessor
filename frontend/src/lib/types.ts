@@ -128,6 +128,10 @@ export interface Crop {
    *  `ReviewItem`. */
   proposed_class_id: number | null;
   proposed_class_name: string | null;
+  /** The one name to show for the item, and where the server took it from: its class, the
+   *  proposed class, the detector's own label, or `none` (empty name). */
+  display_name: string;
+  display_name_kind: 'class' | 'proposed' | 'detector' | 'none';
   test_holdout: boolean;
   // -- Exclude / Ignore (G7) ----------------------------------------------
   /** True when the crop is in the excluded/"Ignored" bucket
@@ -421,28 +425,61 @@ export interface CropHistoryResponse {
   entries: CropHistoryEntry[];
 }
 
-/** `GET {API_PREFIX}/crops/{id}/image` — the shared source image plus every
- *  item cropped from it (siblings, including the requested crop itself). */
-export interface CropImageMeta {
-  image_id: string;
-  image_path: string;
-  width: number | null;
-  height: number | null;
-  source: string | null;
-  indexed_at: string | null;
+/** A box to draw over an image, in image coordinates, with the label and tone the
+ *  backend decided (`BoxView`). */
+export interface ImageBox {
+  crop_id: string;
+  box_id: string | null;
+  kind: 'item' | 'region';
+  bbox_norm: [number, number, number, number];
+  label: string;
+  class_name: string | null;
+  tone: 'validated' | 'machine' | 'unlabeled' | 'holdout' | 'rejected';
+  state: string | null;
 }
 
-export interface CropContextResponse {
-  image: CropImageMeta;
+export interface ImageCounts {
+  items: number;
+  labeled: number;
+  validated: number;
+  unlabeled: number;
+  in_holdout: number;
+}
+
+export interface ImageInfo {
+  image_id: string;
+  file_name: string;
+  file_url: string;
+  width: number | null;
+  height: number | null;
+  source: string;
+  indexed_at: string | null;
+  taken_at: string | null;
+  location: { latitude: number; longitude: number; precision: string | null } | null;
+  dataset_split: string | null;
+  in_holdout: boolean;
+  near_dup: {
+    group_id: string;
+    purpose: 'dedup' | 'leak';
+    size: number | null;
+    is_representative: boolean | null;
+  } | null;
+}
+
+/** `GET {API_PREFIX}/images/{id}` — one source image, its counts, every item
+ *  detected on it and the boxes to draw. */
+export interface ImageDetailResponse {
+  image: ImageInfo;
+  counts: ImageCounts;
   items: Crop[];
+  boxes: ImageBox[];
+  items_truncated: boolean;
 }
 
 export interface ClusterFilter
   extends
     Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>,
     Partial<ClusterListFilter> {
-  /** Restrict to exactly one cluster (its own card). */
-  cluster_uid?: string | null;
   /** Representative crops per card. `0` skips them; the representatives
    *  window (`offset`/`limit`) rejects 0 (the contract's minimum is 1). */
   per_cluster?: number;

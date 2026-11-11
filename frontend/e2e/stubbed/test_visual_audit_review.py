@@ -133,7 +133,7 @@ def _stub_review(
     stub.on('GET', r'thumbnail(/|$|\?)', (200, crop_png, 'image/png'))
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     # The review source panel's image (server-burned bbox overlay).
-    stub.on('GET', r'/crops/[^/]+/image$', (200, source_png, 'image/png'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, source_png, 'image/png'))
 
     def review_handler(request, _match):
         if empty_uncertainty and '/review/uncertainty' in request.url:

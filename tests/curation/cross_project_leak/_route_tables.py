@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from curation.cross_project_leak._constants import SCOPED
-from curation.cross_project_leak._seeded_files import own_image_path
 
 
 if TYPE_CHECKING:
@@ -37,12 +36,17 @@ READ_CROP_FOR: dict[tuple[str, str], str] = {
     ('GET', '/crops/{crop_id}/region_thumbnail'): 'item-0004'
 }
 
+# Reads of an image other than ``-img-0001``: the one whose file the seed wrote under the shared
+# source root, so the pixel routes reach the file.
+READ_IMAGE_FOR: dict[tuple[str, str], str] = {
+    ('GET', '/images/{image_id}/file'): 'img-0002',
+    ('GET', '/images/{image_id}/thumbnail'): 'img-0002',
+}
+
 # Reads whose query names one of the bound project's own files or rows, so it cannot be a fixed
 # dict: the value gets the slug. Same role as READ_QUERIES (a 422 here is an unmapped query).
 SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] = {
     ('GET', '/crops/{crop_id}/region_thumbnail'): lambda _slug: {'params': {'box_id': 'b1'}},
-    ('GET', '/images/serve'): lambda slug: {'params': {'path': own_image_path(slug)}},
-    ('GET', '/images/root/{alias}'): lambda slug: {'params': {'path': f'{slug}-lab-0001.jpg'}},
     ('GET', '/near_duplicates/groups'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/near_duplicates/groups/{group_id}'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/review/{tab}/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
@@ -92,7 +96,13 @@ PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
 # Scoped routes that may answer 4xx in the sweep without it being a gap, and why. A route that
 # neither answers below 400 nor wrote nor is listed here (or in NO_WRITE / UNSEEDED_WRITES, which
 # carry their own reasons) fails the sweep: the request never reached the handler.
-UNREACHED_OK: dict[tuple[str, str], str] = {}
+UNREACHED_OK: dict[tuple[str, str], str] = {
+    ('GET', '/clusters/{cluster_uid}'): (
+        'the sweep transport cannot run the painless review-tab scripts of the card aggregation, so '
+        'the card is absent here (404); test_cluster_list_isolation.py proves the same route with '
+        'a seeded cluster and the script twin'
+    )
+}
 
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must

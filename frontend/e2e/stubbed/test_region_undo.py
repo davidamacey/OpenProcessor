@@ -50,7 +50,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
 
     def review_handler(_request, _match):
         return (200, {'items': [tag_item()], 'total': 1, 'page': 1, 'page_size': 30})
@@ -129,7 +129,7 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, b'', 'image/jpeg'))
+    stub.on('GET', r'/images/[^/]+/file$', (200, b'', 'image/jpeg'))
     stub.on(
         'GET',
         r'/review/(?!tabs)',

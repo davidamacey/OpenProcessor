@@ -48,7 +48,7 @@ def _setup(stub):
     )
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         (200, {'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480}, 'items': [item]}),
     )
 

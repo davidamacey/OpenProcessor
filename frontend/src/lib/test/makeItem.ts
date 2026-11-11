@@ -67,6 +67,8 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   vlm_proposed_class_name: 'pickup_truck',
   proposed_class_id: 101,
   proposed_class_name: 'widget_b',
+  display_name: 'widget_a',
+  display_name_kind: 'class',
   mistakenness_score: 0.27,
   mistakenness_method: 'entropy',
   mistakenness_version: 'v3',

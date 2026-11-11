@@ -27,6 +27,7 @@ import zlib
 from pathlib import Path
 from typing import Any
 
+from fixtures.contract import image_detail
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.waits import expect_handled
@@ -530,20 +531,8 @@ def test_test_panel_draws_hits_and_words_a_dropped_one(stub, page, app_url):
         )
 
     stub.on('POST', r'/open_vocab/test$', run_test)
-    stub.on('GET', r'/crops/[^/]+/image$', (200, png(400, 300), 'image/png'))
-    stub.on(
-        'GET',
-        r'/crops/c_123/context$',
-        {
-            'image': {
-                'image_id': 'img_9',
-                'image_path': '/fixtures/stub.jpg',
-                'width': 400,
-                'height': 300,
-            },
-            'items': [],
-        },
-    )
+    stub.on('GET', r'/images/[^/]+/file$', (200, png(400, 300), 'image/png'))
+    stub.on('GET', r'/images/img_9$', image_detail('img_9', width=400, height=300))
 
     open_editor(page, app_url)
     panel = page.get_by_test_id('open-vocab-test-panel')

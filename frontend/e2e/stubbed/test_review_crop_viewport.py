@@ -61,7 +61,7 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
     stub.on('GET', r'/methods(\?|$)', METHODS)
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {
@@ -104,7 +104,7 @@ def _stub_review(stub) -> None:
     stub.on('GET', r'/methods(\?|$)', METHODS)
     stub.on(
         'GET',
-        r'/crops/[^/]+/image$',
+        r'/images/[^/]+/file$',
         lambda req, m: (
             200,
             {

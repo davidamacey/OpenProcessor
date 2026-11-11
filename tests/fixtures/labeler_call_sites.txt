@@ -43,7 +43,6 @@
 # its entry below was hand-edited to /crops/{param}/regions (the box-list
 # write that replaces it) ahead of the matching Cropwright commit, same as
 # the B2 edits above.
-
 /bakeoff/baseline_models
 /bakeoff/eval_datasets
 /bakeoff/matrix/{param}
@@ -63,11 +62,10 @@
 /crops/flag_new_class
 /crops/move
 /crops/{param}
-/crops/{param}/image
 /crops/{param}/label
-/crops/{param}/regions
 /crops/{param}/region_meta
 /crops/{param}/region_thumbnail
+/crops/{param}/regions
 /crops/{param}/review_dismiss
 /crops/{param}/thumbnail
 /events
@@ -78,6 +76,8 @@
 /export/status
 /export/yolo
 /health
+/images/{param}
+/images/{param}/file
 /methods
 /models/status
 /models/{param}
@@ -113,6 +113,6 @@
 /train/start_campaign
 /train/status
 /train/status/{param}
-/vlm/label_batch
 /viz/projection
 /viz/projection/rebuild
+/vlm/label_batch
