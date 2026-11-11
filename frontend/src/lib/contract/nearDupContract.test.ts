@@ -102,15 +102,26 @@ describe('near-duplicate contract', () => {
         min_edge_cosine: true,
         min_cosine_to_rep: true,
         has_holdout: true,
+        representative_thumbnail_url: true,
       }),
     );
-    expect(served('NearDupGroupPage')).toEqual(['items', 'next_cursor']);
+    expect(served('NearDupGroupPage')).toEqual(['empty_reason', 'items', 'next_cursor']);
+    expect(served('NearDupDecisionPage')).toEqual(['items', 'next_cursor']);
+    expect(served('NearDupPin')).toEqual(
+      keys<keyof T.NearDupPin>({ id: true, kind: true }),
+    );
     expect(served('NearDupGroupDetail')).toEqual(['group', 'members']);
     expect(served('NearDupMemberView')).toEqual(
       keys<keyof T.NearDupMemberView>({
         member_id: true,
         is_representative: true,
         cosine_to_rep: true,
+        thumbnail_url: true,
+        image_id: true,
+        crop_id: true,
+        class_name: true,
+        in_holdout: true,
+        decision: true,
       }),
     );
     expect(served('NearDupDecisionIn')).toEqual(
@@ -130,6 +141,8 @@ describe('near-duplicate contract', () => {
         decision: true,
         decided_by: true,
         decided_at: true,
+        a_thumbnail_url: true,
+        b_thumbnail_url: true,
       }),
     );
     expect(served('ResearchConfigDoc')).toEqual(

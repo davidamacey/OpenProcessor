@@ -8,6 +8,8 @@ import { apiFetch, qs, scoped } from '$lib/api';
 import type {
   NearDupActiveProfile,
   NearDupDecisionIn,
+  NearDupDecisionPage,
+  NearDupDecisionQuery,
   NearDupDecisionView,
   NearDupGroupDetail,
   NearDupGroupPage,
@@ -70,7 +72,7 @@ export function listNearDupGroups(
   );
 }
 
-/** `GET /near_duplicates/groups/{id}`: the members with their cosine to the representative. */
+/** `GET /near_duplicates/groups/{id}`: the members with their picture, class, holdout state and pin. */
 export function getNearDupGroup(
   level: NearDupLevel,
   groupId: string,
@@ -91,6 +93,23 @@ export function decideNearDup(
   return apiFetch<NearDupDecisionView>(
     `${scoped()}/near_duplicates/decisions`,
     { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+}
+
+/** `GET /near_duplicates/decisions`: the pinned pairs, newest first. */
+export function listNearDupDecisions(
+  query: NearDupDecisionQuery = {},
+  signal?: AbortSignal,
+): Promise<NearDupDecisionPage> {
+  return apiFetch<NearDupDecisionPage>(
+    `${scoped()}/near_duplicates/decisions${qs({
+      level: query.level,
+      member_id: query.member_id,
+      cursor: query.cursor,
+      limit: query.limit,
+    })}`,
+    {},
     signal,
   );
 }

@@ -16,7 +16,7 @@ from fastapi import Query, Response
 
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
-from src.routers.curation._common import router
+from src.routers.curation._common import OpenSearchDep, router
 from src.schemas.curation import near_duplicates as wire
 from src.services.near_duplicates import status as service
 
@@ -82,9 +82,27 @@ async def list_near_duplicate_groups(
     '/near_duplicates/groups/{group_id}', response_model=wire.NearDupGroupDetail, tags=[TAG]
 )
 async def get_near_duplicate_group(
-    session: DbSessionDep, group_id: uuid.UUID, level: Annotated[wire.Level, Query()]
+    session: DbSessionDep,
+    opensearch: OpenSearchDep,
+    group_id: uuid.UUID,
+    level: Annotated[wire.Level, Query()],
 ) -> wire.NearDupGroupDetail:
-    return await service.group(session, current_project_id(), level, group_id)
+    """One group with each member's picture, class, holdout state and pin to the representative."""
+    return await service.group(session, current_project_id(), opensearch, level, group_id)
+
+
+@router.get('/near_duplicates/decisions', response_model=wire.NearDupDecisionPage, tags=[TAG])
+async def list_near_duplicate_decisions(
+    session: DbSessionDep,
+    level: Annotated[wire.Level | None, Query()] = None,
+    member_id: Annotated[str | None, Query(description='Only pins naming this member.')] = None,
+    cursor: Annotated[str | None, Query(description='`next_cursor` of the previous page.')] = None,
+    limit: Annotated[int, Query(ge=1, le=service.MAX_PAGE)] = service.DEFAULT_PAGE,
+) -> wire.NearDupDecisionPage:
+    """The pinned pairs, newest first."""
+    return await service.decisions(
+        session, current_project_id(), level=level, member_id=member_id, cursor=cursor, limit=limit
+    )
 
 
 @router.post(

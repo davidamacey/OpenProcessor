@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import psycopg
 import pytest
@@ -118,7 +119,13 @@ async def test_groups_page_by_size_and_open_by_lineage(pg, project) -> None:
     assert [g.size for g in second.items] == [2]
     assert second.next_cursor is None
     async with async_session_factory()() as session:
-        detail = await service.group(session, project, 'image', uuid.UUID(first.items[0].group_id))
+        detail = await service.group(
+            session,
+            project,
+            AsyncMock(search=AsyncMock(return_value={'aggregations': {'held': {'buckets': []}}})),
+            'image',
+            uuid.UUID(first.items[0].group_id),
+        )
     assert {m.member_id for m in detail.members} == {'a1', 'a2', 'a3'}
     assert sum(m.is_representative for m in detail.members) == 1
     async with async_session_factory()() as session:

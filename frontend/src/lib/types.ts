@@ -472,8 +472,6 @@ export interface ClusterFilter
   extends
     Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>,
     Partial<ClusterListFilter> {
-  /** Restrict to exactly one cluster (its own card). */
-  cluster_uid?: string | null;
   /** Representative crops per card. `0` skips them; the representatives
    *  window (`offset`/`limit`) rejects 0 (the contract's minimum is 1). */
   per_cluster?: number;

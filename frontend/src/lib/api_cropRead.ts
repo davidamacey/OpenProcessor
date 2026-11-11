@@ -268,8 +268,3 @@ export function getThumbUrl(cropId: string, size: number = 160): string {
 export function getImageFileUrl(imageId: string, maxDim: number = 1280): string {
   return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/file?max_dim=${maxDim}`;
 }
-
-/** The whole frame as a thumbnail (aspect kept, longest edge `size`). */
-export function getImageThumbUrl(imageId: string, size: number = 256): string {
-  return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/thumbnail?size=${size}`;
-}

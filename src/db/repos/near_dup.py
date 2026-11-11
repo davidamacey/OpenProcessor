@@ -601,3 +601,46 @@ async def delete_decision(
     await session.delete(row)
     await session.flush()
     return kept
+
+
+async def page_decisions(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    *,
+    level: str | None,
+    member_id: str | None,
+    after: tuple[dt.datetime, uuid.UUID] | None,
+    limit: int,
+) -> list[DecisionRow]:
+    """Decisions newest first; ``after`` is the ``(decided_at, id)`` of the last row seen."""
+    stmt = select(NearDupDecision).where(NearDupDecision.project_id == project_id)
+    if level is not None:
+        stmt = stmt.where(NearDupDecision.level == level)
+    if member_id is not None:
+        stmt = stmt.where(or_(NearDupDecision.a_id == member_id, NearDupDecision.b_id == member_id))
+    if after is not None:
+        decided_at, decision_id = after
+        stmt = stmt.where(
+            or_(
+                NearDupDecision.decided_at < decided_at,
+                and_(NearDupDecision.decided_at == decided_at, NearDupDecision.id < decision_id),
+            )
+        )
+    rows = await session.scalars(
+        stmt.order_by(NearDupDecision.decided_at.desc(), NearDupDecision.id.desc()).limit(limit)
+    )
+    return [_decision(d) for d in rows]
+
+
+async def decisions_with(
+    session: AsyncSession, project_id: uuid.UUID, level: str, member_id: str
+) -> list[DecisionRow]:
+    """Every decision that names ``member_id``."""
+    rows = await session.scalars(
+        select(NearDupDecision).where(
+            NearDupDecision.project_id == project_id,
+            NearDupDecision.level == level,
+            or_(NearDupDecision.a_id == member_id, NearDupDecision.b_id == member_id),
+        )
+    )
+    return [_decision(d) for d in rows]

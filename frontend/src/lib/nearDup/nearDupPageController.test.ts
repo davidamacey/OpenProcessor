@@ -27,13 +27,18 @@ const group = (id: string): NearDupGroupSummary => ({
   min_edge_cosine: 0.99,
   min_cosine_to_rep: 0.98,
   has_holdout: false,
+  representative_thumbnail_url: `/curation/projects/p/images/rep-${id}/thumbnail`,
 });
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getNearDupStatus).mockResolvedValue({ profile: null, levels: [] });
   vi.mocked(listNearDupRuns).mockResolvedValue({ items: [] });
-  vi.mocked(listNearDupGroups).mockResolvedValue({ items: [], next_cursor: null });
+  vi.mocked(listNearDupGroups).mockResolvedValue({
+    items: [],
+    next_cursor: null,
+    empty_reason: null,
+  });
 });
 
 describe('createNearDupPageController', () => {
@@ -56,20 +61,47 @@ describe('createNearDupPageController', () => {
     c.dispose();
   });
 
-  it('pages groups with the cursor', async () => {
+  it('pages groups with the cursor and keeps the served picture of each representative', async () => {
     vi.mocked(listNearDupGroups)
-      .mockResolvedValueOnce({ items: [group('a')], next_cursor: 'c1' })
-      .mockResolvedValueOnce({ items: [group('b')], next_cursor: null });
+      .mockResolvedValueOnce({
+        items: [group('a')],
+        next_cursor: 'c1',
+        empty_reason: null,
+      })
+      .mockResolvedValueOnce({
+        items: [group('b')],
+        next_cursor: null,
+        empty_reason: null,
+      });
     const c = createNearDupPageController();
     await c.showGroups('image', 'dedup');
     expect(c.groups.map((g) => g.group_id)).toEqual(['a']);
     expect(c.hasMore).toBe(true);
+    expect(c.groups[0]!.representative_thumbnail_url).toBe(
+      '/curation/projects/p/images/rep-a/thumbnail',
+    );
     await c.loadGroups(true);
     expect(vi.mocked(listNearDupGroups).mock.calls[1]![0]).toMatchObject({
       cursor: 'c1',
     });
     expect(c.groups.map((g) => g.group_id)).toEqual(['a', 'b']);
     expect(c.hasMore).toBe(false);
+    c.dispose();
+  });
+
+  it('asks for the chosen level and purpose and holds the served empty reason', async () => {
+    vi.mocked(listNearDupGroups).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      empty_reason: '0 leak groups at cosine 0.9 among 91 items',
+    });
+    const c = createNearDupPageController();
+    await c.showGroups('item', 'leak');
+    expect(vi.mocked(listNearDupGroups).mock.calls[0]![0]).toMatchObject({
+      level: 'item',
+      purpose: 'leak',
+    });
+    expect(c.emptyReason).toBe('0 leak groups at cosine 0.9 among 91 items');
     c.dispose();
   });
 

@@ -1409,7 +1409,8 @@ no longer exist.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `cluster_uid`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class`, `min_size`, `max_size`, `validation_state`, `flag` (repeatable) and `needs_review`, plus the shared item filter |
+| GET | `/clusters/{cluster_uid}` | the served card of one cluster (the item shape of `/clusters` with its `representatives`; query `per_cluster`); `404 cluster_not_found` when the serving partition has no such cluster or none of its members is workable |
+| GET | `/clusters` | cluster cards, typed (`ClusterListResponse`). Query: `per_cluster`, `max_clusters`, `max_rank`, `min_blur_ratio`, `class_source`, `offset`, `limit`, and the server-side order and filters `sort`, `dominant_class` (repeatable), `detector_class`, `min_size`, `max_size`, `validation_state`, `flag` (repeatable) and `needs_review`, plus the shared item filter |
 | GET | `/clusters/{cluster_uid}/facets` | counts of one cluster's members for filter chips, typed `ClusterFacets`: `detector_classes` (top 20), `class_sources`, `validation`, `review_tabs`, `detector_confidence` (ten bins of 0.1, the last open-ended) and `detector_confidence_missing` |
 | GET | `/clusters/representatives` | `per_cluster`, `max_clusters` (max 1000), `class_id`, `offset` (max 64535, so `offset + max_clusters` stays within OpenSearch `search.max_buckets`; above it `422`) |
 | POST | `/clusters/runs` | `ClusterRunRequest` (`target`, optional `level`); `202` `{job_id}`. Writes a new partition with the active `cluster_profile`; the serving partition keeps serving |
@@ -1503,8 +1504,9 @@ The search routes take `space` and `fuse`, and echo the `space` they ranked in; 
 | POST | `/near_duplicates/runs` | `NearDupRunRequest` (`level`, `mode` `full` or `incremental`); `202` `{job_id, kind}`; 409 `job_busy`, or `no_image_run` for an item run with no current image run |
 | GET | `/near_duplicates/runs` | runs, newest first; query `level`, `limit` |
 | GET | `/near_duplicates/runs/{run_id}` | one run: space, algorithm version, profile revision, parameters, members scored, group counts |
-| GET | `/near_duplicates/groups` | groups; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit` |
-| GET | `/near_duplicates/groups/{group_id}` | one group with its members and representative |
+| GET | `/near_duplicates/groups` | groups, each with `representative_thumbnail_url`; query `level`, `purpose` (`dedup` or `leak`), `min_size`, `has_holdout`, `cursor`, `limit`; an empty first page carries `empty_reason` (the cut and the number scored) |
+| GET | `/near_duplicates/groups/{group_id}` | one group; each member carries `thumbnail_url`, `image_id`, `crop_id`, `class_name`, `in_holdout` and `decision` (the pin to the representative: `{id, kind}`) |
+| GET | `/near_duplicates/decisions` | the pinned pairs, newest first; query `level`, `member_id`, `cursor`, `limit`; each with both members' thumbnail URLs |
 | POST | `/near_duplicates/decisions` | `same` or `different` for a pair; `201` |
 | DELETE | `/near_duplicates/decisions/{decision_id}` | `204` |
 

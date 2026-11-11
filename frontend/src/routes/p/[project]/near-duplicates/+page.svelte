@@ -6,11 +6,13 @@
    * `{prefix}/near_duplicates/*` and `{prefix}/near_dup_profiles/*`.
    */
   import { onMount } from 'svelte';
+  import NearDupDecisionsPanel from '$lib/components/nearDup/NearDupDecisionsPanel.svelte';
   import NearDupGroupList from '$lib/components/nearDup/NearDupGroupList.svelte';
   import NearDupGroupModal from '$lib/components/nearDup/NearDupGroupModal.svelte';
   import NearDupProfilePanel from '$lib/components/nearDup/NearDupProfilePanel.svelte';
   import NearDupRunsTable from '$lib/components/nearDup/NearDupRunsTable.svelte';
   import NearDupStatusCard from '$lib/components/nearDup/NearDupStatusCard.svelte';
+  import { createNearDupDecisionsController } from '$lib/nearDup/nearDupDecisionsController.svelte';
   import { createNearDupPageController } from '$lib/nearDup/nearDupPageController.svelte';
   import { createNearDupProfileController } from '$lib/nearDup/nearDupProfileController.svelte';
   import type { NearDupGroupSummary } from '$lib/types_nearDup';
@@ -21,6 +23,7 @@
   });
 
   const ctl = createNearDupPageController();
+  const decisions = createNearDupDecisionsController(() => void ctl.loadOverview());
   const profile = createNearDupProfileController(() => void ctl.loadOverview());
   let open = $state<NearDupGroupSummary | null>(null);
   let openLevel = $state(ctl.level);
@@ -28,7 +31,11 @@
   onMount(() => {
     void ctl.loadOverview();
     void ctl.showGroups(ctl.level, ctl.purpose);
-    return () => ctl.dispose();
+    void decisions.load();
+    return () => {
+      ctl.dispose();
+      decisions.dispose();
+    };
   });
 
   function openGroup(g: NearDupGroupSummary): void {
@@ -48,6 +55,7 @@
       onclick={() => {
         void ctl.loadOverview();
         void ctl.showGroups(ctl.level, ctl.purpose);
+        void decisions.load();
       }}>Reload</button
     >
   </header>
@@ -69,6 +77,7 @@
   {:else}
     <NearDupStatusCard {ctl} />
     <NearDupGroupList {ctl} onopen={openGroup} />
+    <NearDupDecisionsPanel ctl={decisions} />
     <NearDupRunsTable runs={ctl.runs} />
   {/if}
   <NearDupProfilePanel ctl={profile} />
@@ -80,7 +89,10 @@
       level={openLevel}
       group={open}
       onclose={() => (open = null)}
-      ondecided={() => void ctl.loadOverview()}
+      ondecided={() => {
+        void ctl.loadOverview();
+        void decisions.load();
+      }}
     />
   {/key}
 {/if}

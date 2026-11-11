@@ -36,6 +36,7 @@ export function createNearDupPageController() {
   let groupsLoaded = $state(false);
   let groupsLoading = $state(false);
   let groupsError = $state<string | null>(null);
+  let emptyReason = $state<string | null>(null);
 
   let busyLevel = $state<NearDupLevel | null>(null);
   let runMessage = $state<string | null>(null);
@@ -83,6 +84,7 @@ export function createNearDupPageController() {
       if (token !== groupsToken) return;
       groups = append ? [...groups, ...page.items] : page.items;
       nextCursor = page.next_cursor;
+      emptyReason = page.empty_reason;
       groupsLoaded = true;
     } catch (e) {
       if (token === groupsToken && !abort.signal.aborted) groupsError = apiErrorText(e);
@@ -175,6 +177,9 @@ export function createNearDupPageController() {
     },
     get groupsError() {
       return groupsError;
+    },
+    get emptyReason() {
+      return emptyReason;
     },
     get busyLevel() {
       return busyLevel;

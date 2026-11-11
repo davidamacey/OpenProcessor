@@ -122,17 +122,39 @@ class NearDupGroupSummary(BaseModel):
     min_edge_cosine: float
     min_cosine_to_rep: float
     has_holdout: bool
+    representative_thumbnail_url: str = Field(
+        description="The representative's picture: an image thumbnail at the image level, "
+        'an item crop thumbnail at the item level.'
+    )
 
 
 class NearDupGroupPage(BaseModel):
     items: list[NearDupGroupSummary]
     next_cursor: str | None
+    empty_reason: str | None = Field(
+        description='Why a first page is empty (the cut and the number scored), else null.'
+    )
+
+
+class NearDupPin(BaseModel):
+    id: str = Field(description='The decision id: `DELETE .../decisions/{id}` undoes it.')
+    kind: Literal['same', 'different']
 
 
 class NearDupMemberView(BaseModel):
     member_id: str
     is_representative: bool
     cosine_to_rep: float
+    thumbnail_url: str
+    image_id: str | None = Field(description='The image: the member itself at the image level.')
+    crop_id: str | None = Field(description='The item: the member itself at the item level.')
+    class_name: str | None = Field(description="The item's class; null at the image level.")
+    in_holdout: bool = Field(
+        description='Frozen into the test holdout (an image: any item standing on it is).'
+    )
+    decision: NearDupPin | None = Field(
+        description='The pin between this member and the representative, if one exists.'
+    )
 
 
 class NearDupGroupDetail(BaseModel):
@@ -162,3 +184,10 @@ class NearDupDecisionView(BaseModel):
     decision: Literal['same', 'different']
     decided_by: str
     decided_at: str
+    a_thumbnail_url: str
+    b_thumbnail_url: str
+
+
+class NearDupDecisionPage(BaseModel):
+    items: list[NearDupDecisionView]
+    next_cursor: str | None

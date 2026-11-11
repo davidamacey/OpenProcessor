@@ -1,15 +1,15 @@
 /**
- * One open group: its members and the decisions made on it. A decision pins a
- * pair together (`same`) or apart (`different`) for every later run and is
- * applied by the next run, so this controller never regroups client-side.
- * Undo is offered for the decisions made in this view only: the API serves no
- * decision list, only the id returned when one is made.
+ * One open group: its members and the pin each has to the representative. A
+ * decision pins a pair together (`same`) or apart (`different`) for every
+ * later run and is applied by the next run, so this controller never regroups
+ * client-side. The pins are served on each member (`decision`), so any pin can
+ * be undone, including one made in an earlier visit; after a decision or an
+ * undo the group is read again.
  */
 import { apiErrorText } from '$lib/api_errors';
 import { decideNearDup, getNearDupGroup, undecideNearDup } from '$lib/api_nearDup';
 import type {
   NearDupDecision,
-  NearDupDecisionView,
   NearDupGroupDetail,
   NearDupLevel,
 } from '$lib/types_nearDup';
@@ -18,7 +18,6 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
   let detail = $state<NearDupGroupDetail | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let decisions = $state<NearDupDecisionView[]>([]);
   let busy = $state(false);
   let actionError = $state<string | null>(null);
   const abort = new AbortController();
@@ -44,8 +43,8 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
     busy = true;
     actionError = null;
     try {
-      const made = await decideNearDup({ level, a_id: aId, b_id: bId, decision });
-      decisions = [...decisions.filter((d) => d.id !== made.id), made];
+      await decideNearDup({ level, a_id: aId, b_id: bId, decision });
+      detail = await getNearDupGroup(level, groupId, abort.signal);
     } catch (e) {
       actionError = apiErrorText(e);
     } finally {
@@ -59,7 +58,7 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
     actionError = null;
     try {
       await undecideNearDup(decisionId);
-      decisions = decisions.filter((d) => d.id !== decisionId);
+      detail = await getNearDupGroup(level, groupId, abort.signal);
     } catch (e) {
       actionError = apiErrorText(e);
     } finally {
@@ -81,8 +80,8 @@ export function createNearDupGroupController(level: NearDupLevel, groupId: strin
     get error() {
       return error;
     },
-    get decisions() {
-      return decisions;
+    get pinned() {
+      return detail?.members.filter((m) => m.decision !== null).length ?? 0;
     },
     get busy() {
       return busy;

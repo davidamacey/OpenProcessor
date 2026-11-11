@@ -96,7 +96,13 @@ PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
 # Scoped routes that may answer 4xx in the sweep without it being a gap, and why. A route that
 # neither answers below 400 nor wrote nor is listed here (or in NO_WRITE / UNSEEDED_WRITES, which
 # carry their own reasons) fails the sweep: the request never reached the handler.
-UNREACHED_OK: dict[tuple[str, str], str] = {}
+UNREACHED_OK: dict[tuple[str, str], str] = {
+    ('GET', '/clusters/{cluster_uid}'): (
+        'the sweep transport cannot run the painless review-tab scripts of the card aggregation, so '
+        'the card is absent here (404); test_cluster_list_isolation.py proves the same route with '
+        'a seeded cluster and the script twin'
+    )
+}
 
 # Mutating routes that write nothing by design (read-only work under POST,
 # or an event with no data write), and why. Every other mutating route must

@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { ApiError } from '$lib/api_errors';
 import * as api from '$lib/api_nearDup';
+import { createNearDupDecisionsController } from '$lib/nearDup/nearDupDecisionsController.svelte';
 import { createNearDupPageController } from '$lib/nearDup/nearDupPageController.svelte';
 import { createNearDupProfileController } from '$lib/nearDup/nearDupProfileController.svelte';
+import NearDupDecisionsPanel from './NearDupDecisionsPanel.svelte';
 import NearDupGroupList from './NearDupGroupList.svelte';
 import NearDupGroupModal from './NearDupGroupModal.svelte';
 import NearDupProfilePanel from './NearDupProfilePanel.svelte';
@@ -11,15 +13,12 @@ import NearDupRunsTable from './NearDupRunsTable.svelte';
 import NearDupStatusCard from './NearDupStatusCard.svelte';
 import type {
   NearDupGroupSummary,
+  NearDupMemberView,
   NearDupRunView,
   NearDupStatus,
 } from '$lib/types_nearDup';
 
 vi.mock('$lib/api_nearDup');
-vi.mock('$lib/api_cropRead', () => ({
-  getThumbUrl: (id: string) => `/thumb/${id}`,
-  getImageThumbUrl: (id: string) => `/frame/${id}`,
-}));
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | undefined;
@@ -73,6 +72,7 @@ const group = (
   size: 4,
   representative_id: `img-${id}`,
   min_edge_cosine: 0.991,
+  representative_thumbnail_url: `/curation/projects/p/images/img-${id}/thumbnail`,
   min_cosine_to_rep: 0.982,
   has_holdout: false,
   ...over,
@@ -136,6 +136,42 @@ describe('NearDupRunsTable', () => {
   });
 });
 
+describe('NearDupDecisionsPanel', () => {
+  it('lists the pins with both pictures and says so when there are none', async () => {
+    vi.mocked(api.listNearDupDecisions).mockResolvedValue({
+      items: [
+        {
+          id: 'd1',
+          level: 'image',
+          a_id: 'a',
+          b_id: 'b',
+          decision: 'different',
+          decided_by: 'me',
+          decided_at: '2026-01-01T00:00:00Z',
+          a_thumbnail_url: '/p/images/a/thumbnail',
+          b_thumbnail_url: '/p/images/b/thumbnail',
+        },
+      ],
+      next_cursor: null,
+    });
+    const ctl = createNearDupDecisionsController();
+    instance = mount(NearDupDecisionsPanel, { target, props: { ctl } });
+    await ctl.load();
+    await settle(() => expect(qa('near-dup-decision')).toHaveLength(1));
+    expect(qa('near-dup-thumb')).toHaveLength(2);
+    expect(target.textContent).toContain('Not a duplicate');
+    vi.mocked(api.listNearDupDecisions).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+    });
+    vi.mocked(api.undecideNearDup).mockResolvedValue();
+    (q('near-dup-decision-undo') as HTMLButtonElement).click();
+    await settle(() => expect(q('near-dup-decisions-empty')).not.toBeNull());
+    expect(api.undecideNearDup).toHaveBeenCalledWith('d1', expect.anything());
+    ctl.dispose();
+  });
+});
+
 describe('NearDupGroupList', () => {
   async function render() {
     const ctl = createNearDupPageController();
@@ -150,6 +186,7 @@ describe('NearDupGroupList', () => {
     vi.mocked(api.listNearDupGroups).mockResolvedValue({
       items: [group('a', { has_holdout: true })],
       next_cursor: null,
+      empty_reason: null,
     });
     const { ctl, onopen } = await render();
     await settle(() => expect(qa('near-dup-group')).toHaveLength(1));
@@ -158,17 +195,24 @@ describe('NearDupGroupList', () => {
     expect(card.textContent).toContain('0.991');
     expect(card.textContent).toContain('In test holdout');
     expect((q('near-dup-thumb') as HTMLImageElement).getAttribute('src')).toBe(
-      '/frame/img-a',
+      '/curation/projects/p/images/img-a/thumbnail',
     );
     card.click();
     expect(onopen).toHaveBeenCalledWith(expect.objectContaining({ group_id: 'a' }));
     ctl.dispose();
   });
 
-  it('says so when the level has no groups', async () => {
-    vi.mocked(api.listNearDupGroups).mockResolvedValue({ items: [], next_cursor: null });
+  it('shows the served reason when the level has no groups', async () => {
+    vi.mocked(api.listNearDupGroups).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      empty_reason: '0 dedup groups at cosine 0.98 among 91 images',
+    });
     const { ctl } = await render();
     await settle(() => expect(q('near-dup-groups-empty')).not.toBeNull());
+    expect(q('near-dup-groups-empty')?.textContent).toContain(
+      '0 dedup groups at cosine 0.98 among 91 images',
+    );
     ctl.dispose();
   });
 
@@ -184,7 +228,11 @@ describe('NearDupGroupList', () => {
   });
 
   it('switches level and purpose through the served query', async () => {
-    vi.mocked(api.listNearDupGroups).mockResolvedValue({ items: [], next_cursor: null });
+    vi.mocked(api.listNearDupGroups).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      empty_reason: 'none',
+    });
     const { ctl } = await render();
     (q('near-dup-level-tab-item') as HTMLButtonElement).click();
     await settle(() =>
@@ -205,16 +253,28 @@ describe('NearDupGroupList', () => {
 });
 
 describe('NearDupGroupModal', () => {
-  const detail = {
+  const member = (
+    id: string,
+    rep: boolean,
+    decision: NearDupMemberView['decision'] = null,
+  ) => ({
+    member_id: id,
+    is_representative: rep,
+    cosine_to_rep: rep ? 1 : 0.99,
+    thumbnail_url: `/curation/projects/p/images/${id}/thumbnail`,
+    image_id: id,
+    crop_id: null,
+    class_name: id === 'b' ? 'van' : null,
+    in_holdout: id === 'b',
+    decision,
+  });
+  const detail = (pin: NearDupMemberView['decision'] = null) => ({
     group: group('g1'),
-    members: [
-      { member_id: 'a', is_representative: true, cosine_to_rep: 1 },
-      { member_id: 'b', is_representative: false, cosine_to_rep: 0.99 },
-    ],
-  };
+    members: [member('a', true), member('b', false, pin)],
+  });
 
   it('pins a member apart from the representative, offers undo, and takes it back', async () => {
-    vi.mocked(api.getNearDupGroup).mockResolvedValue(detail);
+    vi.mocked(api.getNearDupGroup).mockResolvedValue(detail());
     vi.mocked(api.decideNearDup).mockResolvedValue({
       id: 'd1',
       level: 'image',
@@ -223,6 +283,8 @@ describe('NearDupGroupModal', () => {
       decision: 'different',
       decided_by: 'me',
       decided_at: '',
+      a_thumbnail_url: '',
+      b_thumbnail_url: '',
     });
     vi.mocked(api.undecideNearDup).mockResolvedValue();
     const ondecided = vi.fn();
@@ -232,7 +294,12 @@ describe('NearDupGroupModal', () => {
     });
     await settle(() => expect(qa('near-dup-member')).toHaveLength(2));
     expect(qa('near-dup-different')).toHaveLength(1);
+    expect(target.textContent).toContain('van');
+    expect(target.textContent).toContain('In test holdout');
 
+    vi.mocked(api.getNearDupGroup).mockResolvedValue(
+      detail({ id: 'd1', kind: 'different' }),
+    );
     (q('near-dup-different') as HTMLButtonElement).click();
     await settle(() => expect(q('near-dup-undo')).not.toBeNull());
     expect(api.decideNearDup).toHaveBeenCalledWith({
@@ -244,11 +311,27 @@ describe('NearDupGroupModal', () => {
     expect(q('near-dup-decided-note')?.textContent).toContain('1 decision saved');
     expect(ondecided).toHaveBeenCalledTimes(1);
 
+    vi.mocked(api.getNearDupGroup).mockResolvedValue(detail());
     (q('near-dup-undo') as HTMLButtonElement).click();
     await settle(() => expect(q('near-dup-different')).not.toBeNull());
     expect(api.undecideNearDup).toHaveBeenCalledWith('d1');
     expect(q('near-dup-decided-note')).toBeNull();
     expect(ondecided).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers undo for a pin served from an earlier visit', async () => {
+    vi.mocked(api.getNearDupGroup).mockResolvedValue(detail({ id: 'old', kind: 'same' }));
+    instance = mount(NearDupGroupModal, {
+      target,
+      props: {
+        level: 'image',
+        group: group('g1'),
+        onclose: () => {},
+        ondecided: () => {},
+      },
+    });
+    await settle(() => expect(q('near-dup-undo')).not.toBeNull());
+    expect(q('near-dup-undo')?.textContent).toContain('keep together');
   });
 
   it('shows the served error when the group is gone', async () => {

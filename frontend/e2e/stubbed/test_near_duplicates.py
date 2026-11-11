@@ -1,8 +1,9 @@
 """`/p/{project}/near-duplicates` in a real browser.
 
   1. `test_status_groups_runs_and_pair_decisions` -- the served status, the
-     groups with thumbnails, the run history, and a group's decision with undo
-     (POST body, DELETE by the returned id).
+     groups with their served pictures, the run history, and a group's decision
+     (POST body), the dialog closed and reopened with the pin served again, the
+     undo (DELETE by the served id), and the Decisions list that serves the pin.
   2. `test_thresholds_show_seeded_defaults_and_save_then_activate` -- the
      advanced panel: defaults beside the fields, the PUT against the loaded
      revision, then the activation, then the rebuild notice; a served 422's
@@ -12,7 +13,7 @@
   4. `test_page_fits_a_430px_phone`.
 
 Responses are built from the generated contract (`fill`). Screenshots go under
-`artifacts_local/screens/neardup_ui_1111/`.
+`artifacts_local/screens/workflow_1c/`.
 """
 
 from __future__ import annotations
@@ -22,10 +23,10 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import fill
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import save_screens
 from playwright.sync_api import expect
 
 
-SHOTS = Path(__file__).resolve().parents[3] / 'artifacts_local' / 'screens' / 'neardup_ui_1111'
 PHOTO = (
     Path(__file__).resolve().parents[1] / 'fixtures' / 'ingest' / 'batch1' / 'a.jpg'
 ).read_bytes()
@@ -90,6 +91,7 @@ def _summary(gid: str, size: int, purpose: str = 'dedup', **over):
             'min_edge_cosine': 0.9912,
             'min_cosine_to_rep': 0.9834,
             'has_holdout': False,
+            'representative_thumbnail_url': '/curation/projects/default/images/img-a/thumbnail',
             **over,
         },
     )
@@ -106,6 +108,12 @@ DETAIL = fill(
             member_id=img,
             is_representative=img == 'img-a',
             cosine_to_rep=1.0 if img == 'img-a' else 0.99 - i * 0.004,
+            thumbnail_url=f'/curation/projects/default/images/{img}/thumbnail',
+            image_id=img,
+            crop_id=None,
+            class_name='van' if img == 'img-c' else None,
+            in_holdout=img == 'img-d',
+            decision=None,
         )
         for i, img in enumerate(IMAGE_IDS)
     ],
@@ -118,22 +126,47 @@ DECISION = fill(
     b_id='img-b',
     decision='different',
     decided_by='curation-api',
+    decided_at='2026-11-11T09:00:00Z',
+    a_thumbnail_url='/curation/projects/default/images/img-a/thumbnail',
+    b_thumbnail_url='/curation/projects/default/images/img-b/thumbnail',
 )
 
 
-def _shot(page, name: str) -> None:
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    for label, width in (('desktop', 1280), ('430', 430)):
-        page.set_viewport_size({'width': width, 'height': 1000})
-        page.screenshot(path=str(SHOTS / f'{name}-{label}.png'), full_page=True)
-    page.set_viewport_size({'width': 1280, 'height': 720})
+def _detail(pins: dict[str, dict]):
+    """The group as the server serves it: each member carries its pin to the representative."""
+    return {
+        **DETAIL,
+        'members': [{**m, 'decision': pins.get(m['member_id'])} for m in DETAIL['members']],
+    }
 
 
 def _serve(stub, groups=None, runs=None, status=None):
+    pins: dict[str, dict] = {}
+
     def serve_groups(request, _m):
         purpose = parse_qs(urlparse(request.url).query).get('purpose', ['dedup'])[0]
         items = (groups if groups is not None else GROUPS) if purpose == 'dedup' else []
-        return fill('NearDupGroupPage', items=items, next_cursor=None)
+        return fill(
+            'NearDupGroupPage',
+            items=items,
+            next_cursor=None,
+            empty_reason=None if items else '0 leak groups at cosine 0.9 among 1200 images',
+        )
+
+    def serve_group(_request, _m):
+        return _detail(pins)
+
+    def serve_decisions(_request, _m):
+        served = [DECISION] if pins else []
+        return fill('NearDupDecisionPage', items=served, next_cursor=None)
+
+    def decide(request, _m):
+        pins['img-b'] = {'id': DECISION['id'], 'kind': 'different'}
+        return 201, DECISION
+
+    def undecide(_request, _m):
+        pins.clear()
+        return 204, ''
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/near_duplicates/status$', status or _status())
@@ -143,9 +176,11 @@ def _serve(stub, groups=None, runs=None, status=None):
         fill('NearDupRunPage', items=runs if runs is not None else [_run('image'), _run('item')]),
     )
     stub.on('GET', r'/near_duplicates/groups(\?|$)', serve_groups)
-    stub.on('GET', r'/near_duplicates/groups/[^/?]+', DETAIL)
-    stub.on('GET', r'/images/[^/]+/thumbnail(\?|$)', (200, PHOTO, 'image/jpeg'))
-    stub.on('GET', r'/crops/[^/]+/thumbnail(\?|$)', (200, PHOTO, 'image/jpeg'))
+    stub.on('GET', r'/near_duplicates/groups/[^/?]+', serve_group)
+    stub.on('GET', r'/near_duplicates/decisions(\?|$)', serve_decisions)
+    stub.on('POST', r'/near_duplicates/decisions$', decide)
+    stub.on('DELETE', r'/near_duplicates/decisions/dec-1$', undecide)
+    stub.on('GET', r'/(images|crops)/[^/]+/thumbnail(\?|$)', (200, PHOTO, 'image/jpeg'))
     stub.on(
         'GET',
         r'/near_dup_profiles/active(\?|$)',
@@ -155,25 +190,28 @@ def _serve(stub, groups=None, runs=None, status=None):
 
 def test_status_groups_runs_and_pair_decisions(stub, page, app_url):
     _serve(stub)
-    stub.on('POST', r'/near_duplicates/decisions$', (201, DECISION))
-    stub.on('DELETE', r'/near_duplicates/decisions/dec-1$', (204, ''))
     page.goto(f'{app_url}{URL}')
     page.get_by_test_id('near-dup-status').wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('near-dup-profile-chip')).to_contain_text('revision 2')
     expect(page.get_by_test_id('near-dup-stale-image')).to_contain_text('not yet grouped (12)')
     expect(page.get_by_test_id('near-dup-run-row')).to_have_count(2)
+    expect(page.get_by_test_id('near-dup-decisions-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     groups = page.get_by_test_id('near-dup-group')
     expect(groups).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     expect(groups.nth(1)).to_contain_text('In test holdout')
-    expect(groups.first.get_by_test_id('near-dup-thumb')).to_be_visible()
-    _shot(page, 'overview')
+    thumb = groups.first.get_by_test_id('near-dup-thumb')
+    expect(thumb).to_be_visible()
+    assert thumb.evaluate('img => img.naturalWidth') > 0, 'the served thumbnail did not load'
+    save_screens(page, 'workflow_1c', 'overview')
 
     groups.first.click()
     members = page.get_by_test_id('near-dup-member')
     expect(members).to_have_count(4, timeout=ACTION_TIMEOUT_MS)
     expect(members.first).to_contain_text('Representative')
+    expect(members.nth(2)).to_contain_text('van')
+    expect(members.nth(3)).to_contain_text('In test holdout')
     expect(page.get_by_test_id('near-dup-different')).to_have_count(3)
-    _shot(page, 'group-modal')
+    save_screens(page, 'workflow_1c', 'group-modal')
 
     page.get_by_test_id('near-dup-different').first.click()
     expect(page.get_by_test_id('near-dup-undo')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
@@ -185,10 +223,31 @@ def test_status_groups_runs_and_pair_decisions(stub, page, app_url):
         'decision': 'different',
     }
     expect(page.get_by_test_id('near-dup-decided-note')).to_contain_text('1 decision saved')
-    _shot(page, 'group-decided')
+    expect(page.get_by_test_id('near-dup-decision')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    save_screens(page, 'workflow_1c', 'group-decided')
+
+    # Closed and reopened: the pin is served again, so it can still be undone.
+    page.get_by_role('button', name='Close').click()
+    expect(page.get_by_test_id('near-dup-member')).to_have_count(0)
+    page.get_by_test_id('near-dup-group').first.click()
+    expect(page.get_by_test_id('near-dup-undo')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_test_id('near-dup-undo').click()
     expect(page.get_by_test_id('near-dup-undo')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
+    assert [c for c in stub.calls if c[0] == 'DELETE'][-1][1].endswith('/decisions/dec-1')
+    expect(page.get_by_test_id('near-dup-decision')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
+
+
+def test_the_decisions_list_undoes_a_pin_made_earlier(stub, page, app_url):
+    _serve(stub)
+    page.goto(f'{app_url}{URL}')
+    page.get_by_test_id('near-dup-group').first.click()
+    page.get_by_test_id('near-dup-different').first.click()
+    expect(page.get_by_test_id('near-dup-decision')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('button', name='Close').click()
+    save_screens(page, 'workflow_1c', 'decisions')
+    page.get_by_test_id('near-dup-decision-undo').click()
+    expect(page.get_by_test_id('near-dup-decisions-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert [c for c in stub.calls if c[0] == 'DELETE'][-1][1].endswith('/decisions/dec-1')
 
 
@@ -197,7 +256,7 @@ def test_leak_tab_is_empty_and_says_so(stub, page, app_url):
     page.goto(f'{app_url}{URL}')
     page.get_by_test_id('near-dup-purpose-tab-leak').click(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('near-dup-groups-empty')).to_contain_text(
-        'No leak groups at the image level', timeout=ACTION_TIMEOUT_MS
+        '0 leak groups at cosine 0.9 among 1200 images', timeout=ACTION_TIMEOUT_MS
     )
 
 
@@ -247,7 +306,7 @@ def test_thresholds_show_seeded_defaults_and_save_then_activate(stub, page, app_
     expect(field).to_have_value('0.95', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('near-dup-profile')).to_contain_text('default 0.98')
     expect(page.get_by_test_id('near-dup-profile-save')).to_be_disabled()
-    _shot(page, 'thresholds')
+    save_screens(page, 'workflow_1c', 'thresholds')
 
     field.fill('0.9')
     page.get_by_test_id('np-image-leak').fill('0.99')
@@ -261,7 +320,7 @@ def test_thresholds_show_seeded_defaults_and_save_then_activate(stub, page, app_
     assert put[2]['body']['image']['dedup_cosine'] == 0.9
     activate = [c for c in stub.calls if c[1].endswith('/activate')][-1]
     assert activate[2] == {'revision': 3, 'expected_active': {'name': 'default', 'revision': 2}}
-    _shot(page, 'thresholds-saved')
+    save_screens(page, 'workflow_1c', 'thresholds-saved')
 
 
 def test_a_refused_threshold_save_shows_the_served_reasons(stub, page, app_url):
@@ -293,7 +352,7 @@ def test_a_refused_threshold_save_shows_the_served_reasons(stub, page, app_url):
     refused = page.get_by_test_id('near-dup-profile-refused')
     expect(refused).to_contain_text('leak_cosine must not exceed', timeout=ACTION_TIMEOUT_MS)
     assert not [c for c in stub.calls if c[1].endswith('/activate')]
-    _shot(page, 'thresholds-refused')
+    save_screens(page, 'workflow_1c', 'thresholds-refused')
 
 
 def test_empty_level_and_a_refused_run_say_why(stub, page, app_url):
@@ -335,7 +394,7 @@ def test_empty_level_and_a_refused_run_say_why(stub, page, app_url):
     expect(page.get_by_test_id('near-dup-no-run-image')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('near-dup-groups-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('near-dup-runs-empty')).to_be_visible()
-    _shot(page, 'empty')
+    save_screens(page, 'workflow_1c', 'empty')
 
     page.get_by_test_id('near-dup-run-full-item').click()
     expect(page.get_by_test_id('near-dup-run-error')).to_contain_text(
@@ -345,7 +404,7 @@ def test_empty_level_and_a_refused_run_say_why(stub, page, app_url):
         'level': 'item',
         'mode': 'full',
     }
-    _shot(page, 'run-refused')
+    save_screens(page, 'workflow_1c', 'run-refused')
 
 
 def test_a_failed_status_read_shows_the_error_and_retries(stub, page, app_url):
@@ -355,7 +414,7 @@ def test_a_failed_status_read_shows_the_error_and_retries(stub, page, app_url):
     expect(page.get_by_test_id('near-dup-load-error')).to_contain_text(
         'store down', timeout=ACTION_TIMEOUT_MS
     )
-    _shot(page, 'load-error')
+    save_screens(page, 'workflow_1c', 'load-error')
 
 
 def test_page_fits_a_430px_phone(stub, page, app_url):
