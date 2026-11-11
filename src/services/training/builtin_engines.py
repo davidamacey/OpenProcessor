@@ -238,7 +238,7 @@ SHIPPED: tuple[Shipped, ...] = (
             resize='native_width',
             interpolation='bilinear',
         ),
-        EngineOutputContract(kind='ctc_logits', shapes=[[-1, 18385]], dtypes=['fp32']),
+        EngineOutputContract(kind='ctc_logits', shapes=[[-1, 18710]], dtypes=['fp32']),
     ),
 )
 
