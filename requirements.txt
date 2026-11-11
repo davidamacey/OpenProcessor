@@ -1,5 +1,5 @@
 # Core Web Framework
-fastapi==0.162.0  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
+fastapi==0.162.2  # same pin as requirements-test.txt: the OpenAPI contract and the route warm-up are tested against it
 uvicorn[standard]==0.54.0
 python-multipart==0.0.33
 orjson==3.13.0  # 2-3x faster JSON encoding/decoding vs stdlib json
@@ -36,8 +36,8 @@ httpx==0.28.1
 httpcore==1.0.9  # imported directly by src/services/labeling/vlm_pinning.py (pinned VLM transport)
 
 # src/services/curation/bulk_ingest/object_store.py (S3 and S3-compatible ingest sources)
-boto3==1.43.125
-botocore==1.43.125
+boto3==1.43.126
+botocore==1.43.126
 
 # Benchmarking and Visualization
 matplotlib
@@ -51,7 +51,7 @@ tabulate==0.10.0
 pyyaml==6.0.3
 
 # Structured Logging
-cachetools==7.3.0  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
+cachetools==8.0.0  # Bounded TTL/LRU per-process caches (src/services/curation/, settings_doc.py)
 structlog==26.1.0  # Structured logging with context and JSON output
 tenacity==9.2.1  # Retry/backoff for src/services/labeling/vlm_client.py (VLM HTTP calls)
 
@@ -89,7 +89,7 @@ imohash==1.1.0  # Fast constant-time image hashing (48KB sampled, ~1ms for any f
 # numpy==2.1.2, wandb, lm-eval, ...) that conflict with open-clip-torch>=3.2
 # (timm>=1.0.17). core.vision_encoder only needs the packages below.
 einops==0.8.2
-regex==2026.9.29
+regex==2026.11.7
 
 # Curation Clustering (lazily imported -- ImportError only surfaces on first
 # call to a clustering endpoint if these are missing from the image)
