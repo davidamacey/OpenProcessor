@@ -276,8 +276,12 @@ async def build_dataset_stats(
     for b in (aggs.get('region_status') or {}).get('buckets') or []:
         region_status_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
 
-    pending_detection = region_status_buckets.get(RegionStatus.PENDING_DETECTION, 0)
-    pending_verification = region_status_buckets.get(RegionStatus.PENDING_VERIFICATION, 0)
+    pending_buckets: dict[str, int] = {}
+    in_scope = aggs.get('region_pending_in_scope') or {}
+    for b in (in_scope.get('by_status') or {}).get('buckets') or []:
+        pending_buckets[str(b.get('key', ''))] = int(b.get('doc_count', 0))
+    pending_detection = pending_buckets.get(RegionStatus.PENDING_DETECTION, 0)
+    pending_verification = pending_buckets.get(RegionStatus.PENDING_VERIFICATION, 0)
     region_drain_total_unfinished = pending_detection + pending_verification
 
     # V-1: same stall-reason computation GET /ingest/region_drain serves,

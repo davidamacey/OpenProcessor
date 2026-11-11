@@ -149,6 +149,10 @@ curl -s -X POST "$API/curation/projects/cars/region_profiles/deactivate" \
 structural error. The activate response has `active`, `previous`, `applied`, `impact` and
 `validation`. Workers switch at a quiet point.
 
+Narrowing `parent_classes` rewrites nothing. Items seeded before stay `pending_detection`, the
+worker no longer fetches them, and the region drain and the dataset stats count only in-scope
+pending items, so the drain still finishes. Widening the scope brings them back.
+
 | `impact` field | Meaning |
 |---|---|
 | `items_total` | Items in the project |

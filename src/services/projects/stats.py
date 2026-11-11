@@ -113,9 +113,16 @@ async def project_stats(client: Any) -> dict[str, Any]:
     validated = await validated_count(client, items_idx)
     items_embedded = await embedded_count(client, items_idx)
     from src.config.region_state import RegionStatus
+    from src.services.curation.region_scope import active_parent_classes, parent_classes_clause
 
-    pending_detection = await _term_count(
-        client, items_idx, 'region_status', RegionStatus.PENDING_DETECTION.value
+    pending_filter: list[dict[str, Any]] = [
+        {'term': {'region_status': RegionStatus.PENDING_DETECTION.value}}
+    ]
+    scope = parent_classes_clause(active_parent_classes())
+    if scope is not None:
+        pending_filter.append(scope)
+    pending_detection = await _count(
+        client, items_idx, {'query': {'bool': {'filter': pending_filter}}}, 'region_status'
     )
     holdout_items = await _term_count(client, items_idx, 'test_holdout', True)
     from src.services.curation.registry_access import project_registry

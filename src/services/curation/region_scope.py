@@ -7,6 +7,12 @@ compared case-insensitively. Ingest seeds only in-scope items
 (:func:`~src.services.curation.item_doc.region_seed_status`) and the
 detection worker only fetches them (:func:`parent_classes_clause`), so a
 profile change also stops items seeded before it from being processed.
+
+Scope is a query-time filter, not a stored state: items seeded before a
+narrowing keep ``pending_detection`` (no write, so a human- or
+import-validated item is never touched, and they re-enter the queue if the
+scope widens). The pending counts the drain verdict and the stats serve
+therefore apply the same clause, or the drain would never finish.
 """
 
 from __future__ import annotations
@@ -55,6 +61,14 @@ def out_of_scope_reason(
     )
 
 
+def active_parent_classes() -> list[str]:
+    """The active region profile's ``parent_classes`` (empty: no profile or every item)."""
+    from src.services.detection.profile_registry import get_active_region_profile
+
+    profile = get_active_region_profile()
+    return [] if profile is None else list(profile.parent_classes)
+
+
 def parent_classes_clause(parent_classes: Iterable[str]) -> dict[str, Any] | None:
     """OpenSearch filter clause matching in-scope items, or ``None`` (no
     filter) when every item is in scope.
@@ -80,6 +94,7 @@ def parent_classes_clause(parent_classes: Iterable[str]) -> dict[str, Any] | Non
 
 __all__ = [
     'PARENT_CLASS_FIELDS',
+    'active_parent_classes',
     'in_parent_classes',
     'out_of_scope_reason',
     'parent_classes_clause',

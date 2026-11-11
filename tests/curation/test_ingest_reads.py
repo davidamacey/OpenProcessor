@@ -79,3 +79,34 @@ async def test_pending_region_counts_read_the_status_buckets_and_never_answer_ze
     fake.search = AsyncMock(side_effect=RuntimeError('connection refused'))
     with pytest.raises(RuntimeError):
         await pending_region_counts(fake)
+
+
+@pytest.mark.asyncio
+async def test_pending_counts_ignore_items_outside_the_profile_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.services.curation import region_drain
+
+    monkeypatch.setattr(region_drain, 'active_parent_classes', lambda: ['car'])
+    fake = AsyncMock()
+    fake.search = AsyncMock(return_value={})
+    await pending_region_counts(fake)
+    query = fake.search.call_args.kwargs['body']['query']
+    assert query['bool']['filter'][0]['bool']['should'][0]['term']['class_name']['value'] == 'car'
+
+    monkeypatch.setattr(region_drain, 'active_parent_classes', list)
+    await pending_region_counts(fake)
+    assert 'query' not in fake.search.call_args.kwargs['body']
+
+
+def test_dataset_stats_count_pending_only_in_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
+
+    from src.config import get_region_fields
+    from src.services.curation import stats_dataset_query as q
+
+    monkeypatch.setattr(q, 'active_parent_classes', lambda: ['car'])
+    agg = q.build_dataset_query_body(get_region_fields(), embedding=DEFAULT_WRITE_FIELDS)['aggs'][
+        'region_pending_in_scope'
+    ]
+    assert 'should' in agg['filter']['bool']
