@@ -8,6 +8,7 @@
   import type { Snippet } from 'svelte';
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import ClassPicker from '$components/ClassPicker.svelte';
+  import DiverseSample from '$components/workspace/DiverseSample.svelte';
   import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
   import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -60,7 +61,7 @@
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs"
+  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs"
   role="toolbar"
   aria-label="Bulk actions"
   data-testid="bulk-bar"
@@ -162,6 +163,7 @@
   <button type="button" class="btn" onclick={() => void undoStore.undoLast()}>
     Undo
   </button>
+  <DiverseSample {ws} />
   {@render extra?.()}
 </div>
 

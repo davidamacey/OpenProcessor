@@ -37927,6 +37927,17 @@
             "description": "Generic exact-match term filters keyed by OpenSearch field name (e.g. {\"class_id\": 7}). List values become a `terms` clause.",
             "title": "Filters"
           },
+          "item_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Workspace item filter, the same body the list routes and bulk selections take; ignored items are left out unless it asks for them."
+          },
           "review_tab": {
             "anyOf": [
               {

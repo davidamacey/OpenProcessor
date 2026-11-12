@@ -324,6 +324,12 @@ export class WorkspaceController {
     return true;
   }
 
+  /** Makes `ids` the selection (a served sample, say) and shows it in the view's own grid. */
+  selectItems(ids: string[]): void {
+    this.select(ids.length > 0 ? { kind: 'items', cropIds: ids } : NO_SELECTION);
+    if (this.#page?.kind === 'items') this.#page.apply(ids);
+  }
+
   confirmSelectAllMatching(): void {
     this.select({ kind: 'matching' });
   }

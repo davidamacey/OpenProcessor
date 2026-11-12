@@ -120,6 +120,15 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
     assert {'range': {'cluster_score': {'lte': 0.65}}} in q['bool']['must']
 
 
+def test_scope_query_carries_the_workspace_item_filter_clauses() -> None:
+    from src.routers.curation.select import SelectDiverseScope, _build_scope_query
+
+    clause = {'term': {'class_name': 'car'}}
+    q = _build_scope_query(SelectDiverseScope(), 'pe_embedding', [clause])
+    assert clause in q['bool']['must']
+    assert {'term': {'test_holdout': True}} in q['bool']['must_not']
+
+
 def test_scope_query_unknown_review_tab_raises_http_400() -> None:
     from src.core.exceptions import RequestRejectedError
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
@@ -425,6 +434,36 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
     assert body['n_pool'] == 6
     assert len(body['crop_ids']) == 3
     assert set(body['crop_ids']) <= {cid for cid, _ in pool}
+
+
+def test_select_diverse_scope_takes_the_workspace_item_filter(
+    select_app_client: _Client,
+) -> None:
+    select_app_client.fake_os.count = AsyncMock(return_value={'count': 0})
+    select_app_client.fake_os.search = AsyncMock(
+        return_value={'_scroll_id': 'sid', 'hits': {'hits': []}}
+    )
+    select_app_client.fake_os.scroll = AsyncMock(
+        return_value={'_scroll_id': 'sid', 'hits': {'hits': []}}
+    )
+    select_app_client.fake_os.clear_scroll = AsyncMock(return_value=None)
+
+    r = select_app_client.post(
+        '/curation/projects/default/select/diverse',
+        json={'k': 3, 'scope': {'item_filter': {'class_names': ['car']}}},
+    )
+    assert r.status_code == 200
+    query = select_app_client.fake_os.count.await_args.kwargs['body']['query']
+    assert 'car' in str(query['bool']['must'])
+    assert {'term': {'test_holdout': True}} in query['bool']['must_not']
+
+
+def test_select_diverse_refuses_a_bad_item_filter(select_app_client: _Client) -> None:
+    r = select_app_client.post(
+        '/curation/projects/default/select/diverse',
+        json={'k': 3, 'scope': {'item_filter': {'conf_min': 0.9, 'conf_max': 0.1}}},
+    )
+    assert r.status_code == 400
 
 
 def test_select_diverse_job_path_for_large_pool(

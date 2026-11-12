@@ -2,6 +2,7 @@
 
 - Gallery cards in one row have the same height, with or without the "+ more boxes" chip
 - The Clusters view shows "N matching" with the hidden note from the served total and hidden counts
+- "Diverse sample…" asks the server for k diverse items over the Workspace filter and selects them
 - Ctrl+A selects the loaded page in Gallery and Detections; a second Ctrl+A on a full page asks for all
   matching with the served total
 """
@@ -106,3 +107,35 @@ def test_clusters_show_the_matching_note_with_served_hidden_counts(stub, page, a
     expect(note).to_contain_text('2', timeout=ACTION_TIMEOUT_MS)
     expect(note).to_contain_text('25 test holdout and 4 ignored not listed')
     shot(page, 'clusters-matching-note', widths=(1600, 430))
+
+
+def test_diverse_sample_selects_the_served_pick(stub, page, app_url):
+    serve_detections(stub, 40)
+    bodies: list[dict] = []
+
+    def diverse(request, _match):
+        bodies.append(request.post_data_json or {})
+        return (
+            200,
+            {
+                'crop_ids': ['crop-0', 'crop-2'],
+                'method': 'kcenter_greedy',
+                'version': 'v1',
+                'n_pool': 40,
+            },
+        )
+
+    stub.on('POST', r'/select/diverse$', diverse)
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=detections&class_name=widget')
+    expect(page.get_by_test_id('detections-total')).to_have_text('40', timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('diverse-sample-open').click()
+    page.get_by_test_id('diverse-sample-k').fill('2')
+    shot(page, 'diverse-sample-open', widths=(1600, 430))
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.get_by_test_id('diverse-sample-start').click()
+    expect(page.get_by_test_id('bulk-count')).to_have_text('2 selected', timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('diverse-sample-message')).to_have_text('Picked 2 of 40')
+    assert bodies[0]['k'] == 2
+    assert bodies[0]['scope']['item_filter']['class_names'] == ['widget']
+    shot(page, 'diverse-sample-picked', widths=(1600, 430))

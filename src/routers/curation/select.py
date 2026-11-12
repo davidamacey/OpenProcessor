@@ -9,7 +9,7 @@ OpenSearch.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
@@ -25,10 +25,16 @@ from src.routers.curation._common import OpenSearchDep, router
 from src.services.curation import review_queries
 from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.diverse_order import diverse_enabled, job_max_n, max_n, sync_max_ops
+from src.services.curation.image_join import resolve_filter_join
+from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.selection import k_center_greedy
 from src.services.curation.selection.pool_fetch import fetch_pool_embeddings, l2_normalize
+from src.services.embedding_spaces.readers import item_write_fields
 from src.services.embedding_spaces.resolve import embedding_space
 
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # =============================================================================
 # POST /curation/select/diverse
@@ -52,6 +58,13 @@ class SelectDiverseScope(BaseModel):
             '(e.g. {"class_id": 7}). List values become a `terms` clause.'
         ),
     )
+    item_filter: ItemFilter | None = Field(
+        default=None,
+        description=(
+            'The Workspace item filter, the same body the list routes and bulk selections take; '
+            'ignored items are left out unless it asks for them.'
+        ),
+    )
 
 
 class SelectDiverseRequest(BaseModel):
@@ -60,7 +73,11 @@ class SelectDiverseRequest(BaseModel):
     seed_crop_id: str | None = None
 
 
-def _build_scope_query(scope: SelectDiverseScope, embedding_field: str) -> dict[str, Any]:
+def _build_scope_query(
+    scope: SelectDiverseScope,
+    embedding_field: str,
+    filter_clauses: Sequence[dict[str, Any]] = (),
+) -> dict[str, Any]:
     """Translate a ``SelectDiverseScope`` into an OpenSearch bool query.
 
     ``test_holdout=true`` crops are always excluded — no scope can opt
@@ -84,6 +101,8 @@ def _build_scope_query(scope: SelectDiverseScope, embedding_field: str) -> dict[
         must.extend(tab_must)
         must_not.extend(tab_must_not)
 
+    must.extend(filter_clauses)
+
     if scope.filters:
         for field_name, value in scope.filters.items():
             if isinstance(value, list):
@@ -92,6 +111,24 @@ def _build_scope_query(scope: SelectDiverseScope, embedding_field: str) -> dict[
                 must.append({'term': {field_name: value}})
 
     return {'bool': {'must': must, 'must_not': must_not}}
+
+
+async def _item_filter_clauses(
+    opensearch: Any, item_filter: ItemFilter | None
+) -> list[dict[str, Any]]:
+    """The clauses of the Workspace filter in the scope; a bad band or area is a 400."""
+    if item_filter is None:
+        return []
+    try:
+        join = await resolve_filter_join(opensearch, item_filter)
+        return [
+            *item_filter_clauses(item_filter, embedding=await item_write_fields(), image_join=join),
+            *visibility_clauses(
+                include_test=False, include_excluded='excluded' in item_filter.review_status
+            ),
+        ]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post('/select/diverse')
@@ -115,7 +152,11 @@ async def select_diverse(
         )
 
     embedding_field = (await embedding_space(Target.ITEM)).vector_field
-    query = _build_scope_query(payload.scope, embedding_field)
+    query = _build_scope_query(
+        payload.scope,
+        embedding_field,
+        await _item_filter_clauses(opensearch, payload.scope.item_filter),
+    )
 
     # Peek at the pool size first (a cheap count, not a fetch) so we can
     # decide sync-vs-job without paying for an embeddings fetch we might
