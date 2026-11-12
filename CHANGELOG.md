@@ -51,6 +51,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Adopt detector classes.** An item excluded while an adoption runs is no longer given a class, and detector names that normalize to nothing no longer count as pending items (the workflow step now reaches done and "adopt again" stops repeating).
+- **Navigation.** The desktop and menu navs have distinct landmark names, the menu closes when the window grows to the desktop layout, and the scroll and back chevrons are icons.
+- **Crop preview cache.** The `GET /crops/{crop_id}/preview` cache is bounded in bytes (16 MiB per process) instead of by entry count, so 2048 px previews cannot grow it past that.
+
 - `GET /crops` and `GET /review/{tab}` serve `hidden` (`test_holdout`, `excluded`), the items the page leaves out, so a total lower than the dashboard's explains itself.
 - `GET /review/tabs` serves `available`, `unavailable_reason` and `count` per tab (the counts come from one `_msearch`), and the sort-fallback note reads "Sorted by X. 'Y' needs a clustering run." instead of naming the index field.
 - `GET /clusters` serves `empty_reason`, `empty_message` and `pending_partition` so an empty list says whether no run was served, a built partition waits for activation, or a filter matched nothing.
