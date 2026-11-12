@@ -38,6 +38,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
+  import DataQualityCard from '$components/dashboard/DataQualityCard.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
@@ -196,6 +197,8 @@
   </section>
 
   <ClusterRunPanel primary={nextId === 'cluster'} />
+
+  <DataQualityCard />
 
   <DatasetStats />
 

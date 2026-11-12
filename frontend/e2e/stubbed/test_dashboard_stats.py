@@ -50,6 +50,21 @@ def serve_dashboard(stub):
     # D2 (visual audit 2026-09-24): the dashboard balance chart reads the
     # served per-class test holdout.
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
+    # The Data quality card.
+    stub.on(
+        'GET',
+        r'/audit/report(\?|$)',
+        {
+            'audited': 0,
+            'pending': 0,
+            'min_per_class': 30,
+            'detector': [],
+            'vlm': [],
+            'confusion': {},
+            'outcomes': {},
+        },
+    )
+    stub.on('GET', r'/near_duplicates/status(\?|$)', {'profile': None, 'levels': []})
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
 
 
