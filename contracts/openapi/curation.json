@@ -8093,17 +8093,6 @@
             ],
             "title": "Soft Limit"
           },
-          "suggested_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Suggested Name"
-          },
           "unbound_class_hotkeys": {
             "anyOf": [
               {
@@ -47270,7 +47259,7 @@
         ]
       },
       "post": {
-        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422\n``invalid_class_name`` with the ``suggested_name`` slug when one exists);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written, against the bound project's stored keymap.",
+        "description": "Append-only add. ``name`` is a display name: it is stored as its registry slug\n(``normalize_class_name``, the one name rule, as ingest by_name does) and the\nresponse's ``class_name`` is that slug. A name with no slug-safe character is 422\n``invalid_class_name``. An optional ``hotkey_letter`` is validated like on update\nbefore anything is written, against the bound project's stored keymap.",
         "operationId": "create_class_curation_projects__project__classes_post",
         "parameters": [
           {

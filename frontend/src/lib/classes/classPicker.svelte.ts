@@ -1,11 +1,11 @@
 /**
  * The class picker's state: a combobox over the bounded, served class
  * registry. Typed text only filters that list (`searchClasses`); creating a
- * class goes to `POST /classes`, and a refused name turns the last row into
- * `Create "<served suggested_name>"`. The element-scoped keydown handler is
- * not a window listener.
+ * class goes to `POST /classes`, which stores the typed name as its slug and
+ * answers that `class_name`. The element-scoped keydown handler is not a
+ * window listener.
  */
-import { addClass, invalidClassNameDetail } from '$lib/api_classes';
+import { addClass } from '$lib/api_classes';
 import { apiErrorText } from '$lib/api_errors';
 import { itemClassTargets, searchClasses } from '$lib/classPicker';
 import type { RegistryClass } from '$lib/types_classes';
@@ -26,7 +26,6 @@ export interface ClassPickerOptions {
 export function createClassPicker(opts: ClassPickerOptions) {
   let query = $state('');
   let index = $state(0);
-  let suggested = $state<string | null>(null);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -44,22 +43,19 @@ export function createClassPicker(opts: ClassPickerOptions) {
   /** The name the last row would create, or null when nothing is typed or it exists. */
   const createName = $derived.by(() => {
     if (!typed) return null;
-    const name = suggested ?? typed;
-    return targets.some((c) => c.name === name) ? null : name;
+    return targets.some((c) => c.name === typed) ? null : typed;
   });
   const rowCount = $derived(results.length + (createName ? 1 : 0));
 
   function reset(): void {
     query = '';
     index = 0;
-    suggested = null;
     error = null;
   }
 
   function setQuery(v: string): void {
     query = v;
     index = 0;
-    suggested = null;
     error = null;
   }
 
@@ -69,19 +65,13 @@ export function createClassPicker(opts: ClassPickerOptions) {
     busy = true;
     error = null;
     try {
-      await addClass({ name });
+      const { class_name } = await addClass({ name });
       await classesStore.clearAndRefetch();
-      const created = classesStore.classes.find((c) => c.name === name);
+      const created = classesStore.classes.find((c) => c.name === class_name);
       if (created) opts.onpick(created);
       opts.onclose();
     } catch (e) {
-      const detail = invalidClassNameDetail(e);
-      if (detail) {
-        suggested = detail.suggested_name;
-        error = detail.message;
-      } else {
-        error = apiErrorText(e);
-      }
+      error = apiErrorText(e);
     } finally {
       busy = false;
     }

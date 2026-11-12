@@ -417,8 +417,6 @@ class ConfigErrorDetail(BaseModel):
     actions: list[dict[str, Any]] | None = None
     class_id: int | None = None
     class_name: str | None = None
-    # 422 invalid_class_name: the slug the refused name most likely meant.
-    suggested_name: str | None = None
     # 422 import_blocked / dataset_path_not_allowed carry the issues,
     # 422 class_mapping_incomplete the unmapped dataset classes, a 409 or a
     # 413 the import id / byte limit it concerns.

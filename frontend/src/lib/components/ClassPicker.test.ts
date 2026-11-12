@@ -3,12 +3,10 @@ import { flushSync, mount, unmount } from 'svelte';
 
 const api = vi.hoisted(() => ({
   addClass: vi.fn(),
-  invalidClassNameDetail: vi.fn(),
 }));
 vi.mock('$lib/api_classes', () => api);
 
 import { classesStore } from '$stores/classes.svelte';
-import { ApiError } from '$lib/api_errors';
 import type { RegistryClass } from '$lib/types_classes';
 import ClassPicker from './ClassPicker.svelte';
 
@@ -64,8 +62,9 @@ function key(input: HTMLElement, k: string): void {
 }
 
 beforeEach(() => {
-  api.addClass.mockReset();
-  api.invalidClassNameDetail.mockReset().mockReturnValue(null);
+  api.addClass
+    .mockReset()
+    .mockResolvedValue({ class_id: 9, class_name: 'traffic_light', group: 'g' });
   onpick.mockReset();
   onclose.mockReset();
   classesStore.classes = [
@@ -110,22 +109,13 @@ describe('ClassPicker', () => {
     expect(document.querySelector('[data-testid="class-picker-create"]')).toBeNull();
   });
 
-  it('turns a refusal into the served suggestion', async () => {
-    api.addClass.mockRejectedValue(new ApiError(422, '/curation/classes', {}));
-    api.invalidClassNameDetail.mockReturnValue({
-      message: 'Use lower-case letters, digits and underscores only.',
-      suggested_name: 'traffic_light',
-    });
+  it('picks the class under the slug the server answered for a typed name', async () => {
     render();
     const input = type('Traffic light');
     key(input, 'Enter');
-    await vi.waitFor(() => {
-      expect(
-        document.querySelector('[data-testid="class-picker-create"]')?.textContent,
-      ).toContain('Create "traffic_light"');
-    });
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('lower-case');
-    expect(onpick).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(onpick).toHaveBeenCalledTimes(1));
+    expect(api.addClass).toHaveBeenCalledWith({ name: 'Traffic light' });
+    expect(onpick.mock.calls[0]![0].name).toBe('traffic_light');
   });
 
   it('assigns the created class in the same gesture', async () => {

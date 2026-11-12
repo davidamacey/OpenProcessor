@@ -53,6 +53,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Class picker accepts a typed name.** `POST /classes` stores a display name such as "Traffic light" under its registry slug (`traffic_light`, the same rule ingest by name uses) and answers that `class_name`; a name with no letter or digit is still `422 invalid_class_name`. The `suggested_name` field of that error is removed.
 - **The Anthropic `env` endpoint probes and labels.** With `OP_VLM_PROVIDER` unset, an `OP_VLM_URL` on `api.anthropic.com` is now the `anthropic` provider (it was `vllm`, so no `anthropic-version` header was sent and `/models` answered 400); an explicit `OP_VLM_PROVIDER` still wins.
 - **Adopt detector classes.** An item excluded while an adoption runs is no longer given a class, and detector names that normalize to nothing no longer count as pending items (the workflow step now reaches done and "adopt again" stops repeating).
 - **Navigation.** The desktop and menu navs have distinct landmark names, the menu closes when the window grows to the desktop layout, and the scroll and back chevrons are icons.
