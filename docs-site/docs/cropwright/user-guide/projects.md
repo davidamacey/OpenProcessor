@@ -11,15 +11,15 @@ the API/CLI path are in the [Projects guide](../../guides/projects.mdx).
 ## URLs
 
 Every page except `/projects` itself lives under a project's slug:
-`/p/<project>/dashboard`, `/p/<project>/review`, and so on. The active
+`/p/<project>/dashboard`, `/p/<project>/workspace`, and so on. The active
 project is the URL — there is nothing else to reconstruct it from, so
 reloading, sharing a link, or opening a bookmark always lands you back in
 the same project.
 
 An old bare URL with no `/p/<project>` prefix (including plain `/`)
 redirects to the deployment's default project on the matching page — `/`
-goes to `/p/<default-project>/dashboard`, `/review?tab=all` goes to
-`/p/<default-project>/review?tab=all`, and so on. There is no unscoped
+goes to `/p/<default-project>/dashboard`, `/workspace?view=detections` goes to
+`/p/<default-project>/workspace?view=detections`, and so on. There is no unscoped
 "global" version of any of these pages anymore.
 
 ## Switching projects

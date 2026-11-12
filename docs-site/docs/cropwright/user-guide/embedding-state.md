@@ -50,5 +50,5 @@ run behind a confirmation.
 ## Region writes
 
 After you edit or accept region boxes, the backend reports how many boxes
-still lack a vector. `/review` shows "N boxes have no vector yet" with an
+still lack a vector. The Review view shows "N boxes have no vector yet" with an
 **Embed now** action while that number is above zero.

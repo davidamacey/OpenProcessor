@@ -20,7 +20,7 @@ image overlay all show every box.
 
 ## Reviewing a region item
 
-On the region tab of [Review](./review.md):
+On the region queue of [Review](./review.md):
 
 | Action | Default key | Effect |
 | --- | --- | --- |

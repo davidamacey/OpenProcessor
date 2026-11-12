@@ -187,7 +187,7 @@ def _side_on_car_distance(item: dict) -> float:
 def _multibox_item_id(base: str) -> str:
     """The side-on car among the reviewable items whose boxes are in different states
     (accepted + rejected)."""
-    d = api_get(base, f'/curation/projects/{VEHICLES_PROJECT}/review/regions?page_size=100')
+    d = api_get(base, f'/curation/projects/{VEHICLES_PROJECT}/review/regions?limit=100')
     mixed = [
         it
         for it in d['items']
@@ -202,7 +202,7 @@ def _multibox_item_id(base: str) -> str:
 def _open_multibox_review(page, ctx: Ctx) -> None:
     cid = _multibox_item_id(ctx.base)
     page.goto(
-        f'{ctx.base}/p/{VEHICLES_PROJECT}/review?tab=regions&crop_id={cid}',
+        f'{ctx.base}/p/{VEHICLES_PROJECT}/workspace?view=review&queue=regions&focus=item:{cid}',
         wait_until='domcontentloaded',
         timeout=30_000,
     )
@@ -264,18 +264,6 @@ def state_import_job(page, ctx: Ctx) -> None:
     )
     page.wait_for_selector("[data-testid='import-job']", timeout=15_000)
     _settle(page, 1200)
-
-
-def state_review_imported(page, ctx: Ctx) -> None:
-    jobs = api_get(ctx.base, f'/curation/projects/{IMPORT_PROJECT}/datasets/imports')['items']
-    jid = next(j['import_id'] for j in jobs if j['status'].startswith('completed'))
-    page.goto(
-        f'{ctx.base}/p/{IMPORT_PROJECT}/review?tab=imported&import_id={jid}',
-        wait_until='domcontentloaded',
-        timeout=30_000,
-    )
-    page.wait_for_selector('text=/Import imp_/', timeout=20_000)
-    _settle(page, 2500)
 
 
 def state_models_sharing(page, ctx: Ctx) -> None:

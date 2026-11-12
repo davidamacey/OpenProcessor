@@ -5,7 +5,7 @@ title: Item filter and Matching items
 
 # Item filter and Matching items
 
-One filter drives three pages: `/workspace`, `/review` and `/export`. Classes
+One filter drives two pages: `/workspace` (all its views, Review included) and `/export`. Classes
 in it are always chosen **by name**.
 
 ## What you can filter by
@@ -54,14 +54,13 @@ it was when the dialog opened. A refusal (an empty filter without a limit, or
 too many items) is the backend's own message. The written ids go on the undo
 stack, so `Z` reverts the whole action.
 
-## `/review`
+## Review queues
 
-The filter bar sits in the filter row, limited per tab to what that tab
-serves, and the choice is kept in the URL and cleared when you change tab.
-Every other filter the backend lists for the tab is drawn from its own
-description: a select, chips, a number box or a text box. A select with no
-backend default reads **any** and sends nothing; it never shows a value that
-isn't applied.
+In the Review view the queue is a preset of this filter, and the filter bar
+is the Workspace's. The backend lists any queue-only filter (a region status,
+for example); each is drawn from its own description: a select, chips, a number
+box or a text box. A select with no backend default reads **any** and sends
+nothing; it never shows a value that isn't applied.
 
 ## `/export`
 

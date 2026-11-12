@@ -32,7 +32,7 @@ makes the shortcuts below customizable per project rather than fixed.
 | `/` | Open the class picker for the selection |
 | `Space` | Select or deselect the focused card |
 | `\` | Show or hide the details panel |
-| `Esc` | Clear the selection, then leave the open cluster, then close the panel |
+| `Esc` | In Review, back to the grid; otherwise clear the selection, then leave the open cluster, then close the panel |
 | `Shift+Enter` | Confirm selected to the chosen class + advance |
 | `Shift+G` | Accept all VLM suggestions on the page |
 | `G` | Accept the VLM suggestion for selected |
@@ -46,7 +46,9 @@ makes the shortcuts below customizable per project rather than fixed.
 | `←` / `→` | Move the selection by one crop |
 | `M` | Move selected to another cluster |
 
-## `/p/<project>/review`
+## Review view (`/p/<project>/workspace?view=review`)
+
+The Workspace keys above also work here. `Enter` on a focused card in the Detections view opens Review at that item; `Esc` returns to the grid with the card you reached focused.
 
 | Key | Action |
 | --- | --- |
@@ -57,7 +59,7 @@ makes the shortcuts below customizable per project rather than fixed.
 | `Z` | Undo last action |
 | `←` / `→` | Previous / next item |
 
-### Region tab additions
+### Region queue additions
 
 | Key | Action |
 | --- | --- |
