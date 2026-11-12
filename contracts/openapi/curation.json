@@ -26594,6 +26594,11 @@
               }
             ]
           },
+          "default_limit": {
+            "description": "Page size when `limit` is omitted.",
+            "title": "Default Limit",
+            "type": "integer"
+          },
           "default_slug": {
             "title": "Default Slug",
             "type": "string"
@@ -26607,6 +26612,11 @@
           },
           "limits": {
             "$ref": "#/components/schemas/ProjectLimits"
+          },
+          "max_limit": {
+            "description": "The most projects one page may hold.",
+            "title": "Max Limit",
+            "type": "integer"
           },
           "next_cursor": {
             "anyOf": [
@@ -26632,12 +26642,32 @@
             "title": "Sort",
             "type": "string"
           },
+          "sort_cap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the sort ranks only this many most recently updated matches (`items:desc`: item counts are not stored); null for an exact sort.",
+            "title": "Sort Cap"
+          },
           "sort_options": {
             "description": "The sorts `sort` accepts, labelled.",
             "items": {
               "$ref": "#/components/schemas/SortOption"
             },
             "title": "Sort Options",
+            "type": "array"
+          },
+          "status_options": {
+            "description": "The statuses `status` filters on, in display order, labelled.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Status Options",
             "type": "array"
           },
           "total": {
@@ -26654,7 +26684,10 @@
           "include_archived",
           "total",
           "sort",
-          "sort_options"
+          "sort_options",
+          "default_limit",
+          "max_limit",
+          "status_options"
         ],
         "title": "ProjectsResponse",
         "type": "object"
@@ -43524,14 +43557,14 @@
             }
           },
           {
-            "description": "At most this many projects per page.",
+            "description": "At most this many projects per page (default and maximum are served).",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maximum": 500,
+                  "maximum": 200,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -43539,7 +43572,7 @@
                   "type": "null"
                 }
               ],
-              "description": "At most this many projects per page.",
+              "description": "At most this many projects per page (default and maximum are served).",
               "title": "Limit"
             }
           },

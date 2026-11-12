@@ -25,13 +25,7 @@ from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
 from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._project_deps import bind_path_project
-from src.routers.curation._project_views import (
-    SELECTABLE_STATUSES,
-    capacity_wire,
-    list_membership,
-    resources_wire,
-    summarize,
-)
+from src.routers.curation._project_views import capacity_wire, resources_wire, summarize
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.projects import (
     ArchiveRequest,
@@ -40,6 +34,7 @@ from src.schemas.curation.projects import (
     DeleteDryRunResponse,
     PatchProjectRequest,
     ProjectCounts,
+    ProjectLabels,
     ProjectLifecycleResponse,
     ProjectLimits,
     ProjectRecordResponse,
@@ -131,6 +126,7 @@ async def _fetch_counts(client: Any, snapshot: dict[str, Any]) -> dict[str, Proj
 
 @global_router.get('/projects', response_model=ProjectsResponse)
 async def list_projects(
+    session: DbSessionDep,
     include_archived: Annotated[bool, Query()] = False,
     q: Annotated[
         str | None,
@@ -144,7 +140,11 @@ async def list_projects(
     ] = False,
     limit: Annotated[
         int | None,
-        Query(ge=1, le=500, description='At most this many projects per page.'),
+        Query(
+            ge=1,
+            le=projects_listing.MAX_LIMIT,
+            description='At most this many projects per page (default and maximum are served).',
+        ),
     ] = None,
     status: Annotated[
         list[str] | None,
@@ -157,29 +157,18 @@ async def list_projects(
 ) -> ProjectsResponse:
     registry = get_project_registry()
     await registry.ensure_fresh()
-    snapshot = dict(registry.snapshot())
-
-    listed = {
-        slug: record
-        for slug, record in snapshot.items()
-        if list_membership(record.status, include_archived=include_archived)
-    }
-
-    if selectable:
-        listed = {s: r for s, r in listed.items() if r.status in SELECTABLE_STATUSES}
-    needle = (q or '').strip().lower()
-    if needle:
-        listed = {
-            slug: record
-            for slug, record in listed.items()
-            if needle in slug.lower() or needle in record.display_name.lower()
-        }
-    if status:
-        wanted = set(status)
-        listed = {s: r for s, r in listed.items() if r.status in wanted}
-    total = len(listed)
     try:
         order = projects_listing.sort_by_id(sort)
+        records, next_cursor, total = await projects_listing.fetch_page(
+            session,
+            statuses=projects_listing.listed_statuses(
+                include_archived=include_archived, selectable=selectable, status=status
+            ),
+            q=q,
+            sort=order,
+            cursor=cursor,
+            limit=limit,
+        )
     except CursorError as exc:
         raise cursor_refused(exc) from exc
 
@@ -187,23 +176,12 @@ async def list_projects(
     counts: dict[str, ProjectCounts] = {}
     try:
         client = await make_curation_opensearch()
-        # Only the item-count sort needs a count for every match before the page is cut.
-        if order.id == 'items:desc':
-            counts = await _fetch_counts(client, listed)
+        counts = await _fetch_counts(client, {r.slug: r for r in records})
     except OpenSearchException as exc:
         logger.warning('project_counts_unavailable', error=str(exc))
-    try:
-        rows, next_cursor = projects_listing.page(
-            listed, sort=order, counts=counts, cursor=cursor, limit=limit
-        )
-    except CursorError as exc:
-        raise cursor_refused(exc) from exc
-    if client is not None and not counts.keys() >= {r.slug for r in rows}:
-        try:
-            counts = await _fetch_counts(client, {r.slug: r for r in rows})
-        except OpenSearchException as exc:
-            logger.warning('project_counts_unavailable', error=str(exc))
-    summaries = [summarize(r, counts.get(r.slug, UNKNOWN_COUNTS)) for r in rows]
+    if order.id == projects_listing.ITEMS_SORT:
+        records = projects_listing.rank_by_items(records, counts, limit)
+    summaries = [summarize(r, counts.get(r.slug, UNKNOWN_COUNTS)) for r in records]
 
     capacity = None
     from src.services.projects.capacity import capacity_status
@@ -222,6 +200,15 @@ async def list_projects(
         next_cursor=next_cursor,
         sort=order.id,
         sort_options=[{'id': o.id, 'label': o.label} for o in projects_listing.SORTS],
+        default_limit=projects_listing.DEFAULT_LIMIT,
+        max_limit=projects_listing.MAX_LIMIT,
+        sort_cap=projects_listing.ITEMS_SORT_CAP
+        if order.id == projects_listing.ITEMS_SORT
+        else None,
+        status_options=[
+            {'id': st, 'label': ProjectLabels().status[st]}
+            for st in projects_listing.FILTER_STATUSES
+        ],
     )
 
 

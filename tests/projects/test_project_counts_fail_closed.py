@@ -81,6 +81,16 @@ class _Registry:
         return self._records.get(slug)
 
 
+def _serve_page(monkeypatch: pytest.MonkeyPatch, router: Any, registry: _Registry) -> None:
+    """The page read is Postgres's (db tier); here it answers the registry's records."""
+
+    async def fetch_page(_session: Any, **_: Any) -> tuple[list[Any], None, int]:
+        records = list(registry.snapshot().values())
+        return records, None, len(records)
+
+    monkeypatch.setattr(router.projects_listing, 'fetch_page', fetch_page)
+
+
 async def _unreachable() -> Any:
     raise OpenSearchConnectionError('N/A', 'opensearch is down', Exception('down'))
 
@@ -91,10 +101,12 @@ async def test_the_project_list_shows_unknown_counts_when_opensearch_is_unreacha
 ) -> None:
     from src.routers.curation import projects as router
 
-    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    registry = _Registry(_record('alpha'))
+    monkeypatch.setattr(router, 'get_project_registry', lambda: registry)
+    _serve_page(monkeypatch, router, registry)
     monkeypatch.setattr(router, 'make_curation_opensearch', _unreachable)
 
-    response = await router.list_projects()
+    response = await router.list_projects(session=None)  # type: ignore[arg-type]
 
     (alpha,) = response.projects
     assert alpha.counts.images is None
@@ -144,9 +156,11 @@ async def test_the_project_list_shows_unknown_counts_when_the_client_cannot_conn
 
     monkeypatch.setattr(dependencies.app_state, '_opensearch_client', None)
     monkeypatch.setattr(dependencies, 'OpenSearchClient', _UnpingableClient)
-    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    registry = _Registry(_record('alpha'))
+    monkeypatch.setattr(router, 'get_project_registry', lambda: registry)
+    _serve_page(monkeypatch, router, registry)
 
-    response = await router.list_projects()
+    response = await router.list_projects(session=None)  # type: ignore[arg-type]
 
     (alpha,) = response.projects
     assert alpha.counts.images is None
@@ -197,11 +211,13 @@ async def test_a_project_without_a_primary_space_lists_with_an_unknown_embedded_
     async def _client() -> Any:
         return _Seven()
 
-    monkeypatch.setattr(router, 'get_project_registry', lambda: _Registry(_record('alpha')))
+    registry = _Registry(_record('alpha'))
+    monkeypatch.setattr(router, 'get_project_registry', lambda: registry)
+    _serve_page(monkeypatch, router, registry)
     monkeypatch.setattr(router, 'make_curation_opensearch', _client)
     monkeypatch.setattr(stats, 'item_vector_field', _no_space)
 
-    response = await router.list_projects()
+    response = await router.list_projects(session=None)  # type: ignore[arg-type]
 
     (alpha,) = response.projects
     assert alpha.counts.images == 7

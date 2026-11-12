@@ -4,7 +4,7 @@ import datetime as dt
 import uuid
 from typing import Any
 
-from sqlalchemy import BigInteger, ForeignKey, Identity, Integer
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, Integer, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,7 @@ class Project(Base):
         check(
             'deleting_has_prior_status', "(status = 'deleting') = (pre_delete_status IS NOT NULL)"
         ),
+        Index('ix_projects_updated_at_slug', text('updated_at DESC'), text('slug DESC')),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=UUIDV7)
