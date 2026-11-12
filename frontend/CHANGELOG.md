@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
+- Gallery view of whole images with served boxes and counts; crop dialog siblings open their crop.
 
 ### Changed
 
