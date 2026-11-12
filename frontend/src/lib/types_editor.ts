@@ -50,6 +50,8 @@ export interface ImageLocate {
   cursor_before: string | null;
   /** The cursor of the page after it. */
   cursor_after: string | null;
+  /** The image right before this one, for walking back; null for the first row. */
+  previous_image_id: string | null;
   reason: 'not_found' | 'filtered_out' | null;
   reason_message: string | null;
 }

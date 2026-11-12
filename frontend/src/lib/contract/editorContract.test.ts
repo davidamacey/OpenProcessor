@@ -54,6 +54,7 @@ const CASES: [string, string[]][] = [
       total: true,
       cursor_before: true,
       cursor_after: true,
+      previous_image_id: true,
       reason: true,
       reason_message: true,
     }),
