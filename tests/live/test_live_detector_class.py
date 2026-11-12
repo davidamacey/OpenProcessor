@@ -151,6 +151,15 @@ def test_adopt_gives_stored_items_their_detector_class_and_can_be_undone(
     restored = {i['crop_id']: i for i in _items(opensearch, project)}
     assert restored[human['crop_id']]['class_source'] == 'human'
 
+    # Adopt again (the undo put the item back): the next steps stop offering the action.
+    again = api.post(f'{project.prefix}/label_ops/adopt_detector', json={'dry_run': False})
+    assert again.status_code == 202, again.text
+    assert wait_job(api, again.json()['job_id'])['status'] == 'completed'
+    steps = api.get(f'{project.prefix}/next_steps').json()['steps']
+    classes = next(s for s in steps if s['id'] == 'classes')
+    assert classes['done'] is True
+    assert classes['action'] is None
+
 
 def _any_class_id(api: Any, project: IngestProject) -> int:
     classes = api.get(f'{project.prefix}/classes').json()['classes']

@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+StepAction = Literal['adopt_detector_classes']
+
 StepId = Literal[
     'ingest',
     'classes',
@@ -32,6 +34,11 @@ class WorkflowStep(BaseModel):
         '`quality/near-duplicates`, `export`, `train` or `audit`.'
     )
     query: str | None = Field(default=None, description='Optional search string for the link.')
+    action: StepAction | None = Field(
+        default=None,
+        description='A write the step offers instead of a page: `adopt_detector_classes` is '
+        '`POST /label_ops/adopt_detector`. Null when the step is done or has none.',
+    )
 
 
 class WorkflowSteps(BaseModel):

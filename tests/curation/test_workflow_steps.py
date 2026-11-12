@@ -65,6 +65,35 @@ def test_each_step_is_done_by_its_own_fact(
     assert _step(dataclasses.replace(EMPTY, **done), step_id).done is True
 
 
+def test_the_classes_step_is_not_done_while_a_detector_class_is_missing() -> None:
+    facts = dataclasses.replace(DONE, active_classes=6, detector_classes_missing=29)
+    step = _step(facts, 'classes')
+    assert step.done is False
+    assert step.action == 'adopt_detector_classes'
+    assert step.detail == '29 detector classes are not in the registry.'
+    assert build_steps(facts).next == step
+
+
+def test_the_classes_step_offers_adopt_for_items_the_detector_named_without_a_class() -> None:
+    facts = dataclasses.replace(DONE, detector_items_undecided=1)
+    step = _step(facts, 'classes')
+    assert (step.done, step.action) == (False, 'adopt_detector_classes')
+    assert step.detail == '1 item has a detector class and no class.'
+    both = dataclasses.replace(facts, detector_classes_missing=2)
+    assert _step(both, 'classes').detail == (
+        '2 detector classes are not in the registry; 1 item has a detector class and no class.'
+    )
+
+
+def test_the_classes_step_is_done_and_offers_nothing_once_the_detector_is_adopted() -> None:
+    step = _step(DONE, 'classes')
+    assert (step.done, step.action) == (True, None)
+    assert step.detail == '2 classes in the registry.'
+    # An empty registry is still not done, with nothing to adopt.
+    empty = _step(dataclasses.replace(DONE, active_classes=0), 'classes')
+    assert (empty.done, empty.action) == (False, None)
+
+
 def test_a_step_says_what_is_missing_in_a_sentence() -> None:
     assert _step(dataclasses.replace(DONE, hotkeys_missing=2), 'hotkeys').detail == (
         '2 classes have no hotkey letter.'
