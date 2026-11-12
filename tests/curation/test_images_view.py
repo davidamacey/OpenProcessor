@@ -242,6 +242,21 @@ def test_in_holdout_and_near_dup_filters(monkeypatch: pytest.MonkeyPatch) -> Non
     assert ids(in_holdout='true') == ['img-b']
     assert ids(in_holdout='false') == ['img-d', 'img-c', 'img-a']
     assert ids(near_dup='representative') == ['img-a']
+    # Collapsed: one image per group plus every image in no group; the extra copies drop out.
+    assert sorted(ids(near_dup='collapsed')) == sorted(
+        {*ids(near_dup='representative'), *ids(near_dup='none')}
+    )
+    assert set(ids(near_dup='collapsed')).isdisjoint(ids(near_dup='member'))
+
+
+def test_collapsed_clause_keeps_representatives_and_ungrouped_images() -> None:
+    from src.services.curation.image_join import near_dup_clauses
+
+    (clause,) = near_dup_clauses('collapsed')
+    should = clause['bool']['should']
+    assert {'term': {'near_dup_is_representative': True}} in should
+    assert {'bool': {'must_not': [{'exists': {'field': 'near_dup_group_id'}}]}} in should
+    assert clause['bool']['minimum_should_match'] == 1
 
 
 def test_sort_options_are_served_and_an_unknown_sort_is_refused(

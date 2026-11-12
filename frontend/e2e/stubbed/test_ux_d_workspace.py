@@ -197,7 +197,7 @@ def test_gallery_duplicates_control_sends_the_served_filter(stub, page, app_url)
     serve_gallery(stub, queries)
     page.goto(f'{app_url}/p/default/workspace?view=gallery')
     expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    with page.expect_request(lambda r: '/images?' in r.url and 'near_dup=representative' in r.url):
+    with page.expect_request(lambda r: '/images?' in r.url and 'near_dup=collapsed' in r.url):
         page.get_by_role('radio', name='One per group').click()
     with page.expect_request(lambda r: r.url.endswith('/images')):
         page.get_by_role('radio', name='All images').click()

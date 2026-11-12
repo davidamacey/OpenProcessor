@@ -30,7 +30,8 @@ def image_view_query(
         NearDupFilter | None,
         Query(
             description='member = in a group and not its representative; representative; '
-            'none = in no group.'
+            'none = in no group; collapsed = one image per group (its representative) plus every '
+            'image in no group.'
         ),
     ] = None,
     label_state: Annotated[

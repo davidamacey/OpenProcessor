@@ -56320,7 +56320,7 @@
             }
           },
           {
-            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
             "in": "query",
             "name": "near_dup",
             "required": false,
@@ -56330,7 +56330,8 @@
                   "enum": [
                     "member",
                     "representative",
-                    "none"
+                    "none",
+                    "collapsed"
                   ],
                   "type": "string"
                 },
@@ -56338,7 +56339,7 @@
                   "type": "null"
                 }
               ],
-              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
               "title": "Near Dup"
             }
           },
@@ -57028,7 +57029,7 @@
             }
           },
           {
-            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
             "in": "query",
             "name": "near_dup",
             "required": false,
@@ -57038,7 +57039,8 @@
                   "enum": [
                     "member",
                     "representative",
-                    "none"
+                    "none",
+                    "collapsed"
                   ],
                   "type": "string"
                 },
@@ -57046,7 +57048,7 @@
                   "type": "null"
                 }
               ],
-              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
               "title": "Near Dup"
             }
           },
@@ -75055,7 +75057,7 @@
             }
           },
           {
-            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
             "in": "query",
             "name": "near_dup",
             "required": false,
@@ -75065,7 +75067,8 @@
                   "enum": [
                     "member",
                     "representative",
-                    "none"
+                    "none",
+                    "collapsed"
                   ],
                   "type": "string"
                 },
@@ -75073,7 +75076,7 @@
                   "type": "null"
                 }
               ],
-              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "description": "member = in a group and not its representative; representative; none = in no group; collapsed = one image per group (its representative) plus every image in no group.",
               "title": "Near Dup"
             }
           },

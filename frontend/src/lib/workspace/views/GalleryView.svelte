@@ -19,7 +19,7 @@
   const NEAR_DUP_OPTIONS = [
     { value: 'all', label: 'All images' },
     {
-      value: 'representative',
+      value: 'collapsed',
       label: 'One per group',
       title: 'Collapse each duplicate group to its representative',
     },
