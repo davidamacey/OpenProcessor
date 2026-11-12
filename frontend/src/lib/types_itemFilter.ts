@@ -9,6 +9,7 @@
  * `src/lib/contract/itemFilterContract.test.ts`. The backend serves no
  * vocabulary for these enums, so the const arrays are the contract's.
  */
+import type { GeoBox } from '$lib/types_map';
 
 /** `ItemDoc.embedding_state`. */
 export const EMBEDDING_STATES = [
@@ -26,6 +27,10 @@ export type ItemOrigin = (typeof ITEM_ORIGINS)[number];
 /** `ItemFilter.review_status`. */
 export const REVIEW_STATUSES = ['pending', 'validated', 'dismissed', 'excluded'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+
+/** `ItemFilter.region_text_match`: how a box-text search matches. */
+export const TEXT_MATCHES = ['exact', 'fuzzy', 'fragment'] as const;
+export type TextMatch = (typeof TEXT_MATCHES)[number];
 
 /** `ItemSelection.sample` / `ReprocessTargets.sample`. */
 export const SELECTION_SAMPLES = ['random', 'largest'] as const;
@@ -55,6 +60,15 @@ export interface ItemFilterQuery {
   taken_to?: string | null;
   /** Only items on these images (at most 200). */
   image_id?: string[];
+  /** Items in these clusters (OR; at most 200). */
+  cluster_uid?: string[];
+  /** `west,south,east,north` in degrees; west > east crosses the antimeridian. */
+  geo_bbox?: string;
+  /** `lon,lat;lon,lat;...`, 3 to 64 vertices. */
+  geo_polygon?: string;
+  has_location?: boolean;
+  near_dup_group?: string;
+  region_text_match?: TextMatch;
 }
 
 /** `ItemFilter` (request body schema). */
@@ -63,7 +77,11 @@ export interface ItemFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_uid?: string | null;
+  cluster_uids?: string[];
+  geo_bbox?: GeoBox | null;
+  geo_polygon?: [number, number][] | null;
+  has_location?: boolean | null;
+  near_dup_group?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;
@@ -89,7 +107,7 @@ export interface ItemFilter {
   region_gate_skipped?: boolean | null;
   /** The item has a box whose folded text matches this (at most 200 characters). */
   region_text?: string | null;
-  region_text_match?: 'exact' | 'fuzzy' | 'fragment';
+  region_text_match?: TextMatch;
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
   review_tab?: string | null;

@@ -34,7 +34,7 @@ def _meta(app_url: str, **over: Any) -> dict[str, Any]:
         'location_policy': 'store_coarse',
         'n_located': 2,
         'bounds': fill(
-            'MapBounds',
+            'GeoBox',
             west=CELL[0] - 0.01,
             south=CELL[1] - 0.01,
             east=CELL[0] + 0.01,

@@ -19,6 +19,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- The shared item filter takes `cluster_uid` (repeatable), `geo_bbox`, `geo_polygon`, `has_location` and `near_dup_group` on every list, count and bulk route; area filters are snapped to the location policy; list responses serve `join_truncated`; `hidden` counts follow the filter. Reprocess and auto-label runs refuse an image-level predicate (the workers have no image join). Map cells serve `bounds` and single-photo `image_id`; `GET /map` serves `n_without_location`. `GET /review/{tab}` and its locate twin take `region_text_match` (`exact`, `fuzzy`, `fragment`) with `text` on the regions tab.
 - **Removed** `GET /crops/{id}/context` and `GET /crops/{id}/image` (use `GET /images/{image_id}` and `/file`), and `GET /images/serve` and `GET /images/root/{alias}` (no route takes a file path any more; pixels are served by image id, only for images the project holds).
 - **OCR runs PP-OCRv6** (small tier, official PaddlePaddle ONNX exports) in place of PP-OCRv5. The recognition dictionary is `ppocrv6_dict.txt` (18708 characters, 18710 classes) and the detector now normalises with ImageNet mean/std. `ocr_pipeline` `MODEL_VERSION` is 3 (the new `rec_char_min` output, the lowest single-character probability of each line, next to `rec_scores`): rebuild the `paddleocr_det_trt` and `paddleocr_rec_trt` engines (`openprocessor models repair`).
 

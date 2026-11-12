@@ -20,16 +20,14 @@ const CASES: [string, string[]][] = [
       available: true,
       location_policy: true,
       n_located: true,
+      n_without_location: true,
       bounds: true,
       tile_url: true,
       tile_attribution: true,
       max_zoom: true,
     }),
   ],
-  [
-    'MapBounds',
-    keys<keyof T.MapBounds>({ west: true, south: true, east: true, north: true }),
-  ],
+  ['GeoBox', keys<keyof T.GeoBox>({ west: true, south: true, east: true, north: true })],
   [
     'MapCellCollection',
     keys<keyof T.MapCellCollection>({
@@ -44,7 +42,16 @@ const CASES: [string, string[]][] = [
     'MapCellFeature',
     keys<keyof T.MapCellFeature>({ type: true, geometry: true, properties: true }),
   ],
-  ['MapCellProperties', keys<keyof T.MapCellProperties>({ count: true, tile: true })],
+  [
+    'MapCellProperties',
+    keys<keyof T.MapCellProperties>({
+      count: true,
+      tile: true,
+      bounds: true,
+      image_id: true,
+      thumbnail_url: true,
+    }),
+  ],
   [
     'MapTileImages',
     keys<keyof T.MapTileImages>({

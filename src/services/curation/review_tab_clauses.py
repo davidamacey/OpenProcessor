@@ -24,6 +24,7 @@ from src.domain.ingest_class_sources import (
 from src.domain.region_boxes import box_query
 from src.services.curation import review_tabs
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
+from src.services.curation.region_text_search import TextMatch, region_text_match_clause
 from src.services.curation.review_filter_specs import (
     HAS_REJECTED_BOX,
     REGION_STATUS_DEFAULT,
@@ -31,6 +32,7 @@ from src.services.curation.review_filter_specs import (
 )
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import EmptyClassReason
+from src.services.detection.region_text import active_confusables
 
 
 OUTLIER_SCORE_MAX = 0.65
@@ -270,7 +272,12 @@ def _region_status_clauses(
     )
 
 
-def regions_tab(include_test: bool, text: str | None, region_status: str | None) -> _TabQuery:
+def regions_tab(
+    include_test: bool,
+    text: str | None,
+    region_status: str | None,
+    text_match: TextMatch | None = None,
+) -> _TabQuery:
     # Region-detection review queue: every accepted region box a human
     # has not validated yet, including the worker's auto-confirmed ones
     # (``region_auto_confirmed`` is machine agreement, not validation)
@@ -302,7 +309,12 @@ def regions_tab(include_test: bool, text: str | None, region_status: str | None)
     # uppercase canonical form. Per-box now (the fixed 'text' element
     # key, not RegionFields-indirected -- see region_boxes.py).
     if text and 'text' in review_tabs.tab_filters('regions'):
-        must.append(box_query(region_text_clause(f'{fields.boxes}.text', text), fields))
+        clause = (
+            region_text_match_clause(fields.boxes, text, text_match, active_confusables())
+            if text_match
+            else region_text_clause(f'{fields.boxes}.text', text)
+        )
+        must.append(box_query(clause, fields))
     # Default sort: region score desc (falling back to the rejected
     # candidate's score when there is no accepted region score), so
     # the high-confidence items are reviewed first — see

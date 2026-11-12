@@ -6,6 +6,7 @@ requeue, the label -> export round trip) are only correct if their query
 *selects the right documents*, so this double stores docs per index and
 evaluates the subset of the query DSL those paths use:
 
+- ``geo_bounding_box`` (antimeridian aware) and ``geo_polygon`` over ``{lat, lon}`` points;
 - ``term`` / ``terms`` / ``exists`` / ``match_all`` / ``match_none`` and ``bool`` with
   ``must`` / ``filter`` / ``must_not`` / ``should`` (``should`` = any-of);
 - ``nested``: matches the parent doc when any element of the nested
@@ -146,7 +147,40 @@ def _script_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
     return evaluator(doc)
 
 
+def _point_in_box(point: dict[str, Any], box: dict[str, Any]) -> bool:
+    top, bottom = box['top_left'], box['bottom_right']
+    lat, lon = float(point['lat']), float(point['lon'])
+    if not bottom['lat'] <= lat <= top['lat']:
+        return False
+    if top['lon'] <= bottom['lon']:
+        return top['lon'] <= lon <= bottom['lon']
+    return lon >= top['lon'] or lon <= bottom['lon']  # across the antimeridian
+
+
+def _point_in_ring(point: dict[str, Any], ring: list[dict[str, Any]]) -> bool:
+    """Even-odd ray casting over ``{lat, lon}`` vertices."""
+    x, y = float(point['lon']), float(point['lat'])
+    inside = False
+    for a, b in zip(ring, [*ring[1:], ring[0]], strict=True):
+        ax, ay, bx, by = float(a['lon']), float(a['lat']), float(b['lon']), float(b['lat'])
+        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+            inside = not inside
+    return inside
+
+
+def _geo_bounding_box_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    ((field, box),) = clause.items()
+    return any(_point_in_box(p, box) for p in _values(doc, field))
+
+
+def _geo_polygon_matches(doc: dict[str, Any], clause: dict[str, Any]) -> bool:
+    ((field, spec),) = clause.items()
+    return any(_point_in_ring(p, spec['points']) for p in _values(doc, field))
+
+
 _LEAF_MATCHERS = {
+    'geo_bounding_box': _geo_bounding_box_matches,
+    'geo_polygon': _geo_polygon_matches,
     'script': _script_matches,
     'match_phrase': _match_phrase_matches,
     'exists': lambda doc, clause: bool(_values(doc, clause['field'])),

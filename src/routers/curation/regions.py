@@ -25,6 +25,7 @@ from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._region_row_models import RegionRowPage
 from src.routers.curation._region_status_models import RegionStatusCatalog
 from src.routers.curation._region_vocabulary_models import RegionVocabularyResponse
+from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.region_rows import search_region_rows
 from src.services.curation.region_text_search import TextMatch, region_text_match_clause
@@ -233,7 +234,12 @@ async def list_regions(
     if not include_test:
         must_not.append({'term': {'test_holdout': True}})
     try:
-        filt.extend(item_filter_clauses(item_filter, embedding=await item_write_fields()))
+        # `cluster_uid` here names the cluster of a BOX (matched above), not of the item.
+        item_filter = item_filter.model_copy(update={'cluster_uids': []})
+        join = await resolve_filter_join(opensearch, item_filter)
+        filt.extend(
+            item_filter_clauses(item_filter, embedding=await item_write_fields(), image_join=join)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if verified is not None:

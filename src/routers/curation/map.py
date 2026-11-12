@@ -14,6 +14,7 @@ from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.config import get_curation_config
+from src.domain.geo_box import parse_geo_box
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.map import MapCellCollection, MapMeta, MapTileImages
@@ -25,7 +26,7 @@ from src.services.embedding_spaces.readers import item_write_fields
 GEOJSON = 'application/geo+json'
 
 
-def _bad_request(exc: map_cells.MapQueryError) -> HTTPException:
+def _bad_request(exc: ValueError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
@@ -64,7 +65,11 @@ async def get_map_cells(
     """Grid cells of the images that have a position, as GeoJSON Points at each cell's centroid.
     Capped at 5000 cells (`truncated`: zoom in)."""
     try:
-        box = None if bbox is None else map_cells.parse_bbox(bbox)
+        box = (
+            None
+            if bbox is None
+            else parse_geo_box(bbox, 'bbox needs west,south,east,north in degrees')
+        )
         collection = await map_cells.map_cells(
             opensearch,
             await get_location_policy(),
@@ -73,7 +78,7 @@ async def get_map_cells(
             zoom=zoom,
             box=box,
         )
-    except map_cells.MapQueryError as exc:
+    except ValueError as exc:
         raise _bad_request(exc) from exc
     return JSONResponse(collection.model_dump(mode='json'), media_type=GEOJSON)
 

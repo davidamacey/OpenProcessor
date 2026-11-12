@@ -320,6 +320,11 @@ class CropsPageResponse(BaseModel):
     hidden: HiddenCounts | None = Field(
         default=None, description='What this page hides; null for an id lookup.'
     )
+    join_truncated: bool = Field(
+        default=False,
+        description='The area, location or group predicates matched more images than the join '
+        'could use, so the page may be incomplete.',
+    )
 
 
 __all__ = [

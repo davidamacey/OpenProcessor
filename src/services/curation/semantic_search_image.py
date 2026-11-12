@@ -37,6 +37,7 @@ from src.utils.image_decode import ImageDecodeError, decode_image
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from src.services.curation.image_join import ImageJoin
     from src.services.curation.item_filter import ItemFilter
 
 logger = get_logger(__name__)
@@ -145,6 +146,7 @@ async def semantic_image_search(
     hide_near_duplicates: bool = False,
     min_score: float | None = None,
     include_test: bool = False,
+    image_join: ImageJoin | None = None,
     item_filter: ItemFilter | None = None,
     space_key: str | None = None,
     fuse: Sequence[str] = (),
@@ -198,6 +200,7 @@ async def semantic_image_search(
         min_blur_ratio=min_blur_ratio,
         hide_near_duplicates=hide_near_duplicates,
         include_test=include_test,
+        image_join=image_join,
     )
     return await run_search(
         opensearch=opensearch,

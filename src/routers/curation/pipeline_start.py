@@ -34,6 +34,7 @@ from src.services.curation.autolabel.run_vlm import (
     require_run_vlm,
     resolve_run_vlm,
 )
+from src.services.curation.image_join import has_image_predicates
 from src.services.curation.vlm_policy import VlmScope
 from src.services.labeling.run_labeler import resolve_pack
 from src.services.rejections import rejection
@@ -80,6 +81,13 @@ async def pipeline_auto_label_start(
     """
     from src.services.curation.autolabel import service
 
+    # The job rebuilds its scope in a worker, which has no image join to apply.
+    if has_image_predicates(item_filter):
+        raise rejection(
+            422,
+            'invalid_request',
+            'auto_label does not take area, location or near-duplicate-group filters',
+        )
     # Resolved here (422 before queueing) so the job args echo what runs.
     reject_detection_profile(detection_profile)
     # captured BEFORE

@@ -13,7 +13,6 @@ frontend/src/lib/annotations/readSlot.ts::readSlot	17	baseline at introduction; 
 frontend/src/lib/api.ts::apiFetch	33	baseline at introduction; decompose to shrink
 frontend/src/lib/api.undoCropRegion.test.ts::<anonymous>	21	baseline at introduction; decompose to shrink
 frontend/src/lib/api_clusters.ts::getCluster	23	baseline at introduction; decompose to shrink
-frontend/src/lib/api_clusters.ts::getClusters	18	baseline at introduction; decompose to shrink
 frontend/src/lib/api_cropMap.ts::mapRawCrop	53	baseline at introduction; decompose to shrink
 frontend/src/lib/api_errors.ts::errorDetail	17	baseline at introduction; decompose to shrink
 frontend/src/lib/clusters/clusterDetailController.svelte.ts::createClusterDetailController	17	baseline at introduction; decompose to shrink

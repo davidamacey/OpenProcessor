@@ -37,6 +37,11 @@ class ReviewQueuePage(BaseModel):
     hidden: HiddenCounts = Field(
         description='Items this queue hides: the test holdout and ignored items.'
     )
+    join_truncated: bool = Field(
+        default=False,
+        description='The area, location or group predicates matched more images than the join '
+        'could use, so the queue may be incomplete.',
+    )
 
 
 class ReviewLocateResponse(BaseModel):

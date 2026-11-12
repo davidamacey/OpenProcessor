@@ -225,8 +225,9 @@ async def build_dataset_stats(
     fields = get_region_fields()
     embedding = await item_write_fields()
     body = build_dataset_query_body(fields, embedding)
+    truncated = False
     if not item_filter.is_empty():
-        body['query'] = filter_query(item_filter, embedding)
+        body['query'], truncated = await filter_query(opensearch, item_filter, embedding)
     try:
         # This is also the query the SSE stats stream re-runs
         # every ~10-15s (see pipeline_events.py's TTL cache). Shard
@@ -334,6 +335,7 @@ async def build_dataset_stats(
 
     return {
         'as_of': now_iso(),
+        'join_truncated': truncated,
         # --- wire fields Cropwright's getStats() reads (do not remove) ----
         'total_crops': int(total),
         'validated': (aggs.get('validated') or {}).get('doc_count', 0),

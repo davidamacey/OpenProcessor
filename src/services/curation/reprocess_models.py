@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.clients.curation_opensearch.open_vocab_fields import OpenVocabStatus
+from src.services.curation.image_join import has_image_predicates
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import Sample
 
@@ -37,6 +38,14 @@ class ReprocessFilter(ItemFilter):
     profile@revision); ``include_detected`` widens a region selection to
     ``detected`` items and is only valid together with a profile selector.
     """
+
+    @model_validator(mode='after')
+    def _no_image_predicates(self) -> ReprocessFilter:
+        # A reprocess is queued and run by a worker that has no image join to apply.
+        if has_image_predicates(self):
+            msg = 'a reprocess does not take area, location or near-duplicate-group filters'
+            raise ValueError(msg)
+        return self
 
     region_status: list[str] = Field(default_factory=list)
     detector: list[str] = Field(default_factory=list)

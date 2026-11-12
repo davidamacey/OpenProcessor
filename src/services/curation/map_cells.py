@@ -22,10 +22,11 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
-from src.config.curation_accessors import images_index, items_index
-from src.domain.location_policy import COARSE_DECIMALS
+from src.config.curation_accessors import images_index
+from src.config.project_context import project_api_base
+from src.domain.geo_box import GeoBox
+from src.domain.location_policy import COARSE_DECIMALS, snap_box
 from src.schemas.curation.map import (
-    MapBounds,
     MapCellCollection,
     MapCellFeature,
     MapCellGeometry,
@@ -33,20 +34,26 @@ from src.schemas.curation.map import (
     MapMeta,
     MapTileImages,
 )
+from src.services.curation.image_facts import thumbnail_url
+from src.services.curation.image_join import (
+    LOCATION_FIELD,
+    geo_box_query,
+    image_predicate_clauses,
+    item_image_ids,
+    without_image_predicates,
+)
 from src.services.curation.item_filter import ItemFilter, item_filter_query
 
 
 if TYPE_CHECKING:
     from src.services.embedding_spaces.readers import WriteFields
 
-LOCATION_FIELD: Final = 'capture.location'
 MAX_CELLS: Final = 5000
 #: Cells per tile at the requested zoom: a map tile is 256 px, a cell 2^3 times finer than a tile.
 CELL_ZOOM_OFFSET: Final = 3
 MAX_PRECISION: Final = 22
 #: A coarse policy keeps about 1 km: tiles at zoom 15 are about 1.2 km wide at the equator.
 COARSE_MAX_PRECISION: Final = 15
-JOIN_MAX_IMAGES: Final = 10_000
 TILE_IMAGES_MAX: Final = 200
 
 
@@ -56,30 +63,6 @@ class MapQueryError(ValueError):
 
 def max_precision(policy: str) -> int:
     return COARSE_MAX_PRECISION if policy == 'store_coarse' else MAX_PRECISION
-
-
-def parse_bbox(raw: str) -> MapBounds:
-    """``west,south,east,north`` in degrees; west may exceed east (a box across the antimeridian)."""
-    try:
-        west, south, east, north = (float(part) for part in raw.split(','))
-    except ValueError as exc:
-        msg = 'bbox must be west,south,east,north in degrees'
-        raise MapQueryError(msg) from exc
-    if not (-90 <= south <= north <= 90 and -180 <= west <= 180 and -180 <= east <= 180):
-        msg = 'bbox is outside -180..180 longitude and -90..90 latitude'
-        raise MapQueryError(msg)
-    return MapBounds(west=west, south=south, east=east, north=north)
-
-
-def geo_box_query(box: MapBounds) -> dict[str, Any]:
-    return {
-        'geo_bounding_box': {
-            LOCATION_FIELD: {
-                'top_left': {'lat': box.north, 'lon': box.west},
-                'bottom_right': {'lat': box.south, 'lon': box.east},
-            }
-        }
-    }
 
 
 def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
@@ -109,22 +92,8 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     ]
 
 
-async def item_image_ids(opensearch: Any, query: dict[str, Any]) -> tuple[list[str], bool]:
-    """The images that have an item matching ``query`` and whether there were more than we use."""
-    resp = await opensearch.search(
-        index=items_index(),
-        body={
-            'size': 0,
-            'query': query,
-            'aggs': {'images': {'terms': {'field': 'image_id', 'size': JOIN_MAX_IMAGES}}},
-        },
-    )
-    agg = resp['aggregations']['images']
-    return [b['key'] for b in agg['buckets']], int(agg.get('sum_other_doc_count', 0)) > 0
-
-
 async def image_query(
-    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: MapBounds | None
+    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: GeoBox | None, policy: str
 ) -> tuple[dict[str, Any], bool]:
     """The images-index query for a map request and whether the item join was truncated.
 
@@ -133,18 +102,29 @@ async def image_query(
     filters: list[dict[str, Any]] = [{'exists': {'field': LOCATION_FIELD}}]
     if box is not None:
         filters.append(geo_box_query(box))
-    joined = f.model_copy(update={'taken_from': None, 'taken_to': None})
+    filters.extend(image_predicate_clauses(f, policy=policy))
+    rest = without_image_predicates(f)
+    joined = rest.model_copy(update={'taken_from': None, 'taken_to': None})
     truncated = False
     if joined.is_empty():
         filters.extend(_date_clauses(f))
     else:
-        ids, truncated = await item_image_ids(opensearch, item_filter_query(f, embedding=embedding))
+        ids, truncated = await item_image_ids(
+            opensearch, item_filter_query(rest, embedding=embedding)
+        )
         filters.append({'terms': {'image_id': ids}})
     return {'bool': {'filter': filters}}, truncated
 
 
 def _round_coarse(value: float) -> float:
     return round(value, COARSE_DECIMALS)
+
+
+async def _count_images(opensearch: Any, query: dict[str, Any]) -> int:
+    resp = await opensearch.search(
+        index=images_index(), body={'size': 0, 'track_total_hits': True, 'query': query}
+    )
+    return int(resp['hits']['total']['value'])
 
 
 async def map_meta(
@@ -156,6 +136,7 @@ async def map_meta(
             available=False,
             location_policy='drop',
             n_located=0,
+            n_without_location=await _count_images(opensearch, {'match_all': {}}),
             tile_url=tile_url,
             tile_attribution=tile_attribution,
             max_zoom=0,
@@ -170,10 +151,13 @@ async def map_meta(
         },
     )
     n_located = int(resp['hits']['total']['value'])
+    n_without_location = await _count_images(
+        opensearch, {'bool': {'must_not': {'exists': {'field': LOCATION_FIELD}}}}
+    )
     bounds = None
     box = (resp.get('aggregations') or {}).get('extent', {}).get('bounds')
     if n_located and box:
-        bounds = MapBounds(
+        bounds = GeoBox(
             west=box['top_left']['lon'],
             south=box['bottom_right']['lat'],
             east=box['bottom_right']['lon'],
@@ -183,10 +167,26 @@ async def map_meta(
         available=n_located > 0,
         location_policy=cast('Literal["drop", "store_coarse", "store"]', policy),
         n_located=n_located,
+        n_without_location=n_without_location,
         bounds=bounds,
         tile_url=tile_url,
         tile_attribution=tile_attribution,
         max_zoom=max_precision(policy) - CELL_ZOOM_OFFSET,
+    )
+
+
+def _cell_properties(bucket: dict[str, Any], policy: str, prefix: str) -> MapCellProperties:
+    tile = str(bucket['key'])
+    box = snap_box(tile_box(tile), policy)
+    assert box is not None  # `drop` serves no cells at all
+    pins = ((bucket.get('pin') or {}).get('hits') or {}).get('hits') or []
+    image_id = str(pins[0]['_id']) if int(bucket['doc_count']) == 1 and pins else None
+    return MapCellProperties(
+        count=int(bucket['doc_count']),
+        tile=tile,
+        bounds=box,
+        image_id=image_id,
+        thumbnail_url=None if image_id is None else thumbnail_url(prefix, image_id),
     )
 
 
@@ -197,13 +197,13 @@ async def map_cells(
     embedding: WriteFields,
     *,
     zoom: int,
-    box: MapBounds | None,
+    box: GeoBox | None,
 ) -> MapCellCollection:
     """The grid cells of the matching images at ``zoom`` as a GeoJSON FeatureCollection."""
     precision = min(zoom + CELL_ZOOM_OFFSET, max_precision(policy))
     if policy == 'drop':
         return MapCellCollection(features=[], precision=precision)
-    query, join_truncated = await image_query(opensearch, f, embedding, box)
+    query, join_truncated = await image_query(opensearch, f, embedding, box, policy)
     grid: dict[str, Any] = {'field': LOCATION_FIELD, 'precision': precision, 'size': MAX_CELLS + 1}
     if box is not None:
         grid['bounds'] = {
@@ -218,12 +218,21 @@ async def map_cells(
             'aggs': {
                 'cells': {
                     'geotile_grid': grid,
-                    'aggs': {'centre': {'geo_centroid': {'field': LOCATION_FIELD}}},
+                    'aggs': {
+                        'centre': {'geo_centroid': {'field': LOCATION_FIELD}},
+                        # A pin never reveals a finer position than the policy serves.
+                        **(
+                            {'pin': {'top_hits': {'size': 1, '_source': False}}}
+                            if precision == max_precision(policy)
+                            else {}
+                        ),
+                    },
                 }
             },
         },
     )
     buckets = resp['aggregations']['cells']['buckets']
+    prefix = project_api_base()
     features: list[MapCellFeature] = []
     for bucket in buckets[:MAX_CELLS]:
         centre = bucket['centre']['location']
@@ -233,9 +242,7 @@ async def map_cells(
         features.append(
             MapCellFeature(
                 geometry=MapCellGeometry(coordinates=(round(lon, 6), round(lat, 6))),
-                properties=MapCellProperties(
-                    count=int(bucket['doc_count']), tile=str(bucket['key'])
-                ),
+                properties=_cell_properties(bucket, policy, prefix),
             )
         )
     return MapCellCollection(
@@ -246,7 +253,7 @@ async def map_cells(
     )
 
 
-def tile_box(tile: str) -> MapBounds:
+def tile_box(tile: str) -> GeoBox:
     """The degrees box of a `z/x/y` web-mercator tile."""
     import math
 
@@ -263,7 +270,7 @@ def tile_box(tile: str) -> MapBounds:
     def lat(row: int) -> float:
         return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * row / n))))
 
-    return MapBounds(
+    return GeoBox(
         west=x / n * 360 - 180, east=(x + 1) / n * 360 - 180, north=lat(y), south=lat(y + 1)
     )
 
@@ -275,7 +282,7 @@ async def tile_images(
     box = tile_box(tile)
     if policy == 'drop':
         return MapTileImages(tile=tile, count=0, image_ids=[], truncated=False)
-    query, _ = await image_query(opensearch, f, embedding, box)
+    query, _ = await image_query(opensearch, f, embedding, box, policy)
     resp = await opensearch.search(
         index=images_index(),
         body={
@@ -293,13 +300,10 @@ async def tile_images(
 
 __all__ = [
     'CELL_ZOOM_OFFSET',
-    'JOIN_MAX_IMAGES',
     'MAX_CELLS',
     'MapQueryError',
-    'item_image_ids',
     'map_cells',
     'map_meta',
-    'parse_bbox',
     'tile_box',
     'tile_images',
 ]

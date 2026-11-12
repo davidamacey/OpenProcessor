@@ -146,6 +146,29 @@ function _rawToClustersResponse(
   };
 }
 
+/** The cluster, area, location and group keys of the shared filter. */
+const areaParams = (f: ClusterFilter) => ({
+  cluster_uid: f.cluster_uid,
+  geo_bbox: f.geo_bbox,
+  geo_polygon: f.geo_polygon,
+  has_location: f.has_location,
+  near_dup_group: f.near_dup_group,
+});
+
+/** Card-level and primary-subject grid filters; card stats reflect only passing crops. */
+const cardParams = (f: ClusterFilter) => ({
+  min_size: f.min_size ?? undefined,
+  max_size: f.max_size ?? undefined,
+  validation_state: f.validation_state ?? undefined,
+  flag: f.flag,
+  needs_review: f.needs_review ? true : undefined,
+  max_rank: f.max_rank ?? undefined,
+  min_blur_ratio: f.min_blur_ratio ?? undefined,
+  class_source: f.class_source ?? undefined,
+  offset: f.representatives_offset ?? undefined,
+  limit: f.representatives_limit ?? undefined,
+});
+
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
@@ -170,22 +193,13 @@ export async function getClusters(
       taken_from: filter.taken_from ?? undefined,
       taken_to: filter.taken_to ?? undefined,
       image_id: filter.image_id,
+      ...areaParams(filter),
       // Enough buckets to return every cluster in one call; `truncated` says when not.
       max_clusters: 2000,
       sort: filter.sort,
       dominant_class: filter.dominant_class,
       detector_class: filter.detector_class,
-      min_size: filter.min_size ?? undefined,
-      max_size: filter.max_size ?? undefined,
-      validation_state: filter.validation_state ?? undefined,
-      flag: filter.flag,
-      needs_review: filter.needs_review ? true : undefined,
-      // Primary-subject grid filters — card stats reflect only passing crops.
-      max_rank: filter.max_rank ?? undefined,
-      min_blur_ratio: filter.min_blur_ratio ?? undefined,
-      class_source: filter.class_source ?? undefined,
-      offset: filter.representatives_offset ?? undefined,
-      limit: filter.representatives_limit ?? undefined,
+      ...cardParams(filter),
     })}`,
     {},
     signal,

@@ -365,8 +365,6 @@ export interface PaginatedResponse<T> {
  *  (`ItemFilterQuery`: class names, confidence and area bands, `max_rank`,
  *  origin, embedding and review state) plus this route's own keys. */
 export interface CropFilter extends ItemFilterQuery {
-  /** Members of one cluster in the serving partition. */
-  cluster_uid?: string | null;
   label_source?: LabelSource;
   /** Original label source (where the class came from). Matches the
    *  {API_PREFIX}/crops?class_source= query param. */

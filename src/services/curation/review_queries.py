@@ -10,10 +10,14 @@ never accidentally couple to its default sort.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.exceptions import RequestRejectedError
 from src.services.curation import review_tab_clauses, review_tabs
+
+
+if TYPE_CHECKING:
+    from src.services.curation.region_text_search import TextMatch
 
 
 def negative_frame_clause(on_negative_frame: bool) -> dict[str, Any]:
@@ -30,9 +34,13 @@ def build_tab_query(
     text: str | None,
     max_rank: int | None,
     region_status: str | None = None,
+    region_text_match: TextMatch | None = None,
     vector_field: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
     """Return ``(must, must_not, reason)`` for one review tab.
+
+    ``region_text_match`` (``regions`` tab only): how ``text`` matches a box's folded text;
+    unset keeps the case-insensitive substring search.
 
     ``region_status`` (``regions`` tab only, ignored elsewhere): one of
     :data:`REGION_STATUS_FILTER_VALUES`. Raises ``RequestRejectedError(400, ...)``
@@ -43,7 +51,9 @@ def build_tab_query(
     raises ``ValueError`` without it.
     """
     if tab == 'regions':
-        must, must_not, reason = review_tab_clauses.regions_tab(include_test, text, region_status)
+        must, must_not, reason = review_tab_clauses.regions_tab(
+            include_test, text, region_status, region_text_match
+        )
     elif tab in review_tab_clauses.SIMPLE_TABS:
         must, must_not, reason = review_tab_clauses.SIMPLE_TABS[tab](include_test, vector_field)
     else:

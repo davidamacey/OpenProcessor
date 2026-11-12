@@ -1,7 +1,7 @@
 // Wire types of the project map. Pinned to the generated contract by
 // `contract/mapContract.test.ts`.
 
-export interface MapBounds {
+export interface GeoBox {
   west: number;
   south: number;
   east: number;
@@ -13,7 +13,9 @@ export interface MapMeta {
   available: boolean;
   location_policy: 'drop' | 'store_coarse' | 'store';
   n_located: number;
-  bounds: MapBounds | null;
+  /** Images with no stored position, or one the location policy does not serve. */
+  n_without_location: number;
+  bounds: GeoBox | null;
   tile_url: string;
   tile_attribution: string;
   max_zoom: number;
@@ -23,6 +25,11 @@ export interface MapCellProperties {
   count: number;
   /** The cell as `z/x/y`. */
   tile: string;
+  /** The cell as a degrees box, rounded outward under a coarse policy. */
+  bounds: GeoBox;
+  /** The photo, when the cell holds exactly one at the finest zoom the policy allows. */
+  image_id: string | null;
+  thumbnail_url: string | null;
 }
 
 /** One grid cell: a GeoJSON Point at the centroid of its images (RFC 7946). */

@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
 
+from src.services.curation.image_join import ImageJoin
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 
 
@@ -41,7 +42,13 @@ CASES: dict[str, dict[str, Any]] = {
     'source': {'source': 'upload'},
     'source_empty_string': {'source': ''},
     'class_id_zero': {'class_id': 0},
-    'cluster_uid': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'},
+    'cluster_uids': {'cluster_uids': ['6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11']},
+    'cluster_uids_many': {
+        'cluster_uids': [
+            '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+            '0b1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b22',
+        ]
+    },
     'dataset_split': {'dataset_split': 'val'},
     'label_source': {'label_source': 'vlm'},
     'class_source': {'class_source': 'human'},
@@ -74,6 +81,10 @@ CASES: dict[str, dict[str, Any]] = {
     'taken_from': {'taken_from': '2024-03-05'},
     'taken_to': {'taken_to': '2024-03-05'},
     'image_ids': {'image_ids': ['a1', 'b2']},
+    'geo_bbox': {'geo_bbox': {'west': 7, 'south': 46, 'east': 9, 'north': 48}},
+    'geo_polygon': {'geo_polygon': [(7, 46), (9, 46), (8, 48)]},
+    'has_location': {'has_location': True},
+    'near_dup_group': {'near_dup_group': '11111111-1111-1111-1111-111111111111'},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],
@@ -87,7 +98,7 @@ CASES: dict[str, dict[str, Any]] = {
         'review_status': ['validated', 'pending'],
         'source': 's',
         'class_id': 1,
-        'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+        'cluster_uids': ['6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'],
         'import_id': 'imp',
         'dataset_split': 'train',
         'label_source': 'ls',
@@ -105,8 +116,12 @@ CASES: dict[str, dict[str, Any]] = {
         'open_vocab_set': 'ov',
         'source_prompt': 'sp',
         'region_gate_skipped': True,
+        'geo_bbox': {'west': 7, 'south': 46, 'east': 9, 'north': 48},
+        'has_location': True,
     },
 }
+
+JOIN = ImageJoin(image_ids=('img-a', 'img-b'), truncated=False)
 
 
 def test_golden_covers_every_filter_field() -> None:
@@ -118,7 +133,9 @@ def test_golden_covers_every_filter_field() -> None:
 def test_clauses_match_golden(name: str) -> None:
     golden = json.loads(GOLDEN.read_text())
     assert (
-        item_filter_clauses(ItemFilter(**CASES[name]), embedding=DEFAULT_WRITE_FIELDS)
+        item_filter_clauses(
+            ItemFilter(**CASES[name]), embedding=DEFAULT_WRITE_FIELDS, image_join=JOIN
+        )
         == golden[name]
     )
 

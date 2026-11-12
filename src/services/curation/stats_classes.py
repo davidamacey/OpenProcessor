@@ -33,7 +33,11 @@ async def class_stats(
     behind it. Raises ``InvalidItemFilterError`` for a filter that cannot be built,
     :class:`StatsQueryError` when the search fails and :class:`ClassRegistryUnavailableError`
     when the registry fails."""
-    query = None if item_filter.is_empty() else filter_query(item_filter, await item_write_fields())
+    query = (
+        None
+        if item_filter.is_empty()
+        else (await filter_query(opensearch, item_filter, await item_write_fields()))[0]
+    )
     try:
         counts, aggs = await fetch_class_counts(opensearch, query=query, by_source=True)
     except Exception as exc:

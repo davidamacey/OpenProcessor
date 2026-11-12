@@ -73,7 +73,7 @@ def membership_overlap(before: list[str], now: list[str]) -> dict[str, Any]:
 
 def scope_filter(target: ClusterTarget | FilterTarget) -> ItemFilter:
     if isinstance(target, ClusterTarget):
-        return ItemFilter(cluster_uid=target.cluster_uid)
+        return ItemFilter(cluster_uids=[target.cluster_uid])
     return target.filter
 
 
@@ -83,7 +83,7 @@ def proposal_scope(target: AssistTarget) -> ItemFilter | None:
     if isinstance(target, ClusterTarget):
         return scope_filter(target)
     if isinstance(target, CropsTarget) and target.context is not None:
-        return ItemFilter(cluster_uid=target.context.cluster_uid)
+        return ItemFilter(cluster_uids=[target.context.cluster_uid])
     return None
 
 

@@ -32,17 +32,10 @@ vi.mock('maplibre-gl', () => ({
 }));
 
 import MapView from './MapView.svelte';
+import { mapMeta } from '$lib/test/fixtures/mapMeta';
 import type { MapMeta } from '$lib/types_map';
 
-const META: MapMeta = {
-  available: true,
-  location_policy: 'store',
-  n_located: 3,
-  bounds: null,
-  tile_url: '/t/{z}/{x}/{y}.png',
-  tile_attribution: '',
-  max_zoom: 12,
-};
+const META: MapMeta = mapMeta();
 
 let instance: ReturnType<typeof mount> | null = null;
 let target: HTMLDivElement;

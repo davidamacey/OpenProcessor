@@ -962,6 +962,9 @@ default state of a new box.
 | `on_negative_frame` | `true` keeps only items on a reviewed-negative frame, `false` hides them |
 | `proposed_by_import` | `true` keeps items an import proposed, `false` hides them |
 | `taken_from`, `taken_to` | inclusive ISO days on the capture time: `capture_taken_utc`, else `capture_taken_local` (floating wall-clock time read as UTC). Items with no capture time never match. `400` when `taken_from` is after `taken_to`. Part of the shared item filter, so every route that takes it accepts them |
+| `cluster_uid` | repeatable, at most 200: items in any of these clusters of the serving partition |
+| `geo_bbox`, `geo_polygon`, `has_location` | `west,south,east,north` (`west > east` crosses the antimeridian), `lon,lat;lon,lat;...` (3 to 64 vertices) and a boolean, on the stored position of the item's image, snapped to the location policy (`store_coarse` rounds the area to the stored precision, `drop` matches nothing). `400` for a malformed area |
+| `near_dup_group` | items on the images of one near-duplicate group |
 | `image_id` | repeatable, at most 200: only items on these images (the map opens the list on one cell's photos) |
 
 ### Human class writes

@@ -53,7 +53,7 @@ def stage_request(
         update={
             'embedding_state': [NOT_SELECTED, DEFERRED, FAILED],
             **({'class_id': class_id} if class_id is not None else {}),
-            **({'cluster_uid': cluster_uid} if cluster_uid is not None else {}),
+            **({'cluster_uids': [cluster_uid]} if cluster_uid is not None else {}),
         }
     )
     return ReprocessRequest(

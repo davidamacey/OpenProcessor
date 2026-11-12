@@ -33,7 +33,8 @@ def _embed_suggestion(item_filter: ItemFilter, n_unembedded: int) -> dict[str, A
     every item in the pool has a vector). Reads never embed: the client POSTs it."""
     if n_unembedded <= 0:
         return None
-    return suggested_embed_request(item_filter).model_dump(mode='json')
+    request = suggested_embed_request(item_filter)
+    return None if request is None else request.model_dump(mode='json')
 
 
 def _page(ids: list[str], page: int, page_size: int) -> list[str]:

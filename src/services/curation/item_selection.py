@@ -15,16 +15,22 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
+from src.services.curation.image_join import resolve_filter_join
+from src.services.curation.item_filter import (
+    MAX_SELECTION_IDS,
+    ItemFilter,
+    item_filter_clauses,
+    visibility_clauses,
+)
 from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from src.services.curation.image_join import ImageJoin
     from src.services.embedding_spaces.readers import WriteFields
 
-MAX_SELECTION_IDS = 5000
 
 MAX_BULK_SELECTION = 20_000
 """A filter selection above this is refused, not truncated: add a limit or a tighter filter.
@@ -71,11 +77,13 @@ class ItemSelection(BaseModel):
         return self
 
 
-def selection_query(sel: ItemSelection, embedding: WriteFields) -> dict[str, Any]:
+def selection_query(
+    sel: ItemSelection, embedding: WriteFields, image_join: ImageJoin | None = None
+) -> dict[str, Any]:
     """The items query for a filter selection (``ValueError`` from a bad band)."""
     assert sel.filter is not None
     clauses = [
-        *item_filter_clauses(sel.filter, embedding=embedding),
+        *item_filter_clauses(sel.filter, embedding=embedding, image_join=image_join),
         *visibility_clauses(
             include_test=sel.include_test,
             include_excluded=sel.include_excluded or 'excluded' in sel.filter.review_status,
@@ -147,7 +155,9 @@ async def resolve_selection(
     if sel.crop_ids is not None:
         return list(dict.fromkeys(sel.crop_ids))
     try:
-        query = selection_query(sel, await item_write_fields())
+        assert sel.filter is not None
+        join = await resolve_filter_join(opensearch, sel.filter)
+        query = selection_query(sel, await item_write_fields(), join)
     except ValueError as exc:
         raise SelectionError(str(exc)) from exc
     return await resolve_ids(

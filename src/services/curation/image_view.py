@@ -32,15 +32,19 @@ from src.services.curation.image_facts import (
     taken_at,
     thumbnail_url,
 )
+from src.services.curation.image_join import (
+    NearDupFilter,
+    image_predicate_clauses,
+    item_image_ids,
+    near_dup_clauses,
+    without_image_predicates,
+)
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
-from src.services.curation.map_cells import LOCATION_FIELD, geo_box_query, item_image_ids
 
 
 if TYPE_CHECKING:
-    from src.schemas.curation.map import MapBounds
     from src.services.embedding_spaces.readers import WriteFields
 
-NearDupFilter = Literal['member', 'representative', 'none']
 LabelState = Literal['has_unlabeled', 'all_labeled', 'no_items']
 
 DEFAULT_SORT: Final = 'indexed_at:desc'
@@ -69,8 +73,6 @@ class ImageQueryError(ValueError):
 class ImageQuery:
     item_filter: ItemFilter
     source: str | None = None
-    has_location: bool | None = None
-    geo_box: MapBounds | None = None
     in_holdout: bool | None = None
     near_dup: NearDupFilter | None = None
     label_state: LabelState | None = None
@@ -84,8 +86,6 @@ class ImageQuery:
             v is not None
             for v in (
                 self.source,
-                self.has_location,
-                self.geo_box,
                 self.in_holdout,
                 self.near_dup,
                 self.label_state,
@@ -116,22 +116,8 @@ def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if q.source is not None:
         out.append({'term': {'source': q.source}})
-    located = {'exists': {'field': LOCATION_FIELD}}
-    if q.has_location is not None:
-        if policy == 'drop':
-            out.append({'match_all': {}} if not q.has_location else {'match_none': {}})
-        else:
-            out.append(located if q.has_location else {'bool': {'must_not': located}})
-    if q.geo_box is not None:
-        out.append({'match_none': {}} if policy == 'drop' else geo_box_query(q.geo_box))
-    group = {'exists': {'field': 'near_dup_group_id'}}
-    representative = {'term': {'near_dup_is_representative': True}}
-    if q.near_dup == 'member':
-        out.append({'bool': {'filter': [group], 'must_not': [representative]}})
-    elif q.near_dup == 'representative':
-        out.append(representative)
-    elif q.near_dup == 'none':
-        out.append({'bool': {'must_not': [group]}})
+    out.extend(image_predicate_clauses(q.item_filter, policy=policy))
+    out.extend(near_dup_clauses(q.near_dup))
     return out
 
 
@@ -139,7 +125,7 @@ async def _image_query(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> tuple[dict[str, Any], bool]:
     """The images-index query for ``q`` and whether an item join was truncated."""
-    f = q.item_filter
+    f = without_image_predicates(q.item_filter)
     if q.label_state == 'no_items' and not f.is_empty():
         msg = 'label_state=no_items cannot be combined with an item filter'
         raise ImageQueryError(msg)
@@ -238,7 +224,7 @@ async def image_page(
         hidden=HiddenCounts(
             **await hidden_counts(
                 opensearch,
-                item_filter_clauses(q.item_filter, embedding=embedding),
+                item_filter_clauses(without_image_predicates(q.item_filter), embedding=embedding),
                 include_test=q.include_test,
                 include_excluded='excluded' in q.item_filter.review_status,
             )

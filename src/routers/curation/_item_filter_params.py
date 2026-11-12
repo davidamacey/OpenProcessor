@@ -11,12 +11,16 @@ across the API. Routes keep their own route-specific parameters on top.
 from __future__ import annotations
 
 import datetime as dt
+import uuid
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, Query
+from fastapi.exceptions import RequestValidationError
 
 from src.domain.embedding_state import EmbeddingState
-from src.services.curation.item_filter import IMAGE_IDS_MAX, ItemFilter, Origin, ReviewStatus
+from src.domain.geo_box import BOX_MESSAGE, POLYGON_MESSAGE, parse_geo_box, parse_geo_polygon
+from src.services.curation.item_filter import QUERY_IDS_MAX, ItemFilter, Origin, ReviewStatus
 
 
 TakenDate = Annotated[
@@ -29,6 +33,17 @@ TakenDate = Annotated[
         )
     ),
 ]
+
+
+def _parsed[T](name: str, raw: str | None, parse: Callable[[str], T], message: str) -> T | None:
+    """``parse(raw)``; a malformed value is the stock FastAPI 422 with the served ``message``."""
+    if raw is None:
+        return None
+    try:
+        return parse(raw)
+    except ValueError as exc:
+        error = {'type': 'value_error', 'loc': ('query', name), 'msg': message, 'input': raw}
+        raise RequestValidationError([error]) from exc
 
 
 def item_filter_query(
@@ -114,10 +129,42 @@ def item_filter_query(
     ] = None,
     taken_from: TakenDate = None,
     taken_to: TakenDate = None,
+    cluster_uid: Annotated[
+        list[uuid.UUID] | None,
+        Query(
+            max_length=QUERY_IDS_MAX,
+            description='Members of these clusters of the served partition, repeatable (OR; at '
+            'most 200).',
+        ),
+    ] = None,
+    geo_bbox: Annotated[
+        str | None,
+        Query(
+            description='Only items on images inside this area: west,south,east,north in '
+            'degrees (west > east crosses the antimeridian). Rounded outward under a coarse '
+            'location policy; matches nothing under `drop`.'
+        ),
+    ] = None,
+    geo_polygon: Annotated[
+        str | None,
+        Query(
+            description='Only items on images inside this ring: lon,lat;lon,lat;... with 3 to '
+            '64 vertices (closed for you). Rounded to the coarse grid under a coarse location '
+            'policy; matches nothing under `drop`.'
+        ),
+    ] = None,
+    has_location: Annotated[
+        bool | None,
+        Query(description='true = items on images with a served position; false = without one.'),
+    ] = None,
+    near_dup_group: Annotated[
+        uuid.UUID | None,
+        Query(description='Items in this near-duplicate group (or on images in it).'),
+    ] = None,
     image_id: Annotated[
         list[str] | None,
         Query(
-            max_length=IMAGE_IDS_MAX,
+            max_length=QUERY_IDS_MAX,
             description='Only items on these images, repeatable (at most 200); the map opens '
             'the list on the images of one cell this way.',
         ),
@@ -141,6 +188,11 @@ def item_filter_query(
         taken_from=taken_from,
         taken_to=taken_to,
         image_ids=image_id or [],
+        cluster_uids=cluster_uid or [],
+        geo_bbox=_parsed('geo_bbox', geo_bbox, parse_geo_box, BOX_MESSAGE),
+        geo_polygon=_parsed('geo_polygon', geo_polygon, parse_geo_polygon, POLYGON_MESSAGE),
+        has_location=has_location,
+        near_dup_group=near_dup_group,
     )
 
 
