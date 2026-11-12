@@ -128,85 +128,98 @@ export function mapRegionBoxList(raw: unknown): SlotBox[] {
   return out;
 }
 
-export function readSlot(
-  raw: Record<string, unknown>,
-  spec: SlotSpec,
+type Cap = SlotSpec['capabilities'];
+type Raw = Record<string, unknown>;
+
+function readSubBoxList(raw: Raw, sub: NonNullable<Cap['subBox']>): Partial<SlotData> {
+  // Multi-box list — always an array, [] when none (owner decision:
+  // no backward compatibility with the old scalar shape).
+  return {
+    subBoxes: mapRegionBoxList(pick(raw, sub.listField)),
+    boxSet: {
+      count: asNumber(pick(raw, sub.countField)),
+      rejectedCount: asNumber(pick(raw, sub.rejectedCountField)),
+      maxScore: asNumber(pick(raw, sub.maxScoreField)),
+      setComplete: asBoolean(pick(raw, sub.setCompleteField)),
+      revision: asNumber(pick(raw, sub.revisionField)),
+    },
+  };
+}
+
+function readSubBoxSingle(
+  raw: Raw,
+  sub: NonNullable<Cap['subBox']>,
   parentXyxy: XYXY,
-): SlotData {
+): SlotData['subBox'] {
+  const rawXyxy = asXyxy(pick(raw, sub.bboxField));
+  const frameRaw = sub.frameField ? asString(pick(raw, sub.frameField)) : null;
+  const frame: SlotFrame =
+    frameRaw === 'parent' || frameRaw === 'source'
+      ? frameRaw
+      : (sub.storedFrame ?? 'source');
+  return {
+    parent: rawXyxy ? projectToParent(rawXyxy, parentXyxy, frame) : null,
+    rawXyxy,
+    frame,
+    score: asNumber(pick(raw, sub.scoreField)),
+    visible: asBoolean(pick(raw, sub.visibleField)),
+  };
+}
+
+function readLifecycle(
+  raw: Raw,
+  lc: NonNullable<Cap['lifecycle']>,
+): SlotData['lifecycle'] {
+  const status = asString(pick(raw, lc.statusField));
+  const state = status
+    ? (lc.states.find(
+        (s) => s.value === status || (s.aliases?.includes(status) ?? false),
+      ) ?? null)
+    : null;
+  return {
+    status,
+    state,
+    verified: asBoolean(pick(raw, lc.verifiedField)),
+    validated: asBoolean(pick(raw, lc.validatedField)),
+    autoConfirmed: asBoolean(pick(raw, lc.autoConfirmedField)),
+    rejectionReason: asString(pick(raw, lc.rejectionReasonField)),
+  };
+}
+
+function readProvenance(
+  raw: Raw,
+  pv: NonNullable<Cap['provenance']>,
+): SlotData['provenance'] {
+  return {
+    detector: asString(pick(raw, pv.detectorField)),
+    detectorVersion: asString(pick(raw, pv.detectorVersionField)),
+    chain: asStringArray(pick(raw, pv.chainField)),
+    verifier: asString(pick(raw, pv.verifierField)),
+    verifierVersion: asString(pick(raw, pv.verifierVersionField)),
+    verifiedAt: asString(pick(raw, pv.verifiedAtField)),
+    detectedAt: asString(pick(raw, pv.detectedAtField)),
+  };
+}
+
+function readText(raw: Raw, tx: NonNullable<Cap['text']>): SlotData['text'] {
+  return {
+    value: asString(pick(raw, tx.valueField)),
+    raw: asString(pick(raw, tx.rawField)),
+    source: asString(pick(raw, tx.sourceField)),
+    confidence: asNumber(pick(raw, tx.confidenceField)),
+    engineVersion: asString(pick(raw, tx.engineVersionField)),
+  };
+}
+
+export function readSlot(raw: Raw, spec: SlotSpec, parentXyxy: XYXY): SlotData {
   const out: SlotData = { key: spec.key };
   const cap = spec.capabilities;
-
-  if (cap.subBox?.listField) {
-    // Multi-box list — always an array, [] when none (owner decision:
-    // no backward compatibility with the old scalar shape, so this is
-    // the only region box path; the legacy single-box block below never
-    // runs for a capability declaring listField — see next `if`).
-    out.subBoxes = mapRegionBoxList(pick(raw, cap.subBox.listField));
-    out.boxSet = {
-      count: asNumber(pick(raw, cap.subBox.countField)),
-      rejectedCount: asNumber(pick(raw, cap.subBox.rejectedCountField)),
-      maxScore: asNumber(pick(raw, cap.subBox.maxScoreField)),
-      setComplete: asBoolean(pick(raw, cap.subBox.setCompleteField)),
-      revision: asNumber(pick(raw, cap.subBox.revisionField)),
-    };
-  }
-
+  if (cap.subBox?.listField) Object.assign(out, readSubBoxList(raw, cap.subBox));
   if (cap.subBox && cap.subBox.bboxField != null && cap.subBox.listField == null) {
-    const rawXyxy = asXyxy(pick(raw, cap.subBox.bboxField));
-    const frameRaw = cap.subBox.frameField
-      ? asString(pick(raw, cap.subBox.frameField))
-      : null;
-    const frame: SlotFrame =
-      frameRaw === 'parent' || frameRaw === 'source'
-        ? frameRaw
-        : (cap.subBox.storedFrame ?? 'source');
-    out.subBox = {
-      parent: rawXyxy ? projectToParent(rawXyxy, parentXyxy, frame) : null,
-      rawXyxy,
-      frame,
-      score: asNumber(pick(raw, cap.subBox.scoreField)),
-      visible: asBoolean(pick(raw, cap.subBox.visibleField)),
-    };
+    out.subBox = readSubBoxSingle(raw, cap.subBox, parentXyxy);
   }
-
-  if (cap.text?.valueField) {
-    out.text = {
-      value: asString(pick(raw, cap.text.valueField)),
-      raw: asString(pick(raw, cap.text.rawField)),
-      source: asString(pick(raw, cap.text.sourceField)),
-      confidence: asNumber(pick(raw, cap.text.confidenceField)),
-      engineVersion: asString(pick(raw, cap.text.engineVersionField)),
-    };
-  }
-
-  if (cap.provenance) {
-    out.provenance = {
-      detector: asString(pick(raw, cap.provenance.detectorField)),
-      detectorVersion: asString(pick(raw, cap.provenance.detectorVersionField)),
-      chain: asStringArray(pick(raw, cap.provenance.chainField)),
-      verifier: asString(pick(raw, cap.provenance.verifierField)),
-      verifierVersion: asString(pick(raw, cap.provenance.verifierVersionField)),
-      verifiedAt: asString(pick(raw, cap.provenance.verifiedAtField)),
-      detectedAt: asString(pick(raw, cap.provenance.detectedAtField)),
-    };
-  }
-
-  if (cap.lifecycle) {
-    const status = asString(pick(raw, cap.lifecycle.statusField));
-    const state = status
-      ? (cap.lifecycle.states.find(
-          (s) => s.value === status || (s.aliases?.includes(status) ?? false),
-        ) ?? null)
-      : null;
-    out.lifecycle = {
-      status,
-      state,
-      verified: asBoolean(pick(raw, cap.lifecycle.verifiedField)),
-      validated: asBoolean(pick(raw, cap.lifecycle.validatedField)),
-      autoConfirmed: asBoolean(pick(raw, cap.lifecycle.autoConfirmedField)),
-      rejectionReason: asString(pick(raw, cap.lifecycle.rejectionReasonField)),
-    };
-  }
-
+  if (cap.text?.valueField) out.text = readText(raw, cap.text);
+  if (cap.provenance) out.provenance = readProvenance(raw, cap.provenance);
+  if (cap.lifecycle) out.lifecycle = readLifecycle(raw, cap.lifecycle);
   return out;
 }

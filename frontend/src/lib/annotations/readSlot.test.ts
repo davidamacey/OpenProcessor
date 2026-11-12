@@ -35,28 +35,29 @@ describe('multi-box mapping (region_boxes)', () => {
       detected_at: '2026-10-01T00:00:00Z',
       thumbnail_url: '/curation/crops/c_123/region_thumbnail?box_id=b1',
     });
-    expect(box).not.toBeNull();
-    expect(box?.boxId).toBe('b1');
-    expect(box?.state).toBe('accepted');
-    expect(box?.rawXyxy).toEqual([0.41, 0.62, 0.47, 0.71]);
-    expect(box?.parent).toEqual({ cx: 0.21, cy: 0.84, w: 0.18, h: 0.28 });
-    expect(box?.text).toBe('TAG-001');
-    expect(box?.textRaw).toBe('tag-001');
-    expect(box?.textSource).toBe('gemma');
+    expect(box).toMatchObject({
+      boxId: 'b1',
+      state: 'accepted',
+      rawXyxy: [0.41, 0.62, 0.47, 0.71],
+      parent: { cx: 0.21, cy: 0.84, w: 0.18, h: 0.28 },
+      text: 'TAG-001',
+      textRaw: 'tag-001',
+      textSource: 'gemma',
+      textReader: 'paddleocr_rec_trt',
+      textReaderVersion: '2',
+      textVlm: 'TAG-001',
+      textOcr: 'TAG-008',
+      textDisagreement: true,
+      textChoice: 'vlm_preferred',
+      textVlmInvalid: 'sequence',
+      locked: true,
+      bboxCorrect: true,
+      clusterUid: '0b9f9a38-0000-4000-8000-00000000000c',
+      detectedAt: '2026-10-01T00:00:00Z',
+      thumbnailUrl: '/curation/crops/c_123/region_thumbnail?box_id=b1',
+    });
     expect(box?.textConfidence).toBeCloseTo(0.8);
-    expect(box?.textReader).toBe('paddleocr_rec_trt');
-    expect(box?.textReaderVersion).toBe('2');
-    expect(box?.textVlm).toBe('TAG-001');
-    expect(box?.textOcr).toBe('TAG-008');
-    expect(box?.textDisagreement).toBe(true);
-    expect(box?.textChoice).toBe('vlm_preferred');
-    expect(box?.textVlmInvalid).toBe('sequence');
-    expect(box?.locked).toBe(true);
-    expect(box?.bboxCorrect).toBe(true);
-    expect(box?.clusterUid).toBe('0b9f9a38-0000-4000-8000-00000000000c');
     expect(box?.clusterScore).toBeCloseTo(0.8);
-    expect(box?.detectedAt).toBe('2026-10-01T00:00:00Z');
-    expect(box?.thumbnailUrl).toBe('/curation/crops/c_123/region_thumbnail?box_id=b1');
   });
 
   it('leaves the text keys null when the profile serves none (a text-free box)', () => {
