@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING, Any, Final
 
 from src.config.curation_accessors import images_index, items_index
 from src.schemas.curation.selection import ClassCount, SelectionSummary
-from src.services.curation.image_join import JOIN_MAX_IMAGES, LOCATION_FIELD
+from src.services.curation.image_join import (
+    JOIN_MAX_IMAGES,
+    LOCATION_FIELD,
+    join_truncated,
+    resolve_image_join,
+)
 from src.services.curation.item_selection import (
     MAX_BULK_SELECTION,
     ItemSelection,
@@ -40,11 +45,17 @@ def summary_text(detections: int, images: int, locked: int) -> str:
     return f'{text} · {locked} locked, skipped' if locked else text
 
 
-def _query(sel: ItemSelection, embedding: WriteFields) -> dict[str, Any]:
+async def _query(
+    opensearch: Any, sel: ItemSelection, embedding: WriteFields, policy: str
+) -> tuple[dict[str, Any], bool]:
+    """``(query, image join truncated)``; a filter's image predicates are resolved on the images
+    index first, as :func:`resolve_selection` does."""
     if sel.crop_ids is not None:
-        return {'terms': {'crop_id': list(dict.fromkeys(sel.crop_ids))}}
+        return {'terms': {'crop_id': list(dict.fromkeys(sel.crop_ids))}}, False
+    assert sel.filter is not None
+    join = await resolve_image_join(opensearch, sel.filter, policy=policy)
     try:
-        return selection_query(sel, embedding)
+        return selection_query(sel, embedding, join), join_truncated(join)
     except ValueError as exc:
         raise SelectionError(str(exc)) from exc
 
@@ -79,12 +90,13 @@ async def selection_summary(
     opensearch: Any, sel: ItemSelection, embedding: WriteFields, policy: str
 ) -> SelectionSummary:
     """Counts for the selection in one query on the items index, plus the images' positions."""
+    query, selection_truncated = await _query(opensearch, sel, embedding, policy)
     resp = await opensearch.search(
         index=items_index(),
         body={
             'size': 0,
             'track_total_hits': True,
-            'query': _query(sel, embedding),
+            'query': query,
             'aggs': {
                 'image_count': {'cardinality': {'field': 'image_id'}},
                 'images': {'terms': {'field': 'image_id', 'size': JOIN_MAX_IMAGES}},
@@ -143,6 +155,6 @@ async def selection_summary(
         taken_from=_iso(aggs['taken_from']),
         taken_to=_iso(aggs['taken_to']),
         located=await _located(opensearch, image_ids, policy),
-        join_truncated=image_buckets.get('sum_other_doc_count', 0) > 0,
+        join_truncated=selection_truncated or image_buckets.get('sum_other_doc_count', 0) > 0,
         summary_text=summary_text(detections, images, locked),
     )

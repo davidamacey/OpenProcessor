@@ -122,3 +122,17 @@ def test_over_the_bulk_cap_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(_world(), monkeypatch)
     response = client.post(URL, json={'filter': {'image_ids': ['img-a', 'img-b']}})
     assert response.status_code == 422
+
+
+def test_a_location_filter_resolves_the_image_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client(_world(), monkeypatch)
+    body = client.post(URL, json={'filter': {'has_location': True}}).json()
+    assert (body['detections'], body['images']) == (2, 1)
+    assert body['located'] == 1
+
+
+def test_a_geo_box_filter_resolves_the_image_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client(_world(), monkeypatch)
+    box = {'west': 0.0, 'south': 0.0, 'east': 5.0, 'north': 5.0}
+    body = client.post(URL, json={'filter': {'geo_bbox': box}}).json()
+    assert (body['detections'], body['images']) == (2, 1)
