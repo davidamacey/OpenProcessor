@@ -56,7 +56,6 @@ src/services/curation/dataset_import/upload.py	1	suppressions recorded when the 
 src/services/curation/edit_history.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/item_scores/mistakenness.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/item_scores/uniqueness.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
-src/services/curation/stale_label_source_repair.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/strategy_defaults.py	2	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/curation/worker_liveness.py	1	suppressions recorded when the ratchet landed; fix or justify, then lower
 src/services/detection/profile_registry.py	3	suppressions recorded when the ratchet landed; fix or justify, then lower

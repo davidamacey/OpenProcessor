@@ -110,3 +110,19 @@ async def test_apply_repairs_skips_a_doc_changed_since_the_plan() -> None:
     counts = await repair.apply_repairs(fake, plans, index=INDEX)
     assert counts['skipped_changed'] == 1
     assert counts['repaired'] == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_repairs_counts_an_opensearch_failure_as_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from opensearchpy.exceptions import ConnectionError as OSConnectionError
+
+    async def _boom(*_a: object, **_k: object) -> None:
+        raise OSConnectionError('N/A', 'down', Exception('down'))
+
+    fake = QueryFakeOpenSearch({INDEX: _docs()})
+    plans = await repair.plan_repairs(fake, index=INDEX)
+    monkeypatch.setattr('src.services.curation.repair_scan.occ_update_one', _boom)
+    counts = await repair.apply_repairs(fake, plans, index=INDEX)
+    assert counts == {'repaired': 0, 'skipped_changed': 0, 'errors': 2}

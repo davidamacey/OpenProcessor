@@ -17,9 +17,6 @@ scripts/codegen/check_cited_paths.py <-> scripts/codegen/check_process_ids.py	20
 scripts/codegen/check_cited_paths.py <-> scripts/codegen/check_process_state.py	14	baseline at introduction; extract a shared helper to shrink
 scripts/curation/bakeoff/backends/coreml.py <-> scripts/curation/bakeoff/backends/onnxruntime_ort.py	23	baseline at introduction; extract a shared helper to shrink
 scripts/curation/prune_exports.py <-> scripts/curation/prune_training_runs.py	27	baseline at introduction; extract a shared helper to shrink
-scripts/curation/repair_empty_vlm_answers.py <-> scripts/curation/repair_stale_label_source.py	26	baseline at introduction; extract a shared helper to shrink
-scripts/curation/repair_empty_vlm_answers.py <-> scripts/curation/repair_unmatched_class.py	48	baseline at introduction; extract a shared helper to shrink
-scripts/curation/repair_stale_label_source.py <-> scripts/curation/repair_unmatched_class.py	26	baseline at introduction; extract a shared helper to shrink
 scripts/datasets/fetch_face_proxy.py <-> scripts/datasets/fetch_vehicle_proxy.py	17	baseline at introduction; extract a shared helper to shrink
 scripts/research/cluster_diag/class_prior_run.py <-> scripts/research/cluster_diag/y_run.py	16	baseline at introduction; extract a shared helper to shrink
 scripts/research/gpu_pipeline/pr0_stage_split.py <-> scripts/research/gpu_pipeline/pr2_resize_ops.py	15	baseline at introduction; extract a shared helper to shrink
@@ -32,4 +29,3 @@ src/routers/curation/search.py <-> src/routers/curation/search.py	39	baseline at
 src/routers/curation/search.py <-> src/routers/curation/search_image.py	13	baseline at introduction; extract a shared helper to shrink
 src/services/config_store/ingest_profiles.py <-> src/services/config_store/open_vocab.py	42	baseline at introduction; extract a shared helper to shrink
 src/services/curation/export_single_class_rows.py <-> src/services/curation/export_single_class_rows.py	13	baseline at introduction; extract a shared helper to shrink
-src/services/curation/stale_label_source_repair.py <-> src/services/curation/unmatched_class_repair.py	60	baseline at introduction; extract a shared helper to shrink
