@@ -128,6 +128,8 @@ export interface SlotBox {
   textChoice: string | null;
   /** Why the VLM's own reading was rejected as not text, when it was. */
   textVlmInvalid: string | null;
+  /** The served name: the read text, else the region name and the box's place in the list. */
+  displayName: string | null;
   /** The box's cluster in the serving region partition, and its score. */
   clusterUid: string | null;
   clusterScore: number | null;

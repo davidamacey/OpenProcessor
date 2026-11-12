@@ -160,6 +160,8 @@ def _filter_routes() -> list[tuple[str, str]]:
 # Route-specific parameters a route needs besides the filter, and the path parameters.
 EXTRA_PARAMS: dict[str, dict[str, Any]] = {
     '/map/cells': {'zoom': 6},
+    '/crops/locate': {'crop_id': 'a1'},
+    '/images/locate': {'target_image_id': 'img-a'},
     '/review/{tab}/locate': {'crop_id': 'a1'},
     '/search/similar': {'crop_id': 'a1'},
     '/search/text': {'q': 'car'},

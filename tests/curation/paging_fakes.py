@@ -81,6 +81,27 @@ class PagingOpenSearch(QueryFakeOpenSearch):
         return {'hits': {'total': {'value': total}, 'hits': hits}}
 
 
+class AggregatingPagingOpenSearch(PagingOpenSearch):
+    """Total ordering for page reads; aggregation reads (the item join) go to the base fake."""
+
+    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
+        if 'aggs' in body or 'aggregations' in body:
+            return await QueryFakeOpenSearch.search(self, index=index, body=body, **kw)
+        return await super().search(index=index, body=body, **kw)
+
+
+def images_client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    """``crops_client`` with the location policy of the image routes pinned to ``store``."""
+    from src.routers.curation import images_view, table_view
+
+    async def _policy() -> str:
+        return 'store'
+
+    for module in (images_view, table_view):
+        monkeypatch.setattr(module, 'get_location_policy', _policy)
+    return crops_client(fake, monkeypatch)
+
+
 def crops_client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

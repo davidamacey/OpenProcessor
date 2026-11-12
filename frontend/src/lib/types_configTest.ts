@@ -139,6 +139,8 @@ export interface RegionTestCandidate {
   detector_version: string | null;
   drop_reason: 'below_min_score' | 'nms' | 'over_max' | null;
   locked: boolean;
+  /** Served name: the read text, else the region name and order. */
+  display_name: string;
   mask_iou: number | null;
   mask_polygon: number[][] | null;
   mask_polygon_in_parent: number[][] | null;

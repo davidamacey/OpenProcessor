@@ -395,14 +395,17 @@ export interface CropHistoryResponse {
 
 /** A box to draw over an image, in image coordinates, with the label and tone the
  *  backend decided (`BoxView`). */
+export type BoxTone = 'validated' | 'machine' | 'unlabeled' | 'holdout' | 'rejected';
+
 export interface ImageBox {
   crop_id: string;
   box_id: string | null;
   kind: 'item' | 'region';
   bbox_norm: [number, number, number, number];
   label: string;
+  label_kind: 'class' | 'proposed' | 'detector' | 'region' | 'none';
   class_name: string | null;
-  tone: 'validated' | 'machine' | 'unlabeled' | 'holdout' | 'rejected';
+  tone: BoxTone;
   state: string | null;
 }
 

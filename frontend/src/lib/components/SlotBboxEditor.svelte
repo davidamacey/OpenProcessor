@@ -23,6 +23,7 @@
   import { keymapStore } from '$stores/keymap.svelte';
   import type { Crop } from '$lib/types';
   import { slotOf } from '$lib/annotations/cropSlots';
+  import { toCanvasBoxes } from '$lib/annotations/multiBox';
   import MultiBoxCanvas from './MultiBoxCanvas.svelte';
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
@@ -128,14 +129,7 @@
   <MultiBoxCanvas
     bind:this={multiBoxCanvasEl}
     cropId={crop.id}
-    boxes={multiBox.boxes
-      .filter((b) => b.box != null)
-      .map((b) => ({
-        box: b.box!,
-        state: b.state,
-        label: `${activeSlot.label.title} (${multiBoxStateLabel(b.state)})`,
-        locked: b.boxId != null && lockedBoxIds.has(b.boxId),
-      }))}
+    boxes={toCanvasBoxes(multiBox.boxes, activeSlot.label.title, lockedBoxIds)}
     selectedIndex={multiBox.selectedIndex}
     busy={multiBox.busy}
     maxBoxes={multiBox.maxBoxes}

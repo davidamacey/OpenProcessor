@@ -27,6 +27,7 @@ export function makeSlotBox(overrides: Partial<SlotBox> = {}): SlotBox {
     textDisagreement: null,
     textChoice: null,
     textVlmInvalid: null,
+    displayName: null,
     clusterUid: null,
     clusterScore: null,
     detectedAt: null,

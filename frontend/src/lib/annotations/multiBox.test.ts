@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   toEditableBoxes,
+  toCanvasBoxes,
   nextBoxIndex,
   removeBoxAt,
   addBox,
@@ -47,18 +48,21 @@ describe('removeBoxAt (Backspace/Delete)', () => {
       state: 'accepted',
       box: { cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 },
       dirty: false,
+      displayName: null,
     },
     {
       boxId: 'b2',
       state: 'proposed',
       box: { cx: 0.5, cy: 0.5, w: 0.1, h: 0.1 },
       dirty: false,
+      displayName: null,
     },
     {
       boxId: 'b3',
       state: 'rejected',
       box: { cx: 0.9, cy: 0.9, w: 0.1, h: 0.1 },
       dirty: false,
+      displayName: null,
     },
   ];
 
@@ -107,12 +111,14 @@ describe('buildRegionsPutBoxes (W8.8 write shape)', () => {
       state: 'proposed',
       box: { cx: 0.1, cy: 0.1, w: 0.1, h: 0.1 },
       dirty: false,
+      displayName: null,
     },
     {
       boxId: 'b2',
       state: 'rejected',
       box: { cx: 0.5, cy: 0.5, w: 0.1, h: 0.1 },
       dirty: false,
+      displayName: null,
     },
   ];
 
@@ -124,7 +130,12 @@ describe('buildRegionsPutBoxes (W8.8 write shape)', () => {
   it('sends a moved box as {box_id, bbox_norm}, keeping its state out of the body', () => {
     const edited = original.map((b) =>
       b.boxId === 'b1'
-        ? { ...b, box: { cx: 0.2, cy: 0.2, w: 0.1, h: 0.1 }, dirty: true }
+        ? {
+            ...b,
+            box: { cx: 0.2, cy: 0.2, w: 0.1, h: 0.1 },
+            dirty: true,
+            displayName: null,
+          }
         : b,
     );
     const result = buildRegionsPutBoxes(original, edited);
@@ -151,6 +162,7 @@ describe('buildRegionsPutBoxes (W8.8 write shape)', () => {
             box: { cx: 0.3, cy: 0.3, w: 0.1, h: 0.1 },
             state: 'accepted',
             dirty: true,
+            displayName: null,
           }
         : b,
     );
@@ -169,6 +181,7 @@ describe('buildRegionsPutBoxes (W8.8 write shape)', () => {
         state: 'accepted',
         box: { cx: 0.7, cy: 0.7, w: 0.1, h: 0.1 },
         dirty: true,
+        displayName: null,
       },
     ]);
     const result = buildRegionsPutBoxes(original, edited);
@@ -188,10 +201,16 @@ describe('buildRegionsPutBoxes (W8.8 write shape)', () => {
 describe('confirmProposedBoxes (Enter — owner decision)', () => {
   it('flips only proposed boxes to accepted, leaving rejected/false_positive untouched', () => {
     const boxes: EditableBox[] = [
-      { boxId: 'b1', state: 'proposed', box: null, dirty: false },
-      { boxId: 'b2', state: 'rejected', box: null, dirty: false },
-      { boxId: 'b3', state: 'false_positive', box: null, dirty: false },
-      { boxId: 'b4', state: 'accepted', box: null, dirty: false },
+      { boxId: 'b1', state: 'proposed', box: null, dirty: false, displayName: null },
+      { boxId: 'b2', state: 'rejected', box: null, dirty: false, displayName: null },
+      {
+        boxId: 'b3',
+        state: 'false_positive',
+        box: null,
+        dirty: false,
+        displayName: null,
+      },
+      { boxId: 'b4', state: 'accepted', box: null, dirty: false, displayName: null },
     ];
     const result = confirmProposedBoxes(boxes);
     expect(result.map((b) => b.state)).toEqual([
@@ -206,14 +225,31 @@ describe('confirmProposedBoxes (Enter — owner decision)', () => {
 describe('hasAcceptedBox', () => {
   it('is false when every box is rejected (server would 422 no_accepted_box)', () => {
     const boxes: EditableBox[] = [
-      { boxId: 'b1', state: 'rejected', box: null, dirty: false },
+      { boxId: 'b1', state: 'rejected', box: null, dirty: false, displayName: null },
     ];
     expect(hasAcceptedBox(boxes)).toBe(false);
   });
   it('is true with at least one accepted box', () => {
     const boxes: EditableBox[] = [
-      { boxId: 'b1', state: 'accepted', box: null, dirty: false },
+      { boxId: 'b1', state: 'accepted', box: null, dirty: false, displayName: null },
     ];
     expect(hasAcceptedBox(boxes)).toBe(true);
+  });
+});
+
+describe('toCanvasBoxes', () => {
+  it('region box labels are the served display names', () => {
+    const editable = toEditableBoxes([
+      box({ boxId: 'b1', displayName: 'ABC123' }),
+      box({ boxId: 'b2', displayName: 'Plate 2', locked: true }),
+    ]);
+    const canvas = toCanvasBoxes(editable, 'Plate', new Set(['b2']));
+    expect(canvas.map((b) => b.label)).toEqual(['ABC123', 'Plate 2']);
+    expect(canvas.map((b) => b.locked)).toEqual([false, true]);
+  });
+
+  it('a box not yet saved is named by the region name alone', () => {
+    const { boxes } = addBox([], { cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 });
+    expect(toCanvasBoxes(boxes, 'Plate', new Set())[0]!.label).toBe('Plate');
   });
 });

@@ -3725,8 +3725,20 @@
             "type": "string"
           },
           "label": {
-            "description": "The text to show on the box: the class name, or \"unlabeled\".",
+            "description": "The text to show on the box: the item display name or the region text.",
             "title": "Label",
+            "type": "string"
+          },
+          "label_kind": {
+            "description": "Where `label` came from.",
+            "enum": [
+              "class",
+              "proposed",
+              "detector",
+              "region",
+              "none"
+            ],
+            "title": "Label Kind",
             "type": "string"
           },
           "state": {
@@ -3759,6 +3771,7 @@
           "kind",
           "bbox_norm",
           "label",
+          "label_kind",
           "tone"
         ],
         "title": "BoxView",
@@ -4721,6 +4734,25 @@
           "job_id"
         ],
         "title": "CancelResponse",
+        "type": "object"
+      },
+      "ClassCount": {
+        "properties": {
+          "class_name": {
+            "description": "A class name, `unlabeled` or `other` (the rest).",
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "ClassCount",
         "type": "object"
       },
       "ClassCreateRequest": {
@@ -7406,6 +7438,7 @@
               "name_conflict",
               "invalid_transition",
               "cursor_invalid",
+              "unknown_column",
               "export_outside_project",
               "empty_val_split",
               "model_not_found",
@@ -13580,6 +13613,100 @@
           "in_holdout"
         ],
         "title": "ImageInfo",
+        "type": "object"
+      },
+      "ImageLocate": {
+        "description": "``GET /images/locate``: where an image sits in the list the same filters and sort serve.",
+        "properties": {
+          "cursor_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the page right after this image; null when not in it.",
+            "title": "Cursor After"
+          },
+          "cursor_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` to `GET /images` for the page that starts at this image; null for the first row and when not in the list.",
+            "title": "Cursor Before"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "in_view": {
+            "title": "In View",
+            "type": "boolean"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0-based position in the list; null when not in it.",
+            "title": "Index"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "filtered_out"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not in the list; null when in_view.",
+            "title": "Reason"
+          },
+          "reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served sentence for `reason`.",
+            "title": "Reason Message"
+          },
+          "total": {
+            "description": "Images in the list.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "image_id",
+          "in_view",
+          "index",
+          "total",
+          "cursor_before",
+          "cursor_after",
+          "reason",
+          "reason_message"
+        ],
+        "title": "ImageLocate",
         "type": "object"
       },
       "ImageLocation": {
@@ -30915,6 +31042,10 @@
             ],
             "title": "Detector Version"
           },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
           "drop_reason": {
             "anyOf": [
               {
@@ -31209,6 +31340,7 @@
           "cluster_assigned_by",
           "detected_at",
           "locked",
+          "display_name",
           "bbox_in_parent",
           "thumbnail_url",
           "candidate_index",
@@ -37208,6 +37340,89 @@
         "title": "SelectionDryRunResponse",
         "type": "object"
       },
+      "SelectionSummary": {
+        "properties": {
+          "by_class": {
+            "description": "The 10 largest classes, then `other`.",
+            "items": {
+              "$ref": "#/components/schemas/ClassCount"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "detections": {
+            "title": "Detections",
+            "type": "integer"
+          },
+          "images": {
+            "title": "Images",
+            "type": "integer"
+          },
+          "in_holdout": {
+            "title": "In Holdout",
+            "type": "integer"
+          },
+          "join_truncated": {
+            "description": "More images matched than the position count used.",
+            "title": "Join Truncated",
+            "type": "boolean"
+          },
+          "located": {
+            "description": "Images with a position the location policy lets be served.",
+            "title": "Located",
+            "type": "integer"
+          },
+          "locked": {
+            "description": "Detections a bulk write skips: a person or an import set their class or boxes, or they sit in the test holdout.",
+            "title": "Locked",
+            "type": "integer"
+          },
+          "summary_text": {
+            "description": "\"183 detections in 41 images · 7 locked, skipped\".",
+            "title": "Summary Text",
+            "type": "string"
+          },
+          "taken_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken From"
+          },
+          "taken_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taken To"
+          }
+        },
+        "required": [
+          "detections",
+          "images",
+          "clusters",
+          "locked",
+          "in_holdout",
+          "by_class",
+          "located",
+          "join_truncated",
+          "summary_text"
+        ],
+        "title": "SelectionSummary",
+        "type": "object"
+      },
       "ServingActivateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -37971,6 +38186,282 @@
           "precision"
         ],
         "title": "StratumMetrics",
+        "type": "object"
+      },
+      "TableCell": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "enum": [
+                  "validated",
+                  "machine",
+                  "unlabeled",
+                  "holdout",
+                  "rejected",
+                  "muted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The raw wire value the text was made from.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TableCell",
+        "type": "object"
+      },
+      "TableColumn": {
+        "properties": {
+          "align": {
+            "enum": [
+              "start",
+              "end",
+              "center"
+            ],
+            "title": "Align",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "thumbnail",
+              "text",
+              "number",
+              "date",
+              "badge"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sortable": {
+            "title": "Sortable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "sortable",
+          "align",
+          "kind"
+        ],
+        "title": "TableColumn",
+        "type": "object"
+      },
+      "TableColumns": {
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/TableColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "default": {
+            "description": "The column ids shown when `columns` is not given.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Default",
+            "type": "array"
+          },
+          "rows": {
+            "enum": [
+              "detections",
+              "images"
+            ],
+            "title": "Rows",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rows",
+          "columns",
+          "default"
+        ],
+        "title": "TableColumns",
+        "type": "object"
+      },
+      "TablePage": {
+        "properties": {
+          "columns": {
+            "description": "The requested columns, in order.",
+            "items": {
+              "$ref": "#/components/schemas/TableColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "empty_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Message"
+          },
+          "empty_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_items",
+                  "no_match"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Reason"
+          },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TableRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "join_truncated": {
+            "title": "Join Truncated",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; pass back as `cursor`. Null on the last page.",
+            "title": "Next Cursor"
+          },
+          "rows": {
+            "enum": [
+              "detections",
+              "images"
+            ],
+            "title": "Rows",
+            "type": "string"
+          },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "description": "One per sortable column and direction; `id` is `<column>:<asc|desc>`.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "columns",
+          "items",
+          "total",
+          "limit",
+          "sort_applied",
+          "sort_options",
+          "hidden",
+          "join_truncated"
+        ],
+        "title": "TablePage",
+        "type": "object"
+      },
+      "TableRow": {
+        "properties": {
+          "cells": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableCell"
+            },
+            "title": "Cells",
+            "type": "object"
+          },
+          "crop_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The item of a detection row; null on an image row.",
+            "title": "Crop Id"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "title": "Thumbnail Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "image_id",
+          "thumbnail_url",
+          "cells"
+        ],
+        "title": "TableRow",
         "type": "object"
       },
       "Target": {
@@ -41963,6 +42454,105 @@
           }
         },
         "title": "WatchTriggerWire",
+        "type": "object"
+      },
+      "WorkflowStep": {
+        "properties": {
+          "detail": {
+            "description": "A served sentence with the counts behind `done`.",
+            "title": "Detail",
+            "type": "string"
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "id": {
+            "enum": [
+              "ingest",
+              "classes",
+              "cluster",
+              "activate",
+              "label",
+              "hotkeys",
+              "near_dups",
+              "export",
+              "train",
+              "review_disagreements"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "What to do, for example \"Create classes from the detector\".",
+            "title": "Label",
+            "type": "string"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional search string for the link.",
+            "title": "Query"
+          },
+          "section": {
+            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, `export` or `train`.",
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "detail",
+          "done",
+          "section"
+        ],
+        "title": "WorkflowStep",
+        "type": "object"
+      },
+      "WorkflowSteps": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowStep"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first step that is not done."
+          },
+          "steps": {
+            "description": "The loop, in order.",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "workspace_default_view": {
+            "description": "`clusters` when an item partition serves, else `gallery`.",
+            "enum": [
+              "gallery",
+              "clusters"
+            ],
+            "title": "Workspace Default View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "steps",
+          "next",
+          "workspace_default_view"
+        ],
+        "title": "WorkflowSteps",
         "type": "object"
       },
       "WriteFailure": {
@@ -53265,100 +53855,6 @@
             }
           },
           {
-            "description": "Ingest source tag.",
-            "in": "query",
-            "name": "source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Ingest source tag.",
-              "title": "Source"
-            }
-          },
-          {
-            "description": "true = images with a held-out item; false = none.",
-            "in": "query",
-            "name": "in_holdout",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "true = images with a held-out item; false = none.",
-              "title": "In Holdout"
-            }
-          },
-          {
-            "description": "member = in a group and not its representative; representative; none = in no group.",
-            "in": "query",
-            "name": "near_dup",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "member",
-                    "representative",
-                    "none"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "member = in a group and not its representative; representative; none = in no group.",
-              "title": "Near Dup"
-            }
-          },
-          {
-            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
-            "in": "query",
-            "name": "label_state",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "has_unlabeled",
-                    "all_labeled",
-                    "no_items"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
-              "title": "Label State"
-            }
-          },
-          {
-            "description": "One of the `sort_options` ids the response serves.",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "default": "indexed_at:desc",
-              "description": "One of the `sort_options` ids the response serves.",
-              "title": "Sort",
-              "type": "string"
-            }
-          },
-          {
             "description": "`next_cursor` of the previous page (same sort).",
             "in": "query",
             "name": "cursor",
@@ -53386,18 +53882,6 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Count and draw held-out test items too.",
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Count and draw held-out test items too.",
-              "title": "Include Test",
-              "type": "boolean"
             }
           },
           {
@@ -53856,6 +54340,118 @@
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
             }
+          },
+          {
+            "description": "Ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true = images with a held-out item; false = none.",
+            "in": "query",
+            "name": "in_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = images with a held-out item; false = none.",
+              "title": "In Holdout"
+            }
+          },
+          {
+            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "in": "query",
+            "name": "near_dup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "member",
+                    "representative",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "title": "Near Dup"
+            }
+          },
+          {
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "has_unlabeled",
+                    "all_labeled",
+                    "no_items"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "title": "Label State"
+            }
+          },
+          {
+            "description": "One of the `sort_options` ids the response serves.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of the `sort_options` ids the response serves.",
+              "title": "Sort"
+            }
+          },
+          {
+            "description": "Count and draw held-out test items too.",
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count and draw held-out test items too.",
+              "title": "Include Test",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -53931,6 +54527,630 @@
         "summary": "Thumbnail Cache Stats",
         "tags": [
           "Curation - Images"
+        ]
+      }
+    },
+    "/curation/projects/{project}/images/locate": {
+      "get": {
+        "description": "Where `target_image_id` sits in the list `GET /images` serves for the same filters and sort.\n\n`index` is the 0-based position; `cursor_before` starts a page at the image (null for the first\nrow) and `cursor_after` resumes right after it. Not in the list: `index` and the cursors are\nnull and `reason` is `not_found` or `filtered_out`.",
+        "operationId": "locate_image_in_list_curation_projects__project__images_locate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The image to find. (`image_id` is the item filter, so it cannot be used.)",
+            "in": "query",
+            "name": "target_image_id",
+            "required": true,
+            "schema": {
+              "description": "The image to find. (`image_id` is the item filter, so it cannot be used.)",
+              "title": "Target Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+            "in": "query",
+            "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+              "title": "Cluster Uid"
+            }
+          },
+          {
+            "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_polygon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Polygon"
+            }
+          },
+          {
+            "description": "true = items on images with a served position; false = without one.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items on images with a served position; false = without one.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "Items in this near-duplicate group (or on images in it).",
+            "in": "query",
+            "name": "near_dup_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items in this near-duplicate group (or on images in it).",
+              "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+            "in": "query",
+            "name": "image_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
+            }
+          },
+          {
+            "description": "Ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true = images with a held-out item; false = none.",
+            "in": "query",
+            "name": "in_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = images with a held-out item; false = none.",
+              "title": "In Holdout"
+            }
+          },
+          {
+            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "in": "query",
+            "name": "near_dup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "member",
+                    "representative",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "title": "Near Dup"
+            }
+          },
+          {
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "has_unlabeled",
+                    "all_labeled",
+                    "no_items"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "title": "Label State"
+            }
+          },
+          {
+            "description": "One of the `sort_options` ids the response serves.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of the `sort_options` ids the response serves.",
+              "title": "Sort"
+            }
+          },
+          {
+            "description": "Count and draw held-out test items too.",
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count and draw held-out test items too.",
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageLocate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Locate Image In List",
+        "tags": [
+          "Curation",
+          "Images"
         ]
       }
     },
@@ -59362,6 +60582,50 @@
         "tags": [
           "Curation",
           "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/next_steps": {
+      "get": {
+        "description": "The curation loop in order, which steps are done, the first one that is not, and the view\nthe Workspace opens on (`clusters` when an item clustering serves, else `gallery`).",
+        "operationId": "get_next_steps_curation_projects__project__next_steps_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowSteps"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Next Steps",
+        "tags": [
+          "Curation",
+          "Workflow"
         ]
       }
     },
@@ -69161,6 +70425,60 @@
         ]
       }
     },
+    "/curation/projects/{project}/selection/summary": {
+      "post": {
+        "description": "Detections, images, clusters, locks and classes of a selection, counted in one query on\nthe items index. Refused with 422 when the selection names more than the bulk-write cap.",
+        "operationId": "post_selection_summary_curation_projects__project__selection_summary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Selection Summary",
+        "tags": [
+          "Curation",
+          "Selection"
+        ]
+      }
+    },
     "/curation/projects/{project}/settings": {
       "get": {
         "description": "Current shared curation-strategy defaults.\n\nNo document yet (nothing has ever been ``PUT``) is not an error --\nit means \"no shared override for any axis,\" reported as\n``defaults: {}``, ``updated_at: null``, ``updated_by: null``.\n\n``prompt_pack`` / ``detection_profile`` are reported from the config\nstore's activation, not this settings document -- see\n:func:`_config_store_axis_defaults`.",
@@ -70375,6 +71693,743 @@
         "summary": "Stats Dataset Route",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/table": {
+      "get": {
+        "description": "A page of detection or image rows under the shared item filter. `sort` is\n`<column>:<asc|desc>` over the sortable columns (`sort_options`); `rows=images` also takes the\nimage-only filters of `GET /images`. A bad cursor is 400 `cursor_invalid`, an unknown column\n422 `unknown_column`.",
+        "operationId": "table_curation_projects__project__table_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Which rows the table lists.",
+            "in": "query",
+            "name": "rows",
+            "required": false,
+            "schema": {
+              "default": "detections",
+              "description": "Which rows the table lists.",
+              "enum": [
+                "detections",
+                "images"
+              ],
+              "title": "Rows",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated column ids, in order; the served default when omitted.",
+            "in": "query",
+            "name": "columns",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated column ids, in order; the served default when omitted.",
+              "title": "Columns"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+            "in": "query",
+            "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+              "title": "Cluster Uid"
+            }
+          },
+          {
+            "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_polygon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Polygon"
+            }
+          },
+          {
+            "description": "true = items on images with a served position; false = without one.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items on images with a served position; false = without one.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "Items in this near-duplicate group (or on images in it).",
+            "in": "query",
+            "name": "near_dup_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items in this near-duplicate group (or on images in it).",
+              "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+            "in": "query",
+            "name": "image_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
+            }
+          },
+          {
+            "description": "Ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true = images with a held-out item; false = none.",
+            "in": "query",
+            "name": "in_holdout",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = images with a held-out item; false = none.",
+              "title": "In Holdout"
+            }
+          },
+          {
+            "description": "member = in a group and not its representative; representative; none = in no group.",
+            "in": "query",
+            "name": "near_dup",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "member",
+                    "representative",
+                    "none"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "member = in a group and not its representative; representative; none = in no group.",
+              "title": "Near Dup"
+            }
+          },
+          {
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "in": "query",
+            "name": "label_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "has_unlabeled",
+                    "all_labeled",
+                    "no_items"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "title": "Label State"
+            }
+          },
+          {
+            "description": "One of the `sort_options` ids the response serves.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of the `sort_options` ids the response serves.",
+              "title": "Sort"
+            }
+          },
+          {
+            "description": "Count and draw held-out test items too.",
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count and draw held-out test items too.",
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TablePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table",
+        "tags": [
+          "Curation",
+          "Table"
+        ]
+      }
+    },
+    "/curation/projects/{project}/table/columns": {
+      "get": {
+        "description": "The columns a table of `rows` can show, which ones sort, and the default set.",
+        "operationId": "table_columns_curation_projects__project__table_columns_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Which rows the table lists.",
+            "in": "query",
+            "name": "rows",
+            "required": false,
+            "schema": {
+              "default": "detections",
+              "description": "Which rows the table lists.",
+              "enum": [
+                "detections",
+                "images"
+              ],
+              "title": "Rows",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableColumns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Table Columns",
+        "tags": [
+          "Curation",
+          "Table"
         ]
       }
     },

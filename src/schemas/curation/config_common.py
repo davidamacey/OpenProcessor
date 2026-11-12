@@ -69,6 +69,7 @@ ErrorCode = Literal[
     'name_conflict',
     'invalid_transition',
     'cursor_invalid',
+    'unknown_column',
     'export_outside_project',
     'empty_val_split',
     'model_not_found',

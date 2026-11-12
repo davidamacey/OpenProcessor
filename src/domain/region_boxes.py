@@ -102,6 +102,12 @@ def read_boxes(src: dict[str, Any], F: RegionFields | None = None) -> list[Regio
     return [RegionBox.from_doc(d) for d in raw]
 
 
+def region_box_display_name(box: RegionBox, *, slot_label: str, ordinal: int) -> str:
+    """The name a region box is drawn with: the text read from it, else ``<slot label> <n>``
+    where ``n`` is its 1-based place in the item's list."""
+    return box.text or f'{slot_label} {ordinal}'
+
+
 def accepted(boxes: Sequence[RegionBox]) -> list[RegionBox]:
     return [b for b in boxes if b.state == 'accepted']
 

@@ -21,6 +21,7 @@ ONE_ENTRY_PER_DOC = {
     '/review/{tab}',
     '/search/similar',
     '/search/text',
+    '/table',  # detection rows: one per item document; image rows: one per image
     '/viz/projection',
 }
 # Per-box rows: ``crop_id`` repeats by design; ``row_key`` (required) is unique.

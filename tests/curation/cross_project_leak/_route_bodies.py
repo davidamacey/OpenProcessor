@@ -103,6 +103,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         },
         ('POST', '/label_ops/{op_id}/undo'): {'json': {'dry_run': False}},
         ('POST', '/crops/flag_new_class'): {'json': {'crop_ids': [item], 'note': 'n'}},
+        ('POST', '/selection/summary'): {'json': {'crop_ids': [proposal]}},
         ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'r'}},
         ('POST', '/crops/batch_unexclude'): {'json': {'crop_ids': [proposal]}},
         ('POST', '/classes'): {'json': {'name': f'{slug}_newclass'}},

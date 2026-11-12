@@ -373,6 +373,7 @@ exempt-modules = [
     "src.core.db_session",                       # DbSessionDep
     "src.core.dependencies",                     # dependency aliases
     "src.routers.curation._item_filter_params",  # ItemFilterQuery
+    "src.routers.curation._image_query_params",  # ImageViewQuery
     "src.routers.curation._common_models",       # route request/response models
     "src.routers.curation._crop_write_models",
     "src.routers.curation._export_models",

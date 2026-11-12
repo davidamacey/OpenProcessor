@@ -109,7 +109,7 @@ def candidate_wires(
             detector_version=detector_version,
             source=box_source,
         )
-        wire = region_box_to_wire(source, box)
+        wire = region_box_to_wire(source, box, ordinal=index + 1)
         wire['box_id'] = None
         polygon = raw.mask_polygon
         wire.update(

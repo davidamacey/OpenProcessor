@@ -157,6 +157,7 @@ const CASES: [string, string[]][] = [
       text_vlm: true,
       text_vlm_invalid: true,
       thumbnail_url: true,
+      display_name: true,
     } satisfies Record<keyof T.RegionTestCandidate, true>),
   ],
   [

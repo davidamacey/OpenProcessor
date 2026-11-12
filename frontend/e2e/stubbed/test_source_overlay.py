@@ -1,4 +1,4 @@
-"""`/review`'s source panel draws every box itself, over the clean pixels of
+"""`/review`'s source panel draws the served boxes, over the clean pixels of
 `GET {API_PREFIX}/images/{image_id}/file`, from `GET {API_PREFIX}/images/{image_id}`
 (`SourceImageOverlay.svelte`). This proves the wiring end to end against the
 stub: the image endpoint gets hit by the crop's image id, and the overlay
@@ -7,9 +7,10 @@ renders one box per item on the image, and the "hide boxes" toggle removes them.
 
 from __future__ import annotations
 
-from fixtures.contract import image_detail
+from fixtures.contract import box_view, image_detail
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
+from harness.screens import save_screens
 from playwright.sync_api import expect
 
 
@@ -51,7 +52,7 @@ def review_item(i: int) -> dict:
     return item
 
 
-def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
+def test_review_source_panel_draws_the_served_boxes(stub, page, app_url):
     image_calls: list[str] = []
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
@@ -70,6 +71,15 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
             image_detail(
                 'img-shared',
                 [review_item(i) for i in range(3)],
+                boxes=[
+                    box_view(
+                        f'crop-{i}',
+                        ['widget_a', 'widget_b (served)', 'Tag 3'][i],
+                        bbox_norm=[0.1 * i, 0.1, 0.1 * i + 0.2, 0.3],
+                        tone=['validated', 'machine', 'rejected'][i],
+                    )
+                    for i in range(3)
+                ],
                 width=640,
                 height=480,
                 source='fixture',
@@ -79,7 +89,7 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
     stub.on('GET', r'/images/[^/]+$', image_handler)
     # The clean source image itself — a real image response, not JSON, so the
     # <img> element actually loads.
-    stub.on('GET', r'/images/[^/]+/file(\?|$)', stub._image)
+    stub.on('GET', r'/images/[^/]+/file(\?|$)', (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
 
     page.goto(f'{app_url}/p/default/review')
     counter = page.get_by_test_id('queue-counter')
@@ -89,6 +99,9 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
     overlay_boxes = panel.get_by_test_id('overlay-box')
     overlay_boxes.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert overlay_boxes.count() == 3, 'one overlay box per item on the image'
+    titles = [overlay_boxes.nth(i).get_attribute('title') for i in range(3)]
+    assert titles == ['widget_a', 'widget_b (served)', 'Tag 3'], titles
+    save_screens(page, 'workflow_2c', 'review-source-boxes')
     assert image_calls, 'the source panel must hit GET .../images/{image_id}'
     assert all(c.endswith('/images/img-shared') for c in image_calls), image_calls
 

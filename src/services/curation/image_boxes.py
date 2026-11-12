@@ -3,13 +3,13 @@ tone (how the box looks) decided here so the browser only paints what it is give
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.domain.region_boxes import read_boxes
-from src.schemas.curation.images import BoxTone, BoxView
-from src.services.curation.wire import parse_xyxy
+from src.schemas.curation.images import BoxLabelKind, BoxTone, BoxView
+from src.services.curation.wire import item_display_name, parse_xyxy, region_box_name
 
 
 if TYPE_CHECKING:
@@ -25,8 +25,11 @@ def is_labeled(src: dict[str, Any]) -> bool:
     return src.get('class_id') is not None
 
 
-def item_label(src: dict[str, Any]) -> str:
-    return str(src.get('class_name') or UNLABELED_LABEL) if is_labeled(src) else UNLABELED_LABEL
+def item_label(src: dict[str, Any]) -> tuple[str, BoxLabelKind]:
+    """The item's served display name and its kind; ``unlabeled`` when nothing names it."""
+    named = item_display_name(src)
+    kind = named['display_name_kind']
+    return named['display_name'] or UNLABELED_LABEL, cast('BoxLabelKind', kind)
 
 
 def item_tone(src: dict[str, Any]) -> BoxTone:
@@ -44,7 +47,7 @@ def item_box_views(
 ) -> list[BoxView]:
     """The item's own box, then each region box it holds."""
     f = storage or get_region_fields()
-    label = item_label(src)
+    label, label_kind = item_label(src)
     class_name = str(src['class_name']) if is_labeled(src) and src.get('class_name') else None
     tone = item_tone(src)
     views: list[BoxView] = []
@@ -55,11 +58,12 @@ def item_box_views(
                 kind='item',
                 bbox_norm=item_box,
                 label=label,
+                label_kind=label_kind,
                 class_name=class_name,
                 tone=tone,
             )
         )
-    for box in read_boxes(src, f):
+    for ordinal, box in enumerate(read_boxes(src, f), start=1):
         if (region_box := parse_xyxy(list(box.bbox_norm))) is None:
             continue
         box_tone: BoxTone = tone
@@ -73,7 +77,8 @@ def item_box_views(
                 box_id=box.box_id,
                 kind='region',
                 bbox_norm=region_box,
-                label=label,
+                label=region_box_name(box, ordinal),
+                label_kind='region',
                 class_name=class_name,
                 tone=box_tone,
                 state=box.state,

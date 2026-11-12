@@ -7,13 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import type { Crop } from '$lib/types';
-import { imageDetail } from '$lib/test/fixtures/imageDetail';
-import {
-  installDeploymentSlots,
-  resetDeploymentSlots,
-} from '$lib/annotations/registeredSlots';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
+import { imageBox, imageDetail } from '$lib/test/fixtures/imageDetail';
 
 vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
 vi.mock('$lib/api_cropRead', () => ({
@@ -26,20 +20,10 @@ const { getImage } = await import('$lib/api_cropRead');
 const { default: SourceImageOverlay, resetForProjectChange } =
   await import('./SourceImageOverlay.svelte');
 
-function item(overrides: Partial<Crop> = {}): Crop {
-  return {
-    id: 'crop-1',
-    class_name: null,
-    proposed_class_name: null,
-    bbox_norm: { cx: 0.3, cy: 0.3, w: 0.2, h: 0.2 },
-    ...overrides,
-  } as unknown as Crop;
-}
-
 function ctxFor(label: string) {
   return imageDetail({
     image: { image_id: `img-${label}` },
-    items: [item({ id: 'shared-crop-id', class_name: label })],
+    boxes: [imageBox({ crop_id: 'shared-crop-id', label })],
   });
 }
 
@@ -47,7 +31,6 @@ let instance: unknown;
 let target: HTMLDivElement;
 
 beforeEach(() => {
-  installDeploymentSlots([widgetTagSlot]);
   resetForProjectChange();
   vi.mocked(activeProjectKey).mockReturnValue('default');
 });
@@ -56,7 +39,6 @@ afterEach(() => {
   if (instance) unmount(instance as Record<string, unknown>);
   instance = undefined;
   target?.remove();
-  resetDeploymentSlots();
   resetForProjectChange();
   vi.mocked(getImage).mockReset();
   vi.mocked(activeProjectKey).mockReset();

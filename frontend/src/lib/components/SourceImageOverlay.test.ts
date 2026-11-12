@@ -6,20 +6,11 @@
  * here is pinned against the actual rendered `%` geometry, not just
  * "it mounted".
  *
- * Uses the neutral `widgetTagSlot` fixture, not a real registered slot —
- * this file is scanned by `domainNeutral.scan.test.ts`.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import type { Crop } from '$lib/types';
-import { imageDetail } from '$lib/test/fixtures/imageDetail';
-import {
-  installDeploymentSlots,
-  resetDeploymentSlots,
-} from '$lib/annotations/registeredSlots';
-import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
-import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
-import { makeSlotBox } from '$lib/test/fixtures/slotBox';
+import { imageBox, imageDetail } from '$lib/test/fixtures/imageDetail';
 import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
 vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
@@ -47,15 +38,10 @@ function item(overrides: Partial<Crop> = {}): Crop {
 let instance: unknown;
 let target: HTMLDivElement;
 
-beforeEach(() => {
-  installDeploymentSlots([widgetTagSlot]);
-});
-
 afterEach(() => {
   if (instance) unmount(instance);
   instance = undefined;
   target?.remove();
-  resetDeploymentSlots();
   // The detail cache is keyed by image id and every test draws on the same one.
   resetForProjectChange();
   vi.mocked(getImage).mockReset();
@@ -76,21 +62,19 @@ async function render(
 }
 
 describe('SourceImageOverlay', () => {
-  it('positions the item box at the bbox_norm percentages', async () => {
+  it('draws the served boxes, not item-derived labels', async () => {
+    // The items carry names that must NOT appear: the boxes are the only source.
     const ctx = imageDetail({
-      image: {
-        image_id: 'img-1',
-        image_path: '/img-1.jpg',
-        width: 1000,
-        height: 1000,
-        source: 'test',
-        indexed_at: null,
-      },
       items: [
-        item({
-          id: 'crop-pos',
-          display_name: 'widget_a',
-          bbox_norm: { cx: 0.5, cy: 0.4, w: 0.2, h: 0.1 },
+        item({ id: 'crop-pos', display_name: 'from_items', display_name_kind: 'class' }),
+      ],
+      boxes: [
+        imageBox({
+          crop_id: 'crop-pos',
+          bbox_norm: [0.4, 0.35, 0.6, 0.45],
+          label: 'served_name',
+          tone: 'machine',
+          label_kind: 'proposed',
         }),
       ],
     });
@@ -98,70 +82,19 @@ describe('SourceImageOverlay', () => {
 
     const el = await render({ imageId: 'img-1', selectedCropId: 'crop-pos' });
 
-    const boxes = el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]');
-    expect(boxes.length).toBe(1);
-    const style = (boxes[0] as HTMLElement).style;
-    // cx=0.5,w=0.2 -> left = (0.5-0.1)*100 = 40%; cy=0.4,h=0.1 -> top = 35%
-    expect(style.left).toBe('40%');
-    expect(style.top).toBe('35%');
-    expect(style.width).toBe('20%');
-    expect(style.height).toBe('10%');
+    const boxes = el.querySelectorAll<HTMLElement>('[data-testid="overlay-box"]');
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]!.style.left).toBe('40%');
+    expect(boxes[0]!.style.top).toBe('35%');
+    expect(boxes[0]!.style.width).toBe('20%');
+    expect(boxes[0]!.style.height).toBe('10%');
+    expect(boxes[0]!.className).toContain('border-amber-400');
+    expect(boxes[0]!.getAttribute('title')).toBe('served_name');
+    expect(el.textContent).not.toContain('from_items');
   });
 
-  it('labels a labelled item, a proposed item, and an unlabeled item distinctly', async () => {
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        item({ id: 'lbl-a', display_name: 'widget_a', display_name_kind: 'class' }),
-        item({ id: 'lbl-b', display_name: 'widget_b', display_name_kind: 'proposed' }),
-        item({ id: 'lbl-c', display_name: '', display_name_kind: 'none' }),
-        item({ id: 'lbl-d', display_name: 'stop sign', display_name_kind: 'detector' }),
-      ],
-    });
-    vi.mocked(getImage).mockResolvedValue(ctx);
-
-    const el = await render({ imageId: 'img-1', selectedCropId: 'lbl-a' });
-
-    const boxes = Array.from(
-      el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
-    );
-    const byId = (id: string) =>
-      boxes.find((b) => b.getAttribute('data-crop-id') === id) as HTMLElement;
-
-    expect(byId('lbl-a').className).toContain('border-emerald-400');
-    expect(byId('lbl-a').getAttribute('title')).toContain('widget_a');
-
-    expect(byId('lbl-b').className).toContain('border-amber-400');
-    expect(byId('lbl-b').getAttribute('title')).toContain('widget_b (proposed)');
-
-    expect(byId('lbl-c').className).toContain('border-zinc-500');
-    expect(byId('lbl-c').getAttribute('title')).toContain('unlabeled');
-
-    // Named by the detector only: the served name, marked as the detector's, never "unlabeled".
-    expect(byId('lbl-d').className).toContain('border-amber-400');
-    expect(byId('lbl-d').getAttribute('title')).toContain('stop sign (detector)');
-  });
-
-  it('draws every served box at its source-frame position, solid or dashed by state', async () => {
+  it('draws a region box with its served name and dashes it by its served state', async () => {
     regionStatusesStore.boxStates = [
-      {
-        value: 'accepted',
-        label: 'accepted',
-        role: 'accepted',
-        human_writable: true,
-        exported: true,
-        dashed: false,
-        dim: false,
-        badge: null,
-        tone: 'accepted',
-      },
       {
         value: 'rejected',
         label: 'rejected',
@@ -175,189 +108,50 @@ describe('SourceImageOverlay', () => {
       },
     ];
     const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        {
-          ...item({
-            id: 'region-a',
-            class_name: 'widget_a',
-            bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
-          }),
-          slots: {
-            widget_tag: {
-              key: 'widget_tag',
-              subBoxes: [
-                // bbox_norm is already source-image-normalized: drawn as is,
-                // never re-projected through the item's own box.
-                makeSlotBox({
-                  boxId: 'b1',
-                  state: 'accepted',
-                  rawXyxy: [0.1, 0.2, 0.3, 0.4],
-                  parent: { cx: 0.25, cy: 0.25, w: 0.2, h: 0.2 },
-                  score: 0.9,
-                }),
-                makeSlotBox({
-                  boxId: 'b2',
-                  state: 'rejected',
-                  rawXyxy: [0.6, 0.6, 0.8, 0.9],
-                  parent: { cx: 0.75, cy: 0.75, w: 0.2, h: 0.2 },
-                  score: 0.4,
-                }),
-              ],
-            },
-          },
-        } as unknown as Crop,
+      boxes: [
+        imageBox({
+          crop_id: 'region-a',
+          box_id: 'b1',
+          kind: 'region',
+          bbox_norm: [0.1, 0.2, 0.3, 0.4],
+          label: 'Tag 1',
+          label_kind: 'region',
+          tone: 'rejected',
+          state: 'rejected',
+        }),
       ],
     });
     vi.mocked(getImage).mockResolvedValue(ctx);
 
     const el = await render({ imageId: 'img-1', selectedCropId: 'region-a' });
 
-    const [first, second] = Array.from(
-      el.querySelectorAll('[data-testid="overlay-box"][data-kind="region-box"]'),
-    ) as HTMLElement[];
-    expect(first).toBeTruthy();
-    expect(second).toBeTruthy();
-    expect(first.className).not.toContain('border-dashed');
-    expect(second.className).toContain('border-dashed');
-    expect(first.style.left).toBe('10%');
-    expect(first.style.top).toBe('20%');
-    expect(first.style.width).toBe('20%');
-    expect(first.getAttribute('title')).toContain('Tag 1');
-    expect(second.getAttribute('title')).toContain('Tag 2');
+    const box = el.querySelector<HTMLElement>('[data-kind="region"]')!;
+    expect(box.className).toContain('border-red-400');
+    expect(box.className).toContain('border-dashed');
+    expect(box.getAttribute('title')).toBe('Tag 1');
     regionStatusesStore.boxStates = [];
   });
 
-  it('draws a read-only scalar-box slot through the item box when it is stored in the parent frame', async () => {
+  it('fires onselect when a sibling box is clicked, not for the selected one', async () => {
     const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        {
-          ...item({
-            id: 'tail-a',
-            class_name: 'widget_a',
-            // Item box: x 0.2..0.6, y 0.2..0.6.
-            bbox_norm: { cx: 0.4, cy: 0.4, w: 0.4, h: 0.4 },
-          }),
-          slots: {
-            aircraft_tail_number: {
-              key: 'aircraft_tail_number',
-              subBox: {
-                // Parent-frame box: right half of the item box.
-                rawXyxy: [0.5, 0, 1, 1],
-                frame: 'parent',
-                parent: { cx: 0.75, cy: 0.5, w: 0.5, h: 1 },
-                score: 0.8,
-                visible: true,
-              },
-            },
-          },
-        } as unknown as Crop,
-      ],
-    });
-    vi.mocked(getImage).mockResolvedValue(ctx);
-    installDeploymentSlots([widgetTagSlot, aircraftTailNumberSlot]);
-
-    const el = await render({ imageId: 'img-1', selectedCropId: 'tail-a' });
-    resetDeploymentSlots();
-
-    const region = el.querySelector(
-      '[data-testid="overlay-box"][data-kind="region"]',
-    ) as HTMLElement;
-    expect(region).toBeTruthy();
-    expect(region.style.left).toBe('40%');
-    expect(region.style.width).toBe('20%');
-  });
-
-  it('renders the selected item with a highlight ring and dims the rest', async () => {
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        item({ id: 'sel-a', class_name: 'widget_a' }),
-        item({ id: 'sel-b', class_name: 'widget_b' }),
-      ],
-    });
-    vi.mocked(getImage).mockResolvedValue(ctx);
-
-    const el = await render({ imageId: 'img-1', selectedCropId: 'sel-a' });
-    const boxes = Array.from(
-      el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
-    );
-    const byId = (id: string) =>
-      boxes.find((b) => b.getAttribute('data-crop-id') === id) as HTMLElement;
-
-    expect(byId('sel-a').className).toContain('ring-2');
-    expect(byId('sel-a').className).not.toContain('opacity-60');
-    expect(byId('sel-b').className).toContain('opacity-60');
-  });
-
-  it('fires onselect when a clickable sibling box is clicked, not for the selected one', async () => {
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        item({ id: 'click-a', class_name: 'widget_a' }),
-        item({ id: 'click-b', class_name: 'widget_b' }),
-      ],
+      boxes: [imageBox({ crop_id: 'click-a' }), imageBox({ crop_id: 'click-b' })],
     });
     vi.mocked(getImage).mockResolvedValue(ctx);
     const onselect = vi.fn();
 
     const el = await render({ imageId: 'img-1', selectedCropId: 'click-a', onselect });
-    const boxes = Array.from(
-      el.querySelectorAll('[data-testid="overlay-box"][data-kind="item"]'),
-    );
-    const byId = (id: string) =>
-      boxes.find((b) => b.getAttribute('data-crop-id') === id) as HTMLElement;
+    const byId = (id: string) => el.querySelector<HTMLElement>(`[data-crop-id="${id}"]`)!;
 
-    expect(byId('click-a').tagName).toBe('DIV'); // selected/unclickable stays a div
+    expect(byId('click-a').tagName).toBe('DIV');
     expect(byId('click-b').tagName).toBe('BUTTON');
     byId('click-b').click();
     expect(onselect).toHaveBeenCalledWith('click-b');
   });
 
   it('the boxes toggle hides and re-shows the overlay layer', async () => {
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [item({ id: 'toggle-a', class_name: 'widget_a' })],
-    });
-    vi.mocked(getImage).mockResolvedValue(ctx);
+    vi.mocked(getImage).mockResolvedValue(imageDetail({ boxes: [imageBox()] }));
 
-    const el = await render({ imageId: 'img-1', selectedCropId: 'toggle-a' });
+    const el = await render({ imageId: 'img-1', selectedCropId: 'crop-1' });
     expect(el.querySelector('[data-testid="overlay-layer"]')).toBeTruthy();
 
     const toggle = el.querySelector('button') as HTMLButtonElement;
@@ -371,95 +165,19 @@ describe('SourceImageOverlay', () => {
   });
 
   it('skips its own fetch when a pre-fetched context is provided', async () => {
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [item({ id: 'prefetch-a', class_name: 'widget_a' })],
-    });
-
     const el = await render({
       imageId: 'img-1',
-      selectedCropId: 'prefetch-a',
-      context: ctx,
+      selectedCropId: 'crop-1',
+      context: imageDetail({ boxes: [imageBox()] }),
     });
 
     expect(getImage).not.toHaveBeenCalled();
     expect(el.querySelectorAll('[data-testid="overlay-box"]').length).toBe(1);
   });
-
-  it('draws a multi-box region ring in the served box_states tone, not the client role fallback', async () => {
-    // Each
-    // box_states entry serves `tone`. A served `rejected` tone must
-    // win over the role→color guess this file used before (which mapped
-    // a `rejected` box to the same neutral zinc as `false_positive`).
-    regionStatusesStore.boxStates = [
-      {
-        value: 'rejected',
-        label: 'rejected',
-        role: 'rejected',
-        human_writable: true,
-        exported: false,
-        dashed: true,
-        dim: false,
-        badge: null,
-        tone: 'rejected',
-      },
-    ];
-
-    const ctx = imageDetail({
-      image: {
-        image_id: 'i',
-        image_path: '/i.jpg',
-        width: 100,
-        height: 100,
-        source: null,
-        indexed_at: null,
-      },
-      items: [
-        {
-          ...item({
-            id: 'region-mb',
-            class_name: 'widget_a',
-            bbox_norm: { cx: 0.5, cy: 0.5, w: 0.4, h: 0.4 },
-          }),
-          slots: {
-            widget_tag: {
-              key: 'widget_tag',
-              subBoxes: [
-                makeSlotBox({
-                  boxId: 'b1',
-                  state: 'rejected',
-                  rawXyxy: [0.1, 0.1, 0.3, 0.3],
-                }),
-              ],
-            },
-          },
-        } as unknown as Crop,
-      ],
-    });
-    vi.mocked(getImage).mockResolvedValue(ctx);
-
-    const el = await render({ imageId: 'img-1', selectedCropId: 'region-mb' });
-
-    const box = el.querySelector(
-      '[data-testid="overlay-box"][data-kind="region-box"]',
-    ) as HTMLElement;
-    expect(box).toBeTruthy();
-    expect(box.className).toContain('border-red-400');
-    expect(box.className).not.toContain('border-zinc-500');
-
-    regionStatusesStore.boxStates = [];
-  });
 });
 
 describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
-  const ctx = () => imageDetail({ items: [item({ id: 'crop-1' })] });
+  const ctx = () => imageDetail({ boxes: [imageBox()] });
 
   const shapes = [
     {

@@ -50,6 +50,7 @@ SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] 
     ('GET', '/near_duplicates/groups'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/near_duplicates/groups/{group_id}'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/review/{tab}/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
+    ('GET', '/images/locate'): lambda slug: {'params': {'target_image_id': f'{slug}-img-0001'}},
     ('GET', '/crops/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
     ('GET', '/search/similar'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
     ('GET', '/search/text'): lambda _slug: {'params': {'q': 'truck'}},
@@ -109,6 +110,7 @@ UNREACHED_OK: dict[tuple[str, str], str] = {
 # or an event with no data write), and why. Every other mutating route must
 # really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
+    ('POST', '/selection/summary'): 'counts a selection read-only; writes nothing',
     ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
     ('POST', '/datasets/imports'): (
         'the sweep sends no mapping, so it is refused before anything is queued; the '

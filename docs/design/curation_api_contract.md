@@ -810,6 +810,7 @@ separate single-box shape. Each element:
 | `locked` | server-derived: [the lock rule](#the-lock-rule) for this box |
 | `bbox_in_parent` | server-derived: the box in the item-crop frame, clamped to `[0, 1]`; `null` when the item has no usable `bbox_norm`. Draw it on the item thumbnail as is |
 | `thumbnail_url` | server-derived: `GET /crops/{crop_id}/region_thumbnail?box_id=<box_id>` |
+| `display_name` | server-derived: the box's `text` when read, else the active region profile's name for one region (`Region` when it names none) and the box's 1-based place in the list, for example `Plate 2` |
 
 Item-level summaries: `region_count` counts `accepted` boxes,
 `region_rejected_count` counts `rejected` ones, `region_max_score` is the best
@@ -943,6 +944,9 @@ default state of a new box.
 |---|---|---|
 | GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `limit`, `next_cursor`, `sort_applied`, `sort_options[]`, `empty_reason`, `empty_message`, `method`, `version`, `n_pool` |
 | GET | `/crops/locate` | `CropLocate`: where one item sits in the list `GET /crops` would serve for the same query. `crop_id` required; the other parameters are those of `GET /crops` except `cursor`, `limit` and `ids`. `{crop_id, in_view, index, total, cursor_before, cursor_after, reason, reason_message}`: `index` is 0-based, `cursor_before` starts a page at the item (`null` for the first), `cursor_after` resumes right after it. Outside the list `index` is `null` and `reason` is `not_found` or `filtered_out`. Not available under a computed `order` (`400`) |
+| GET | `/images/locate` | `ImageLocate`: where one image sits in the list `GET /images` would serve for the same query. `target_image_id` required (`image_id` is the item filter's own parameter); the other parameters are those of `GET /images` except `cursor` and `limit`. `{image_id, in_view, index, total, cursor_before, cursor_after, reason, reason_message}` as `CropLocate` |
+| GET | `/table/columns` | `TableColumns`: `rows` (`detections` or `images`), `columns[]` (`id`, `label`, `sortable`, `align`, `kind`) and the `default` ids |
+| GET | `/table` | `TablePage`: `rows`, the requested `columns[]`, `items[]` (`crop_id`, `image_id`, `thumbnail_url`, `cells{column: {text, value, tone}}`), `total`, `limit`, `next_cursor`, `sort_applied`, `sort_options[]` (`<column>:<asc\|desc>`), `hidden`, `join_truncated`, `empty_reason`, `empty_message`. Takes the shared item filter, `rows`, `columns` (comma list; an unknown id is `422 unknown_column`), `sort`, `cursor`, `limit` (1 to 200); `rows=images` also takes the image-only filters of `GET /images` |
 | GET | `/crops/{crop_id}` | item (`404` when unknown) |
 | GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500. Items carry `mask_polygon` here (lists send it as null), so one call draws every sibling outline |
 | GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
@@ -2607,3 +2611,18 @@ The table lists renamed or restructured wire surfaces.
 - A backend outage is `503`. An empty list always means no matching data.
 - Not on the wire: backend OpenSearch field names, the internal tracking
   host, API keys, and filesystem paths of training artifacts.
+
+## Selection summary
+
+`POST /selection/summary` takes an `ItemSelection` (`crop_ids` xor `filter`) and answers what a bulk
+action on it would touch: `detections`, `images`, `clusters`, `locked` (items a bulk write skips),
+`in_holdout`, `by_class` (ten largest, then `unlabeled` and `other`), `taken_from`, `taken_to`,
+`located` (images with a served position), `join_truncated` and the sentence `summary_text`. One
+aggregation on the items index; a selection above the bulk cap (20,000) is refused with `422`.
+
+## Next steps
+
+`GET /next_steps` serves the curation loop in order: `steps[]` (`id`, `label`, `detail`, `done`,
+`section`, `query`), `next` (the first step that is not done) and `workspace_default_view`
+(`clusters` when an item clustering serves, else `gallery`). The default view is decided only
+here. `review_disagreements` appears only after a model is promoted.
