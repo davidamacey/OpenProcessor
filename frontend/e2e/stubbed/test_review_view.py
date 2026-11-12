@@ -220,8 +220,14 @@ def test_the_review_states_render_at_1600_and_430(stub, page, app_url):
     shot(page, 'review-machine-label', widths=(1600, 430))
 
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.keyboard.press('/')
-    expect(page.locator('#class-picker-list')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    # The keys register a tick after the item renders: press until the picker answers.
+    picker = page.locator('#class-picker-list')
+    for _ in range(10):
+        page.keyboard.press('/')
+        if picker.is_visible():
+            break
+        page.wait_for_timeout(300)
+    expect(picker).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     shot(page, 'review-class-picker', widths=(1600, 430))
     page.keyboard.press('Escape')
 
@@ -251,3 +257,41 @@ def test_the_review_states_render_at_1600_and_430(stub, page, app_url):
         'Review the disagreements', timeout=ACTION_TIMEOUT_MS
     )
     shot(page, 'review-empty-queue', widths=(1600, 430))
+
+
+def test_enter_on_a_table_row_opens_review_at_that_row_and_esc_returns_to_the_table(
+    stub, page, app_url
+):
+    from test_table_view import png, serve as serve_table
+
+    serve_table(stub)
+    serve(stub)
+    # The filmstrip also draws the rows past the table's four.
+    stub.on('GET', r'/crops/crop-\d/thumbnail', (200, png(60), 'image/png'))
+    stub.on(
+        'GET',
+        r'/crops/locate(\?|$)',
+        {
+            'crop_id': 'crop-1',
+            'in_view': True,
+            'index': 1,
+            'total': 6,
+            'cursor_before': 'cb',
+            'cursor_after': 'ca',
+            'reason': None,
+            'reason_message': None,
+        },
+    )
+    page.goto(f'{app_url}/p/default/workspace?view=table')
+    rows = page.get_by_test_id('data-table-row')
+    expect(rows).to_have_count(4, timeout=ACTION_TIMEOUT_MS)
+    rows.nth(1).click()
+    page.keyboard.press('Enter')
+
+    expect(page.get_by_test_id('review-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert 'view=review' in page.url, page.url
+    assert 'focus=item%3Acrop-1' in page.url or 'focus=item:crop-1' in page.url, page.url
+
+    page.keyboard.press('Escape')
+    expect(page.get_by_test_id('data-table-row').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert 'view=table' in page.url, page.url
