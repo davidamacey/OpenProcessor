@@ -2,8 +2,8 @@
 
 Each kind is saved, read, re-saved against its revision, refused when stale or misspelt, listed,
 activated (the project kinds; the serving profile is deployment-wide, so a live run never activates
-it) and deleted. Routes and body fields come from ``contracts/openapi/curation.json`` and
-``src/schemas/curation/research_config.py``. Pending the wave run.
+it) and deleted (an activated one is refused as in use). Routes and body fields come from
+``contracts/openapi/curation.json`` and ``src/schemas/curation/research_config.py``. Pending the wave run.
 """
 
 from __future__ import annotations
@@ -84,7 +84,11 @@ def test_a_preset_document_goes_through_its_revisions(api: Any, opensearch: Any,
         assert api.get(f'{base}/no-such-{name}').status_code == 404
 
         if activatable:
-            active = api.post(f'{doc}/activate', json={})
+            # Activation is compare-and-set: a project that already serves one (the near-duplicate
+            # default) must be told what is active now; null only when nothing is.
+            now = api.get(f'{base}/active').json()
+            expected = None if now['state'] == 'none' else {k: now[k] for k in ('name', 'revision')}
+            active = api.post(f'{doc}/activate', json={'expected_active': expected})
             assert active.status_code == 200, active.text
             assert (active.json()['state'], active.json()['name']) == ('active', name)
             assert api.get(f'{base}/active').json()['name'] == name
@@ -93,6 +97,12 @@ def test_a_preset_document_goes_through_its_revisions(api: Any, opensearch: Any,
 
         stale = api.delete(doc, params={'expected_revision': 1})
         assert (stale.status_code, _error(stale)) == (409, 'revision_conflict'), stale.text
-        deleted = api.delete(doc, params={'expected_revision': 2})
-        assert deleted.status_code == 204, deleted.text
-        assert api.get(doc).status_code == 404
+        if activatable:
+            # The activation points at it; the project's own delete removes it afterwards.
+            refused = api.delete(doc, params={'expected_revision': 2})
+            assert (refused.status_code, _error(refused)) == (409, 'in_use'), refused.text
+            assert api.get(doc).status_code == 200
+        else:
+            deleted = api.delete(doc, params={'expected_revision': 2})
+            assert deleted.status_code == 204, deleted.text
+            assert api.get(doc).status_code == 404
