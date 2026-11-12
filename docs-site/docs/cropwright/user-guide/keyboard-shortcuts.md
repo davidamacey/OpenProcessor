@@ -23,12 +23,15 @@ makes the shortcuts below customizable per project rather than fixed.
 | `Esc` | Close the overlay |
 | _class letter_ | Assign that class (selection / current item) |
 
-## `/p/<project>/clusters/[id]`
+## `/p/<project>/workspace`
 
 | Key | Action |
 | --- | --- |
-| `Enter` | Confirm selected to the chosen class + advance |
-| `Shift+Enter` | Accept all VLM suggestions on the page |
+| `[` / `]` | Previous / next view |
+| `\` | Show or hide the details panel |
+| `Esc` | Clear the selection, then leave the open cluster, then close the panel |
+| `Shift+Enter` | Confirm selected to the chosen class + advance |
+| `Shift+G` | Accept all VLM suggestions on the page |
 | `G` | Accept the VLM suggestion for selected |
 | `N` | Skip + advance |
 | `Shift+N` | Flag selected as needing a new class |
@@ -39,7 +42,6 @@ makes the shortcuts below customizable per project rather than fixed.
 | `A` | Select all on page |
 | `←` / `→` | Move the selection by one crop |
 | `M` | Move selected to another cluster |
-| `Esc` | Clear drag capture / close picker / clear selection |
 
 ## `/p/<project>/review`
 

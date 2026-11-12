@@ -14,10 +14,10 @@ probes at runtime.
 
 | Feature | Backend requirement |
 | --- | --- |
-| Region review tab, `/clusters` region gallery, sub-box edit | A region profile served on `GET {API_PREFIX}/health` (`region_profile`) |
+| Region review tab, Workspace Clusters-view region gallery, sub-box edit | A region profile served on `GET {API_PREFIX}/health` (`region_profile`) |
 | Score chips, mistakenness/uniqueness sort options | `OP_SCORES_ENABLED` |
-| Diverse-selection overlay on `/clusters/[id]` | `OP_SELECT_DIVERSE_ENABLED` |
-| Embedding-plot lasso tool on `/clusters` | `OP_VIZ_PROJECTION_ENABLED` |
+| Diverse-selection overlay on an open Workspace cluster | `OP_SELECT_DIVERSE_ENABLED` |
+| Embedding-plot lasso tool in the Workspace Clusters view | `OP_VIZ_PROJECTION_ENABLED` |
 | Semantic (embedding) search box | `OP_SEMANTIC_SEARCH_ENABLED` (on by default; `0` hides it) |
 | `/train` (preflight, launch, promote) | The backend's trainer container/worker running |
 | `/bakeoff` | The backend's on-demand evaluator container, and its `/bakeoff/*` router mounted |

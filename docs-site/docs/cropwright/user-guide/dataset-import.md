@@ -95,7 +95,7 @@ were skipped for that reason.
   reverify), and confirm. The updated item replaces what you were looking at.
 - **One image.** On a card's expanded view and on a region card, **Reprocess
   image…** re-runs the proposals for every item cut from that image.
-- **A selection.** On `/clusters/<id>`, select crops and use **Reprocess** in
+- **A selection.** In the Workspace, open a cluster, select crops and use **Reprocess** in
   the toolbar. The backend does a dry run first, you see the per-scope counts
   (selected, locked and skipped, queued, failed, not found), and then confirm
   to apply. A large request becomes a job you can follow and cancel.

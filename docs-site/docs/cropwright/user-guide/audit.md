@@ -69,7 +69,7 @@ audited crops and a high enough detector precision before
 the cluster auto-promote step will validate it; otherwise
 the backend answers `409 audit_required` or `409 audit_precision_low`. Cropwright
 has no screen for that call, so run the audit here first and let the backend
-promote. See [Clusters](./clusters.md) and the
+promote. See [Workspace](./workspace.md) and the
 [curation workflow](../../operations/curation-workflow.mdx#4-cluster).
 
 ## Troubleshooting

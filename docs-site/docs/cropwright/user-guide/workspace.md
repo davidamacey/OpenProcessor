@@ -1,81 +1,65 @@
 ---
 sidebar_position: 3
-title: Clusters
+title: Workspace
 ---
 
-# Clusters (`/p/<project>/clusters`, `/p/<project>/clusters/[id]`)
+# Workspace (`/p/<project>/workspace`)
 
-## Cluster grid (`/p/<project>/clusters`)
+The Workspace is where you look at a project's items and label them in
+batches. One page holds the **filter row**, the **view bar**, the **rail**
+(queues and classes), the **view** itself, a **details** panel and a **bulk
+bar**. The filter, the queue, the open cluster and the selection stay when
+you switch view, and Back returns to the previous view and filter.
 
-Every cluster as a card: dominant class, **cohesion** (the served
-nearest-centroid purity — labelled "cohesion" rather than "purity" so a
-mixed-labels-but-visually-coherent cluster doesn't read as "bad"), size and
-representative crops.
+<Screenshot name="cropwright/clusters-1600.png" alt="The Workspace, Clusters view" caption="Clusters view with the rail and the filter row" />
 
-- A **Clusters** panel states the serving partition (cluster and item counts,
-  method, when it was fitted). **Cluster items** starts a clustering job; when
-  its partition is ready but not serving, **Activate it** serves it. The
-  server refuses a stale activation and says why.
-- The sort and the filters are the server's. The toolbar offers the sort
-  options and flags the backend serves and filters by dominant class,
-  detector class, size range, validation state, flags and needs review. The
-  choice goes out as query parameters, stays in the URL and the session, and
-  **Clear filters** resets it. Cards also show the detector's top class with
-  its share.
-- Search by embedding similarity (semantic search, when enabled) or literal
-  OCR text. A **Crops / Regions** switch next to the search box applies to
-  text, **More like this** and picture search; with Regions each result
-  names the region that matched.
-- **Search by image** (semantic search only) takes a dropped or chosen
-  picture, optionally with a region dragged on its preview, and lists the
-  nearest crops.
-- **More like this** (the `similar` action on a crop card, shown when semantic search is
-  enabled) lists the crops nearest to that crop, with their match scores, on the Clusters page
-  (`?similar_to=<crop id>`). A crop without a vector shows the server's message instead. Choosing
-  it on a result re-runs the search from that crop; "Back to clusters" leaves it.
-- The **auto-label loop** panel runs the VLM over the whole project: a dry run
-  first, then live status and budget meters, the node table, cancel and
-  resume (also after a run that stopped because every VLM call failed), and a
-  two-step rollback. Clusters the budget could not cover are shown as not
-  visited, each with the backend's reason. See the
-  [Auto-label loop](../../guides/auto-label-loop.mdx) guide.
-- An **Ignored** toggle lists the excluded bucket with a restore action.
-- When the backend serves an embedding projection, an overlay lets you
-  lasso a set of points on a 2-D plot and preview them side by side —
-  visualization only, it never feeds a clustering decision.
-- Filtering on the region class swaps the grid for the region gallery
-  (browsing the region queue directly, with detector/verified/status/score/
-  text filters, plus a **Box state** filter; see
-  [Multi-box regions](./multi-box-regions.md)).
-- One synthetic inventory card per registered annotation slot with a browse
-  endpoint is pinned to the unfiltered grid.
+## Views
 
-<Screenshot name="cropwright/clusters-1600.png" alt="Cropwright cluster grid" caption="Cluster grid with cohesion badges" />
+- **Clusters.** Every cluster as a card: dominant class, **cohesion**, size
+  and representative crops. Choosing a card opens the cluster in place (the
+  scope chip in the filter row shows which one); **All clusters** or the
+  chip's close leaves it. The sort and card filters, similarity and text
+  search, the auto-label loop panel, the embedding overlay, the **Ignored**
+  list, the region gallery for a region class and the pinned slot inventory
+  cards work as before. Filtering by a class lists the clusters whose
+  dominant class it is.
+- **Detections.** Every item the filter, queue and scope match, as a flat
+  grid with the total and what the filter hides.
 
-<Screenshot name="cropwright/wheels-inventory-card-1600.png" alt="Cluster grid with a Wheels inventory card pinned first, showing the number of region items listed" caption="Wheels inventory card — pinned first, it opens the slot's region gallery" />
+The view bar lists the views; under 768 px it is a menu. The first visit
+opens the view the server suggests for the project's state, and the
+**Next** chip in the filter row names the next step of the curation loop.
 
-The filter bar above the grid, and the **Matching items** mode that lists and
-bulk-edits everything the filter matches, are described in
-[Item filter and Matching items](./item-filter.md).
+## Filter row and rail
 
-## Cluster detail (`/p/<project>/clusters/[id]`)
+The filter row is the shared [item filter](./item-filter.md) plus chips for
+the open cluster and the queue; under 768 px it sits behind one **Filters**
+button. The **rail** lists the review queues with their counts, then the
+classes with theirs, as the server serves them. A click on a queue or class
+filters every view; drag a card onto a class to assign it. **+ New class**
+creates one (a refused name offers the server's suggestion). Under 1024 px
+the rail is a drawer (**Queues & classes**).
 
-The core triage surface: a crop grid for one cluster with pointer-based
-drag and drop onto class rows, bulk select/confirm/move/discard/ignore,
-per-class hotkeys, **Assist…** (ask the VLM about the selection, the cluster
-or a sample of it, with a per-run endpoint and a proposal for the
-cluster's label, see [Assist (VLM)](./assist.md)) and **Accept VLM** for
-the page, **Reprocess** for the selection (see
-[Reprocess](./dataset-import.md#reprocess)) and **Move** (to a different
-cluster, reversible from the label operations list). A cluster is identified
-by its `cluster_uid`; the number shown (`#N`) is its display number in the
-serving partition.
+## Labeling a batch
 
-A facet bar on the page shows the served counts by detector class, validation,
-review tab and detector-confidence band, and the crops can be sorted by
-detector confidence.
+1. Open a cluster, or pick the Detections view and set the filter.
+2. Select the cards (click, Shift+click for a range, `A` for the page).
+3. Read the bulk bar: it states what the selection is, in the server's
+   words, including how many items are locked and will be skipped.
+4. **Assign class…** (or **Move…**, **Ignore** with a reason, **Restore…**).
+   Each asks the server for a dry run first and shows the count it would
+   change.
+5. **Apply** writes it. `Z` or **Undo** reverts the last one.
 
-See [Keyboard shortcuts](./keyboard-shortcuts.md) for the full key table.
+In a cluster, the bulk bar also offers **Flag**, **Reprocess** (see
+[Reprocess](./dataset-import.md#reprocess)), **Accept VLM** and **Assist…**
+(see [Assist (VLM)](./assist.md)). A facet bar shows the served counts by
+detector class, validation, review tab and detector-confidence band.
+
+The **Details** panel shows the focused detection, else the selection's
+served summary, else the open cluster. Under 1280 px it is a drawer.
+
+See [Keyboard shortcuts](./keyboard-shortcuts.md) for the keys.
 
 ## Crop detail
 

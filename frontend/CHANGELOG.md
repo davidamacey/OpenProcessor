@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Workspace page (`/workspace`) with Clusters and Detections views, a served queues and classes rail, a details panel, a bulk bar that states the served selection summary and dry-runs every action, and a class picker with inline create. The filter, queue, open cluster and selection stay when you switch view; Back restores the previous view.
+- Ignore reasons are the served list (`GET /exclude_reasons`).
+
+### Removed
+
+- `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
+
 ### Changed
 
 - Every grid pages by cursor: the shared pager follows the served `next_cursor`, a deep link loads the page that starts at the located item in one request, and no view sees a page number. The audit queue has Previous and Next.

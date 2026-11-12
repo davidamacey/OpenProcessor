@@ -5,7 +5,7 @@ title: Item filter and Matching items
 
 # Item filter and Matching items
 
-One filter drives three pages: `/clusters`, `/review` and `/export`. Classes
+One filter drives three pages: `/workspace`, `/review` and `/export`. Classes
 in it are always chosen **by name**.
 
 ## What you can filter by
@@ -32,7 +32,7 @@ mode (exact, fuzzy or fragment); left unset it is a plain substring search.
 Nothing is validated in the browser: a malformed band is refused by the
 backend and its message is shown under the bar.
 
-## `/clusters`
+## `/workspace`
 
 The bar above the cluster grid filters the clusters (and the semantic search
 box uses the same filter). A sidebar class chosen on the left counts only
