@@ -118,7 +118,12 @@ async def fetch_page(
     limit: int | None,
 ) -> tuple[list[Any], str | None, int]:
     """``(records, next_cursor, total)``. ``total`` counts every match; ``next_cursor`` is ``None`` on
-    the last page and always for the item-count sort."""
+    the last page and always for the item-count sort.
+
+    ``total`` is counted on every page, cursor pages included: the project table is small (one row
+    per project), the count shares the page's transaction, and the picker and the projects page
+    take ``total`` from each response as the "of N" they show while a list is loaded in pieces.
+    """
     capped = sort.id == ITEMS_SORT
     if capped and cursor is not None:
         msg = 'cursor belongs to a different sort'
