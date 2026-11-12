@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import save_screens
 
 
 CLASSES = [
@@ -146,3 +147,61 @@ def test_region_text_input_reaches_the_queue_with_the_status_filter(stub, page, 
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, errors[:3]
+
+
+MATCH_TABS = {
+    **REVIEW_TABS,
+    'tabs': [
+        {
+            **REVIEW_TABS['tabs'][0],
+            'filters': ['text', 'region_text_match', 'region_status'],
+            'filter_specs': [
+                *REVIEW_TABS['tabs'][0]['filter_specs'],
+                {
+                    'param': 'region_text_match',
+                    'kind': 'enum',
+                    'label': 'Text match',
+                    'options': [
+                        {'value': '', 'label': 'Any'},
+                        {'value': 'exact', 'label': 'Exact (letters and digits)'},
+                        {'value': 'fuzzy', 'label': 'Fuzzy (one edit)'},
+                        {'value': 'fragment', 'label': 'Contains fragment'},
+                    ],
+                    'min': None,
+                    'max': None,
+                    'description': '',
+                    'default': None,
+                    'allows_unset': True,
+                },
+            ],
+        },
+    ],
+}
+
+
+def test_served_text_match_mode_reaches_the_queue(stub, page, app_url):
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
+    stub.on('GET', r'/review/tabs(\?|$)', MATCH_TABS)
+    stub.on('GET', r'/regions/vocabulary(\?|$)', VOCABULARY)
+    stub.on('GET', r'/crops/[^/]+/(image|thumbnail)', (200, b'', 'image/jpeg'))
+    stub.on(
+        'GET',
+        r'/review/regions(\?|$)',
+        {'items': [_item('plate-a')], 'total': 1, 'page': 1, 'page_size': 30},
+    )
+
+    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    select = page.locator('label:has-text("Text match") select')
+    select.wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert select.input_value() == ''
+    with page.expect_response(
+        lambda r: '/review/regions' in r.url and 'region_text_match=fuzzy' in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option('fuzzy')
+    save_screens(page, 'wf2b', 'review-text-match')
+    with page.expect_response(
+        lambda r: '/review/regions' in r.url and 'region_text_match' not in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option('')
