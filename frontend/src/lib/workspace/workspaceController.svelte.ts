@@ -173,10 +173,11 @@ export class WorkspaceController {
     this.#write({ rows, columns }, false);
   }
 
-  /** Writes the draft to the URL; the filter keys are the draft's own. */
-  applyFilter(): void {
+  /** Writes the draft to the URL (and `view`, in the same navigation); the filter keys are the draft's own. */
+  applyFilter(view?: ViewId): void {
     const params = new SvelteURLSearchParams(page.url.search);
     this.filter.toUrl(params);
+    if (view) writeWorkspaceUrl(params, { view });
     this.#go(params, false);
   }
 

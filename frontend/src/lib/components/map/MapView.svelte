@@ -20,20 +20,24 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { viewQuery } from '$lib/map/viewport';
   import type { AreaTools, LngLat } from '$lib/map/areaTools.svelte';
-  import type { MapCellCollection, MapMeta, MapViewQuery } from '$lib/types_map';
+  import type { GeoBox, MapCellCollection, MapMeta, MapViewQuery } from '$lib/types_map';
 
   interface Props {
     meta: MapMeta;
     cells: MapCellCollection | null;
     /** The viewport changed (also once at start): load the cells for it. */
     onview: (view: MapViewQuery) => void;
-    /** A cell was clicked; the host decides between listing its photos and zooming in. */
-    oncell: (cell: { tile: string; count: number; zoom: number }) => boolean;
+    /** A cell was clicked, with the bounds the server gave it. */
+    oncell: (cell: { tile: string; count: number; bounds: GeoBox }) => void;
+    /** A single-photo pin was clicked. */
+    onpin?: (imageId: string) => void;
+    /** The focused cell's tile, drawn with a highlight ring. */
+    selectedTile?: string | null;
     /** Shift+drag draws a rectangle and the lasso button a polygon; both end in the filter. */
     area?: AreaTools;
   }
 
-  let { meta, cells, onview, oncell, area }: Props = $props();
+  let { meta, cells, onview, oncell, onpin, selectedTile = null, area }: Props = $props();
 
   /** What a GeoJSON source takes; the served cells are already a FeatureCollection. */
   type GeoData = Parameters<GeoJSONSource['setData']>[0];
@@ -61,6 +65,11 @@
 
   function pointOf(geometry: { type: string }): [number, number] {
     return (geometry as unknown as { coordinates: [number, number] }).coordinates;
+  }
+
+  /** MapLibre hands a nested feature property back as a JSON string. */
+  function boundsOf(raw: unknown): GeoBox {
+    return (typeof raw === 'string' ? JSON.parse(raw) : raw) as GeoBox;
   }
 
   function emitView(): void {
@@ -195,6 +204,7 @@
         id: 'cells',
         type: 'circle',
         source: 'cells',
+        filter: ['!', ['to-boolean', ['get', 'image_id']]],
         paint: {
           'circle-radius': [
             'interpolate',
@@ -225,6 +235,31 @@
           'circle-opacity': 0.75,
           'circle-stroke-width': 1.5,
           'circle-stroke-color': '#0b0b0f',
+        },
+      });
+      // A cell with exactly one photo at the finest zoom is a pin, never a count.
+      map.addLayer({
+        id: 'pins',
+        type: 'circle',
+        source: 'cells',
+        filter: ['to-boolean', ['get', 'image_id']],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#a78bfa',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+      map.addLayer({
+        id: 'cell-selected',
+        type: 'circle',
+        source: 'cells',
+        filter: ['==', ['get', 'tile'], selectedTile ?? ''],
+        paint: {
+          'circle-radius': 34,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
         },
       });
       map.addSource('area', { type: 'geojson', data: areaShape() });
@@ -263,26 +298,29 @@
         .setText(`${count} photo${count === 1 ? '' : 's'}`)
         .addTo(map);
     });
+    map.on('mouseenter', 'pins', () => {
+      if (map) map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'pins', () => {
+      if (map) map.getCanvas().style.cursor = '';
+    });
     map.on('mouseleave', 'cells', () => {
       if (!map) return;
       map.getCanvas().style.cursor = '';
       popup.remove();
     });
-    map.on('click', 'cells', (e) => {
-      const f = e.features?.[0];
-      if (!f || !map) return;
-      const zoom = Math.floor(map.getZoom());
-      const opened = oncell({
-        tile: String(f.properties?.tile),
-        count: Number(f.properties?.count ?? 0),
-        zoom,
-      });
-      if (!opened) {
-        map.easeTo({
-          center: pointOf(f.geometry),
-          zoom: Math.min(map.getZoom() + 2, meta.max_zoom + 3),
+    map.on('click', (e) => {
+      if (!map || area?.drawing) return;
+      const f = map.queryRenderedFeatures(e.point, { layers: ['pins', 'cells'] })[0];
+      if (!f) return;
+      const props = f.properties ?? {};
+      if (props.image_id) onpin?.(String(props.image_id));
+      else
+        oncell({
+          tile: String(props.tile),
+          count: Number(props.count ?? 0),
+          bounds: boundsOf(props.bounds),
         });
-      }
     });
 
     return () => {
@@ -295,6 +333,12 @@
   $effect(() => {
     void cells;
     push();
+  });
+
+  $effect(() => {
+    const tile = selectedTile ?? '';
+    if (ready && map?.getLayer('cell-selected'))
+      map.setFilter('cell-selected', ['==', ['get', 'tile'], tile]);
   });
 
   $effect(() => {

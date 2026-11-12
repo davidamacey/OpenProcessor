@@ -1,37 +1,51 @@
 /**
- * `/map`: where the project's photos were taken. Thin: the server says whether a map exists
- * (`GET /map`), aggregates the photos into grid cells for the viewport (`GET /map/cells`, GeoJSON)
- * and lists the photos of a cell (`GET /map/images`). Nothing here counts, rounds or hides a
- * position; under the `drop` policy there is nothing to draw and the page says so.
+ * The Workspace Map view: where the project's photos were taken. Thin: the server says whether a
+ * map exists (`GET /map`), aggregates the photos that match the Workspace filter and queue into
+ * grid cells for the viewport (`GET /map/cells`, GeoJSON), and summarises a cell
+ * (`POST /selection/summary`, `GET /images`). Nothing here counts, rounds or hides a position.
+ * The filter is the Workspace's (`ws.itemQuery()`); a pan or zoom never changes it.
  */
 import { apiErrorText } from '$lib/api_errors';
-import { getMapCells, getMapMeta, getMapTileImages } from '$lib/api_map';
-import {
-  ItemFilterState,
-  withoutOpenVocab,
-} from '$lib/itemFilter/itemFilterState.svelte';
-import type { ItemFilterQuery } from '$lib/types_itemFilter';
+import { listImages } from '$lib/api_images';
+import { getMapCells, getMapMeta } from '$lib/api_map';
+import { getSelectionSummary } from '$lib/api_select';
 import type {
-  MapCellCollection,
-  MapMeta,
-  MapTileImages,
-  MapViewQuery,
-} from '$lib/types_map';
+  ItemFilter,
+  ItemFilterQuery,
+  SelectionSummary,
+} from '$lib/types_itemFilter';
+import type { ImagePage } from '$lib/types_images';
+import type { GeoBox, MapCellCollection, MapMeta, MapViewQuery } from '$lib/types_map';
+import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
-/** A cell that holds this many photos or fewer opens the list; a larger one zooms in. */
-export const OPEN_CELL_MAX = 200;
+/** A cell's panel shows this many image cards; the summary counts all of its images. */
+export const CELL_CARDS = 12;
+
+export type MapHost = Pick<
+  WorkspaceController,
+  'itemQuery' | 'itemBody' | 'setFocus' | 'applyFilter'
+> & { filter: Pick<WorkspaceController['filter'], 'geoBbox' | 'hasLocation'> };
 
 export interface MapDeps {
   meta: typeof getMapMeta;
   cells: typeof getMapCells;
-  images: typeof getMapTileImages;
+  summary: typeof getSelectionSummary;
+  images: typeof listImages;
 }
 
 const DEFAULT_DEPS: MapDeps = {
   meta: getMapMeta,
   cells: getMapCells,
-  images: getMapTileImages,
+  summary: getSelectionSummary,
+  images: listImages,
 };
+
+/** The cell that has focus, with the bounds the server gave it. */
+export interface FocusedCell {
+  tile: string;
+  count: number;
+  bounds: GeoBox;
+}
 
 export class MapController {
   meta = $state<MapMeta | null>(null);
@@ -42,24 +56,20 @@ export class MapController {
   cellsError = $state<string | null>(null);
   loadingCells = $state(false);
 
-  /** The shared item filter, capture days included; the same names the lists take. */
-  readonly filter = new ItemFilterState();
+  cell = $state<FocusedCell | null>(null);
+  summary = $state<SelectionSummary | null>(null);
+  cards = $state<ImagePage | null>(null);
+  cellError = $state<string | null>(null);
 
-  /** The cell whose photos are listed in the side panel. */
-  openTile = $state<MapTileImages | null>(null);
-  openError = $state<string | null>(null);
-
+  #host: MapHost;
   #deps: MapDeps;
   #cellsAbort: AbortController | null = null;
+  #cellAbort: AbortController | null = null;
   #lastView: MapViewQuery | null = null;
 
-  constructor(deps: MapDeps = DEFAULT_DEPS) {
+  constructor(host: MapHost, deps: MapDeps = DEFAULT_DEPS) {
+    this.#host = host;
     this.#deps = deps;
-  }
-
-  /** The filter as the query parameters every map route takes. */
-  query(): ItemFilterQuery {
-    return this.filter.toQuery(withoutOpenVocab);
   }
 
   async loadMeta(signal?: AbortSignal): Promise<void> {
@@ -76,7 +86,7 @@ export class MapController {
     }
   }
 
-  /** Loads the cells of a viewport; a newer call replaces an older one still in flight. */
+  /** Loads the cells of a viewport for the Workspace filter; a newer call replaces an older one. */
   async loadCells(view: MapViewQuery): Promise<void> {
     this.#lastView = view;
     this.#cellsAbort?.abort();
@@ -85,7 +95,7 @@ export class MapController {
     this.loadingCells = true;
     this.cellsError = null;
     try {
-      const got = await this.#deps.cells(view, this.query(), abort.signal);
+      const got = await this.#deps.cells(view, this.#host.itemQuery(), abort.signal);
       if (!abort.signal.aborted) this.cells = got;
     } catch (e) {
       if (abort.signal.aborted) return;
@@ -95,46 +105,87 @@ export class MapController {
     }
   }
 
-  /** A filter change reloads the last viewport. */
+  /** The Workspace filter changed: reload the last viewport and the focused cell. */
   refresh(): Promise<void> {
-    this.openTile = null;
-    return this.#lastView ? this.loadCells(this.#lastView) : Promise.resolve();
+    const cells = this.#lastView ? this.loadCells(this.#lastView) : Promise.resolve();
+    return Promise.all([cells, this.cell ? this.#loadCell(this.cell) : undefined]).then(
+      () => undefined,
+    );
   }
 
-  /** Whether a click on a cell lists its photos (true) or zooms in (false). */
-  opensList(count: number, zoom: number): boolean {
-    const deepest = this.meta ? zoom >= this.meta.max_zoom : false;
-    return count <= OPEN_CELL_MAX || deepest;
+  /** A cell click: focus it and ask once for its served summary and first cards. */
+  focusCell(cell: FocusedCell): Promise<void> {
+    this.#host.setFocus({ kind: 'cell', id: cell.tile });
+    return this.#loadCell(cell);
   }
 
-  async openCell(tile: string): Promise<void> {
-    this.openError = null;
+  /** A pin click: the single photo opens in the image details. */
+  focusPin(imageId: string): void {
+    this.#abortCell();
+    this.cell = null;
+    this.#host.setFocus({ kind: 'image', id: imageId });
+  }
+
+  clearCell(): void {
+    this.#abortCell();
+    this.cell = null;
+    this.#host.setFocus(null);
+  }
+
+  /** The Workspace filter narrowed to the focused cell's served bounds. */
+  cellBody(cell: FocusedCell): ItemFilter {
+    return { ...this.#host.itemBody(), geo_bbox: { ...cell.bounds } };
+  }
+
+  /** "Show in <view>": the cell's bounds become the area filter and the view switches. */
+  showCell(cell: FocusedCell, view: Parameters<MapHost['applyFilter']>[0]): void {
+    this.#host.filter.geoBbox = { ...cell.bounds };
+    this.#host.applyFilter(view);
+  }
+
+  /** The "no location" link: narrow the Workspace to photos without a position. */
+  showWithoutLocation(): void {
+    this.#host.filter.hasLocation = false;
+    this.#host.applyFilter();
+  }
+
+  #cellQuery(bounds: GeoBox): ItemFilterQuery {
+    const { west, south, east, north } = bounds;
+    return { ...this.#host.itemQuery(), geo_bbox: `${west},${south},${east},${north}` };
+  }
+
+  #abortCell(): void {
+    this.#cellAbort?.abort();
+    this.#cellAbort = null;
+  }
+
+  async #loadCell(cell: FocusedCell): Promise<void> {
+    this.#abortCell();
+    const abort = new AbortController();
+    this.#cellAbort = abort;
+    this.cell = cell;
+    this.summary = null;
+    this.cards = null;
+    this.cellError = null;
     try {
-      this.openTile = await this.#deps.images(tile, this.query());
+      const [summary, cards] = await Promise.all([
+        this.#deps.summary({ filter: this.cellBody(cell) }, abort.signal),
+        this.#deps.images(
+          { ...this.#cellQuery(cell.bounds), limit: CELL_CARDS },
+          null,
+          abort.signal,
+        ),
+      ]);
+      if (abort.signal.aborted) return;
+      this.summary = summary;
+      this.cards = cards;
     } catch (e) {
-      this.openTile = null;
-      this.openError = apiErrorText(e);
+      if (!abort.signal.aborted) this.cellError = apiErrorText(e);
     }
-  }
-
-  closeCell(): void {
-    this.openTile = null;
-    this.openError = null;
-  }
-
-  /** The list query of the open cell: the filter, narrowed to the cell's photos. */
-  listQuery(): ItemFilterQuery {
-    return { ...this.query(), image_id: this.openTile?.image_ids ?? [] };
-  }
-
-  /** The same, as the `ItemFilter` body the selection actions send. */
-  listBody() {
-    const body = this.filter.toBody();
-    body.image_ids = this.openTile?.image_ids ?? [];
-    return body;
   }
 
   dispose(): void {
     this.#cellsAbort?.abort();
+    this.#abortCell();
   }
 }

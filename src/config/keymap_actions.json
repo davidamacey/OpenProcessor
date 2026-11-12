@@ -23,6 +23,7 @@
     {"id": "box_edit", "label": "Box editing", "description": "Region edit mode and the box editor.", "includes": ["global"], "class_hotkeys_live": false},
     {"id": "workspace", "label": "Workspace", "description": "Keys that work in every Workspace view.", "includes": ["global"], "class_hotkeys_live": true},
     {"id": "cluster", "label": "Workspace grid", "description": "The Workspace card grids: clusters, detections and a cluster's crops.", "includes": ["workspace"], "class_hotkeys_live": true},
+    {"id": "map", "label": "Map", "description": "The Workspace Map view; no class letters, so a key cannot label an area.", "includes": ["workspace"], "class_hotkeys_live": false},
     {"id": "clusters_search", "label": "Cluster search", "description": "Semantic-search results in the Workspace Clusters view.", "includes": ["global"], "class_hotkeys_live": true},
     {"id": "region_gallery", "label": "Region gallery", "description": "The region gallery in the Workspace Clusters view.", "includes": ["global"], "class_hotkeys_live": false}
   ],

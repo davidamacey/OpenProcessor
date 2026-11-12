@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MapController, OPEN_CELL_MAX, type MapDeps } from './mapController.svelte';
+import {
+  CELL_CARDS,
+  MapController,
+  type MapDeps,
+  type MapHost,
+} from './mapController.svelte';
 import { mapMeta } from '$lib/test/fixtures/mapMeta';
-import type { MapCellCollection, MapMeta, MapTileImages } from '$lib/types_map';
+import type { ImagePage } from '$lib/types_images';
+import type { SelectionSummary } from '$lib/types_itemFilter';
+import type { MapCellCollection, MapMeta } from '$lib/types_map';
 
-const META: MapMeta = mapMeta({
-  bounds: { west: 7, south: 46, east: 9, north: 48 },
-  tile_url: 'https://tiles.example/{z}/{x}/{y}.png',
-  tile_attribution: 'osm',
-});
+const META: MapMeta = mapMeta({ bounds: { west: 7, south: 46, east: 9, north: 48 } });
 const CELLS: MapCellCollection = {
   type: 'FeatureCollection',
   features: [],
@@ -15,66 +18,77 @@ const CELLS: MapCellCollection = {
   truncated: false,
   join_truncated: false,
 };
-const IMAGES: MapTileImages = {
-  tile: '9/267/179',
-  count: 2,
-  image_ids: ['a', 'b'],
-  truncated: false,
-};
+const BOUNDS = { west: 8.4375, south: 47.5, east: 8.4551, north: 47.51 };
+const CELL = { tile: '9/267/179', count: 7, bounds: BOUNDS };
+const SUMMARY = {
+  summary_text: '7 detections in 4 images',
+  images: 4,
+} as SelectionSummary;
+const PAGE = { items: [], total: 4 } as unknown as ImagePage;
+
+function host() {
+  return {
+    itemQuery: vi.fn(() => ({ class_name: ['car'], review_tab: 'unreviewed' })),
+    itemBody: vi.fn(() => ({ class_names: ['car'], review_tab: 'unreviewed' })),
+    setFocus: vi.fn(),
+    applyFilter: vi.fn(),
+    filter: { geoBbox: null, hasLocation: null },
+  } as unknown as MapHost & {
+    itemQuery: ReturnType<typeof vi.fn>;
+    setFocus: ReturnType<typeof vi.fn>;
+    applyFilter: ReturnType<typeof vi.fn>;
+  };
+}
 
 function deps(over: Partial<MapDeps> = {}): MapDeps {
   return {
     meta: vi.fn().mockResolvedValue(META),
     cells: vi.fn().mockResolvedValue(CELLS),
-    images: vi.fn().mockResolvedValue(IMAGES),
+    summary: vi.fn().mockResolvedValue(SUMMARY),
+    images: vi.fn().mockResolvedValue(PAGE),
     ...over,
   };
 }
 
 describe('MapController', () => {
-  it('loads the served meta', async () => {
-    const ctl = new MapController(deps());
-    await ctl.loadMeta();
-    expect(ctl.meta).toEqual(META);
-    expect(ctl.loadingMeta).toBe(false);
-  });
-
-  it('shows the served error when the meta read fails, never a made-up map', async () => {
-    const ctl = new MapController(
+  it('loads the served meta, or the served error and never a made-up map', async () => {
+    const ok = new MapController(host(), deps());
+    await ok.loadMeta();
+    expect(ok.meta).toEqual(META);
+    const bad = new MapController(
+      host(),
       deps({ meta: vi.fn().mockRejectedValue(new Error('boom')) }),
     );
-    await ctl.loadMeta();
-    expect(ctl.meta).toBeNull();
-    expect(ctl.metaError).toBe('boom');
+    await bad.loadMeta();
+    expect(bad.meta).toBeNull();
+    expect(bad.metaError).toBe('boom');
   });
 
-  it('sends the shared filter and the capture days with every cells request', async () => {
+  it('sends the workspace filter and queue', async () => {
     const d = deps();
-    const ctl = new MapController(d);
-    ctl.filter.setValue('class_name', ['class_a']);
-    ctl.filter.takenFrom = '2024-03-05';
-    await ctl.loadCells({ zoom: 6, bbox: '7,46,9,48' });
+    await new MapController(host(), d).loadCells({ zoom: 6, bbox: '7,46,9,48' });
     expect(d.cells).toHaveBeenCalledWith(
       { zoom: 6, bbox: '7,46,9,48' },
-      { class_name: ['class_a'], taken_from: '2024-03-05' },
+      { class_name: ['car'], review_tab: 'unreviewed' },
       expect.any(AbortSignal),
     );
-    expect(ctl.cells).toEqual(CELLS);
   });
 
   it('a newer viewport cancels the older request and keeps only the newer answer', async () => {
     const answers: Array<(v: MapCellCollection) => void> = [];
     const signals: AbortSignal[] = [];
-    const d = deps({
-      cells: vi.fn().mockImplementation(
-        (_v, _f, signal: AbortSignal) =>
-          new Promise<MapCellCollection>((resolve) => {
-            signals.push(signal);
-            answers.push(resolve);
-          }),
-      ),
-    });
-    const ctl = new MapController(d);
+    const ctl = new MapController(
+      host(),
+      deps({
+        cells: vi.fn().mockImplementation(
+          (_v, _f, signal: AbortSignal) =>
+            new Promise<MapCellCollection>((resolve) => {
+              signals.push(signal);
+              answers.push(resolve);
+            }),
+        ),
+      }),
+    );
     const first = ctl.loadCells({ zoom: 3 });
     const second = ctl.loadCells({ zoom: 4 });
     expect(signals[0].aborted).toBe(true);
@@ -85,40 +99,71 @@ describe('MapController', () => {
     expect(ctl.loadingCells).toBe(false);
   });
 
-  it('a filter change reloads the last viewport and closes the open cell', async () => {
+  it('a cell click focuses the cell and asks for its summary with the cell bounds', async () => {
+    const h = host();
     const d = deps();
-    const ctl = new MapController(d);
-    await ctl.loadCells({ zoom: 5, bbox: '1,2,3,4' });
-    await ctl.openCell('9/1/1');
-    ctl.filter.takenTo = '2024-03-06';
-    await ctl.refresh();
-    expect(ctl.openTile).toBeNull();
-    expect(d.cells).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(d.cells).mock.calls[1][0]).toEqual({ zoom: 5, bbox: '1,2,3,4' });
-  });
-
-  it('opens the list of a small cell and zooms in on a large one, except at the deepest zoom', async () => {
-    const ctl = new MapController(deps());
-    await ctl.loadMeta();
-    expect(ctl.opensList(OPEN_CELL_MAX, 4)).toBe(true);
-    expect(ctl.opensList(OPEN_CELL_MAX + 1, 4)).toBe(false);
-    expect(ctl.opensList(OPEN_CELL_MAX + 1, 12)).toBe(true);
-  });
-
-  it("narrows the list to the open cell's photos, in both filter spellings", async () => {
-    const ctl = new MapController(deps());
-    ctl.filter.takenFrom = '2024-03-05';
-    await ctl.openCell('9/267/179');
-    expect(ctl.listQuery()).toEqual({ taken_from: '2024-03-05', image_id: ['a', 'b'] });
-    expect(ctl.listBody()).toEqual({ taken_from: '2024-03-05', image_ids: ['a', 'b'] });
-  });
-
-  it('shows the served error when a cell cannot be opened', async () => {
-    const ctl = new MapController(
-      deps({ images: vi.fn().mockRejectedValue(new Error('nope')) }),
+    const ctl = new MapController(h, d);
+    await ctl.focusCell(CELL);
+    expect(h.setFocus).toHaveBeenCalledWith({ kind: 'cell', id: '9/267/179' });
+    expect(d.summary).toHaveBeenCalledWith(
+      { filter: { class_names: ['car'], review_tab: 'unreviewed', geo_bbox: BOUNDS } },
+      expect.any(AbortSignal),
     );
-    await ctl.openCell('9/1/1');
-    expect(ctl.openTile).toBeNull();
-    expect(ctl.openError).toBe('nope');
+    expect(d.images).toHaveBeenCalledTimes(1);
+    expect(d.images).toHaveBeenCalledWith(
+      {
+        class_name: ['car'],
+        review_tab: 'unreviewed',
+        geo_bbox: '8.4375,47.5,8.4551,47.51',
+        limit: CELL_CARDS,
+      },
+      null,
+      expect.any(AbortSignal),
+    );
+    expect(ctl.summary).toEqual(SUMMARY);
+    expect(ctl.cell).toEqual(CELL);
+  });
+
+  it('a pin opens the image details and drops the cell', async () => {
+    const h = host();
+    const ctl = new MapController(h, deps());
+    await ctl.focusCell(CELL);
+    ctl.focusPin('img-9');
+    expect(h.setFocus).toHaveBeenLastCalledWith({ kind: 'image', id: 'img-9' });
+    expect(ctl.cell).toBeNull();
+  });
+
+  it('a filter change reloads the last viewport and the focused cell', async () => {
+    const d = deps();
+    const ctl = new MapController(host(), d);
+    await ctl.loadCells({ zoom: 5, bbox: '1,2,3,4' });
+    await ctl.focusCell(CELL);
+    await ctl.refresh();
+    expect(d.cells).toHaveBeenCalledTimes(2);
+    expect(d.summary).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the served error when a cell cannot be summarised', async () => {
+    const ctl = new MapController(
+      host(),
+      deps({ summary: vi.fn().mockRejectedValue(new Error('nope')) }),
+    );
+    await ctl.focusCell(CELL);
+    expect(ctl.cellError).toBe('nope');
+    expect(ctl.summary).toBeNull();
+  });
+
+  it('show-in applies the cell bounds as the area filter and the view in one navigation', () => {
+    const h = host();
+    new MapController(h, deps()).showCell(CELL, 'gallery');
+    expect(h.filter.geoBbox).toEqual(BOUNDS);
+    expect(h.applyFilter).toHaveBeenCalledWith('gallery');
+  });
+
+  it('the no-location link filters to photos without a position', () => {
+    const h = host();
+    new MapController(h, deps()).showWithoutLocation();
+    expect(h.filter.hasLocation).toBe(false);
+    expect(h.applyFilter).toHaveBeenCalledWith();
   });
 });

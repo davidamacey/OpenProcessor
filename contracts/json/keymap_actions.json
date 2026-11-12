@@ -675,6 +675,15 @@
       "label": "Workspace grid"
     },
     {
+      "class_hotkeys_live": false,
+      "description": "The Workspace Map view; no class letters, so a key cannot label an area.",
+      "id": "map",
+      "includes": [
+        "workspace"
+      ],
+      "label": "Map"
+    },
+    {
       "class_hotkeys_live": true,
       "description": "Semantic-search results in the Workspace Clusters view.",
       "id": "clusters_search",

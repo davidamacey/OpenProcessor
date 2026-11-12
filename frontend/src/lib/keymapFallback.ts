@@ -385,6 +385,14 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
       class_hotkeys_live: true,
     },
     {
+      id: 'map',
+      label: 'Map',
+      description:
+        'The Workspace Map view; no class letters, so a key cannot label an area.',
+      includes: ['workspace'],
+      class_hotkeys_live: false,
+    },
+    {
       id: 'clusters_search',
       label: 'Cluster search',
       description: 'Semantic-search results in the Workspace Clusters view.',

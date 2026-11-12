@@ -11,7 +11,7 @@
   import ViewBar from '$components/workspace/ViewBar.svelte';
   import WorkspaceRail from '$components/workspace/WorkspaceRail.svelte';
   import { createWorkspaceController } from '$lib/workspace/workspaceController.svelte';
-  import { VIEWS, viewEntry } from '$lib/workspace/viewRegistry';
+  import { availableViews, viewEntry } from '$lib/workspace/viewRegistry';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { nextStepsStore } from '$stores/nextSteps.svelte';
 
@@ -30,8 +30,9 @@
   });
 
   function stepView(by: 1 | -1): void {
-    const at = VIEWS.findIndex((v) => v.id === entry.id);
-    ws.setView(VIEWS[(at + by + VIEWS.length) % VIEWS.length]!.id);
+    const views = availableViews(ws);
+    const at = views.findIndex((v) => v.id === entry.id);
+    ws.setView(views[(at + by + views.length) % views.length]!.id);
   }
 
   // Escape peels one layer: the selection, then the open scope, then the panel.
