@@ -69,6 +69,8 @@ ErrorCode = Literal[
     'name_conflict',
     'invalid_transition',
     'cursor_invalid',
+    # A sort on the stored per-image counts was asked while some image has none yet.
+    'image_counts_not_ready',
     'unknown_column',
     'export_outside_project',
     'empty_val_split',

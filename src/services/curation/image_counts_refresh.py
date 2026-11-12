@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from src.clients.image_counts_dirty import DirtyImages, mark_dirty
 from src.config.curation_accessors import images_index, items_index
+from src.config.image_counts import sweep_per_tick
 from src.core.logging import get_logger
 from src.services.curation.image_counts import item_facts
 from src.utils.timeutil import now_iso
@@ -35,8 +36,6 @@ logger = get_logger(__name__)
 
 #: Images recounted per items aggregation and per bulk write.
 BATCH: Final = 500
-#: Never-counted images one tick picks up besides the marked ones.
-SWEEP_PER_TICK: Final = BATCH
 #: A drain stops starting batches after this long (the tick's soft limit is 120 s).
 DRAIN_BUDGET_S: Final = 90.0
 
@@ -87,8 +86,12 @@ async def recount_images(opensearch: Any, image_ids: list[str]) -> int:
     return updated
 
 
-async def sweep_uncounted(opensearch: Any, limit: int = SWEEP_PER_TICK) -> int:
-    """Recount up to ``limit`` images that have no ``counts_at``; returns how many were found."""
+async def sweep_uncounted(opensearch: Any, limit: int | None = None) -> int:
+    """Recount up to ``limit`` images that have no ``counts_at`` (default: ``sweep_per_tick()``);
+    returns how many were found."""
+    limit = sweep_per_tick() if limit is None else limit
+    if limit == 0:
+        return 0
     resp = await opensearch.search(
         index=images_index(),
         body={

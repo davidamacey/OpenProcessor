@@ -6,7 +6,15 @@ asked of the images index, so it is resolved to the images that have such items 
 `JOIN_MAX_IMAGES` of them (`join_truncated` says when it was more), the same capped join the map
 uses. Counts and card boxes for the page then come from one items aggregation (`image_counts`).
 
+When every image in a list's scope carries its stored counts (`counts_at`, set by the periodic
+drain or the `image_counts_backfill` job), `label_state` is a range query on `counts.*` and the
+"most unlabelled first" sort is served, so neither needs the capped join. That holds only without
+item narrowing (an item filter, held-out items shown): those still resolve through the items.
+The stored counts trail the items by at most the drain interval.
+
 * search_after: https://docs.opensearch.org/latest/search-plugins/searching-data/paginate/
+* range query: https://docs.opensearch.org/latest/query-dsl/term/range/
+* filter aggregation: https://docs.opensearch.org/latest/aggregations/bucket/filter/
 * terms query: https://docs.opensearch.org/latest/query-dsl/term/terms/
 """
 
@@ -65,12 +73,32 @@ _SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
 }
 SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _SORTS.items()]
 
+#: Sorts on the stored counts; served (and accepted) only while every image in scope has them.
+_STORED_SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
+    'unlabeled_count:desc': ('Most unlabelled first', [{'counts.unlabeled': {'order': 'desc'}}]),
+    'unlabeled_count:asc': ('Fewest unlabelled first', [{'counts.unlabeled': {'order': 'asc'}}]),
+}
+STORED_SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _STORED_SORTS.items()]
+_STORED_LABEL_STATE: Final[dict[str, list[dict[str, Any]]]] = {
+    'has_unlabeled': [{'range': {'counts.unlabeled': {'gt': 0}}}],
+    'all_labeled': [
+        {'range': {'counts.items': {'gt': 0}}},
+        {'term': {'counts.unlabeled': 0}},
+    ],
+    'no_items': [{'term': {'counts.items': 0}}],
+}
+_UNCOUNTED = {'bool': {'must_not': {'exists': {'field': 'counts_at'}}}}
+
 _HOLDOUT = {'term': {'test_holdout': True}}
 _UNLABELED = {'bool': {'must_not': {'exists': {'field': 'class_id'}}}}
 
 
 class ImageQueryError(ValueError):
     """The request names a sort or combination the route does not serve."""
+
+
+class ImageCountsNotReadyError(ImageQueryError):
+    """A sort on the stored counts was asked while some image in scope has none yet."""
 
 
 @dataclass(frozen=True)
@@ -120,6 +148,25 @@ def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
     return out
 
 
+async def _counts_ready(opensearch: Any, query: dict[str, Any]) -> bool:
+    """True when every image ``query`` matches carries its stored counts."""
+    resp = await opensearch.count(
+        index=images_index(), body={'query': {'bool': {'filter': [query, _UNCOUNTED]}}}
+    )
+    return int(resp['count']) == 0
+
+
+async def _use_stored_label_state(
+    opensearch: Any, q: ImageQuery, f: ItemFilter, image_clauses: list[dict[str, Any]]
+) -> bool:
+    """Whether ``label_state`` can be asked of the stored counts: they describe the images' own
+    visible items, so any item narrowing (a filter, held-out items shown) still needs the join,
+    and so does a scope that has an uncounted image."""
+    if q.view.label_state is None or not f.is_empty() or q.view.include_test:
+        return False
+    return await _counts_ready(opensearch, {'bool': {'filter': image_clauses}})
+
+
 async def _image_query(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> tuple[dict[str, Any], bool]:
@@ -134,21 +181,25 @@ async def _image_query(
             include_test=q.view.include_test, include_excluded='excluded' in f.review_status
         ),
     ]
+    filters = _image_level_clauses(q, policy)
+    state = q.view.label_state
+    if state is not None and await _use_stored_label_state(opensearch, q, f, filters):
+        filters.extend(_STORED_LABEL_STATE[state])
+        state = None
     positive: list[list[dict[str, Any]]] = []
     negative: list[list[dict[str, Any]]] = []
-    if q.view.label_state == 'has_unlabeled':
+    if state == 'has_unlabeled':
         positive.append([*item_clauses, _UNLABELED])
-    elif not f.is_empty() or q.view.label_state == 'all_labeled':
+    elif not f.is_empty() or state == 'all_labeled':
         positive.append(item_clauses)
-    if q.view.label_state == 'all_labeled':
+    if state == 'all_labeled':
         negative.append([*item_clauses, _UNLABELED])
-    if q.view.label_state == 'no_items':
+    if state == 'no_items':
         negative.append(item_clauses)
     if q.view.in_holdout is True:
         positive.append([_HOLDOUT])
     elif q.view.in_holdout is False:
         negative.append([_HOLDOUT])
-    filters = _image_level_clauses(q, policy)
     must_not: list[dict[str, Any]] = []
     truncated = False
     for clauses in positive:
@@ -185,27 +236,49 @@ def _card(src: dict[str, Any], prefix: str, policy: str, facts: Any) -> ImageCar
     )
 
 
+def _sort_clause(sort_id: str) -> list[dict[str, Any]]:
+    """The sort clauses of ``sort_id`` (refuses one the route does not know)."""
+    known = {**_SORTS, **_STORED_SORTS}
+    if sort_id not in known:
+        msg = f'sort must be one of {sorted(known)}'
+        raise ImageQueryError(msg)
+    return known[sort_id][1]
+
+
+def _sort_options(counts_ready: bool) -> list[dict[str, str]]:
+    return [*SORT_OPTIONS, *(STORED_SORT_OPTIONS if counts_ready else [])]
+
+
+def _not_ready() -> ImageCountsNotReadyError:
+    return ImageCountsNotReadyError(
+        'sorting by unlabelled count needs every image counted; start the image-counts backfill '
+        '(POST .../image_counts/backfill). Images ingested since are counted within seconds.'
+    )
+
+
 async def image_page(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> ImagePage:
     """One page of images with their counts and boxes."""
-    if q.view.sort_id not in _SORTS:
-        msg = f'sort must be one of {sorted(_SORTS)}'
-        raise ImageQueryError(msg)
+    sort = _sort_clause(q.view.sort_id)
     query, join_truncated = await _image_query(opensearch, q, embedding, policy)
     body = page_body(
         {
             'track_total_hits': True,
             'query': query,
             '_source': {'includes': list(IMAGE_SOURCE_FIELDS)},
+            'aggs': {'uncounted': {'filter': _UNCOUNTED}},
         },
-        sort=_SORTS[q.view.sort_id][1],
+        sort=sort,
         tiebreak='image_id',
         cursor=q.cursor,
         sort_id=q.view.sort_id,
         limit=q.limit,
     )
     resp = await opensearch.search(index=images_index(), body=body)
+    counts_ready = int(resp['aggregations']['uncounted']['doc_count']) == 0
+    if q.view.sort_id in _STORED_SORTS and not counts_ready:
+        raise _not_ready()
     kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.view.sort_id, limit=q.limit)
     ids = [str(h['_source']['image_id']) for h in kept]
     facts = await item_facts(opensearch, ids, include_test=q.view.include_test)
@@ -221,7 +294,7 @@ async def image_page(
         limit=q.limit,
         join_truncated=join_truncated,
         sort_applied=q.view.sort_id,
-        sort_options=SORT_OPTIONS,
+        sort_options=_sort_options(counts_ready),
         hidden=HiddenCounts(
             **await hidden_counts(
                 opensearch,
@@ -245,10 +318,10 @@ async def locate_image(
 ) -> ImageLocate:
     """Where ``image_id`` (whose stored document is ``image_source``, ``None`` when there is none)
     sits in the list ``q`` would serve; its cursor and limit are ignored."""
-    if q.view.sort_id not in _SORTS:
-        msg = f'sort must be one of {sorted(_SORTS)}'
-        raise ImageQueryError(msg)
+    sort = _sort_clause(q.view.sort_id)
     query, _truncated = await _image_query(opensearch, q, embedding, policy)
+    if q.view.sort_id in _STORED_SORTS and not await _counts_ready(opensearch, query):
+        raise _not_ready()
     out = ImageLocate(
         image_id=image_id,
         in_view=False,
@@ -263,11 +336,12 @@ async def locate_image(
         return out
     source = {**image_source, 'image_id': image_id}
     source[_TAKEN] = (source.get('capture') or {}).get('taken_local')
+    source['counts.unlabeled'] = (source.get('counts') or {}).get('unlabeled')
     where = await locate_item(
         opensearch,
         index=images_index(),
         query=query,
-        sort=with_tiebreak(_SORTS[q.view.sort_id][1], 'image_id'),
+        sort=with_tiebreak(sort, 'image_id'),
         sort_id=q.view.sort_id,
         source=source,
         id_field='image_id',

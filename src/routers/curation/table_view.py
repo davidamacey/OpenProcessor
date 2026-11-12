@@ -12,7 +12,7 @@ from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._crop_params import CropBrowse, resolve_listing
 from src.routers.curation._cursor_params import CursorQ, cursor_refused
-from src.routers.curation._image_query_params import ImageViewQuery
+from src.routers.curation._image_query_params import ImageViewQuery, image_query_refusal
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.table import TableColumns, TablePage, TableRows
 from src.services.curation import table_cells
@@ -85,7 +85,7 @@ async def table(
     except CursorError as exc:
         raise cursor_refused(exc) from exc
     except ImageQueryError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise image_query_refusal(exc) from exc
     except HTTPException:
         raise
     except Exception as exc:

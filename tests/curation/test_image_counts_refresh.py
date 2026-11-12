@@ -238,3 +238,14 @@ def test_a_refused_count_write_leaves_the_images_marked(
     else:
         raise AssertionError('the drain hid a refused write')
     assert image_counts_dirty == {'op:image_counts:claimed:default': {'img-a'}}
+
+
+def test_the_sweep_size_is_a_setting_and_zero_turns_the_sweep_off(
+    image_counts_dirty: dict[str, set[str]], monkeypatch: Any
+) -> None:
+    fake = _world()
+    monkeypatch.setenv('OP_IMAGE_COUNTS_SWEEP_PER_TICK', '2')
+    assert _drain(fake, image_counts_dirty).swept == 2
+    monkeypatch.setenv('OP_IMAGE_COUNTS_SWEEP_PER_TICK', '0')
+    assert _drain(fake, image_counts_dirty).swept == 0
+    assert sum('counts_at' in d for d in fake.docs(IMAGES).values()) == 2
