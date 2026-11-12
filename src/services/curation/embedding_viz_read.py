@@ -4,6 +4,7 @@ cached ``viz_x``/``viz_y`` coordinates only and never fits (split out of
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
@@ -20,8 +21,6 @@ from src.services.embedding_spaces.resolve import embedding_space
 
 
 if TYPE_CHECKING:
-    import uuid
-
     from opensearchpy import AsyncOpenSearch
 
 logger = get_logger(__name__)
@@ -73,39 +72,72 @@ def _point_from_hit(h: dict[str, Any]) -> dict[str, Any]:
         'cluster_uid': src.get('cluster_uid'),
         'class_name': src.get('class_name'),
         'class_source': src.get('class_source'),
+        'matched': True,
     }
+
+
+async def _matched_ids(
+    opensearch: AsyncOpenSearch, clauses: list[dict[str, Any]], crop_ids: list[str]
+) -> set[str]:
+    """The ``crop_ids`` of one page of points that the filter ``clauses`` also match."""
+    body = {
+        'size': len(crop_ids),
+        'query': {'bool': {'filter': [*clauses, {'terms': {'crop_id': crop_ids}}]}},
+        '_source': False,
+        'track_total_hits': False,
+    }
+    try:
+        resp = await opensearch.search(index=items_index(), body=body)
+    except OpenSearchException as exc:
+        logger.warning('curation_viz_projection_match_read_failed', error=str(exc))
+        raise ProjectionUnavailableError(str(exc)) from exc
+    return {str(h['_id']) for h in resp.get('hits', {}).get('hits') or []}
+
+
+def _legend(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The classes of ``points`` by size, each with the colour slot its points use.
+
+    A point with no class (or an empty one) is the ``class_name: None`` entry. The slot is the
+    entry's rank, so the biggest class gets slot 0; the frontend maps a slot to a theme colour.
+    """
+    counts = Counter(p['class_name'] or None for p in points)
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0] is None, kv[0] or ''))
+    slots = {name: i for i, (name, _) in enumerate(ranked)}
+    for p in points:
+        p['colour_index'] = slots[p['class_name'] or None]
+    return [{'class_name': n, 'colour_index': slots[n], 'count': c} for n, c in ranked]
 
 
 async def get_cached_projection(
     opensearch: AsyncOpenSearch,
     *,
-    cluster_uid: uuid.UUID | None = None,
-    class_id: int | None = None,
+    filter_clauses: list[dict[str, Any]] | None = None,
     max_points: int = 50_000,
 ) -> dict[str, Any]:
     """Serve **cached coordinates only** — imports nothing UMAP-related,
-    calls no fit function, does one plain ``search`` over already-written
+    calls no fit function, does plain ``search`` reads over already-written
     ``viz_x``/``viz_y`` fields. This is the entire GET
     ``/curation/viz/projection`` contract (module docstring point 2).
 
+    Every embedded, non-holdout item with coordinates is a point. ``filter_clauses`` (the shared
+    item filter's clauses, built by the route) only decide ``matched``: a second
+    ``terms crop_id`` pass over each page of points keeps the matching ones, so the points the
+    filter leaves out are served with ``matched: false`` (drawn dimmed), never dropped, and the
+    pass is bounded by ``max_points`` like the points.
+
     Raises :class:`ProjectionNotBuiltError` when no projection has ever been
     fit and :class:`ProjectionUnavailableError` when the state read failed
-    (also for a failed points search). Otherwise returns ``{points, projection_version, fitted_at, stale}`` where
-    ``stale`` is True iff there exist crops matching the requested scope
-    (embedding present, not test_holdout) whose cached
-    ``viz_projection_version`` doesn't match the latest fit's version --
-    i.e. some in-scope crops are missing/outdated coordinates, the same
-    "partial coverage is visible" philosophy ``/curation/scores/coverage`` uses.
+    (also for a failed points search). Otherwise returns ``{points, legend, projection_version,
+    fitted_at, stale}`` where ``stale`` is True iff there exist crops (embedding present, not
+    test_holdout) whose cached ``viz_projection_version`` doesn't match the latest fit's version
+    -- i.e. some crops are missing/outdated coordinates, the same "partial coverage is visible"
+    philosophy ``/curation/scores/coverage`` uses.
     """
     meta = await _load_run_metadata()
 
     embedding_field = (await embedding_space(Target.ITEM)).vector_field
     scope_must: list[dict[str, Any]] = [embedded_clause(embedding_field)]
     scope_must_not: list[dict[str, Any]] = [{'term': {'test_holdout': True}}]
-    if cluster_uid is not None:
-        scope_must.append({'term': {'cluster_uid': str(cluster_uid)}})
-    if class_id is not None:
-        scope_must.append({'term': {'class_id': class_id}})
 
     points_query = {
         'bool': {
@@ -134,7 +166,12 @@ async def get_cached_projection(
         hits = resp.get('hits', {}).get('hits') or []
         if not hits:
             break
-        points.extend(_point_from_hit(h) for h in hits)
+        page = [_point_from_hit(h) for h in hits]
+        if filter_clauses:
+            kept = await _matched_ids(opensearch, filter_clauses, [p['crop_id'] for p in page])
+            for p in page:
+                p['matched'] = p['crop_id'] in kept
+        points.extend(page)
         if len(hits) < page_size:
             break
         search_after = hits[-1]['sort']
@@ -157,6 +194,7 @@ async def get_cached_projection(
 
     return {
         'points': points,
+        'legend': _legend(points),
         'projection_version': meta.get('projection_version'),
         'fitted_at': meta.get('fitted_at'),
         'stale': stale,

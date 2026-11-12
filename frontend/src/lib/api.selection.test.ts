@@ -151,6 +151,7 @@ describe('class identity is by name on the list routes', () => {
       geo_bbox: '7,46,9,48',
       geo_polygon: '7,46;9,46;8,48',
       has_location: true,
+      viz_box: '0,0,1,1',
       near_dup_group: 'g1',
     } satisfies Required<
       Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt' | 'region_text_match'>

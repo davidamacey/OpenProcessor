@@ -197,6 +197,8 @@ def test_geo_bbox_narrows_every_filter_route(
 ) -> None:
     if path == '/regions':
         request.getfixturevalue('reference_region_profile')
+    if path == '/viz/projection':
+        monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
     fake = _recording_world()
     url = BASE + path.format(**PATH_VALUES)
     got = _client(fake, monkeypatch).request(

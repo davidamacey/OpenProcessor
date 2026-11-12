@@ -2409,7 +2409,7 @@ classes are reported.
 | POST | `/select/diverse` | `{k, scope: {cluster_uid, filters, review_tab}, seed_crop_id}`. Answers inline with `{crop_ids, method, version, n_pool}` (`200`) when the pool is small enough (`OP_SELECT_SYNC_MAX_OPS`), otherwise starts a background job (`202`). `400` when `OP_SELECT_DIVERSE_ENABLED` is off, `409` while a job runs |
 | GET | `/select/status` | job state. `result` (`crop_ids`, `method`, `version`, `n_pool`) is set once `status` is `completed` |
 | POST | `/select/cancel` | |
-| GET | `/viz/projection` | `cluster_uid`, `class_id`, `max_points` (default 50000). `400` when `OP_VIZ_PROJECTION_ENABLED` is off |
+| GET | `/viz/projection` | the shared item filter (including `viz_box=x1,y1,x2,y2`, a box drawn on the scatter; an inverted box is `422`), `max_points` (default 50000). Points the filter leaves out are served with `matched: false`; `legend` lists `{class_name, colour_index, count}`. `400` when `OP_VIZ_PROJECTION_ENABLED` is off |
 | POST | `/viz/projection/rebuild` | `scope` (`residual` default, or `cluster` with `cluster_uid`). `202` |
 | GET | `/viz/projection/status` | |
 | POST | `/viz/projection/cancel` | |

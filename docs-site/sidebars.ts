@@ -144,6 +144,7 @@ const sidebars: SidebarsConfig = {
         'cropwright/user-guide/workspace',
         'cropwright/user-guide/gallery',
         'cropwright/user-guide/map',
+        'cropwright/user-guide/embedding-view',
         'cropwright/user-guide/image-editor',
         'cropwright/user-guide/assist',
         'cropwright/user-guide/item-filter',

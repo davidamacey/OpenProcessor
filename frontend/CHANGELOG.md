@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Embedding is a Workspace view: the embedding scatter follows the filter (the rest is dimmed), is coloured by the served class legend with its counts, a lasso selects items for the bulk bar, a click opens an item in the details panel, and a box drawn on it (Shift+drag or Draw a box) becomes an "Area: embedding box" chip that filters every view.
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
 - Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The "Embedding plot" toggle of the cluster list and the plot's own class and cluster scope: the Embedding view replaces them and takes the Workspace filter; its inline Assign and Move bar is the Workspace bulk bar.
 - `/map`: the Map is a Workspace view (`/workspace?view=map`) with area filters; its crop side panel is the cell details.
 - `/review`: Review is a Workspace view (`/workspace?view=review&queue=<queue>`); the top-bar Review link, the Review tab bar, the strategy row, the diverse overlay, the semantic search box on Review, its own filter bar and its own class picker are gone (Review uses the Workspace filter and class picker).
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.

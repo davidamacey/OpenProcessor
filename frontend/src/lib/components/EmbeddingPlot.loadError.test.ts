@@ -14,6 +14,15 @@ const { default: EmbeddingPlot } = await import('./EmbeddingPlot.svelte');
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | undefined;
 
+const PROPS = {
+  query: {},
+  vizBox: null,
+  selectedIds: [],
+  onselect: () => {},
+  onbox: () => {},
+  onfocus: () => {},
+};
+
 beforeEach(() => {
   vi.stubGlobal(
     'ResizeObserver',
@@ -49,7 +58,7 @@ describe('EmbeddingPlot read failures', () => {
         detail: { error: 'projection_unavailable', message: 'Index is down.' },
       }),
     );
-    instance = mount(EmbeddingPlot, { target });
+    instance = mount(EmbeddingPlot, { target, props: PROPS });
     await settle();
     expect(target.textContent).toContain('Index is down.');
     expect(target.textContent).not.toContain('No projection has been built yet');
@@ -57,7 +66,7 @@ describe('EmbeddingPlot read failures', () => {
 
   it('shows "not built yet" when the read resolves not built', async () => {
     getVizProjection.mockResolvedValue({ built: false, points: [] });
-    instance = mount(EmbeddingPlot, { target });
+    instance = mount(EmbeddingPlot, { target, props: PROPS });
     await settle();
     expect(target.textContent).toContain('No projection has been built yet');
   });

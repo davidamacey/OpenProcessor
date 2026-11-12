@@ -19,8 +19,6 @@
     matchingModeActive,
     enterMatchingMode,
     exitMatchingMode,
-    embeddingVizAvailable,
-    showEmbeddingViz = $bindable(),
   }: {
     list: ClusterListController;
     modes: ClusterSearchModes;
@@ -30,8 +28,6 @@
     matchingModeActive: boolean;
     enterMatchingMode: () => void;
     exitMatchingMode: () => void;
-    embeddingVizAvailable: boolean;
-    showEmbeddingViz: boolean;
   } = $props();
 </script>
 
@@ -165,28 +161,9 @@
   <span class="grow"></span>
 
   <!-- C5 (visual audit 2026-09-24): the cluster-grid controls below
-       (embedding plot, subject, clarity) don't apply to the Ignored bucket's crop list, so they
+       (subject, clarity) don't apply to the Ignored bucket's crop list, so they
        are hidden in that mode rather than left live and inert. -->
   {#if !modes.ignoredModeActive}
-    <!-- Embedding-plot toggle (curation-strategy plan §5.6): fully absent
-       unless {API_PREFIX}/methods actually reports the overlay, same convention
-       as the diverse overlay in <StrategyBar>. Replaces the card grid
-       when active (never overlays it) — see the {#if showEmbeddingViz}
-       branch in ClustersGrid. Hidden on the slot-gallery view, which has its own
-       grid + toolbar and no per-crop cluster_id to color by. -->
-    {#if embeddingVizAvailable && !isSlotFilter}
-      <button
-        type="button"
-        onclick={() => (showEmbeddingViz = !showEmbeddingViz)}
-        class="btn-sm border text-xs transition-colors {showEmbeddingViz
-          ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
-          : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
-        title="Toggle a 2-d embedding-projection scatter plot (replaces the grid); lasso-select feeds the same label/move actions as the grid"
-      >
-        {showEmbeddingViz ? '✓ ' : ''}Embedding plot
-      </button>
-    {/if}
-
     <!-- Primary-subject grid filters: scope cards to the largest / clear
        crops. Card size + reps reflect only passing crops, so a filtered
        grid is ready to drag-drop + AHC-refine on the subjects that matter. -->

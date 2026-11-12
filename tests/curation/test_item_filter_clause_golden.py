@@ -85,6 +85,7 @@ CASES: dict[str, dict[str, Any]] = {
     'geo_polygon': {'geo_polygon': [(7, 46), (9, 46), (8, 48)]},
     'has_location': {'has_location': True},
     'near_dup_group': {'near_dup_group': '11111111-1111-1111-1111-111111111111'},
+    'viz_box': {'viz_box': (0.0, -1.0, 2.5, 3.0)},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],
@@ -118,6 +119,7 @@ CASES: dict[str, dict[str, Any]] = {
         'region_gate_skipped': True,
         'geo_bbox': {'west': 7, 'south': 46, 'east': 9, 'north': 48},
         'has_location': True,
+        'viz_box': (0.0, -1.0, 2.5, 3.0),
     },
 }
 

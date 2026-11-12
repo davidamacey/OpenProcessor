@@ -247,6 +247,8 @@ async def test_get_cached_projection_never_triggers_a_fit(
             'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
             'class_name': '',
             'class_source': 'vlm_unmatched',
+            'matched': True,
+            'colour_index': 0,
         }
     ]
 
@@ -265,25 +267,22 @@ async def test_get_cached_projection_stale_when_uncovered_crops_exist(
 
 
 @pytest.mark.asyncio
-async def test_get_cached_projection_applies_cluster_and_class_filters(
+async def test_get_cached_projection_scope_is_not_narrowed_by_the_filter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The shared filter only decides ``matched``; the points query stays the whole embedded set."""
     fake_os = AsyncMock()
     current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
     fake_os.search = AsyncMock(return_value={'hits': {'hits': []}})
     fake_os.count = AsyncMock(return_value={'count': 0})
 
     await embedding_viz_read.get_cached_projection(
-        fake_os,
-        cluster_uid=uuid.UUID('6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'),
-        class_id=7,
-        max_points=5,
+        fake_os, filter_clauses=[{'term': {'class_id': 7}}], max_points=5
     )
 
     search_kwargs = fake_os.search.call_args.kwargs
     filter_clauses = search_kwargs['body']['query']['bool']['filter']
-    assert {'term': {'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'}} in filter_clauses
-    assert {'term': {'class_id': 7}} in filter_clauses
+    assert {'term': {'class_id': 7}} not in filter_clauses
     assert search_kwargs['body']['size'] == 5
 
 

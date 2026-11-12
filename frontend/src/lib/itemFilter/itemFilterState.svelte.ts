@@ -45,6 +45,16 @@ function parseBox(raw: string | null): GeoBox | null {
   return { west, south, east, north };
 }
 
+/** A box on the embedding scatter, `x1,y1,x2,y2`; an inverted or unparsable one is dropped. */
+export type VizBox = [number, number, number, number];
+
+function parseVizBox(raw: string | null): VizBox | null {
+  const parts = (raw ?? '').split(',').map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [x1, y1, x2, y2] = parts;
+  return x1 <= x2 && y1 <= y2 ? [x1, y1, x2, y2] : null;
+}
+
 function parseRing(raw: string | null): [number, number][] | null {
   if (!raw) return null;
   const ring = raw.split(';').map((v) => v.split(',').map(Number));
@@ -98,6 +108,8 @@ export class ItemFilterState {
   geoBbox = $state<GeoBox | null>(null);
   geoPolygon = $state<[number, number][] | null>(null);
   hasLocation = $state<boolean | null>(null);
+  /** A box drawn on the Embedding view, in scatter coordinates. */
+  vizBox = $state<VizBox | null>(null);
   /** Set by a scope (a near-duplicate group, one image), not by a bar control. */
   nearDupGroup = $state<string | null>(null);
   imageIds = $state<string[]>([]);
@@ -142,6 +154,7 @@ export class ItemFilterState {
       this.geoPolygon != null,
     );
     put('has_location', this.hasLocation, this.hasLocation != null);
+    put('viz_box', this.vizBox?.join(','), this.vizBox != null);
     put('near_dup_group', this.nearDupGroup, this.nearDupGroup != null);
     put('image_id', [...this.imageIds], this.imageIds.length > 0);
     put('region_text_match', this.regionTextMatch, this.regionTextMatch != null);
@@ -184,6 +197,7 @@ export class ItemFilterState {
     if (this.geoBbox) b.geo_bbox = { ...this.geoBbox };
     if (this.geoPolygon) b.geo_polygon = this.geoPolygon.map(([lon, lat]) => [lon, lat]);
     if (this.hasLocation != null) b.has_location = this.hasLocation;
+    if (this.vizBox) b.viz_box = [...this.vizBox];
     if (this.nearDupGroup) b.near_dup_group = this.nearDupGroup;
     if (this.imageIds.length > 0) b.image_ids = [...this.imageIds];
     if (this.regionTextMatch) b.region_text_match = this.regionTextMatch;
@@ -224,6 +238,7 @@ export class ItemFilterState {
     this.geoPolygon = parseRing(params.get('geo_polygon'));
     const located = params.get('has_location');
     this.hasLocation = located === 'true' ? true : located === 'false' ? false : null;
+    this.vizBox = parseVizBox(params.get('viz_box'));
     this.regionTextMatch =
       pick(params.getAll('region_text_match'), TEXT_MATCHES)[0] ?? null;
   }
@@ -351,6 +366,7 @@ export class ItemFilterState {
     this.geoBbox = null;
     this.geoPolygon = null;
     this.hasLocation = null;
+    this.vizBox = null;
     this.nearDupGroup = null;
     this.imageIds = [];
     this.regionTextMatch = null;
@@ -485,6 +501,13 @@ export class ItemFilterState {
         clear: () => (this.hasLocation = null),
       });
     }
+    if (this.vizBox) {
+      out.push({
+        param: 'viz_box',
+        label: 'Area: embedding box',
+        clear: () => (this.vizBox = null),
+      });
+    }
     if (this.nearDupGroup) {
       out.push({
         param: 'near_dup_group',
@@ -530,5 +553,6 @@ export const URL_KEYS = [
   'geo_bbox',
   'geo_polygon',
   'has_location',
+  'viz_box',
   'region_text_match',
 ] as const;
