@@ -1,3 +1,4 @@
+import { apiErrorText } from '$lib/api_errors';
 import type { PresetBody } from '$lib/types_presets';
 
 /** A preset body as indented JSON text. */
@@ -13,6 +14,6 @@ export function parseBodyText(text: string): { body: PresetBody } | { error: str
     }
     return { body: v as PresetBody };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: apiErrorText(e) };
   }
 }
