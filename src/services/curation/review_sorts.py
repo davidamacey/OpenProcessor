@@ -329,67 +329,8 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
                 "queue's fallback when no probe has run."
             ),
         ),
-        ReviewSort(
-            id='primary_low_conf_default',
-            label='Largest subject, least confident',
-            clause=[
-                {
-                    'crop_area_norm': {
-                        'order': 'desc',
-                        'missing': '_last',
-                        'unmapped_type': 'double',
-                    }
-                },
-                {
-                    # classifier_raw_confidence is never written
-                    # in production -- sort on the stored `confidence`
-                    # field instead (ascending: least confident first).
-                    'confidence': {
-                        'order': 'asc',
-                        'missing': '_last',
-                        'unmapped_type': 'double',
-                    }
-                },
-            ],
-            requires_field='crop_area_norm',
-            status='stable',
-            description='Largest subject first, then the least confident.',
-        ),
-        ReviewSort(
-            id='classifier_blind_spots_default',
-            # The tab was renamed 'Classifier blind spots' (from the
-            # COCO-detector-specific name), but this served label still
-            # said 'COCO' — the one place a client could not avoid
-            # rendering the stale name since it's served text, not an id.
-            label='Largest classifier blind spot',
-            clause=[
-                {
-                    'crop_area_norm': {
-                        'order': 'desc',
-                        'missing': '_last',
-                        'unmapped_type': 'double',
-                    }
-                },
-                {
-                    'confidence': {
-                        'order': 'desc',
-                        'missing': '_last',
-                        'unmapped_type': 'double',
-                    }
-                },
-            ],
-            requires_field='crop_area_norm',
-            status='stable',
-            description='Largest subject first, then the most confident detection.',
-        ),
     ]
     return {rs.id: rs for rs in entries}
-
-
-REVIEW_SORTS: dict[str, ReviewSort] = _build_review_sorts()
-"""Import-time snapshot — fine for introspection/docs, but ``build_sort``
-calls :func:`get_review_sorts` internally so ``mistakenness``'s status is
-never stale relative to live ``OP_SCORES_ENABLED``/``OP_SCORES_SHADOW``."""
 
 
 def get_review_sorts() -> dict[str, ReviewSort]:
@@ -461,11 +402,9 @@ async def _first_covered(
     )
 
 
-_NOT_OFFERED: frozenset[str] = frozenset(
-    {'default', 'detector_disagreement_default', 'primary_low_conf_default'}
-    | {'classifier_blind_spots_default'}
-)
-"""The sentinel and the legacy per-tab defaults: they name a queue's own order, not a choice."""
+_NOT_OFFERED: frozenset[str] = frozenset({'default', 'detector_disagreement_default'})
+"""The sentinel and the disagreements queue's fallback order: they name a queue's own order, not
+a choice."""
 
 _ONLY_IN: dict[str, frozenset[str]] = {
     REGION_SCORE_SORT: frozenset({'regions'}),
@@ -573,7 +512,6 @@ async def build_sort(
 
 
 __all__ = [
-    'REVIEW_SORTS',
     'ReviewSort',
     'build_sort',
     'default_sort_for_tab',
