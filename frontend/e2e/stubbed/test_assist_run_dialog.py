@@ -182,7 +182,7 @@ def register(stub, *, apply_refusal=None, listed=None):
     def crops(request, _m):
         seen['crops_queries'].append(parse_qs(urlsplit(request.url).query))
         items = [crop(i) for i in range(4)]
-        return {'total': len(items), 'page': 1, 'page_size': 60, 'crops': items}
+        return {'total': len(items), 'next_cursor': None, 'limit': 60, 'crops': items}
 
     stub.on('GET', r'/crops(\?|$)', crops)
     stub.on('GET', r'/assist/runs(\?|$)', {'runs': listed if listed is not None else [COMPLETED]})

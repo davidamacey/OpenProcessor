@@ -265,7 +265,7 @@ def _stub_audit(stub):
     stub.on(
         'GET',
         r'/audit/queue(\?|$)',
-        {'items': [_disagreement_item()], 'total': 31, 'page': 1, 'page_size': 30},
+        {'items': [_disagreement_item()], 'total': 31, 'next_cursor': None, 'limit': 30},
     )
 
 

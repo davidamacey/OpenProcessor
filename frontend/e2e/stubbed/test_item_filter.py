@@ -148,7 +148,7 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
 
     def review_handler(request, _match):
         requests.append(request)
-        return (200, {'items': [item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _common(stub)

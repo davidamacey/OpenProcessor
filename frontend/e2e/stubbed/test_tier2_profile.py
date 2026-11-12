@@ -71,7 +71,13 @@ CLASSES = [
 ]
 
 METHODS = {'strategies': [], 'flags': {}}
-EMPTY_QUEUE = {'total': 0, 'page': 1, 'page_size': 30, 'items': [], 'sort_fallback_reason': None}
+EMPTY_QUEUE = {
+    'total': 0,
+    'next_cursor': None,
+    'limit': 30,
+    'items': [],
+    'sort_fallback_reason': None,
+}
 
 
 def register_curation(stub):
