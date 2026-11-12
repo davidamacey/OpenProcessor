@@ -9,9 +9,9 @@ OpenSearch.
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 from fastapi.responses import JSONResponse
 from opensearchpy.exceptions import OpenSearchException
 from pydantic import BaseModel, Field
@@ -22,12 +22,19 @@ from src.core.db_session import DbSessionDep
 from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import embedded_clause
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
+from src.routers.curation._item_models import CropsPageResponse
 from src.services.curation import review_queries
+from src.services.curation.cluster_cards import attach_item_display_nos
+from src.services.curation.crop_browse import crops_page
+from src.services.curation.crop_listing import crops_by_ids
 from src.services.curation.diverse_limits import DIVERSE_SELECT_MAX_K
 from src.services.curation.diverse_order import diverse_enabled, job_max_n, max_n, sync_max_ops
 from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
+from src.services.curation.list_cursor import CursorError
 from src.services.curation.selection import k_center_greedy
+from src.services.curation.selection.pages import SORT_ID, page_slice, stored_selection
 from src.services.curation.selection.pool_fetch import fetch_pool_embeddings, l2_normalize
 from src.services.embedding_spaces.readers import item_write_fields
 from src.services.embedding_spaces.resolve import embedding_space
@@ -227,6 +234,44 @@ async def select_status(session: DbSessionDep) -> dict[str, Any]:
     ``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the
     sync path returns directly."""
     return await _state(session)
+
+
+@router.get(
+    '/select/diverse/{job_id}/items',
+    response_model=None,
+    responses={200: {'model': CropsPageResponse}},
+)
+async def select_diverse_items(
+    job_id: uuid.UUID,
+    opensearch: OpenSearchDep,
+    session: DbSessionDep,
+    cursor: CursorQ = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> dict[str, Any]:
+    """One page of the items a finished diverse selection picked, in pick order.
+
+    Same wire items as ``GET /crops``; ``total`` is the number picked. 404 for a job that is not
+    this project's selection, 409 while it has not completed."""
+    job_status, selection = await stored_selection(session, job_id)
+    if job_status != 'completed':
+        raise HTTPException(status_code=409, detail=f'the selection is {job_status}, not completed')
+    ids: list[str] = list(selection.get('crop_ids') or [])
+    try:
+        wanted, next_cursor = page_slice(ids, cursor=cursor, limit=limit)
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
+    crops = await crops_by_ids(opensearch, wanted)
+    await attach_item_display_nos(crops)
+    return crops_page(
+        total=len(ids),
+        next_cursor=next_cursor,
+        limit=limit,
+        crops=crops,
+        sort_applied=SORT_ID,
+        method=selection.get('method'),
+        version=selection.get('version'),
+        n_pool=selection.get('n_pool'),
+    )
 
 
 @router.post('/select/cancel')

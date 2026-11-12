@@ -70,7 +70,16 @@ def state_dict(view: JobView | None) -> dict[str, Any]:
     """The ``/select/status`` wire of a job row."""
     params = (view.params if view else None) or {}
     progress = (view.progress if view else None) or {}
-    result = (view.result or {}).get('selection') if view else None
+    stored = (view.result or {}).get('selection') if view else None
+    # The picked ids are served a page at a time (GET /select/diverse/{job_id}/items), not here.
+    result = (
+        None
+        if stored is None
+        else {
+            **{key: value for key, value in stored.items() if key != 'crop_ids'},
+            'n_selected': len(stored.get('crop_ids') or []),
+        }
+    )
     return {
         **common_state(view),
         'k': int(params.get('k') or 0),

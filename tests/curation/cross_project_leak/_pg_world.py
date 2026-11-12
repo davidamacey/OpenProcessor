@@ -34,13 +34,22 @@ def finished_job(
     status: str = 'completed',
     params: dict[str, Any] | None = None,
     error: str | None = None,
+    result: dict[str, Any] | None = None,
 ) -> uuid.UUID:
     """A finished job (finished, so it never counts as the project's live one)."""
     row = conn.execute(
         'INSERT INTO jobs (project_id, kind, queue, status, params, max_queue_wait, requested_by, '
-        'started_at, finished_at, error_message) '
-        "VALUES (%s, %s, %s, %s, %s, interval '1 hour', 'test', now(), now(), %s) RETURNING id",
-        (project, kind, queue, status, Jsonb(params or {}), error),
+        'started_at, finished_at, error_message, result) '
+        "VALUES (%s, %s, %s, %s, %s, interval '1 hour', 'test', now(), now(), %s, %s) RETURNING id",
+        (
+            project,
+            kind,
+            queue,
+            status,
+            Jsonb(params or {}),
+            error,
+            None if result is None else Jsonb(result),
+        ),
     ).fetchone()
     assert row is not None
     return row[0]
@@ -225,6 +234,21 @@ def seed_world(conn: Any, slug: str, project: uuid.UUID, source_dir: str) -> dic
     return {
         'reprocess_job_id': str(finished_job(conn, project, 'reprocess')),
         'autolabel_job_id': str(finished_job(conn, project, 'autolabel')),
+        'selection_job_id': str(
+            finished_job(
+                conn,
+                project,
+                'selection',
+                result={
+                    'selection': {
+                        'crop_ids': [f'{slug}-item-0004'],
+                        'method': 'kcenter_greedy',
+                        'version': 'v1',
+                        'n_pool': 1,
+                    }
+                },
+            )
+        ),
         'bulk_run_id': str(
             finished_job(
                 conn,

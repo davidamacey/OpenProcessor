@@ -71650,6 +71650,89 @@
         ]
       }
     },
+    "/curation/projects/{project}/select/diverse/{job_id}/items": {
+      "get": {
+        "description": "One page of the items a finished diverse selection picked, in pick order.\n\nSame wire items as ``GET /crops``; ``total`` is the number picked. 404 for a job that is not\nthis project's selection, 409 while it has not completed.",
+        "operationId": "select_diverse_items_curation_projects__project__select_diverse__job_id__items_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CropsPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Diverse Items",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/select/status": {
       "get": {
         "description": "Poll a queued ``POST /curation/select/diverse`` job. ``result`` is populated once\n``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the\nsync path returns directly.",
