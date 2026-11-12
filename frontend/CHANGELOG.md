@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Workspace page (`/workspace`) with Clusters and Detections views, a served queues and classes rail, a details panel, a bulk bar that states the served selection summary and dry-runs every action, and a class picker with inline create. The filter, queue, open cluster and selection stay when you switch view; Back restores the previous view.
 - Ignore reasons are the served list (`GET /exclude_reasons`).
+- Image editor (`/images/<image_id>`): draw, move, resize and delete boxes, class picker with inline create, undo and redo, autosave. It walks the Workspace list it was opened from (`Shift+O` opens it from the Workspace); its keys are the `editor` keymap context.
 
 ### Removed
 
