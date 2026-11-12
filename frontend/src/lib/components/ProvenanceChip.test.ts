@@ -56,7 +56,7 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
 
     expect(el.textContent).toContain('Tag detector');
     const span = el.querySelector('span.chip') as HTMLElement;
-    expect(span.className).toContain('border-blue-500/50');
+    expect(span.className).toContain('border-accent/50');
   });
 
   it('colors a verifier-role id (e.g. the VLM) teal', () => {
@@ -67,7 +67,7 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
 
     expect(el.textContent).toContain('Gemma');
     const span = el.querySelector('span.chip') as HTMLElement;
-    expect(span.className).toContain('border-teal-500/50');
+    expect(span.className).toContain('border-info/50');
   });
 
   it('colors a human-role id emerald', () => {
@@ -75,7 +75,7 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
     const el = renderChip({ detector: 'human' });
 
     const span = el.querySelector('span.chip') as HTMLElement;
-    expect(span.className).toContain('border-emerald-500/50');
+    expect(span.className).toContain('border-success/50');
   });
 
   it('renders an id not in any served vocabulary verbatim with the neutral chip', () => {
@@ -83,7 +83,7 @@ describe('ProvenanceChip — served vocabulary label + role-driven color (m9)', 
 
     expect(el.textContent).toContain('some_unknown_future_detector');
     const span = el.querySelector('span.chip') as HTMLElement;
-    expect(span.className).toContain('border-zinc-700');
+    expect(span.className).toContain('border-line-strong');
   });
 
   it('parses `raw="<id>:<tag>"`, and mutes a miss/reject tag', () => {

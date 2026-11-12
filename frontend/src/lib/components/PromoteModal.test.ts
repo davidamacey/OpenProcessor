@@ -322,7 +322,7 @@ describe('PromoteModal background job (#87)', () => {
     mountOpen({ attachJob: pj('building') });
     expect(target.querySelector('[data-testid="promote-progress"]')).not.toBeNull();
     expect(current()).toBe('promote-phase-building');
-    expect(phaseOf('exporting')!.textContent).toContain('✓');
+    expect(phaseOf('exporting')!.querySelector('svg[aria-label="done"]')).not.toBeNull();
     expect(target.querySelector('button[type="submit"]')).toBeNull();
   });
 });

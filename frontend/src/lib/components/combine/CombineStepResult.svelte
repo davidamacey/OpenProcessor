@@ -29,16 +29,16 @@
 </script>
 
 <section
-  class="space-y-1 rounded border border-zinc-800 p-3"
+  class="space-y-1 rounded border border-line p-3"
   data-testid="combine-step-result"
 >
   <div class="flex flex-wrap items-center gap-2">
-    <h2 class="text-sm font-semibold text-zinc-200">Last next step</h2>
-    <span class="text-xs text-zinc-300" data-testid="combine-step-result-action"
+    <h2 class="text-sm font-semibold text-fg-1">Last next step</h2>
+    <span class="text-xs text-fg-2" data-testid="combine-step-result-action"
       >{combineLabel(action)}</span
     >
     <span
-      class="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-200"
+      class="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg-1"
       data-testid="combine-step-result-status"
       >{status ? combineLabel(status) : 'Done'}</span
     >
@@ -46,20 +46,20 @@
   {#if inline.length > 0}
     <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-xs">
       {#each inline as [k, v] (k)}
-        <dt class="text-zinc-500">{combineLabel(k)}</dt>
-        <dd class="font-mono text-zinc-200" data-result-key={k}>{reportCell(v)}</dd>
+        <dt class="text-fg-3">{combineLabel(k)}</dt>
+        <dd class="font-mono text-fg-1" data-result-key={k}>{reportCell(v)}</dd>
       {/each}
     </dl>
   {/if}
   {#each collapsed as [k, v] (k)}
     <details class="text-xs" data-testid="combine-step-result-detail">
-      <summary class="cursor-pointer text-zinc-400">{combineLabel(k)}</summary>
-      <pre class="mt-1 overflow-x-auto font-mono text-zinc-300">{typeof v === 'string'
+      <summary class="cursor-pointer text-fg-2">{combineLabel(k)}</summary>
+      <pre class="mt-1 overflow-x-auto font-mono text-fg-2">{typeof v === 'string'
           ? v
           : JSON.stringify(v, null, 2)}</pre>
     </details>
   {/each}
   {#if obj === null}
-    <p class="text-xs text-zinc-400">{reportCell(result)}</p>
+    <p class="text-xs text-fg-2">{reportCell(result)}</p>
   {/if}
 </section>

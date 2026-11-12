@@ -108,19 +108,17 @@
 
   <!-- HDD source distribution -->
   {#if stats?.dataset_error}
-    <section
-      class="surface border-orange-500/40 bg-orange-500/10 p-3 text-xs text-orange-200"
-    >
+    <section class="surface border-warn/40 bg-warn/10 p-3 text-xs text-warn-text">
       Dataset totals unavailable: {stats.dataset_error}
     </section>
   {:else if hddSources.length > 0}
     <section class="surface p-4">
-      <h2 class="mb-2 text-sm font-semibold text-zinc-300">Source distribution</h2>
+      <h2 class="mb-2 text-sm font-semibold text-fg-2">Source distribution</h2>
       <ul class="flex flex-wrap gap-2 text-xs">
         {#each hddSources as src (src.key)}
-          <li class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-            <span class="font-mono text-zinc-300">{src.key}</span>
-            <span class="ml-1 text-zinc-500">{src.doc_count.toLocaleString()}</span>
+          <li class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
+            <span class="font-mono text-fg-2">{src.key}</span>
+            <span class="ml-1 text-fg-3">{src.doc_count.toLocaleString()}</span>
           </li>
         {/each}
       </ul>

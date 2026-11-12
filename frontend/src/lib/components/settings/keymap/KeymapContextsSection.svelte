@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import KeyChips from '$components/settings/keymap/KeyChips.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
@@ -11,34 +12,36 @@
 </script>
 
 {#each contexts as ctx (ctx.id)}
-  <details class="mb-3 rounded border border-zinc-800" open>
-    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-300">
+  <details class="mb-3 rounded border border-line" open>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-2">
       {ctx.label}
-      <span class="ml-1 font-normal text-zinc-600">{ctx.description}</span>
+      <span class="ml-1 font-normal text-fg-3">{ctx.description}</span>
     </summary>
     <table class="w-full text-xs">
       <tbody>
         {#each contextRowActions(ctx.id) as action (action.id)}
           {@const field = `overrides.${action.id}`}
           {@const fieldIssues = ctl.issuesForField(field)}
-          <tr class="border-t border-zinc-900">
-            <td class="px-3 py-1.5 text-zinc-300">
+          <tr class="border-t border-line">
+            <td class="px-3 py-1.5 text-fg-2">
               {action.label}
               {#if !action.available}
-                <span class="ml-1 text-zinc-600">(no region profile in this project)</span
-                >
+                <span class="ml-1 text-fg-3">(no region profile in this project)</span>
               {/if}
               {#if fieldIssues.errors.length > 0}
-                <div class="text-red-400">{fieldIssues.errors.join('; ')}</div>
+                <div class="text-danger-text">{fieldIssues.errors.join('; ')}</div>
               {/if}
               {#if fieldIssues.warnings.length > 0}
-                <div class="text-amber-400">{fieldIssues.warnings.join('; ')}</div>
+                <div class="text-warn-text">{fieldIssues.warnings.join('; ')}</div>
               {/if}
             </td>
             <td class="px-3 py-1.5">
               {#if !action.modifiable}
-                <span class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-500">
-                  🔒 {ctl.keysOf(action.id).map(formatShortcutKey).join(' / ') || '—'}
+                <span class="rounded border border-line-strong px-1.5 py-0.5 text-fg-3">
+                  <Icon name="lock" size={12} class="mr-1 -mt-0.5 inline-block" />{ctl
+                    .keysOf(action.id)
+                    .map(formatShortcutKey)
+                    .join(' / ') || '—'}
                 </span>
               {:else}
                 <KeyChips
@@ -51,7 +54,7 @@
                   {#snippet extra()}
                     {#if ctl.isChanged(action.id)}
                       <button
-                        class="text-zinc-500 underline hover:text-zinc-300"
+                        class="text-fg-3 underline hover:text-fg-2"
                         onclick={() => ctl.resetOneLocal(action.id)}
                       >
                         reset

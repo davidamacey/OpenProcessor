@@ -14,15 +14,15 @@
 {#each namedGroups() as g (g)}
   {@const members = groupMembers(g)}
   {@const canonical = ctl.groupCanonicalKeys(g)}
-  <details class="mb-3 rounded border border-zinc-800" open data-testid={`group-${g}`}>
-    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-zinc-300">
+  <details class="mb-3 rounded border border-line" open data-testid={`group-${g}`}>
+    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-2">
       {groupLabel(g)}
-      <span class="ml-1 font-normal text-zinc-600">applies on every page</span>
+      <span class="ml-1 font-normal text-fg-3">applies on every page</span>
     </summary>
     <table class="w-full text-xs">
       <tbody>
-        <tr class="border-t border-zinc-900">
-          <td class="px-3 py-1.5 text-zinc-300">{groupLabel(g)} (every page)</td>
+        <tr class="border-t border-line">
+          <td class="px-3 py-1.5 text-fg-2">{groupLabel(g)} (every page)</td>
           <td class="px-3 py-1.5">
             <KeyChips
               {ctl}
@@ -35,27 +35,27 @@
         </tr>
       </tbody>
     </table>
-    <details class="border-t border-zinc-900 px-3 py-1.5">
-      <summary class="cursor-pointer text-xs text-zinc-500">Customize per page</summary>
+    <details class="border-t border-line px-3 py-1.5">
+      <summary class="cursor-pointer text-xs text-fg-3">Customize per page</summary>
       <table class="w-full text-xs">
         <tbody>
           {#each members as action (action.id)}
             {@const field = `overrides.${action.id}`}
             {@const fieldIssues = ctl.issuesForField(field)}
             {@const detached = ctl.memberDetached(action.id)}
-            <tr class="border-t border-zinc-900" data-testid={`member-${action.id}`}>
-              <td class="px-3 py-1.5 text-zinc-300">
+            <tr class="border-t border-line" data-testid={`member-${action.id}`}>
+              <td class="px-3 py-1.5 text-fg-2">
                 {contextLabel(action.context)}
                 {#if detached}
-                  <span class="ml-1 text-amber-400" data-testid={`detached-${action.id}`}>
+                  <span class="ml-1 text-warn-text" data-testid={`detached-${action.id}`}>
                     differs from the group
                   </span>
                 {/if}
                 {#if fieldIssues.errors.length > 0}
-                  <div class="text-red-400">{fieldIssues.errors.join('; ')}</div>
+                  <div class="text-danger-text">{fieldIssues.errors.join('; ')}</div>
                 {/if}
                 {#if fieldIssues.warnings.length > 0}
-                  <div class="text-amber-400">{fieldIssues.warnings.join('; ')}</div>
+                  <div class="text-warn-text">{fieldIssues.warnings.join('; ')}</div>
                 {/if}
               </td>
               <td class="px-3 py-1.5">
@@ -69,7 +69,7 @@
                   {#snippet extra()}
                     {#if detached}
                       <button
-                        class="text-amber-500 underline hover:text-amber-300"
+                        class="text-warn-text underline hover:text-warn-text"
                         onclick={() => ctl.resetMemberToGroup(action.id)}
                       >
                         reset to group

@@ -35,18 +35,18 @@
 <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Save">
   {#if report || ed.validating}
     <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="report-counts">
-      <span class={counts.errors > 0 ? 'text-red-300' : 'text-zinc-400'}
+      <span class={counts.errors > 0 ? 'text-danger-text' : 'text-fg-2'}
         >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
       >
-      <span class={counts.warnings > 0 ? 'text-amber-300' : 'text-zinc-400'}
+      <span class={counts.warnings > 0 ? 'text-warn-text' : 'text-fg-2'}
         >{counts.warnings} warning{counts.warnings === 1 ? '' : 's'}</span
       >
-      <span class="text-zinc-400">{counts.info} note{counts.info === 1 ? '' : 's'}</span>
-      {#if ed.validating}<span class="text-zinc-500">checking…</span>{/if}
+      <span class="text-fg-2">{counts.info} note{counts.info === 1 ? '' : 's'}</span>
+      {#if ed.validating}<span class="text-fg-3">checking…</span>{/if}
     </div>
   {/if}
   {#if ed.validateError}
-    <p class="text-xs text-red-300">Could not check the draft: {ed.validateError}</p>
+    <p class="text-xs text-danger-text">Could not check the draft: {ed.validateError}</p>
   {/if}
   {#if ed.editable}
     <div class="flex flex-wrap gap-2">
@@ -64,22 +64,22 @@
         onclick={() => void ed.reloadLatest()}>Discard edits</button
       >
     </div>
-    <p class="text-xs text-zinc-500">
+    <p class="text-xs text-fg-3">
       {ed.dirty ? 'Unsaved edits.' : 'No unsaved edits.'} Saving writes a new revision; it doesn't
       change the active {noun}.
     </p>
   {/if}
   {#if ed.saveError}
-    <p class="text-xs text-red-300" data-testid="save-error">{ed.saveError}</p>
+    <p class="text-xs text-danger-text" data-testid="save-error">{ed.saveError}</p>
     {#if ed.saveReasons.length > 0}
-      <ul class="list-disc pl-5 text-xs text-red-300" data-testid="save-reasons">
+      <ul class="list-disc pl-5 text-xs text-danger-text" data-testid="save-reasons">
         {#each ed.saveReasons as r (r)}<li class="font-mono">{r}</li>{/each}
       </ul>
     {/if}
   {/if}
   {#if ed.conflict}
     <div
-      class="space-y-2 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-100"
+      class="space-y-2 rounded border border-warn/40 bg-warn/10 p-2 text-xs text-warn-text"
       data-testid="save-conflict"
     >
       <p>{ed.conflict.message}</p>
@@ -102,7 +102,7 @@
   {/if}
   {#if ed.remoteChanged}
     <div
-      class="space-y-2 rounded border border-sky-500/40 bg-sky-500/10 p-2 text-xs text-sky-100"
+      class="space-y-2 rounded border border-info/40 bg-info/10 p-2 text-xs text-info-text"
       data-testid="remote-changed"
     >
       <p>This {noun} changed on the server while you were editing.</p>
@@ -113,7 +113,7 @@
   {/if}
   {@render extra?.()}
   {#if ed.doc}
-    <div class="border-t border-zinc-800 pt-2">
+    <div class="border-t border-line pt-2">
       <button
         type="button"
         class="btn btn-sm"

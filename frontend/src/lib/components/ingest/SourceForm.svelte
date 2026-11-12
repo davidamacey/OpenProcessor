@@ -17,7 +17,7 @@
 </script>
 
 <form
-  class="space-y-3 rounded border border-zinc-700 p-3"
+  class="space-y-3 rounded border border-line-strong p-3"
   data-testid="source-form"
   onsubmit={(e) => {
     e.preventDefault();
@@ -25,7 +25,7 @@
   }}
 >
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs text-zinc-400">
+    <label class="text-xs text-fg-2">
       Name
       <input
         class="input input-sm block"
@@ -35,7 +35,7 @@
       />
     </label>
     {#if creating}
-      <fieldset class="flex gap-3 text-xs text-zinc-300">
+      <fieldset class="flex gap-3 text-xs text-fg-2">
         <label class="flex items-center gap-1">
           <input
             type="radio"
@@ -60,7 +60,7 @@
   </div>
 
   {#if creating && list && !list.s3_configured}
-    <p class="text-xs text-amber-300" data-testid="s3-off">
+    <p class="text-xs text-warn-text" data-testid="s3-off">
       S3 is off on this deployment: the API's OP_S3_ALLOWED lists no bucket.
     </p>
   {/if}
@@ -68,7 +68,7 @@
   {#if creating}
     {#if controller.form.backend === 's3'}
       <div class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-zinc-400">
+        <label class="text-xs text-fg-2">
           Bucket
           <input
             class="input input-sm block font-mono"
@@ -76,7 +76,7 @@
             bind:value={controller.form.bucket}
           />
         </label>
-        <label class="text-xs text-zinc-400">
+        <label class="text-xs text-fg-2">
           Prefix
           <input
             class="input input-sm block font-mono"
@@ -87,13 +87,13 @@
         </label>
       </div>
       {#if list && list.s3_allowed.length > 0}
-        <p class="text-xs text-zinc-500">
+        <p class="text-xs text-fg-3">
           Allowed by this deployment:
           <span class="font-mono">{list.s3_allowed.join(', ')}</span>
         </p>
       {/if}
     {:else}
-      <label class="block text-xs text-zinc-400">
+      <label class="block text-xs text-fg-2">
         Folder (a path inside the API container, under a source root)
         <input
           class="input block w-full font-mono text-xs"
@@ -104,8 +104,8 @@
     {/if}
   {/if}
 
-  <fieldset class="space-y-2 text-xs text-zinc-300">
-    <legend class="text-zinc-400">Triggers</legend>
+  <fieldset class="space-y-2 text-xs text-fg-2">
+    <legend class="text-fg-2">Triggers</legend>
     <div class="flex flex-wrap items-center gap-2">
       <label class="flex items-center gap-1">
         <input
@@ -124,7 +124,7 @@
         disabled={!controller.form.watchEnabled}
         data-testid="trigger-watch-interval"
       />
-      <span class="text-zinc-500">seconds</span>
+      <span class="text-fg-3">seconds</span>
     </div>
     <div class="flex flex-wrap items-center gap-2">
       <label class="flex items-center gap-1">
@@ -155,7 +155,7 @@
     {/if}
   </fieldset>
 
-  <details class="text-xs text-zinc-400">
+  <details class="text-xs text-fg-2">
     <summary class="cursor-pointer">Options</summary>
     <div class="mt-2 flex flex-wrap items-end gap-3">
       <label>
@@ -194,7 +194,7 @@
   </details>
 
   {#if controller.actionError}
-    <p class="text-xs text-red-300" data-testid="source-form-error">
+    <p class="text-xs text-danger-text" data-testid="source-form-error">
       {controller.actionError}
     </p>
   {/if}

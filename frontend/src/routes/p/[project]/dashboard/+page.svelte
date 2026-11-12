@@ -145,7 +145,7 @@
   <header class="flex items-end justify-between">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <p class="text-sm text-zinc-500">
+      <p class="text-sm text-fg-3">
         Pipeline stats and manual clustering control. Stats refresh every 10s.
       </p>
     </div>
@@ -153,7 +153,7 @@
 
   {#if !healthStore.ok}
     <div
-      class="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger-text"
     >
       <strong>API unavailable.</strong> Check that the OpenProcessor API is reachable from
       <code class="font-mono"
@@ -172,7 +172,7 @@
 
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
-    <h2 class="mr-3 text-sm font-semibold text-zinc-400">Quick actions</h2>
+    <h2 class="mr-3 text-sm font-semibold text-fg-2">Quick actions</h2>
     <VlmQuickAction />
     <button class="btn" type="button" onclick={openExportConfirm}>
       Export Dataset (YOLO)
@@ -197,7 +197,7 @@
   <!-- Class balance (D2, visual audit 2026-09-24): ClassBalanceChart. -->
   <section class="surface p-4">
     {#if !legacyStats}
-      <p class="text-sm text-zinc-500">Loading...</p>
+      <p class="text-sm text-fg-3">Loading...</p>
     {:else}
       <ClassBalanceChart
         rows={legacyStats.per_class}
@@ -209,13 +209,13 @@
 
   <!-- Recent activity -->
   <section class="surface p-4">
-    <h2 class="mb-3 text-sm font-semibold text-zinc-300">Recent labels (last 20)</h2>
+    <h2 class="mb-3 text-sm font-semibold text-fg-2">Recent labels (last 20)</h2>
     {#if recent.length === 0}
-      <p class="text-sm text-zinc-500">No recent labels.</p>
+      <p class="text-sm text-fg-3">No recent labels.</p>
     {:else}
       <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
         {#each recent as crop (crop.id)}
-          <li class="rounded-md border border-zinc-800 bg-zinc-900">
+          <li class="rounded-md border border-line bg-surface-1">
             <img
               src={getThumbUrl(crop.id)}
               alt="crop"
@@ -223,7 +223,7 @@
               class="aspect-square w-full rounded-t-md object-contain"
             />
             <div
-              class="truncate px-1.5 py-1 text-[10px] text-zinc-300"
+              class="truncate px-1.5 py-1 text-caption text-fg-2"
               title={crop.class_name ?? ''}
             >
               {crop.class_name ?? '—'}
@@ -242,41 +242,41 @@
   <Modal label="Export dataset confirm" onclose={closeExportConfirm}>
     <h3 class="mb-3 text-base font-semibold">Export dataset (YOLO)</h3>
     {#if !exportResult && !exportError}
-      <p class="mb-4 text-xs text-zinc-500">
+      <p class="mb-4 text-xs text-fg-3">
         Runs the full YOLO export pipeline synchronously (resize, stratified split
         honoring the frozen test holdout, manifest write) — this can take a while and the
         page will wait for it to finish.
       </p>
     {/if}
     {#if exportRunning}
-      <p class="mb-4 text-xs text-zinc-400">Exporting… this may take a few minutes.</p>
+      <p class="mb-4 text-xs text-fg-2">Exporting… this may take a few minutes.</p>
     {/if}
     {#if exportError}
-      <p class="mb-4 text-xs text-red-300">Export failed: {exportError}</p>
+      <p class="mb-4 text-xs text-danger-text">Export failed: {exportError}</p>
     {/if}
     {#if exportResult}
       <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt class="text-zinc-500">Status</dt>
-        <dd class="font-mono text-zinc-200">{exportResult.status}</dd>
+        <dt class="text-fg-3">Status</dt>
+        <dd class="font-mono text-fg-1">{exportResult.status}</dd>
         {#if exportResult.export_dir}
-          <dt class="text-zinc-500">Export dir</dt>
-          <dd class="break-all font-mono text-zinc-200">{exportResult.export_dir}</dd>
+          <dt class="text-fg-3">Export dir</dt>
+          <dd class="break-all font-mono text-fg-1">{exportResult.export_dir}</dd>
         {/if}
         {#if exportResult.dataset_sha}
-          <dt class="text-zinc-500">Dataset SHA</dt>
-          <dd class="break-all font-mono text-zinc-200">{exportResult.dataset_sha}</dd>
+          <dt class="text-fg-3">Dataset SHA</dt>
+          <dd class="break-all font-mono text-fg-1">{exportResult.dataset_sha}</dd>
         {/if}
         {#if exportResult.split_counts}
-          <dt class="text-zinc-500">Split counts</dt>
-          <dd class="font-mono text-zinc-200">
+          <dt class="text-fg-3">Split counts</dt>
+          <dd class="font-mono text-fg-1">
             {Object.entries(exportResult.split_counts)
               .map(([k, v]) => `${k}: ${v}`)
               .join(' · ')}
           </dd>
         {/if}
         {#if exportResult.finished_at}
-          <dt class="text-zinc-500">Finished</dt>
-          <dd class="font-mono text-zinc-200">
+          <dt class="text-fg-3">Finished</dt>
+          <dd class="font-mono text-fg-1">
             {formatTimestamp(exportResult.finished_at)}
           </dd>
         {/if}

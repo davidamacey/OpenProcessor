@@ -371,7 +371,7 @@
 <div
   bind:this={container}
   {@attach wheel}
-  class="relative h-full min-h-0 w-full touch-none overflow-hidden bg-zinc-950 select-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none focus-visible:ring-inset"
+  class="relative h-full min-h-0 w-full touch-none overflow-hidden bg-surface-0 select-none focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none focus-visible:ring-inset"
   style="cursor:{cursor}"
   role="application"
   aria-label="Image editor canvas"
@@ -407,7 +407,7 @@
 
     {#if overlay && selectedCropId !== null && tool === 'select'}
       <div
-        class="absolute z-20 border-2 border-dashed border-sky-300 {selectedLocked
+        class="absolute z-20 border-2 border-dashed border-info {selectedLocked
           ? 'cursor-not-allowed'
           : 'cursor-move'}"
         style={boxStyle(overlay)}
@@ -418,7 +418,7 @@
         {#if !selectedLocked}
           {#each Object.entries(RESIZE_HANDLES) as [name, h] (name)}
             <span
-              class="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-zinc-900 bg-sky-300 [@media(pointer:coarse)]:h-4 [@media(pointer:coarse)]:w-4"
+              class="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-[1px] border border-line bg-info [@media(pointer:coarse)]:h-4 [@media(pointer:coarse)]:w-4"
               style="left:{h.x * 100}%;top:{h.y * 100}%;cursor:{name}-resize"
               data-handle={name}
               data-testid="resize-handle"
@@ -430,7 +430,7 @@
 
     {#if pending}
       <div
-        class="pointer-events-none absolute z-20 border-2 border-dashed border-sky-400 bg-sky-400/20"
+        class="pointer-events-none absolute z-20 border-2 border-dashed border-info bg-info/20"
         style={boxStyle(pending)}
         data-testid="pending-box"
       ></div>
@@ -438,7 +438,7 @@
 
     {#if draft}
       <div
-        class="pointer-events-none absolute z-20 border-2 border-dashed border-sky-400 bg-sky-400/10"
+        class="pointer-events-none absolute z-20 border-2 border-dashed border-info bg-info/10"
         style={boxStyle(draft)}
         data-testid="draft-box"
       ></div>
@@ -449,7 +449,7 @@
     <!-- Pointer-only aid: panning has its own keys and the pan tool. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="absolute right-2 bottom-2 z-30 w-40 cursor-pointer overflow-hidden rounded border border-zinc-600 bg-zinc-900 shadow"
+      class="absolute right-2 bottom-2 z-30 w-40 cursor-pointer overflow-hidden rounded border border-line-strong bg-surface-1 shadow"
       style="aspect-ratio:{ratio}"
       data-testid="minimap"
       onpointerdown={panFromMinimap}
@@ -464,7 +464,7 @@
         <BoxLayer {boxes} {selectedCropId} showLabels={false} />
       </div>
       <div
-        class="pointer-events-none absolute border-2 border-sky-400 bg-sky-400/25"
+        class="pointer-events-none absolute border-2 border-info bg-info/25"
         style="left:{view.x * 100}%;top:{view.y * 100}%;width:{view.width *
           100}%;height:{view.height * 100}%"
         data-testid="minimap-view"

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   // A repeatable value picker: a select adds a value as a chip, each chip's
   // button removes it. The options are served values; nothing is invented.
   let {
@@ -37,12 +38,12 @@
   {#each selected as v (v)}
     <button
       type="button"
-      class="btn-sm border border-blue-500/50 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25"
+      class="btn-sm border border-accent/50 bg-accent/15 text-accent-text hover:bg-accent/25"
       aria-label="Remove {label} {v}"
       onclick={() => onchange(selected.filter((x) => x !== v))}
     >
       {v}
-      <span aria-hidden="true" class="ml-1 text-blue-300">×</span>
+      <Icon name="x" size={12} class="ml-1 text-accent-text" />
     </button>
   {/each}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Shared sort/filter strategy control (curation-strategy plan Phase 3/4 —
    * curation strategy plan §5.1/§5.4/§7). Used on both
@@ -39,7 +40,6 @@
    */
 
   import { untrack } from 'svelte';
-  import ChevronDownIcon from './ChevronDownIcon.svelte';
   import {
     hasFieldCoverage,
     isDiverseOverlayAvailable,
@@ -312,8 +312,8 @@
     <button
       type="button"
       class="btn-sm min-w-0 max-w-full overflow-hidden {bar.isDefault
-        ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-        : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
+        ? 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'
+        : 'border-accent/60 bg-accent/15 text-accent-text hover:bg-accent/25'}"
       onclick={() => (expanded = true)}
       title="Sort / filter strategy"
       aria-label={[
@@ -324,7 +324,7 @@
         .filter(Boolean)
         .join(' ')}
     >
-      <span class="shrink-0 text-zinc-500">sort:</span>
+      <span class="shrink-0 text-fg-3">sort:</span>
       <span class="min-w-[4.5rem] shrink-0 truncate">{currentLabel}</span>
       {#if pinnedFallbackLabel}
         <!-- S1 (visual audit 2026-09-24): merges with, never doubles up
@@ -334,14 +334,14 @@
              renders. -->
         <span
           data-testid="pinned-sort-fallback-chip"
-          class="inline-block max-w-[20rem] truncate rounded border border-amber-500/60 bg-amber-500/15 px-1 align-middle text-[10px] text-amber-200 md:max-w-[32rem]"
+          class="inline-block max-w-[20rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn-text md:max-w-[32rem]"
           title={`The deployment's pinned default review-queue sort has no data yet, so this tab is using the backend's own fallback order instead. ${pinnedFallbackLabel}`}
         >
           {pinnedFallbackLabel}
         </span>
       {:else if appliedLabel}
         <span
-          class="hidden min-w-0 truncate text-zinc-500 sm:inline"
+          class="hidden min-w-0 truncate text-fg-3 sm:inline"
           title="The backend applied this sort — a tab default, or a fallback from what was requested."
         >
           → {appliedLabel}
@@ -353,7 +353,7 @@
              never push the bar past a narrow viewport. -->
         <span
           data-testid="sort-fallback-chip"
-          class="inline-block max-w-[16rem] truncate rounded border border-amber-500/60 bg-amber-500/15 px-1 align-middle text-[10px] text-amber-200 md:max-w-[28rem]"
+          class="inline-block max-w-[16rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn-text md:max-w-[28rem]"
           title={`The requested sort couldn't be honored server-side — showing the fallback order instead. ${fallbackReason}`}
         >
           fallback: {fallbackReason}
@@ -361,17 +361,17 @@
       {/if}
       {#if currentIsBeta}
         <span
-          class="rounded border border-amber-500/60 bg-amber-500/15 px-1 text-[9px] uppercase tracking-wide text-amber-200"
+          class="rounded border border-warn/60 bg-warn/15 px-1 text-caption uppercase tracking-wide text-warn-text"
         >
           beta
         </span>
       {/if}
-      <span class="text-zinc-500"><ChevronDownIcon size={15} /></span>
+      <Icon name="chevron-down" size={15} class="text-fg-3" />
     </button>
   {:else}
     {#if sortOptions.length > 1}
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-500">sort</span>
+        <span class="text-fg-3">sort</span>
         <select bind:value={bar.sort} class="select-sm">
           {#each sortOptions as opt (opt.id)}
             <option value={opt.id}>
@@ -381,25 +381,25 @@
         </select>
       </label>
       {#if pinnedFallbackLabel}
-        <span data-testid="pinned-sort-fallback-chip" class="text-amber-300"
+        <span data-testid="pinned-sort-fallback-chip" class="text-warn-text"
           >{pinnedFallbackLabel}</span
         >
       {:else if appliedLabel}
-        <span class="text-zinc-500">applied: {appliedLabel}</span>
+        <span class="text-fg-3">applied: {appliedLabel}</span>
       {/if}
       {#if fallbackReason}
-        <span class="text-amber-300">fallback: {fallbackReason}</span>
+        <span class="text-warn-text">fallback: {fallbackReason}</span>
       {/if}
     {:else}
       <!-- No alternate sorts reported yet (backend not deployed, or
            {API_PREFIX}/methods reports a registry shape this build doesn't
            recognize — both degrade to an empty review_sorts list here
            rather than a broken/empty <select>). -->
-      <span class="text-zinc-500">no alternate sorts available yet</span>
+      <span class="text-fg-3">no alternate sorts available yet</span>
     {/if}
     {#if currentIsBeta}
       <span
-        class="rounded border border-amber-500/60 bg-amber-500/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-200"
+        class="rounded border border-warn/60 bg-warn/15 px-1.5 py-0.5 text-caption uppercase tracking-wide text-warn-text"
         title="Experimental — not yet fully validated (OpenProcessor docs/research/curation_scores.md)"
       >
         beta
@@ -408,7 +408,7 @@
 
     {#if mistakenessInfo}
       <label class="flex items-center gap-1">
-        <span class="text-zinc-500">min mistakenness</span>
+        <span class="text-fg-3">min mistakenness</span>
         <input
           type="number"
           min="0"
@@ -428,8 +428,8 @@
       <button
         type="button"
         class="btn-sm {bar.hideNearDuplicates
-          ? 'border-blue-500/60 bg-blue-500/15 text-blue-100'
-          : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+          ? 'border-accent/60 bg-accent/15 text-accent-text'
+          : 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'}"
         onclick={() => (bar.hideNearDuplicates = !bar.hideNearDuplicates)}
       >
         hide near-dupes
@@ -442,7 +442,7 @@
          shown for a backend that hasn't shipped this yet. -->
     {#if diverseSelected}
       <label class="flex items-center gap-1">
-        <span class="text-zinc-500">how many diverse crops?</span>
+        <span class="text-fg-3">how many diverse crops?</span>
         <input
           type="number"
           min={diverseKMin}
@@ -464,7 +464,7 @@
       </label>
       {#if diverseMeta?.method || diverseMeta?.version || diverseMeta?.n_pool != null}
         <span
-          class="text-zinc-500"
+          class="text-fg-3"
           title={[
             diverseMeta?.method ? `method: ${diverseMeta.method}` : null,
             diverseMeta?.version ? `version: ${diverseMeta.version}` : null,
@@ -485,7 +485,7 @@
     {#if !bar.isDefault}
       <button
         type="button"
-        class="btn-sm bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+        class="btn-sm bg-surface-2 text-fg-2 hover:bg-surface-3"
         onclick={() => bar.reset()}
       >
         reset
@@ -494,11 +494,11 @@
 
     <button
       type="button"
-      class="btn-sm btn-icon border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+      class="btn-sm btn-icon border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
       onclick={() => (expanded = false)}
       title="Collapse"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   {/if}
 </div>

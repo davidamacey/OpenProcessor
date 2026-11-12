@@ -11,11 +11,11 @@
 <section class="surface flex flex-col gap-2 p-4" data-testid="near-dup-runs">
   <h2 class="text-base font-semibold">Run history</h2>
   {#if runs.length === 0}
-    <p class="text-xs text-zinc-400" data-testid="near-dup-runs-empty">No runs yet.</p>
+    <p class="text-xs text-fg-2" data-testid="near-dup-runs-empty">No runs yet.</p>
   {:else}
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs">
-        <thead class="text-zinc-400">
+        <thead class="text-fg-2">
           <tr>
             <th class="py-1 pr-3 font-medium">Started</th>
             <th class="pr-3 font-medium">Level</th>
@@ -32,7 +32,7 @@
         </thead>
         <tbody>
           {#each runs as run (run.id)}
-            <tr class="border-t border-zinc-800" data-testid="near-dup-run-row">
+            <tr class="border-t border-line" data-testid="near-dup-run-row">
               <td class="py-1 pr-3">{formatTimestamp(run.started_at)}</td>
               <td class="pr-3">{run.level}</td>
               <td class="pr-3">{run.mode}</td>

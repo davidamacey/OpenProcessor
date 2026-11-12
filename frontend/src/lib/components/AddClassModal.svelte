@@ -89,32 +89,32 @@
       }}
     >
       <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-zinc-400">Class name (lowercase slug)</span>
+        <span class="mb-1 block text-xs text-fg-2">Class name (lowercase slug)</span>
         <input
           type="text"
           bind:value={name}
           required
           placeholder="e.g. delivery_van"
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
         />
-        <span class="mt-1 block text-[11px] text-zinc-500">
+        <span class="mt-1 block text-caption text-fg-3">
           Lowercase a–z, 0–9, _ only. No spaces — the server rejects anything else.
         </span>
       </label>
 
       <label class="mb-1 block text-sm">
-        <span class="mb-1 block text-xs text-zinc-400">Group</span>
+        <span class="mb-1 block text-xs text-fg-2">Group</span>
         {#if createNewGroup}
           <input
             type="text"
             bind:value={groupNew}
             placeholder="e.g. animals / tools / furniture"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
           />
         {:else}
           <select
             bind:value={groupExisting}
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
           >
             {#each groups as g (g)}
               <option value={g}>{g}</option>
@@ -124,7 +124,7 @@
       </label>
       <button
         type="button"
-        class="mb-3 text-[11px] text-blue-400 hover:underline"
+        class="mb-3 text-caption text-accent-text hover:underline"
         onclick={() => (createNewGroup = !createNewGroup)}
         disabled={groups.length === 0}
       >
@@ -132,16 +132,16 @@
       </button>
 
       <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-zinc-400">Notes (optional)</span>
+        <span class="mb-1 block text-xs text-fg-2">Notes (optional)</span>
         <textarea
           bind:value={notes}
           rows="2"
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
         ></textarea>
       </label>
 
       {#if errorText}
-        <p class="mb-3 text-xs text-red-300">{errorText}</p>
+        <p class="mb-3 text-xs text-danger-text">{errorText}</p>
       {/if}
 
       <div class="flex items-center justify-end gap-2">

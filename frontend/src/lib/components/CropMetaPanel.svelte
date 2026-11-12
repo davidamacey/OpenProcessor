@@ -73,14 +73,14 @@
 
 {#if crop.class_excluded}
   <div
-    class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200"
+    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-xs text-warn-text"
   >
     <span class="font-medium">Ignored</span>
     {#if crop.excluded_reason}
-      <span class="ml-1 text-amber-300/80">({crop.excluded_reason})</span>
+      <span class="ml-1 text-warn-text/80">({crop.excluded_reason})</span>
     {/if}
     {#if crop.excluded_at}
-      <span class="ml-1 font-mono text-amber-300/60" title={crop.excluded_at}
+      <span class="ml-1 font-mono text-warn-text/60" title={crop.excluded_at}
         >{formatTimestamp(crop.excluded_at)}</span
       >
     {/if}
@@ -89,29 +89,29 @@
 
 <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
   {#if !embedded}
-    <dt class="text-zinc-500">Class</dt>
-    <dd class="text-zinc-200">
+    <dt class="text-fg-3">Class</dt>
+    <dd class="text-fg-1">
       <!-- R6 (visual audit 2026-09-24): a class-less crop read
          "Class (vlm_new_class_pending)" with a blank name and a raw id. -->
       {#if crop.class_name}
         {crop.class_name}
       {:else}
-        <span class="italic text-zinc-500">no class yet</span>
+        <span class="italic text-fg-3">no class yet</span>
       {/if}
       {#if classSource}
-        <span class="ml-1 text-zinc-500" title={classSource}
+        <span class="ml-1 text-fg-3" title={classSource}
           >({classSourcesStore.labelFor(classSource)})</span
         >
       {/if}
     </dd>
 
-    <dt class="text-zinc-500">Label source</dt>
-    <dd class="text-zinc-200">
+    <dt class="text-fg-3">Label source</dt>
+    <dd class="text-fg-1">
       {crop.label_source ?? '—'}
       <ConfirmationChip source={crop.class_source} validated={crop.class_validated} />
       {#if crop.class_validated}
         <span
-          class="ml-1 rounded border border-green-500/40 bg-green-500/15 px-1 text-[10px] text-green-200"
+          class="ml-1 rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
         >
           validated
         </span>
@@ -127,17 +127,17 @@
        whenever the class came from the VLM, and show the VLM's own
        categorical confidence (`vlm_confidence`, served separately) as
        its own row instead of folding it in as a same-row detail. -->
-    <dt class="text-zinc-500">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
+    <dt class="text-fg-3">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
     <dd class="font-mono">{pct(crop.label_confidence)}</dd>
 
     {#if isVlmSourced && crop.detector_class_name}
-      <dt class="text-zinc-500">Detector class</dt>
-      <dd class="text-zinc-200"><DetectorClass {crop} bare /></dd>
+      <dt class="text-fg-3">Detector class</dt>
+      <dd class="text-fg-1"><DetectorClass {crop} bare /></dd>
     {/if}
 
     {#if vlmConf}
-      <dt class="text-zinc-500">VLM confidence</dt>
-      <dd class="font-mono text-zinc-200">{vlmConf}</dd>
+      <dt class="text-fg-3">VLM confidence</dt>
+      <dd class="font-mono text-fg-1">{vlmConf}</dd>
     {/if}
   {/if}
 
@@ -156,44 +156,44 @@
        `label_confidence` above, which is always the detector score. Null
        for human labels, so this row is omitted then. -->
   {#if !embedded && crop.class_confidence != null}
-    <dt class="text-zinc-500">Label confidence</dt>
-    <dd class="font-mono text-zinc-200">
+    <dt class="text-fg-3">Label confidence</dt>
+    <dd class="font-mono text-fg-1">
       {classConfidenceSourceLabel}
       {pct(crop.class_confidence)}
     </dd>
   {/if}
 
   {#if !embedded && crop.vlm_raw_class}
-    <dt class="text-zinc-500">VLM said</dt>
-    <dd class="text-zinc-300">{crop.vlm_raw_class}</dd>
+    <dt class="text-fg-3">VLM said</dt>
+    <dd class="text-fg-2">{crop.vlm_raw_class}</dd>
   {/if}
 
   {#if !embedded && crop.assist}
-    <dt class="text-zinc-500">Assist</dt>
+    <dt class="text-fg-3">Assist</dt>
     <dd data-testid="meta-assist">
       <AssistSuggestions assist={crop.assist} className={crop.class_name} />
     </dd>
   {/if}
 
   {#if !embedded && crop.vlm_class_empty_reason}
-    <dt class="text-zinc-500">VLM empty reason</dt>
-    <dd class="text-orange-300" title={crop.vlm_class_empty_reason}>
+    <dt class="text-fg-3">VLM empty reason</dt>
+    <dd class="text-warn-text" title={crop.vlm_class_empty_reason}>
       {humanizeId(crop.vlm_class_empty_reason)}
     </dd>
   {/if}
 
   {#if crop.vlm_suggested_class_id != null}
-    <dt class="text-zinc-500">VLM proposed</dt>
-    <dd class="text-yellow-200">
+    <dt class="text-fg-3">VLM proposed</dt>
+    <dd class="text-warn-text">
       {crop.vlm_suggested_class_name ?? '—'}
       {#if crop.vlm_confidence}
-        <span class="ml-1 font-mono text-yellow-400/70">{crop.vlm_confidence}</span>
+        <span class="ml-1 font-mono text-warn-text/70">{crop.vlm_confidence}</span>
       {/if}
     </dd>
   {/if}
 
-  <dt class="text-zinc-500">Cluster</dt>
-  <dd class="font-mono text-zinc-200">
+  <dt class="text-fg-3">Cluster</dt>
+  <dd class="font-mono text-fg-1">
     {#if crop.cluster}
       <span title={crop.cluster.uid ?? crop.cluster.partition_id}
         >{crop.cluster.uid
@@ -201,10 +201,10 @@
           : (crop.cluster.state ?? '—')}</span
       >
       {#if crop.cluster.state && crop.cluster.uid}
-        <span class="ml-1 text-zinc-500">{crop.cluster.state}</span>
+        <span class="ml-1 text-fg-3">{crop.cluster.state}</span>
       {/if}
       {#if crop.cluster.score != null}
-        <span class="ml-1 text-zinc-500">score {pct(crop.cluster.score)}</span>
+        <span class="ml-1 text-fg-3">score {pct(crop.cluster.score)}</span>
       {/if}
     {:else}
       —
@@ -212,8 +212,8 @@
   </dd>
 
   {#if crop.near_dup_group_id}
-    <dt class="text-zinc-500">Near-duplicates</dt>
-    <dd class="font-mono text-zinc-200" data-testid="meta-near-dup">
+    <dt class="text-fg-3">Near-duplicates</dt>
+    <dd class="font-mono text-fg-1" data-testid="meta-near-dup">
       {crop.near_dup_group_size ?? '?'} in group{crop.near_dup_is_representative
         ? ', representative'
         : ''}
@@ -221,7 +221,7 @@
   {/if}
 
   {#if crop.class_detector}
-    <dt class="text-zinc-500">Class detector</dt>
+    <dt class="text-fg-3">Class detector</dt>
     <dd>
       <ProvenanceChip
         detector={crop.class_detector}
@@ -231,18 +231,18 @@
   {/if}
 
   {#if crop.class_labeled_at}
-    <dt class="text-zinc-500">Labeled at</dt>
+    <dt class="text-fg-3">Labeled at</dt>
     <!-- p6 (2026-09-24 interactive pass): the ISO timestamp has no
          whitespace to wrap on, so it overflowed the fixed-width panel and
          got visually clipped ("…+00:0") instead of wrapping. -->
-    <dd class="font-mono text-zinc-400" title={crop.class_labeled_at}>
+    <dd class="font-mono text-fg-2" title={crop.class_labeled_at}>
       {formatTimestamp(crop.class_labeled_at)}
     </dd>
   {/if}
 
   {#if crop.class_labeler}
-    <dt class="text-zinc-500">Labeler</dt>
-    <dd class="text-zinc-300">{crop.class_labeler}</dd>
+    <dt class="text-fg-3">Labeler</dt>
+    <dd class="text-fg-2">{crop.class_labeler}</dd>
   {/if}
 </dl>
 

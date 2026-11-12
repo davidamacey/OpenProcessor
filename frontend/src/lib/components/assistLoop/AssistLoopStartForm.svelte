@@ -39,7 +39,7 @@
   }}
 >
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-    <label class="flex flex-col gap-1 text-xs text-zinc-300">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       VLM crop budget
       <input
         class="input"
@@ -51,7 +51,7 @@
         data-testid="loop-budget"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-300">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Smallest cluster to work on
       <input
         class="input"
@@ -62,7 +62,7 @@
         data-testid="loop-min-root"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-300">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Homogeneity to show (theta)
       <input
         class="input"
@@ -75,7 +75,7 @@
         data-testid="loop-theta"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-300">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Split depth
       <input
         class="input"
@@ -87,7 +87,7 @@
         data-testid="loop-depth"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-zinc-300">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Seed
       <input
         class="input"
@@ -120,7 +120,7 @@
         }}
       />
       {#if ctl.auditVlm}
-        <label class="flex items-center gap-1.5 text-zinc-300">
+        <label class="flex items-center gap-1.5 text-fg-2">
           If the audit fails
           <select
             class="select-sm"
@@ -139,42 +139,42 @@
   </div>
 
   <div
-    class="rounded border border-zinc-800 bg-zinc-900/40 p-3 text-xs"
+    class="rounded border border-line bg-surface-1/40 p-3 text-xs"
     aria-live="polite"
     data-testid="loop-plan"
   >
-    <h3 class="mb-1 text-sm font-medium text-zinc-200">Dry run</h3>
+    <h3 class="mb-1 text-sm font-medium text-fg-1">Dry run</h3>
     {#if ctl.planError}
-      <p class="text-red-300" data-testid="loop-plan-error">{ctl.planError}</p>
+      <p class="text-danger-text" data-testid="loop-plan-error">{ctl.planError}</p>
     {:else if plan}
       <dl class="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
         <div>
-          <dt class="text-zinc-500">Clusters to work on</dt>
-          <dd class="font-mono text-zinc-100" data-testid="loop-plan-roots">
+          <dt class="text-fg-3">Clusters to work on</dt>
+          <dd class="font-mono text-fg-1" data-testid="loop-plan-roots">
             {formatCount(plan.roots)}
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Items it could label</dt>
-          <dd class="font-mono text-zinc-100" data-testid="loop-plan-items">
+          <dt class="text-fg-3">Items it could label</dt>
+          <dd class="font-mono text-fg-1" data-testid="loop-plan-items">
             {formatCount(plan.eligible_items)}
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Root level costs about</dt>
-          <dd class="font-mono text-zinc-100" data-testid="loop-plan-crops">
+          <dt class="text-fg-3">Root level costs about</dt>
+          <dd class="font-mono text-fg-1" data-testid="loop-plan-crops">
             {formatCount(plan.estimated_vlm_crops_root_level)} crops,
             {formatCount(plan.estimated_vlm_requests_root_level)} requests
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Fits the budget</dt>
-          <dd class="font-mono text-zinc-100" data-testid="loop-plan-fits">
+          <dt class="text-fg-3">Fits the budget</dt>
+          <dd class="font-mono text-fg-1" data-testid="loop-plan-fits">
             {plan.fits_budget === null ? '—' : plan.fits_budget ? 'yes' : 'no'}
           </dd>
         </div>
       </dl>
-      <p class="mt-2 text-zinc-500">
+      <p class="mt-2 text-fg-3">
         Splits cost more than the root-level estimate; the budget is a hard cap and the
         loop stops at it.
         {#if ctl.preview?.pinned.audit_vlm === null}
@@ -183,7 +183,7 @@
       </p>
       {#if plan.required_sample_table.length > 0}
         <details class="mt-2">
-          <summary class="cursor-pointer text-zinc-300"
+          <summary class="cursor-pointer text-fg-2"
             >Answers needed per cluster size</summary
           >
           <table class="mt-1 w-full text-left" data-testid="loop-sample-table">
@@ -191,13 +191,13 @@
               >VLM answers a cluster of each size needs to pass, by sampled answers
               allowed to disagree</caption
             >
-            <thead class="text-zinc-500">
+            <thead class="text-fg-3">
               <tr>
                 <th scope="col" class="pr-4 font-normal">Cluster size</th>
                 <th scope="col" class="font-normal">Answers at 0, 1, 2, 3 dissent</th>
               </tr>
             </thead>
-            <tbody class="font-mono text-zinc-200">
+            <tbody class="font-mono text-fg-1">
               {#each plan.required_sample_table as row (row.n_members)}
                 <tr>
                   <td class="pr-4">{formatCount(row.n_members)}</td>
@@ -209,12 +209,12 @@
         </details>
       {/if}
     {:else}
-      <p class="text-zinc-500">{ctl.planning ? 'Planning…' : 'No plan yet.'}</p>
+      <p class="text-fg-3">{ctl.planning ? 'Planning…' : 'No plan yet.'}</p>
     {/if}
   </div>
 
   {#if ctl.actionError}
-    <p class="text-xs text-red-300" role="alert" data-testid="loop-action-error">
+    <p class="text-xs text-danger-text" role="alert" data-testid="loop-action-error">
       {ctl.actionError}
     </p>
   {/if}
@@ -228,7 +228,7 @@
     >
       Start the loop
     </button>
-    <span class="text-xs text-zinc-500">
+    <span class="text-xs text-fg-3">
       Writes machine labels (not validated, kept out of the export until reviewed). A
       rollback restores them.
     </span>

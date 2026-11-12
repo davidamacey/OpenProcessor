@@ -21,12 +21,12 @@
     subBoxes?.find((sb) => sb.boxId === b.boxId)?.rejectionReason ?? null,
   )}
   <span
-    class={`rounded border px-1.5 py-0.5 text-[10px] ${
+    class={`rounded border px-1.5 py-0.5 text-caption ${
       kind === 'needs_human'
-        ? 'border-zinc-600 bg-zinc-800/80 text-zinc-300'
+        ? 'border-line-strong bg-surface-2/80 text-fg-2'
         : kind === 'model_verdict'
-          ? 'border-red-500/40 bg-red-500/15 text-red-200'
-          : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
+          ? 'border-danger/40 bg-danger/15 text-danger-text'
+          : 'border-warn/40 bg-warn/15 text-warn-text'
     }`}
   >
     {kind === 'needs_human' ? 'candidate · needs review' : 'rejected · confirm to accept'}

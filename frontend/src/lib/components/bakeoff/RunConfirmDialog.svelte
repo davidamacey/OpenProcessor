@@ -18,11 +18,11 @@
 <Modal
   label="Confirm model comparison"
   onclose={onCancel}
-  panelClass="max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  panelClass="max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
   data-testid="run-confirm"
 >
   <h3 class="mb-2 text-base font-semibold">Run model comparison</h3>
-  <p class="mb-3 text-sm text-zinc-300" data-testid="run-confirm-summary">
+  <p class="mb-3 text-sm text-fg-2" data-testid="run-confirm-summary">
     {models.length} model{models.length === 1 ? '' : 's'} × {datasets.length} dataset{datasets.length ===
     1
       ? ''
@@ -34,25 +34,25 @@
   </p>
   <div class="mb-3 grid grid-cols-2 gap-3 text-xs">
     <div>
-      <p class="mb-1 text-zinc-500">Datasets</p>
-      <ul class="space-y-0.5 font-mono text-zinc-300">
+      <p class="mb-1 text-fg-3">Datasets</p>
+      <ul class="space-y-0.5 font-mono text-fg-2">
         {#each datasets as d (d)}<li>{d}</li>{/each}
       </ul>
     </div>
     <div>
-      <p class="mb-1 text-zinc-500">Models</p>
-      <ul class="space-y-0.5 font-mono text-zinc-300">
+      <p class="mb-1 text-fg-3">Models</p>
+      <ul class="space-y-0.5 font-mono text-fg-2">
         {#each models as m (m)}<li>{m}</li>{/each}
       </ul>
     </div>
   </div>
-  <p class="mb-3 text-xs text-zinc-400">
+  <p class="mb-3 text-xs text-fg-2">
     Runs in the on-demand evaluator container and may pause other GPU services while it
     runs.
   </p>
   {#if error}
     <p
-      class="mb-3 rounded border border-red-800 bg-red-950/60 p-2 text-xs text-red-200"
+      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
       data-testid="run-error"
     >
       {error}

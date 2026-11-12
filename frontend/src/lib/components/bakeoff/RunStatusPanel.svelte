@@ -39,21 +39,21 @@
 </script>
 
 <section
-  class="mb-6 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 text-sm"
+  class="mb-6 rounded-lg border border-line bg-surface-1/50 p-4 text-sm"
   data-testid="run-status"
 >
   <div class="flex flex-wrap items-center gap-2">
-    <span class="text-zinc-400">Job</span>
-    <code class="text-zinc-200">{jobId}</code>
+    <span class="text-fg-2">Job</span>
+    <code class="text-fg-1">{jobId}</code>
     <span
       class="rounded px-1.5 py-0.5 text-xs {status?.state === 'error'
-        ? 'bg-red-900/60 text-red-200'
+        ? 'bg-danger-soft text-danger-text'
         : status?.state === 'done'
-          ? 'bg-emerald-900/60 text-emerald-200'
-          : 'bg-zinc-800 text-zinc-300'}"
+          ? 'bg-success-soft text-success-text'
+          : 'bg-surface-2 text-fg-2'}"
       data-testid="run-state">{status?.state ?? 'enqueued'}</span
     >
-    {#if status?.profile}<span class="text-xs text-zinc-500"
+    {#if status?.profile}<span class="text-xs text-fg-3"
         >profile <span class="font-mono">{status.profile}</span></span
       >{/if}
   </div>
@@ -61,24 +61,24 @@
   {#if progress && progress.total > 0}
     <div class="mt-3">
       {#if !isTerminal(status?.state)}
-        <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
-          <div class="h-full bg-emerald-600 transition-all" style="width: {pct}%"></div>
+        <div class="h-2 w-full overflow-hidden rounded bg-surface-2">
+          <div class="h-full bg-success transition-all" style="width: {pct}%"></div>
         </div>
       {/if}
-      <p class="mt-1 text-xs text-zinc-500" data-testid="run-progress">
+      <p class="mt-1 text-xs text-fg-3" data-testid="run-progress">
         {progress.done} / {progress.total} evaluations
       </p>
     </div>
   {/if}
 
   {#if status?.error}
-    <p class="mt-3 text-xs text-red-300" data-testid="run-job-error">
+    <p class="mt-3 text-xs text-danger-text" data-testid="run-job-error">
       Job failed: {status.error}
     </p>
   {/if}
   {#if status?.failed?.length}
     <div
-      class="mt-3 rounded border border-red-800 bg-red-950/60 p-2 text-xs text-red-200"
+      class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
     >
       <p class="mb-1 font-medium">
         {status.failed.length} failed piece{status.failed.length === 1 ? '' : 's'}
@@ -93,18 +93,18 @@
 
   {#if mine}
     <details class="mt-3 text-xs" open={hasNotes} data-testid="enqueue-summary">
-      <summary class="cursor-pointer text-zinc-400">
+      <summary class="cursor-pointer text-fg-2">
         Class mapping at enqueue{mine.warnings.length
           ? ` · ${mine.warnings.length} warning${mine.warnings.length === 1 ? '' : 's'}`
           : ''}
       </summary>
       {#if mine.warnings.length}
-        <ul class="mt-2 list-disc pl-5 text-amber-300">
+        <ul class="mt-2 list-disc pl-5 text-warn-text">
           {#each mine.warnings as w, i (i)}<li>{w}</li>{/each}
         </ul>
       {/if}
       <table class="mt-2 w-full">
-        <thead class="text-left text-[10px] uppercase text-zinc-500">
+        <thead class="text-left text-caption uppercase text-fg-3">
           <tr>
             <th class="py-1 pr-2">Model</th>
             <th class="py-1 pr-2">Dataset</th>
@@ -116,11 +116,11 @@
           {#each mine.models as m (m.model)}
             {#each Object.entries(m.class_mapping) as [dsId, cm] (dsId)}
               {@const overlap = m.train_test_overlap?.[dsId]}
-              <tr class="border-t border-zinc-800 align-top">
+              <tr class="border-t border-line align-top">
                 <td class="py-1 pr-2 font-mono">{m.display_name}</td>
                 <td class="py-1 pr-2 font-mono">{datasetName(dsId)}</td>
                 <td class="py-1 pr-2">{cm.method}</td>
-                <td class="py-1 text-zinc-400">
+                <td class="py-1 text-fg-2">
                   {#if cm.not_covered_eval_classes.length}
                     <div>
                       not covered: {cm.not_covered_eval_classes
@@ -135,11 +135,11 @@
                         .join(', ')}
                     </div>
                   {/if}
-                  {#each cm.warnings as w, i (i)}<div class="text-amber-300">
+                  {#each cm.warnings as w, i (i)}<div class="text-warn-text">
                       {w}
                     </div>{/each}
                   {#if hasOverlap(overlap)}
-                    <div class="text-red-300">overlap: {formatOverlap(overlap)}</div>
+                    <div class="text-danger-text">overlap: {formatOverlap(overlap)}</div>
                   {/if}
                 </td>
               </tr>

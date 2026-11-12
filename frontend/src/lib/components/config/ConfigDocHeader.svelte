@@ -21,28 +21,29 @@
 <header class="flex flex-wrap items-baseline gap-3">
   <h1 class="font-mono text-2xl font-semibold tracking-tight">{name}</h1>
   {#if d}
-    <span class="text-sm text-zinc-400" data-testid="config-meta">
+    <span class="text-sm text-fg-2" data-testid="config-meta">
       {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
         ? ' · read-only'
         : ''}
     </span>
     {#if d.active}
       <span
-        class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-xs text-emerald-300"
+        class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
         >active{d.active_revision != null ? ` r${d.active_revision}` : ''}</span
       >
       {#if lineage && d.revision != null && d.active_revision != null && d.revision !== d.active_revision}
-        <span class="text-xs text-amber-300" data-testid="saved-vs-active"
+        <span class="text-xs text-warn-text" data-testid="saved-vs-active"
           >saved r{d.revision}, active r{d.active_revision}</span
         >
       {/if}
     {/if}
     {#if lineage && d.cloned_from}
-      <span class="font-mono text-xs text-zinc-500">cloned from {d.cloned_from}</span>
+      <span class="font-mono text-xs text-fg-3">cloned from {d.cloned_from}</span>
     {/if}
   {/if}
   <span class="grow"></span>
-  <a class="text-xs text-blue-300 hover:underline" href={resolve(projectHref(listPath))}
-    >{listLabel}</a
+  <a
+    class="text-xs text-accent-text hover:underline"
+    href={resolve(projectHref(listPath))}>{listLabel}</a
   >
 </header>

@@ -76,18 +76,18 @@
   aria-label="Test a target"
 >
   <h2 class="text-base font-semibold">Test a target</h2>
-  <p class="text-xs text-zinc-400">
+  <p class="text-xs text-fg-2">
     Runs one target (as drafted, saved or not) on one image and shows every candidate the
     segmenter found and what selection kept. Nothing is written.
   </p>
 
   {#if targets.length === 0}
-    <p class="text-xs text-zinc-500" data-testid="test-no-targets">
+    <p class="text-xs text-fg-3" data-testid="test-no-targets">
       Add a target to test it.
     </p>
   {:else}
     <div class="grid gap-2 sm:grid-cols-2">
-      <label class="flex flex-col gap-1 text-xs text-zinc-400">
+      <label class="flex flex-col gap-1 text-xs text-fg-2">
         Target
         <select class="select select-sm" bind:value={index} data-testid="ov-test-target">
           {#each targets as tg, i (i)}
@@ -95,7 +95,7 @@
           {/each}
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-zinc-400">
+      <label class="flex flex-col gap-1 text-xs text-fg-2">
         Image
         <select
           class="select select-sm"
@@ -107,7 +107,7 @@
         </select>
       </label>
       {#if t.source === 'crop'}
-        <label class="flex flex-col gap-1 text-xs text-zinc-400 sm:col-span-2">
+        <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
           Crop id (from review or browse)
           <input
             class="input input-sm font-mono"
@@ -117,7 +117,7 @@
           />
         </label>
       {:else}
-        <label class="flex flex-col gap-1 text-xs text-zinc-400 sm:col-span-2">
+        <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
           JPEG or PNG
           <input
             type="file"
@@ -127,7 +127,7 @@
           />
         </label>
       {/if}
-      <label class="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2">
+      <label class="flex items-center gap-2 text-xs text-fg-2 sm:col-span-2">
         <input type="checkbox" bind:checked={t.precheck} data-testid="ov-test-precheck" />
         Run the VLM pre-check
       </label>
@@ -145,7 +145,7 @@
 
   {#if t.error}
     <p
-      class="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-red-200"
+      class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger-text"
       data-testid="ov-test-error"
     >
       {t.segmenterError ? `Segmenter error: ${t.error}` : t.error}
@@ -155,21 +155,21 @@
   {#if t.result}
     {@const r = t.result}
     <div
-      class="flex flex-col gap-3 border-t border-zinc-800 pt-3"
+      class="flex flex-col gap-3 border-t border-line pt-3"
       data-testid="ov-test-result"
     >
-      <p class="text-xs text-zinc-400">
-        <span class="text-zinc-500">Prompt</span>
-        <span class="font-mono text-zinc-200">{r.prompt}</span>
-        <span class="ml-2 text-zinc-500">Class</span>
-        <span class="font-mono text-zinc-200" data-testid="ov-test-class"
+      <p class="text-xs text-fg-2">
+        <span class="text-fg-3">Prompt</span>
+        <span class="font-mono text-fg-1">{r.prompt}</span>
+        <span class="ml-2 text-fg-3">Class</span>
+        <span class="font-mono text-fg-1" data-testid="ov-test-class"
           >{r.class_name || 'discovery'}</span
         >
-        <span class="ml-2 text-zinc-500">Took</span>
-        <span class="font-mono text-zinc-200">{Math.round(r.elapsed_ms)} ms</span>
+        <span class="ml-2 text-fg-3">Took</span>
+        <span class="font-mono text-fg-1">{Math.round(r.elapsed_ms)} ms</span>
       </p>
       <p
-        class="text-xs {r.gate.run ? 'text-zinc-300' : 'text-amber-300'}"
+        class="text-xs {r.gate.run ? 'text-fg-2' : 'text-warn-text'}"
         data-testid="ov-test-gate"
       >
         {#if r.gate.run}
@@ -190,13 +190,13 @@
       {/if}
 
       {#if r.hits.length === 0}
-        <p class="text-xs text-zinc-400" data-testid="ov-test-no-hits">
+        <p class="text-xs text-fg-2" data-testid="ov-test-no-hits">
           The segmenter returned no candidates.
         </p>
       {:else}
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs" data-testid="ov-test-hits">
-            <thead class="text-zinc-500">
+            <thead class="text-fg-3">
               <tr>
                 <th class="py-1 pr-3 font-normal">Hit</th>
                 <th class="py-1 pr-3 font-normal">Score</th>
@@ -207,7 +207,7 @@
             <tbody>
               {#each r.hits as h, i (i)}
                 <tr
-                  class="border-t border-zinc-800 {h.selected ? '' : 'opacity-60'}"
+                  class="border-t border-line {h.selected ? '' : 'opacity-60'}"
                   data-testid="ov-test-hit"
                   data-selected={h.selected}
                 >

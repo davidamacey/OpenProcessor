@@ -12,14 +12,14 @@
   const states = $derived(Object.entries(crop.embedding_states ?? {}));
 </script>
 
-<dt class="text-zinc-500">Embedding</dt>
-<dd class="text-zinc-200" data-testid="embedding-row">
+<dt class="text-fg-3">Embedding</dt>
+<dd class="text-fg-1" data-testid="embedding-row">
   {#if states.length === 0}
     no state served
   {:else}
     {#each states as [space, state] (space)}
       <div data-testid="embedding-row-space" data-space={space}>
-        <span class="font-mono text-zinc-400">{space}</span>
+        <span class="font-mono text-fg-2">{space}</span>
         {#if state === 'embedded'}
           embedded
         {:else}

@@ -25,7 +25,7 @@
 
 {#if ws.detailsOpen}
   <aside
-    class="fixed inset-y-0 right-0 z-30 w-[min(360px,100vw)] overflow-y-auto border-l border-zinc-800 bg-zinc-950 p-4 xl:static xl:z-auto xl:w-[360px] xl:shrink-0"
+    class="fixed inset-y-0 right-0 z-30 w-[min(360px,100vw)] overflow-y-auto border-l border-line bg-surface-0 p-4 xl:static xl:z-auto xl:w-[360px] xl:shrink-0"
     aria-label="Details"
     data-testid="details-panel"
   >
@@ -35,7 +35,7 @@
     {#if Body && target}
       <Body {ws} id={target.id} />
     {:else}
-      <p class="text-sm text-zinc-500">Select something to see its details.</p>
+      <p class="text-sm text-fg-3">Select something to see its details.</p>
     {/if}
   </aside>
 {/if}

@@ -14,7 +14,7 @@
 </script>
 
 <div
-  class="flex items-center gap-2 border-b border-zinc-800 px-4 py-1.5"
+  class="flex items-center gap-2 border-b border-line px-4 py-1.5"
   data-testid="view-bar"
 >
   <div role="tablist" aria-label="Views" class="hidden gap-1 md:flex">
@@ -24,8 +24,8 @@
         role="tab"
         aria-selected={current === v.id}
         class="rounded px-3 py-1 text-sm {current === v.id
-          ? 'bg-zinc-800 text-white'
-          : 'text-zinc-400 hover:text-white'}"
+          ? 'bg-surface-2 text-white'
+          : 'text-fg-2 hover:text-white'}"
         data-testid="view-tab-{v.id}"
         onclick={() => ws.setView(v.id)}
       >

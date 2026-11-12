@@ -220,8 +220,19 @@ allow-list. Tests use the neutral widget domain (`WIDGET_TAG_PROFILE`, `widgetTa
 
 ### Styling
 
-Dark theme by default. No emoji, no gradients. Tailwind `bg-zinc-950` base with accent
-through CSS variables. Never fetch full-resolution images in grids; use
+Dark theme. The design tokens are in `src/app.css` `@theme` (surfaces `surface-0..3` and
+`surface-nav`, lines `line` and `line-strong`, text `fg-1..3`, `accent`, `success`, `warn`,
+`danger`, `info`, `holdout` each with `-soft`, `-line` and `-text` variants, elevation
+`shadow-e1..e3`, radii, the type scale `text-caption` (11px, the minimum) to `text-kpi`). Use
+the token classes, never a palette colour (`bg-zinc-900`), a pixel size (`text-[10px]`), an emoji
+or a Unicode glyph as an icon: `designRules.scan.test.ts` fails on each. Icons are Lucide SVGs
+through `$components/ui/Icon.svelte` (add a name to `iconRegistry.ts`). Pages are built from the
+kit in `$components/ui/` (PageShell for width, PageHeader for the h1, Card, Section, Tabs,
+SidebarNav, Segmented, Button, Chip, Badge, Kbd, EmptyState, ErrorState, Skeleton, Drawer,
+Popover, Menu); `.btn`, `.chip`, `.input` and `.select` in `app.css` are the control tiers the
+kit renders. Page and nav labels come from the one table in `$lib/projectPaths`. A default
+rule that sets a colour (`* { border-color }`) must sit in a CSS layer, or it beats every
+utility. Never fetch full-resolution images in grids; use
 `{prefix}/crops/{id}/thumbnail`. The API serves all images; Cropwright mounts no volumes.
 
 ### Security

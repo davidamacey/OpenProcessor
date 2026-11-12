@@ -96,7 +96,7 @@
   const { requestStart, closeConfirmStart, start, cancel, pause, resume } = ctl;
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-950 p-4">
+<section class="rounded-md border border-line bg-surface-0 p-4">
   <!-- D3 (visual audit 2026-09-24): at 800px the description was squeezed
        into a ~60px column beside the controls (one word per line). It now
        stacks above the controls until there's room for a side-by-side row. -->
@@ -106,7 +106,7 @@
   >
     <div class="min-w-0 xl:max-w-md" data-testid="recluster-description">
       <h2 class="text-base font-semibold">Auto-label</h2>
-      <p class="mt-0.5 text-xs text-zinc-400">
+      <p class="mt-0.5 text-xs text-fg-2">
         Optionally embeds the items that have no vector, and runs the VLM over the
         unvalidated crops (off by default — see "Run VLM labeling stage" below), then
         finalizes. The classifier's confident labels and human validations are never
@@ -120,12 +120,12 @@
           <AssistScopeBar {scope} classes={classesStore.classes} disabled={busy} />
         {/if}
         <label
-          class="flex items-center gap-1.5 text-xs text-zinc-300"
+          class="flex items-center gap-1.5 text-xs text-fg-2"
           title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class, prompt pack or VLM endpoint is scoped above."
         >
           <input
             type="checkbox"
-            class="h-3.5 w-3.5 accent-blue-500"
+            class="h-3.5 w-3.5 accent-accent"
             checked={ctl.runVlm || !scope.isDefault}
             disabled={busy || !scope.isDefault}
             onchange={(e) => (ctl.runVlm = (e.currentTarget as HTMLInputElement).checked)}
@@ -133,12 +133,12 @@
           Run VLM labeling stage
         </label>
         <label
-          class="flex items-center gap-1.5 text-xs text-zinc-300"
+          class="flex items-center gap-1.5 text-xs text-fg-2"
           title="Embed the items that have no vector (a lazy ingest policy, a failed encoder) before clustering. Off by default."
         >
           <input
             type="checkbox"
-            class="h-3.5 w-3.5 accent-blue-500"
+            class="h-3.5 w-3.5 accent-accent"
             data-testid="embed-missing-checkbox"
             bind:checked={ctl.embedMissing}
             disabled={busy}
@@ -186,7 +186,7 @@
       {/if}
     </div>
     {#if gate?.blocked}
-      <p class="mt-1 text-[11px] text-amber-300">{gate.reason}</p>
+      <p class="mt-1 text-caption text-warn-text">{gate.reason}</p>
     {/if}
   </div>
 
@@ -195,7 +195,7 @@
       <h3 class="mb-3 text-base font-semibold">
         {scopeClassName ? `Auto-label · VLM: ${scopeClassName}` : 'Auto-label now'}
       </h3>
-      <p class="mb-4 text-xs text-zinc-400">
+      <p class="mb-4 text-xs text-fg-2">
         Queues the auto-label run{resolveAutoLabelRunVlm(
           scope.toStartParams(),
           ctl.runVlm,
@@ -222,52 +222,49 @@
         <span
           class="rounded px-2 py-0.5 font-mono uppercase
             {job.status === 'running'
-            ? 'bg-blue-500/20 text-blue-200'
+            ? 'bg-accent/20 text-accent-text'
             : job.status === 'completed'
-              ? 'bg-emerald-500/20 text-emerald-200'
+              ? 'bg-success/20 text-success-text'
               : job.status === 'failed'
-                ? 'bg-red-500/20 text-red-200'
+                ? 'bg-danger/20 text-danger-text'
                 : job.status === 'cancelled' ||
                     job.status === 'cancelling' ||
                     job.status === 'paused' ||
                     job.status === 'completed_with_errors' ||
                     job.status === 'interrupted'
-                  ? 'bg-orange-500/20 text-orange-200'
-                  : 'bg-zinc-700/40 text-zinc-300'}"
+                  ? 'bg-warn/20 text-warn-text'
+                  : 'bg-surface-3/40 text-fg-2'}"
           data-testid="auto-label-status"
         >
           {job.status.replaceAll('_', ' ')}
         </span>
         {#if isPaused && job.pause_reason}
-          <span class="text-zinc-300" data-testid="auto-label-pause-reason"
+          <span class="text-fg-2" data-testid="auto-label-pause-reason"
             >{job.pause_reason.replaceAll('_', ' ')}</span
           >
         {/if}
         {#if isLive}
-          <span class="text-zinc-300">{STAGE_LABEL[job.stage] ?? job.stage}</span>
-          <span class="font-mono text-zinc-500">
+          <span class="text-fg-2">{STAGE_LABEL[job.stage] ?? job.stage}</span>
+          <span class="font-mono text-fg-3">
             stage {stageIdx + 1}/{stageOrder.length}
           </span>
         {:else if job.status !== 'idle' && !isPaused && job.finished_at}
-          <span class="text-zinc-400">finished {lastFinishedRel}</span>
+          <span class="text-fg-2">finished {lastFinishedRel}</span>
         {/if}
       </div>
 
       {#if isLive}
         <!-- Per-stage progress bar. Indeterminate when total=0; determinate
              for the VLM stage which is the dominant cost. -->
-        <div class="h-2 overflow-hidden rounded bg-zinc-800">
+        <div class="h-2 overflow-hidden rounded bg-surface-2">
           {#if percent != null}
-            <div
-              class="h-full bg-blue-500 transition-all"
-              style="width: {percent}%"
-            ></div>
+            <div class="h-full bg-accent transition-all" style="width: {percent}%"></div>
           {:else}
-            <div class="h-full w-1/3 animate-pulse bg-blue-500/50"></div>
+            <div class="h-full w-1/3 animate-pulse bg-accent/50"></div>
           {/if}
         </div>
         <div
-          class="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-zinc-400"
+          class="flex flex-wrap items-center justify-between gap-2 font-mono text-caption text-fg-2"
         >
           <span>
             {#if job.total > 0}
@@ -287,10 +284,10 @@
       {/if}
 
       {#if job.error}
-        <p class="text-xs text-red-300">Error: {job.error}</p>
+        <p class="text-xs text-danger-text">Error: {job.error}</p>
       {/if}
       {#if job.error_detail}
-        <p class="text-xs text-red-300/80" data-testid="auto-label-error-detail">
+        <p class="text-xs text-danger-text/80" data-testid="auto-label-error-detail">
           {job.error_detail}
         </p>
       {/if}
@@ -300,14 +297,14 @@
              a compact table above the raw JSON so operators can answer
              "where did the wall time go?" without parsing the full result. -->
         {#if stageDurations.length > 0}
-          <div class="space-y-1 text-xs text-zinc-300">
+          <div class="space-y-1 text-xs text-fg-2">
             {#if stageDurations.length > 0}
-              <table class="font-mono text-[10px]">
+              <table class="font-mono text-caption">
                 <tbody>
                   {#each stageDurations as [name, sec] (name)}
                     <tr>
-                      <td class="pr-4 text-zinc-400">{name}</td>
-                      <td class="text-zinc-200">{formatDuration(sec)}</td>
+                      <td class="pr-4 text-fg-2">{name}</td>
+                      <td class="text-fg-1">{formatDuration(sec)}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -316,18 +313,18 @@
           </div>
         {/if}
         {#if job.result?.stages}
-          <details class="text-xs text-zinc-300">
-            <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
+          <details class="text-xs text-fg-2">
+            <summary class="cursor-pointer text-fg-2 hover:text-fg-1">
               Last run summary
             </summary>
             <!-- D5 (visual audit 2026-09-24): a per-stage table of the
                  served result instead of a raw JSON dump; the JSON stays
                  one click away for the nested details. -->
             <table
-              class="mt-2 w-full text-left text-[11px]"
+              class="mt-2 w-full text-left text-caption"
               data-testid="last-run-stages"
             >
-              <thead class="text-zinc-500">
+              <thead class="text-fg-3">
                 <tr>
                   <th class="py-1 pr-3 font-medium">Stage</th>
                   <th class="py-1 pr-3 font-medium">Status</th>
@@ -337,20 +334,20 @@
               <tbody>
                 {#each summarizeRunStages(job.result) as row (row.key)}
                   <tr
-                    class="border-t border-zinc-800 align-top {row.status === 'error'
-                      ? 'bg-red-500/10 text-red-200'
+                    class="border-t border-line align-top {row.status === 'error'
+                      ? 'bg-danger/10 text-danger-text'
                       : ''}"
                     data-stage-status={row.status}
                   >
-                    <td class="py-1 pr-3 text-zinc-200" title={row.key}>
+                    <td class="py-1 pr-3 text-fg-1" title={row.key}>
                       {STAGE_LABEL[row.key] ?? row.key}
                     </td>
-                    <td class="py-1 pr-3 font-mono text-zinc-300">{row.status}</td>
-                    <td class="py-1 text-zinc-400">
+                    <td class="py-1 pr-3 font-mono text-fg-2">{row.status}</td>
+                    <td class="py-1 text-fg-2">
                       {#if row.reason}<span class="mr-2">{row.reason}</span>{/if}
                       {#each row.fields as f (f.name)}
-                        <span class="mr-2 inline-block font-mono text-[10px]"
-                          ><span class="text-zinc-500">{f.name}</span> {f.value}</span
+                        <span class="mr-2 inline-block font-mono text-caption"
+                          ><span class="text-fg-3">{f.name}</span> {f.value}</span
                         >
                       {/each}
                     </td>
@@ -359,13 +356,11 @@
               </tbody>
             </table>
             <details class="mt-2">
-              <summary
-                class="cursor-pointer text-[10px] text-zinc-500 hover:text-zinc-300"
-              >
+              <summary class="cursor-pointer text-caption text-fg-3 hover:text-fg-2">
                 Raw JSON
               </summary>
               <pre
-                class="mt-1 max-h-64 overflow-auto rounded bg-zinc-900 p-2 font-mono text-[10px] text-zinc-300">{JSON.stringify(
+                class="mt-1 max-h-64 overflow-auto rounded bg-surface-1 p-2 font-mono text-caption text-fg-2">{JSON.stringify(
                   job.result,
                   null,
                   2,

@@ -99,17 +99,17 @@
   </header>
 
   <div
-    class="rounded border border-zinc-700 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300"
+    class="rounded border border-line-strong bg-surface-1/60 px-4 py-3 text-sm text-fg-2"
   >
     These are deployment-wide. There is no per-user setting and no undo. Every operator on
     this Cropwright instance gets what you save here.
   </div>
 
   {#if curationSettingsStore.loading && !curationSettingsStore.loaded}
-    <section class="surface p-6 text-sm text-zinc-500">Loading settings…</section>
+    <section class="surface p-6 text-sm text-fg-3">Loading settings…</section>
   {:else if curationSettingsStore.error}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-red-300">{curationSettingsStore.error}</p>
+      <p class="text-danger-text">{curationSettingsStore.error}</p>
       <button type="button" class="btn w-fit" onclick={reload}>Retry</button>
     </section>
   {:else}
@@ -118,7 +118,7 @@
         <h2 class="text-base font-semibold">Active defaults</h2>
         {#if curationSettingsStore.settings.updated_at}
           <span
-            class="text-xs text-zinc-500"
+            class="text-xs text-fg-3"
             title={curationSettingsStore.settings.updated_at}
           >
             last changed {formatTimestamp(curationSettingsStore.settings.updated_at)}
@@ -137,12 +137,12 @@
         {@const pinned = isPinned(curationSettingsStore.settings, spec)}
         {@const copy = axisCopy(strategiesStore.methods, spec)}
         <div
-          class="flex flex-col gap-1.5 border-t border-zinc-800 pt-4 first:border-0 first:pt-0"
+          class="flex flex-col gap-1.5 border-t border-line pt-4 first:border-0 first:pt-0"
         >
           <div class="flex flex-wrap items-center gap-2">
             <span class="w-44 shrink-0 text-sm font-medium">{copy.label}</span>
             {#if options.length === 0}
-              <span class="text-sm text-zinc-500">no options advertised</span>
+              <span class="text-sm text-fg-3">no options advertised</span>
             {:else}
               <select
                 class="select"
@@ -179,13 +179,13 @@
                 : null}
               {#if selectedWarning}
                 <span
-                  class="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[11px] text-red-200"
+                  class="rounded border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-caption text-danger-text"
                   data-testid="settings-option-warning">{selectedWarning}</span
                 >
               {/if}
               {#if selectedOpt && !coverageOf(selectedOpt)}
                 <span
-                  class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-200"
+                  class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-caption text-warn-text"
                 >
                   0 coverage — pinning this sorts by tie-break only
                 </span>
@@ -214,29 +214,29 @@
               </button>
             {/if}
           </div>
-          <p class="text-xs text-zinc-400">{copy.blurb}</p>
-          <p class="text-xs text-zinc-500">
+          <p class="text-xs text-fg-2">{copy.blurb}</p>
+          <p class="text-xs text-fg-3">
             {pinned ? 'pinned' : "inherited from the backend's built-in default"}
           </p>
           {#if options.some((o) => settingsOptionView(spec, o).disabled)}
-            <p class="text-xs text-zinc-400" data-testid="settings-ack-hint">
+            <p class="text-xs text-fg-2" data-testid="settings-ack-hint">
               An endpoint that sends crops outside this deployment is acknowledged when it
               is activated.
               <a
-                class="text-blue-300 hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(projectHref('/settings/models'))}>Settings → Models</a
               >
             </p>
           {/if}
           {#if saveErrors[spec.axis]}
             <p
-              class="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-200"
+              class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
               data-testid="settings-save-error"
             >
               {saveErrors[spec.axis]}
               {#if ackRefused[spec.axis]}
                 <a
-                  class="ml-1 text-blue-300 hover:underline"
+                  class="ml-1 text-accent-text hover:underline"
                   href={resolve(projectHref('/settings/models'))}>Settings → Models</a
                 >
               {/if}
@@ -248,10 +248,8 @@
 
     {#if advisoryVisible}
       <section class="surface flex flex-col gap-4 border-dashed p-5">
-        <h2 class="text-base font-semibold text-zinc-300">
-          Not settable on this backend
-        </h2>
-        <p class="text-xs text-zinc-400">
+        <h2 class="text-base font-semibold text-fg-2">Not settable on this backend</h2>
+        <p class="text-xs text-fg-2">
           The backend does not accept a shared default for these axes (it marks them not
           settable). Shown here so you can see what is active.
         </p>
@@ -259,11 +257,11 @@
           {@const options = axisOptions(strategiesStore.methods, spec)}
           {#if options.length > 0}
             <div class="flex flex-wrap items-center gap-2 text-sm">
-              <span class="w-44 shrink-0 font-medium text-zinc-400"
+              <span class="w-44 shrink-0 font-medium text-fg-2"
                 >{axisCopy(strategiesStore.methods, spec).label}</span
               >
               {#each options as opt (opt.id)}
-                <span class="text-zinc-300"
+                <span class="text-fg-2"
                   >{opt.label}{(opt as { default?: boolean }).default
                     ? ' (active)'
                     : ''}</span
@@ -283,7 +281,7 @@
     >
       <div class="flex min-w-0 flex-col gap-1">
         <h2 class="text-base font-semibold">Prompt packs</h2>
-        <p class="text-xs text-zinc-400">
+        <p class="text-xs text-fg-2">
           Edit the VLM's instructions, test them on a crop, and choose which revision is
           active.
         </p>
@@ -302,7 +300,7 @@
     >
       <div class="flex min-w-0 flex-col gap-1">
         <h2 class="text-base font-semibold">Region profiles</h2>
-        <p class="text-xs text-zinc-400">
+        <p class="text-xs text-fg-2">
           Choose what part of an item to find, with which models, and which revision is
           active.
         </p>
@@ -326,7 +324,7 @@
     >
       <div class="flex min-w-0 flex-col gap-1">
         <h2 class="text-base font-semibold">Models</h2>
-        <p class="text-xs text-zinc-400">
+        <p class="text-xs text-fg-2">
           Register VLM endpoints, test them, choose which one this project uses, and see
           every model choice in one place.
         </p>
@@ -351,7 +349,7 @@
         confirmSpec,
       ).label}
     </h3>
-    <p class="mb-3 text-sm text-zinc-300">
+    <p class="mb-3 text-sm text-fg-2">
       {effectiveDefaultId(
         curationSettingsStore.settings,
         strategiesStore.methods,
@@ -359,17 +357,17 @@
       ) ?? '(none)'} →
       <strong>{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong>
     </p>
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       {axisCopy(strategiesStore.methods, confirmSpec).blurb}
     </p>
     {#if confirmMode === 'clear'}
-      <p class="mb-3 text-xs text-zinc-400">
+      <p class="mb-3 text-xs text-fg-2">
         Removes this axis's pinned override entirely — every caller that reads it falls
         back to its own built-in default instead of the shared one.
       </p>
     {:else if confirmSpec.irreversibleWarning}
       <div
-        class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
       >
         {confirmSpec.irreversibleWarning}
       </div>

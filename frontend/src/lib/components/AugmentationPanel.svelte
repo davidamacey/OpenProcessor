@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * Augmentation config panel (design §13).
@@ -162,16 +163,20 @@
   }
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-900">
+<section class="rounded-md border border-line bg-surface-1">
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-zinc-800"
+    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2"
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
-    <span class="font-mono text-xs text-zinc-500">{expanded ? '▼' : '▶'}</span>
-    <span class="font-semibold text-zinc-100">Augmentation</span>
-    <span class="grow text-xs text-zinc-400">
+    <Icon
+      name={expanded ? 'chevron-down' : 'chevron-right'}
+      size={14}
+      class="text-fg-3"
+    />
+    <span class="font-semibold text-fg-1">Augmentation</span>
+    <span class="grow text-xs text-fg-2">
       {#if !enabled}
         disabled
       {:else}
@@ -182,13 +187,13 @@
   </button>
 
   {#if expanded}
-    <div class="space-y-3 border-t border-zinc-800 p-3 text-sm">
-      <label class="flex items-center gap-2 text-zinc-200">
+    <div class="space-y-3 border-t border-line p-3 text-sm">
+      <label class="flex items-center gap-2 text-fg-1">
         <input
           type="checkbox"
           checked={enabled}
           onchange={(e) => setEnabled((e.currentTarget as HTMLInputElement).checked)}
-          class="h-4 w-4 cursor-pointer accent-blue-500"
+          class="h-4 w-4 cursor-pointer accent-accent"
         />
         Enable on-disk augmentation (Albumentations)
       </label>
@@ -196,12 +201,12 @@
       {#if enabled}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block">
-            <span class="mb-1 block text-xs text-zinc-400">Preset</span>
+            <span class="mb-1 block text-xs text-fg-2">Preset</span>
             {#if presetsResponse}
               <select
                 value={spec.preset ?? servedDefault}
                 onchange={(e) => setPreset((e.currentTarget as HTMLSelectElement).value)}
-                class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
               >
                 {#each presetsResponse.presets as p (p.id)}
                   <option value={p.id} title={p.description}>
@@ -211,7 +216,7 @@
               </select>
               {#if selectedPresetOption}
                 <p
-                  class="mt-1 text-[11px] text-zinc-500"
+                  class="mt-1 text-caption text-fg-3"
                   title={selectedPresetOption.description}
                 >
                   {selectedPresetOption.description}
@@ -221,19 +226,17 @@
                 </p>
               {/if}
             {:else if presetsError}
-              <p class="text-[11px] text-red-300">
+              <p class="text-caption text-danger-text">
                 Could not load presets: {presetsError}
               </p>
             {:else}
-              <p class="text-[11px] text-zinc-500">Loading presets…</p>
+              <p class="text-caption text-fg-3">Loading presets…</p>
             {/if}
           </label>
 
           <label class="block">
-            <span class="mb-1 block text-xs text-zinc-400">
-              Multiplier <span class="font-mono text-zinc-500"
-                >×{spec.multiplier ?? 1}</span
-              >
+            <span class="mb-1 block text-xs text-fg-2">
+              Multiplier <span class="font-mono text-fg-3">×{spec.multiplier ?? 1}</span>
             </span>
             <input
               type="range"
@@ -243,23 +246,23 @@
               value={spec.multiplier ?? 1}
               oninput={(e) =>
                 setMultiplier(Number((e.currentTarget as HTMLInputElement).value))}
-              class="w-full accent-blue-500"
+              class="w-full accent-accent"
             />
           </label>
         </div>
 
-        <fieldset class="rounded border border-zinc-800 p-3">
-          <legend class="px-1 text-[11px] uppercase tracking-wide text-zinc-500">
+        <fieldset class="rounded border border-line p-3">
+          <legend class="px-1 text-caption uppercase tracking-wide text-fg-3">
             Per-class oversampling
           </legend>
-          <div class="mb-2 flex gap-3 text-xs text-zinc-300">
+          <div class="mb-2 flex gap-3 text-xs text-fg-2">
             <label class="flex cursor-pointer items-center gap-1.5">
               <input
                 type="radio"
                 name="oversample"
                 checked={oversampleMode === 'off'}
                 onchange={() => setOversampleMode('off')}
-                class="accent-blue-500"
+                class="accent-accent"
               />
               off
             </label>
@@ -269,7 +272,7 @@
                 name="oversample"
                 checked={oversampleMode === 'manual'}
                 onchange={() => setOversampleMode('manual')}
-                class="accent-blue-500"
+                class="accent-accent"
               />
               manual table
             </label>
@@ -279,7 +282,7 @@
                 name="oversample"
                 checked={oversampleMode === 'auto'}
                 onchange={() => setOversampleMode('auto')}
-                class="accent-blue-500"
+                class="accent-accent"
               />
               auto-balance
             </label>
@@ -287,23 +290,21 @@
 
           {#if oversampleMode === 'manual'}
             <label class="block">
-              <span class="mb-1 block text-[11px] text-zinc-500">
+              <span class="mb-1 block text-caption text-fg-3">
                 One <code>class_id:multiplier</code> per line. Blanks ignored.
               </span>
               <textarea
                 bind:value={manualText}
                 onblur={commitManual}
                 rows="4"
-                class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 font-mono text-xs text-fg-1 focus:border-accent focus:outline-none"
                 placeholder="81:8
 47:5"></textarea>
             </label>
           {:else if oversampleMode === 'auto'}
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label class="block">
-                <span class="mb-1 block text-xs text-zinc-400"
-                  >Target count per class</span
-                >
+                <span class="mb-1 block text-xs text-fg-2">Target count per class</span>
                 <input
                   type="number"
                   min="100"
@@ -313,11 +314,11 @@
                     setAutoBalance({
                       target_count: Number((e.currentTarget as HTMLInputElement).value),
                     })}
-                  class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
                 />
               </label>
               <label class="block">
-                <span class="mb-1 block text-xs text-zinc-400">Max multiplier (cap)</span>
+                <span class="mb-1 block text-xs text-fg-2">Max multiplier (cap)</span>
                 <input
                   type="number"
                   min="1"
@@ -327,7 +328,7 @@
                     setAutoBalance({
                       max_multiplier: Number((e.currentTarget as HTMLInputElement).value),
                     })}
-                  class="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
                 />
               </label>
             </div>

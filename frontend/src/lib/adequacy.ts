@@ -19,13 +19,13 @@ export type AdequacyLevel = 'block' | 'warn' | 'ok';
 export function adequacyChipClass(level: string | null | undefined): string {
   switch (level) {
     case 'ok':
-      return 'bg-green-500/20 text-green-200 border-green-500/40';
+      return 'bg-success/20 text-success-text border-success/40';
     case 'warn':
-      return 'bg-orange-500/20 text-orange-200 border-orange-500/40';
+      return 'bg-warn/20 text-warn-text border-warn/40';
     case 'block':
-      return 'bg-red-500/20 text-red-200 border-red-500/40';
+      return 'bg-danger/20 text-danger-text border-danger/40';
     default:
-      return 'bg-zinc-800/40 text-zinc-400 border-zinc-700';
+      return 'bg-surface-2/40 text-fg-2 border-line-strong';
   }
 }
 

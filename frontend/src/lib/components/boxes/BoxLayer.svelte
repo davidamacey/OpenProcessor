@@ -56,7 +56,7 @@
   {#snippet label()}
     {#if showLabels}
       <span
-        class="pointer-events-none absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
+        class="pointer-events-none absolute -top-4 left-0 rounded-sm bg-surface-0/90 px-1 py-0.5 text-caption leading-none whitespace-nowrap text-fg-1"
       >
         {b.label}
       </span>

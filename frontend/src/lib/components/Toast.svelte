@@ -1,22 +1,23 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
   const kindClass = (k: 'info' | 'success' | 'warn' | 'error'): string => {
     switch (k) {
       case 'success':
-        return 'border-green-500/40 bg-green-500/10 text-green-200';
+        return 'border-success/40 bg-success/10 text-success-text';
       case 'warn':
-        return 'border-orange-500/40 bg-orange-500/10 text-orange-100';
+        return 'border-warn/40 bg-warn/10 text-warn-text';
       case 'error':
-        return 'border-red-500/40 bg-red-500/10 text-red-100';
+        return 'border-danger/40 bg-danger/10 text-danger-text';
       default:
-        return 'border-blue-500/40 bg-blue-500/10 text-blue-100';
+        return 'border-accent/40 bg-accent/10 text-accent-text';
     }
   };
 </script>
 
 <div
-  class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[360px] max-w-[95vw] flex-col gap-2"
+  class="pointer-events-none fixed right-4 bottom-4 z-80 flex w-[360px] max-w-[95vw] flex-col gap-2"
   aria-live="polite"
   aria-atomic="true"
 >
@@ -30,11 +31,11 @@
         <span class="grow whitespace-pre-wrap break-words">{t.text}</span>
         <button
           type="button"
-          class="text-zinc-300 hover:text-white"
+          class="text-fg-2 hover:text-white"
           aria-label="Dismiss"
           onclick={() => toastStore.dismiss(t.id)}
         >
-          ×
+          <Icon name="x" size={14} />
         </button>
       </div>
     </div>

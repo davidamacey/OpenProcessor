@@ -52,7 +52,7 @@
   <section class="surface space-y-3 p-4">
     <h2 class="text-sm font-semibold">Embedding</h2>
     <label class="flex flex-col gap-1 text-xs">
-      <span class="text-zinc-400">Mode</span>
+      <span class="text-fg-2">Mode</span>
       <select
         class="input w-48"
         data-testid="policy-mode"
@@ -63,7 +63,7 @@
           <option value={m}>{m}</option>
         {/each}
       </select>
-      <span class="text-zinc-500">{MODE_HELP[embedding.mode ?? 'all']}</span>
+      <span class="text-fg-3">{MODE_HELP[embedding.mode ?? 'all']}</span>
     </label>
 
     {#if embedding.mode === 'selected'}
@@ -75,7 +75,7 @@
       />
       <div class="flex flex-wrap gap-3 text-xs">
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Min confidence</span>
+          <span class="text-fg-2">Min confidence</span>
           <input
             class="input w-28"
             type="number"
@@ -86,7 +86,7 @@
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Min box area (fraction)</span>
+          <span class="text-fg-2">Min box area (fraction)</span>
           <input
             class="input w-28"
             type="number"
@@ -97,7 +97,7 @@
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Max per image</span>
+          <span class="text-fg-2">Max per image</span>
           <input
             class="input w-28"
             type="number"
@@ -119,9 +119,9 @@
         checked={draft.clustering?.automatic ?? true}
         onchange={(e) => setClustering({ automatic: e.currentTarget.checked })}
       />
-      <span class="text-zinc-200">Cluster automatically</span>
+      <span class="text-fg-1">Cluster automatically</span>
     </label>
-    <p class="text-xs text-zinc-500">
+    <p class="text-xs text-fg-3">
       Off: new items are not placed in clusters, and the refresh and idle retrains skip
       this project. Cluster when you ask.
     </p>
@@ -139,7 +139,7 @@
           checked={detect.classes != null}
           onchange={(e) => setDetect({ classes: e.currentTarget.checked ? [] : null })}
         />
-        <span class="text-zinc-200">Limit to these classes</span>
+        <span class="text-fg-1">Limit to these classes</span>
       </label>
       {#if detect.classes != null}
         <ClassNamePicker
@@ -157,7 +157,7 @@
       />
       <div class="flex flex-wrap gap-3 text-xs">
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Min confidence</span>
+          <span class="text-fg-2">Min confidence</span>
           <input
             class="input w-28"
             type="number"
@@ -167,7 +167,7 @@
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Min box area (fraction)</span>
+          <span class="text-fg-2">Min box area (fraction)</span>
           <input
             class="input w-28"
             type="number"
@@ -177,7 +177,7 @@
           />
         </label>
         <label class="flex flex-col gap-1">
-          <span class="text-zinc-400">Max per image</span>
+          <span class="text-fg-2">Max per image</span>
           <input
             class="input w-28"
             type="number"
@@ -188,7 +188,7 @@
         </label>
       </div>
       <label class="flex flex-col gap-1 text-xs">
-        <span class="text-zinc-400">Class resolution</span>
+        <span class="text-fg-2">Class resolution</span>
         <select
           class="input w-48"
           data-testid="policy-class-resolution"
@@ -199,7 +199,7 @@
             <option value={r}>{r}</option>
           {/each}
         </select>
-        <span class="text-zinc-500"
+        <span class="text-fg-3"
           >{RESOLUTION_HELP[detect.class_resolution ?? 'by_name']}</span
         >
       </label>

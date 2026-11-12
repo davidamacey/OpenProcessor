@@ -52,7 +52,7 @@
 {#if available}
   <div class="inline-flex flex-wrap items-center gap-1.5" data-testid="vlm-run-picker">
     <label class="flex items-center gap-1.5">
-      <span class="text-zinc-500">VLM</span>
+      <span class="text-fg-3">VLM</span>
       <select
         class="select-sm"
         value={vlm ?? ''}
@@ -72,7 +72,7 @@
     </label>
     {#if needsAck}
       <div
-        class="flex basis-full flex-col gap-1 rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-red-200"
+        class="flex basis-full flex-col gap-1 rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger-text"
         data-testid="vlm-run-ack"
       >
         {#if chosen?.warning}<p>{chosen.warning}</p>{/if}

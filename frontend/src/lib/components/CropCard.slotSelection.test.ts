@@ -91,7 +91,7 @@ function renderCard(crop: Crop) {
 }
 
 const editButton = (el: HTMLElement) =>
-  [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === '✎');
+  el.querySelector<HTMLButtonElement>('button[aria-label^="Edit"]');
 
 afterEach(() => {
   if (instance) {
@@ -112,23 +112,23 @@ describe('CropCard — sub-box slot chosen by region evidence', () => {
     expect(editButton(el)?.getAttribute('aria-label')).toBe('Edit tag');
   });
 
-  it('offers ✎ on an item with no region yet when exactly one sub-box slot is registered', () => {
+  it('offers the edit button on an item with no region yet when exactly one sub-box slot is registered', () => {
     registry.all = [widgetTagSlot];
     const el = renderCard(widget());
 
     expect(el.querySelector('div.pointer-events-none.absolute')).toBeNull();
-    expect(editButton(el)).toBeDefined();
+    expect(editButton(el)).not.toBeNull();
   });
 
-  it('renders no ✎ and no ring when no sub-box slot is registered', () => {
+  it('renders no edit button and no ring when no sub-box slot is registered', () => {
     registry.all = [];
     const el = renderCard(widget({ [widgetTagSlot.key]: tagData() }));
 
-    expect(editButton(el)).toBeUndefined();
+    expect(editButton(el)).toBeNull();
     expect(el.querySelector('div.pointer-events-none.absolute')).toBeNull();
   });
 
-  it('offers no ✎ for a read-only scalar-box slot (the backend has no write route for it)', () => {
+  it('offers no edit button for a read-only scalar-box slot (the backend has no write route for it)', () => {
     registry.all = [aircraftTailNumberSlot];
     const el = renderCard(
       widget({
@@ -146,6 +146,6 @@ describe('CropCard — sub-box slot chosen by region evidence', () => {
     );
     // Its box still draws.
     expect(el.querySelectorAll('div.pointer-events-none.absolute')).toHaveLength(1);
-    expect(editButton(el)).toBeUndefined();
+    expect(editButton(el)).toBeNull();
   });
 });

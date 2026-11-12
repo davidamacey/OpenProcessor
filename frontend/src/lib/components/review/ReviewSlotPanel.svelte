@@ -4,6 +4,7 @@
   actions with the step-back footer.
 -->
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import AssistButton from '$lib/components/assistRun/AssistButton.svelte';
   import AssistSuggestions from '$lib/components/assistRun/AssistSuggestions.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
@@ -58,8 +59,8 @@
    is two keystrokes per crop on average: minor twitch with
    arrows / handles, then Enter. -->
 <div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
-  <span class="text-zinc-500">{slotLabels.scoreLabel}</span>
-  <span class="font-mono text-zinc-200">
+  <span class="text-fg-3">{slotLabels.scoreLabel}</span>
+  <span class="font-mono text-fg-1">
     {#if isMultiBoxSlot && selectedSlotBox?.score != null}
       {(selectedSlotBox.score * 100).toFixed(1)}%
     {:else if !isMultiBoxSlot && slotData?.subBox?.score != null}
@@ -68,13 +69,13 @@
       —
     {/if}
   </span>
-  <span class="text-zinc-500">{slotLabels.statusLabel}</span>
+  <span class="text-fg-3">{slotLabels.statusLabel}</span>
   <span class="flex items-center gap-1.5">
     <select
       aria-label={slotLabels.statusLabel}
       bind:value={edit.editedSlotStatus}
       onchange={() => void commitSlotStatus()}
-      class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 focus:border-accent focus:outline-none"
     >
       <option value="">—</option>
       {#each slotStatusOptions as opt (opt.value)}
@@ -86,14 +87,14 @@
          region_verified no longer distinguishes the two. -->
     {#if slotData?.lifecycle?.validated}
       <span
-        class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1 text-[10px] text-emerald-200"
+        class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
         title="A human confirmed/drew/rejected this region"
       >
         human validated
       </span>
     {:else if slotData?.lifecycle?.autoConfirmed}
       <span
-        class="rounded border border-blue-500/40 bg-blue-500/15 px-1 text-[10px] text-blue-200"
+        class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent-text"
         title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
       >
         auto-confirmed
@@ -104,7 +105,7 @@
          signal. -->
     {#if selectedSlotBox?.bboxCorrect === false}
       <span
-        class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+        class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
         title="The verifier judged this box incorrect"
       >
         model: box wrong
@@ -112,7 +113,7 @@
     {/if}
     {#if selectedSlotBox?.locked}
       <span
-        class="rounded border border-zinc-600 bg-zinc-800 px-1 text-[10px] text-zinc-300"
+        class="rounded border border-line-strong bg-surface-2 px-1 text-caption text-fg-2"
         title="A human created or edited this box; automated stages leave it alone"
       >
         locked
@@ -120,14 +121,14 @@
     {/if}
     {#if slotData?.boxSet?.setComplete === false}
       <span
-        class="rounded border border-amber-500/40 bg-amber-500/15 px-1 text-[10px] text-amber-200"
+        class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
         title="The VLM reported visible regions that are missing from this list"
       >
         set incomplete
       </span>
     {/if}
   </span>
-  <span class="text-zinc-500">Detector</span>
+  <span class="text-fg-3">Detector</span>
   <span class="flex flex-wrap items-center gap-1.5">
     {#if selectedSlotBox?.detector || slotData?.provenance?.detector}
       <ProvenanceChip
@@ -137,7 +138,7 @@
           null}
       />
     {:else}
-      <span class="text-zinc-500">—</span>
+      <span class="text-fg-3">—</span>
     {/if}
     {#if slotData?.provenance?.verifier}
       <ProvenanceChip
@@ -160,7 +161,7 @@
       <RejectedBoxChips boxes={multiBox.boxes} subBoxes={slotData?.subBoxes} />
       {#if multiBox.boxes.length === 0 && !editMode}
         <span
-          class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400"
+          class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-caption text-fg-2"
         >
           no boxes · press {kg('review.region.edit_box')} to draw
         </span>
@@ -168,7 +169,7 @@
     {/if}
   </span>
   {#if isMultiBoxSlot && selectedSlotBox?.boxId}
-    <span class="text-zinc-500">Assist</span>
+    <span class="text-fg-3">Assist</span>
     <span class="flex flex-wrap items-center gap-2" data-testid="review-box-assist">
       <AssistSuggestions assist={current.assist} boxId={selectedSlotBox.boxId} />
       <AssistButton
@@ -185,7 +186,7 @@
     </span>
   {/if}
   {#if slotData?.provenance?.chain && slotData.provenance.chain.length > 0}
-    <span class="text-zinc-500">Cascade</span>
+    <span class="text-fg-3">Cascade</span>
     <span class="flex flex-wrap items-center gap-1">
       {#each slotData.provenance.chain as entry, i (i)}
         <ProvenanceChip raw={entry} size="sm" />
@@ -197,7 +198,7 @@
        even a disabled input — since the backend 422s
        `region_text` on such a profile. -->
   {#if activeSlot.capabilities.text}
-    <span class="text-zinc-500">{slotLabels.textLabel}</span>
+    <span class="text-fg-3">{slotLabels.textLabel}</span>
     <span class="flex items-center gap-1.5">
       <input
         type="text"
@@ -215,7 +216,7 @@
         autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
           ? 'characters'
           : 'off'}
-        class="w-28 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 placeholder:italic placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none {activeSlot
+        class="w-28 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 placeholder:italic placeholder:text-fg-3 focus:border-accent focus:outline-none {activeSlot
           .capabilities.text?.monospace
           ? 'font-mono'
           : ''}"
@@ -229,7 +230,7 @@
         />
       {/if}
       {#if (isMultiBoxSlot ? selectedSlotBox?.textConfidence : slotData?.text?.confidence) != null}
-        <span class="text-[10px] text-zinc-500">
+        <span class="text-caption text-fg-3">
           {(
             ((isMultiBoxSlot
               ? selectedSlotBox?.textConfidence
@@ -239,7 +240,7 @@
       {/if}
       {#if selectedSlotBox?.textDisagreement}
         <span
-          class="rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+          class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
           title="vlm: {selectedSlotBox.textVlm ?? '∅'} · ocr: {selectedSlotBox.textOcr ??
             '∅'}"
         >
@@ -251,7 +252,7 @@
            vocabulary ids). -->
       {#if selectedSlotBox?.textChoice && selectedSlotBox.textChoice !== 'human'}
         <span
-          class="rounded border border-zinc-700 bg-zinc-900 px-1 text-[10px] text-zinc-400"
+          class="rounded border border-line-strong bg-surface-1 px-1 text-caption text-fg-2"
           title="How this reading was chosen"
         >
           {regionVocabularyStore.textChoiceLabel(selectedSlotBox.textChoice)}
@@ -259,7 +260,7 @@
       {/if}
       {#if selectedSlotBox?.textVlmInvalid}
         <span
-          class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+          class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
           title="Why the VLM's own reading wasn't used as text"
         >
           vlm invalid: {regionVocabularyStore.invalidReasonLabel(
@@ -273,14 +274,14 @@
     {@const servedReasonKind = regionVocabularyStore.rejectionReasonKind(
       slotData?.lifecycle?.rejectionReason,
     )}
-    <span class="text-zinc-500">Rejection reason</span>
+    <span class="text-fg-3">Rejection reason</span>
     <span>
       {#if servedReasonKind && editedRejectionReason === (slotData?.lifecycle?.rejectionReason ?? '')}
         <!-- R6 (visual audit 2026-09-24): a machine reason from the
              served vocabulary (e.g. verifier_no_verdict) used to
              sit raw in an editable box; show its served label
              instead. Changing the status still re-asks. -->
-        <span class="text-zinc-300" data-testid="served-rejection-reason"
+        <span class="text-fg-2" data-testid="served-rejection-reason"
           >{regionVocabularyStore.rejectionReasonLabel(
             slotData?.lifecycle?.rejectionReason,
           )}</span
@@ -297,14 +298,14 @@
             }
           }}
           placeholder="e.g. blurred, occluded, glare"
-          class="w-44 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-44 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 focus:border-accent focus:outline-none"
         />
       {/if}
     </span>
   {/if}
 </div>
 <div
-  class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-[rgb(var(--bg-elevated))] py-1"
+  class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-surface-1 py-1"
   data-testid="review-actions"
 >
   {#if editMode}
@@ -364,7 +365,7 @@
         'review.region.back',
       )}) — only re-queues it locally, use {kg('review.undo')} to undo the server write"
     >
-      ← Step back
+      <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Step back
     </button>
   {/if}
 </div>
@@ -375,7 +376,7 @@
        footer said "confirmed" unconditionally, so a reject
        read as "1 confirmed in this session". "Actioned" is
        accurate for all three. -->
-  <p class="mt-1 text-[10px] text-zinc-500">
+  <p class="mt-1 text-caption text-fg-3">
     {slotUndoStack.length} actioned in this session — press {kg('review.region.back')} to step
     back.
   </p>

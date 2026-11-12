@@ -61,7 +61,7 @@ describe('DQ-M8: the detector score is labeled for what it is next to a VLM-sour
 
   it('renders "Detector score" when VLM-sourced, plain "Confidence" otherwise', () => {
     expect(src).toMatch(
-      /<dt class="text-zinc-500">\{isVlmSourced \? 'Detector score' : 'Confidence'\}<\/dt>/,
+      /<dt class="text-fg-3">\{isVlmSourced \? 'Detector score' : 'Confidence'\}<\/dt>/,
     );
   });
 

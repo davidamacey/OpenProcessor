@@ -32,8 +32,8 @@
 {#each presentSlots as spec (spec.key)}
   {@const data = slotOf(crop, spec)}
   {#if slotIsPresent(data)}
-    <div class="mt-4 border-t border-zinc-800 pt-3">
-      <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
+    <div class="mt-4 border-t border-line pt-3">
+      <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">
         {spec.label.title}
       </div>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
@@ -41,8 +41,8 @@
              so Details and the review panel's status dropdown use one
              vocabulary; the slot profile's own label only as a fallback. -->
         {#if data?.lifecycle?.status || data?.lifecycle?.state}
-          <dt class="text-zinc-500">Status</dt>
-          <dd class="text-zinc-200">
+          <dt class="text-fg-3">Status</dt>
+          <dd class="text-fg-1">
             {regionStatusesStore.labelFor(data.lifecycle.status) ??
               data.lifecycle.state?.label ??
               data.lifecycle.status}
@@ -55,36 +55,36 @@
              region_verified, whose meaning ("a verification pass ran")
              is now a third, distinct thing. -->
         {#if data?.lifecycle?.validated != null || data?.lifecycle?.autoConfirmed != null}
-          <dt class="text-zinc-500">Validation</dt>
+          <dt class="text-fg-3">Validation</dt>
           <dd class="flex flex-wrap items-center gap-1.5">
             {#if data.lifecycle.validated}
               <span
-                class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200"
+                class="rounded border border-success/40 bg-success/15 px-1.5 py-0.5 text-caption text-success-text"
               >
                 human validated
               </span>
             {:else if data.lifecycle.autoConfirmed}
               <span
-                class="rounded border border-blue-500/40 bg-blue-500/15 px-1.5 py-0.5 text-[10px] text-blue-200"
+                class="rounded border border-accent/40 bg-accent/15 px-1.5 py-0.5 text-caption text-accent-text"
               >
                 auto-confirmed (unreviewed)
               </span>
             {:else if data.lifecycle.validated != null || data.lifecycle.autoConfirmed != null}
-              <span class="text-zinc-500">not yet reviewed</span>
+              <span class="text-fg-3">not yet reviewed</span>
             {/if}
           </dd>
         {/if}
 
         {#if data?.subBox?.score != null}
-          <dt class="text-zinc-500">Score</dt>
+          <dt class="text-fg-3">Score</dt>
           <dd class="font-mono">{pct(data.subBox.score)}</dd>
         {/if}
 
         {#if data?.boxSet && data.boxSet.setComplete === false}
-          <dt class="text-zinc-500">Box set</dt>
+          <dt class="text-fg-3">Box set</dt>
           <dd>
             <span
-              class="rounded border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200"
+              class="rounded border border-warn/40 bg-warn/15 px-1.5 py-0.5 text-caption text-warn-text"
               title="The VLM reported visible regions that are missing from this list"
             >
               incomplete
@@ -95,7 +95,7 @@
         {#if data?.subBoxes && data.subBoxes.length > 0}
           <!-- One block per box, numbered by its current position in the
                served list (the id, not the number, is stable). -->
-          <dt class="text-zinc-500">Boxes ({data.subBoxes.length})</dt>
+          <dt class="text-fg-3">Boxes ({data.subBoxes.length})</dt>
           <dd class="flex flex-col gap-1.5">
             {#each data.subBoxes as b, i (b.boxId ?? i)}
               {@const rejectionKind = regionVocabularyStore.rejectionReasonKind(
@@ -103,21 +103,20 @@
               )}
               <div class="flex flex-col gap-0.5" data-testid="meta-box">
                 <div class="flex flex-wrap items-center gap-1.5">
-                  <span class="font-mono text-[10px] text-zinc-500">#{i + 1}</span>
+                  <span class="font-mono text-caption text-fg-3">#{i + 1}</span>
                   <span
-                    class="rounded border px-1 py-0.5 text-[10px] {toneChipClass(
+                    class="rounded border px-1 py-0.5 text-caption {toneChipClass(
                       regionStatusesStore.boxStateTone(b.state),
                     )}"
                   >
                     {regionStatusesStore.boxStateInfo(b.state)?.label ?? b.state}
                   </span>
                   {#if b.score != null}
-                    <span class="font-mono text-[10px] text-zinc-500">{pct(b.score)}</span
-                    >
+                    <span class="font-mono text-caption text-fg-3">{pct(b.score)}</span>
                   {/if}
                   {#if b.locked}
                     <span
-                      class="rounded border border-zinc-600 bg-zinc-800 px-1 text-[10px] text-zinc-300"
+                      class="rounded border border-line-strong bg-surface-2 px-1 text-caption text-fg-2"
                       title="A human created or edited this box; automated stages leave it alone"
                     >
                       locked
@@ -128,7 +127,7 @@
                        from a rejection reason's kind. -->
                   {#if b.bboxCorrect === false}
                     <span
-                      class="rounded border border-red-500/40 bg-red-500/15 px-1 text-[10px] text-red-200"
+                      class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
                     >
                       model: box wrong
                     </span>
@@ -143,11 +142,11 @@
                 </div>
                 {#if b.rejectionReason}
                   <div
-                    class="text-[11px] {rejectionKind === 'model_verdict'
-                      ? 'text-red-300'
+                    class="text-caption {rejectionKind === 'model_verdict'
+                      ? 'text-danger-text'
                       : rejectionKind === 'needs_human'
-                        ? 'text-zinc-300'
-                        : 'text-amber-300'}"
+                        ? 'text-fg-2'
+                        : 'text-warn-text'}"
                   >
                     {rejectionKind === 'needs_human'
                       ? 'Needs review: '
@@ -159,19 +158,19 @@
                 {#if b.text != null}
                   <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                     <span
-                      class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+                      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
                     >
                       {b.text || '∅'}
                     </span>
                     {#if b.textSource}
                       <ProvenanceChip detector={b.textSource} size="sm" />
                     {/if}
-                    <span class="font-mono text-[10px] text-zinc-500">
+                    <span class="font-mono text-caption text-fg-3">
                       {pct(b.textConfidence)}
                     </span>
                     {#if b.textDisagreement}
                       <span
-                        class="whitespace-nowrap rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[10px] text-orange-200"
+                        class="whitespace-nowrap rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
                         title="The VLM and OCR readers disagree on this text"
                       >
                         readers disagree
@@ -180,23 +179,23 @@
                   </div>
                 {/if}
                 {#if b.textVlm != null || b.textOcr != null}
-                  <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption">
                     {#if b.textVlm != null}
                       <span>
-                        <span class="text-zinc-500">vlm:</span>
-                        <span class="font-mono text-zinc-200">{b.textVlm || '∅'}</span>
+                        <span class="text-fg-3">vlm:</span>
+                        <span class="font-mono text-fg-1">{b.textVlm || '∅'}</span>
                       </span>
                     {/if}
                     {#if b.textOcr != null}
                       <span>
-                        <span class="text-zinc-500">ocr:</span>
-                        <span class="font-mono text-zinc-200">{b.textOcr || '∅'}</span>
+                        <span class="text-fg-3">ocr:</span>
+                        <span class="font-mono text-fg-1">{b.textOcr || '∅'}</span>
                       </span>
                     {/if}
                   </div>
                 {/if}
                 {#if b.textReader}
-                  <div class="font-mono text-[10px] text-zinc-500">
+                  <div class="font-mono text-caption text-fg-3">
                     text reader {b.textReader}{b.textReaderVersion
                       ? ` ${b.textReaderVersion}`
                       : ''}
@@ -205,12 +204,12 @@
                 <!-- Why the chosen reading won / why the VLM's own reading
                      was rejected as not text (served vocabulary ids). -->
                 {#if b.textChoice && b.textChoice !== 'human'}
-                  <div class="text-[11px] text-zinc-300">
+                  <div class="text-caption text-fg-2">
                     Text choice: {regionVocabularyStore.textChoiceLabel(b.textChoice)}
                   </div>
                 {/if}
                 {#if b.textVlmInvalid}
-                  <div class="text-[11px] text-red-300">
+                  <div class="text-caption text-danger-text">
                     VLM text rejected: {regionVocabularyStore.invalidReasonLabel(
                       b.textVlmInvalid,
                     )}
@@ -222,7 +221,7 @@
         {/if}
 
         {#if data?.provenance?.detector || data?.provenance?.verifier}
-          <dt class="text-zinc-500">Detector</dt>
+          <dt class="text-fg-3">Detector</dt>
           <dd class="flex flex-wrap items-center gap-1.5">
             {#if data.provenance.detector}
               <ProvenanceChip
@@ -242,7 +241,7 @@
         {/if}
 
         {#if data?.provenance?.chain && data.provenance.chain.length > 0}
-          <dt class="text-zinc-500">Cascade</dt>
+          <dt class="text-fg-3">Cascade</dt>
           <dd class="flex flex-wrap items-center gap-1">
             {#each data.provenance.chain as entry, i (i)}
               <ProvenanceChip raw={entry} size="sm" />
@@ -251,25 +250,25 @@
         {/if}
 
         {#if data?.text?.value != null}
-          <dt class="text-zinc-500">Text</dt>
+          <dt class="text-fg-3">Text</dt>
           <dd class="flex min-w-0 flex-wrap items-center gap-1.5">
             <span
-              class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-zinc-100"
+              class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
             >
               {data.text.value || '∅'}
             </span>
             {#if data.text.source}
               <ProvenanceChip detector={data.text.source} size="sm" />
             {/if}
-            <span class="font-mono text-[10px] text-zinc-500">
+            <span class="font-mono text-caption text-fg-3">
               {pct(data.text.confidence)}
             </span>
           </dd>
         {/if}
 
         {#if data?.text?.engineVersion}
-          <dt class="text-zinc-500">Text engine</dt>
-          <dd class="font-mono text-zinc-400">{data.text.engineVersion}</dd>
+          <dt class="text-fg-3">Text engine</dt>
+          <dd class="font-mono text-fg-2">{data.text.engineVersion}</dd>
         {/if}
 
         {#if data?.lifecycle?.rejectionReason}
@@ -281,15 +280,15 @@
                a rejection, automatic (a geometry gate) is neutral/amber,
                needs_human (no verdict given) must never be worded as a
                rejection. -->
-          <dt class="text-zinc-500">
+          <dt class="text-fg-3">
             {rejectionKind === 'needs_human' ? 'Needs review' : 'Rejection'}
           </dt>
           <dd
             class={rejectionKind === 'model_verdict'
-              ? 'text-red-300'
+              ? 'text-danger-text'
               : rejectionKind === 'needs_human'
-                ? 'text-zinc-300'
-                : 'text-amber-300'}
+                ? 'text-fg-2'
+                : 'text-warn-text'}
           >
             {regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)}
           </dd>

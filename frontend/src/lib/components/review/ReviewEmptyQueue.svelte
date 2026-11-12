@@ -23,9 +23,9 @@
      the served tab description and sort-fallback reason, instead of
      a bare "Queue empty.". -->
 <div class="col-span-full max-w-2xl text-sm" data-testid="queue-empty">
-  <p class="text-zinc-300">{emptyMessage.title}</p>
+  <p class="text-fg-2">{emptyMessage.title}</p>
   {#each emptyMessage.lines as line (line)}
-    <p class="mt-1 text-xs text-zinc-500">{line}</p>
+    <p class="mt-1 text-xs text-fg-3">{line}</p>
   {/each}
   {#if emptyMessage.link}
     <!-- #36 item 9: served empty_state says the prerequisite this
@@ -33,7 +33,7 @@
          control, not just "empty". -->
     <p class="mt-2 text-xs">
       <a
-        class="text-blue-400 underline hover:text-blue-300"
+        class="text-accent-text underline hover:text-accent-text"
         href={resolve(projectHref(emptyMessage.link.href))}>{emptyMessage.link.text}</a
       >
     </p>

@@ -88,9 +88,11 @@
     testid="profiles-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-red-300" data-testid="profile-load-error">{ed.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="profile-load-error">
+        {ed.loadError}
+      </p>
     {:else if !ed.doc || !ed.schema}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {:else}
       {@const d = ed.doc}
       <ConfigActivePanel
@@ -111,7 +113,7 @@
               ? ` r${lastActivation.active.revision}`
               : ''}
           </h2>
-          <p class="text-xs text-zinc-400">
+          <p class="text-xs text-fg-2">
             The app shows a reload notice when the region profile it runs on changes.
           </p>
           {#if activationWarnings.length > 0}
@@ -132,10 +134,10 @@
 
           {#if shownDoc?.effective}
             {@const eff = shownDoc.effective}
-            <p class="text-xs text-zinc-400" data-testid="profile-effective">
+            <p class="text-xs text-fg-2" data-testid="profile-effective">
               {ed.viewing ? `Revision ${ed.viewing.revision}` : 'The saved revision'}:
               finds regions with
-              <span class="font-mono text-zinc-200"
+              <span class="font-mono text-fg-1"
                 >{eff.legs.length > 0 ? eff.legs.join(' + ') : 'nothing'}</span
               >;
               {eff.reads_text ? 'reads text' : 'reads no text'}{eff.text_hint_active
@@ -146,7 +148,7 @@
 
           <ConfigDescriptionField {ed} />
 
-          <div class="flex flex-wrap items-center gap-4 text-xs text-zinc-400">
+          <div class="flex flex-wrap items-center gap-4 text-xs text-fg-2">
             {#if advancedCount > 0}
               <label class="flex items-center gap-2">
                 <input
@@ -171,7 +173,7 @@
             </label>
           </div>
           {#if ed.vocabularyError}
-            <p class="text-xs text-red-300" data-testid="vocabulary-error">
+            <p class="text-xs text-danger-text" data-testid="vocabulary-error">
               Could not load the model lists: {ed.vocabularyError}
             </p>
           {/if}
@@ -186,7 +188,7 @@
                 data-testid="profile-group"
                 data-group={g.id}
               >
-                <h2 class="text-sm font-semibold text-zinc-200">{g.label}</h2>
+                <h2 class="text-sm font-semibold text-fg-1">{g.label}</h2>
                 {#if g.id === 'segmenter' && ed.vocabulary}
                   <SegmenterStatus segmenters={ed.vocabulary.segmenters} />
                 {/if}
@@ -203,12 +205,12 @@
                         : 'Check segmenter prompt'}</button
                     >
                     {#if ed.promptCheckError}
-                      <p class="text-xs text-red-300">{ed.promptCheckError}</p>
+                      <p class="text-xs text-danger-text">{ed.promptCheckError}</p>
                     {/if}
                     {#if ed.promptReport}
                       {@const r = ed.promptReport}
                       <div class="space-y-1" data-testid="segmenter-prompt-check">
-                        <p class="text-xs text-zinc-400">
+                        <p class="text-xs text-fg-2">
                           {r.ok ? 'The prompt passes.' : 'The prompt has errors.'}
                         </p>
                         <ConfigIssueList
@@ -231,7 +233,7 @@
                   />
                 {/each}
                 {#if !showAdvanced && visible.length < g.fields.length}
-                  <p class="text-xs text-zinc-500">
+                  <p class="text-xs text-fg-3">
                     {g.fields.length - visible.length} advanced field{g.fields.length -
                       visible.length ===
                     1

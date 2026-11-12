@@ -67,7 +67,7 @@ describe('the synthetic slot inventory card invents nothing and never hides a re
   it('the border helper gives the synthetic card its own neutral border', () => {
     const fn = cardSrc.match(/function borderColor\(c: Cluster\)[\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
-    expect(fn).toMatch(/if \(c\.isSlotCard\) return 'border-purple-500\/60';/);
+    expect(fn).toMatch(/if \(c\.isSlotCard\) return 'border-holdout\/60';/);
   });
 
   it('the subtitle row skips the invented dominant_pct "· 0%" for the synthetic card too', () => {

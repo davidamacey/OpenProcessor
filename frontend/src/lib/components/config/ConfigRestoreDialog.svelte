@@ -40,9 +40,9 @@
       the active {noun}.
     </p>
     {#if ed.dirty}
-      <p class="text-xs text-amber-300">Your unsaved edits are replaced.</p>
+      <p class="text-xs text-warn-text">Your unsaved edits are replaced.</p>
     {/if}
-    {#if ed.saveError}<p class="text-red-300">{ed.saveError}</p>{/if}
-    {#if ed.conflict}<p class="text-red-300">{ed.conflict.message}</p>{/if}
+    {#if ed.saveError}<p class="text-danger-text">{ed.saveError}</p>{/if}
+    {#if ed.conflict}<p class="text-danger-text">{ed.conflict.message}</p>{/if}
   </ConfirmDialog>
 {/if}

@@ -48,7 +48,7 @@
 
 <div class="overflow-x-auto">
   <table class="w-full text-left text-xs" data-testid="mapping-table">
-    <thead class="text-zinc-500">
+    <thead class="text-fg-3">
       <tr>
         <th class="px-2 py-1">Dataset class</th>
         <th class="px-2 py-1 text-right">Boxes</th>
@@ -62,22 +62,22 @@
       {#each rows as row (row.dataset_class)}
         {@const choice = wizard.choiceFor(row.dataset_class)}
         <tr
-          class="border-t border-zinc-800 align-top {unmapped.has(row.dataset_class)
-            ? 'bg-amber-950/30'
+          class="border-t border-line align-top {unmapped.has(row.dataset_class)
+            ? 'bg-warn-soft'
             : ''}"
           data-testid="mapping-row"
           data-dataset-class={row.dataset_class}
           data-unmapped={unmapped.has(row.dataset_class) ? 'true' : undefined}
         >
           <td class="px-2 py-1.5">
-            <div class="font-medium text-zinc-100">{row.dataset_class}</div>
-            <div class="text-[11px] text-zinc-500">
+            <div class="font-medium text-fg-1">{row.dataset_class}</div>
+            <div class="text-caption text-fg-3">
               {#if row.dataset_id != null}dataset id {row.dataset_id}{/if}
               {#if row.source_class_id != null}
                 · source registry id {row.source_class_id}{/if}
             </div>
             {#if row.index_would_have_mapped_to && indexMismatch}
-              <div class="text-[11px] text-zinc-500" data-testid="index-hint">
+              <div class="text-caption text-fg-3" data-testid="index-hint">
                 by index this would have been {row.index_would_have_mapped_to.class_name}
               </div>
             {/if}
@@ -87,12 +87,12 @@
           <td class="px-2 py-1.5">
             {#if row.suggestion}
               <span
-                class="inline-block rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-zinc-300"
+                class="inline-block rounded border border-line-strong px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2"
                 data-testid="suggestion-chip"
               >
                 {matchLabel.get(row.suggestion.match) ?? row.suggestion.match}
               </span>
-              <div class="mt-0.5 text-[11px] text-zinc-400">
+              <div class="mt-0.5 text-caption text-fg-2">
                 {actionLabel.get(row.suggestion.action) ?? row.suggestion.action}{row
                   .suggestion.class_name
                   ? `: ${row.suggestion.class_name}`
@@ -100,11 +100,11 @@
               </div>
               <button
                 type="button"
-                class="mt-0.5 text-[11px] text-blue-300 hover:underline"
+                class="mt-0.5 text-caption text-accent-text hover:underline"
                 onclick={() => wizard.useSuggestion(row)}>Use suggestion</button
               >
             {:else}
-              <span class="text-zinc-600">—</span>
+              <span class="text-fg-3">—</span>
             {/if}
           </td>
           <td class="px-2 py-1.5">
@@ -153,11 +153,11 @@
           </td>
           <td class="px-2 py-1.5" data-testid="resolved">
             {#if resolvedText(row)}
-              <span class="text-emerald-300">{resolvedText(row)}</span>
+              <span class="text-success-text">{resolvedText(row)}</span>
             {:else if unmapped.has(row.dataset_class)}
-              <span class="text-amber-300">not mapped yet</span>
+              <span class="text-warn-text">not mapped yet</span>
             {:else}
-              <span class="text-zinc-600">—</span>
+              <span class="text-fg-3">—</span>
             {/if}
           </td>
         </tr>

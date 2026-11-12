@@ -36,38 +36,38 @@
     {@const image = detail.image}
     {@const counts = detail.counts}
     <section class="space-y-3 text-sm" data-testid="image-details">
-      <h2 class="truncate text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+      <h2 class="truncate text-xs font-semibold tracking-wide text-fg-2 uppercase">
         {image.file_name}
       </h2>
-      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-zinc-300">
+      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
         {#if image.width != null && image.height != null}
-          <dt class="text-zinc-500">size</dt>
+          <dt class="text-fg-3">size</dt>
           <dd>{image.width}×{image.height}</dd>
         {/if}
         {#if image.source}
-          <dt class="text-zinc-500">source</dt>
+          <dt class="text-fg-3">source</dt>
           <dd>{image.source}</dd>
         {/if}
         {#if image.taken_at}
-          <dt class="text-zinc-500">taken</dt>
+          <dt class="text-fg-3">taken</dt>
           <dd>{formatTimestamp(image.taken_at)}</dd>
         {/if}
         {#if image.indexed_at}
-          <dt class="text-zinc-500">indexed</dt>
+          <dt class="text-fg-3">indexed</dt>
           <dd>{formatTimestamp(image.indexed_at)}</dd>
         {/if}
-        <dt class="text-zinc-500">items</dt>
+        <dt class="text-fg-3">items</dt>
         <dd data-testid="image-details-items">{counts.items}</dd>
-        <dt class="text-zinc-500">labelled</dt>
+        <dt class="text-fg-3">labelled</dt>
         <dd>{counts.labeled}</dd>
-        <dt class="text-zinc-500">unlabelled</dt>
+        <dt class="text-fg-3">unlabelled</dt>
         <dd>{counts.unlabeled}</dd>
         {#if counts.in_holdout > 0}
-          <dt class="text-zinc-500">in test holdout</dt>
+          <dt class="text-fg-3">in test holdout</dt>
           <dd>{counts.in_holdout}</dd>
         {/if}
         {#if image.near_dup}
-          <dt class="text-zinc-500">near-dup group</dt>
+          <dt class="text-fg-3">near-dup group</dt>
           <dd>
             {image.near_dup.purpose}{image.near_dup.size
               ? ` · ${image.near_dup.size}`

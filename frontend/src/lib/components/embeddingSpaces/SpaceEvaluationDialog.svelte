@@ -24,9 +24,9 @@
 <Modal
   label="Evaluation of {space.space_key}"
   {onclose}
-  panelClass="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  panelClass="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
 >
-  <h3 class="mb-3 text-base font-semibold text-zinc-100">
+  <h3 class="mb-3 text-base font-semibold text-fg-1">
     Evaluation of {space.space_key}
   </h3>
   <div class="mb-4" data-testid="space-evaluation-dialog">

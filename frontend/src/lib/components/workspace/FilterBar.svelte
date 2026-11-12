@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * The Workspace's filter row: the shared item-filter bar, the chips the
    * queue and the scope add to it, and the served next step. Under `md` it
@@ -36,7 +37,7 @@
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-2 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2"
+  class="flex flex-wrap items-center gap-2 border-b border-line bg-surface-1/40 px-4 py-2"
   data-testid="workspace-filter-bar"
 >
   <button
@@ -59,36 +60,40 @@
     />
   </div>
   {#if ws.matching}
-    <span class="text-xs text-zinc-300" data-testid="matching-note">
-      <strong class="text-zinc-100">{ws.matching.total.toLocaleString()}</strong>
+    <span class="text-xs text-fg-2" data-testid="matching-note">
+      <strong class="text-fg-1">{ws.matching.total.toLocaleString()}</strong>
       matching<HiddenItemsNote hidden={ws.matching.hidden} />
     </span>
   {/if}
   {#if scope}
     <button
       type="button"
-      class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
+      class="chip border-accent/60 bg-accent/15 text-accent-text"
       data-testid="scope-chip"
       title="Leave this {scope.kind}"
       onclick={() => ws.setScope(null)}
     >
-      {scope.kind === 'cluster' ? 'Cluster' : scope.kind} · {scope.id} ×
+      {scope.kind === 'cluster' ? 'Cluster' : scope.kind} · {scope.id}<Icon
+        name="x"
+        size={12}
+        class="ml-1 inline-block"
+      />
     </button>
   {/if}
   {#if queue}
     <button
       type="button"
-      class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
+      class="chip border-accent/60 bg-accent/15 text-accent-text"
       data-testid="queue-chip"
       title="Leave the {queueLabel} queue"
       onclick={() => ws.setQueue(null)}
     >
-      Queue · {queueLabel} ×
+      Queue · {queueLabel}<Icon name="x" size={12} class="ml-1 inline-block" />
     </button>
   {/if}
   {#if next && nextHref}
     <a
-      class="chip ml-auto border-amber-500/50 bg-amber-500/10 text-amber-100"
+      class="chip ml-auto border-warn/50 bg-warn/10 text-warn-text"
       href={resolve(nextHref)}
       title={next.detail}
       data-testid="next-step-chip"

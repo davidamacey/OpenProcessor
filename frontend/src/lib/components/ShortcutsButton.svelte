@@ -8,7 +8,7 @@
 
 <button
   type="button"
-  class="btn-sm gap-1.5 border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+  class="btn-sm gap-1.5 border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2 hover:text-white"
   onclick={() => keyboardStore.toggleOverlay()}
   title="Keyboard shortcuts ({keymapStore.glyph('global.shortcuts_overlay')})"
 >

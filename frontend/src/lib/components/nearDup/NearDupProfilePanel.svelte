@@ -18,29 +18,33 @@
 <details class="surface p-4" data-testid="near-dup-profile">
   <summary class="cursor-pointer text-base font-semibold">Advanced: thresholds</summary>
   <div class="mt-3 flex flex-col gap-3">
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Cosine similarity cuts per level. Members at or above the duplicate cut are
       duplicates; members at or above the leak cut must stay on one split side, so the
       leak cut cannot exceed the duplicate cut. Few projects need to change these; the
       defaults are the seeded values.
     </p>
     {#if ctl.loading && !ctl.draft}
-      <p class="text-xs text-zinc-500">Loading the profile…</p>
+      <p class="text-xs text-fg-3">Loading the profile…</p>
     {:else if ctl.loadError}
-      <p class="text-sm text-red-300" role="alert" data-testid="near-dup-profile-error">
+      <p
+        class="text-sm text-danger-text"
+        role="alert"
+        data-testid="near-dup-profile-error"
+      >
         {ctl.loadError}
       </p>
     {:else if ctl.draft}
       {@const d = ctl.draft}
       {@const s = ctl.seeded}
-      <p class="text-xs text-zinc-300">
+      <p class="text-xs text-fg-2">
         Active: <span class="font-mono">{ctl.name}</span> revision {ctl.revision}
       </p>
       <div class="grid gap-4 md:grid-cols-2">
-        <fieldset class="flex flex-col gap-2 rounded border border-zinc-800 p-3">
+        <fieldset class="flex flex-col gap-2 rounded border border-line p-3">
           <legend class="px-1 text-sm font-medium">Image level</legend>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Duplicate cosine{#if s}&nbsp;(default {s.image.dedup_cosine}){/if}</span
             >
             <input
@@ -52,7 +56,7 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Leak cosine{#if s}&nbsp;(default {s.image.leak_cosine}){/if}</span
             >
             <input
@@ -64,7 +68,7 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Neighbours per member (k){#if s}&nbsp;(default {s.image.k}){/if}</span
             >
             <input
@@ -76,7 +80,7 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Largest group{#if s}&nbsp;(default {s.image.max_group_size}){/if}</span
             >
             <input
@@ -88,10 +92,10 @@
             />
           </label>
         </fieldset>
-        <fieldset class="flex flex-col gap-2 rounded border border-zinc-800 p-3">
+        <fieldset class="flex flex-col gap-2 rounded border border-line p-3">
           <legend class="px-1 text-sm font-medium">Item level</legend>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Duplicate cosine{#if s}&nbsp;(default {s.item.dedup_cosine}){/if}</span
             >
             <input
@@ -103,7 +107,7 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Leak cosine{#if s}&nbsp;(default {s.item.leak_cosine}){/if}</span
             >
             <input
@@ -115,7 +119,7 @@
             />
           </label>
           <label class="flex flex-col gap-1 text-xs">
-            <span class="text-zinc-400"
+            <span class="text-fg-2"
               >Largest group{#if s}&nbsp;(default {s.item.max_group_size}){/if}</span
             >
             <input
@@ -132,7 +136,7 @@
               data-testid="np-item-same-class"
               bind:checked={d.item.same_detector_class}
             />
-            <span class="text-zinc-300"
+            <span class="text-fg-2"
               >Only group crops of the same detector class{#if s}&nbsp;(default {s.item
                   .same_detector_class
                   ? 'on'
@@ -143,7 +147,7 @@
       </div>
       {#if ctl.saveError}
         <div
-          class="text-xs text-red-300"
+          class="text-xs text-danger-text"
           role="alert"
           data-testid="near-dup-profile-refused"
         >
@@ -157,7 +161,7 @@
       {/if}
       {#if ctl.notice}
         <p
-          class="text-xs text-green-400"
+          class="text-xs text-success-text"
           role="status"
           data-testid="near-dup-profile-notice"
         >

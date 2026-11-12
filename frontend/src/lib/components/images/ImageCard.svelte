@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One whole image: the served thumbnail with the served boxes over it, the served counts as
    * chips, and the near-duplicate badge when the server says the image is in a group. Nothing is
@@ -50,9 +51,9 @@
 </script>
 
 <li
-  class="flex h-full flex-col rounded-md border bg-zinc-900 {selected
-    ? 'border-sky-400 bg-zinc-800'
-    : 'border-zinc-700'} {focused ? 'ring-2 ring-sky-500 ring-inset' : ''}"
+  class="flex h-full flex-col rounded-md border bg-surface-1 {selected
+    ? 'border-info bg-surface-2'
+    : 'border-line-strong'} {focused ? 'ring-2 ring-info ring-inset' : ''}"
   style="content-visibility:auto;contain-intrinsic-size:auto 220px"
   data-testid="image-card"
   data-image-id={card.image_id}
@@ -62,7 +63,7 @@
   <div class="relative" bind:clientWidth={width}>
     <button
       type="button"
-      class="relative flex w-full items-center justify-center overflow-hidden rounded-t bg-zinc-950"
+      class="relative flex w-full items-center justify-center overflow-hidden rounded-t bg-surface-0"
       style="aspect-ratio:4 / 3"
       data-testid="image-card-select"
       aria-pressed={selected}
@@ -98,8 +99,8 @@
     </div>
     {#if selected}
       <span
-        class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-xs text-white"
-        aria-hidden="true">✓</span
+        class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-xs text-white"
+        aria-hidden="true"><Icon name="check" size={14} /></span
       >
     {/if}
     {#if card.boxes_truncated}
@@ -133,12 +134,12 @@
     >
   </div>
   <div
-    class="mt-auto flex items-center justify-between gap-2 px-2 pb-1.5 text-[11px] text-zinc-400"
+    class="mt-auto flex items-center justify-between gap-2 px-2 pb-1.5 text-caption text-fg-2"
   >
     <span class="truncate" title={card.file_name}>{card.file_name}</span>
     <button
       type="button"
-      class="shrink-0 underline hover:text-zinc-200"
+      class="shrink-0 underline hover:text-fg-1"
       data-testid="image-card-open"
       onclick={onopen}>Details</button
     >
@@ -147,7 +148,7 @@
 
 <style>
   .unlabeled-chip {
-    border-color: rgb(var(--system-orange));
-    color: rgb(var(--system-orange));
+    border-color: var(--color-warn);
+    color: var(--color-warn);
   }
 </style>

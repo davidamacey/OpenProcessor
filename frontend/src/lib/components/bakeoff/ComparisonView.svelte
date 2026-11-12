@@ -43,23 +43,23 @@
 <div data-testid="comparison-view">
   {#if legacy}
     <p
-      class="rounded border border-zinc-800 bg-zinc-900/50 p-3 text-sm text-zinc-400"
+      class="rounded border border-line bg-surface-1/50 p-3 text-sm text-fg-2"
       data-testid="comparison-legacy"
     >
       {LEGACY_RESULTS_MESSAGE}
     </p>
   {:else if error}
     <p
-      class="rounded border border-red-800 bg-red-950/60 p-3 text-sm text-red-200"
+      class="rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
       data-testid="comparison-error"
     >
       {error}
     </p>
   {:else if loading && !comparison}
-    <p class="text-sm text-zinc-500">Loading results…</p>
+    <p class="text-sm text-fg-3">Loading results…</p>
   {:else if comparison}
     {@const c = comparison}
-    <div class="mb-2 text-xs text-zinc-500">
+    <div class="mb-2 text-xs text-fg-3">
       {formatCount(c.dataset.n_images)} test images · {formatCount(c.dataset.n_objects)} objects
       · ranked by {metricLabel(c.rank_by)} over
       {c.rank_scope === 'common'
@@ -69,7 +69,7 @@
     </div>
     {#if protocolText(c.thresholds)}
       <p
-        class="mb-2 text-xs text-zinc-500"
+        class="mb-2 text-xs text-fg-3"
         data-testid="comparison-protocol"
         title="The trainer's own mAP (Ultralytics val defaults) uses a different protocol, so the two numbers differ on the same split."
       >
@@ -79,16 +79,16 @@
 
     {#if c.warnings.length}
       <ul
-        class="mb-3 list-disc rounded border border-amber-800/60 bg-amber-950/30 p-2 pl-6 text-xs text-amber-200"
+        class="mb-3 list-disc rounded border border-warn-line bg-warn-soft p-2 pl-6 text-xs text-warn-text"
         data-testid="comparison-warnings"
       >
         {#each c.warnings as w, i (i)}<li>{w}</li>{/each}
       </ul>
     {/if}
 
-    <ScrollX class="rounded-lg border border-zinc-800" testId="comparison-scroll">
+    <ScrollX class="rounded-lg border border-line" testId="comparison-scroll">
       <table class="w-full text-sm" data-testid="comparison-rows">
-        <thead class="bg-zinc-900 text-xs text-zinc-400">
+        <thead class="bg-surface-1 text-xs text-fg-2">
           <tr>
             <th class="px-2 py-2 text-right">Rank</th>
             <th class="px-3 py-2 text-left">Model</th>
@@ -107,22 +107,22 @@
         <tbody>
           {#each c.models as r (r.model)}
             {@const b = scopeBlock(c, r)}
-            <tr class="border-t border-zinc-800 align-top" data-model={r.model}>
+            <tr class="border-t border-line align-top" data-model={r.model}>
               <td class="px-2 py-2 text-right tabular-nums"
                 >{formatMetric(r.rank, 'rank')}</td
               >
               <td class="min-w-[14rem] px-3 py-2 text-xs">
                 <div class="font-mono">{r.display_name}</div>
-                <div class="text-[10px] text-zinc-500">
+                <div class="text-caption text-fg-3">
                   {r.source} · {r.runtime}{r.imgsz ? ` · ${r.imgsz}px` : ''} · mapping {r
                     .class_mapping.method}
                 </div>
                 {#each r.class_mapping.warnings as w, i (i)}
-                  <div class="text-[10px] text-amber-300">{w}</div>
+                  <div class="text-caption text-warn-text">{w}</div>
                 {/each}
                 {#if hasOverlap(r.train_test_overlap)}
                   <div
-                    class="mt-0.5 text-[10px] text-red-300"
+                    class="mt-0.5 text-caption text-danger-text"
                     data-testid="row-overlap-warning"
                   >
                     overlap: {formatOverlap(r.train_test_overlap)}
@@ -138,10 +138,10 @@
               <td class="px-2 py-2 text-right tabular-nums"
                 >{formatMetric(r.overall.map_50_95, 'map_50_95')}</td
               >
-              <td class="px-2 py-2 text-right tabular-nums text-zinc-400"
+              <td class="px-2 py-2 text-right tabular-nums text-fg-2"
                 >{formatMetric(r.latency_ms?.mean, 'latency_ms')}</td
               >
-              <td class="px-2 py-2 text-right tabular-nums text-zinc-400"
+              <td class="px-2 py-2 text-right tabular-nums text-fg-2"
                 >{formatMetric(r.size_mb, 'size_mb')}</td
               >
             </tr>
@@ -152,7 +152,7 @@
 
     {#if c.failed.length}
       <ul
-        class="mt-3 rounded border border-red-800 bg-red-950/60 p-2 text-xs text-red-200"
+        class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
         data-testid="comparison-failed"
       >
         {#each c.failed as f (f.model)}
@@ -162,12 +162,12 @@
     {/if}
 
     <div class="mt-5 mb-2 flex flex-wrap items-center justify-between gap-2">
-      <h4 class="text-sm font-medium text-zinc-300">Per class</h4>
-      <label class="text-xs text-zinc-400">
+      <h4 class="text-sm font-medium text-fg-2">Per class</h4>
+      <label class="text-xs text-fg-2">
         metric
         <select
           bind:value={perClassMetric}
-          class="ml-1 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+          class="ml-1 rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs"
           data-testid="per-class-metric"
         >
           {#each PER_CLASS_METRICS as m (m)}
@@ -176,9 +176,9 @@
         </select>
       </label>
     </div>
-    <ScrollX class="rounded-lg border border-zinc-800">
+    <ScrollX class="rounded-lg border border-line">
       <table class="w-full text-sm" data-testid="per-class-table">
-        <thead class="bg-zinc-900 text-xs text-zinc-400">
+        <thead class="bg-surface-1 text-xs text-fg-2">
           <tr>
             <th class="px-3 py-2 text-left">Class</th>
             <th class="px-2 py-2 text-right">Objects</th>
@@ -189,19 +189,19 @@
         </thead>
         <tbody>
           {#each c.eval_classes as ec (ec.eval_class_id)}
-            <tr class="border-t border-zinc-800" data-class-id={ec.eval_class_id}>
+            <tr class="border-t border-line" data-class-id={ec.eval_class_id}>
               <td class="px-3 py-1.5 text-xs">
                 <span class="font-mono">{ec.name}</span>
                 {#if c.common_classes.includes(ec.eval_class_id)}
-                  <span class="ml-1 text-[10px] text-zinc-500">common</span>
+                  <span class="ml-1 text-caption text-fg-3">common</span>
                 {/if}
               </td>
-              <td class="px-2 py-1.5 text-right tabular-nums text-zinc-400">{ec.n_gt}</td>
+              <td class="px-2 py-1.5 text-right tabular-nums text-fg-2">{ec.n_gt}</td>
               {#each c.models as r (r.model)}
                 {@const p = perClass(r, ec.eval_class_id)}
                 {#if p && !p.covered}
                   <td
-                    class="px-2 py-1.5 text-right text-xs text-zinc-600 italic"
+                    class="px-2 py-1.5 text-right text-xs text-fg-3 italic"
                     data-testid="not-covered">not covered</td
                   >
                 {:else}
@@ -217,8 +217,8 @@
     </ScrollX>
 
     {#if c.models.some((r) => r.coverage.unmapped_model_classes.length)}
-      <div class="mt-3 text-xs text-zinc-400" data-testid="unmapped-classes">
-        <p class="mb-1 text-zinc-500">
+      <div class="mt-3 text-xs text-fg-2" data-testid="unmapped-classes">
+        <p class="mb-1 text-fg-3">
           Model classes with no class in this dataset (their predictions are not scored):
         </p>
         <ul class="space-y-0.5">
@@ -239,6 +239,6 @@
       </div>
     {/if}
   {:else}
-    <p class="text-sm text-zinc-500">No results for this dataset yet.</p>
+    <p class="text-sm text-fg-3">No results for this dataset yet.</p>
   {/if}
 </div>

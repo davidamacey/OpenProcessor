@@ -184,27 +184,27 @@
 
 {#if eligible || runningHere || lastResult}
   <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="probe-control">
-    <span class="font-semibold text-zinc-400">Probe predictions</span>
+    <span class="font-semibold text-fg-2">Probe predictions</span>
     {#if runningHere}
-      <span class="text-zinc-400">
+      <span class="text-fg-2">
         {job?.status === 'running' ? 'Running…' : job?.status}
       </span>
       <button
         type="button"
-        class="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:bg-zinc-800"
+        class="rounded border border-line-strong px-2 py-0.5 text-fg-2 hover:bg-surface-2"
         onclick={() => void cancelRun()}
         disabled={cancelling}
       >
         {cancelling ? 'Cancelling…' : 'Cancel'}
       </button>
     {:else if runningElsewhere}
-      <span class="text-zinc-500" title={job?.train_job_id ?? undefined}>
+      <span class="text-fg-3" title={job?.train_job_id ?? undefined}>
         A probe is already running for another run.
       </span>
     {:else}
       <button
         type="button"
-        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
+        class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-accent-text hover:border-accent hover:bg-accent/10"
         onclick={openConfirm}
         disabled={starting || !eligible}
         title={eligible
@@ -216,11 +216,12 @@
     {/if}
     {#if lastResult && !runningHere}
       {#if lastResult.status === 'failed'}
-        <span class="text-red-300">Failed: {lastResult.error ?? 'unknown error'}</span>
+        <span class="text-danger-text">Failed: {lastResult.error ?? 'unknown error'}</span
+        >
       {:else if lastResult.status === 'cancelled'}
-        <span class="text-zinc-500">Cancelled.</span>
+        <span class="text-fg-3">Cancelled.</span>
       {:else}
-        <span class="text-emerald-300">
+        <span class="text-success-text">
           Done{lastResult.updated_count != null
             ? ` — ${lastResult.updated_count.toLocaleString()} items updated`
             : ''}.
@@ -233,13 +234,13 @@
 {#if confirmOpen}
   <Modal label="Confirm run probe predictions" onclose={closeConfirm}>
     <h3 class="mb-3 text-base font-semibold">Run probe predictions</h3>
-    <p class="mb-3 text-sm text-zinc-300">
+    <p class="mb-3 text-sm text-fg-2">
       Runs this run's exported checkpoint over the crop pool to populate
       <code class="font-mono">probe_pred_*</code>. This is what the Uncertainty and
       Model-disagreements review queues need — they stay empty until a probe has run at
       least once.
     </p>
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       Deployment-wide, potentially long-running. Only one probe job can run at a time.
     </p>
     <div class="flex justify-end gap-2">

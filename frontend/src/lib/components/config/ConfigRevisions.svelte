@@ -16,7 +16,7 @@
 {#if ed.revisions}
   <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Revisions">
     <h2 class="text-sm font-semibold">Revisions</h2>
-    {#if ed.revisionError}<p class="text-xs text-red-300">{ed.revisionError}</p>{/if}
+    {#if ed.revisionError}<p class="text-xs text-danger-text">{ed.revisionError}</p>{/if}
     <ul class="space-y-1" data-testid="revisions">
       {#each ed.revisions as r (r.revision)}
         <li
@@ -25,13 +25,10 @@
           data-revision={r.revision}
         >
           <span class="font-mono">r{r.revision}</span>
-          <span class="text-zinc-500" title={r.saved_at}
-            >{formatTimestamp(r.saved_at)}</span
-          >
-          {#if r.revision === ed.doc?.revision}<span class="text-zinc-400">latest</span
-            >{/if}
+          <span class="text-fg-3" title={r.saved_at}>{formatTimestamp(r.saved_at)}</span>
+          {#if r.revision === ed.doc?.revision}<span class="text-fg-2">latest</span>{/if}
           {#if ed.doc?.active && r.revision === ed.doc.active_revision}<span
-              class="text-emerald-300">active</span
+              class="text-success-text">active</span
             >{/if}
           <span class="grow"></span>
           <button
@@ -41,11 +38,10 @@
             onclick={() => void ed.viewRevision(r.revision)}>View</button
           >
           {#if r.description}
-            <span class="w-full text-zinc-400">{r.description}</span>
+            <span class="w-full text-fg-2">{r.description}</span>
           {/if}
           {#if r.cloned_from}
-            <span class="w-full font-mono text-zinc-500">cloned from {r.cloned_from}</span
-            >
+            <span class="w-full font-mono text-fg-3">cloned from {r.cloned_from}</span>
           {/if}
         </li>
       {/each}

@@ -215,12 +215,12 @@ describe('/export — served split counts (OpenProcessor df01309)', () => {
     const audiRow = Array.from(target.querySelectorAll('tr')).find((tr) =>
       tr.textContent?.includes('widget_b'),
     );
-    expect(audiRow?.className).toContain('bg-red-500/10');
+    expect(audiRow?.className).toContain('bg-danger/10');
 
     const bmwRow = Array.from(target.querySelectorAll('tr')).find((tr) =>
       tr.textContent?.includes('widget_a'),
     );
-    expect(bmwRow?.className ?? '').not.toContain('bg-red-500/10');
+    expect(bmwRow?.className ?? '').not.toContain('bg-danger/10');
   });
 
   it('renders a null 4c9499a field as "—", never 0, for an export written before it was recorded', async () => {

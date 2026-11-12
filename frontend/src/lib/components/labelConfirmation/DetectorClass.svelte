@@ -27,6 +27,6 @@
     title="The detector's own class for this item"
     data-testid="detector-class"
   >
-    {#if !bare}Detector:&nbsp;{/if}<span class="text-zinc-200">{text}</span>
+    {#if !bare}Detector:&nbsp;{/if}<span class="text-fg-1">{text}</span>
   </span>
 {/if}

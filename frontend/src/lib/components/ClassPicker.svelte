@@ -53,7 +53,7 @@
     layer="top"
     align="top"
     scrim="bg-black/50"
-    panelClass="w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl"
+    panelClass="w-full max-w-md overflow-hidden rounded-lg border border-line-strong bg-surface-1 shadow-xl"
   >
     <input
       bind:this={input}
@@ -69,12 +69,12 @@
       placeholder={mode === 'create'
         ? 'Name the new class'
         : `Search all ${picker.total} classes…`}
-      class="input w-full rounded-none border-0 border-b border-zinc-800 bg-zinc-900"
+      class="input w-full rounded-none border-0 border-b border-line bg-surface-1"
       onkeydown={picker.onKeydown}
     />
     <ul id={listId} role="listbox" class="max-h-72 overflow-y-auto py-1 text-sm">
       {#if rowCount === 0}
-        <li class="px-3 py-2 text-zinc-500" role="presentation">No matching class.</li>
+        <li class="px-3 py-2 text-fg-3" role="presentation">No matching class.</li>
       {/if}
       {#each picker.results as cls, i (cls.id)}
         <li role="presentation">
@@ -85,19 +85,19 @@
             aria-selected={i === picker.index}
             class="flex w-full items-center gap-2 px-3 py-1.5 text-left {i ===
             picker.index
-              ? 'bg-blue-500/20 text-white'
-              : 'text-zinc-200 hover:bg-zinc-800'}"
+              ? 'bg-accent/20 text-white'
+              : 'text-fg-1 hover:bg-surface-2'}"
             onclick={() => picker.pick(cls)}
             onmouseenter={() => (picker.index = i)}
           >
             {#if cls.hotkey_letter}
               <kbd
-                class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
                 >{cls.hotkey_letter}</kbd
               >
             {/if}
             <span class="grow truncate">{cls.name}</span>
-            <span class="shrink-0 text-[10px] text-zinc-300">{cls.count}</span>
+            <span class="shrink-0 text-caption text-fg-2">{cls.count}</span>
           </button>
         </li>
       {/each}
@@ -112,8 +112,8 @@
             disabled={picker.busy}
             class="flex w-full items-center gap-2 px-3 py-1.5 text-left {i ===
             picker.index
-              ? 'bg-blue-500/20 text-white'
-              : 'text-zinc-200 hover:bg-zinc-800'}"
+              ? 'bg-accent/20 text-white'
+              : 'text-fg-1 hover:bg-surface-2'}"
             onclick={() => void createFromRow()}
             onmouseenter={() => (picker.index = i)}
             data-testid="class-picker-create"
@@ -124,11 +124,11 @@
       {/if}
     </ul>
     {#if picker.error}
-      <p class="border-t border-zinc-800 px-3 py-1.5 text-xs text-red-300" role="alert">
+      <p class="border-t border-line px-3 py-1.5 text-xs text-danger-text" role="alert">
         {picker.error}
       </p>
     {/if}
-    <p class="border-t border-zinc-800 px-3 py-1.5 text-[10px] text-zinc-500">
+    <p class="border-t border-line px-3 py-1.5 text-caption text-fg-3">
       Move with the arrow keys · <kbd>{keymapStore.glyph('global.close_overlay')}</kbd> closes
     </p>
   </Modal>

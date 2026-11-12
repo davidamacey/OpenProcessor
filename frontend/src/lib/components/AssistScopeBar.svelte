@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Scope selector for an assisted auto-label run
    * (VLM-scoped labeling assist plan §4).
@@ -31,7 +32,6 @@
    * exactly today's unscoped run.
    */
 
-  import ChevronDownIcon from './ChevronDownIcon.svelte';
   import VlmRunPicker from './vlm/VlmRunPicker.svelte';
   import { searchClasses } from '$lib/classPicker';
   import {
@@ -117,19 +117,19 @@
     <button
       type="button"
       class="btn-sm {scope.isDefault
-        ? 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-        : 'border-blue-500/60 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25'}"
+        ? 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'
+        : 'border-accent/60 bg-accent/15 text-accent-text hover:bg-accent/25'}"
       onclick={() => (expanded = true)}
       title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick its prompt pack and VLM endpoint"
       {disabled}
     >
-      <span class="text-zinc-500">assist:</span>
+      <span class="text-fg-3">assist:</span>
       <span>{summary}</span>
-      <span class="text-zinc-500"><ChevronDownIcon size={15} /></span>
+      <Icon name="chevron-down" size={15} class="text-fg-3" />
     </button>
   {:else}
     <label class="flex items-center gap-1.5">
-      <span class="text-zinc-500">class</span>
+      <span class="text-fg-3">class</span>
       <input
         type="search"
         bind:value={query}
@@ -139,13 +139,13 @@
       />
     </label>
     <div
-      class="max-h-40 w-44 overflow-y-auto rounded border border-zinc-700 bg-zinc-950 py-0.5"
+      class="max-h-40 w-44 overflow-y-auto rounded border border-line-strong bg-surface-0 py-0.5"
     >
       <button
         type="button"
         class="block w-full px-2 py-0.5 text-left {scope.classId == null
-          ? 'bg-blue-500/20 text-white'
-          : 'text-zinc-300 hover:bg-zinc-800'}"
+          ? 'bg-accent/20 text-white'
+          : 'text-fg-2 hover:bg-surface-2'}"
         onclick={() => pick(null)}
         {disabled}
       >
@@ -156,17 +156,17 @@
           type="button"
           class="flex w-full items-center gap-2 px-2 py-0.5 text-left {scope.classId ===
           cls.id
-            ? 'bg-blue-500/20 text-white'
-            : 'text-zinc-300 hover:bg-zinc-800'}"
+            ? 'bg-accent/20 text-white'
+            : 'text-fg-2 hover:bg-surface-2'}"
           onclick={() => pick(cls.id)}
           {disabled}
         >
           <span class="grow truncate">{cls.name}</span>
-          <span class="shrink-0 text-[10px] text-zinc-500">{cls.validated_count}</span>
+          <span class="shrink-0 text-caption text-fg-3">{cls.validated_count}</span>
         </button>
       {/each}
       {#if results.length === 0}
-        <p class="px-2 py-1 text-zinc-500">No matching class.</p>
+        <p class="px-2 py-1 text-fg-3">No matching class.</p>
       {/if}
     </div>
 
@@ -174,7 +174,7 @@
          doesn't advertise a prompt pack. -->
     {#if promptPackAvailable}
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-500">prompts</span>
+        <span class="text-fg-3">prompts</span>
         <select
           value={scope.promptPack ?? ''}
           onchange={(e) => {
@@ -209,7 +209,7 @@
     {#if !scope.isDefault}
       <button
         type="button"
-        class="btn-sm bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+        class="btn-sm bg-surface-2 text-fg-2 hover:bg-surface-3"
         onclick={() => {
           scope.reset();
           query = '';
@@ -222,11 +222,11 @@
 
     <button
       type="button"
-      class="btn-sm btn-icon border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+      class="btn-sm btn-icon border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
       onclick={() => (expanded = false)}
       title="Collapse"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   {/if}
 </div>

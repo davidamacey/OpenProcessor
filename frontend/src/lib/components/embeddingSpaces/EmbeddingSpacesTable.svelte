@@ -31,7 +31,7 @@
 >
   <h2 class="mb-2 text-base font-semibold">{target} spaces</h2>
   <table class="w-full text-left text-sm">
-    <thead class="text-xs text-zinc-500">
+    <thead class="text-xs text-fg-3">
       <tr>
         <th class="py-1 pr-3 font-normal">Space</th>
         <th class="py-1 pr-3 font-normal">Encoder</th>
@@ -48,7 +48,7 @@
       {#each spaces as s (s.space_key)}
         {@const run = st.runOf(s)}
         <tr
-          class="border-t border-zinc-800 align-top"
+          class="border-t border-line align-top"
           data-testid="space-row"
           data-space={s.space_key}
         >
@@ -57,7 +57,7 @@
           <td class="py-1.5 pr-3 font-mono text-xs">{s.dim}</td>
           <td class="py-1.5 pr-3 text-xs" data-testid="space-role">{s.role}</td>
           <td class="py-1.5 pr-3 text-xs" data-testid="space-status">{s.status}</td>
-          <td class="py-1.5 pr-3 text-xs text-zinc-400"
+          <td class="py-1.5 pr-3 text-xs text-fg-2"
             >{s.ready_at ? formatTimestamp(s.ready_at) : '—'}</td
           >
           <td class="py-1.5 pr-3 font-mono text-xs">{s.docs_with_vector ?? '—'}</td>
@@ -70,13 +70,13 @@
                 data-testid="last-run"
               >
                 <span
-                  class="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-200"
+                  class="rounded border border-line-strong px-1.5 text-caption text-fg-1"
                   data-testid="last-run-status">{s.run_status}</span
                 >
-                <span class="text-zinc-400">{s.run_mode}</span>
+                <span class="text-fg-2">{s.run_mode}</span>
               </span>
             {:else}
-              <span class="text-xs text-zinc-500">—</span>
+              <span class="text-xs text-fg-3">—</span>
             {/if}
           </td>
           <td class="py-1.5">

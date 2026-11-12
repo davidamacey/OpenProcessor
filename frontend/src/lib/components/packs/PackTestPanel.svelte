@@ -51,11 +51,11 @@
     aria-label="Test on a crop"
   >
     <h2 class="text-base font-semibold">Test on a crop</h2>
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Runs one call on real crops and shows what the VLM answered. Nothing is written.
     </p>
     <div class="grid gap-2 sm:grid-cols-2">
-      <label class="flex flex-col gap-1 text-xs text-zinc-400">
+      <label class="flex flex-col gap-1 text-xs text-fg-2">
         Call
         <select class="select select-sm" bind:value={t.call} data-testid="test-call">
           {#each testable as c (c.id)}
@@ -63,7 +63,7 @@
           {/each}
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-zinc-400">
+      <label class="flex flex-col gap-1 text-xs text-fg-2">
         Pack version
         <select class="select select-sm" bind:value={t.source} data-testid="test-source">
           {#if !savedOnly}<option value="draft">Unsaved draft</option>{/if}
@@ -72,11 +72,11 @@
           >
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-zinc-400 sm:col-span-2">
+      <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
         Crop ids (from review or browse, separated by commas or spaces)
         <input
           class="input input-sm font-mono {t.missingCropIds.length > 0
-            ? 'border-red-500'
+            ? 'border-danger'
             : ''}"
           bind:value={t.cropIdsText}
           placeholder="c_123, c_456"
@@ -84,7 +84,7 @@
           data-testid="test-crop-ids"
         />
         {#if t.missingCropIds.length > 0}
-          <span class="text-red-300" data-testid="test-missing-ids">
+          <span class="text-danger-text" data-testid="test-missing-ids">
             Not found:
             {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
               t.missingCropIds.length - 1
@@ -93,7 +93,7 @@
           </span>
         {/if}
       </label>
-      <label class="flex flex-col gap-1 text-xs text-zinc-400">
+      <label class="flex flex-col gap-1 text-xs text-fg-2">
         Boxes on the crop
         <select class="select select-sm" bind:value={t.useRegionBox}>
           <option value="">Server default</option>
@@ -116,14 +116,15 @@
         <TestRefs pack={r.pack} vlm={r.vlm} latencyMs={r.latency_ms} />
         <p class="text-xs" data-testid="test-parse-status">
           {#if r.parse_ok}
-            <span class="rounded border border-emerald-500/40 px-1.5 text-emerald-300"
+            <span class="rounded border border-success/40 px-1.5 text-success-text"
               >parsed</span
             >
           {:else}
-            <span class="rounded border border-red-500/40 px-1.5 text-red-300"
+            <span class="rounded border border-danger/40 px-1.5 text-danger-text"
               >not parsed</span
             >
-            {#if r.parse_error}<span class="ml-1 text-red-300">{r.parse_error}</span>{/if}
+            {#if r.parse_error}<span class="ml-1 text-danger-text">{r.parse_error}</span
+              >{/if}
           {/if}
         </p>
         {#if r.validation}
@@ -133,32 +134,32 @@
           />
         {/if}
         <details>
-          <summary class="cursor-pointer text-xs text-zinc-300">Prompt sent</summary>
-          <p class="mt-1 text-[11px] text-zinc-500">System</p>
+          <summary class="cursor-pointer text-xs text-fg-2">Prompt sent</summary>
+          <p class="mt-1 text-caption text-fg-3">System</p>
           <pre
-            class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
+            class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
             data-testid="test-prompt-system">{r.prompt.system ?? ''}</pre>
-          <p class="mt-1 text-[11px] text-zinc-500">User</p>
+          <p class="mt-1 text-caption text-fg-3">User</p>
           <pre
-            class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
+            class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
             data-testid="test-prompt-user">{r.prompt.user_text ?? ''}</pre>
         </details>
         <div>
-          <p class="text-xs text-zinc-500">Raw reply</p>
+          <p class="text-xs text-fg-3">Raw reply</p>
           <pre
-            class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap"
+            class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
             data-testid="test-raw-reply">{r.raw_reply ?? ''}</pre>
         </div>
         {#if r.reasoning}
           <div>
-            <p class="text-xs text-zinc-500">Reasoning</p>
+            <p class="text-xs text-fg-3">Reasoning</p>
             <pre
-              class="max-h-40 overflow-auto rounded bg-zinc-900 p-2 text-[11px] whitespace-pre-wrap">{r.reasoning}</pre>
+              class="max-h-40 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap">{r.reasoning}</pre>
           </div>
         {/if}
         {#each r.results as res, idx (res.crop_id + ':' + (res.box_id ?? '') + ':' + idx)}
           <article
-            class="flex flex-col gap-2 rounded border border-zinc-800 p-3"
+            class="flex flex-col gap-2 rounded border border-line p-3"
             data-testid="test-result-item"
             data-crop-id={res.crop_id}
           >
@@ -169,29 +170,26 @@
                 class="h-12 w-12 rounded object-cover"
               />
               <code class="font-mono">{res.crop_id}</code>
-              {#if res.box_id}<code class="font-mono text-zinc-400">{res.box_id}</code
-                >{/if}
+              {#if res.box_id}<code class="font-mono text-fg-2">{res.box_id}</code>{/if}
             </div>
             {#if res.skipped}
-              <p class="text-xs text-amber-300" data-testid="test-skipped">
+              <p class="text-xs text-warn-text" data-testid="test-skipped">
                 {res.skipped}
               </p>
             {:else if res.parsed != null}
               <pre
-                class="max-h-48 overflow-auto rounded bg-zinc-900 p-2 text-[11px]"
+                class="max-h-48 overflow-auto rounded bg-surface-1 p-2 text-caption"
                 data-testid="test-parsed">{JSON.stringify(res.parsed, null, 2)}</pre>
             {/if}
             {#if res.preview}
-              <p class="text-[11px] text-zinc-500">
-                The item as this reply would leave it
-              </p>
+              <p class="text-caption text-fg-3">The item as this reply would leave it</p>
               <TestPreviewItem preview={res.preview} />
               <details>
-                <summary class="cursor-pointer text-[11px] text-zinc-400"
+                <summary class="cursor-pointer text-caption text-fg-2"
                   >preview_item</summary
                 >
                 <pre
-                  class="max-h-60 overflow-auto rounded bg-zinc-900 p-2 text-[11px]">{JSON.stringify(
+                  class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption">{JSON.stringify(
                     res.preview_item,
                     null,
                     2,

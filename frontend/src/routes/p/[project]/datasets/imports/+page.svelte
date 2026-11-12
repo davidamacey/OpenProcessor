@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   /**
    * `/datasets/imports` — this project's dataset imports (any_domain_plan.md
    * §7.12 item 3): `GET /datasets/imports`, status chips from the served
@@ -43,15 +45,16 @@
   const pages = $derived(list ? Math.max(1, Math.ceil(list.total / PAGE_SIZE)) : 1);
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-zinc-100">Dataset imports</h1>
-    {#if datasetsAvailability.available === true}
-      <a class="btn btn-primary btn-sm" href={resolve(projectHref('/datasets/import'))}
-        >Import a labeled dataset</a
-      >
-    {/if}
-  </div>
+<PageShell class="space-y-6">
+  <PageHeader title="Dataset imports">
+    {#snippet actions()}
+      {#if datasetsAvailability.available === true}
+        <a class="btn btn-primary btn-sm" href={resolve(projectHref('/datasets/import'))}
+          >Import a labeled dataset</a
+        >
+      {/if}
+    {/snippet}
+  </PageHeader>
 
   <DatasetsGate>
     {#snippet children(formats)}
@@ -62,7 +65,7 @@
       >
         <button
           type="button"
-          class="chip {status === '' ? 'border-blue-500 text-blue-200' : ''}"
+          class="chip {status === '' ? 'border-accent text-accent-text' : ''}"
           aria-pressed={status === ''}
           onclick={() => {
             status = '';
@@ -72,7 +75,7 @@
         {#each Object.entries(formats.status_labels) as [id, label] (id)}
           <button
             type="button"
-            class="chip {status === id ? 'border-blue-500 text-blue-200' : ''}"
+            class="chip {status === id ? 'border-accent text-accent-text' : ''}"
             aria-pressed={status === id}
             onclick={() => {
               status = id;
@@ -83,14 +86,14 @@
       </div>
 
       {#if error}
-        <p class="text-sm text-red-300">{error}</p>
+        <p class="text-sm text-danger-text">{error}</p>
       {:else if !list}
-        <p class="text-sm text-zinc-500">Loading…</p>
+        <p class="text-sm text-fg-3">Loading…</p>
       {:else if list.items.length === 0}
-        <p class="text-sm text-zinc-500" data-testid="imports-empty">No imports.</p>
+        <p class="text-sm text-fg-3" data-testid="imports-empty">No imports.</p>
       {:else}
         <table class="w-full text-left text-xs" data-testid="imports-list">
-          <thead class="text-zinc-500">
+          <thead class="text-fg-3">
             <tr>
               <th class="py-1 pr-3">Import</th>
               <th class="py-1 pr-3">Status</th>
@@ -101,10 +104,10 @@
           </thead>
           <tbody>
             {#each list.items as j (j.import_id)}
-              <tr class="border-t border-zinc-800">
+              <tr class="border-t border-line">
                 <td class="py-1.5 pr-3">
                   <a
-                    class="text-blue-300 hover:underline"
+                    class="text-accent-text hover:underline"
                     href={resolve(
                       projectHref(`/datasets/imports/${encodeURIComponent(j.import_id)}`),
                     )}>{j.name ?? j.import_id}</a
@@ -114,14 +117,14 @@
                 <td class="py-1.5 pr-3 text-right font-mono">
                   {j.progress.images_done.toLocaleString()} / {j.progress.images_total.toLocaleString()}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-zinc-400">{j.source.root}</td>
-                <td class="py-1.5 text-zinc-400">{j.started_at ?? '—'}</td>
+                <td class="py-1.5 pr-3 font-mono text-fg-2">{j.source.root}</td>
+                <td class="py-1.5 text-fg-2">{j.started_at ?? '—'}</td>
               </tr>
             {/each}
           </tbody>
         </table>
         {#if pages > 1}
-          <div class="flex items-center gap-2 text-xs text-zinc-400">
+          <div class="flex items-center gap-2 text-xs text-fg-2">
             <button
               type="button"
               class="btn btn-sm"
@@ -140,4 +143,4 @@
       {/if}
     {/snippet}
   </DatasetsGate>
-</div>
+</PageShell>

@@ -123,21 +123,21 @@
   <Modal
     label={title ?? 'Delete project'}
     {onclose}
-    panelClass="w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+    panelClass="w-full max-w-lg rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
     data-testid="delete-project-dialog"
   >
     <h3 class="mb-1 text-base font-semibold" data-testid="delete-project-title">
       {title ? `${title}: ${project.display_name}?` : `Delete ${project.display_name}?`}
     </h3>
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       This permanently removes the project's data. Its slug
-      <span class="font-mono text-zinc-200">{project.slug}</span> can never be reused.
+      <span class="font-mono text-fg-1">{project.slug}</span> can never be reused.
     </p>
 
     {#if loadingReport}
-      <p class="mb-3 text-xs text-zinc-500">Checking what would be deleted…</p>
+      <p class="mb-3 text-xs text-fg-3">Checking what would be deleted…</p>
     {:else if dryRunError}
-      <p class="mb-3 text-xs text-red-300" data-testid="delete-project-dry-run-error">
+      <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-dry-run-error">
         {dryRunError}
       </p>
       {#if canRetry}
@@ -149,9 +149,9 @@
         >
       {/if}
     {:else if report}
-      <div class="mb-3 max-h-56 overflow-auto rounded border border-zinc-800 p-2 text-xs">
-        <p class="mb-1 text-zinc-400">Would delete:</p>
-        <ul class="space-y-0.5 text-zinc-300" data-testid="delete-project-report">
+      <div class="mb-3 max-h-56 overflow-auto rounded border border-line p-2 text-xs">
+        <p class="mb-1 text-fg-2">Would delete:</p>
+        <ul class="space-y-0.5 text-fg-2" data-testid="delete-project-report">
           {#each report.indexes as ix (ix.name)}
             <li>index <span class="font-mono">{ix.name}</span> · {ix.docs} docs</li>
           {/each}
@@ -170,12 +170,12 @@
           {/if}
         </ul>
         {#if report.running_jobs.length > 0}
-          <p class="mt-2 text-amber-300">{report.running_jobs.length} running job(s)</p>
+          <p class="mt-2 text-warn-text">{report.running_jobs.length} running job(s)</p>
         {/if}
       </div>
       {#if report.referenced_by.length > 0}
         <div
-          class="mb-3 rounded border border-amber-900 bg-amber-950/40 px-2 py-1.5 text-xs text-amber-200"
+          class="mb-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-xs text-warn-text"
           data-testid="delete-project-references"
         >
           <p class="mb-1 font-semibold">Used by other projects:</p>
@@ -192,7 +192,7 @@
       {/if}
       {#if blocking.length > 0}
         <div
-          class="mb-3 rounded border border-red-900 bg-red-950/40 px-2 py-1.5 text-xs text-red-200"
+          class="mb-3 rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-xs text-danger-text"
           data-testid="delete-project-blocking"
         >
           <p class="mb-1 font-semibold">Can't delete:</p>
@@ -213,25 +213,25 @@
     >
       {#if report && !blocked}
         <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-zinc-400"
-            >Type <span class="font-mono text-zinc-200">{project.slug}</span> to confirm</span
+          <span class="mb-1 block text-xs text-fg-2"
+            >Type <span class="font-mono text-fg-1">{project.slug}</span> to confirm</span
           >
           <input
             type="text"
             bind:value={typed}
             autocomplete="off"
             data-testid="delete-project-confirm"
-            class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 font-mono text-sm text-zinc-100 focus:border-red-500 focus:outline-none"
+            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-sm text-fg-1 focus:border-danger focus:outline-none"
           />
         </label>
       {/if}
       {#if errorText}
-        <p class="mb-3 text-xs text-red-300" data-testid="delete-project-error">
+        <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-error">
           {errorText}
         </p>
       {/if}
       {#if inUseText}
-        <p class="mb-3 text-xs text-zinc-300" data-testid="delete-project-in-use">
+        <p class="mb-3 text-xs text-fg-2" data-testid="delete-project-in-use">
           In use by: <span class="font-mono">{inUseText}</span>
         </p>
       {/if}
@@ -249,7 +249,7 @@
         >
         <button
           type="submit"
-          class="btn border-red-800 text-red-200 hover:border-red-600"
+          class="btn border-danger-line text-danger-text hover:border-danger"
           data-testid="delete-project-submit"
           disabled={busy || !report || blocked || typed.trim() === ''}
         >

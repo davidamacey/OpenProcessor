@@ -15,9 +15,9 @@
   let { issues, showField = false }: Props = $props();
 
   const TONE: Record<string, string> = {
-    error: 'border-red-500/40 bg-red-500/10 text-red-200',
-    warning: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
-    info: 'border-zinc-600 bg-zinc-800/60 text-zinc-300',
+    error: 'border-danger/40 bg-danger/10 text-danger-text',
+    warning: 'border-warn/40 bg-warn/10 text-warn-text',
+    info: 'border-line-strong bg-surface-2/60 text-fg-2',
   };
 </script>
 
@@ -34,8 +34,8 @@
         {#if showField && i.field}<code class="ml-1 font-mono opacity-80">{i.field}</code
           >{/if}
         <span class="ml-1">{i.message}</span>
-        <code class="ml-1 font-mono text-[10px] opacity-60">{i.code}</code>
-        {#if i.bypassable}<span class="ml-1 text-[10px] opacity-80"
+        <code class="ml-1 font-mono text-caption opacity-60">{i.code}</code>
+        {#if i.bypassable}<span class="ml-1 text-caption opacity-80"
             >(can be overridden)</span
           >{/if}
       </li>

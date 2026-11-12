@@ -14,8 +14,8 @@
   let { issues, testid = 'combine-issues' }: Props = $props();
 
   const TONE: Record<string, string> = {
-    error: 'border-red-500/40 bg-red-500/10 text-red-200',
-    warning: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+    error: 'border-danger/40 bg-danger/10 text-danger-text',
+    warning: 'border-warn/40 bg-warn/10 text-warn-text',
   };
 </script>
 
@@ -31,17 +31,17 @@
       >
         <span class="font-semibold">{severity}</span>
         {#if i.project}
-          <span class="ml-1 rounded bg-zinc-800 px-1 font-mono text-[10px] text-zinc-300"
+          <span class="ml-1 rounded bg-surface-2 px-1 font-mono text-caption text-fg-2"
             >{i.project}</span
           >
         {/if}
         <span class="ml-1">{i.message}</span>
-        <code class="ml-1 font-mono text-[10px] opacity-60">{i.code}</code>
+        <code class="ml-1 font-mono text-caption opacity-60">{i.code}</code>
         {#if i.detail && Object.keys(i.detail).length > 0}
           <details class="mt-1">
-            <summary class="cursor-pointer text-[10px] opacity-80">detail</summary>
+            <summary class="cursor-pointer text-caption opacity-80">detail</summary>
             <pre
-              class="mt-1 max-h-40 overflow-auto rounded bg-zinc-950/60 p-1 text-[10px] text-zinc-300">{JSON.stringify(
+              class="mt-1 max-h-40 overflow-auto rounded bg-surface-0/60 p-1 text-caption text-fg-2">{JSON.stringify(
                 i.detail,
                 null,
                 2,

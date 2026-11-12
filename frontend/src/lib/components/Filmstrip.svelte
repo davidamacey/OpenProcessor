@@ -42,9 +42,9 @@
     index !== null && total !== null ? `${index + 1} of ${total}` : null,
   );
   const TILE =
-    'block h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none';
+    'block h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none';
   const tone = (current: boolean) =>
-    current ? 'border-sky-400' : 'border-zinc-800 opacity-80 hover:opacity-100';
+    current ? 'border-info' : 'border-line opacity-80 hover:opacity-100';
 </script>
 
 {#snippet thumb(tile: FilmstripTile)}
@@ -61,7 +61,7 @@
 
 <div class="flex items-center gap-3">
   {#if position}
-    <span class="shrink-0 text-xs text-zinc-400" data-testid="filmstrip-position">
+    <span class="shrink-0 text-xs text-fg-2" data-testid="filmstrip-position">
       {position}
     </span>
   {/if}

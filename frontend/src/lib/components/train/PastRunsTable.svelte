@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /** /train's paginated past-runs table with per-run promote/reproduce. */
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import RunResults from '$components/RunResults.svelte';
@@ -16,27 +17,25 @@
   let { ctl, actions }: Props = $props();
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-900">
-  <header
-    class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2"
-  >
-    <h2 class="text-sm font-semibold text-zinc-100">Past runs</h2>
-    <span class="font-mono text-xs text-zinc-500"
-      >{ctl.runs.length} / {ctl.runsTotal}</span
-    >
+<section class="rounded-md border border-line bg-surface-1">
+  <header class="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+    <h2 class="text-sm font-semibold text-fg-1">Past runs</h2>
+    <span class="font-mono text-xs text-fg-3">{ctl.runs.length} / {ctl.runsTotal}</span>
   </header>
   {#if ctl.runsError}
-    <p class="px-3 py-2 text-xs text-red-300">Past runs fetch failed: {ctl.runsError}</p>
+    <p class="px-3 py-2 text-xs text-danger-text">
+      Past runs fetch failed: {ctl.runsError}
+    </p>
   {/if}
   <div class="max-h-[40rem] overflow-auto">
     {#if ctl.runsLoading && ctl.runs.length === 0}
-      <p class="px-3 py-3 text-xs text-zinc-500">Loading…</p>
+      <p class="px-3 py-3 text-xs text-fg-3">Loading…</p>
     {:else if ctl.runs.length === 0}
-      <p class="px-3 py-3 text-xs text-zinc-500">No runs yet. Start one above.</p>
+      <p class="px-3 py-3 text-xs text-fg-3">No runs yet. Start one above.</p>
     {:else}
       <table class="w-full min-w-[42rem] table-fixed text-sm">
         <thead
-          class="sticky top-0 bg-zinc-900 text-[11px] uppercase tracking-wide text-zinc-500"
+          class="sticky top-0 bg-surface-1 text-caption uppercase tracking-wide text-fg-3"
         >
           <tr>
             <th class="px-3 py-2 text-left">Name</th>
@@ -54,26 +53,30 @@
         <tbody>
           {#each ctl.runs as r (r.job_id)}
             {@const mapDisplay = bestMapDisplay(r)}
-            <tr class="border-t border-zinc-800 hover:bg-zinc-800/50">
+            <tr class="border-t border-line hover:bg-surface-2/50">
               <td class="px-3 py-2">
-                <div class="truncate font-mono text-xs text-zinc-200" title={r.job_id}>
+                <div class="truncate font-mono text-xs text-fg-1" title={r.job_id}>
                   {r.job_id}
                 </div>
                 {#if r.campaign_id}
                   <div
-                    class="truncate font-mono text-[10px] text-zinc-500"
+                    class="truncate font-mono text-caption text-fg-3"
                     title={r.campaign_id}
                   >
-                    ↳ {r.campaign_id}
+                    <Icon
+                      name="corner-down-right"
+                      size={12}
+                      class="mr-1 -mt-0.5 inline-block"
+                    />{r.campaign_id}
                   </div>
                 {/if}
               </td>
               <td class="px-3 py-2">
-                <span class="font-mono text-xs text-zinc-400">{familyLabel(r)}</span>
+                <span class="font-mono text-xs text-fg-2">{familyLabel(r)}</span>
               </td>
               <td class="px-3 py-2">
                 <span
-                  class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {statePillClass(
+                  class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {statePillClass(
                     r.state,
                   )}"
                 >
@@ -81,7 +84,7 @@
                 </span>
               </td>
               <td
-                class="px-3 py-2 text-right font-mono text-xs text-zinc-200"
+                class="px-3 py-2 text-right font-mono text-xs text-fg-1"
                 title={mapDisplay.source === 'test'
                   ? 'test split (frozen holdout)'
                   : mapDisplay.source === 'val'
@@ -89,7 +92,7 @@
                     : 'no eval served yet'}
               >
                 {mapDisplay.value?.toFixed(3) ?? '—'}
-                <span class="block font-sans text-[9px] text-zinc-500">
+                <span class="block font-sans text-caption text-fg-3">
                   {mapDisplay.source === 'test'
                     ? 'test'
                     : mapDisplay.source === 'val'
@@ -102,17 +105,17 @@
                   {#if r.state === 'finished' || r.state === 'exporting'}
                     <button
                       type="button"
-                      class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-blue-300 hover:border-blue-500 hover:bg-blue-500/10"
+                      class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-accent-text hover:border-accent hover:bg-accent/10"
                       onclick={() => actions.openPromote(r)}
                       title="Promote to Triton"
                     >
-                      Promote ↑
+                      Promote<Icon name="arrow-up" size={14} class="ml-1 inline-block" />
                     </button>
                   {/if}
                   {#if r.state === 'finished' || r.state === 'failed'}
                     <button
                       type="button"
-                      class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800"
+                      class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-fg-2 hover:border-fg-3 hover:bg-surface-2"
                       onclick={() => actions.reproduceRun(r)}
                       disabled={actions.reproducingId === r.job_id}
                       title="Submit a new run with the same spec"

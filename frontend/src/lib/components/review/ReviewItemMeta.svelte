@@ -67,44 +67,44 @@
     {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
       currentSlotRejectionReason,
     )}
-    <dt class="text-zinc-500">
+    <dt class="text-fg-3">
       {reasonKind === 'needs_human' ? 'Needs review' : 'Rejection'}
     </dt>
     <dd
       class={reasonKind === 'model_verdict'
-        ? 'text-red-300'
+        ? 'text-danger-text'
         : reasonKind === 'needs_human'
-          ? 'text-zinc-200'
-          : 'text-amber-300'}
+          ? 'text-fg-1'
+          : 'text-warn-text'}
     >
       {regionVocabularyStore.rejectionReasonLabel(currentSlotRejectionReason)}
     </dd>
   {:else}
-    <dt class="text-zinc-500">Reason</dt>
-    <dd class="text-zinc-200">{current.reason ?? '—'}</dd>
+    <dt class="text-fg-3">Reason</dt>
+    <dd class="text-fg-1">{current.reason ?? '—'}</dd>
   {/if}
 
-  <dt class="text-zinc-500">Current label</dt>
-  <dd class="text-zinc-200" data-testid="current-label">
+  <dt class="text-fg-3">Current label</dt>
+  <dd class="text-fg-1" data-testid="current-label">
     <!-- R6 (visual audit 2026-09-24): a class-less item used to
          read "Current label (vlm)" with a blank value. -->
     {#if current.display_name_kind === 'class'}
       {current.display_name}
     {:else if current.display_name}
-      <span class="italic text-zinc-300">{current.display_name}</span>
-      <span class="text-[10px] text-zinc-500"
+      <span class="italic text-fg-2">{current.display_name}</span>
+      <span class="text-caption text-fg-3"
         >({current.display_name_kind === 'detector'
           ? "detector's label, not classed yet"
           : 'proposed, not classed yet'})</span
       >
     {:else}
-      <span class="italic text-zinc-500">{NO_CLASS_YET}</span>
+      <span class="italic text-fg-3">{NO_CLASS_YET}</span>
     {/if}
     {#if current.label_source}
-      <span class="ml-1 text-zinc-500">({current.label_source})</span>
+      <span class="ml-1 text-fg-3">({current.label_source})</span>
     {/if}
     <ConfirmationChip source={current.class_source} validated={current.class_validated} />
-    <DetectorClass crop={current} class="ml-1 text-[11px] text-zinc-500" />
+    <DetectorClass crop={current} class="ml-1 text-caption text-fg-3" />
     <!-- dq-queues cutover (2026-09-24): vlm_raw_class/
          vlm_class_empty_reason fold into this row rather than
          their own — the review panel is height-budgeted
@@ -112,11 +112,9 @@
          stay visible without scrolling at 1280x720), and every
          extra dt/dd row eats into that budget. -->
     {#if current.vlm_raw_class}
-      <span class="ml-1 text-[11px] text-zinc-500"
-        >— VLM said: {current.vlm_raw_class}</span
-      >
+      <span class="ml-1 text-caption text-fg-3">— VLM said: {current.vlm_raw_class}</span>
     {:else if current.vlm_class_empty_reason}
-      <span class="ml-1 text-[11px] text-orange-300"
+      <span class="ml-1 text-caption text-warn-text"
         >— {vlmEmptyReasonText(current.vlm_class_empty_reason)}</span
       >
     {/if}
@@ -129,29 +127,29 @@
        yellow style as a real proposal, though Enter opens the
        picker instead of confirming it — the row now says so. -->
   {#if current.proposed_class_name}
-    <dt class="text-zinc-500">Proposed</dt>
+    <dt class="text-fg-3">Proposed</dt>
     {#if current.proposed_class_id == null}
-      <dd class="text-zinc-400" title="Not a registry class — Enter opens the picker">
-        {current.proposed_class_name} <span class="text-[10px]">(hint only)</span>
+      <dd class="text-fg-2" title="Not a registry class — Enter opens the picker">
+        {current.proposed_class_name} <span class="text-caption">(hint only)</span>
       </dd>
     {:else}
-      <dd class="text-yellow-200">{current.proposed_class_name}</dd>
+      <dd class="text-warn-text">{current.proposed_class_name}</dd>
     {/if}
   {/if}
 
   {#if opinion.kind === 'no_opinion'}
     <!-- F8 D1: out of the probe's classes: no opinion, never
          shown as a prediction or as agreement. -->
-    <dt class="text-zinc-500">Model predicts</dt>
-    <dd class="text-zinc-400" data-testid="probe-no-opinion">
+    <dt class="text-fg-3">Model predicts</dt>
+    <dd class="text-fg-2" data-testid="probe-no-opinion">
       {NO_OPINION_TEXT}
     </dd>
   {:else if opinion.kind === 'unsure'}
     <!-- OpenProcessor 8990ede: a served disagreement below the
          server's own confidence threshold (`probe_actionable`
          false) — shown, but never offered as an Accept action. -->
-    <dt class="text-zinc-500">Model predicts</dt>
-    <dd class="text-zinc-400" data-testid="probe-unsure">
+    <dt class="text-fg-3">Model predicts</dt>
+    <dd class="text-fg-2" data-testid="probe-unsure">
       model unsure: {current.probe_pred_class}
     </dd>
   {:else if opinion.kind === 'prediction'}
@@ -159,8 +157,8 @@
        now serves `probe_pred_class_id` alongside the display
        name, so "Accept" no longer needs a client-side
        name→id lookup — assign() takes the served id directly. -->
-    <dt class="text-zinc-500">Model predicts</dt>
-    <dd class="flex flex-wrap items-center gap-1.5 text-zinc-200">
+    <dt class="text-fg-3">Model predicts</dt>
+    <dd class="flex flex-wrap items-center gap-1.5 text-fg-1">
       {current.probe_pred_class}
       {#if current.probe_pred_entropy != null}
         <ScoreChip label="entropy" value={current.probe_pred_entropy} size="sm" />
@@ -168,7 +166,7 @@
       {#if opinion.showAccept}
         <button
           type="button"
-          class="rounded border border-blue-500/60 bg-blue-500/15 px-1.5 py-0.5 text-[11px] text-blue-100 hover:bg-blue-500/25"
+          class="rounded border border-accent/60 bg-accent/15 px-1.5 py-0.5 text-caption text-accent-text hover:bg-accent/25"
           onclick={acceptModelClass}
         >
           Accept model's class
@@ -178,8 +176,8 @@
   {/if}
 
   {#if current.needs_new_class}
-    <dt class="text-zinc-500">Needs new class</dt>
-    <dd class="text-amber-200">
+    <dt class="text-fg-3">Needs new class</dt>
+    <dd class="text-warn-text">
       {current.needs_new_class_note || 'flagged — no matching class in the registry'}
     </dd>
   {/if}
@@ -195,7 +193,7 @@
        own categorical confidence (`vlm_confidence`, served
        separately) as its own row when there's a real number to
        contrast it with. -->
-  <dt class="text-zinc-500">
+  <dt class="text-fg-3">
     {isCurrentLabelVlmSourced ? 'Detector score' : 'Confidence'}
   </dt>
   <dd class="font-mono">
@@ -210,7 +208,7 @@
          instead — see that row's comment for why (DQ-M5
          height budget). -->
     {#if current.class_confidence != null && !current.vlm_confidence}
-      <span class="ml-1 text-[11px] text-zinc-500">
+      <span class="ml-1 text-caption text-fg-3">
         · label: {current.class_confidence_source === 'model' ? 'Model ' : ''}{(
           current.class_confidence * 100
         ).toFixed(0)}%
@@ -219,15 +217,15 @@
   </dd>
 
   {#if current.vlm_confidence}
-    <dt class="text-zinc-500">VLM confidence</dt>
-    <dd class="font-mono text-zinc-200">
+    <dt class="text-fg-3">VLM confidence</dt>
+    <dd class="font-mono text-fg-1">
       {current.vlm_confidence}
       <!-- class_confidence is the numeric mapping of this same
            categorical value when VLM-sourced — shown inline
            rather than its own row (DQ-M5 height budget, see
            the Detector score/Confidence row's comment above). -->
       {#if current.class_confidence != null}
-        <span class="text-[11px] text-zinc-500"
+        <span class="text-caption text-fg-3"
           >({(current.class_confidence * 100).toFixed(0)}%)</span
         >
       {/if}
@@ -235,17 +233,17 @@
   {/if}
 
   {#if current.assist}
-    <dt class="text-zinc-500">Assist</dt>
+    <dt class="text-fg-3">Assist</dt>
     <dd data-testid="review-assist">
       <AssistSuggestions assist={current.assist} className={current.class_name} />
     </dd>
   {/if}
 
   {#if current.proposal_name}
-    <dt class="text-zinc-500">Proposal hint</dt>
+    <dt class="text-fg-3">Proposal hint</dt>
     <dd>
       <span
-        class="rounded border border-cyan-500/40 bg-cyan-500/15 px-1.5 py-0.5 text-[11px] text-cyan-200"
+        class="rounded border border-info/40 bg-info/15 px-1.5 py-0.5 text-caption text-info-text"
         title="A general-purpose detector found a subject here that the primary classifier missed. Coarse class — pick the specific class below (a close variant may be near one-click)."
       >
         {current.proposal_name}
@@ -254,14 +252,14 @@
   {/if}
 
   {#if current.rank_label || current.clarity_label}
-    <dt class="text-zinc-500">Rank · clarity</dt>
-    <dd class="font-mono text-zinc-300">
+    <dt class="text-fg-3">Rank · clarity</dt>
+    <dd class="font-mono text-fg-2">
       {[current.rank_label, current.clarity_label].filter(Boolean).join(' · ')}
     </dd>
   {/if}
 
   {#if current.mistakenness_score != null || searchScores.has(current.id)}
-    <dt class="text-zinc-500">Scores</dt>
+    <dt class="text-fg-3">Scores</dt>
     <dd class="flex flex-wrap items-center gap-1.5">
       {#if current.mistakenness_score != null}
         <ScoreChip

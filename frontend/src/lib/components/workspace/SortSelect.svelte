@@ -26,7 +26,7 @@
   }: Props = $props();
 </script>
 
-<label class="flex items-center gap-2 text-xs text-zinc-400">
+<label class="flex items-center gap-2 text-xs text-fg-2">
   <span>Sort</span>
   <select
     class="select"
@@ -39,6 +39,6 @@
     {/each}
   </select>
   {#if fallbackReason}
-    <span class="text-amber-300" data-testid="sort-fallback">{fallbackReason}</span>
+    <span class="text-warn-text" data-testid="sort-fallback">{fallbackReason}</span>
   {/if}
 </label>

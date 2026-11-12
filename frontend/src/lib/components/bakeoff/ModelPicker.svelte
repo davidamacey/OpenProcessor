@@ -93,10 +93,10 @@
 
 <div class="space-y-3" data-testid="model-picker">
   <div>
-    <p class="text-[10px] uppercase tracking-wide text-zinc-500">Trained runs</p>
+    <p class="text-caption uppercase tracking-wide text-fg-3">Trained runs</p>
     {#each trained as t (t.run_id)}
       <div
-        class="rounded px-1 py-1 text-xs hover:bg-zinc-800/50"
+        class="rounded px-1 py-1 text-xs hover:bg-surface-2/50"
         data-testid="run-row"
         data-run-id={t.run_id}
       >
@@ -106,18 +106,18 @@
             checked={selectedRuns.includes(t.run_id)}
             onchange={(e) => onToggleRun(t.run_id, e.currentTarget.checked)}
           />
-          <span class="font-mono text-zinc-200">{t.display_name}</span>
+          <span class="font-mono text-fg-1">{t.display_name}</span>
           {#if t.model_family || t.model_size}
-            <span class="rounded bg-blue-900/60 px-1 text-[10px] text-blue-200"
+            <span class="rounded bg-accent-soft px-1 text-caption text-accent-text"
               >{t.model_family ?? ''}{t.model_size ?? ''}</span
             >
           {/if}
-          <span class="text-[10px] text-zinc-500">{t.imgsz}px</span>
-          <span class="text-[10px] text-zinc-500">
+          <span class="text-caption text-fg-3">{t.imgsz}px</span>
+          <span class="text-caption text-fg-3">
             {t.class_names.length} classes{t.single_cls ? ' (single-class)' : ''}
           </span>
           <span
-            class="text-[10px] text-zinc-500"
+            class="text-caption text-fg-3"
             title="The trainer's own number from its own evaluation (Ultralytics val defaults) — not a comparison metric."
           >
             {TRAINER_PROTOCOL_LABEL} mAP50 {t.trainer_map50 == null
@@ -129,7 +129,7 @@
         </label>
         {#each selectedDatasets as dsId (dsId)}
           {@const f = facts[dsId]?.[t.run_id]}
-          <div class="ml-6 text-[10px] text-zinc-500" data-testid="run-facts">
+          <div class="ml-6 text-caption text-fg-3" data-testid="run-facts">
             <span class="font-mono">{datasetName(dsId)}</span>:
             {#if facts[dsId] === undefined}
               loading…
@@ -140,7 +140,7 @@
               {f.n_classes_mapped} classes mapped
               {#if hasOverlap(f.train_test_overlap)}
                 <span
-                  class="ml-1 rounded bg-red-900/60 px-1 text-red-200"
+                  class="ml-1 rounded bg-danger-soft px-1 text-danger-text"
                   data-testid="overlap-warning"
                   >overlap: {formatOverlap(f.train_test_overlap)}</span
                 >
@@ -150,17 +150,15 @@
         {/each}
       </div>
     {:else}
-      <p class="px-1 text-xs text-zinc-600">
-        No finished training run with a checkpoint.
-      </p>
+      <p class="px-1 text-xs text-fg-3">No finished training run with a checkpoint.</p>
     {/each}
   </div>
 
   <div>
-    <p class="text-[10px] uppercase tracking-wide text-zinc-500">Baselines</p>
+    <p class="text-caption uppercase tracking-wide text-fg-3">Baselines</p>
     {#each baselines as b (b.name)}
       <label
-        class="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-zinc-800/50"
+        class="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-surface-2/50"
         data-testid="baseline-row"
       >
         <input
@@ -168,30 +166,28 @@
           checked={selectedBaselines.includes(b.name)}
           onchange={(e) => onToggleBaseline(b.name, e.currentTarget.checked)}
         />
-        <span class="font-mono text-zinc-200">{b.name}</span>
-        <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400">{b.backend}</span
-        >
+        <span class="font-mono text-fg-1">{b.name}</span>
+        <span class="rounded bg-surface-2 px-1 text-caption text-fg-2">{b.backend}</span>
         {#if b.training_data}
-          <span class="text-[10px] text-zinc-500">trained on {b.training_data}</span>
+          <span class="text-caption text-fg-3">trained on {b.training_data}</span>
         {/if}
       </label>
     {:else}
-      <p class="px-1 text-xs text-zinc-600">This profile registers no baselines.</p>
+      <p class="px-1 text-xs text-fg-3">This profile registers no baselines.</p>
     {/each}
   </div>
 
   {#if customRefs.length}
     <div>
-      <p class="text-[10px] uppercase tracking-wide text-zinc-500">Custom</p>
+      <p class="text-caption uppercase tracking-wide text-fg-3">Custom</p>
       {#each customRefs as c, i (i)}
         <div class="flex items-center gap-1.5 px-1 py-1 text-xs">
-          <span class="font-mono text-zinc-200">{c.display_name ?? c.name}</span>
-          <span class="rounded bg-zinc-800 px-1 text-[10px] text-zinc-400"
-            >{c.backend}</span
+          <span class="font-mono text-fg-1">{c.display_name ?? c.name}</span>
+          <span class="rounded bg-surface-2 px-1 text-caption text-fg-2">{c.backend}</span
           >
           <button
             type="button"
-            class="text-[10px] text-zinc-500 hover:text-zinc-300"
+            class="text-caption text-fg-3 hover:text-fg-2"
             onclick={() => onRemoveCustom(i)}>remove</button
           >
         </div>
@@ -199,27 +195,27 @@
     </div>
   {/if}
 
-  <details class="rounded border border-zinc-800 px-2 py-1 text-xs">
-    <summary class="cursor-pointer text-zinc-400">Add a custom model</summary>
+  <details class="rounded border border-line px-2 py-1 text-xs">
+    <summary class="cursor-pointer text-fg-2">Add a custom model</summary>
     <div class="mt-2 grid grid-cols-2 gap-2">
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Name</span>
+        ><span class="text-fg-3">Name</span>
         <input class="input-sm" bind:value={cName} /></label
       >
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Backend</span>
+        ><span class="text-fg-3">Backend</span>
         <input class="input-sm" bind:value={cBackend} /></label
       >
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Weights path (evaluator)</span>
+        ><span class="text-fg-3">Weights path (evaluator)</span>
         <input class="input-sm" bind:value={cWeights} /></label
       >
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Served model name</span>
+        ><span class="text-fg-3">Served model name</span>
         <input class="input-sm" bind:value={cTriton} /></label
       >
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Image size</span>
+        ><span class="text-fg-3">Image size</span>
         <input
           class="input-sm"
           type="number"
@@ -229,18 +225,18 @@
         /></label
       >
       <label class="flex flex-col gap-0.5"
-        ><span class="text-zinc-500">Display name</span>
+        ><span class="text-fg-3">Display name</span>
         <input class="input-sm" bind:value={cDisplay} /></label
       >
       <label class="col-span-2 flex flex-col gap-0.5"
-        ><span class="text-zinc-500"
+        ><span class="text-fg-3"
           >Class map (JSON, model class id → eval class name; empty = match by name)</span
         >
         <textarea class="input-sm font-mono" rows="2" bind:value={cClassMap}
         ></textarea></label
       >
     </div>
-    {#if customError}<p class="mt-1 text-red-300">{customError}</p>{/if}
+    {#if customError}<p class="mt-1 text-danger-text">{customError}</p>{/if}
     <button type="button" class="btn mt-2" onclick={addCustom}>Add</button>
   </details>
 </div>

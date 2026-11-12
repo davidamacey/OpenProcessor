@@ -48,17 +48,15 @@
   );
 </script>
 
-<div class="mt-4 border-t border-zinc-800 pt-3">
-  <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">
-    Source image
-  </div>
+<div class="mt-4 border-t border-line pt-3">
+  <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">Source image</div>
   {#if imageLoading}
-    <p class="text-[11px] text-zinc-500">Loading…</p>
+    <p class="text-caption text-fg-3">Loading…</p>
   {:else if imageError}
-    <p class="text-[11px] text-red-300">Source image unavailable: {imageError}</p>
+    <p class="text-caption text-danger-text">Source image unavailable: {imageError}</p>
   {:else if imageMeta}
     {#if contextRes && showImage}
-      <div class="mb-2 h-40 w-full overflow-hidden rounded bg-zinc-950">
+      <div class="mb-2 h-40 w-full overflow-hidden rounded bg-surface-0">
         <SourceImageOverlay
           imageId={contextRes.image.image_id}
           selectedCropId={crop.id}
@@ -68,13 +66,13 @@
       </div>
     {/if}
     <a
-      class="text-[11px] text-sky-300 underline hover:text-sky-200"
+      class="text-caption text-info-text underline hover:text-info-text"
       data-testid="open-image"
       href={resolve(projectHref(`/images/${encodeURIComponent(imageMeta.image_id)}`))}
       >Open image</a
     >
     {#if siblings && siblings.length > 0}
-      <div class="mt-2 text-[10px] uppercase tracking-wider text-zinc-500">
+      <div class="mt-2 text-caption uppercase tracking-wider text-fg-3">
         Siblings ({siblings.length})
       </div>
       <div class="mt-1 flex flex-wrap gap-1.5">
@@ -83,7 +81,7 @@
             <img
               src={getThumbUrl(sib.id, 64)}
               alt="sibling crop"
-              class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
+              class="h-12 w-12 rounded border border-line bg-surface-1 object-contain"
             />
           {/snippet}
           {#if onopencrop}
@@ -92,7 +90,7 @@
               data-testid="sibling-crop"
               title={sib.class_name ?? sib.id}
               aria-label="Open sibling {sib.class_name ?? sib.id}"
-              class="rounded hover:ring-2 hover:ring-zinc-500"
+              class="rounded hover:ring-2 hover:ring-fg-3"
               onclick={() => onopencrop(sib)}
             >
               {@render thumb()}
@@ -107,23 +105,23 @@
 </div>
 
 {#if crop.source_image_path || crop.updated_at}
-  <div class="mt-4 border-t border-zinc-800 pt-3 text-[11px] text-zinc-500">
+  <div class="mt-4 border-t border-line pt-3 text-caption text-fg-3">
     {#if crop.source_image_path}
       <div class="truncate" title={crop.source_image_path}>
-        <span class="text-zinc-600">src:</span>
+        <span class="text-fg-3">src:</span>
         {crop.source_image_path}
       </div>
     {/if}
     {#if crop.updated_at}
       <div>
-        <span class="text-zinc-600">updated:</span>
+        <span class="text-fg-3">updated:</span>
         <span class="font-mono" title={crop.updated_at}
           >{formatTimestamp(crop.updated_at)}</span
         >
       </div>
     {/if}
     <div>
-      <span class="text-zinc-600">id:</span>
+      <span class="text-fg-3">id:</span>
       <span class="font-mono">{crop.id}</span>
     </div>
   </div>

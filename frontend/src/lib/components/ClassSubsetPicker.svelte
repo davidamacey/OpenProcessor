@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Class multi-select with preset chips and live counters.
    *
@@ -168,21 +169,25 @@
   });
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-900">
+<section class="rounded-md border border-line bg-surface-1">
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-zinc-800"
+    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2"
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
-    <span class="font-mono text-xs text-zinc-500">{expanded ? '▼' : '▶'}</span>
-    <span class="font-semibold text-zinc-100">Classes to train</span>
-    <span class="grow text-xs text-zinc-400">{summary}</span>
+    <Icon
+      name={expanded ? 'chevron-down' : 'chevron-right'}
+      size={14}
+      class="text-fg-3"
+    />
+    <span class="font-semibold text-fg-1">Classes to train</span>
+    <span class="grow text-xs text-fg-2">{summary}</span>
   </button>
 
   {#if lackingSelected.length > 0}
     <div
-      class="flex flex-wrap items-center gap-2 border-t border-zinc-800 px-3 py-2 text-xs text-amber-200"
+      class="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 text-xs text-warn-text"
       data-testid="lacking-data-row"
     >
       <span>
@@ -202,14 +207,14 @@
   {/if}
 
   {#if expanded}
-    <div class="border-t border-zinc-800 p-3">
+    <div class="border-t border-line p-3">
       <!-- Top row: search + select / clear -->
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <input
           type="search"
           bind:value={query}
           placeholder="Search classes…"
-          class="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="min-w-0 flex-1 rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
         />
         <button type="button" class="btn" onclick={selectAll}>Select all</button>
         <button type="button" class="btn" onclick={clearAll}>Clear</button>
@@ -218,12 +223,12 @@
       <!-- Preset chips -->
       {#if presets.length > 0}
         <div class="mb-3 flex flex-wrap gap-1.5">
-          <span class="text-[11px] uppercase tracking-wide text-zinc-500">Presets:</span>
+          <span class="text-caption uppercase tracking-wide text-fg-3">Presets:</span>
           {#each presets as p (p.name)}
             <button
               type="button"
               title={p.description}
-              class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-0.5 text-xs text-zinc-200 hover:border-blue-500 hover:bg-blue-500/10"
+              class="rounded-md border border-line-strong bg-surface-0 px-2 py-0.5 text-xs text-fg-1 hover:border-accent hover:bg-accent/10"
               onclick={() => applyPreset(p)}
             >
               {p.label}
@@ -233,35 +238,35 @@
       {/if}
 
       <!-- Class list -->
-      <div class="max-h-72 overflow-auto rounded border border-zinc-800 bg-zinc-950">
+      <div class="max-h-72 overflow-auto rounded border border-line bg-surface-0">
         {#if filtered.length === 0}
-          <p class="px-3 py-3 text-xs text-zinc-500">No classes match.</p>
+          <p class="px-3 py-3 text-xs text-fg-3">No classes match.</p>
         {:else}
-          <ul class="divide-y divide-zinc-900">
+          <ul class="divide-y divide-line">
             {#each filtered as cls (cls.id)}
               {@const checked = allMode || selectedSet.has(cls.id)}
               <li>
                 <label
-                  class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-900"
+                  class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-1"
                 >
                   <input
                     type="checkbox"
                     {checked}
                     onchange={() => toggle(cls.id)}
-                    class="h-4 w-4 cursor-pointer accent-blue-500"
+                    class="h-4 w-4 cursor-pointer accent-accent"
                   />
-                  <span class="grow truncate text-zinc-200">{cls.name}</span>
+                  <span class="grow truncate text-fg-1">{cls.name}</span>
                   {#if cls.group}
-                    <span class="font-mono text-[10px] text-zinc-500">{cls.group}</span>
+                    <span class="font-mono text-caption text-fg-3">{cls.group}</span>
                   {/if}
                   {#if (cls.trainable_gap ?? 0) > 0}
                     <span
-                      class="font-mono text-[10px] text-amber-300"
+                      class="font-mono text-caption text-warn-text"
                       title="Short of the per-class minimum by {cls.trainable_gap} trainable crops (served trainable_gap)"
                       >needs {cls.trainable_gap}</span
                     >
                   {/if}
-                  <span class="font-mono text-xs text-zinc-400">
+                  <span class="font-mono text-xs text-fg-2">
                     {(cls.validated_count ?? 0).toLocaleString()}
                   </span>
                 </label>
@@ -272,13 +277,13 @@
       </div>
 
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p class="text-xs text-zinc-400">{summary}</p>
-        <label class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+        <p class="text-xs text-fg-2">{summary}</p>
+        <label class="flex cursor-pointer items-center gap-2 text-xs text-fg-2">
           <input
             type="checkbox"
             checked={singleCls}
             onchange={(e) => setSingleCls((e.currentTarget as HTMLInputElement).checked)}
-            class="h-4 w-4 cursor-pointer accent-blue-500"
+            class="h-4 w-4 cursor-pointer accent-accent"
           />
           Single-class detector (collapse all to "object")
         </label>

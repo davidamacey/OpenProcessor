@@ -22,13 +22,13 @@
 </script>
 
 {#if choices.length === 0}
-  <p class="text-sm text-zinc-500" data-testid="model-choices-empty">
+  <p class="text-sm text-fg-3" data-testid="model-choices-empty">
     No model choices served.
   </p>
 {:else}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-xs" data-testid="model-choices">
-      <thead class="text-zinc-500">
+      <thead class="text-fg-3">
         <tr>
           <th class="py-1 pr-3 font-normal">Choice</th>
           <th class="py-1 pr-3 font-normal">Set</th>
@@ -42,17 +42,18 @@
         {#each choices as c (c.role)}
           {@const link = modelChoiceLink(c.role)}
           <tr
-            class="border-t border-zinc-800 align-top"
+            class="border-t border-line align-top"
             data-testid="model-choice-row"
             data-role={c.role}
           >
             <td class="py-1.5 pr-3">
               {#if link}
-                <a class="text-blue-300 hover:underline" href={resolve(projectHref(link))}
-                  >{c.label}</a
+                <a
+                  class="text-accent-text hover:underline"
+                  href={resolve(projectHref(link))}>{c.label}</a
                 >
               {:else}
-                <span class="text-zinc-100">{c.label}</span>
+                <span class="text-fg-1">{c.label}</span>
               {/if}
             </td>
             <td class="py-1.5 pr-3">{scopeLabels[c.scope] ?? c.scope}</td>
@@ -62,10 +63,10 @@
               {#each c.choices as ch (ch.id)}
                 <span class="mr-1 inline-block">{ch.label}</span>
               {:else}
-                <span class="text-zinc-500">—</span>
+                <span class="text-fg-3">—</span>
               {/each}
             </td>
-            <td class="py-1.5 text-zinc-400">
+            <td class="py-1.5 text-fg-2">
               {c.settable ? 'settable' : 'not settable'}
               {#if c.settable_via}<span class="block">{c.settable_via}</span>{/if}
               {#if c.reason}<span class="block">{c.reason}</span>{/if}

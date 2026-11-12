@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * A slot's region gallery for /clusters, backed by the slot's browse
    * endpoint (genericization plan §3.4/§5a). All
@@ -35,14 +36,14 @@
        bucket or sub-cluster. -mx-4/-mt-4 cancels the scroll container's
        p-4 so it spans edge-to-edge and pins at the very top. -->
   <div
-    class="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-3 border-b border-zinc-800 bg-zinc-950 px-4 pt-4 pb-3"
+    class="sticky top-0 z-20 -mx-4 -mt-4 flex flex-col gap-3 border-b border-line bg-surface-0 px-4 pt-4 pb-3"
   >
     <!-- Filter strip: detector / verified / score / text-search. -->
     <div
-      class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs"
+      class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1/40 px-3 py-2 text-xs"
     >
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Detector</span>
+        <span class="text-fg-2">Detector</span>
         <!-- Options are the served vocabulary's filterable detectors
              (`GET {API_PREFIX}/regions/vocabulary`) — the exact
              values that can appear in stored region_detector for this
@@ -58,12 +59,12 @@
         <input
           type="checkbox"
           bind:checked={gallery.verifiedOnly}
-          class="accent-blue-500"
+          class="accent-accent"
         />
-        <span class="text-zinc-400">Verified only</span>
+        <span class="text-fg-2">Verified only</span>
       </label>
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Status</span>
+        <span class="text-fg-2">Status</span>
         <!-- dq-region (2026-09-24): backed by GET {API_PREFIX}/regions?status=
              (400 on an unknown value) — options are the served status
              vocabulary (GET {API_PREFIX}/regions/statuses), not a hardcoded
@@ -79,7 +80,7 @@
       </label>
       {#if regionStatusesStore.boxStates.length > 0}
         <label class="flex items-center gap-1.5">
-          <span class="text-zinc-400">Box state</span>
+          <span class="text-fg-2">Box state</span>
           <!-- Served `box_states` vocabulary; applies to the same box as
                every other filter here. -->
           <select
@@ -95,7 +96,7 @@
         </label>
       {/if}
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Min score</span>
+        <span class="text-fg-2">Min score</span>
         <input
           type="number"
           min="0"
@@ -108,7 +109,7 @@
       {#if gallery.slot.capabilities.queue?.textFilter}
         {@const textFilter = gallery.slot.capabilities.queue.textFilter}
         <label class="flex items-center gap-1.5">
-          <span class="text-zinc-400">{textFilter.label}</span>
+          <span class="text-fg-2">{textFilter.label}</span>
           <input
             type="text"
             bind:value={gallery.textQuery}
@@ -120,13 +121,13 @@
 
       <!-- Top-N largest-crop gate. The sort runs on the largest 1-3
          crops, so this is the key filter for the regions that matter. -->
-      <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+      <div class="inline-flex overflow-hidden rounded border border-line-strong">
         {#each [{ v: null, l: 'All' }, { v: 1, l: 'Largest' }, { v: 2, l: '+2nd' }, { v: 3, l: '+3rd' }] as o (o.l)}
           <button
             type="button"
             class="chip rounded-none border-0 {gallery.maxRank === o.v
-              ? 'bg-blue-600 text-white'
-              : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+              ? 'bg-accent-fill text-white'
+              : 'bg-surface-1 text-fg-2 hover:bg-surface-3'}"
             onclick={() => (gallery.maxRank = o.v as number | null)}
           >
             {o.l}
@@ -137,13 +138,13 @@
       {#if gallery.suspectedFpView}
         <button
           type="button"
-          class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+          class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
-        <span class="font-medium text-red-200">Suspected false positives</span>
-        <label class="flex items-center gap-1 text-[11px] text-zinc-400">
+        <span class="font-medium text-danger-text">Suspected false positives</span>
+        <label class="flex items-center gap-1 text-caption text-fg-2">
           ≤
           <input
             type="number"
@@ -151,13 +152,13 @@
             min="0"
             max="2"
             bind:value={gallery.suspectedFpThreshold}
-            class="w-16 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-zinc-200"
+            class="w-16 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-fg-1"
           />
         </label>
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
         >
           {gallery.clusterBusy ? 'Loading…' : 'Reload'}
@@ -165,17 +166,17 @@
       {:else if gallery.viewingAll}
         <button
           type="button"
-          class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+          class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
-        <span class="font-medium text-zinc-200">All {label.plural}</span>
+        <span class="font-medium text-fg-1">All {label.plural}</span>
       {:else if gallery.selectedCluster == null}
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-purple-500/50 bg-purple-500/20 text-purple-100 hover:bg-purple-500/30 disabled:opacity-50"
+          class="btn-sm border border-holdout/50 bg-holdout/20 text-holdout-text hover:bg-holdout/30 disabled:opacity-50"
           onclick={gallery.runClustering}
           title="Group {label.plural} by visual similarity so outliers/false-positives surface"
         >
@@ -184,7 +185,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-red-500/50 bg-red-500/20 text-red-100 hover:bg-red-500/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
           title="List {label.singular} crops that look like known false positives (needs FP centroids built)"
         >
@@ -193,7 +194,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-amber-500/50 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+          class="btn-sm border border-warn/50 bg-warn/20 text-warn-text hover:bg-warn/30 disabled:opacity-50"
           onclick={gallery.runBuildFpCentroids}
           title="Sub-type the false-positive boxes and (re)build their centroids"
         >
@@ -207,7 +208,7 @@
              clustering starts covering only part of the pool too. -->
         <button
           type="button"
-          class="btn-sm border border-blue-500/50 bg-blue-500/20 text-blue-100 hover:bg-blue-500/30"
+          class="btn-sm border border-accent/50 bg-accent/20 text-accent-text hover:bg-accent/30"
           onclick={gallery.openAll}
           title="Browse every {label.singular}, including ones not in any cluster bucket yet"
         >
@@ -216,12 +217,12 @@
       {:else}
         <button
           type="button"
-          class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+          class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
-        <span class="font-mono text-[11px] text-zinc-300" title={gallery.selectedCluster}
+        <span class="font-mono text-caption text-fg-2" title={gallery.selectedCluster}
           >cluster {gallery.selectedCluster.slice(0, 8)}</span
         >
       {/if}
@@ -229,7 +230,7 @@
       {#if gallery.pager.items.length > 0}
         <button
           type="button"
-          class="btn-sm border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+          class="btn-sm border border-line-strong bg-surface-2 text-fg-2 hover:bg-surface-3"
           onclick={gallery.selectAll}
           title="Select all loaded {label.plural} (shift-click a card for a range, ctrl/cmd-click to toggle)"
         >
@@ -240,7 +241,7 @@
            browse endpoint's filtered, holdout-excluded total, which differs
            from the sidebar/dashboard/review-queue counts. -->
       <span
-        class="font-mono text-[11px] text-zinc-500"
+        class="font-mono text-caption text-fg-3"
         title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
         data-testid="slot-gallery-count"
       >
@@ -257,7 +258,7 @@
         {/if}
         {#if gallery.rowsTruncated}
           <span
-            class="text-amber-300"
+            class="text-warn-text"
             title="An item on this page matched more boxes than the index lists per item; the total still counts them."
             data-testid="rows-truncated">· some boxes not listed</span
           >
@@ -269,20 +270,20 @@
        outliers without leaving the gallery (no /review round-trip). -->
     {#if gallery.sel.size > 0}
       <div
-        class="flex flex-wrap items-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs"
+        class="flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs"
       >
-        <span class="font-medium text-blue-200">{gallery.sel.size} selected</span>
+        <span class="font-medium text-accent-text">{gallery.sel.size} selected</span>
         {#if gallery.selectedCluster != null}
           <!-- Triage from a cluster is per-box (batch_box_state), never
                the item-level batch_status, which would flip every sibling
                box on a multi-box item. -->
-          <span class="text-[11px] text-zinc-500">(per-box)</span>
+          <span class="text-caption text-fg-3">(per-box)</span>
         {/if}
         <span class="grow"></span>
         <button
           type="button"
           disabled={gallery.busy}
-          class="btn-sm border border-red-500/50 bg-red-500/20 text-red-200 hover:bg-red-500/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState(
@@ -294,12 +295,12 @@
                   gallery.falsePositiveState(),
                 )}
         >
-          ✗ Mark false positive
+          <Icon name="x" size={14} class="mr-1 -mt-0.5 inline-block" />Mark false positive
         </button>
         <button
           type="button"
           disabled={gallery.busy}
-          class="btn-sm border border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700 disabled:opacity-50"
+          class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3 disabled:opacity-50"
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState([...gallery.sel.ids], gallery.rejectBoxState())
@@ -313,7 +314,7 @@
         <button
           type="button"
           disabled={gallery.busy}
-          class="btn-sm border border-green-500/50 bg-green-500/20 text-green-200 hover:bg-green-500/30 disabled:opacity-50"
+          class="btn-sm border border-success/50 bg-success/20 text-success-text hover:bg-success/30 disabled:opacity-50"
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState([...gallery.sel.ids], gallery.confirmBoxState())
@@ -322,11 +323,11 @@
                   gallery.confirmState(),
                 )}
         >
-          ✓ Verify
+          <Icon name="check" size={14} class="mr-1 -mt-0.5 inline-block" />Verify
         </button>
         <button
           type="button"
-          class="btn-sm border border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+          class="btn-sm border border-line-strong text-fg-2 hover:bg-surface-2"
           onclick={() => gallery.sel.clear()}
         >
           Clear
@@ -337,7 +338,7 @@
   <!-- /sticky header -->
 
   {#if gallery.pager.error}
-    <p class="text-sm text-red-300">API unavailable: {gallery.pager.error}</p>
+    <p class="text-sm text-danger-text">API unavailable: {gallery.pager.error}</p>
   {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
     <!-- Region cluster cards. Click one to open its regions (with the
          bulk toolbar). False positives are a box state, not a cluster:
@@ -347,25 +348,25 @@
         <li style="content-visibility:auto;contain-intrinsic-size:auto 200px">
           <button
             type="button"
-            class="flex w-full flex-col rounded-md border-2 border-zinc-700 bg-zinc-900 text-left transition hover:border-zinc-300"
+            class="flex w-full flex-col rounded-md border-2 border-line-strong bg-surface-1 text-left transition hover:border-fg-3"
             onclick={() => gallery.openCluster(c.uid)}
           >
-            <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
+            <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-surface-0">
               {#each c.representative_thumb_urls?.slice(0, 4) ?? [] as url, i (i)}
                 <img
                   src={resolveApiUrl(url)}
                   alt={label.singular}
                   loading="lazy"
-                  class="aspect-[2/1] w-full bg-zinc-950 object-contain"
+                  class="aspect-[2/1] w-full bg-surface-0 object-contain"
                 />
               {/each}
             </div>
             <div class="flex items-center justify-between gap-1 p-2 text-xs">
-              <span class="font-mono font-semibold text-zinc-200" title={c.uid}
+              <span class="font-mono font-semibold text-fg-1" title={c.uid}
                 >{displayNoText(c) || c.uid.slice(0, 8)}</span
               >
               <span
-                class="text-zinc-400"
+                class="text-fg-2"
                 title={c.box_count != null && c.box_count !== c.size
                   ? `${c.size} items, ${c.box_count} boxes (W8 multi-box)`
                   : undefined}
@@ -379,9 +380,9 @@
       {/each}
     </ul>
   {:else if gallery.pager.loading && gallery.pager.items.length === 0}
-    <p class="text-sm text-zinc-500">Loading {label.plural}...</p>
+    <p class="text-sm text-fg-3">Loading {label.plural}...</p>
   {:else if gallery.pager.items.length === 0}
-    <p class="text-sm text-zinc-500">
+    <p class="text-sm text-fg-3">
       No {label.plural} match the current filters. The re-detection drain may still be populating
       provenance — fresh rows appear here as the worker processes them.
     </p>
@@ -416,7 +417,7 @@
       aria-hidden="true"
     ></div>
     {#if gallery.pager.loadingMore}
-      <p class="py-2 text-center text-xs text-zinc-500">Loading more…</p>
+      <p class="py-2 text-center text-xs text-fg-3">Loading more…</p>
     {/if}
   {/if}
 </div>

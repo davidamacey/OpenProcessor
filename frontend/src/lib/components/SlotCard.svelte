@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Compact card for one slot detection, read through the `readSlot`
    * adapter against the given `slot` (genericization plan
@@ -132,14 +133,14 @@
   <button
     type="button"
     style="content-visibility:auto;contain-intrinsic-size:auto 130px"
-    class="relative flex w-full flex-col items-stretch overflow-hidden rounded-md border bg-zinc-950 text-left transition-colors {selected
-      ? 'border-blue-500 ring-2 ring-blue-500/40'
-      : 'border-zinc-800 hover:border-blue-500/50'} {isFalsePositive ? 'opacity-50' : ''}"
+    class="relative flex w-full flex-col items-stretch overflow-hidden rounded-md border bg-surface-0 text-left transition-colors {selected
+      ? 'border-accent ring-2 ring-accent/40'
+      : 'border-line hover:border-accent/50'} {isFalsePositive ? 'opacity-50' : ''}"
     onclick={handleClick}
     onkeydown={handleKey}
-    title={`${crop.crop_id} — click to select, ✎ to edit`}
+    title={`${crop.crop_id} — click to select, the pencil to edit`}
   >
-    <div class="relative w-full bg-zinc-900" style="aspect-ratio: {thumbAspect}">
+    <div class="relative w-full bg-surface-1" style="aspect-ratio: {thumbAspect}">
       <img
         src={thumbUrl}
         alt={slot.label.singular}
@@ -149,25 +150,21 @@
       />
       {#if box?.locked}
         <span
-          class="absolute top-1 left-7 flex items-center rounded-sm bg-black/60 px-1 py-0.5 text-zinc-200"
+          class="absolute top-1 left-7 flex items-center rounded-sm bg-black/60 px-1 py-0.5 text-fg-1"
           title={reprocessVocabularyStore.lockText()}
           data-testid="box-locked"
         >
-          <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">
-            <path
-              d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
-            />
-          </svg>
+          <Icon name="lock" size={12} />
         </span>
       {/if}
       <!-- Selection checkbox (top-left). -->
       <span
-        class="absolute top-1 left-1 flex h-4 w-4 items-center justify-center rounded-sm border text-[10px] {selected
-          ? 'border-blue-400 bg-blue-500 text-white'
-          : 'border-zinc-500 bg-black/50 text-transparent group-hover:text-zinc-400'}"
+        class="absolute top-1 left-1 flex h-4 w-4 items-center justify-center rounded-sm border text-caption {selected
+          ? 'border-accent bg-accent text-white'
+          : 'border-fg-3 bg-black/50 text-transparent group-hover:text-fg-2'}"
         aria-hidden="true"
       >
-        ✓
+        <Icon name="check" size={14} />
       </span>
       <!-- Edit + quick false-positive (hover). Span (not button) to stay
          valid inside the outer button; stopPropagation so they don't
@@ -176,7 +173,7 @@
         <span
           role="button"
           tabindex="0"
-          class="absolute right-1 bottom-1 cursor-pointer rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition group-hover:opacity-100"
+          class="absolute right-1 bottom-1 cursor-pointer rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white opacity-0 transition group-hover:opacity-100"
           onclick={(e) => {
             e.stopPropagation();
             onedit?.(crop);
@@ -189,14 +186,14 @@
           }}
           title="Edit {slot.label.singular} bbox / status"
         >
-          ✎
+          <Icon name="pencil" size={14} />
         </span>
       {/if}
       {#if onmarkfp && !isFalsePositive}
         <span
           role="button"
           tabindex="0"
-          class="absolute top-1 right-1 cursor-pointer rounded-sm border border-red-500/60 bg-red-500/80 px-1 py-0.5 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100"
+          class="absolute top-1 right-1 cursor-pointer rounded-sm border border-danger/60 bg-danger/80 px-1 py-0.5 text-caption font-semibold text-white opacity-0 transition group-hover:opacity-100"
           onclick={(e) => {
             e.stopPropagation();
             onmarkfp?.(crop);
@@ -209,12 +206,12 @@
           }}
           title="Mark false positive"
         >
-          ✗ FP
+          <Icon name="x" size={12} class="mr-1 -mt-0.5 inline-block" />FP
         </span>
       {/if}
       {#if isFalsePositive}
         <span
-          class="absolute top-1 right-1 rounded border border-red-500/60 bg-red-600/85 px-1 py-0.5 text-[9px] font-semibold text-white"
+          class="absolute top-1 right-1 rounded border border-danger/60 bg-danger-fill/85 px-1 py-0.5 text-caption font-semibold text-white"
         >
           false pos
         </span>
@@ -228,12 +225,12 @@
            automatic (geometry gate) keeps the original amber. Tooltip is
            the served label, not the raw id. -->
         <span
-          class={`absolute top-1 right-1 rounded border px-1 py-0.5 text-[9px] font-semibold text-white ${
+          class={`absolute top-1 right-1 rounded border px-1 py-0.5 text-caption font-semibold text-white ${
             rejectionKind === 'model_verdict'
-              ? 'border-red-500/60 bg-red-600/85'
+              ? 'border-danger/60 bg-danger-fill/85'
               : rejectionKind === 'needs_human'
-                ? 'border-zinc-500/60 bg-zinc-600/85'
-                : 'border-amber-500/60 bg-amber-600/85'
+                ? 'border-fg-3/60 bg-fg-3/85'
+                : 'border-warn/60 bg-warn/85'
           }`}
           title={box?.rejectionReason
             ? regionVocabularyStore.rejectionReasonLabel(box.rejectionReason)
@@ -245,7 +242,7 @@
         <!-- Multi-box: box count (+ this row's own box state, when the
            browse route selected a specific box via region_box_id). -->
         <span
-          class="absolute top-1 right-1 rounded border border-zinc-600/60 bg-zinc-800/85 px-1 py-0.5 text-[9px] font-semibold text-zinc-200"
+          class="absolute top-1 right-1 rounded border border-line-strong/60 bg-surface-2/85 px-1 py-0.5 text-caption font-semibold text-fg-1"
           title={rowBox ? `box state: ${rowBox.state}` : `${boxCount} box(es)`}
         >
           {boxCount}&nbsp;box{boxCount === 1 ? '' : 'es'}{#if rowBox}
@@ -253,7 +250,7 @@
         </span>
       {/if}
     </div>
-    <div class="flex min-w-0 flex-col gap-1 p-2 text-[11px]">
+    <div class="flex min-w-0 flex-col gap-1 p-2 text-caption">
       <!-- C3 (visual audit 2026-09-24): the text value keeps its own
          width; the disagree badge wraps under it instead of squeezing the
          value to "6…" on a narrow card. C6: plain text, no emoji glyph. -->
@@ -263,16 +260,16 @@
            "—" placeholder — showing one implied the profile reads text
            when it structurally doesn't. -->
         {#if slot.capabilities.text}
-          <span class="min-w-0 truncate text-zinc-300" data-testid="slot-text-value"
+          <span class="min-w-0 truncate text-fg-2" data-testid="slot-text-value"
             >{box?.text ?? '—'}</span
           >
         {/if}
-        <span class="shrink-0 text-zinc-500">
+        <span class="shrink-0 text-fg-3">
           {box?.score != null ? `${(box.score * 100).toFixed(0)}%` : '—'}
         </span>
         {#if box?.textDisagreement}
           <span
-            class="shrink-0 rounded border border-orange-500/40 bg-orange-500/15 px-1 text-[9px] font-sans text-orange-200"
+            class="shrink-0 rounded border border-warn/40 bg-warn/15 px-1 text-caption font-sans text-warn-text"
             title="vlm: {box.textVlm ?? '∅'} · ocr: {box.textOcr ?? '∅'}"
           >
             readers disagree
@@ -293,14 +290,14 @@
            longer distinguishes the two. -->
         {#if data.lifecycle?.validated}
           <span
-            class="rounded border border-emerald-500/40 bg-emerald-500/15 px-1 text-[9px] text-emerald-200"
+            class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
             title="A human confirmed/drew/rejected this region"
           >
             human
           </span>
         {:else if data.lifecycle?.autoConfirmed}
           <span
-            class="rounded border border-blue-500/40 bg-blue-500/15 px-1 text-[9px] text-blue-200"
+            class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent-text"
             title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
           >
             auto
@@ -308,7 +305,7 @@
         {/if}
         {#if crop.class_name}
           <span
-            class="max-w-full truncate rounded border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-300"
+            class="max-w-full truncate rounded border border-line-strong bg-surface-2/60 px-1.5 py-0.5 text-caption text-fg-2"
             title={crop.class_name}
           >
             {crop.class_name}
@@ -332,7 +329,7 @@
       <ReprocessControl
         target={{ kind: 'image', imageId: crop.image_id }}
         buttonLabel="Reprocess image…"
-        buttonClass="btn btn-sm text-[10px]"
+        buttonClass="btn btn-sm text-caption"
         onadopt={(items) => onreprocessed?.(items)}
       />
     </div>

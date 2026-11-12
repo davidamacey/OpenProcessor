@@ -72,17 +72,17 @@
 </script>
 
 <section
-  class="flex flex-col gap-3 rounded border border-zinc-800 bg-zinc-900/40 p-3 text-sm"
+  class="flex flex-col gap-3 rounded border border-line bg-surface-1/40 p-3 text-sm"
   data-testid="profile-impact"
   aria-label="Activation impact"
 >
-  <p class="text-xs text-zinc-400">
+  <p class="text-xs text-fg-2">
     Items already processed keep their results. Only items still waiting are detected with
     the active profile.
   </p>
   <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-xs sm:max-w-md">
     {#each IMPACT_ROWS as r (r.key)}
-      <dt class="text-zinc-400">{r.label}</dt>
+      <dt class="text-fg-2">{r.label}</dt>
       <dd class="text-right font-mono" data-testid="impact-{r.key}">
         {impact[r.key].toLocaleString()}
       </dd>
@@ -90,7 +90,7 @@
   </dl>
   {#if impact.by_profile.length > 0}
     <table class="text-xs sm:max-w-md" data-testid="impact-by-profile">
-      <thead class="text-left text-zinc-500">
+      <thead class="text-left text-fg-3">
         <tr>
           <th class="py-0.5 pr-3 font-normal">Produced by</th>
           <th class="py-0.5 text-right font-normal">Items</th>
@@ -98,7 +98,7 @@
       </thead>
       <tbody>
         {#each impact.by_profile as p, i (i)}
-          <tr class="border-t border-zinc-800">
+          <tr class="border-t border-line">
             <td class="py-0.5 pr-3 font-mono">{refText(p.name, p.revision)}</td>
             <td class="py-0.5 text-right font-mono">{p.count.toLocaleString()}</td>
           </tr>
@@ -108,7 +108,7 @@
   {/if}
 
   {#if impact.suggested_reprocess && available}
-    <div class="flex flex-col gap-2 border-t border-zinc-800 pt-2">
+    <div class="flex flex-col gap-2 border-t border-line pt-2">
       {#if !flow}
         <button
           type="button"
@@ -119,7 +119,7 @@
       {:else}
         {@const f = flow}
         {#if f.busy && !f.dryRun && !f.result}
-          <p class="text-xs text-zinc-500">Checking what would re-run…</p>
+          <p class="text-xs text-fg-3">Checking what would re-run…</p>
         {/if}
         {#if f.dryRun && !f.result}
           <div class="space-y-1" data-testid="rerun-dry-run">
@@ -147,16 +147,18 @@
           <div class="space-y-1" data-testid="rerun-result">
             <ReprocessCounts res={f.result} {scopeLabel} />
             {#if f.job}
-              <p class="text-xs text-zinc-300" data-testid="rerun-job">
+              <p class="text-xs text-fg-2" data-testid="rerun-job">
                 Job <code class="font-mono">{f.job.job_id}</code>:
                 {datasetsAvailability.statusLabel(f.job.status)}
-                {#if f.job.error}<span class="text-red-300"> — {f.job.error}</span>{/if}
+                {#if f.job.error}<span class="text-danger-text">
+                    — {f.job.error}</span
+                  >{/if}
               </p>
             {/if}
           </div>
         {/if}
         {#if f.error && !confirming}
-          <p class="text-xs text-red-300" data-testid="rerun-error">{f.error}</p>
+          <p class="text-xs text-danger-text" data-testid="rerun-error">{f.error}</p>
         {/if}
       {/if}
     </div>
@@ -173,6 +175,6 @@
   >
     <p>Sends the server's suggested re-run with the counts below.</p>
     <ReprocessCounts res={flow.dryRun} {scopeLabel} />
-    {#if flow.error}<p class="text-red-300">{flow.error}</p>{/if}
+    {#if flow.error}<p class="text-danger-text">{flow.error}</p>{/if}
   </ConfirmDialog>
 {/if}

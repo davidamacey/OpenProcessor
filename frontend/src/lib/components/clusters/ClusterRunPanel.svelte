@@ -34,15 +34,15 @@
 </script>
 
 <section
-  class="rounded-md border border-zinc-800 bg-zinc-950 p-4"
+  class="rounded-md border border-line bg-surface-0 p-4"
   data-testid="cluster-run-panel"
 >
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="min-w-0">
       <h2 class="text-base font-semibold">Clusters</h2>
-      <p class="mt-0.5 text-xs text-zinc-400" data-testid="cluster-run-serving">
+      <p class="mt-0.5 text-xs text-fg-2" data-testid="cluster-run-serving">
         {#if ctl.loadError}
-          <span class="text-red-300" role="alert">{ctl.loadError}</span>
+          <span class="text-danger-text" role="alert">{ctl.loadError}</span>
         {:else if ctl.serving}
           Serving {formatCount(ctl.serving.n_clusters)} clusters over
           {formatCount(ctl.serving.n_items)} items ({ctl.serving.method}, fitted
@@ -68,10 +68,10 @@
 
   {#if ctl.pending}
     <div
-      class="mt-3 flex flex-wrap items-center gap-3 rounded border border-amber-500/40 bg-amber-500/10 p-2 text-xs"
+      class="mt-3 flex flex-wrap items-center gap-3 rounded border border-warn/40 bg-warn/10 p-2 text-xs"
       data-testid="cluster-run-pending"
     >
-      <span class="text-amber-100">
+      <span class="text-warn-text">
         A new partition is ready ({formatCount(ctl.pending.n_clusters)} clusters,
         {formatCount(ctl.pending.n_items)} items) but is not serving.
       </span>
@@ -87,12 +87,12 @@
     </div>
   {/if}
   {#if ctl.message}
-    <p class="mt-2 text-xs text-zinc-300" role="status" data-testid="cluster-run-message">
+    <p class="mt-2 text-xs text-fg-2" role="status" data-testid="cluster-run-message">
       {ctl.message}
     </p>
   {/if}
   {#if ctl.actionError}
-    <p class="mt-2 text-xs text-red-300" role="alert" data-testid="cluster-run-error">
+    <p class="mt-2 text-xs text-danger-text" role="alert" data-testid="cluster-run-error">
       {ctl.actionError}
     </p>
   {/if}

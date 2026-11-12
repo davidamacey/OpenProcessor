@@ -25,7 +25,7 @@
     oncommit,
     max = 2,
     label = 'clarity ≥',
-    labelClass = 'text-zinc-400',
+    labelClass = 'text-fg-2',
     title,
     width = 'w-32',
     stops = false,
@@ -42,7 +42,7 @@
     list={stops ? 'blur-stops' : undefined}
     bind:value
     onchange={oncommit}
-    class="h-1 {width} cursor-pointer accent-blue-500"
+    class="h-1 {width} cursor-pointer accent-accent"
   />
   {#if stops}
     <datalist id="blur-stops">
@@ -51,7 +51,7 @@
       <option value="1.4"></option>
     </datalist>
   {/if}
-  <span class="w-10 tabular-nums text-zinc-400">
+  <span class="w-10 tabular-nums text-fg-2">
     {value > 0 ? value.toFixed(2) : 'off'}
   </span>
 </label>

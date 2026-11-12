@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Design system: tokens in `app.css` `@theme` (surfaces 0-3 and the nav surface, lines, text, elevation e1-e3, accent and semantic colours, box tones, radii, a 11-28 px type scale, focus ring), and a UI kit in `$components/ui/` (PageShell, PageHeader, Card, Section, Tabs, SidebarNav, Segmented, Button, Chip, Badge, Kbd, EmptyState, ErrorState with the request id and Retry, Skeleton, Drawer, Popover, Menu, Icon).
+- Icons are Lucide SVGs (`@lucide/svelte`); no emoji or Unicode glyph is used as an icon. A scan test fails on emoji, glyph icons, `text-[Npx]` and raw palette colour classes.
+- The top bar is 48 px on the nav surface with a shadow and blur, grouped Dashboard | Data | Model | Quality | Settings, with a drawer below 768 px; the breadcrumb names the group and page instead of repeating the nav; a 404 inside a project keeps the bar.
+- `ApiError.requestId`, read from the `X-Request-ID` response header.
 - Embedding is a Workspace view: the embedding scatter follows the filter (the rest is dimmed), is coloured by the served class legend with its counts, a lasso selects items for the bulk bar, a click opens an item in the details panel, and a box drawn on it (Shift+drag or Draw a box) becomes an "Area: embedding box" chip that filters every view.
 - One "AI" menu in the Workspace view bar: the Auto-label run with its settings (no VLM needed), and, while the project has an active VLM, Assist on the selection (or the scope) and the auto-label loop with its status on the button. Without a VLM the last two are disabled with a link to Models settings.
 - Preset editor field help: beside the JSON body, a Fields list from the server's schema (type, required, default, choices, limits, description, at every depth). The activation targets are the ones the server serves for the kind, and a cluster profile refused on the other target's axis shows the server's `axis_target_mismatch` message.
@@ -36,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Ingest policy form: the class resolution defaults to `by_name` and its help says it adds the registry class when it is missing (the detector's class is now a machine label by default).
+- The editor toolbar is three segmented groups of 36 px icon buttons. Dim text is `fg-3` at 4.5:1 or better on every surface; text on tinted backgrounds uses the `-text` colour variants.
+- Borders now take the colour their class names: the default hairline moved into a CSS layer so it no longer overrides every border-colour utility.
 - Z undoes a single label write (Review, the Workspace cluster and detections views) through its served label operation, so the same undo is in the Label history after a reload; the client keeps no separate stack for label writes. The editor's class change undoes the same way; its own command stack keeps only geometry. Label history says how many bulk operations and single labels are kept.
 - The image editor shows a minimap (a 160 px thumbnail with the boxes and the part in view) for a photo larger than four viewports; a click on it pans there.
 - A near-duplicate representative's details open its group in the Workspace, where "Label whole duplicate group…" labels every member through the server's dry run (`{filter: {near_dup_group}}`).

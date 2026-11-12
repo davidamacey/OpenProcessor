@@ -18,16 +18,16 @@
 {#if m.mergeOpen}
   <Modal label="Merge classes" onclose={m.closeMerge}>
     <h3 class="mb-3 text-base font-semibold">Merge classes</h3>
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       Source class is marked deprecated; all crops + label rows are relabeled to the
       target.
     </p>
 
     <label class="mb-3 block text-sm">
-      <span class="mb-1 block text-zinc-400">Source (will be merged away)</span>
+      <span class="mb-1 block text-fg-2">Source (will be merged away)</span>
       <select
         bind:value={m.mergeSourceId}
-        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
       >
         <option value={null}>— pick source —</option>
         {#each allClasses.filter((c) => !c.deprecated) as c (c.id)}
@@ -37,10 +37,10 @@
     </label>
 
     <label class="mb-3 block text-sm">
-      <span class="mb-1 block text-zinc-400">Target (kept)</span>
+      <span class="mb-1 block text-fg-2">Target (kept)</span>
       <select
         bind:value={m.mergeTargetId}
-        class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
       >
         <option value={null}>— pick target —</option>
         {#each allClasses.filter((c) => !c.deprecated && c.id !== m.mergeSourceId) as c (c.id)}
@@ -51,18 +51,18 @@
 
     {#if m.mergeSource && m.mergeTarget}
       {#if m.mergePreviewBusy}
-        <div class="mb-3 text-xs text-zinc-500">Checking impact…</div>
+        <div class="mb-3 text-xs text-fg-3">Checking impact…</div>
       {:else if m.mergePreviewError}
         <div
-          class="mb-3 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          class="mb-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
         >
           Preview failed: {m.mergePreviewError}
         </div>
       {:else if m.mergePreview}
         <div
           class="mb-3 rounded border px-3 py-2 text-xs {m.mergePreview.blocked
-            ? 'border-red-500/40 bg-red-500/10 text-red-200'
-            : 'border-orange-500/40 bg-orange-500/10 text-orange-200'}"
+            ? 'border-danger/40 bg-danger/10 text-danger-text'
+            : 'border-warn/40 bg-warn/10 text-warn-text'}"
         >
           Will relabel <strong>{m.mergePreview.would_relabel}</strong> crops from
           <strong>{m.mergeSource.name}</strong> to <strong>{m.mergeTarget.name}</strong>

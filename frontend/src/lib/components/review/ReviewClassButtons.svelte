@@ -19,9 +19,9 @@
   {#each topClasses as cls (cls.id)}
     <button
       type="button"
-      class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-200
-         hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
-         focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+      class="rounded border border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-1
+         hover:border-accent/60 hover:bg-accent/10 hover:text-white
+         focus:outline-none focus:ring-2 focus:ring-accent/40"
       title={cls.hotkey_letter
         ? `Assign ${cls.name} (press ${cls.hotkey_letter})`
         : `Assign ${cls.name}`}
@@ -29,7 +29,7 @@
     >
       {#if cls.hotkey_letter}
         <kbd
-          class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase text-blue-300"
+          class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
         >
           {cls.hotkey_letter}
         </kbd>
@@ -42,21 +42,21 @@
      classes (same action as pressing /). -->
   <button
     type="button"
-    class="rounded border border-dashed border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400
-       hover:border-blue-500/60 hover:bg-blue-500/10 hover:text-white
-       focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+    class="rounded border border-dashed border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-2
+       hover:border-accent/60 hover:bg-accent/10 hover:text-white
+       focus:outline-none focus:ring-2 focus:ring-accent/40"
     title="Search all classes ({kg('review.queue.class_picker')})"
     onclick={openPicker}
   >
     <kbd
-      class="mr-1.5 rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] text-blue-300"
+      class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
     >
       {kg('review.queue.class_picker')}
     </kbd>
     search all classes…
   </button>
 </div>
-<p class="mt-1.5 text-[10px] text-zinc-500">
+<p class="mt-1.5 text-caption text-fg-3">
   Click a class, press its bound letter, or press {kg('review.queue.class_picker')} to search
   all classes (set hotkeys on /classes).
 </p>

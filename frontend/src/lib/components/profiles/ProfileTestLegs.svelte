@@ -22,30 +22,30 @@
 <div class="flex flex-col gap-3" data-testid="profile-test-legs">
   {#each legs as leg (leg.leg)}
     <section
-      class="rounded border border-zinc-800 p-2"
+      class="rounded border border-line p-2"
       data-testid="test-leg"
       data-leg={leg.leg}
     >
       <p class="flex flex-wrap items-baseline gap-2 text-xs">
-        <span class="font-semibold text-zinc-200">{humanizeId(leg.leg)}</span>
+        <span class="font-semibold text-fg-1">{humanizeId(leg.leg)}</span>
         <span
           class="rounded border px-1.5 {leg.status === 'error'
-            ? 'border-red-500/40 text-red-300'
+            ? 'border-danger/40 text-danger-text'
             : leg.status === 'ok'
-              ? 'border-emerald-500/40 text-emerald-300'
-              : 'border-zinc-600 text-zinc-400'}"
+              ? 'border-success/40 text-success-text'
+              : 'border-line-strong text-fg-2'}"
           data-testid="test-leg-status">{humanizeId(leg.status)}</span
         >
         {#if leg.elapsed_ms != null}
-          <span class="font-mono text-zinc-500">{leg.elapsed_ms} ms</span>
+          <span class="font-mono text-fg-3">{leg.elapsed_ms} ms</span>
         {/if}
         {#if leg.reason}
-          <span class="text-zinc-300" data-testid="test-leg-reason">{leg.reason}</span>
+          <span class="text-fg-2" data-testid="test-leg-reason">{leg.reason}</span>
         {/if}
       </p>
       {#if (leg.candidates ?? []).length > 0}
         <table class="mt-1 w-full text-left text-xs">
-          <thead class="text-zinc-500">
+          <thead class="text-fg-3">
             <tr>
               <th class="py-0.5 pr-3">Candidate</th>
               <th class="py-0.5 pr-3 text-right">Score</th>
@@ -58,7 +58,7 @@
           <tbody>
             {#each leg.candidates ?? [] as c (c.candidate_index)}
               <tr
-                class="border-t border-zinc-800 {c.selected ? '' : 'opacity-50'}"
+                class="border-t border-line {c.selected ? '' : 'opacity-50'}"
                 data-testid="test-candidate"
                 data-leg={leg.leg}
                 data-index={c.candidate_index}
@@ -76,7 +76,7 @@
                   >{c.drop_reason ? humanizeId(c.drop_reason) : ''}</td
                 >
                 <td class="py-0.5 pr-3 text-right font-mono">{num(c.mask_iou)}</td>
-                <td class="py-0.5 font-mono text-zinc-400">{c.detector ?? '—'}</td>
+                <td class="py-0.5 font-mono text-fg-2">{c.detector ?? '—'}</td>
               </tr>
             {/each}
           </tbody>

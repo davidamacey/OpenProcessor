@@ -33,16 +33,16 @@
     >
       <div class="flex min-w-0 grow flex-col gap-0.5">
         <span class="truncate font-medium" data-testid="label-op-title">{title(op)}</span>
-        <span class="text-xs text-zinc-400" title={op.at}>
+        <span class="text-xs text-fg-2" title={op.at}>
           {when(op)}
         </span>
       </div>
-      <span class="text-xs text-zinc-300" data-testid="label-op-count">
+      <span class="text-xs text-fg-2" data-testid="label-op-count">
         <span class="font-mono">{formatCount(op.count)}</span> items,
         <span class="font-mono">{formatCount(op.current)}</span> still labeled
       </span>
       <span
-        class="rounded border border-zinc-700 px-1.5 py-0.5 text-xs text-zinc-300"
+        class="rounded border border-line-strong px-1.5 py-0.5 text-xs text-fg-2"
         data-testid="label-op-status">{humanizeId(op.status)}</span
       >
       <button

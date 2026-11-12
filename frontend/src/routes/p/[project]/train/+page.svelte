@@ -118,7 +118,7 @@
   <header class="flex flex-wrap items-end justify-between gap-3">
     <div>
       <h1 class="text-xl font-semibold tracking-tight">Train model</h1>
-      <p class="mt-1 text-sm text-zinc-400">
+      <p class="mt-1 text-sm text-fg-2">
         YOLO26 detector training over the frozen export. Submits a job to the
         curation-trainer container and tails progress until it finishes.
       </p>
@@ -176,7 +176,7 @@
        the page defaults when it finishes. -->
   {#if runs.isActive}
     <p
-      class="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-xs text-blue-200"
+      class="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent-text"
     >
       A run is in progress. Submit a new run after it finishes — the trainer handles one
       job at a time.
@@ -184,7 +184,7 @@
   {/if}
   {#if !dataset.datasetExportDir}
     <p
-      class="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200"
+      class="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
     >
       Form disabled until a frozen export is available.
     </p>

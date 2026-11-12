@@ -18,13 +18,13 @@
 </script>
 
 <section class="space-y-3" data-testid="combine-step-options">
-  <h2 class="text-sm font-semibold text-zinc-200">3. Options</h2>
-  <p class="text-xs text-zinc-500">Anything you leave alone uses the server's default.</p>
+  <h2 class="text-sm font-semibold text-fg-1">3. Options</h2>
+  <p class="text-xs text-fg-3">Anything you leave alone uses the server's default.</p>
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="block text-sm">
-      <span class="mb-1 block text-xs text-zinc-400">Duplicate images</span>
+      <span class="mb-1 block text-xs text-fg-2">Duplicate images</span>
       <select
-        class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
         data-testid="combine-opt-dedup"
         value={wizard.options.dedup ?? ''}
         onchange={(e) => {
@@ -37,14 +37,14 @@
       </select>
     </label>
     <label class="block text-sm">
-      <span class="mb-1 block text-xs text-zinc-400">Duplicate box overlap (IoU)</span>
+      <span class="mb-1 block text-xs text-fg-2">Duplicate box overlap (IoU)</span>
       <input
         type="number"
         min="0"
         max="1"
         step="0.01"
         placeholder="Server default"
-        class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
         data-testid="combine-opt-iou"
         value={wizard.options.dedup_iou ?? ''}
         oninput={(e) => {
@@ -54,9 +54,9 @@
       />
     </label>
     <label class="block text-sm">
-      <span class="mb-1 block text-xs text-zinc-400">Test split</span>
+      <span class="mb-1 block text-xs text-fg-2">Test split</span>
       <select
-        class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
         data-testid="combine-opt-holdout"
         value={wizard.options.holdout ?? ''}
         onchange={(e) => {
@@ -69,9 +69,9 @@
       </select>
     </label>
     <label class="block text-sm">
-      <span class="mb-1 block text-xs text-zinc-400">Copy settings from</span>
+      <span class="mb-1 block text-xs text-fg-2">Copy settings from</span>
       <select
-        class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
         data-testid="combine-opt-settings-from"
         value={wizard.options.settings_from ?? ''}
         onchange={(e) => {

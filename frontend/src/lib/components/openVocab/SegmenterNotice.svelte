@@ -27,8 +27,8 @@
 {#if state}
   <p
     class="rounded border px-3 py-2 text-xs {state === 'ready'
-      ? 'border-zinc-700 bg-zinc-900/60 text-zinc-300'
-      : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}"
+      ? 'border-line-strong bg-surface-1/60 text-fg-2'
+      : 'border-warn/40 bg-warn/10 text-warn-text'}"
     data-testid="segmenter-notice"
     data-state={state}
   >

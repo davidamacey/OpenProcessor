@@ -73,9 +73,9 @@ describe('BoxLayer', () => {
       selectedCropId: null,
     });
     const cls = (id: string) => el.querySelector(`[data-crop-id="${id}"]`)!.className;
-    expect(cls('a')).toContain('border-emerald-400');
-    expect(cls('b')).toContain('border-amber-400');
-    expect(cls('c')).toContain('border-red-400');
+    expect(cls('a')).toContain('border-success');
+    expect(cls('b')).toContain('border-warn');
+    expect(cls('c')).toContain('border-danger');
   });
 
   it('rings the selected item and fires onselect only for the others', () => {

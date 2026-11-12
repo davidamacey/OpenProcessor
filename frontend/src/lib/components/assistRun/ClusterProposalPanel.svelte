@@ -21,24 +21,24 @@
 
 {#if proposal}
   <details
-    class="rounded-md border border-sky-500/30 bg-sky-500/5"
+    class="rounded-md border border-info/30 bg-info/5"
     data-testid="cluster-assist-proposal"
     ontoggle={(e) => (open = e.currentTarget.open)}
   >
     <summary
       class="flex cursor-pointer flex-wrap items-baseline gap-x-2 px-3 py-2 text-sm"
     >
-      <span class="font-medium text-zinc-100"
+      <span class="font-medium text-fg-1"
         >VLM proposal for {scopeLabel(run.request.target)}:</span
       >
-      <span class="text-zinc-50" data-testid="proposal-summary-class"
+      <span class="text-fg-1" data-testid="proposal-summary-class"
         >{proposal.class_name ?? 'no class reached the gate'}</span
       >
-      <span class="text-xs text-zinc-400"
+      <span class="text-xs text-fg-2"
         >{Math.round(proposal.agreement * 100)}% of {proposal.answered} answers</span
       >
       {#if run.scope_now?.changed}
-        <span class="text-xs text-amber-300">scope changed since</span>
+        <span class="text-xs text-warn-text">scope changed since</span>
       {/if}
     </summary>
     {#if open}

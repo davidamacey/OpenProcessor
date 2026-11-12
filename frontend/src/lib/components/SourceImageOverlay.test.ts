@@ -88,7 +88,7 @@ describe('SourceImageOverlay', () => {
     expect(boxes[0]!.style.top).toBe('35%');
     expect(boxes[0]!.style.width).toBe('20%');
     expect(boxes[0]!.style.height).toBe('10%');
-    expect(boxes[0]!.className).toContain('border-amber-400');
+    expect(boxes[0]!.className).toContain('border-warn');
     expect(boxes[0]!.getAttribute('title')).toBe('served_name');
     expect(el.textContent).not.toContain('from_items');
   });
@@ -126,7 +126,7 @@ describe('SourceImageOverlay', () => {
     const el = await render({ imageId: 'img-1', selectedCropId: 'region-a' });
 
     const box = el.querySelector<HTMLElement>('[data-kind="region"]')!;
-    expect(box.className).toContain('border-red-400');
+    expect(box.className).toContain('border-danger');
     expect(box.className).toContain('border-dashed');
     expect(box.getAttribute('title')).toBe('Tag 1');
     regionStatusesStore.boxStates = [];

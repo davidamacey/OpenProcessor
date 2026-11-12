@@ -1,11 +1,11 @@
 import type { BoxTone } from '$lib/types';
 
 const TONE_CLASS: Record<BoxTone, string> = {
-  validated: 'border-emerald-400',
-  machine: 'border-amber-400',
-  unlabeled: 'border-zinc-500',
-  holdout: 'border-violet-400',
-  rejected: 'border-red-400',
+  validated: 'border-success',
+  machine: 'border-warn',
+  unlabeled: 'border-fg-3',
+  holdout: 'border-holdout',
+  rejected: 'border-danger',
 };
 
 /** The border colour of a served box tone: the one tone-to-class map. */

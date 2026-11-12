@@ -20,28 +20,26 @@
   });
 </script>
 
-<div class="mt-4 border-t border-zinc-800 pt-3" data-testid="region-stage-panel">
-  <h3 class="mb-2 text-sm font-semibold text-zinc-200">Region stage</h3>
+<div class="mt-4 border-t border-line pt-3" data-testid="region-stage-panel">
+  <h3 class="mb-2 text-sm font-semibold text-fg-1">Region stage</h3>
   {#if stage.loadError && !stage.state}
-    <p class="text-xs text-red-300" data-testid="region-stage-error">
+    <p class="text-xs text-danger-text" data-testid="region-stage-error">
       Region stage unavailable: {stage.loadError}
     </p>
   {:else if !stage.state}
-    <p class="text-xs text-zinc-500">Loading…</p>
+    <p class="text-xs text-fg-3">Loading…</p>
   {:else}
     {@const s = stage.state}
     <div class="flex flex-wrap items-center gap-2 text-xs">
       <span
         class="rounded border px-1.5 py-0.5 {s.paused
-          ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-          : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'}"
+          ? 'border-warn/40 bg-warn/10 text-warn-text'
+          : 'border-success/40 bg-success/10 text-success-text'}"
         data-testid="region-stage-state">{s.paused ? 'paused' : 'running'}</span
       >
       {#if s.paused && s.paused_since}
-        <span
-          class="text-zinc-500"
-          title={s.paused_since}
-          data-testid="region-stage-since">since {formatTimestamp(s.paused_since)}</span
+        <span class="text-fg-3" title={s.paused_since} data-testid="region-stage-since"
+          >since {formatTimestamp(s.paused_since)}</span
         >
       {/if}
       <span class="grow"></span>
@@ -55,30 +53,27 @@
       >
     </div>
     {#if s.pipeline_paused}
-      <p class="mt-2 text-xs text-amber-200" data-testid="region-stage-pipeline-paused">
+      <p class="mt-2 text-xs text-warn-text" data-testid="region-stage-pipeline-paused">
         This project's whole pipeline is paused, so the region stage is not running either
         way.
       </p>
     {/if}
     <div class="mt-2 flex flex-wrap gap-4 text-xs">
       <div>
-        <div class="text-zinc-500">Pending detection</div>
-        <div class="font-mono text-zinc-200" data-testid="region-stage-pending-detection">
+        <div class="text-fg-3">Pending detection</div>
+        <div class="font-mono text-fg-1" data-testid="region-stage-pending-detection">
           {s.counts.pending_detection}
         </div>
       </div>
       <div>
-        <div class="text-zinc-500">Pending verification</div>
-        <div
-          class="font-mono text-zinc-200"
-          data-testid="region-stage-pending-verification"
-        >
+        <div class="text-fg-3">Pending verification</div>
+        <div class="font-mono text-fg-1" data-testid="region-stage-pending-verification">
           {s.counts.pending_verification}
         </div>
       </div>
       <div>
-        <div class="text-zinc-500">Gate-skipped</div>
-        <div class="font-mono text-zinc-200" data-testid="region-stage-gate-skipped">
+        <div class="text-fg-3">Gate-skipped</div>
+        <div class="font-mono text-fg-1" data-testid="region-stage-gate-skipped">
           {s.counts.gate_skipped}
         </div>
       </div>
@@ -113,7 +108,7 @@
       <p>Resume the region stage? Queued items are picked up again.</p>
     {/if}
     {#if stage.actionError}<p
-        class="text-red-300"
+        class="text-danger-text"
         data-testid="region-stage-action-error"
       >
         {stage.actionError}

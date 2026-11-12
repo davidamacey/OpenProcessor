@@ -56,21 +56,21 @@
     <h1 class="text-2xl font-semibold tracking-tight">Ingest policy</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-blue-300 hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-zinc-400">
+  <p class="text-sm text-fg-2">
     Which detections an ingest keeps, and which of those get a vector. The policy changes
     only future ingests; embed detections already stored from the dashboard.
   </p>
 
   {#if editor.loadError}
-    <p class="text-sm text-red-300" data-testid="policy-load-error">
+    <p class="text-sm text-danger-text" data-testid="policy-load-error">
       {editor.loadError}
     </p>
   {:else if editor.loading}
-    <p class="text-sm text-zinc-500">Loading...</p>
+    <p class="text-sm text-fg-3">Loading...</p>
   {:else}
     <ActiveIngestProfileCard
       profile={editor.activeProfile}
@@ -83,7 +83,7 @@
 
     {#if editor.conflict}
       <div
-        class="space-y-2 rounded border border-amber-900 bg-amber-950/30 p-3 text-sm text-amber-200"
+        class="space-y-2 rounded border border-warn-line bg-warn-soft p-3 text-sm text-warn-text"
         data-testid="policy-conflict"
       >
         <p>The policy changed since you opened it.</p>
@@ -106,7 +106,7 @@
         </div>
       </div>
     {:else if editor.saveLines.length > 0}
-      <div class="space-y-1 text-sm text-red-300" data-testid="policy-save-error">
+      <div class="space-y-1 text-sm text-danger-text" data-testid="policy-save-error">
         {#each editor.saveLines as line, i (i)}
           <p>{line}</p>
         {/each}
@@ -115,7 +115,7 @@
 
     {#if editor.unknownNames.length > 0}
       <div
-        class="rounded border border-amber-900 bg-amber-950/30 p-3 text-xs text-amber-200"
+        class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
         data-testid="policy-unknown-names"
       >
         <p>These names are not in the detector's labels or the registry; saved anyway:</p>
@@ -135,7 +135,7 @@
         disabled={!editor.dirty || editor.saving}
         onclick={() => (confirming = true)}>Save policy</button
       >
-      <span class="text-xs text-zinc-500">Revision {editor.revision}</span>
+      <span class="text-xs text-fg-3">Revision {editor.revision}</span>
     </div>
   {/if}
 </div>
@@ -148,7 +148,7 @@
     onconfirm={() => void doSave()}
     oncancel={() => (confirming = false)}
   >
-    <p class="text-sm text-zinc-300">
+    <p class="text-sm text-fg-2">
       Future ingests will keep and embed detections under this policy. Detections already
       stored are not changed.
     </p>

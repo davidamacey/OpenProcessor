@@ -116,4 +116,23 @@ describe('ToolStrip', () => {
     render();
     expect(btn('editor.tool_draw').title).toBe('Draw a box (X)');
   });
+
+  it('is three groups (tool, zoom, history) of icon buttons, with the percentage as text', () => {
+    render({ zoomPercent: 100 });
+    const groups = [...target.querySelectorAll('[role="group"]')];
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([
+      'Tool',
+      'Zoom',
+      'History and labels',
+    ]);
+    expect(groups.map((g) => g.querySelectorAll('button').length)).toEqual([4, 4, 3]);
+    // Every button but the zoom percentage draws an SVG icon; none draws a text glyph.
+    const iconless = [...target.querySelectorAll('button')].filter(
+      (b) => !b.querySelector('svg'),
+    );
+    expect(iconless.map((b) => b.getAttribute('data-action'))).toEqual([
+      'editor.zoom_actual',
+    ]);
+    expect(btn('editor.tool_select').className).toContain('size-9');
+  });
 });

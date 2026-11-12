@@ -234,7 +234,7 @@ describe('ProfileTestPanel', () => {
       'Error',
     );
     expect(det!.querySelector('[data-testid="test-leg-status"]')?.className).toContain(
-      'text-red-300',
+      'text-danger-text',
     );
   });
 

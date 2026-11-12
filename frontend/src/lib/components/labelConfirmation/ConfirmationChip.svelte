@@ -18,7 +18,7 @@
 
 {#if text}
   <span
-    class="shrink-0 rounded-sm border border-zinc-600 bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-200"
+    class="shrink-0 rounded-sm border border-line-strong bg-surface-2 px-1 py-0.5 text-caption text-fg-1"
     data-testid="confirmation-chip">{text}</span
   >
 {/if}

@@ -41,11 +41,11 @@
     <h1 class="text-2xl font-semibold tracking-tight">Region profiles</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-blue-300 hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-zinc-400">
+  <p class="text-sm text-fg-2">
     A region profile says which part of an item to find (and whether to read text on it):
     which item classes to search, the detector and segmenter that propose boxes, and how
     many to keep. Open a profile to edit it and make it the active one.
@@ -76,23 +76,25 @@
     </ConfigActivePanel>
 
     {#if list.impactError}
-      <p class="text-sm text-red-300" data-testid="impact-error">{list.impactError}</p>
+      <p class="text-sm text-danger-text" data-testid="impact-error">
+        {list.impactError}
+      </p>
     {/if}
     {#if list.impact}
       <ProfileImpactPanel impact={list.impact} />
     {/if}
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-red-300" data-testid="profiles-load-error">
+      <p class="text-sm text-danger-text" data-testid="profiles-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {:else}
       {@const l = list.list}
       <section class="surface overflow-x-auto p-4" aria-label="Profiles">
         <table class="w-full text-left text-sm" data-testid="profiles-table">
-          <thead class="text-xs text-zinc-500">
+          <thead class="text-xs text-fg-3">
             <tr>
               <th class="py-1 pr-3 font-normal">Name</th>
               <th class="py-1 pr-3 font-normal">Region</th>
@@ -107,13 +109,13 @@
           <tbody>
             {#each l.profiles as p (p.name)}
               <tr
-                class="border-t border-zinc-800 align-top"
+                class="border-t border-line align-top"
                 data-testid="profile-row"
                 data-name={p.name}
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-blue-300 hover:underline"
+                    class="font-mono text-accent-text hover:underline"
                     href={resolve(
                       projectHref(
                         `/settings/region-profiles/${encodeURIComponent(p.name)}`,
@@ -122,7 +124,7 @@
                   >
                   {#if p.active}
                     <span
-                      class="ml-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-[11px] text-emerald-300"
+                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
                       data-testid="profile-active-chip"
                       >active{p.active_revision != null
                         ? ` r${p.active_revision}`
@@ -130,7 +132,7 @@
                     >
                     {#if p.revision != null && p.active_revision != null && p.revision !== p.active_revision}
                       <span
-                        class="ml-1 block text-[11px] text-amber-300"
+                        class="ml-1 block text-caption text-warn-text"
                         data-testid="profile-saved-vs-active"
                         >saved r{p.revision}, active r{p.active_revision}</span
                       >
@@ -138,16 +140,15 @@
                   {/if}
                 </td>
                 <td class="py-1.5 pr-3 text-xs">
-                  <span class="text-zinc-200">{p.display_name ?? '—'}</span>
+                  <span class="text-fg-1">{p.display_name ?? '—'}</span>
                   {#if p.region_class_name}
-                    <code class="ml-1 font-mono text-zinc-500">{p.region_class_name}</code
-                    >
+                    <code class="ml-1 font-mono text-fg-3">{p.region_class_name}</code>
                   {/if}
-                  <span class="block text-zinc-500"
+                  <span class="block text-fg-3"
                     >{p.reads_text ? 'reads text' : 'no text'}</span
                   >
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-zinc-400">
+                <td class="py-1.5 pr-3 text-xs text-fg-2">
                   {p.source}{p.read_only ? ' · read-only' : ''}
                 </td>
                 <td class="py-1.5 pr-3 font-mono text-xs">{p.revision ?? '—'}</td>
@@ -162,12 +163,12 @@
                     ></span
                   >
                   {#if p.max_regions_per_item != null}
-                    <span class="block text-zinc-500"
+                    <span class="block text-fg-3"
                       >up to {p.max_regions_per_item} per item</span
                     >
                   {/if}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-xs text-zinc-300">
+                <td class="py-1.5 pr-3 font-mono text-xs text-fg-2">
                   {p.parent_classes.length > 0 ? p.parent_classes.join(', ') : '—'}
                 </td>
                 <ConfigRowTail row={p} {flow} />
@@ -176,7 +177,7 @@
           </tbody>
         </table>
         {#if l.profiles.length === 0}
-          <p class="mt-2 text-sm text-zinc-400" data-testid="profiles-empty">
+          <p class="mt-2 text-sm text-fg-2" data-testid="profiles-empty">
             No profiles yet. Clone a template below to start one.
           </p>
         {/if}
@@ -185,19 +186,18 @@
       {#if (l.templates ?? []).length > 0}
         <section class="surface flex flex-col gap-2 p-4" aria-label="Templates">
           <h2 class="text-base font-semibold">Templates</h2>
-          <p class="text-xs text-zinc-400">
+          <p class="text-xs text-fg-2">
             Starting points. Clone one to get a profile you can edit and activate.
           </p>
           <ul class="space-y-1 text-sm" data-testid="profile-templates">
             {#each l.templates ?? [] as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
                 <span class="font-mono">{t.name}</span>
-                {#if t.display_name}<span class="text-zinc-300">{t.display_name}</span
-                  >{/if}
-                <span class="text-xs text-zinc-500"
+                {#if t.display_name}<span class="text-fg-2">{t.display_name}</span>{/if}
+                <span class="text-xs text-fg-3"
                   >{t.reads_text ? 'reads text' : 'no text'}</span
                 >
-                <code class="text-xs text-zinc-500">{t.path}</code>
+                <code class="text-xs text-fg-3">{t.path}</code>
                 <button
                   type="button"
                   class="btn btn-sm"
@@ -220,17 +220,17 @@
         <summary class="cursor-pointer text-base font-semibold"
           >Models and sources</summary
         >
-        <p class="mt-1 text-xs text-zinc-400">
+        <p class="mt-1 text-xs text-fg-2">
           What this deployment serves for a profile to use. Read only; a profile picks
           from these.
         </p>
         <div class="mt-3">
           {#if list.vocabularyError}
-            <p class="text-sm text-red-300">{list.vocabularyError}</p>
+            <p class="text-sm text-danger-text">{list.vocabularyError}</p>
           {:else if list.vocabulary}
             <ProfileVocabularyPanel vocab={list.vocabulary} />
           {:else}
-            <p class="text-sm text-zinc-500">Loading…</p>
+            <p class="text-sm text-fg-3">Loading…</p>
           {/if}
         </div>
       </details>

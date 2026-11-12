@@ -171,6 +171,23 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 
 ---
 
+## Lucide icons (Cropwright frontend)
+
+Cropwright (`frontend/`) draws every icon as an SVG from the Lucide set through
+`frontend/src/lib/components/ui/Icon.svelte`. No emoji or Unicode glyph is used as an icon.
+
+### Repository Information
+- **Package:** `@lucide/svelte` 1.72.0 (npm dependency, one deep import per icon)
+- **Repository:** https://github.com/lucide-icons/lucide
+- **License:** ISC. The icons Lucide derives from the Feather project are MIT (Copyright (c)
+  2013-present Cole Bemis); the package's `LICENSE` file carries both texts.
+
+### Usage in This Project
+- `frontend/src/lib/components/ui/iconRegistry.ts` lists the icons in use; nothing is vendored
+  or modified.
+
+---
+
 ## Datasets used for public sample fetching
 
 ### COCO 2017
@@ -350,6 +367,7 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | nvidia-ml-py (NVML GPU inventory in the export worker, `requirements-export.txt`) | BSD 3-Clause (NVIDIA) | ✓ Yes |
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
+| Lucide icons (`@lucide/svelte` 1.72.0, Cropwright frontend) | ISC (Feather-derived icons: MIT) | ✓ Yes (this file) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
 | COCO 2017 (images) | Per-image Flickr license, filtered to BY/BY-SA/no-known/US-Gov | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
 | Open Images V7 (annotations) | CC BY 4.0 (Google LLC) | ✓ Yes (this file) |

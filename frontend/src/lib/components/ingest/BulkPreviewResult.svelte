@@ -41,23 +41,23 @@
 </script>
 
 <section
-  class="space-y-2 rounded border border-zinc-800 p-3 text-xs"
+  class="space-y-2 rounded border border-line p-3 text-xs"
   data-testid="bulk-preview"
 >
-  <p class="font-mono break-all text-zinc-400">{preview.target}</p>
+  <p class="font-mono break-all text-fg-2">{preview.target}</p>
   {#if preview.partial && preview.stop_reason}
     <p
-      class="rounded border border-amber-700 px-2 py-1 text-amber-200"
+      class="rounded border border-warn-line px-2 py-1 text-warn-text"
       data-testid="bulk-preview-partial"
     >
       Partial: the scan stopped at {STOP_TEXT[preview.stop_reason](config)}, so these are
       at least the figures; the source holds more.
     </p>
   {/if}
-  <p class="text-sm text-zinc-100" data-testid="bulk-preview-total">
+  <p class="text-sm text-fg-1" data-testid="bulk-preview-total">
     {preview.files} files · {formatBytes(preview.total_bytes)}
   </p>
-  <table class="w-full max-w-sm text-zinc-300">
+  <table class="w-full max-w-sm text-fg-2">
     <tbody>
       {#each extensions as [ext, totals] (ext)}
         <tr>
@@ -69,7 +69,7 @@
     </tbody>
   </table>
   {#if preview.megapixels.sampled > 0}
-    <p class="text-zinc-300" data-testid="bulk-preview-sizes">
+    <p class="text-fg-2" data-testid="bulk-preview-sizes">
       Image sizes (headers of {preview.megapixels.sampled} files, megapixels):
       {#each sizes as [label, n], i (label)}{i > 0 ? ' · ' : ' '}{label}: {n}{/each}.
       {#if preview.megapixels.share_at_or_above_gate != null}
@@ -83,15 +83,15 @@
       {/if}
     </p>
   {:else if preview.kind === 's3'}
-    <p class="text-zinc-500">Image sizes are not read for S3 objects.</p>
+    <p class="text-fg-3">Image sizes are not read for S3 objects.</p>
   {/if}
   {#if skipped.length > 0}
-    <ul class="text-amber-200" data-testid="bulk-preview-skipped">
+    <ul class="text-warn-text" data-testid="bulk-preview-skipped">
       {#each skipped as [n, label] (label)}
         <li>{n} {label}</li>
       {/each}
       {#each preview.unreadable_samples as path (path)}
-        <li class="font-mono break-all text-zinc-400">{path}</li>
+        <li class="font-mono break-all text-fg-2">{path}</li>
       {/each}
     </ul>
   {/if}
@@ -100,19 +100,19 @@
     data-testid="bulk-preview-estimate"
   >
     <div>
-      <dt class="text-zinc-500">Estimated ingest time</dt>
-      <dd class="text-zinc-200">{duration}</dd>
+      <dt class="text-fg-3">Estimated ingest time</dt>
+      <dd class="text-fg-1">{duration}</dd>
     </div>
     <div>
-      <dt class="text-zinc-500">Estimated index size</dt>
-      <dd class="text-zinc-200">{formatBytes(est.opensearch_bytes)}</dd>
+      <dt class="text-fg-3">Estimated index size</dt>
+      <dd class="text-fg-1">{formatBytes(est.opensearch_bytes)}</dd>
     </div>
     <div>
-      <dt class="text-zinc-500">Estimated vectors</dt>
-      <dd class="text-zinc-200">{Math.round(est.vectors)}</dd>
+      <dt class="text-fg-3">Estimated vectors</dt>
+      <dd class="text-fg-1">{Math.round(est.vectors)}</dd>
     </div>
   </dl>
-  <details class="text-zinc-400">
+  <details class="text-fg-2">
     <summary class="cursor-pointer">
       Basis: measured figures from {config.source_document}
     </summary>

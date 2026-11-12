@@ -36,18 +36,18 @@
 </script>
 
 <div
-  class="rounded-md border border-zinc-800 bg-zinc-900/60 p-3 text-xs"
+  class="rounded-md border border-line bg-surface-1/60 p-3 text-xs"
   data-testid="assist-plan"
   aria-live="polite"
 >
   {#if error}
-    <p class="text-red-300" data-testid="assist-plan-error" data-code={errorCode}>
+    <p class="text-danger-text" data-testid="assist-plan-error" data-code={errorCode}>
       {error}
     </p>
   {:else if !resolved}
-    <p class="text-zinc-500">{planning ? 'Asking the server for a dry run…' : '—'}</p>
+    <p class="text-fg-3">{planning ? 'Asking the server for a dry run…' : '—'}</p>
   {:else}
-    <p class="text-zinc-200" class:opacity-60={planning}>
+    <p class="text-fg-1" class:opacity-60={planning}>
       <strong data-testid="assist-plan-sampled">{formatCount(resolved.sampled)}</strong>
       of {formatCount(resolved.scope_count)} members go to the VLM, about
       <strong data-testid="assist-plan-calls"
@@ -56,14 +56,14 @@
       VLM calls. Nothing is written until you start the run.
     </p>
     {#if named(resolved.vlm) || named(resolved.prompt_pack)}
-      <p class="mt-1 text-zinc-400" data-testid="assist-plan-pinned">
+      <p class="mt-1 text-fg-2" data-testid="assist-plan-pinned">
         VLM {named(resolved.vlm) ?? '—'}{typeof resolved.vlm?.model === 'string'
           ? ` (${resolved.vlm.model})`
           : ''} · prompt pack {named(resolved.prompt_pack) ?? '—'}
       </p>
     {/if}
     {#if skipped.length > 0}
-      <p class="mt-2 text-zinc-500" data-testid="assist-plan-skipped">
+      <p class="mt-2 text-fg-3" data-testid="assist-plan-skipped">
         Left out:
         {#each skipped as [k, n], i (k)}{i > 0 ? ', ' : ''}{formatCount(n)}
           {SKIPPED_LABELS[k] ?? k}{/each}

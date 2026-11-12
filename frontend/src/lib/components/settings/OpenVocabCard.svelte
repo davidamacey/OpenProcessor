@@ -19,7 +19,7 @@
   >
     <div class="flex min-w-0 flex-col gap-1">
       <h2 class="text-base font-semibold">Open-vocabulary sets</h2>
-      <p class="text-xs text-zinc-400">
+      <p class="text-xs text-fg-2">
         Find things by describing them in words, with SAM 3. Choose the prompts, the
         classes they map to, and which set is active.
       </p>

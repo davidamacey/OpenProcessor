@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One image in the editor: the picture and its boxes, the tools, the objects, the filmstrip of the
    * list it was opened from, the class picker for a drawn box and the save state. Everything it
@@ -75,14 +76,14 @@
     message={c.stack.message}
   />
   {#if c.filmstrip?.message}
-    <p class="border-b border-zinc-800 px-3 py-1.5 text-xs text-zinc-400">
+    <p class="border-b border-line px-3 py-1.5 text-xs text-fg-2">
       {c.filmstrip.message}
     </p>
   {/if}
 
   {#if c.drop}
     <div
-      class="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
+      class="flex flex-wrap items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn-text"
       role="alert"
       data-testid="drop-regions"
     >
@@ -100,9 +101,7 @@
   <ViewState {status} message={c.loadError ?? ''}>
     {#if c.image}
       <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div
-          class="shrink-0 border-b border-zinc-800 p-2 lg:w-14 lg:border-r lg:border-b-0"
-        >
+        <div class="shrink-0 border-b border-line p-2 lg:w-14 lg:border-r lg:border-b-0">
           <ToolStrip
             tool={c.tool}
             sticky={c.sticky}
@@ -145,19 +144,19 @@
         </div>
 
         <aside
-          class="shrink-0 border-t border-zinc-800 lg:w-72 lg:overflow-y-auto lg:border-t-0 lg:border-l"
+          class="shrink-0 border-t border-line lg:w-72 lg:overflow-y-auto lg:border-t-0 lg:border-l"
           aria-label="Objects"
         >
           <button
             type="button"
-            class="flex w-full items-center justify-between px-3 py-2 text-sm text-zinc-200 lg:hidden"
+            class="flex w-full items-center justify-between px-3 py-2 text-sm text-fg-1 lg:hidden"
             aria-expanded={objectsOpen}
             aria-controls="editor-objects"
             data-testid="objects-toggle"
             onclick={() => (objectsOpen = !objectsOpen)}
           >
             <span>Objects ({c.objects.length})</span>
-            <span aria-hidden="true">{objectsOpen ? '▾' : '▸'}</span>
+            <Icon name={objectsOpen ? 'chevron-down' : 'chevron-right'} size={14} />
           </button>
           <div
             id="editor-objects"
@@ -183,7 +182,7 @@
       </div>
 
       {#if c.filmstrip && c.filmstrip.index !== null}
-        <div class="shrink-0 border-t border-zinc-800 p-2">
+        <div class="shrink-0 border-t border-line p-2">
           <Filmstrip
             tiles={[
               ...(c.filmstrip.before ? [c.filmstrip.before] : []),

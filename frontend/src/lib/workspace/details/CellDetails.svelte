@@ -19,22 +19,22 @@
 </script>
 
 <section class="space-y-2 text-sm" data-testid="cell-details">
-  <h2 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Map cell</h2>
+  <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Map cell</h2>
   {#if !ctl || !cell}
-    <p class="text-zinc-500">Select a cell on the map to see its photos.</p>
+    <p class="text-fg-3">Select a cell on the map to see its photos.</p>
   {:else if ctl.cellError}
-    <p class="text-red-300" role="alert" data-testid="cell-error">{ctl.cellError}</p>
+    <p class="text-danger-text" role="alert" data-testid="cell-error">{ctl.cellError}</p>
   {:else if !ctl.summary || !ctl.cards}
-    <p class="text-zinc-500" role="status">Loading…</p>
+    <p class="text-fg-3" role="status">Loading…</p>
   {:else}
-    <p class="text-zinc-100" data-testid="cell-summary">{ctl.summary.summary_text}</p>
-    <p class="text-xs text-zinc-400">
+    <p class="text-fg-1" data-testid="cell-summary">{ctl.summary.summary_text}</p>
+    <p class="text-xs text-fg-2">
       {ctl.summary.images.toLocaleString()} photo{ctl.summary.images === 1 ? '' : 's'}
       here
       {#if ctl.cards.total > CELL_CARDS}· showing the first {CELL_CARDS}{/if}
     </p>
     {#if ctl.summary.join_truncated}
-      <p class="text-xs text-amber-300">
+      <p class="text-xs text-warn-text">
         The cell holds more photos than can be counted at once; zoom in to narrow it.
       </p>
     {/if}
@@ -43,7 +43,7 @@
         <li>
           <button
             type="button"
-            class="block w-full overflow-hidden rounded border border-zinc-800"
+            class="block w-full overflow-hidden rounded border border-line"
             title={card.file_name}
             data-testid="cell-card"
             onclick={() => ws.setFocus({ kind: 'image', id: card.image_id })}

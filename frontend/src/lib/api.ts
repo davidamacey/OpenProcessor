@@ -338,7 +338,13 @@ async function attemptFetch<T>(
       notifyRegionProfileUnavailable();
       throw new RegionProfileUnavailableError(url, body);
     }
-    const err = new ApiError(res.status, url, body);
+    const err = new ApiError(
+      res.status,
+      url,
+      body,
+      undefined,
+      res.headers.get('x-request-id'),
+    );
     // Don't retry on 4xx — they won't get better.
     if (res.status < 500) throw err;
     if (res.status === 503) retryAfterMs = parseRetryAfterMs(res);

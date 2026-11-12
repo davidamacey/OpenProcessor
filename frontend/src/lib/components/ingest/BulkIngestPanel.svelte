@@ -25,14 +25,14 @@
   onDestroy(() => controller.stop());
 
   const STATUS_TONE: Record<BulkIngestStatus, string> = {
-    queued: 'text-zinc-300',
-    running: 'text-blue-300',
-    cancelling: 'text-amber-300',
-    completed: 'text-emerald-300',
-    completed_with_errors: 'text-amber-300',
-    failed: 'text-red-300',
-    cancelled: 'text-amber-300',
-    interrupted: 'text-amber-300',
+    queued: 'text-fg-2',
+    running: 'text-accent-text',
+    cancelling: 'text-warn-text',
+    completed: 'text-success-text',
+    completed_with_errors: 'text-warn-text',
+    failed: 'text-danger-text',
+    cancelled: 'text-warn-text',
+    interrupted: 'text-warn-text',
   };
 
   const run = $derived(controller.run);
@@ -47,17 +47,17 @@
 
 <div class="space-y-4" data-testid="bulk-ingest">
   {#if controller.configError}
-    <p class="text-xs text-red-300">
+    <p class="text-xs text-danger-text">
       Could not load bulk ingest: {controller.configError}
     </p>
   {:else if !config}
-    <p class="text-xs text-zinc-500">Loading…</p>
+    <p class="text-xs text-fg-3">Loading…</p>
   {:else}
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Ingest a whole folder or a list of images that already lie under a source root on
       the server. The run continues if you leave this page.
     </p>
-    <ul class="text-xs text-zinc-300" data-testid="bulk-roots">
+    <ul class="text-xs text-fg-2" data-testid="bulk-roots">
       {#each config.source_roots as root (root)}
         <li class="font-mono break-all">{root}</li>
       {/each}
@@ -70,7 +70,7 @@
         void controller.start();
       }}
     >
-      <div class="flex flex-wrap gap-4 text-xs text-zinc-300">
+      <div class="flex flex-wrap gap-4 text-xs text-fg-2">
         <label class="flex items-center gap-1">
           <input
             type="radio"
@@ -90,7 +90,7 @@
           /> Manifest
         </label>
       </div>
-      <label class="block text-xs text-zinc-400">
+      <label class="block text-xs text-fg-2">
         {pathLabel}
         <input
           class="input block w-full font-mono text-xs"
@@ -101,7 +101,7 @@
         />
       </label>
       <div class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-zinc-400">
+        <label class="text-xs text-fg-2">
           Source tag
           <input
             class="input input-sm block"
@@ -129,7 +129,7 @@
           {controller.previewing ? 'Scanning… (click to cancel)' : 'Preview'}
         </button>
       </div>
-      <details class="text-xs text-zinc-400">
+      <details class="text-xs text-fg-2">
         <summary class="cursor-pointer">Advanced</summary>
         <div class="mt-2 flex flex-wrap items-end gap-3">
           <label>
@@ -170,7 +170,7 @@
     </form>
 
     {#if controller.previewError}
-      <p class="text-xs text-red-300" data-testid="bulk-preview-error">
+      <p class="text-xs text-danger-text" data-testid="bulk-preview-error">
         {controller.previewError}
       </p>
     {/if}
@@ -179,24 +179,24 @@
     {/if}
 
     {#if controller.actionError}
-      <p class="text-xs text-red-300" data-testid="bulk-action-error">
+      <p class="text-xs text-danger-text" data-testid="bulk-action-error">
         {controller.actionError}
       </p>
     {/if}
     {#if controller.loadError}
-      <p class="text-xs text-amber-300" data-testid="bulk-load-error">
+      <p class="text-xs text-warn-text" data-testid="bulk-load-error">
         Could not refresh: {controller.loadError}
       </p>
     {/if}
 
     {#if run && progress}
       <section
-        class="space-y-3 rounded border border-zinc-800 p-3"
+        class="space-y-3 rounded border border-line p-3"
         data-testid="bulk-run"
         data-status={run.status}
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <p class="min-w-0 text-xs text-zinc-400">
+          <p class="min-w-0 text-xs text-fg-2">
             <span class="font-mono break-all">{run.source.label ?? run.source.path}</span>
           </p>
           <span
@@ -208,18 +208,18 @@
         </div>
 
         <div
-          class="h-2 w-full overflow-hidden rounded bg-zinc-800"
+          class="h-2 w-full overflow-hidden rounded bg-surface-2"
           role="progressbar"
           aria-valuemin="0"
           aria-valuemax="100"
           aria-valuenow={progressPercent(progress)}
         >
           <div
-            class="h-full bg-blue-600 transition-[width]"
+            class="h-full bg-accent-fill transition-[width]"
             style="width: {progressPercent(progress)}%"
           ></div>
         </div>
-        <p class="text-xs text-zinc-300" data-testid="bulk-counts">
+        <p class="text-xs text-fg-2" data-testid="bulk-counts">
           {progress.processed} of {progress.discovered}{progress.discovery_complete
             ? ''
             : run.can_cancel
@@ -228,11 +228,11 @@
           {#if progress.skipped > 0}· {progress.skipped} already stored by this run{/if}
         </p>
         {#if progress.unreadable > 0}
-          <div class="text-xs text-amber-200" data-testid="bulk-unreadable">
+          <div class="text-xs text-warn-text" data-testid="bulk-unreadable">
             <p>{progress.unreadable} entries could not be read and were skipped.</p>
             <ul class="mt-1">
               {#each progress.unreadable_samples as path (path)}
-                <li class="font-mono break-all text-zinc-400">{path}</li>
+                <li class="font-mono break-all text-fg-2">{path}</li>
               {/each}
             </ul>
           </div>
@@ -242,8 +242,10 @@
             >ingested {progress.ingested}</span
           >
           <span class="chip">duplicate {progress.duplicates}</span>
-          <span class="chip {progress.failed > 0 ? 'border-red-700 text-red-200' : ''}"
-            >failed {progress.failed}</span
+          <span
+            class="chip {progress.failed > 0
+              ? 'border-danger-line text-danger-text'
+              : ''}">failed {progress.failed}</span
           >
           <span class="chip">crops {progress.crops_indexed}</span>
           <span class="chip"
@@ -253,41 +255,41 @@
         </div>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
           <div>
-            <dt class="text-zinc-500">Speed</dt>
-            <dd class="text-zinc-200" data-testid="bulk-rate">
+            <dt class="text-fg-3">Speed</dt>
+            <dd class="text-fg-1" data-testid="bulk-rate">
               {headlineRate(progress, run.can_cancel)?.toFixed(1) ?? '--'} img/s
             </dd>
           </div>
           <div>
-            <dt class="text-zinc-500">Run average</dt>
-            <dd class="text-zinc-200">
+            <dt class="text-fg-3">Run average</dt>
+            <dd class="text-fg-1">
               {progress.images_per_s?.toFixed(1) ?? '--'} img/s
             </dd>
           </div>
           <div>
-            <dt class="text-zinc-500">Time left</dt>
-            <dd class="text-zinc-200" data-testid="bulk-eta">
+            <dt class="text-fg-3">Time left</dt>
+            <dd class="text-fg-1" data-testid="bulk-eta">
               {formatDuration(progress.eta_s, '--')}
             </dd>
           </div>
           <div>
-            <dt class="text-zinc-500">Elapsed</dt>
-            <dd class="text-zinc-200">{formatDuration(progress.elapsed_s, '--')}</dd>
+            <dt class="text-fg-3">Elapsed</dt>
+            <dd class="text-fg-1">{formatDuration(progress.elapsed_s, '--')}</dd>
           </div>
           <div>
-            <dt class="text-zinc-500">In flight</dt>
-            <dd class="text-zinc-200">{progress.in_flight}</dd>
+            <dt class="text-fg-3">In flight</dt>
+            <dd class="text-fg-1">{progress.in_flight}</dd>
           </div>
           <div>
-            <dt class="text-zinc-500">Batches</dt>
-            <dd class="text-zinc-200">
+            <dt class="text-fg-3">Batches</dt>
+            <dd class="text-fg-1">
               {run.options.batch_size} × {run.options.concurrency}
             </dd>
           </div>
         </dl>
 
         {#if run.error}
-          <p class="text-xs text-red-300" data-testid="bulk-run-error">{run.error}</p>
+          <p class="text-xs text-danger-text" data-testid="bulk-run-error">{run.error}</p>
         {/if}
 
         <div class="flex flex-wrap gap-2">
@@ -312,14 +314,14 @@
             >
               Resume
             </button>
-            <span class="self-center text-xs text-zinc-500">
+            <span class="self-center text-xs text-fg-3">
               Images already stored are skipped.
             </span>
           {/if}
         </div>
 
         {#if stageRows(run).length > 0}
-          <details class="text-xs text-zinc-400">
+          <details class="text-xs text-fg-2">
             <summary class="cursor-pointer">Where the time went</summary>
             <table class="mt-2 w-full max-w-md" data-testid="bulk-stages">
               <tbody>
@@ -331,7 +333,7 @@
                 {/each}
               </tbody>
             </table>
-            <p class="mt-1 text-zinc-500">
+            <p class="mt-1 text-fg-3">
               Seconds summed over concurrent work, so a stage can exceed the elapsed time.
             </p>
           </details>
@@ -339,17 +341,17 @@
 
         {#if controller.failures && controller.failures.total > 0}
           <div class="space-y-1" data-testid="bulk-failures">
-            <p class="text-xs font-semibold text-red-300">
+            <p class="text-xs font-semibold text-danger-text">
               {controller.failures.total} failed image{controller.failures.total === 1
                 ? ''
                 : 's'}
             </p>
             <ul class="max-h-48 overflow-y-auto text-xs">
               {#each controller.failures.items as f (f.path)}
-                <li class="border-b border-zinc-900 py-1 break-all">
+                <li class="border-b border-line py-1 break-all">
                   <span class="font-mono">{f.path}</span>
-                  <span class="text-zinc-500"> [{f.error_kind}]</span>
-                  <span class="text-red-300"> — {f.error}</span>
+                  <span class="text-fg-3"> [{f.error_kind}]</span>
+                  <span class="text-danger-text"> — {f.error}</span>
                 </li>
               {/each}
             </ul>
@@ -382,7 +384,7 @@
     {/if}
 
     {#if controller.recent.length > 1}
-      <details class="text-xs text-zinc-400" data-testid="bulk-recent">
+      <details class="text-xs text-fg-2" data-testid="bulk-recent">
         <summary class="cursor-pointer">Recent runs</summary>
         <ul class="mt-2 space-y-1">
           {#each controller.recent as r (r.run_id)}
@@ -391,7 +393,7 @@
               <span class={STATUS_TONE[r.status]}>{r.status.replaceAll('_', ' ')}</span>
               <span>{r.progress.ingested} ingested · {r.progress.failed} failed</span>
               <button
-                class="text-blue-300 hover:underline"
+                class="text-accent-text hover:underline"
                 type="button"
                 onclick={() => controller.select(r)}>View</button
               >

@@ -52,7 +52,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">New VLM endpoint</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-blue-300 hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings/models'))}>All models</a
     >
   </header>
@@ -64,16 +64,18 @@
     testid="vlm-unavailable"
   >
     {#if creator.loadError}
-      <p class="text-sm text-red-300" data-testid="vlm-load-error">{creator.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="vlm-load-error">
+        {creator.loadError}
+      </p>
     {:else if !creator.schema}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {:else}
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section
           class="surface flex min-w-0 flex-col gap-4 p-4"
           aria-label="Endpoint fields"
         >
-          <label class="flex flex-col gap-1 text-xs text-zinc-400">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Name
             <input
               class="input input-sm max-w-md font-mono text-sm"
@@ -84,7 +86,7 @@
             />
           </label>
           <ConfigIssueList issues={issuesForField(creator.report, 'name')} />
-          <label class="flex flex-col gap-1 text-xs text-zinc-400">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Description
             <input
               class="input input-sm text-sm"
@@ -96,7 +98,7 @@
 
           {#if creator.checks.facts?.sends_images_externally}
             <div
-              class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+              class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
               data-testid="vlm-external-banner"
             >
               This endpoint sends crops outside this deployment.
@@ -121,16 +123,16 @@
               class="flex flex-wrap items-center gap-2 text-xs"
               data-testid="report-counts"
             >
-              <span class={counts.errors > 0 ? 'text-red-300' : 'text-zinc-400'}
+              <span class={counts.errors > 0 ? 'text-danger-text' : 'text-fg-2'}
                 >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
               >
-              <span class={counts.warnings > 0 ? 'text-amber-300' : 'text-zinc-400'}
+              <span class={counts.warnings > 0 ? 'text-warn-text' : 'text-fg-2'}
                 >{counts.warnings} warning{counts.warnings === 1 ? '' : 's'}</span
               >
-              {#if creator.validating}<span class="text-zinc-500">checking…</span>{/if}
+              {#if creator.validating}<span class="text-fg-3">checking…</span>{/if}
             </div>
             {#if creator.validateError}
-              <p class="text-xs text-red-300">
+              <p class="text-xs text-danger-text">
                 Could not check the draft: {creator.validateError}
               </p>
             {/if}
@@ -153,7 +155,7 @@
               >
             </div>
             {#if creator.createError}
-              <p class="text-xs text-red-300" data-testid="vlm-create-error">
+              <p class="text-xs text-danger-text" data-testid="vlm-create-error">
                 {creator.createError}
               </p>
             {/if}
@@ -167,7 +169,7 @@
               />
             {/if}
             {#if creator.checks.testError}
-              <p class="text-xs text-red-300" data-testid="vlm-test-error">
+              <p class="text-xs text-danger-text" data-testid="vlm-test-error">
                 {creator.checks.testError}
               </p>
             {/if}

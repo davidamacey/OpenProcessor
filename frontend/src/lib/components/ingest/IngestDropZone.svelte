@@ -58,15 +58,15 @@
 
 <div
   class="rounded-lg border-2 border-dashed p-8 text-center transition-colors {dragOver
-    ? 'border-blue-500 bg-blue-950/20'
-    : 'border-zinc-700'} {disabled ? 'opacity-50' : ''}"
+    ? 'border-accent bg-accent-soft'
+    : 'border-line-strong'} {disabled ? 'opacity-50' : ''}"
   ondrop={onDrop}
   ondragover={onDragOver}
   ondragleave={onDragLeave}
   role="region"
   aria-label="Drop images or a folder here"
 >
-  <p class="mb-3 text-sm text-zinc-400">Drag files or a folder here</p>
+  <p class="mb-3 text-sm text-fg-2">Drag files or a folder here</p>
   <div class="flex justify-center gap-2">
     <button
       class="btn btn-sm"

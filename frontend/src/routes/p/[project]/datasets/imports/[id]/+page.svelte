@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   /**
    * `/datasets/imports/[id]` — one import job (any_domain_plan.md §7.12
    * item 2; w10 import reprocess UI plan §3).
@@ -78,46 +80,44 @@
     total > 0 ? Math.min(100, (done / total) * 100) : 0;
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-zinc-100">
-      Import
-      <span class="font-mono text-sm text-zinc-400">{importId}</span>
-    </h1>
-    <a
-      class="text-xs text-blue-300 hover:underline"
-      href={resolve(projectHref('/datasets/imports'))}>All imports</a
-    >
-  </div>
+<PageShell class="space-y-6">
+  <PageHeader title="Import {importId}">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/datasets/imports'))}>All imports</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <DatasetsGate>
     {#snippet children(formats)}
       {#if job.loadError && !job.job}
-        <p class="text-sm text-red-300" data-testid="job-load-error">{job.loadError}</p>
+        <p class="text-sm text-danger-text" data-testid="job-load-error">
+          {job.loadError}
+        </p>
       {:else if !job.job}
-        <p class="text-sm text-zinc-500">Loading…</p>
+        <p class="text-sm text-fg-3">Loading…</p>
       {:else}
         {@const j = job.job}
         <section
-          class="space-y-3 rounded-lg border border-zinc-800 p-4"
+          class="space-y-3 rounded-lg border border-line p-4"
           data-testid="import-job"
         >
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-sm font-semibold text-zinc-100"
-              >{j.name ?? j.import_id}</span
-            >
+            <span class="text-sm font-semibold text-fg-1">{j.name ?? j.import_id}</span>
             <span
-              class="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-200"
+              class="rounded border border-line-strong px-2 py-0.5 text-xs text-fg-1"
               data-testid="job-status"
               data-status={j.status}>{job.statusLabel(formats.status_labels)}</span
             >
-            <span class="text-xs text-zinc-500">
+            <span class="text-xs text-fg-3">
               {formats.formats.find((f) => f.format === j.source.format)?.label ??
                 j.source.format}
               · <code class="font-mono">{j.source.root}</code>
             </span>
             <a
-              class="ml-auto text-xs text-blue-300 underline hover:text-blue-200"
+              class="ml-auto text-xs text-accent-text underline hover:text-accent-text"
               data-testid="review-imported-link"
               href={resolve(
                 projectHref(
@@ -128,17 +128,17 @@
           </div>
 
           <div data-testid="job-progress">
-            <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
+            <div class="h-2 w-full overflow-hidden rounded bg-surface-2">
               <div
-                class="h-full bg-blue-500"
+                class="h-full bg-accent"
                 style="width: {pct(j.progress.images_done, j.progress.images_total)}%"
               ></div>
             </div>
-            <p class="mt-1 text-xs text-zinc-400">
+            <p class="mt-1 text-xs text-fg-2">
               {j.progress.images_done.toLocaleString()} / {j.progress.images_total.toLocaleString()}
               images · {j.progress.chunks_done} / {j.progress.chunks_total} chunks
               {#if j.progress.images_failed > 0}
-                · <span class="text-red-300"
+                · <span class="text-danger-text"
                   >{j.progress.images_failed.toLocaleString()} failed</span
                 >
               {/if}
@@ -151,7 +151,7 @@
 
           {#if j.waiting_for}
             <p
-              class="rounded border border-amber-900 bg-amber-950/30 p-2 text-xs text-amber-200"
+              class="rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn-text"
               data-testid="job-waiting"
             >
               Waiting for: {j.waiting_for}
@@ -160,7 +160,7 @@
 
           {#if j.error}
             <p
-              class="rounded border border-red-900 bg-red-950/30 p-2 text-sm text-red-200"
+              class="rounded border border-danger-line bg-danger-soft p-2 text-sm text-danger-text"
               data-testid="job-error"
             >
               {j.error}
@@ -168,7 +168,7 @@
           {/if}
 
           {#if job.loadError}
-            <p class="text-xs text-amber-300">Could not refresh: {job.loadError}</p>
+            <p class="text-xs text-warn-text">Could not refresh: {job.loadError}</p>
           {/if}
 
           <div class="flex flex-wrap gap-2">
@@ -193,27 +193,27 @@
             {/if}
           </div>
           {#if job.refusalReasons.length > 0}
-            <ul class="text-xs text-zinc-500" data-testid="job-action-reasons">
+            <ul class="text-xs text-fg-3" data-testid="job-action-reasons">
               {#each job.refusalReasons as [name, reason] (name)}
                 <li>{name}: {reason}</li>
               {/each}
             </ul>
           {/if}
           {#if job.actionError && !confirm && !pendingStep}
-            <p class="text-sm text-red-300" data-testid="job-action-error">
+            <p class="text-sm text-danger-text" data-testid="job-action-error">
               {job.actionError}
             </p>
           {/if}
         </section>
 
-        <section class="rounded-lg border border-zinc-800 p-4">
-          <h2 class="mb-2 text-sm font-semibold text-zinc-200">Report</h2>
+        <section class="rounded-lg border border-line p-4">
+          <h2 class="mb-2 text-sm font-semibold text-fg-1">Report</h2>
           <dl
             class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3 lg:grid-cols-5"
           >
             {#each REPORT_ROWS as [key, label] (key)}
               <div>
-                <dt class="text-zinc-500">{label}</dt>
+                <dt class="text-fg-3">{label}</dt>
                 <dd class="font-mono" data-testid="report-{key}">
                   {j.report[key].toLocaleString()}
                 </dd>
@@ -221,7 +221,7 @@
             {/each}
           </dl>
           {#if Object.keys(j.report.disagreements.counts).length > 0}
-            <p class="mt-2 text-xs text-zinc-400">
+            <p class="mt-2 text-xs text-fg-2">
               Disagreements:
               {#each Object.entries(j.report.disagreements.counts) as [k, n], i (k)}{k}
                 {n.toLocaleString()}{i <
@@ -234,10 +234,10 @@
 
         {#if j.next_steps.length > 0}
           <section
-            class="space-y-2 rounded-lg border border-zinc-800 p-4"
+            class="space-y-2 rounded-lg border border-line p-4"
             data-testid="next-steps"
           >
-            <h2 class="text-sm font-semibold text-zinc-200">Next steps</h2>
+            <h2 class="text-sm font-semibold text-fg-1">Next steps</h2>
             {#each j.next_steps as step (step.action + step.path)}
               <div class="flex flex-wrap items-center gap-2 text-xs">
                 <button
@@ -245,25 +245,25 @@
                   class="btn btn-sm"
                   onclick={() => (pendingStep = step)}>{step.action}</button
                 >
-                <span class="text-zinc-400">{step.reason}</span>
+                <span class="text-fg-2">{step.reason}</span>
               </div>
             {/each}
           </section>
         {/if}
 
-        <section class="rounded-lg border border-zinc-800 p-4">
-          <h2 class="mb-2 text-sm font-semibold text-zinc-200">Class mapping</h2>
+        <section class="rounded-lg border border-line p-4">
+          <h2 class="mb-2 text-sm font-semibold text-fg-1">Class mapping</h2>
           <table class="text-xs">
             <tbody>
               {#each j.mapping as m (m.dataset_class)}
-                <tr class="border-t border-zinc-800">
-                  <td class="py-1 pr-4 text-zinc-300">{m.dataset_class}</td>
-                  <td class="py-1 pr-4 text-zinc-500">
+                <tr class="border-t border-line">
+                  <td class="py-1 pr-4 text-fg-2">{m.dataset_class}</td>
+                  <td class="py-1 pr-4 text-fg-3">
                     {formats.mapping_actions.find(
                       (a) => a.value === (m.kind === 'item' ? 'map' : m.kind),
                     )?.label ?? m.kind}
                   </td>
-                  <td class="py-1 text-zinc-100">{m.class_name ?? '—'}</td>
+                  <td class="py-1 text-fg-1">{m.class_name ?? '—'}</td>
                 </tr>
               {/each}
             </tbody>
@@ -271,20 +271,20 @@
         </section>
 
         {#if j.issues_summary.length > 0}
-          <section class="rounded-lg border border-zinc-800 p-4">
-            <h2 class="mb-2 text-sm font-semibold text-zinc-200">Issues</h2>
+          <section class="rounded-lg border border-line p-4">
+            <h2 class="mb-2 text-sm font-semibold text-fg-1">Issues</h2>
             <DatasetIssueList issues={j.issues_summary} catalog={formats.issues} />
           </section>
         {/if}
 
         <details
-          class="rounded-lg border border-zinc-800 p-4"
+          class="rounded-lg border border-line p-4"
           ontoggle={(e) => {
             if ((e.currentTarget as HTMLDetailsElement).open && !job.issues)
               void job.loadIssues(1);
           }}
         >
-          <summary class="cursor-pointer text-sm font-semibold text-zinc-200"
+          <summary class="cursor-pointer text-sm font-semibold text-fg-1"
             >All issues</summary
           >
           <div class="mt-2 space-y-2 text-xs">
@@ -314,15 +314,13 @@
         </details>
 
         <details
-          class="rounded-lg border border-zinc-800 p-4"
+          class="rounded-lg border border-line p-4"
           ontoggle={(e) => {
             if ((e.currentTarget as HTMLDetailsElement).open && !job.entries)
               void job.loadEntries(1);
           }}
         >
-          <summary class="cursor-pointer text-sm font-semibold text-zinc-200"
-            >Images</summary
-          >
+          <summary class="cursor-pointer text-sm font-semibold text-fg-1">Images</summary>
           <div class="mt-2 space-y-2 text-xs">
             <div class="flex flex-wrap gap-2">
               {#each [['split', 'Split'], ['label_state', 'Label state'], ['status', 'Status']] as [key, label] (key)}
@@ -343,7 +341,7 @@
             </div>
             {#if job.entries}
               <table class="w-full text-left">
-                <thead class="text-zinc-500">
+                <thead class="text-fg-3">
                   <tr>
                     <th class="py-1 pr-3">File</th>
                     <th class="py-1 pr-3">Split</th>
@@ -354,12 +352,12 @@
                 </thead>
                 <tbody>
                   {#each job.entries.items as e (e.rel_path)}
-                    <tr class="border-t border-zinc-800">
+                    <tr class="border-t border-line">
                       <td class="py-1 pr-3 font-mono">{e.rel_path}</td>
                       <td class="py-1 pr-3">{e.split ?? '—'}</td>
                       <td class="py-1 pr-3">{e.label_state}</td>
                       <td class="py-1 pr-3">{e.status}</td>
-                      <td class="py-1 text-red-300">{e.error_kind ?? ''}</td>
+                      <td class="py-1 text-danger-text">{e.error_kind ?? ''}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -372,7 +370,9 @@
             {/if}
           </div>
         </details>
-        {#if job.tablesError}<p class="text-xs text-red-300">{job.tablesError}</p>{/if}
+        {#if job.tablesError}<p class="text-xs text-danger-text">
+            {job.tablesError}
+          </p>{/if}
 
         {#if confirm === 'cancel'}
           <ConfirmDialog
@@ -384,7 +384,7 @@
             oncancel={() => (confirm = null)}
           >
             <p>Stop this import after the chunk in progress. It can be resumed later.</p>
-            {#if job.actionError}<p class="text-red-300">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {:else if confirm === 'resume'}
           <ConfirmDialog
@@ -395,7 +395,7 @@
             oncancel={() => (confirm = null)}
           >
             <p>Resume from the first chunk that did not finish.</p>
-            {#if job.actionError}<p class="text-red-300">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {:else if confirm === 'undo'}
           <ConfirmDialog
@@ -437,38 +437,38 @@
                 class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs"
                 data-testid="undo-report"
               >
-                <dt class="text-zinc-500">Items deleted</dt>
+                <dt class="text-fg-3">Items deleted</dt>
                 <dd class="font-mono">{r.items_deleted}</dd>
-                <dt class="text-zinc-500">Items restored</dt>
+                <dt class="text-fg-3">Items restored</dt>
                 <dd class="font-mono">{r.items_restored}</dd>
-                <dt class="text-zinc-500">Labels removed</dt>
+                <dt class="text-fg-3">Labels removed</dt>
                 <dd class="font-mono">{r.class_labels_removed}</dd>
-                <dt class="text-zinc-500">Boxes removed</dt>
+                <dt class="text-fg-3">Boxes removed</dt>
                 <dd class="font-mono">{r.boxes_removed}</dd>
-                <dt class="text-zinc-500">Proposals deleted</dt>
+                <dt class="text-fg-3">Proposals deleted</dt>
                 <dd class="font-mono">{r.proposals_deleted}</dd>
-                <dt class="text-zinc-500">Holdout flags cleared</dt>
+                <dt class="text-fg-3">Holdout flags cleared</dt>
                 <dd class="font-mono">{r.holdout_flags_cleared}</dd>
-                <dt class="text-zinc-500">Images deleted</dt>
+                <dt class="text-fg-3">Images deleted</dt>
                 <dd class="font-mono">{r.images_deleted}</dd>
-                <dt class="text-zinc-500">Images kept</dt>
+                <dt class="text-fg-3">Images kept</dt>
                 <dd class="font-mono">{r.images_kept}</dd>
               </dl>
               {#if r.items_kept_human_edited > 0 || r.boxes_kept_human_edited > 0}
-                <p class="text-emerald-300" data-testid="undo-kept">
+                <p class="text-success-text" data-testid="undo-kept">
                   Your edits are kept: {r.items_kept_human_edited} items and
                   {r.boxes_kept_human_edited} boxes you changed stay as they are.
                 </p>
               {/if}
               {#if r.classes_deprecated.length > 0}
-                <p class="text-xs text-zinc-400">
+                <p class="text-xs text-fg-2">
                   Classes to deprecate: {r.classes_deprecated.join(', ')}
                 </p>
               {/if}
             {:else if !job.actionError}
-              <p class="text-xs text-zinc-500">Counting what the undo would change…</p>
+              <p class="text-xs text-fg-3">Counting what the undo would change…</p>
             {/if}
-            {#if job.actionError}<p class="text-red-300">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {/if}
 
@@ -480,17 +480,17 @@
             oncancel={() => (pendingStep = null)}
           >
             <p>{pendingStep.reason}</p>
-            <p class="font-mono text-xs text-zinc-500">
+            <p class="font-mono text-xs text-fg-3">
               {pendingStep.method}
               {pendingStep.path}
             </p>
-            {#if job.actionError}<p class="text-red-300">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {/if}
       {/if}
     {/snippet}
   </DatasetsGate>
-</div>
+</PageShell>
 
 {#snippet Pager({
   page: p,
@@ -502,7 +502,7 @@
   go: (p: number) => void;
 })}
   {@const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))}
-  <div class="flex items-center gap-2 text-xs text-zinc-400">
+  <div class="flex items-center gap-2 text-xs text-fg-2">
     <button type="button" class="btn btn-sm" disabled={p <= 1} onclick={() => go(p - 1)}
       >Prev</button
     >

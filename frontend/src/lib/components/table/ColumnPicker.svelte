@@ -21,16 +21,16 @@
 
 <details class="relative" data-testid="column-picker">
   <summary
-    class="cursor-pointer rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:text-zinc-100"
+    class="cursor-pointer rounded border border-line-strong px-2 py-1 text-xs text-fg-2 hover:text-fg-1"
   >
     Columns
   </summary>
   <fieldset
-    class="absolute right-0 z-20 mt-1 flex min-w-44 flex-col gap-1 rounded border border-zinc-700 bg-zinc-900 p-2 shadow-lg"
+    class="absolute right-0 z-20 mt-1 flex min-w-44 flex-col gap-1 rounded border border-line-strong bg-surface-1 p-2 shadow-lg"
   >
     <legend class="sr-only">Columns shown</legend>
     {#each vocabulary as c (c.id)}
-      <label class="flex items-center gap-2 text-xs text-zinc-200">
+      <label class="flex items-center gap-2 text-xs text-fg-1">
         <input
           type="checkbox"
           checked={chosen.includes(c.id)}

@@ -216,7 +216,7 @@
 
   <!-- F8 D9: the Uncertainty and Model Disagreements queues are driven by
          probe predictions (run a probe on /train), not by these scorers. -->
-  <p class="text-xs text-zinc-400" data-testid="scores-intro">
+  <p class="text-xs text-fg-2" data-testid="scores-intro">
     Scores are computed on demand, not automatically. The score-based review sorts (for
     example mistakenness) have nothing to sort by until their scorer has run at least
     once. Mistakenness also needs model probe predictions; if those are missing, Compute
@@ -227,18 +227,18 @@
 
   {#if loadError}
     <p
-      class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
     >
       {loadError}
     </p>
   {/if}
 
   {#if scorerIds.length === 0 && !loading}
-    <p class="text-sm text-zinc-500">No scorers advertised.</p>
+    <p class="text-sm text-fg-3">No scorers advertised.</p>
   {:else}
     <table class="w-full text-left text-sm">
       <thead>
-        <tr class="border-b border-zinc-800 text-xs text-zinc-500">
+        <tr class="border-b border-line text-xs text-fg-3">
           <th class="w-8 py-1.5 font-normal"><span class="sr-only">Select</span></th>
           <th class="py-1.5 font-normal">Scorer</th>
           <th class="py-1.5 font-normal">Field</th>
@@ -249,7 +249,7 @@
       <tbody>
         {#each scorerIds as id (id)}
           {@const entry = coverage[id]}
-          <tr class="border-b border-zinc-900">
+          <tr class="border-b border-line">
             <td class="py-1.5">
               <input
                 type="checkbox"
@@ -259,9 +259,9 @@
               />
             </td>
             <td class="py-1.5 font-mono text-xs">{id}</td>
-            <td class="py-1.5 font-mono text-xs text-zinc-500">{entry?.field ?? '—'}</td>
-            <td class="py-1.5 text-zinc-300">{formatCoverageCounts(entry)}</td>
-            <td class="py-1.5 text-zinc-300">{formatCoveragePct(entry)}</td>
+            <td class="py-1.5 font-mono text-xs text-fg-3">{entry?.field ?? '—'}</td>
+            <td class="py-1.5 text-fg-2">{formatCoverageCounts(entry)}</td>
+            <td class="py-1.5 text-fg-2">{formatCoveragePct(entry)}</td>
           </tr>
         {/each}
       </tbody>
@@ -286,7 +286,7 @@
       Compute selected{selectedIds.length ? ` (${selectedIds.length})` : ''}
     </button>
     {#if job}
-      <span class="text-xs text-zinc-400">
+      <span class="text-xs text-fg-2">
         Computing {job.scorers.join(', ') || 'scores'}
         {job.total
           ? ` — ${job.processed.toLocaleString()} / ${job.total.toLocaleString()}`
@@ -294,7 +294,7 @@
       </span>
       <button
         type="button"
-        class="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300 hover:bg-zinc-800"
+        class="rounded border border-line-strong px-2 py-0.5 text-xs text-fg-2 hover:bg-surface-2"
         onclick={() => void cancelCompute()}
         disabled={cancelling}
       >
@@ -305,7 +305,7 @@
 
   {#if computeError}
     <p
-      class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
     >
       {computeError}
     </p>
@@ -315,12 +315,12 @@
 {#if confirmScorers !== undefined}
   <Modal label="Confirm compute curation scores" onclose={closeConfirm}>
     <h3 class="mb-3 text-base font-semibold">Compute curation scores</h3>
-    <p class="mb-3 text-sm text-zinc-300">
+    <p class="mb-3 text-sm text-fg-2">
       {confirmScorers === null
         ? 'Runs every enabled scorer against the full pool.'
         : `Runs: ${confirmScorers?.join(', ')}.`}
     </p>
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       This is a deployment-wide, potentially long-running operation over the whole crop
       pool. Only one compute job can run at a time.
     </p>

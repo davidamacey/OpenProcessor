@@ -35,24 +35,24 @@
   data-testid="assist-progress"
   data-status={run.status}
 >
-  <p class="text-sm text-zinc-100" data-testid="assist-status">
+  <p class="text-sm text-fg-1" data-testid="assist-status">
     {STATUS_TEXT[run.status] ?? run.status}
     {#if total > 0}
-      <span class="font-mono text-zinc-400"
+      <span class="font-mono text-fg-2"
         >{formatCount(processed)}/{formatCount(total)}</span
       >
     {/if}
   </p>
   {#if total > 0}
-    <div class="h-1.5 rounded bg-zinc-800">
+    <div class="h-1.5 rounded bg-surface-2">
       <div
-        class="h-1.5 rounded bg-sky-500/70"
+        class="h-1.5 rounded bg-info/70"
         style="width: {Math.min(100, (processed / total) * 100)}%"
       ></div>
     </div>
   {/if}
   {#if run.status === 'waiting_region'}
-    <p class="text-zinc-400" data-testid="assist-waiting-region">
+    <p class="text-fg-2" data-testid="assist-waiting-region">
       The items are queued for the region worker. This run continues when it has written
       their boxes{segment
         ? ` (${formatCount(segment.done)} of ${formatCount(segment.queued)} done)`
@@ -60,10 +60,10 @@
     </p>
   {/if}
   {#if run.error}
-    <p class="text-red-300" data-testid="assist-run-error">{run.error}</p>
+    <p class="text-danger-text" data-testid="assist-run-error">{run.error}</p>
   {/if}
   {#if result}
-    <ul class="flex flex-col gap-0.5 text-zinc-300" data-testid="assist-result">
+    <ul class="flex flex-col gap-0.5 text-fg-2" data-testid="assist-result">
       {#if result.classify}
         <li>
           Class: {formatCount(result.classify.predicted)} answered, {formatCount(

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * `/datasets/import` — import a labeled dataset into the current project
@@ -102,32 +104,34 @@
   }
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-zinc-100">Import a labeled dataset</h1>
-    <a
-      class="text-xs text-blue-300 hover:underline"
-      href={resolve(projectHref('/datasets/imports'))}>All imports</a
-    >
-  </div>
+<PageShell class="space-y-6">
+  <PageHeader title="Import a labeled dataset">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/datasets/imports'))}>All imports</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <DatasetsGate>
     {#snippet children(formats)}
-      <p class="text-xs text-zinc-500">
+      <p class="text-xs text-fg-3">
         The dataset is imported into this project. To import into a new project,
-        <a class="text-blue-300 hover:underline" href={resolve('/projects')}>create it</a> first
-        and open this page there.
+        <a class="text-accent-text hover:underline" href={resolve('/projects')}
+          >create it</a
+        > first and open this page there.
       </p>
 
       <!-- 1. Source -->
       <section
-        class="space-y-3 rounded-lg border border-zinc-800 p-4"
+        class="space-y-3 rounded-lg border border-line p-4"
         data-testid="import-source"
       >
-        <h2 class="text-sm font-semibold text-zinc-200">Source</h2>
+        <h2 class="text-sm font-semibold text-fg-1">Source</h2>
         <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
           <label class="block text-xs">
-            <span class="mb-0.5 block text-zinc-400">Server path</span>
+            <span class="mb-0.5 block text-fg-2">Server path</span>
             <input
               class="input w-full font-mono"
               placeholder="/data/source/my_dataset"
@@ -138,7 +142,7 @@
             />
           </label>
           <label class="block text-xs">
-            <span class="mb-0.5 block text-zinc-400">Format</span>
+            <span class="mb-0.5 block text-fg-2">Format</span>
             <select
               class="select"
               value={wizard.format}
@@ -152,61 +156,61 @@
           </label>
         </div>
         {#if sourceRoots.length > 0}
-          <div class="text-xs text-zinc-500" data-testid="source-roots">
+          <div class="text-xs text-fg-3" data-testid="source-roots">
             Allowed roots:
-            {#each sourceRoots as r, i (r)}<code class="font-mono text-zinc-300">{r}</code
+            {#each sourceRoots as r, i (r)}<code class="font-mono text-fg-2">{r}</code
               >{i < sourceRoots.length - 1 ? ', ' : ''}{/each}
           </div>
         {/if}
         <div class="text-xs">
           <label class="inline-flex items-center gap-2">
-            <span class="text-zinc-400">Or upload an archive</span>
+            <span class="text-fg-2">Or upload an archive</span>
             <input
               type="file"
               disabled={wizard.uploading}
               onchange={(e) => onFile(e, formats)}
             />
           </label>
-          <span class="ml-2 text-zinc-500">
+          <span class="ml-2 text-fg-3">
             Up to
             {(datasetUploadMaxBytes(formats.upload_limits.max_bytes) / 1024 ** 3).toFixed(
               1,
             )} GiB and {formats.upload_limits.max_files.toLocaleString()} files. Large datasets
             belong on a server path.
           </span>
-          {#if wizard.uploading}<p class="mt-1 text-zinc-400">Uploading…</p>{/if}
-          {#if wizard.uploadError}<p class="mt-1 text-red-300">
+          {#if wizard.uploading}<p class="mt-1 text-fg-2">Uploading…</p>{/if}
+          {#if wizard.uploadError}<p class="mt-1 text-danger-text">
               {wizard.uploadError}
             </p>{/if}
         </div>
       </section>
 
       <!-- 2. Preview -->
-      <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
+      <section class="space-y-3 rounded-lg border border-line p-4">
         <div class="flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold text-zinc-200">Preview</h2>
+          <h2 class="text-sm font-semibold text-fg-1">Preview</h2>
           {#if wizard.previewing}
-            <span class="text-xs text-zinc-500" data-testid="previewing"
+            <span class="text-xs text-fg-3" data-testid="previewing"
               >Checking the dataset…</span
             >
           {/if}
         </div>
         {#if wizard.previewError}
-          <p class="text-sm text-red-300" data-testid="preview-error">
+          <p class="text-sm text-danger-text" data-testid="preview-error">
             {wizard.previewError}
           </p>
         {:else if wizard.preview}
           <PreviewSummary preview={wizard.preview} {formats} />
         {:else}
-          <p class="text-xs text-zinc-500">Enter a server path or upload an archive.</p>
+          <p class="text-xs text-fg-3">Enter a server path or upload an archive.</p>
         {/if}
       </section>
 
       {#if wizard.preview}
         <!-- 3. Class mapping -->
-        <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
-          <h2 class="text-sm font-semibold text-zinc-200">Class mapping</h2>
-          <p class="text-xs text-zinc-500">
+        <section class="space-y-3 rounded-lg border border-line p-4">
+          <h2 class="text-sm font-semibold text-fg-1">Class mapping</h2>
+          <p class="text-xs text-fg-3">
             Classes are matched by name. Pick the same class on two rows to merge them.
           </p>
           <div class="flex flex-wrap items-center gap-4 text-xs">
@@ -223,7 +227,7 @@
             </label>
             {#if previousImports.length > 0}
               <label class="inline-flex items-center gap-2">
-                <span class="text-zinc-400">Use the mapping from</span>
+                <span class="text-fg-2">Use the mapping from</span>
                 <select
                   class="select select-sm"
                   onchange={(e) =>
@@ -236,14 +240,14 @@
                 </select>
               </label>
             {/if}
-            {#if prefillError}<span class="text-red-300">{prefillError}</span>{/if}
+            {#if prefillError}<span class="text-danger-text">{prefillError}</span>{/if}
           </div>
           <MappingTable {wizard} {formats} classes={pickableClasses} />
         </section>
 
         <!-- 4. Options -->
-        <section class="space-y-3 rounded-lg border border-zinc-800 p-4">
-          <h2 class="text-sm font-semibold text-zinc-200">Options</h2>
+        <section class="space-y-3 rounded-lg border border-line p-4">
+          <h2 class="text-sm font-semibold text-fg-1">Options</h2>
           <ImportOptions {wizard} {formats} />
         </section>
 
@@ -251,7 +255,7 @@
         <section class="space-y-3" data-testid="import-start">
           {#if wizard.refusal}
             <div
-              class="space-y-2 rounded border border-red-900 bg-red-950/30 p-3 text-sm text-red-200"
+              class="space-y-2 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
               data-testid="start-refusal"
             >
               <p>{wizard.refusal.message}</p>
@@ -264,7 +268,7 @@
                 >
               {:else if wizard.refusal.importId}
                 <a
-                  class="text-blue-300 hover:underline"
+                  class="text-accent-text hover:underline"
                   href={resolve(
                     projectHref(
                       `/datasets/imports/${encodeURIComponent(wizard.refusal.importId)}`,
@@ -281,10 +285,10 @@
             </div>
           {/if}
           {#if wizard.reusedJob}
-            <p class="text-sm text-zinc-300" data-testid="start-reused">
+            <p class="text-sm text-fg-2" data-testid="start-reused">
               Already imported.
               <a
-                class="text-blue-300 hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(
                   projectHref(
                     `/datasets/imports/${encodeURIComponent(wizard.reusedJob.import_id)}`,
@@ -302,13 +306,13 @@
             Start import
           </button>
           {#if wizard.unmappedRows.length > 0}
-            <span class="ml-2 text-xs text-amber-300">
+            <span class="ml-2 text-xs text-warn-text">
               {wizard.unmappedRows.length === 1
                 ? '1 class still needs a mapping.'
                 : `${wizard.unmappedRows.length} classes still need a mapping.`}
             </span>
           {:else if wizard.preview.blocking && !wizard.canStart}
-            <span class="ml-2 text-xs text-red-300"
+            <span class="ml-2 text-xs text-danger-text"
               >The issues above block this import.</span
             >
           {/if}
@@ -326,7 +330,7 @@
               Import {wizard.preview.totals.images.toLocaleString()} images and
               {wizard.preview.totals.boxes.toLocaleString()} boxes into this project.
             </p>
-            <p class="text-xs text-zinc-400">
+            <p class="text-xs text-fg-2">
               {wizard.preview.totals.images_to_ingest.toLocaleString()} images to ingest,
               {wizard.preview.totals.images_already_indexed.toLocaleString()} already here.
               An import can be undone from its page.
@@ -350,4 +354,4 @@
       {/if}
     {/snippet}
   </DatasetsGate>
-</div>
+</PageShell>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * A horizontally scrolling box that shows it can scroll (F8 D5: the
    * `/bakeoff` ranked table cut off after "Precision" at 800px with nothing
@@ -44,12 +45,13 @@
   </div>
   {#if moreRight}
     <div
-      class="pointer-events-none absolute inset-y-0 right-0 w-1 rounded-r-lg bg-blue-500/50"
+      class="pointer-events-none absolute inset-y-0 right-0 w-1 rounded-r-lg bg-accent/50"
       aria-hidden="true"
     ></div>
     <span
-      class="pointer-events-none absolute right-1 top-1 rounded bg-zinc-900/90 px-1.5 py-0.5 text-[10px] text-zinc-300"
-      data-testid="scroll-hint">scroll →</span
+      class="pointer-events-none absolute right-1 top-1 rounded bg-surface-1/90 px-1.5 py-0.5 text-caption text-fg-2"
+      data-testid="scroll-hint"
+      >scroll <Icon name="arrow-right" size={12} class="inline-block" /></span
     >
   {/if}
 </div>

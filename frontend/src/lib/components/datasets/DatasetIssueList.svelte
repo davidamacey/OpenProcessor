@@ -15,13 +15,17 @@
   let { issues, catalog }: Props = $props();
 
   const SEVERITIES = [
-    { id: 'error', title: 'Errors', tone: 'border-red-900 bg-red-950/30 text-red-200' },
+    {
+      id: 'error',
+      title: 'Errors',
+      tone: 'border-danger-line bg-danger-soft text-danger-text',
+    },
     {
       id: 'warning',
       title: 'Warnings',
-      tone: 'border-amber-900 bg-amber-950/30 text-amber-200',
+      tone: 'border-warn-line bg-warn-soft text-warn-text',
     },
-    { id: 'info', title: 'Info', tone: 'border-zinc-800 bg-zinc-900/40 text-zinc-300' },
+    { id: 'info', title: 'Info', tone: 'border-line bg-surface-1/40 text-fg-2' },
   ] as const;
 
   const labelByCode = $derived(new Map(catalog.map((c) => [c.code, c.label])));
@@ -34,12 +38,12 @@
 </script>
 
 {#if issues.length === 0}
-  <p class="text-xs text-zinc-500" data-testid="dataset-issues-none">No issues.</p>
+  <p class="text-xs text-fg-3" data-testid="dataset-issues-none">No issues.</p>
 {:else}
   <div class="space-y-3" data-testid="dataset-issues">
     {#each groups as g (g.id)}
       <section data-testid="dataset-issues-{g.id}">
-        <h4 class="mb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+        <h4 class="mb-1 text-xs font-semibold tracking-wide text-fg-2 uppercase">
           {g.title}
         </h4>
         <ul class="space-y-1">
@@ -49,11 +53,12 @@
                 <span class="font-semibold"
                   >{labelByCode.get(issue.code) ?? issue.code}</span
                 >
-                <span class="font-mono text-[11px] opacity-70"
+                <span class="font-mono text-caption opacity-70"
                   >{issue.count.toLocaleString()}</span
                 >
                 {#if issue.blocking}
-                  <span class="rounded bg-red-900/60 px-1.5 text-[10px] text-red-100"
+                  <span
+                    class="rounded bg-danger-soft px-1.5 text-caption text-danger-text"
                     >blocks the import{issue.bypassable ? ' (can be forced)' : ''}</span
                   >
                 {/if}
@@ -64,7 +69,7 @@
                   <summary class="cursor-pointer opacity-80">
                     {issue.samples.length} sample{issue.samples.length === 1 ? '' : 's'}
                   </summary>
-                  <ul class="mt-1 space-y-0.5 font-mono text-[11px]">
+                  <ul class="mt-1 space-y-0.5 font-mono text-caption">
                     {#each issue.samples as s, i (i)}
                       <li>{s.file}{s.line != null ? `:${s.line}` : ''}</li>
                     {/each}

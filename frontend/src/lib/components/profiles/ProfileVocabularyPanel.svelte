@@ -23,11 +23,11 @@
 
 {#snippet models(list: VocabModel[], testid: string)}
   {#if list.length === 0}
-    <p class="text-xs text-zinc-500">None served.</p>
+    <p class="text-xs text-fg-3">None served.</p>
   {:else}
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs" data-testid={testid}>
-        <thead class="text-zinc-500">
+        <thead class="text-fg-3">
           <tr>
             <th class="py-0.5 pr-3 font-normal">Model</th>
             <th class="py-0.5 pr-3 font-normal">Source</th>
@@ -37,14 +37,14 @@
         </thead>
         <tbody>
           {#each list as m (m.name + (m.project ?? ''))}
-            <tr class="border-t border-zinc-800">
+            <tr class="border-t border-line">
               <td class="py-0.5 pr-3 font-mono">{m.choice.label}</td>
               <td class="py-0.5 pr-3 font-mono">{m.source}</td>
               <td class="py-0.5 pr-3 font-mono">
                 {m.state ?? '—'}{m.ready === false ? ' (not ready)' : ''}
               </td>
-              <td class="py-0.5 text-zinc-400">
-                {#if m.configured}<span class="mr-2 text-emerald-300"
+              <td class="py-0.5 text-fg-2">
+                {#if m.configured}<span class="mr-2 text-success-text"
                     >configured for this role</span
                   >{/if}
                 {#if m.project}<span class="mr-2"
@@ -71,35 +71,35 @@
 
 <div class="flex flex-col gap-4 text-sm" data-testid="vocabulary-panel">
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-zinc-200">Detectors</h3>
+    <h3 class="text-sm font-semibold text-fg-1">Detectors</h3>
     {@render models(vocab.detectors, 'vocab-detectors')}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-zinc-200">Segmenters</h3>
+    <h3 class="text-sm font-semibold text-fg-1">Segmenters</h3>
     <SegmenterStatus segmenters={vocab.segmenters} />
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-zinc-200">
-      OCR <span class="text-xs font-normal text-zinc-400"
+    <h3 class="text-sm font-semibold text-fg-1">
+      OCR <span class="text-xs font-normal text-fg-2"
         >({vocab.ocr.available ? 'available' : 'not available'})</span
       >
     </h3>
     {#each ocrLists as l (l.id)}
-      <p class="text-xs text-zinc-400">{l.label}</p>
+      <p class="text-xs text-fg-2">{l.label}</p>
       {@render models(l.models, `vocab-ocr-${l.id}`)}
     {/each}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-zinc-200">Text-reading modes</h3>
+    <h3 class="text-sm font-semibold text-fg-1">Text-reading modes</h3>
     <ul class="space-y-0.5 text-xs" data-testid="vocab-text-modes">
       {#each vocab.text_reader_modes as m (m.id)}
         <li>
-          <span class="text-zinc-200">{m.label}</span>
-          <code class="ml-1 font-mono text-zinc-500">{m.id}</code>
-          <span class="ml-1 text-zinc-400"
+          <span class="text-fg-1">{m.label}</span>
+          <code class="ml-1 font-mono text-fg-3">{m.id}</code>
+          <span class="ml-1 text-fg-2"
             >{m.reads_text ? 'reads text' : 'no text'}{m.needs_vlm
               ? ' · needs the VLM'
               : ''}{m.needs_ocr ? ' · needs OCR' : ''}</span
@@ -110,13 +110,13 @@
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-zinc-200">VLM endpoints</h3>
+    <h3 class="text-sm font-semibold text-fg-1">VLM endpoints</h3>
     {#if vocab.vlm.endpoints.length === 0}
-      <p class="text-xs text-zinc-500">No VLM is configured.</p>
+      <p class="text-xs text-fg-3">No VLM is configured.</p>
     {:else}
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs" data-testid="vocab-vlm">
-          <thead class="text-zinc-500">
+          <thead class="text-fg-3">
             <tr>
               <th class="py-0.5 pr-3 font-normal">Endpoint</th>
               <th class="py-0.5 pr-3 font-normal">Model</th>
@@ -126,9 +126,9 @@
           </thead>
           <tbody>
             {#each vocab.vlm.endpoints as v (v.name)}
-              <tr class="border-t border-zinc-800">
+              <tr class="border-t border-line">
                 <td class="py-0.5 pr-3 font-mono"
-                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-emerald-300"
+                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-success-text"
                       >active</span
                     >{/if}</td
                 >
@@ -144,7 +144,7 @@
                 >
                 <td class="py-0.5 font-mono"
                   >{v.status ?? '—'}{#if v.warning}<span
-                      class="ml-1 rounded border border-red-500/40 bg-red-500/10 px-1 font-sans text-red-200"
+                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 font-sans text-danger-text"
                       data-testid="vocab-vlm-warning">{v.warning}</span
                     >{/if}</td
                 >

@@ -34,15 +34,15 @@
 </script>
 
 {#if prompt != null}
-  <dt class="text-zinc-500">Prompt</dt>
-  <dd class="text-zinc-200" data-testid="ov-prompt">{prompt}</dd>
+  <dt class="text-fg-3">Prompt</dt>
+  <dd class="text-fg-1" data-testid="ov-prompt">{prompt}</dd>
 {/if}
 {#if set != null}
-  <dt class="text-zinc-500">Open-vocabulary set</dt>
-  <dd class="font-mono text-zinc-200" data-testid="ov-set">
+  <dt class="text-fg-3">Open-vocabulary set</dt>
+  <dd class="font-mono text-fg-1" data-testid="ov-set">
     {#if linkable}
       <a
-        class="text-blue-300 underline hover:text-blue-200"
+        class="text-accent-text underline hover:text-accent-text"
         href={resolve(projectHref(`/settings/open-vocab/${encodeURIComponent(set)}`))}
         >{set}{crop.open_vocab_revision != null ? `@${crop.open_vocab_revision}` : ''}</a
       >
@@ -52,14 +52,14 @@
   </dd>
 {/if}
 {#if gateSkip != null}
-  <dt class="text-zinc-500">Region stage skipped</dt>
-  <dd class="text-amber-200" data-testid="ov-gate-skip">{gateSkip}</dd>
+  <dt class="text-fg-3">Region stage skipped</dt>
+  <dd class="text-warn-text" data-testid="ov-gate-skip">{gateSkip}</dd>
 {/if}
 {#if set != null || prompt != null}
-  <dt class="text-zinc-500">Same origin</dt>
+  <dt class="text-fg-3">Same origin</dt>
   <dd>
     <a
-      class="text-blue-300 underline hover:text-blue-200"
+      class="text-accent-text underline hover:text-accent-text"
       data-testid="ov-matching-link"
       href={resolve(projectHref(`/workspace?${matchingQuery}`))}>Show matching items</a
     >

@@ -93,18 +93,16 @@
   });
 </script>
 
-<div class="flex flex-col rounded-md border border-zinc-800 bg-zinc-950">
-  <div
-    class="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-1.5"
-  >
-    <h3 class="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-      Live log <span class="font-mono text-[10px] text-zinc-500">tail {lines}</span>
+<div class="flex flex-col rounded-md border border-line bg-surface-0">
+  <div class="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
+    <h3 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">
+      Live log <span class="font-mono text-caption text-fg-3">tail {lines}</span>
     </h3>
-    <div class="flex items-center gap-2 text-[11px] text-zinc-500">
+    <div class="flex items-center gap-2 text-caption text-fg-3">
       {#if !stickyBottom}
         <button
           type="button"
-          class="rounded border border-zinc-700 px-1.5 py-0.5 text-blue-300 hover:bg-zinc-900"
+          class="rounded border border-line-strong px-1.5 py-0.5 text-accent-text hover:bg-surface-1"
           onclick={() => {
             stickyBottom = true;
             scrollToBottom();
@@ -113,22 +111,22 @@
           jump to bottom
         </button>
       {:else if active}
-        <span class="font-mono text-green-400">tailing</span>
+        <span class="font-mono text-success-text">tailing</span>
       {:else}
         <span class="font-mono">paused</span>
       {/if}
     </div>
   </div>
   {#if error}
-    <p class="px-3 py-2 text-xs text-red-300">log fetch failed: {error}</p>
+    <p class="px-3 py-2 text-xs text-danger-text">log fetch failed: {error}</p>
   {/if}
   <div
     bind:this={scroller}
     onscroll={onScroll}
-    class="max-h-[24rem] min-h-[12rem] overflow-auto px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-300"
+    class="max-h-[24rem] min-h-[12rem] overflow-auto px-3 py-2 font-mono text-caption leading-relaxed text-fg-2"
   >
     {#if buffer.length === 0}
-      <p class="text-zinc-600">(no log lines yet)</p>
+      <p class="text-fg-3">(no log lines yet)</p>
     {:else}
       {#each buffer as line, i (i)}
         <div class="whitespace-pre">{cleanLogLine(line)}</div>

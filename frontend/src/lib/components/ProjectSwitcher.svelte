@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Top-bar project switcher (review §7.3). Lists the served `selectable`
    * projects with their `display_name` and a served status badge for
@@ -112,7 +113,7 @@
 <div class="relative min-w-0 shrink" bind:this={root} data-testid="project-switcher">
   <button
     type="button"
-    class="flex max-w-[min(16rem,55vw)] min-w-0 items-center gap-1.5 rounded border border-zinc-800 px-2 py-1 text-sm text-zinc-200 hover:border-zinc-600"
+    class="flex max-w-[min(16rem,55vw)] min-w-0 items-center gap-1.5 rounded border border-line px-2 py-1 text-sm text-fg-1 hover:border-line-strong"
     aria-haspopup="listbox"
     aria-expanded={open}
     title="Switch project"
@@ -125,31 +126,31 @@
     >
     {#if current && current.status !== 'active'}
       <span
-        class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
         data-testid="project-switcher-status"
         >{projectsStore.statusLabel(current.status)}</span
       >
     {/if}
     {#if paused}
       <span
-        class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
         title={pausedTitle}
         data-testid="project-switcher-paused">paused</span
       >
     {/if}
     {#if customKeys}
       <span
-        class="shrink-0 rounded bg-zinc-800 px-1 text-[10px] text-zinc-300"
+        class="shrink-0 rounded bg-surface-2 px-1 text-caption text-fg-2"
         title="This project's keyboard shortcuts differ from the defaults"
         data-testid="project-switcher-custom-keys">custom keys</span
       >
     {/if}
-    <span class="shrink-0 text-zinc-500" aria-hidden="true">▾</span>
+    <Icon name="chevron-down" size={14} class="text-fg-3" />
   </button>
 
   {#if open}
     <div
-      class="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-1rem)] rounded border border-zinc-700 bg-zinc-900 shadow-xl"
+      class="absolute left-0 top-full z-60 mt-1 w-72 max-w-[calc(100vw-1rem)] rounded border border-line-strong bg-surface-1 shadow-xl"
       role="presentation"
       data-testid="project-switcher-menu"
       onkeydown={onKeydown}
@@ -157,7 +158,7 @@
       <input
         bind:this={filterInput}
         type="text"
-        class="block w-full rounded-t border-b border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+        class="block w-full rounded-t border-b border-line-strong bg-surface-0 px-3 py-1.5 text-sm text-fg-1 placeholder:text-fg-3 focus:outline-none"
         placeholder="Find a project…"
         role="combobox"
         aria-label="Find a project"
@@ -181,18 +182,16 @@
         data-testid="project-switcher-list"
       >
         {#if picker.query.trim() === '' && picker.recents.length > 0}
-          <p class="px-3 pt-1 text-[10px] uppercase tracking-wide text-zinc-500">
-            Recent
-          </p>
+          <p class="px-3 pt-1 text-caption uppercase tracking-wide text-fg-3">Recent</p>
           {#each picker.recents as r (r.slug)}
             <button
               type="button"
-              class="block w-full truncate px-3 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+              class="block w-full truncate px-3 py-1 text-left text-sm text-fg-2 hover:bg-surface-2"
               data-testid="project-recent-{r.slug}"
               onclick={() => choose(r.slug)}>{r.display_name}</button
             >
           {/each}
-          <p class="px-3 pt-1 text-[10px] uppercase tracking-wide text-zinc-500">All</p>
+          <p class="px-3 pt-1 text-caption uppercase tracking-wide text-fg-3">All</p>
         {/if}
         {#each picker.projects as p, i (p.slug)}
           <div
@@ -202,30 +201,29 @@
             aria-selected={i === picker.active}
             class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm {i ===
             picker.active
-              ? 'bg-zinc-800'
-              : ''} {p.slug === current?.slug ? 'text-white' : 'text-zinc-300'}"
+              ? 'bg-surface-2'
+              : ''} {p.slug === current?.slug ? 'text-white' : 'text-fg-2'}"
             data-testid="project-option-{p.slug}"
             onclick={() => choose(p.slug)}
             onkeydown={() => {}}
           >
             <span class="min-w-0 flex-1">
               <span class="block truncate">{p.display_name}</span>
-              <span class="block truncate font-mono text-[11px] text-zinc-500"
-                >{p.slug}</span
+              <span class="block truncate font-mono text-caption text-fg-3">{p.slug}</span
               >
             </span>
             {#if p.status !== 'active'}
               <span
-                class="shrink-0 rounded bg-amber-950/60 px-1 text-[10px] uppercase tracking-wide text-amber-300"
+                class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
                 >{projectsStore.statusLabel(p.status)}</span
               >
             {/if}
             {#if p.slug === current?.slug}
-              <span class="shrink-0 text-xs text-zinc-500">current</span>
+              <span class="shrink-0 text-xs text-fg-3">current</span>
             {/if}
           </div>
         {:else}
-          <p class="px-3 py-2 text-xs text-zinc-500" role="status">
+          <p class="px-3 py-2 text-xs text-fg-3" role="status">
             {#if picker.error}{picker.error}{:else if picker.loading}Loading…{:else}No
               project matches "{picker.query}".{/if}
           </p>
@@ -233,14 +231,14 @@
       </div>
       {#if picker.projects.length > 0}
         <div
-          class="flex items-center gap-2 px-3 py-1 text-[11px] text-zinc-500"
+          class="flex items-center gap-2 px-3 py-1 text-caption text-fg-3"
           data-testid="project-switcher-more"
         >
           <span>Showing {picker.projects.length} of {picker.total}</span>
           {#if picker.hasMore}
             <button
               type="button"
-              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300 hover:border-zinc-500"
+              class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2 hover:border-fg-3"
               disabled={picker.loading}
               data-testid="project-switcher-more-button"
               onclick={() => void picker.more()}>Show more</button
@@ -248,10 +246,10 @@
           {/if}
         </div>
       {/if}
-      <div class="my-1 border-t border-zinc-800"></div>
+      <div class="my-1 border-t border-line"></div>
       <a
         href={resolve('/projects')}
-        class="block px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-white"
+        class="block px-3 py-1.5 text-sm text-fg-2 hover:bg-surface-2 hover:text-white"
         data-testid="project-switcher-manage"
         onclick={() => (open = false)}>Manage projects…</a
       >

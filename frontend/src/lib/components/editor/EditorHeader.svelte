@@ -28,27 +28,27 @@
 </script>
 
 <header
-  class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800 px-3 py-2"
+  class="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-3 py-2"
 >
   <a
     href={resolve(backHref)}
-    class="text-sm text-sky-300 hover:underline"
+    class="text-sm text-info-text hover:underline"
     data-testid="editor-back"
   >
     ‹ Workspace
   </a>
-  <h1 class="min-w-0 truncate text-sm font-medium text-zinc-100" title={fileName}>
+  <h1 class="min-w-0 truncate text-sm font-medium text-fg-1" title={fileName}>
     {fileName}
   </h1>
   {#if index !== null && total !== null}
-    <span class="text-xs text-zinc-400" data-testid="editor-position">
+    <span class="text-xs text-fg-2" data-testid="editor-position">
       {index + 1} of {total}
     </span>
   {/if}
   <span
     class="ml-auto text-xs {status === 'saved' || status === 'saving'
-      ? 'text-zinc-400'
-      : 'text-amber-300'}"
+      ? 'text-fg-2'
+      : 'text-warn-text'}"
     role="status"
     data-testid="save-state"
     data-status={status}
@@ -58,7 +58,7 @@
 </header>
 {#if message && (status === 'conflict' || status === 'failed')}
   <p
-    class="border-b border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200"
+    class="border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn-text"
     role="alert"
     data-testid="save-message"
   >

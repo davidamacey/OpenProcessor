@@ -64,7 +64,7 @@
 
 <div class="flex flex-col gap-4" data-testid="vlm-endpoint-form">
   {#if advancedCount > 0}
-    <label class="flex items-center gap-2 text-xs text-zinc-400">
+    <label class="flex items-center gap-2 text-xs text-fg-2">
       <input type="checkbox" bind:checked={showAdvanced} data-testid="show-advanced" />
       Show advanced fields ({advancedCount})
     </label>
@@ -76,7 +76,7 @@
     {@const visible = g.fields.filter((f) => showAdvanced || !f.advanced)}
     {#if visible.length > 0}
       <section class="flex flex-col gap-3" data-testid="vlm-group" data-group={g.id}>
-        <h2 class="text-sm font-semibold text-zinc-200">{g.label}</h2>
+        <h2 class="text-sm font-semibold text-fg-1">{g.label}</h2>
         {#each visible as f (f.field)}
           {@const row = schema.fields.find((r) => r.field === f.field)!}
           <ProfileFieldEditor
@@ -90,13 +90,13 @@
             onchange={(v) => onchange(f.field, v)}
           />
           {#if f.field === 'provider' && providerDefaults}
-            <p class="-mt-2 text-xs text-zinc-500" data-testid="vlm-provider-defaults">
+            <p class="-mt-2 text-xs text-fg-3" data-testid="vlm-provider-defaults">
               Provider defaults: JSON mode {providerDefaults.json_mode}, temperature
               {providerDefaults.temperature ?? 'none (not sent)'}.
             </p>
           {/if}
           {#if f.field === 'api_key_ref' && body.api_key_ref != null}
-            <p class="-mt-2 text-xs text-zinc-500" data-testid="vlm-key-present">
+            <p class="-mt-2 text-xs text-fg-3" data-testid="vlm-key-present">
               {keyPresent() === true
                 ? 'The host has this secret.'
                 : keyPresent() === false
@@ -106,7 +106,7 @@
           {/if}
         {/each}
         {#if !showAdvanced && visible.length < g.fields.length}
-          <p class="text-xs text-zinc-500">
+          <p class="text-xs text-fg-3">
             {g.fields.length - visible.length} advanced field{g.fields.length -
               visible.length ===
             1

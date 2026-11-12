@@ -63,18 +63,18 @@
 </script>
 
 <div
-  class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800 px-4 py-2"
+  class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2"
   data-testid="review-header"
 >
-  <h1 class="text-sm font-medium text-zinc-100" data-testid="review-queue-label">
+  <h1 class="text-sm font-medium text-fg-1" data-testid="review-queue-label">
     {tabs.activeQueueLabel}
   </h1>
   {#if regionProfileStore.unknown}
-    <span class="text-[11px] text-zinc-500" data-testid="region-profile-loading"
+    <span class="text-caption text-fg-3" data-testid="region-profile-loading"
       >loading region profile…</span
     >
   {/if}
-  <span data-testid="queue-counter" class="font-mono text-xs text-zinc-500">
+  <span data-testid="queue-counter" class="font-mono text-xs text-fg-3">
     {queue.items.length > 0 ? `#${loader.currentPosition}` : '—'} · {queue.items.length} loaded
     · {queue.total} total
   </span>
@@ -111,7 +111,7 @@
     {/key}
   {/if}
   <span class="grow"></span>
-  <span class="hidden text-[11px] text-zinc-500 lg:inline">
+  <span class="hidden text-caption text-fg-3 lg:inline">
     {#if isMultiBoxSlot && activeSlot}
       <kbd>{kg('review.region.confirm')}</kbd> confirm proposed ·
       <kbd>{kg('review.region.accept_box')}</kbd> accept box ·
@@ -141,7 +141,7 @@
   <ShortcutsButton />
   <button
     type="button"
-    class="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+    class="shrink-0 rounded border border-line-strong px-2 py-1 text-caption text-fg-2 hover:border-fg-3 hover:text-fg-1"
     onclick={toggleDismissedPanel}
     title="Crops permanently dismissed from review — restore one back into the queue"
   >
@@ -150,7 +150,7 @@
   {#if liveNewCount > 0}
     <button
       type="button"
-      class="shrink-0 animate-pulse rounded-full border border-blue-500/60 bg-blue-500/15 px-2.5 py-1 text-[11px] text-blue-200 hover:bg-blue-500/25"
+      class="shrink-0 animate-pulse rounded-full border border-accent/60 bg-accent/15 px-2.5 py-1 text-caption text-accent-text hover:bg-accent/25"
       onclick={refreshFromLive}
       title="Reload the queue with the latest crops"
     >

@@ -60,19 +60,19 @@
       {/each}
     </div>
   </header>
-  <p class="text-xs text-zinc-400">{PURPOSE_HINT[ctl.purpose]}</p>
+  <p class="text-xs text-fg-2">{PURPOSE_HINT[ctl.purpose]}</p>
 
   {#if ctl.groupsError}
     <div class="flex flex-col gap-2 text-sm" data-testid="near-dup-groups-error">
-      <p class="text-red-300" role="alert">{ctl.groupsError}</p>
+      <p class="text-danger-text" role="alert">{ctl.groupsError}</p>
       <button type="button" class="btn w-fit" onclick={() => void ctl.loadGroups()}
         >Retry</button
       >
     </div>
   {:else if !ctl.groupsLoaded}
-    <p class="text-xs text-zinc-500">Loading groups…</p>
+    <p class="text-xs text-fg-3">Loading groups…</p>
   {:else if ctl.groups.length === 0}
-    <p class="text-sm text-zinc-400" data-testid="near-dup-groups-empty">
+    <p class="text-sm text-fg-2" data-testid="near-dup-groups-empty">
       {ctl.emptyReason}
     </p>
   {:else}
@@ -81,7 +81,7 @@
         <li>
           <button
             type="button"
-            class="flex w-full items-start gap-3 rounded border border-zinc-800 p-3 text-left hover:border-zinc-600"
+            class="flex w-full items-start gap-3 rounded border border-line p-3 text-left hover:border-line-strong"
             data-testid="near-dup-group"
             onclick={() => onopen(g)}
           >
@@ -90,12 +90,12 @@
               label={`${ctl.level} ${g.representative_id}`}
               size="sm"
             />
-            <span class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">
-              <span class="text-sm font-medium text-zinc-100">{g.size} members</span>
+            <span class="flex min-w-0 flex-col gap-1 text-xs text-fg-2">
+              <span class="text-sm font-medium text-fg-1">{g.size} members</span>
               <span>Lowest edge cosine {cos(g.min_edge_cosine)}</span>
               <span>Lowest to representative {cos(g.min_cosine_to_rep)}</span>
               {#if g.has_holdout}
-                <span class="chip w-fit border-amber-700 text-amber-300"
+                <span class="chip w-fit border-warn-line text-warn-text"
                   >In test holdout</span
                 >
               {/if}

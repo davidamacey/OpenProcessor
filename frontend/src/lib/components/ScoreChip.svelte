@@ -35,11 +35,11 @@
     if (!method) return `${label}: ${pct}`;
     return `${label}: ${pct} · ${method}${version ? `@${version}` : ''}`;
   });
-  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
+  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-caption' : '');
 </script>
 
 <span
-  class="chip border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-200 {sizeCls} font-mono"
+  class="chip border-holdout/50 bg-holdout/10 text-holdout-text {sizeCls} font-mono"
   title={tooltip}
 >
   <span class="uppercase tracking-wide opacity-80">{label}</span>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { sourceBadge } from '$lib/sourceBadge';
   import { sourceShortCode } from '$lib/cropCardText';
   import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
@@ -234,14 +235,14 @@
      button (Enter and Space work natively). -->
 <div
   style="content-visibility:auto;contain-intrinsic-size:auto 260px"
-  class="group relative flex flex-col rounded-md border bg-zinc-900 text-left transition {selected
-    ? 'border-blue-500 ring-2 ring-blue-500/40'
-    : 'border-zinc-800 hover:border-zinc-600'}"
+  class="group relative flex flex-col rounded-md border bg-surface-1 text-left transition {selected
+    ? 'border-accent ring-2 ring-accent/40'
+    : 'border-line hover:border-line-strong'}"
 >
-  <div class="relative aspect-square w-full overflow-hidden rounded-t-md bg-zinc-950">
+  <div class="relative aspect-square w-full overflow-hidden rounded-t-md bg-surface-0">
     <button
       type="button"
-      class="block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
+      class="block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       aria-pressed={selected}
       data-crop-id={crop.id}
       aria-label="Select crop {crop.id}"
@@ -269,7 +270,7 @@
 
     {#if noSlot}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-zinc-500/60 bg-zinc-700/70 px-1 py-0.5 font-mono text-[10px] text-zinc-200"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-fg-3/60 bg-surface-3/70 px-1 py-0.5 font-mono text-caption text-fg-1"
         title="{activeSlot?.label.title ??
           'Slot'} marked as not visible by a human reviewer"
       >
@@ -298,7 +299,7 @@
         ></div>
       {/each}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-blue-400/60 bg-blue-500/30 px-1 py-0.5 font-mono text-[10px] text-white"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-accent/60 bg-accent/30 px-1 py-0.5 font-mono text-caption text-white"
       >
         {activeSlot?.label.singular ?? 'box'}
       </span>
@@ -306,7 +307,7 @@
 
     {#if conf}
       <span
-        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white"
+        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-white"
       >
         {conf}
       </span>
@@ -315,7 +316,7 @@
     {#if rankClarityLabel}
       <span
         data-testid="rank-clarity-chip"
-        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200"
+        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-fg-1"
         title="Size rank among the objects in its photo, and how sharp it is"
       >
         {rankClarityLabel}
@@ -333,7 +334,7 @@
       {#if ondetail}
         <button
           type="button"
-          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white"
           onclick={(e) => {
             e.stopPropagation();
             ondetail?.(crop);
@@ -341,7 +342,7 @@
           aria-label="Show crop details"
           title="Details (provenance + metadata)"
         >
-          ⓘ
+          <Icon name="info" size={14} />
         </button>
       {/if}
 
@@ -349,7 +350,7 @@
         {@const noVector = noVectorAnywhereCopy(crop.embedding_states)}
         <button
           type="button"
-          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white disabled:opacity-50"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white disabled:opacity-50"
           onclick={(e) => {
             e.stopPropagation();
             onsimilar?.(crop);
@@ -368,21 +369,21 @@
       {#if activeSlot?.capabilities.subBox?.listField != null}
         <button
           type="button"
-          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+          class="rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white"
           onclick={(e) => {
             e.stopPropagation();
             editorOpen = true;
           }}
           aria-label="Edit {activeSlot.label.singular}"
-          title="Edit {activeSlot.label.singular} (✎)"
+          title="Edit {activeSlot.label.singular}"
         >
-          ✎
+          <Icon name="pencil" size={14} />
         </button>
       {/if}
 
       <button
         type="button"
-        class="rounded-sm bg-black/60 px-1.5 py-0.5 text-[10px] text-white"
+        class="rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white"
         onclick={(e) => {
           e.stopPropagation();
           expanded = true;
@@ -403,16 +404,12 @@
   <div class="flex min-w-0 items-center gap-1 px-2 py-1.5">
     {#if crop.label_locked}
       <span
-        class="shrink-0 text-zinc-400"
+        class="shrink-0 text-fg-2"
         title={reprocessVocabularyStore.lockText()}
         aria-label="Label locked"
         data-testid="label-locked-badge"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">
-          <path
-            d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
-          />
-        </svg>
+        <Icon name="lock" size={12} />
       </span>
     {/if}
     {#each noVectorEntries(crop.embedding_states) as [space, state] (space)}
@@ -420,7 +417,7 @@
     {/each}
     {#if hasClass}
       <span
-        class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-[10px] font-medium {badge.cls}"
+        class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-caption font-medium {badge.cls}"
         title="Label source: {badge.text.replace(/ ·$/, '')}{badge.unvalidated
           ? ' — not yet validated'
           : ''}"
@@ -431,7 +428,7 @@
           : ''}
       </span>
       <span
-        class="min-w-0 grow truncate text-xs text-zinc-200"
+        class="min-w-0 grow truncate text-xs text-fg-1"
         title={crop.class_name ?? ''}
         data-testid="class-name"
       >
@@ -439,7 +436,7 @@
       </span>
     {:else}
       <span
-        class="min-w-0 grow truncate text-xs text-amber-300/90"
+        class="min-w-0 grow truncate text-xs text-warn-text/90"
         data-testid="class-name"
       >
         Unlabeled
@@ -447,7 +444,7 @@
     {/if}
     {#if hasClass && crop.class_confidence != null}
       <span
-        class="shrink-0 font-mono text-[10px] text-zinc-500"
+        class="shrink-0 font-mono text-caption text-fg-3"
         title="{crop.class_confidence_source === 'vlm'
           ? 'VLM'
           : crop.class_confidence_source === 'model'
@@ -461,18 +458,16 @@
 
   <DetectorClass
     {crop}
-    class="block border-t border-zinc-800 px-2 py-1 text-[10px] text-zinc-500"
+    class="block border-t border-line px-2 py-1 text-caption text-fg-3"
   />
 
   {#if crop.vlm_class_empty_reason}
-    <div
-      class="border-t border-zinc-800 bg-orange-500/5 px-2 py-1 text-[10px] text-orange-300"
-    >
+    <div class="border-t border-line bg-warn/5 px-2 py-1 text-caption text-warn-text">
       {vlmEmptyReasonText(crop.vlm_class_empty_reason)}
     </div>
   {:else if crop.vlm_raw_class && crop.vlm_raw_class !== crop.class_name}
     <div
-      class="border-t border-zinc-800 px-2 py-1 text-[10px] text-zinc-500"
+      class="border-t border-line px-2 py-1 text-caption text-fg-3"
       title={crop.vlm_raw_class}
     >
       VLM said: {crop.vlm_raw_class}
@@ -480,44 +475,42 @@
   {/if}
 
   {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
-    <div
-      class="flex items-center gap-1 border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs"
-    >
+    <div class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-xs">
       <span
-        class="grow truncate text-yellow-200"
+        class="grow truncate text-warn-text"
         title={crop.vlm_suggested_class_name ?? ''}
       >
         VLM: {crop.vlm_suggested_class_name ?? '—'}
         {#if crop.vlm_confidence}
-          <span class="ml-1 text-yellow-400/70">{crop.vlm_confidence}</span>
+          <span class="ml-1 text-warn-text/70">{crop.vlm_confidence}</span>
         {/if}
       </span>
       <button
         type="button"
-        class="rounded border border-green-500/40 bg-green-500/20 px-1 text-green-200 hover:bg-green-500/30"
+        class="rounded border border-success/40 bg-success/20 px-1 text-success-text hover:bg-success/30"
         onclick={(e) => {
           e.stopPropagation();
           onacceptVlm?.(crop);
         }}
         aria-label="Accept VLM suggestion"
       >
-        ✓
+        <Icon name="check" size={14} />
       </button>
       <button
         type="button"
-        class="rounded border border-red-500/40 bg-red-500/20 px-1 text-red-200 hover:bg-red-500/30"
+        class="rounded border border-danger/40 bg-danger/20 px-1 text-danger-text hover:bg-danger/30"
         onclick={(e) => {
           e.stopPropagation();
           onrejectVlm?.(crop);
         }}
         aria-label="Reject VLM suggestion"
       >
-        ×
+        <Icon name="x" size={14} />
       </button>
     </div>
   {:else if crop.vlm_suggested_class_name && !crop.class_validated}
     <div
-      class="border-t border-zinc-800 bg-yellow-500/5 px-2 py-1 text-xs text-yellow-200"
+      class="border-t border-line bg-warn/5 px-2 py-1 text-xs text-warn-text"
       title="The VLM proposed a class that isn't in the registry yet"
     >
       VLM suggests new class: {crop.vlm_suggested_class_name}
@@ -525,7 +518,7 @@
   {/if}
 
   {#if crop.assist}
-    <div class="border-t border-zinc-800 px-2 py-1" data-testid="card-assist">
+    <div class="border-t border-line px-2 py-1" data-testid="card-assist">
       <AssistSuggestions assist={crop.assist} className={crop.class_name} />
     </div>
   {/if}
@@ -561,7 +554,7 @@
       <SourceImageOverlay
         imageId={crop.image_id}
         selectedCropId={crop.id}
-        class="max-h-[85vh] max-w-full rounded-md border border-zinc-700"
+        class="max-h-[85vh] max-w-full rounded-md border border-line-strong"
       />
       <div class="mt-2 flex justify-end" data-testid="card-reprocess-image">
         <ReprocessControl
@@ -573,11 +566,11 @@
     {/if}
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white"
+      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white"
       onclick={() => (expanded = false)}
       aria-label="Close"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   </Modal>
 {/if}

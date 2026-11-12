@@ -51,7 +51,7 @@
 <Modal
   label="Near-duplicate group"
   {onclose}
-  panelClass="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl"
+  panelClass="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
   data-testid="near-dup-group-modal"
 >
   <header class="mb-3 flex items-baseline gap-3">
@@ -72,19 +72,19 @@
   </header>
 
   {#if ctl.loading}
-    <p class="text-sm text-zinc-500">Loading the group…</p>
+    <p class="text-sm text-fg-3">Loading the group…</p>
   {:else if ctl.error}
-    <p class="text-sm text-red-300" role="alert" data-testid="near-dup-group-error">
+    <p class="text-sm text-danger-text" role="alert" data-testid="near-dup-group-error">
       {ctl.error}
     </p>
   {:else if ctl.detail}
-    <p class="mb-3 text-xs text-zinc-400">
+    <p class="mb-3 text-xs text-fg-2">
       A decision applies from the next run. "Not a duplicate" pins the member apart from
       the representative; "Keep together" pins it to the representative.
     </p>
     {#if ctl.actionError}
       <p
-        class="mb-2 text-xs text-red-300"
+        class="mb-2 text-xs text-danger-text"
         role="alert"
         data-testid="near-dup-action-error"
       >
@@ -95,15 +95,15 @@
       {#each ctl.detail.members as m (m.member_id)}
         {@const pin = m.decision}
         <li
-          class="flex items-start gap-3 rounded border border-zinc-800 p-2"
+          class="flex items-start gap-3 rounded border border-line p-2"
           data-testid="near-dup-member"
         >
           <NearDupThumb url={m.thumbnail_url} label={`${level} ${m.member_id}`} />
-          <div class="flex min-w-0 flex-col gap-1 text-xs text-zinc-300">
-            <span class="break-all font-mono text-zinc-100">{m.member_id}</span>
+          <div class="flex min-w-0 flex-col gap-1 text-xs text-fg-2">
+            <span class="break-all font-mono text-fg-1">{m.member_id}</span>
             {#if m.class_name}<span>{m.class_name}</span>{/if}
             {#if m.in_holdout}
-              <span class="chip w-fit border-amber-700 text-amber-300"
+              <span class="chip w-fit border-warn-line text-warn-text"
                 >In test holdout</span
               >
             {/if}
@@ -152,7 +152,7 @@
       {/each}
     </ul>
     {#if ctl.pinned > 0}
-      <p class="mt-3 text-xs text-amber-300" data-testid="near-dup-decided-note">
+      <p class="mt-3 text-xs text-warn-text" data-testid="near-dup-decided-note">
         {ctl.pinned} decision{ctl.pinned === 1 ? '' : 's'} saved; run the level again to apply
         {ctl.pinned === 1 ? 'it' : 'them'}.
       </p>

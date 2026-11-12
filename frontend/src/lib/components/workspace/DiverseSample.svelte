@@ -31,23 +31,23 @@
   </button>
   {#if open}
     <form
-      class="absolute top-full right-4 left-4 z-20 mt-1 flex flex-col gap-2 rounded border border-zinc-700 bg-zinc-900 p-3 shadow-lg sm:right-0 sm:left-auto sm:w-64"
+      class="absolute top-full right-4 left-4 z-20 mt-1 flex flex-col gap-2 rounded border border-line-strong bg-surface-1 p-3 shadow-lg sm:right-0 sm:left-auto sm:w-64"
       onsubmit={(e) => {
         e.preventDefault();
         void sample.start();
       }}
     >
-      <label class="flex items-center justify-between gap-2 text-zinc-200">
+      <label class="flex items-center justify-between gap-2 text-fg-1">
         How many
         <input
           type="number"
           min="1"
-          class="w-24 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-right"
+          class="w-24 rounded border border-line-strong bg-surface-0 px-2 py-1 text-right"
           data-testid="diverse-sample-k"
           bind:value={sample.k}
         />
       </label>
-      <p class="text-zinc-400">
+      <p class="text-fg-2">
         Picks the items that differ most from each other among those the filter matches.
       </p>
       <div class="flex gap-2">
@@ -71,7 +71,7 @@
         {/if}
       </div>
       {#if sample.message}
-        <p class="text-zinc-200" role="status" data-testid="diverse-sample-message">
+        <p class="text-fg-1" role="status" data-testid="diverse-sample-message">
           {sample.message}
         </p>
       {/if}

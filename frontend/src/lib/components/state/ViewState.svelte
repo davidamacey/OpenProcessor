@@ -31,7 +31,7 @@
     data-testid="view-state-loading"
   >
     {#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
-      <div class="aspect-square animate-pulse rounded-lg bg-zinc-800/60"></div>
+      <div class="aspect-square animate-pulse rounded-lg bg-surface-2/60"></div>
     {/each}
   </div>
 {:else}
@@ -41,7 +41,7 @@
     data-testid="view-state-{status}"
   >
     {#if message}
-      <p class={status === 'error' ? 'text-red-300' : 'text-zinc-400'}>{message}</p>
+      <p class={status === 'error' ? 'text-danger-text' : 'text-fg-2'}>{message}</p>
     {/if}
     {#if status === 'error' && onretry}
       <button type="button" class="btn btn-sm" onclick={onretry}>Retry</button>
