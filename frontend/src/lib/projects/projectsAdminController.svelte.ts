@@ -102,6 +102,10 @@ const TRANSIENT_STATUSES = ['building', 'deleting'];
 /** How often the list is re-read while any row is transient. */
 const TRANSIENT_POLL_MS = 2000;
 
+/** Rows per page; a refresh re-reads as many as are already shown, up to the served maximum. */
+export const ADMIN_PAGE = 50;
+const TYPE_DELAY_MS = 250;
+
 export function createProjectsAdmin() {
   let list = $state<ProjectSummary[]>([]);
   let capacity = $state<ProjectCapacity | null>(null);
@@ -111,6 +115,16 @@ export function createProjectsAdmin() {
   let includeArchived = $state(false);
   let loading = $state(false);
   let loadError = $state<string | null>(null);
+  let query = $state('');
+  let statusFilter = $state('');
+  let sort = $state<string | undefined>(undefined);
+  let sortOptions = $state<{ id: string; label: string }[]>([]);
+  let statusOptions = $state<{ id: string; label: string }[]>([]);
+  let maxLimit = $state(ADMIN_PAGE);
+  let sortCap = $state<number | null>(null);
+  let total = $state(0);
+  let nextCursor = $state<string | null>(null);
+  let typeTimer: ReturnType<typeof setTimeout> | null = null;
   let seq = 0;
   let watching = false;
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -128,13 +142,31 @@ export function createProjectsAdmin() {
     pollTimer = setTimeout(() => void load(), TRANSIENT_POLL_MS);
   }
 
+  function filter(cursor?: string | null, limit = ADMIN_PAGE) {
+    return {
+      q: query.trim(),
+      status: statusFilter ? [statusFilter] : undefined,
+      sort,
+      limit,
+      cursor,
+    };
+  }
+
   async function load(): Promise<void> {
     const mine = ++seq;
     loading = true;
     try {
-      const res = await getProjects(undefined, includeArchived);
+      const shown = Math.min(maxLimit, Math.max(ADMIN_PAGE, list.length));
+      const res = await getProjects(undefined, includeArchived, filter(null, shown));
       if (mine !== seq) return;
       list = res.projects;
+      total = res.total;
+      nextCursor = res.next_cursor ?? null;
+      sortOptions = res.sort_options ?? [];
+      statusOptions = res.status_options ?? [];
+      sortCap = res.sort_cap ?? null;
+      maxLimit = res.max_limit ?? ADMIN_PAGE;
+      sort = res.sort;
       capacity = res.capacity;
       limits = res.limits;
       labels = res.labels ?? null;
@@ -148,6 +180,23 @@ export function createProjectsAdmin() {
         loading = false;
         schedulePoll();
       }
+    }
+  }
+
+  async function more(): Promise<void> {
+    if (nextCursor === null || loading) return;
+    const mine = ++seq;
+    loading = true;
+    try {
+      const res = await getProjects(undefined, includeArchived, filter(nextCursor));
+      if (mine !== seq) return;
+      list = [...list, ...res.projects];
+      total = res.total;
+      nextCursor = res.next_cursor ?? null;
+    } catch (e) {
+      if (mine === seq) loadError = apiErrorText(e);
+    } finally {
+      if (mine === seq) loading = false;
     }
   }
 
@@ -207,6 +256,47 @@ export function createProjectsAdmin() {
     get includeArchived() {
       return includeArchived;
     },
+    get query() {
+      return query;
+    },
+    get statusFilter() {
+      return statusFilter;
+    },
+    get sort() {
+      return sort;
+    },
+    get sortOptions() {
+      return sortOptions;
+    },
+    get statusOptions() {
+      return statusOptions;
+    },
+    get sortCap() {
+      return sortCap;
+    },
+    get total() {
+      return total;
+    },
+    get hasMore() {
+      return nextCursor !== null;
+    },
+    more,
+    /** The search box changed: re-read the first page after a short pause in typing. */
+    type(text: string): void {
+      query = text;
+      if (typeTimer) clearTimeout(typeTimer);
+      typeTimer = setTimeout(() => void load(), TYPE_DELAY_MS);
+    },
+    async setStatusFilter(v: string): Promise<void> {
+      statusFilter = v;
+      list = [];
+      await load();
+    },
+    async setSort(id: string): Promise<void> {
+      sort = id;
+      list = [];
+      await load();
+    },
     get loading() {
       return loading;
     },
@@ -226,6 +316,7 @@ export function createProjectsAdmin() {
     /** Stop polling (page unmount). */
     stop(): void {
       watching = false;
+      if (typeTimer) clearTimeout(typeTimer);
       clearPoll();
     },
     async setIncludeArchived(v: boolean): Promise<void> {

@@ -87,6 +87,10 @@
 
   function choose(slug: string): void {
     open = false;
+    const picked =
+      picker.projects.find((p) => p.slug === slug) ??
+      picker.recents.find((r) => r.slug === slug);
+    if (picked) picker.remember(picked);
     if (slug === current?.slug) return;
     void goto(resolve(switchProjectHref(page.url, slug)));
   }
@@ -176,6 +180,20 @@
         aria-label="Projects"
         data-testid="project-switcher-list"
       >
+        {#if picker.query.trim() === '' && picker.recents.length > 0}
+          <p class="px-3 pt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+            Recent
+          </p>
+          {#each picker.recents as r (r.slug)}
+            <button
+              type="button"
+              class="block w-full truncate px-3 py-1 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+              data-testid="project-recent-{r.slug}"
+              onclick={() => choose(r.slug)}>{r.display_name}</button
+            >
+          {/each}
+          <p class="px-3 pt-1 text-[10px] uppercase tracking-wide text-zinc-500">All</p>
+        {/if}
         {#each picker.projects as p, i (p.slug)}
           <div
             id="project-option-{p.slug}"
@@ -213,13 +231,22 @@
           </p>
         {/each}
       </div>
-      {#if picker.total > picker.projects.length && picker.projects.length > 0}
-        <p
-          class="px-3 py-1 text-[11px] text-zinc-500"
+      {#if picker.projects.length > 0}
+        <div
+          class="flex items-center gap-2 px-3 py-1 text-[11px] text-zinc-500"
           data-testid="project-switcher-more"
         >
-          Showing {picker.projects.length} of {picker.total}; type to narrow.
-        </p>
+          <span>Showing {picker.projects.length} of {picker.total}</span>
+          {#if picker.hasMore}
+            <button
+              type="button"
+              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300 hover:border-zinc-500"
+              disabled={picker.loading}
+              data-testid="project-switcher-more-button"
+              onclick={() => void picker.more()}>Show more</button
+            >
+          {/if}
+        </div>
       {/if}
       <div class="my-1 border-t border-zinc-800"></div>
       <a

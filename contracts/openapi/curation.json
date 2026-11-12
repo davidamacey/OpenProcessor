@@ -26569,6 +26569,11 @@
               }
             ]
           },
+          "default_limit": {
+            "description": "Page size when `limit` is omitted.",
+            "title": "Default Limit",
+            "type": "integer"
+          },
           "default_slug": {
             "title": "Default Slug",
             "type": "string"
@@ -26583,11 +26588,61 @@
           "limits": {
             "$ref": "#/components/schemas/ProjectLimits"
           },
+          "max_limit": {
+            "description": "The most projects one page may hold.",
+            "title": "Max Limit",
+            "type": "integer"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page.",
+            "title": "Next Cursor"
+          },
           "projects": {
             "items": {
               "$ref": "#/components/schemas/ProjectSummary"
             },
             "title": "Projects",
+            "type": "array"
+          },
+          "sort": {
+            "description": "The sort id this page is in.",
+            "title": "Sort",
+            "type": "string"
+          },
+          "sort_cap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the sort ranks only this many most recently updated matches (`items:desc`: item counts are not stored); null for an exact sort.",
+            "title": "Sort Cap"
+          },
+          "sort_options": {
+            "description": "The sorts `sort` accepts, labelled.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
+          "status_options": {
+            "description": "The statuses `status` filters on, in display order, labelled.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Status Options",
             "type": "array"
           },
           "total": {
@@ -26602,7 +26657,12 @@
           "capacity",
           "limits",
           "include_archived",
-          "total"
+          "total",
+          "sort",
+          "sort_options",
+          "default_limit",
+          "max_limit",
+          "status_options"
         ],
         "title": "ProjectsResponse",
         "type": "object"
@@ -43464,14 +43524,14 @@
             }
           },
           {
-            "description": "At most this many projects, in slug order.",
+            "description": "At most this many projects per page (default and maximum are served).",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maximum": 500,
+                  "maximum": 200,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -43479,8 +43539,59 @@
                   "type": "null"
                 }
               ],
-              "description": "At most this many projects, in slug order.",
+              "description": "At most this many projects per page (default and maximum are served).",
               "title": "Limit"
+            }
+          },
+          {
+            "description": "Only projects in one of these statuses (repeatable).",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only projects in one of these statuses (repeatable).",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "One of the served `sort_options` ids.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name:asc",
+              "description": "One of the served `sort_options` ids.",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           }
         ],

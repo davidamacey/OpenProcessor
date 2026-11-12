@@ -7,32 +7,11 @@ from typing import TYPE_CHECKING, Any
 from src.config.projects import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
 from src.schemas.curation.config_common import ProjectCapacityWire
 from src.schemas.curation.projects import ProjectCounts, ProjectSummary
+from src.services.projects.listing import SELECTABLE
 
 
 if TYPE_CHECKING:
     from src.services.projects.capacity import ProjectCapacity
-
-
-# List membership by status (§4 rev 2 / delta 3): active always;
-# archived only opt-in; building/failed/deleting always (so a stuck
-# create or an in-flight combine target survive a reload); deleted
-# never.
-_ALWAYS_LISTED_STATUSES = frozenset({'active', 'building', 'failed', 'deleting'})
-
-
-_ARCHIVED_STATUS = 'archived'
-
-
-# Statuses a project can be opened in; the picker asks for exactly these.
-SELECTABLE_STATUSES = ('active', 'archived')
-
-
-def list_membership(status: str, *, include_archived: bool) -> bool:
-    """Whether a project of this ``status`` appears in ``GET /projects``'s
-    ``projects[]`` (§4 delta 3)."""
-    if status == _ARCHIVED_STATUS:
-        return include_archived
-    return status in _ALWAYS_LISTED_STATUSES
 
 
 def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
@@ -52,7 +31,7 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         prefix=prefix,
         status=record.status,
         writable=record.status == 'active',
-        selectable=record.status in SELECTABLE_STATUSES,
+        selectable=record.status in SELECTABLE,
         is_default=is_default,
         deletable=not is_default,
         archivable=record.status in ARCHIVABLE_STATUSES,

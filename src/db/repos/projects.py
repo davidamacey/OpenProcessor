@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Select, delete, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.models.classes import ClassRegistry
@@ -210,6 +210,74 @@ def list_projects_sync(session: Session) -> list[ProjectRow]:
     """Every existing project (a deleted one has no row), ordered by slug."""
     projects = session.execute(select(Project).order_by(Project.slug)).scalars().all()
     names = _index_names_sync(session, None)
+    return [_row(p, names.get(p.id, {})) for p in projects]
+
+
+def _matching(statuses: Collection[str], q: str | None) -> list[Any]:
+    clauses: list[Any] = [Project.status.in_(list(statuses))]
+    needle = (q or '').strip()
+    if needle:
+        clauses.append(
+            or_(
+                Project.slug.icontains(needle, autoescape=True),
+                Project.display_name.icontains(needle, autoescape=True),
+            )
+        )
+    return clauses
+
+
+async def count_matching(session: AsyncSession, *, statuses: Collection[str], q: str | None) -> int:
+    stmt = select(func.count()).select_from(Project).where(*_matching(statuses, q))
+    return int(await session.scalar(stmt) or 0)
+
+
+def list_page_stmt(
+    *,
+    statuses: Collection[str],
+    q: str | None,
+    sort: str,
+    after: tuple[Any, str] | None,
+    limit: int,
+) -> Select[Any]:
+    """One keyset page: ``ORDER BY <sort value>, slug`` with the ``(value, slug)`` predicate after the
+    cursor and ``LIMIT``. ``name:asc`` orders by slug; ``updated_at:desc`` by recency, slug descending
+    within a tie (one row-value comparison, PostgreSQL's documented keyset form) (served by ``ix_projects_updated_at_slug``)."""
+    where = _matching(statuses, q)
+    if sort == 'name:asc':
+        if after is not None:
+            where.append(Project.slug > after[1])
+        order: list[Any] = [Project.slug]
+    elif sort == 'updated_at:desc':
+        if after is not None:
+            value, slug = after
+            where.append(tuple_(Project.updated_at, Project.slug) < tuple_(value, slug))
+        order = [Project.updated_at.desc(), Project.slug.desc()]
+    else:
+        msg = f'no keyset sort {sort!r}'
+        raise ValueError(msg)
+    return select(Project).where(*where).order_by(*order).limit(limit)
+
+
+async def list_page(
+    session: AsyncSession,
+    *,
+    statuses: Collection[str],
+    q: str | None,
+    sort: str,
+    after: tuple[Any, str] | None,
+    limit: int,
+) -> list[ProjectRow]:
+    projects = (
+        (
+            await session.execute(
+                list_page_stmt(statuses=statuses, q=q, sort=sort, after=after, limit=limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    ids = [p.id for p in projects]
+    names = await session.run_sync(lambda sync: _index_names_sync(sync, ids))
     return [_row(p, names.get(p.id, {})) for p in projects]
 
 

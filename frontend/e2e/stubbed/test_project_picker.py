@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS, review_url
+from playwright.sync_api import expect
 
 
 API_PREFIX = '/curation'
@@ -23,8 +24,11 @@ def _page_of_projects(request, _match):
     q = query.get('q', [''])[0].lower()
     limit = int(query['limit'][0]) if 'limit' in query else None
     hit = [p for p in ALL if q in p['slug'] or q in p['display_name'].lower()]
-    body = projects_response(API_PREFIX, hit[:limit] if limit else hit)
+    start = int(query['cursor'][0]) if 'cursor' in query else 0
+    end = start + limit if limit else len(hit)
+    body = projects_response(API_PREFIX, hit[start:end])
     body['total'] = len(hit)
+    body['next_cursor'] = str(end) if end < len(hit) else None
     return (200, body)
 
 
@@ -36,6 +40,8 @@ def test_picker_is_bounded_scrollable_and_searchable(stub, page, app_url):
         r'/review/(?!tabs)',
         (200, {'items': [], 'total': 0, 'next_cursor': None, 'limit': 30}),
     )
+    if os.environ.get('PICKER_SHOTS'):
+        page.set_viewport_size({'width': 1600, 'height': 900})
     page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('project-switcher-trigger').click()
     page.get_by_test_id('project-switcher-menu').wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -53,9 +59,12 @@ def test_picker_is_bounded_scrollable_and_searchable(stub, page, app_url):
     if shots:
         page.screenshot(path=f'{shots}/picker_open_{viewport["width"]}.png')
 
+    page.get_by_test_id('project-switcher-more-button').click()
+    page.get_by_test_id('project-option-survey-30').wait_for(timeout=ACTION_TIMEOUT_MS)
+    assert listbox.get_by_role('option').count() == 50
+
     page.get_by_test_id('project-switcher-filter').fill('survey-4')
-    page.get_by_test_id('project-option-survey-40').wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert listbox.get_by_role('option').count() == 10
+    expect(listbox.get_by_role('option')).to_have_count(10, timeout=ACTION_TIMEOUT_MS)
     if shots:
         page.screenshot(path=f'{shots}/picker_filtered_{viewport["width"]}.png')
 

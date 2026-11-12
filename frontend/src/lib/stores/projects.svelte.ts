@@ -92,6 +92,18 @@ class ProjectsStore {
     }
   }
 
+  /** The list is one served page, so the default project may fall past it: read it by slug. */
+  async #ensureDefault(): Promise<void> {
+    const slug = this.defaultSlug;
+    if (!slug || this.list.some((p) => p.slug === slug)) return;
+    try {
+      const { resources: _resources, error: _error, ...summary } = await getProject(slug);
+      this.list = [...this.list, summary];
+    } catch {
+      // the default is then simply not offered; `defaultProject` falls back to the first listed
+    }
+  }
+
   /** Boot entry point, called once from the root layout's `load()`.
    *  Bounded retries like `loadRegionProfile`; never throws — a
    *  persistent failure sets `error`, which the layout renders as a
@@ -102,6 +114,7 @@ class ProjectsStore {
       if (attempt > 0) await delay(RETRY_DELAYS_MS[attempt - 1]!);
       try {
         this.#apply(await getProjects(AbortSignal.timeout(LOAD_TIMEOUT_MS)));
+        await this.#ensureDefault();
         this.loaded = true;
         this.error = null;
         return;
@@ -118,6 +131,7 @@ class ProjectsStore {
   async refresh(): Promise<void> {
     try {
       this.#apply(await getProjects());
+      await this.#ensureDefault();
       this.loaded = true;
       this.error = null;
     } catch {

@@ -12,7 +12,7 @@ from src.db.base import Base
 
 pytestmark = pytest.mark.db
 
-HEAD = '0007_region_text'
+HEAD = '0008_projects_list_index'
 
 
 def test_there_is_exactly_one_head() -> None:
