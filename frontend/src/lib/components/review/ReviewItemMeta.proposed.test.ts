@@ -87,6 +87,17 @@ describe('ReviewItemMeta Current label', () => {
     );
   });
 
+  it('does not print a machine source id the catalog does not name', () => {
+    const el = render({
+      display_name: 'widget_a',
+      display_name_kind: 'class',
+      label_source: 'item_proposal',
+    });
+    expect(el.querySelector('[data-testid="current-label"]')!.textContent).not.toContain(
+      'item_proposal',
+    );
+  });
+
   it('shows the class name of a classed item', () => {
     const el = render({ display_name: 'widget_a', display_name_kind: 'class' });
     expect(el.querySelector('[data-testid="current-label"]')!.textContent).toContain(
