@@ -188,6 +188,27 @@ Cropwright (`frontend/`) draws every icon as an SVG from the Lucide set through
 
 ---
 
+## Inter and JetBrains Mono fonts (Cropwright frontend)
+
+Cropwright (`frontend/`) bundles two variable fonts through Fontsource, so the static build serves
+them itself and a LAN-only deployment needs no CDN. Inter is the interface face. JetBrains Mono is
+used only for code, ids, hashes and paths.
+
+### Repository Information
+- **Packages:** `@fontsource-variable/inter` 5.3.0 and `@fontsource-variable/jetbrains-mono` 5.3.0
+  (npm dependencies, exact pins)
+- **Sources:** https://github.com/rsms/inter (The Inter Project Authors) and
+  https://github.com/JetBrains/JetBrainsMono (The JetBrains Mono Project Authors); packaged by
+  https://fontsource.org
+- **License:** SIL Open Font License 1.1 (OFL-1.1), for both fonts. Each package's `LICENSE` file
+  carries the text.
+
+### Usage in This Project
+- `frontend/src/routes/+layout.svelte` imports both packages; `frontend/src/app.css` names the
+  families in `@theme` (`--font-sans`, `--font-mono`). The font files are not modified.
+
+---
+
 ## Datasets used for public sample fetching
 
 ### COCO 2017
@@ -368,6 +389,7 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Lucide icons (`@lucide/svelte` 1.72.0, Cropwright frontend) | ISC (Feather-derived icons: MIT) | ✓ Yes (this file) |
+| Inter and JetBrains Mono (`@fontsource-variable/*` 5.3.0, Cropwright frontend) | OFL-1.1 | ✓ Yes (this file) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
 | COCO 2017 (images) | Per-image Flickr license, filtered to BY/BY-SA/no-known/US-Gov | ✓ Yes (`ATTRIBUTION.csv` written alongside the fetched sample) |
 | Open Images V7 (annotations) | CC BY 4.0 (Google LLC) | ✓ Yes (this file) |

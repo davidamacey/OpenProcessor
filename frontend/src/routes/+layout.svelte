@@ -6,6 +6,8 @@
    * (top bar, nav, sidebar, every project-scoped store) lives in
    * `p/[project]/+layout.svelte`; `/projects` renders its own header.
    */
+  import '@fontsource-variable/inter';
+  import '@fontsource-variable/jetbrains-mono';
   import '../app.css';
   import { updated } from '$app/state';
   import type { Snippet } from 'svelte';
