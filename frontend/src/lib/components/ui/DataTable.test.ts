@@ -10,7 +10,7 @@ describe('DataTable', () => {
   it('has a sticky header and renders one row per item through the cell snippet', () => {
     const el = mountUi(DataTableHarness);
     expect(el.querySelector('thead')!.className).toContain('sticky');
-    expect(names(el)).toEqual(['car', 'bus', 'person']);
+    expect(names(el)).toEqual(['cog', 'bolt', 'person']);
   });
 
   it('a header click sorts ascending, again descending, and marks aria-sort', () => {
@@ -19,11 +19,11 @@ describe('DataTable', () => {
       [...el.querySelectorAll('th')].find((h) => h.textContent?.includes(id))!;
     th('Class').querySelector('button')!.click();
     flushSync();
-    expect(names(el)).toEqual(['bus', 'car', 'person']);
+    expect(names(el)).toEqual(['bolt', 'cog', 'person']);
     expect(th('Class').getAttribute('aria-sort')).toBe('ascending');
     th('Class').querySelector('button')!.click();
     flushSync();
-    expect(names(el)).toEqual(['person', 'car', 'bus']);
+    expect(names(el)).toEqual(['person', 'cog', 'bolt']);
     expect(th('Class').getAttribute('aria-sort')).toBe('descending');
   });
 
@@ -34,7 +34,7 @@ describe('DataTable', () => {
       .querySelector('button')!
       .click();
     flushSync();
-    expect(names(el)).toEqual(['person', 'car', 'bus']);
+    expect(names(el)).toEqual(['person', 'cog', 'bolt']);
   });
 
   it('a column without a value is not sortable', () => {

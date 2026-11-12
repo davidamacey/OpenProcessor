@@ -30,13 +30,13 @@ const SUMMARY = {
   rows: [
     {
       class_id: 1,
-      class_name: 'car',
+      class_name: 'cog',
       kind: 'class',
       counts: { validated: 9, detector_proposals: 1 },
     },
     {
       class_id: 2,
-      class_name: 'bus',
+      class_name: 'bolt',
       kind: 'class',
       counts: { validated: 0, detector_proposals: 0 },
     },
@@ -86,7 +86,7 @@ describe('TrainingCohortsPanel', () => {
   it('reads the matrix in one request, never one per class, and hides empty rows', async () => {
     const el = await render();
     expect(urls.filter((u) => u.includes('training_cohorts'))).toHaveLength(1);
-    expect(classes(el)).toEqual(['tram', 'car']);
+    expect(classes(el)).toEqual(['tram', 'cog']);
     expect(el.querySelector('[data-testid="cohorts-hidden"]')!.textContent).toContain(
       '1 class with',
     );
@@ -97,7 +97,7 @@ describe('TrainingCohortsPanel', () => {
     const box = el.querySelector<HTMLInputElement>('[data-testid="cohorts-hide-empty"]')!;
     box.click();
     flushSync();
-    expect(classes(el)).toEqual(['tram', 'car', 'bus']);
+    expect(classes(el)).toEqual(['tram', 'cog', 'bolt']);
   });
 
   it('the filter keeps the classes that match', async () => {
@@ -114,8 +114,8 @@ describe('TrainingCohortsPanel', () => {
     const buttons = [...el.querySelectorAll('tbody button')];
     expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
       'Preview 3 Detector proposals not decided for tram',
-      'Preview 1 Detector proposals not decided for car',
-      'Preview 9 Validated for car',
+      'Preview 1 Detector proposals not decided for cog',
+      'Preview 9 Validated for cog',
     ]);
     (buttons.at(-1) as HTMLButtonElement).click();
     await vi.waitFor(() => {
@@ -145,6 +145,6 @@ describe('TrainingCohortsPanel', () => {
     const el = await render();
     const heads = [...el.querySelectorAll('thead th')].map((h) => h.textContent?.trim());
     expect(heads[1]).toContain('Detector proposals not decided');
-    expect(classes(el)).toEqual(['tram', 'car']);
+    expect(classes(el)).toEqual(['tram', 'cog']);
   });
 });

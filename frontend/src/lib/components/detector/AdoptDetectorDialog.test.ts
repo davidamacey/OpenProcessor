@@ -7,7 +7,7 @@ import AdoptDetectorDialog from './AdoptDetectorDialog.svelte';
 const dry = {
   dry_run: true,
   items: 40,
-  classes_to_create: ['bus', 'car'],
+  classes_to_create: ['bolt', 'cog'],
   blocked: ['person'],
   blocked_items: 3,
   remaining: 0,
@@ -35,7 +35,7 @@ describe('AdoptDetectorDialog', () => {
     });
     await vi.waitFor(() => expect(q('adopt-items')).not.toBeNull());
     expect(q('adopt-items')!.textContent).toBe('40');
-    expect(q('adopt-create')!.textContent).toContain('bus, car');
+    expect(q('adopt-create')!.textContent).toContain('bolt, cog');
     expect(q('adopt-blocked')!.textContent).toContain('person');
     expect(adopt).toHaveBeenCalledTimes(1);
     const confirm = [...document.querySelectorAll('button')].find((b) =>

@@ -6,8 +6,8 @@
     n: number;
   }
   const rows: Row[] = [
-    { name: 'car', n: 9 },
-    { name: 'bus', n: 2 },
+    { name: 'cog', n: 9 },
+    { name: 'bolt', n: 2 },
     { name: 'person', n: 30 },
   ];
   const columns: Column<Row>[] = [
