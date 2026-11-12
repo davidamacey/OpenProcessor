@@ -6,7 +6,7 @@
  * (`presetRefusalText`).
  */
 import { apiFetch, globalApi, qs, scoped } from '$lib/api';
-import { ApiError, apiErrorText } from '$lib/api_errors';
+import { apiErrorText } from '$lib/api_errors';
 import { configErrorDetail } from '$lib/api_profiles';
 import type {
   ActivePreset,
@@ -18,6 +18,7 @@ import type {
   PresetPutRequest,
   PresetSchemaWire,
   ServingActivateRequest,
+  ServingActiveStateWire,
   ServingActiveWire,
 } from '$lib/types_presets';
 
@@ -130,29 +131,25 @@ export async function getActivePreset(
   };
 }
 
-/** `GET /serving_profiles/active`: a 404 `not_found` is "none active". */
+/** `GET /serving_profiles/active`: `{active: null}` is "none active". */
 export async function getActiveServingProfile(
   signal?: AbortSignal,
 ): Promise<ActivePreset> {
-  try {
-    const w = await apiFetch<ServingActiveWire>(
-      `${collection('serving_profile')}/active`,
-      {},
-      signal,
-      GLOBAL,
-    );
-    return {
-      axis: null,
-      state: 'active',
-      name: w.name,
-      revision: w.revision,
-      activated_at: null,
-      setting_revision: w.setting_revision,
-    };
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return NONE;
-    throw e;
-  }
+  const { active } = await apiFetch<ServingActiveStateWire>(
+    `${collection('serving_profile')}/active`,
+    {},
+    signal,
+    GLOBAL,
+  );
+  if (active === null) return NONE;
+  return {
+    axis: null,
+    state: 'active',
+    name: active.name,
+    revision: active.revision,
+    activated_at: null,
+    setting_revision: active.setting_revision,
+  };
 }
 
 /** `POST /{name}/activate` of a project kind. */

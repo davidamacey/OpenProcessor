@@ -100,6 +100,11 @@ export interface ServingActiveWire {
   body: PresetBody;
 }
 
+/** `ServingActiveState`: `GET /serving_profiles/active`; `active` is null until one is activated. */
+export interface ServingActiveStateWire {
+  active: ServingActiveWire | null;
+}
+
 /** What is active on one axis, whichever kind served it. */
 export interface ActivePreset {
   /** The project axis; null for the deployment's serving profile. */

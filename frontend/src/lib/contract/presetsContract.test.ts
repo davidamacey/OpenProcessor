@@ -88,6 +88,12 @@ const CASES: [string, string[]][] = [
       body: true,
     } satisfies Record<keyof T.ServingActiveWire, true>),
   ],
+  [
+    'ServingActiveState',
+    keys({
+      active: true,
+    } satisfies Record<keyof T.ServingActiveStateWire, true>),
+  ],
 ];
 
 describe('preset wire types match the OpenAPI schemas', () => {

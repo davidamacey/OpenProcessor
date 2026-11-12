@@ -25,6 +25,7 @@ from src.schemas.curation.research_config import (
     ResearchConfigSchema,
     ServingActivateRequest,
     ServingActive,
+    ServingActiveState,
 )
 from src.services.config_store.research_kinds import (
     KIND_AXES,
@@ -168,14 +169,16 @@ def _register_project_activation(kind: str, path: str, axes: tuple[str, ...], *,
         )
 
 
-@global_router.get('/serving_profiles/active', response_model=ServingActive, tags=['Serving'])
-async def get_active_serving_profile() -> ServingActive:
+@global_router.get('/serving_profiles/active', response_model=ServingActiveState, tags=['Serving'])
+async def get_active_serving_profile() -> ServingActiveState:
     found = await active_serving_profile()
     if found is None:
-        raise api_error(404, 'not_found', 'no serving profile is active')
+        return ServingActiveState(active=None)
     doc, setting_revision = found
-    return ServingActive(
-        name=doc.name, revision=doc.revision, setting_revision=setting_revision, body=doc.body
+    return ServingActiveState(
+        active=ServingActive(
+            name=doc.name, revision=doc.revision, setting_revision=setting_revision, body=doc.body
+        )
     )
 
 

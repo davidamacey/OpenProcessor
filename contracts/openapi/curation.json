@@ -38537,6 +38537,26 @@
         "title": "ServingActive",
         "type": "object"
       },
+      "ServingActiveState": {
+        "description": "``GET /serving_profiles/active``: the active profile, or ``null`` when none was activated.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServingActive"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "ServingActiveState",
+        "type": "object"
+      },
       "SingleClassSplitCounts": {
         "properties": {
           "test": {
@@ -77408,7 +77428,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServingActive"
+                  "$ref": "#/components/schemas/ServingActiveState"
                 }
               }
             },
