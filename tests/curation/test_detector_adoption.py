@@ -89,6 +89,8 @@ def test_the_merge_leaves_a_classed_locked_or_unknown_item_alone() -> None:
     assert merge(_item(class_source='human', class_validated=True)) == {}
     assert merge(_item(class_source='external_label', class_validated=True)) == {}
     assert merge(_item(test_holdout=True)) == {}
+    # excluded after the id snapshot was taken
+    assert merge(_item(class_excluded=True)) == {}
     assert merge(_item(detector_class_name='zebra')) == {}
     assert merge(_item(detector_class_name=None)) == {}
 
