@@ -183,19 +183,15 @@ def live_project(live_url: str) -> dict[str, Any]:
 
 @pytest.fixture(scope='session')
 def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
-    """Headless Chromium with software WebGL2, for the map page (MapLibre needs WebGL2).
+    """Headless Chromium with WebGL2 for the map (MapLibre needs it): ANGLE on EGL (D-20).
 
-    Chromium's GPU docs name ANGLE's SwiftShader backend as the software path
-    (`--use-angle=swiftshader`); since Chrome 139 the software fallback must be opted into with
-    `--enable-unsafe-swiftshader` (https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md).
-    `DISPLAY` is dropped from the browser's environment: headless needs no X server, and a stale
-    one (an XRDP or ssh-forwarded display) makes the GPU process try it and fail to create any
-    WebGL context, which `--disable-gpu` hid for the stubbed tier only by turning WebGL off.
+    SwiftShader gave no WebGL2 on this host (wf-1d). `DISPLAY` is dropped so a stale X display
+    cannot break GPU-process init.
     """
     env = {k: v for k, v in os.environ.items() if k != 'DISPLAY'}
     return {
         **browser_type_launch_args,
-        'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+        'args': ['--use-gl=angle', '--use-angle=gl-egl'],
         'env': env,
     }
 

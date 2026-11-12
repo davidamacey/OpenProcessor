@@ -18,18 +18,15 @@ from harness.constants import ROOT
 
 @pytest.fixture(scope='session')
 def browser_type_launch_args(browser_type_launch_args: dict[str, Any]) -> dict[str, Any]:
-    """Headless Chromium with software WebGL2, for the map page (MapLibre needs WebGL2).
+    """Headless Chromium with WebGL2 for the map (MapLibre needs it): ANGLE on EGL (D-20).
 
-    Same launch as the live tier (`live/conftest.py`): ANGLE's SwiftShader backend
-    (`--use-angle=swiftshader`), opted into with `--enable-unsafe-swiftshader` since Chrome 139
-    (https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md). `DISPLAY` is
-    dropped so a stale X display cannot break GPU-process init, which `--disable-gpu` used to
-    hide by turning WebGL off.
+    SwiftShader gave no WebGL2 on this host (wf-1d). `DISPLAY` is dropped so a stale X display
+    cannot break GPU-process init.
     """
     env = {k: v for k, v in os.environ.items() if k != 'DISPLAY'}
     return {
         **browser_type_launch_args,
-        'args': ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+        'args': ['--use-gl=angle', '--use-angle=gl-egl'],
         'env': env,
     }
 
