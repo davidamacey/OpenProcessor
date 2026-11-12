@@ -63,6 +63,9 @@ export function createSlotInventory() {
         size: res.total,
         is_unlabeled: false,
         dominant_class_name: cls.name,
+        display_name: cls.name,
+        display_name_kind: 'class',
+        near_dup_group_count: 0,
         dominant_pct: null,
         representative_crop_ids: reps.map((r) => r.p.crop_id),
         // Region close-ups, not parent-item thumbnails: the card is the

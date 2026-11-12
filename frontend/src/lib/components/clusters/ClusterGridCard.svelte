@@ -11,6 +11,7 @@
     DETECTOR_TOOLTIP,
     VALIDATION_TEXT,
     detectorText,
+    displayNameNote,
     reviewCountsTitle,
   } from '$lib/clusters/clusterCardText';
   import { clusterScopeSearch } from '$lib/workspace/workspaceUrl';
@@ -130,7 +131,7 @@
       </div>
       <div
         class="truncate text-sm text-fg-2"
-        title={c.dominant_class_name ?? `Unlabeled cluster ${c.uid}`}
+        title={c.display_name || `Unlabeled cluster ${c.uid}`}
       >
         {#if c.isSlotCard}
           <!-- M4: dominant_pct is meaningless for the inventory
@@ -140,12 +141,14 @@
                so this line names the class once, as a class. -->
           <span class="text-fg-3">class</span>
           <span class="font-mono">{c.dominant_class_name}</span>
-        {:else if c.dominant_class_name}
-          {c.dominant_class_name}
-          {#if dominantShareText(c)}
+        {:else if c.display_name_kind !== 'none'}
+          <span data-testid="cluster-name">{c.display_name}</span>
+          {#if c.display_name_kind === 'class' && dominantShareText(c)}
             <span class="text-fg-3" title={dominantShareTitle(c)}>
               · {dominantShareText(c)}
             </span>
+          {:else if displayNameNote(c.display_name_kind)}
+            <span class="text-fg-3">· {displayNameNote(c.display_name_kind)}</span>
           {/if}
         {:else}
           <span class="text-warn-text">Unlabeled {numberText}</span>
