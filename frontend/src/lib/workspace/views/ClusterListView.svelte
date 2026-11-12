@@ -12,7 +12,6 @@
   import { createClusterListController } from '$lib/clusters/clusterListController.svelte';
   import { createClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
   import { createSlotInventory } from '$lib/clusters/slotInventory.svelte';
-  import AssistLoopPanel from '$components/assistLoop/AssistLoopPanel.svelte';
   import { clusterFilterToUrl } from '$lib/clusters/clusterListFilter';
   import ClusterListFilterBar from '$lib/components/clusters/ClusterListFilterBar.svelte';
   import ClustersGrid from '$lib/components/clusters/ClustersGrid.svelte';
@@ -242,8 +241,6 @@
     {embeddingVizAvailable}
     bind:showEmbeddingViz
   />
-
-  <AssistLoopPanel />
 
   {#if !isSlotFilter && !matchingModeActive && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
     <ClusterListFilterBar {list} />
