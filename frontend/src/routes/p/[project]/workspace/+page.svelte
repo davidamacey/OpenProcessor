@@ -55,6 +55,25 @@
         'workspace',
       ),
       keyboardStore.registerAction('workspace.escape', escape, 'workspace'),
+      keyboardStore.registerAction(
+        'workspace.class_picker',
+        () => {
+          if (ws.selection.kind !== 'none') ws.pickerOpen = true;
+        },
+        'workspace',
+      ),
+      // Space on a focused card toggles it, like Ctrl+click.
+      keyboardStore.registerAction(
+        'workspace.select_toggle',
+        () => {
+          const el = document.activeElement;
+          if (!(el instanceof HTMLButtonElement) || !el.hasAttribute('aria-pressed')) {
+            return false;
+          }
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+        },
+        'cluster',
+      ),
     ];
     return () => offs.forEach((off) => off());
   });

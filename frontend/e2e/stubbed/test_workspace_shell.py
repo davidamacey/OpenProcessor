@@ -183,6 +183,39 @@ def test_filter_queue_and_selection_survive_a_view_switch(stub, page, app_url):
     )
 
 
+def test_comma_and_period_step_between_clusters(stub, page, app_url):
+    serve(stub)
+    second = 'cl-fixture-0002'
+    stub.on(
+        'GET', r'/clusters(\?|$)', cluster_list(cluster_card(CLUSTER_UID), cluster_card(second))
+    )
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('.')
+    expect(page).to_have_url(re.compile(f'scope=cluster(:|%3A){second}'), timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press(',')
+    expect(page).to_have_url(
+        re.compile(f'scope=cluster(:|%3A){CLUSTER_UID}'), timeout=ACTION_TIMEOUT_MS
+    )
+
+
+def test_slash_opens_the_class_picker_and_space_toggles_the_focused_card(stub, page, app_url):
+    serve(stub)
+    page.goto(f'{app_url}/p/default/workspace?view=detections')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
+    thumb = page.locator('button[aria-pressed]').first
+    thumb.focus()
+    page.keyboard.press('Space')
+    expect(page.get_by_test_id('bulk-count')).to_have_text('1 selected', timeout=ACTION_TIMEOUT_MS)
+    page.locator('button[aria-pressed]').nth(1).focus()
+    page.keyboard.press('Space')
+    expect(page.get_by_test_id('bulk-count')).to_have_text('2 selected', timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('/')
+    expect(page.get_by_role('combobox', name='Search classes')).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
+
+
 def test_back_restores_the_previous_view(stub, page, app_url):
     serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')

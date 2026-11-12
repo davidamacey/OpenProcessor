@@ -67,7 +67,7 @@ export function normalize(e: KeyboardEvent): string {
   if (e.metaKey) parts.push('meta');
   if (e.altKey) parts.push('alt');
   if (e.shiftKey) parts.push('shift');
-  parts.push(e.key.toLowerCase());
+  parts.push(e.key === ' ' ? 'space' : e.key.toLowerCase());
   return parts.join('+');
 }
 

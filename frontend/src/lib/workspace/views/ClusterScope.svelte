@@ -20,6 +20,8 @@
   import { createClusterAssist } from '$lib/assistRun/clusterAssist.svelte';
   import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
   import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
+  import { getClusters } from '$lib/api_clusters';
+  import { keyboardStore } from '$stores/keyboard.svelte';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type { Crop } from '$lib/types';
   import { NO_SELECTION } from '$lib/workspace/selection';
@@ -60,6 +62,29 @@
       return actions.controller.handleClassDrop(cls, droppedIds);
     }),
   );
+
+  // `,` and `.` step through the served cluster list.
+  async function step(by: 1 | -1): Promise<void> {
+    const uids = (await getClusters({ per_cluster: 0 })).items.map((c) => c.uid);
+    const at = uids.indexOf(view.clusterUid);
+    const next = uids[at + by];
+    if (at >= 0 && next) ws.openCluster(next);
+  }
+  $effect(() => {
+    const offs = [
+      keyboardStore.registerAction(
+        'workspace.scope_prev',
+        () => void step(-1),
+        'workspace',
+      ),
+      keyboardStore.registerAction(
+        'workspace.scope_next',
+        () => void step(1),
+        'workspace',
+      ),
+    ];
+    return () => offs.forEach((off) => off());
+  });
 
   // The proposal on screen belongs to the cluster being viewed.
   $effect(() => {

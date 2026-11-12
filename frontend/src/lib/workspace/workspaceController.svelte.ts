@@ -52,6 +52,8 @@ export class WorkspaceController {
   #detailsChoice = $state<boolean | null>(null);
   readonly #wide =
     typeof matchMedia === 'function' ? new MediaQuery(DETAILS_MEDIA) : null;
+  /** The class picker the bulk bar owns; `workspace.class_picker` opens it. */
+  pickerOpen = $state(false);
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */

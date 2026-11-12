@@ -25,7 +25,6 @@
   let { ws, onapplied, extra }: Props = $props();
 
   const actions = createSelectionActionController(() => ws.itemSelection() ?? {});
-  let pickerOpen = $state(false);
   let reasonsOpen = $state(false);
 
   const hasSelection = $derived(ws.selection.kind !== 'none');
@@ -48,7 +47,7 @@
   });
 
   function assign(cls: { id: number }): void {
-    pickerOpen = false;
+    ws.pickerOpen = false;
     actions.classId = cls.id;
     void actions.open('label');
   }
@@ -99,7 +98,7 @@
     class="btn btn-primary"
     disabled={!hasSelection}
     data-testid="assign-selected"
-    onclick={() => (pickerOpen = true)}
+    onclick={() => (ws.pickerOpen = true)}
   >
     Assign class…
   </button>
@@ -167,9 +166,9 @@
 </div>
 
 <ClassPicker
-  open={pickerOpen}
+  open={ws.pickerOpen}
   mode="assign"
   onpick={assign}
-  onclose={() => (pickerOpen = false)}
+  onclose={() => (ws.pickerOpen = false)}
 />
 <SelectionActionDialog controller={actions} {onapplied} />

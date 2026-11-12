@@ -114,6 +114,15 @@ describe('keyboardStore', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('names the space bar space', () => {
+    const handler = vi.fn();
+    reg('space', handler);
+
+    press({ key: ' ' });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('unregistering removes the handler', () => {
     const handler = vi.fn();
     const off = keyboardStore.register('q', handler);
