@@ -40121,6 +40121,18 @@
       },
       "TrainingCohort": {
         "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows the cohort holds for the requested `class_id`, counted by the same query that serves its rows; null when no class was asked for.",
+            "title": "Count"
+          },
           "cutoffs": {
             "additionalProperties": {
               "type": "number"
@@ -74953,7 +74965,7 @@
     },
     "/curation/projects/{project}/training_cohorts": {
       "get": {
-        "description": "``{cohorts: [{id, label, description, cutoffs, endpoint, params,\nrow_kind}]}`` — fetch a cohort's rows with ``GET {prefix}{endpoint}``\nand ``params``. Region cohorts appear only with a region profile.",
+        "description": "``{cohorts: [{id, label, description, cutoffs, endpoint, params,\nrow_kind, count}]}`` — fetch a cohort's rows with ``GET {prefix}{endpoint}``\nand ``params``. ``count`` is the cohort's size for ``class_id`` (null without one).\nRegion cohorts appear only with a region profile.",
         "operationId": "training_cohorts_curation_projects__project__training_cohorts_get",
         "parameters": [
           {
@@ -74966,7 +74978,7 @@
             }
           },
           {
-            "description": "Fold into every cohort query.",
+            "description": "Fold into every cohort query and count each cohort for this class.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -74979,7 +74991,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Fold into every cohort query.",
+              "description": "Fold into every cohort query and count each cohort for this class.",
               "title": "Class Id"
             }
           }
