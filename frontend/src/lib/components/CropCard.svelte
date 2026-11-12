@@ -222,16 +222,11 @@
     crop.label_confidence != null ? `${(crop.label_confidence * 100).toFixed(0)}%` : null,
   );
 
-  // Primary-subject rank + blur chip — tells the operator why a crop is in
-  // or out of the size/clarity filters. rank 1 = largest in its photo.
-  const rank = $derived<number | null>(crop.crop_rank_in_image ?? null);
-  const blurRatio = $derived<number | null>(crop.blur_lap_ratio ?? null);
-  const rankBlurLabel = $derived.by<string | null>(() => {
-    const parts: string[] = [];
-    if (rank != null) parts.push(rank === 1 ? '★1' : `#${rank}`);
-    if (blurRatio != null) parts.push(`b${blurRatio.toFixed(2)}`);
-    return parts.length ? parts.join(' ') : null;
-  });
+  // Why a crop is in or out of the size and clarity filters: the server's words for its
+  // size rank in the photo and its sharpness.
+  const rankClarityLabel = $derived(
+    [crop.rank_label, crop.clarity_label].filter(Boolean).join(' · ') || null,
+  );
 </script>
 
 <!-- The card is a container, not a button: its actions are real buttons and
@@ -317,12 +312,13 @@
       </span>
     {/if}
 
-    {#if rankBlurLabel}
+    {#if rankClarityLabel}
       <span
+        data-testid="rank-clarity-chip"
         class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-200"
-        title="★1 = largest subject in its photo (#2 = second largest) · b = clarity score (higher is sharper)"
+        title="Size rank among the objects in its photo, and how sharp it is"
       >
-        {rankBlurLabel}
+        {rankClarityLabel}
       </span>
     {/if}
 

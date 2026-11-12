@@ -186,6 +186,8 @@ class ItemDoc(BaseModel):
     crop_rank_in_image: int | None = None
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
+    clarity_label: Literal['soft', 'clear', 'sharp'] | None = None
+    rank_label: str | None = None
     proposal_name: str | None = None
     # The detector's own answer (set at ingest, never overwritten by a relabel):
     # its label in registry-name form, its raw score, and its registry id when the

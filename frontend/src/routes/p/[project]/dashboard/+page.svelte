@@ -10,9 +10,10 @@
    * "home" pages was confusing. Nothing from the legacy page was
    * dropped — see below for where each piece landed:
    *
-   *   1. `AutoLabelPanel` / `DatasetStats` — unchanged, already here.
+   *   1. `DatasetStats` — unchanged, already here. The Auto-label run lives in
+   *      the Workspace's AI menu.
    *   2. Quick actions (VLM assist link / Export / Snapshot). A VLM run is an
-   *      assist run started from a cluster page, so the VLM action links there.
+   *      assist run started from a cluster page, so the VLM action links to the Workspace AI menu.
    *   3. Class balance bar chart — brought over verbatim; this is a
    *      genuinely different view from DatasetStats' "Labeled by
    *      source" breakdown (per-CLASS, not per-source), so it's kept
@@ -32,7 +33,6 @@
   import { projectsStore } from '$stores/projects.svelte';
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
   import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
@@ -189,7 +189,6 @@
   </section>
 
   <ClusterRunPanel />
-  <AutoLabelPanel />
 
   <DatasetStats />
 

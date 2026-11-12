@@ -11,6 +11,9 @@
   3. `test_empty_level_and_a_refused_run_say_why` -- no run yet, an empty group
      list, and the served 409 message of a refused run start.
   4. `test_page_fits_a_430px_phone`.
+  5. `test_label_the_whole_group_uses_the_group_filter` -- a representative's details open its
+     group in the Workspace, and "Label whole duplicate group" labels `{filter: {near_dup_group}}`
+     after the server's dry run.
 
 Responses are built from the generated contract (`fill`). Screenshots go under
 `artifacts_local/screens/workflow_1c/`.
@@ -457,3 +460,54 @@ def test_a_group_opens_in_the_workspace(stub, page, app_url):
     link.click()
     expect(page).to_have_url(re.compile(r'/p/default/workspace\?view=gallery&scope=near_dup'))
     expect(page.get_by_test_id('gallery-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+
+
+def test_label_the_whole_group_uses_the_group_filter(stub, page, app_url):
+    from fixtures.contract import label_op_accepted
+    from harness.label_ops import stub_label_op
+    from harness.screens import shot
+
+    serve_gallery(stub, [])
+    group = fill('ImageNearDup', group_id='g1', purpose='dedup', size=3, is_representative=True)
+    stub.on(
+        'GET',
+        r'/images/img-1$',
+        fill(
+            'ImageDetail',
+            image=fill(
+                'ImageInfo',
+                image_id='img-1',
+                file_name='img-1.jpg',
+                in_holdout=False,
+                near_dup=group,
+            ),
+            counts=fill('ImageCounts', items=2, labeled=1, unlabeled=1),
+            items=[],
+            boxes=[],
+        ),
+    )
+    calls: list[dict] = []
+    stub_label_op(stub, r'/crops/batch_label$', 'op-g', updated=3, method='PUT')
+
+    def label(request, _match):
+        body = request.post_data_json or {}
+        calls.append(body)
+        if body.get('dry_run'):
+            return (200, {'dry_run': True, 'selected': 3})
+        return (202, label_op_accepted('op-g', 'job-op-g'))
+
+    stub.on('PUT', r'/crops/batch_label$', label)
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=gallery')
+    expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('image-card-open').nth(1).click()
+    page.get_by_test_id('scope-near-dup').click()
+    expect(page.get_by_test_id('label-whole-group')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    shot(page, 'near-dup-group-scope', widths=(1600, 430))
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.get_by_test_id('label-whole-group').click()
+    page.get_by_role('combobox', name='Search classes').fill('widget')
+    page.get_by_role('dialog').get_by_role('option', name=re.compile('widget')).first.click()
+    expect(page.get_by_test_id('selection-count')).to_contain_text('3', timeout=ACTION_TIMEOUT_MS)
+    assert calls[0]['dry_run'] is True
+    assert calls[0]['selection']['filter']['near_dup_group'] == 'g1'

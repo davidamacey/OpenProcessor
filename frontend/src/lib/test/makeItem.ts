@@ -52,6 +52,8 @@ const DEFAULT_ITEM: Required<RawCrop> = {
   crop_rank_in_image: 2,
   crop_area_norm: 0.19,
   blur_lap_ratio: 4.5,
+  clarity_label: 'sharp',
+  rank_label: '2nd',
   classifier_raw_confidence: 0.61,
   proposal_name: 'widget_g',
   detector_class_name: 'widget_h',

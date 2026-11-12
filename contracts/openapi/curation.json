@@ -5817,6 +5817,10 @@
             "title": "Flag Vocabulary",
             "type": "array"
           },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts",
+            "description": "Items matching the filter that the cards leave out (holdout, ignored)."
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ClusterCard"
@@ -5881,6 +5885,7 @@
           "flag_vocabulary",
           "truncated",
           "join_truncated",
+          "hidden",
           "empty_reason",
           "empty_message",
           "pending_partition"
@@ -16541,6 +16546,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -17194,6 +17215,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [
@@ -30010,6 +30042,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -30675,6 +30723,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [
@@ -34315,6 +34374,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -34968,6 +35043,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "reason": {
             "description": "Why the item is in this tab's queue.",
@@ -36311,6 +36397,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -36988,6 +37090,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [
@@ -37917,6 +38030,17 @@
             ],
             "description": "Generic exact-match term filters keyed by OpenSearch field name (e.g. {\"class_id\": 7}). List values become a `terms` clause.",
             "title": "Filters"
+          },
+          "item_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Workspace item filter, the same body the list routes and bulk selections take; ignored items are left out unless it asks for them."
           },
           "review_tab": {
             "anyOf": [

@@ -67,6 +67,17 @@
     );
   });
 
+  $effect(() =>
+    ws.registerPage({
+      get kind() {
+        return ctl.rowsKind === 'images' ? 'images' : 'items';
+      },
+      ids: () => ctl.rows.map(rowKey),
+      total: () => ctl.total,
+      apply: (keys) => ctl.select(keys, true),
+    }),
+  );
+
   $effect(() => {
     if (!ctl.loading) ws.matching = { total: ctl.total, hidden: ctl.hidden };
     return () => {

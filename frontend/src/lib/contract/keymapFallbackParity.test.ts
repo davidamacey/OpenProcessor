@@ -22,7 +22,7 @@ describe('FALLBACK_KEYMAP parity with the served vocabulary', () => {
     expect(keys['workspace.escape']).toEqual(['escape']);
     expect(keys['workspace.view_next']).toEqual([']']);
     expect(keys['cluster.confirm']).toEqual(['shift+enter']);
-    expect(keys['cluster.select_all']).toEqual(['a', 'ctrl+a', 'meta+a']);
+    expect(keys['workspace.select_all']).toEqual(['a', 'ctrl+a', 'meta+a']);
   });
 
   it('serves the editor actions with their default keys', () => {

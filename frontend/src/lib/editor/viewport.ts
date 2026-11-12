@@ -75,3 +75,38 @@ export function viewportRect(
     height: frame.height * vp.scale,
   };
 }
+
+/** Pans so the picture point `at` (0 to 1 each way) sits at the centre of the container. */
+export function centerOn(
+  vp: Viewport,
+  at: { x: number; y: number },
+  frame: FrameSize,
+  container: FrameSize,
+): Viewport {
+  return clampViewport(
+    {
+      ...vp,
+      x:
+        (container.width - frame.width) / -2 +
+        container.width / 2 -
+        at.x * frame.width * vp.scale,
+      y:
+        (container.height - frame.height) / -2 +
+        container.height / 2 -
+        at.y * frame.height * vp.scale,
+    },
+    frame,
+  );
+}
+
+/** The part of the picture inside the container, as fractions of the picture (0 to 1). */
+export function visibleFraction(
+  rect: { left: number; top: number; width: number; height: number },
+  container: FrameSize,
+): { x: number; y: number; width: number; height: number } {
+  const x1 = Math.max(0, -rect.left / rect.width);
+  const y1 = Math.max(0, -rect.top / rect.height);
+  const x2 = Math.min(1, (container.width - rect.left) / rect.width);
+  const y2 = Math.min(1, (container.height - rect.top) / rect.height);
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+}

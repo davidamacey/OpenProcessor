@@ -94,3 +94,18 @@ describe('ReviewItemMeta Current label', () => {
     );
   });
 });
+
+describe('ReviewItemMeta Rank · clarity row', () => {
+  it('shows the served words, never the raw ratio', () => {
+    const el = render({
+      crop_rank_in_image: 2,
+      rank_label: '2nd',
+      blur_lap_ratio: 4.5,
+      clarity_label: 'sharp',
+    });
+    const dd = [...el.querySelectorAll('dt')].find((d) =>
+      d.textContent?.includes('Rank'),
+    )!.nextElementSibling!;
+    expect(dd.textContent?.replace(/\s+/g, ' ').trim()).toBe('2nd · sharp');
+  });
+});

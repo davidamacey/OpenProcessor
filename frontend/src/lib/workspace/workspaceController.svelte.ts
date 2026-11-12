@@ -43,6 +43,15 @@ import {
   type WorkspaceUrlState,
 } from './workspaceUrl';
 
+/** What select-all acts on: the ids a view has loaded, and the served total behind them. */
+export interface SelectablePage {
+  kind: SelectionKind;
+  ids: () => string[];
+  total: () => number;
+  /** Puts `ids` into the view's own selection, which the view mirrors back to the controller. */
+  apply: (ids: string[]) => void;
+}
+
 const DETAILS_MEDIA = 'min-width: 1280px';
 
 export class WorkspaceController {
@@ -95,6 +104,11 @@ export class WorkspaceController {
 
   get url(): WorkspaceUrlState {
     return this.#url;
+  }
+
+  /** True while the scope is one near-duplicate group (the bar offers its group-wide label). */
+  get inNearDupGroup(): boolean {
+    return this.#url.scope?.kind === 'near_dup';
   }
 
   get view(): ViewId {
@@ -290,11 +304,35 @@ export class WorkspaceController {
     this.select(NO_SELECTION);
   }
 
-  /** Ctrl/Cmd+A over the loaded page; `total` is the served total. */
-  selectAll(pageIds: string[], total: number): void {
-    const r = pressSelectAll(this.selection, this.selectionKind, pageIds, total);
-    this.selection = r.selection;
+  #page: SelectablePage | null = null;
+
+  /** The active view's loaded page, for select-all. Returns the function that unregisters it. */
+  registerPage(page: SelectablePage): () => void {
+    this.#page = page;
+    return () => {
+      if (this.#page === page) this.#page = null;
+    };
+  }
+
+  /** Ctrl/Cmd+A over the view's loaded page; a second press on a full page asks for all `total`
+   *  matching. False when the view has nothing to select, so the key keeps its browser meaning. */
+  pressSelectAll(): boolean {
+    const page = this.#page;
+    if (!page) return false;
+    const ids = page.ids();
+    const r = pressSelectAll(this.selection, page.kind, ids, page.total());
     this.pendingSelectAll = r.pending;
+    if (!r.pending) {
+      this.selection = r.selection;
+      page.apply(ids);
+    }
+    return true;
+  }
+
+  /** Makes `ids` the selection (a served sample, say) and shows it in the view's own grid. */
+  selectItems(ids: string[]): void {
+    this.select(ids.length > 0 ? { kind: 'items', cropIds: ids } : NO_SELECTION);
+    if (this.#page?.kind === 'items') this.#page.apply(ids);
   }
 
   confirmSelectAllMatching(): void {

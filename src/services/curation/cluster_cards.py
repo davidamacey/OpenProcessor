@@ -16,9 +16,11 @@ from src.config.project_context import current_project_id
 from src.core.exceptions import RequestRejectedError
 from src.db.session import async_session_factory, project_tx
 from src.domain.cluster_flags import FLAG_VOCABULARY, ValidationState, card_flags, validation_state
+from src.schemas.curation.views import HiddenCounts
 from src.services.clustering.partitions import display_numbers
 from src.services.curation import review_queries
 from src.services.curation.cluster_representatives import partition_representatives_body
+from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
@@ -311,9 +313,20 @@ async def attach_item_display_nos(items: list[dict[str, Any]]) -> None:
         ref['display_no'] = numbers.get(ref['uid'])
 
 
+async def _hidden(opensearch: Any, params: ClusterListParams) -> HiddenCounts:
+    """What the filter leaves out: cards never count the frozen holdout or ignored items."""
+    clauses = item_filter_clauses(
+        params.item_filter, embedding=await item_write_fields(), image_join=params.image_join
+    )
+    return HiddenCounts(
+        **await hidden_counts(opensearch, clauses, include_test=False, include_excluded=False)
+    )
+
+
 async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> ClusterListResponse:
     body = aggregation_body(params, await item_write_fields())
     try:
+        hidden = await _hidden(opensearch, params)
         resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise RequestRejectedError(500, f'clusters query failed: {exc}') from exc
@@ -341,4 +354,5 @@ async def list_cluster_cards(opensearch: Any, params: ClusterListParams) -> Clus
         'empty_reason': None,
         'empty_message': None,
         'pending_partition': None,
+        'hidden': hidden,
     }

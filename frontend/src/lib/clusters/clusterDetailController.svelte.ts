@@ -363,10 +363,6 @@ export function createClusterDetailController(uid: () => string) {
     );
   }
 
-  function selectAllPage(): void {
-    sel.selectAll(filteredCrops.map((c) => c.id));
-  }
-
   function deselectAll(): void {
     sel.clear();
   }
@@ -518,7 +514,6 @@ export function createClusterDetailController(uid: () => string) {
     loadFirst,
     loadMore,
     clickSelect,
-    selectAllPage,
     deselectAll,
   };
 }

@@ -61,6 +61,8 @@ export type RawCrop = ItemProvenanceFields & {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   blur_lap_ratio?: number | null;
+  clarity_label?: 'soft' | 'clear' | 'sharp' | null;
+  rank_label?: string | null;
   classifier_raw_confidence?: number | null;
   proposal_name?: string | null;
   detector_class_name?: string | null;
@@ -154,6 +156,8 @@ export const RAW_CROP_KEYS = [
   'crop_rank_in_image',
   'crop_area_norm',
   'blur_lap_ratio',
+  'clarity_label',
+  'rank_label',
   'classifier_raw_confidence',
   'proposal_name',
   'detector_class_name',
@@ -277,6 +281,14 @@ function mapCropScores(c: RawCrop) {
   } satisfies Partial<Crop>;
 }
 
+/** The served words for a crop's size rank and sharpness. */
+function mapCropLabels(c: RawCrop) {
+  return {
+    clarity_label: c.clarity_label ?? null,
+    rank_label: c.rank_label ?? null,
+  } satisfies Partial<Crop>;
+}
+
 /** The box-edit revision and lock of a served crop. */
 function mapCropGeometry(c: RawCrop) {
   return {
@@ -360,6 +372,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     embedding_states: c.embedding_states ?? {},
     ...mapCropScores(c),
     ...mapCropGeometry(c),
+    ...mapCropLabels(c),
     ...mapCropOrigin(c),
     near_dup_group_id:
       typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,

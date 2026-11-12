@@ -253,17 +253,10 @@
     </dd>
   {/if}
 
-  {#if current.crop_rank_in_image != null || current.blur_lap_ratio != null}
+  {#if current.rank_label || current.clarity_label}
     <dt class="text-zinc-500">Rank · clarity</dt>
     <dd class="font-mono text-zinc-300">
-      {current.crop_rank_in_image != null
-        ? current.crop_rank_in_image === 1
-          ? '★1 largest'
-          : `#${current.crop_rank_in_image}`
-        : '—'}
-      {#if current.blur_lap_ratio != null}
-        · b{current.blur_lap_ratio.toFixed(2)}
-      {/if}
+      {[current.rank_label, current.clarity_label].filter(Boolean).join(' · ')}
     </dd>
   {/if}
 

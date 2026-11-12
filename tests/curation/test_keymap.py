@@ -88,7 +88,7 @@ def test_validator_rejects_duplicate_combo_in_one_action() -> None:
 
 def test_validator_warns_focus_key() -> None:
     report, _, _, _issues = validate_keymap(
-        {'cluster.select_all': ['tab']}, project='default', classes=[], previous_overrides={}
+        {'workspace.select_all': ['tab']}, project='default', classes=[], previous_overrides={}
     )
     assert report.ok
     assert any(w.code == 'keymap_focus_key' for w in report.warnings)

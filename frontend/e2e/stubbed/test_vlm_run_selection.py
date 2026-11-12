@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 from fixtures.contract import auto_label_job
 from fixtures.wire import labeled_stats
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.vlm_menu import open_vlm_menu, serve_workspace_reads
 from playwright.sync_api import expect
 
 
@@ -116,7 +117,8 @@ def register_dashboard(
 def test_dashboard_auto_label_with_a_picked_external_endpoint(stub, page, app_url):
     starts = register_dashboard(stub, [*BASE_STRATEGIES, *VLM_STRATEGIES])
 
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     chip = page.get_by_text(re.compile(r'^assist:\s*whole dataset'))
     chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip.first.click()
@@ -135,12 +137,14 @@ def test_dashboard_auto_label_with_a_picked_external_endpoint(stub, page, app_ur
     expect(page.get_by_test_id('vlm-run-ack')).to_contain_text(WARNING)
     page.get_by_test_id('vlm-run-ack-checkbox').check()
 
-    page.get_by_role('button', name=re.compile(r'^Auto-label')).first.click()
+    page.get_by_role('button', name=re.compile(r'^Auto-label (now|·)')).first.click()
     with page.expect_response(
         lambda r: r.request.method == 'POST' and '/pipeline/auto_label/start' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.get_by_role('button', name='Start').first.click()
+        page.get_by_role('dialog', name='Confirm auto-label').get_by_role(
+            'button', name='Start'
+        ).first.click()
     assert len(starts) == 1, starts
     query = parse_qs(urlsplit(starts[0]).query)
     assert query['vlm'] == ['cloud_vlm'], query
@@ -182,7 +186,8 @@ def test_settings_disables_an_unacknowledged_external_entry(stub, page, app_url)
 
 def test_no_picker_without_a_vlm_axis(stub, page, app_url):
     starts = register_dashboard(stub, BASE_STRATEGIES)
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     start_btn = page.get_by_role('button', name='Auto-label now')
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
@@ -194,6 +199,8 @@ def test_no_picker_without_a_vlm_axis(stub, page, app_url):
         lambda r: r.request.method == 'POST' and '/pipeline/auto_label/start' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.get_by_role('button', name='Start').first.click()
+        page.get_by_role('dialog', name='Confirm auto-label').get_by_role(
+            'button', name='Start'
+        ).first.click()
     query = parse_qs(urlsplit(starts[0]).query)
     assert 'vlm' not in query and 'acknowledge_external' not in query, query

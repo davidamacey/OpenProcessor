@@ -22,8 +22,10 @@
   import {
     actualSize,
     FIT,
+    centerOn,
     panBy,
     viewportRect,
+    visibleFraction,
     zoomAt,
     type Viewport,
   } from '$lib/editor/viewport';
@@ -95,6 +97,12 @@
   const percent = $derived(
     pixels.w > 0 && fit.width > 0 ? ((fit.width * vp.scale) / pixels.w) * 100 : 100,
   );
+  // A photo more than four viewports large gets a small map to find one's way around it.
+  const MINIMAP_AREA_FACTOR = 4;
+  const showMinimap = $derived(
+    box.w > 0 && pixels.w * pixels.h > MINIMAP_AREA_FACTOR * box.w * box.h,
+  );
+  const view = $derived(visibleFraction(rect, { width: box.w, height: box.h }));
   // Pull in a sharper copy once the picture is drawn larger than the one on screen; never a smaller one.
   const wantLevel = $derived.by(() => {
     const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
@@ -143,6 +151,16 @@
     const left = (box.w - fit.width) / 2;
     const top = (box.h - fit.height) / 2;
     return { x: e.clientX - (r?.left ?? 0) - left, y: e.clientY - (r?.top ?? 0) - top };
+  }
+
+  function panFromMinimap(e: PointerEvent): void {
+    e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const at = {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+    };
+    vp = centerOn(vp, at, fit, { width: box.w, height: box.h });
   }
 
   function zoomWith(factor: number, at: { x: number; y: number }): void {
@@ -426,4 +444,31 @@
       ></div>
     {/if}
   </div>
+
+  {#if showMinimap}
+    <!-- Pointer-only aid: panning has its own keys and the pan tool. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="absolute right-2 bottom-2 z-30 w-40 cursor-pointer overflow-hidden rounded border border-zinc-600 bg-zinc-900 shadow"
+      style="aspect-ratio:{ratio}"
+      data-testid="minimap"
+      onpointerdown={panFromMinimap}
+    >
+      <img
+        src={imageUrl(LEVELS[0])}
+        alt=""
+        draggable="false"
+        class="pointer-events-none block h-full w-full object-fill"
+      />
+      <div class="pointer-events-none absolute inset-0">
+        <BoxLayer {boxes} {selectedCropId} showLabels={false} />
+      </div>
+      <div
+        class="pointer-events-none absolute border-2 border-sky-400 bg-sky-400/25"
+        style="left:{view.x * 100}%;top:{view.y * 100}%;width:{view.width *
+          100}%;height:{view.height * 100}%"
+        data-testid="minimap-view"
+      ></div>
+    </div>
+  {/if}
 </div>

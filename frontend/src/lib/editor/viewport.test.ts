@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   actualSize,
+  centerOn,
   clampViewport,
   FIT,
   MAX_SCALE,
   panBy,
   viewportRect,
+  visibleFraction,
   zoomAt,
 } from './viewport';
 
@@ -65,6 +67,35 @@ describe('viewport', () => {
       top: -40,
       width: 800,
       height: 600,
+    });
+  });
+
+  it('centres a picture point and stops at the edge of the picture', () => {
+    const container = { width: 400, height: 300 };
+    const zoomed = { scale: 4, x: 0, y: 0 };
+    const vp = centerOn(zoomed, { x: 0.5, y: 0.5 }, FRAME, container);
+    expect((200 - vp.x) / (FRAME.width * 4)).toBeCloseTo(0.5);
+    expect((150 - vp.y) / (FRAME.height * 4)).toBeCloseTo(0.5);
+    // The far corner cannot be centred: the picture still covers the view.
+    const corner = centerOn(zoomed, { x: 1, y: 1 }, FRAME, container);
+    expect(corner.x).toBe(FRAME.width * (1 - 4));
+    expect(corner.y).toBe(FRAME.height * (1 - 4));
+  });
+
+  it('says which fraction of the picture is in view', () => {
+    const container = { width: 400, height: 300 };
+    const rect = viewportRect({ scale: 4, x: -400, y: -300 }, FRAME, container);
+    expect(visibleFraction(rect, container)).toEqual({
+      x: 0.25,
+      y: 0.25,
+      width: 0.25,
+      height: 0.25,
+    });
+    expect(visibleFraction(viewportRect(FIT, FRAME, container), container)).toEqual({
+      x: 0,
+      y: 0,
+      width: 1,
+      height: 1,
     });
   });
 });

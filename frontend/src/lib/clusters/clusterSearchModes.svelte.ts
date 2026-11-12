@@ -387,9 +387,6 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     const reg = (actionId: string, fn: () => void | Promise<void>) =>
       offKeys.push(keyboardStore.registerAction(actionId, () => void fn(), 'cluster'));
 
-    reg('clusters_search.select_all', () =>
-      searchSel.selectAll(searchResults.map((c) => c.id)),
-    );
     reg('clusters_search.cancel', () => searchSel.clear());
     reg('clusters_search.ignore', async () => {
       const ids = [...searchSel.ids];

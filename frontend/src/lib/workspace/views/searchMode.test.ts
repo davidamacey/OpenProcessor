@@ -63,14 +63,12 @@ describe('/clusters search mode', () => {
   it('only wires A / Z / X / Escape in search mode — no M (move) or sub-cluster grouping', () => {
     const body = extractSearchModeEffect(src);
     // K1: registered by keymap action id (defaults a / z / x / Escape).
-    expect(body).toMatch(/reg\(\s*'clusters_search\.select_all',/);
     expect(body).toMatch(/reg\(\s*'clusters_search\.undo',/);
     expect(body).toMatch(/reg\(\s*'clusters_search\.ignore',/);
     expect(body).toMatch(/reg\(\s*\n?\s*'clusters_search\.cancel',/);
     expect([...body.matchAll(/\breg\(\s*'([^']+)'/g)].map((m) => m[1]).sort()).toEqual([
       'clusters_search.cancel',
       'clusters_search.ignore',
-      'clusters_search.select_all',
       'clusters_search.undo',
     ]);
     expect(body).not.toMatch(/openMovePicker/);

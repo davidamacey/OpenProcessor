@@ -72,8 +72,10 @@ endpoint is fixed. A loop pauses for a person, a reached budget limit, a failing
 
 ## In the app
 
-The Clusters page has an auto-label loop panel (absent when the backend does not serve
-`/assist/loops`). It shows the served dry run before a start, then live status, VLM and audit
+The Workspace's AI menu (in the view bar) holds the Auto-label run, which needs no VLM, and, while
+the project has an active VLM, the auto-label loop panel (absent when the backend does not serve `/assist/loops`) next to
+"Assist on the selection" (or the scope when nothing is selected) and the Auto-label run with its
+settings; the button shows the loop's status. It shows the served dry run before a start, then live status, VLM and audit
 budget meters, per-level counts, totals and the second-opinion result. It can start, pause,
 resume, cancel and edit the budget of a loop, open the node table with votes and member
 crops, and roll back in two steps (a served dry run, then confirm), whole or per node. Every

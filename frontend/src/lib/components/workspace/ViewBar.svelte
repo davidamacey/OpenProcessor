@@ -3,6 +3,7 @@
    * The Workspace's views: tabs from the registry, a `<select>` under `md`.
    * Switching keeps the filter, the queue, the scope and the selection.
    */
+  import VlmMenu from '$components/workspace/VlmMenu.svelte';
   import { availableViews, viewEntry } from '$lib/workspace/viewRegistry';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import type { ViewId } from '$lib/workspace/workspaceUrl';
@@ -43,6 +44,7 @@
       <option value={v.id}>{v.label}</option>
     {/each}
   </select> <span class="grow"></span>
+  <VlmMenu {ws} />
   <button
     type="button"
     class="btn lg:hidden"

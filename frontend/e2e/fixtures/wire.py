@@ -239,6 +239,8 @@ _EXPLICIT: dict[str, Any] = {
     'crop_rank_in_image': 2,
     'crop_area_norm': 0.19,
     'blur_lap_ratio': 4.5,
+    'clarity_label': 'sharp',
+    'rank_label': '2nd',
     'proposal_name': 'car',
     'detector_class_name': 'sedan',
     'detector_class_id': 8,

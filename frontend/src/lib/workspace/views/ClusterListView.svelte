@@ -11,7 +11,6 @@
   import { createClusterListController } from '$lib/clusters/clusterListController.svelte';
   import { createClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
   import { createSlotInventory } from '$lib/clusters/slotInventory.svelte';
-  import AssistLoopPanel from '$components/assistLoop/AssistLoopPanel.svelte';
   import { clusterFilterToUrl } from '$lib/clusters/clusterListFilter';
   import ClusterListFilterBar from '$lib/components/clusters/ClusterListFilterBar.svelte';
   import ClustersGrid from '$lib/components/clusters/ClustersGrid.svelte';
@@ -50,6 +49,25 @@
     gridItemFilter,
   });
   let detailSearchCrop = $state<Crop | null>(null);
+  // The filter row's "N matching · M hidden" note: the served cluster count and hidden counts.
+  $effect(() => {
+    if (list.clusterPager.loading || list.clusterPager.error) return;
+    ws.matching = { total: list.total, hidden: list.hidden };
+    return () => {
+      ws.matching = null;
+    };
+  });
+  // Select-all applies where cards are items: the search results. The cluster cards are opened,
+  // not selected, so the key keeps its browser meaning there.
+  $effect(() => {
+    if (!modes.searchModeActive) return;
+    return ws.registerPage({
+      kind: 'items',
+      ids: () => modes.searchResults.map((c) => c.id),
+      total: () => modes.searchTotal,
+      apply: (ids) => modes.searchSel.selectAll(ids),
+    });
+  });
 
   // --- Slot gallery (shown instead of the cluster grid when the class
   //     filter is a slot-bound class). State/logic live in
@@ -180,8 +198,6 @@
     {enterMatchingMode}
     {exitMatchingMode}
   />
-
-  <AssistLoopPanel />
 
   {#if !isSlotFilter && !matchingModeActive && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
     <ClusterListFilterBar {list} />

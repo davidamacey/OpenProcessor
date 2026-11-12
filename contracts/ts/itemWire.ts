@@ -118,6 +118,8 @@ export interface ItemWire {
   crop_rank_in_image: number | null;
   crop_area_norm: number | null;
   blur_lap_ratio: number | null;
+  clarity_label: string | null;
+  rank_label: string | null;
   proposal_name: string | null;
   detector_class_name: string | null;
   detector_class_id: number | null;
@@ -247,6 +249,8 @@ export const ITEM_WIRE_KEYS = [
   'crop_rank_in_image',
   'crop_area_norm',
   'blur_lap_ratio',
+  'clarity_label',
+  'rank_label',
   'proposal_name',
   'detector_class_name',
   'detector_class_id',

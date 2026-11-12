@@ -19,8 +19,7 @@ import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
 export function createClusterDetailActions(view: ClusterDetailController) {
-  const { cropPager, sel, exclusionGuard, grid, loadFirst, loadMore, selectAllPage } =
-    view;
+  const { cropPager, sel, exclusionGuard, grid, loadFirst, loadMore } = view;
 
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
@@ -273,7 +272,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     reg('cluster.undo', controller.undoLast);
     reg('cluster.ignore', () => void ignoreSelected('ignore'));
     reg('cluster.unignore', controller.undoIgnore);
-    reg('cluster.select_all', selectAllPage);
     // Arrow keys navigate within the loaded grid. With infinite scroll the
     // next-page concept is gone — left/right move selection by one position
     // in the visible filtered list.

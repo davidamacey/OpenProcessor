@@ -86,6 +86,12 @@
         'workspace.items',
       ),
       keyboardStore.registerAction('workspace.open_review', openReview, 'cluster'),
+      // False leaves Ctrl+A to the browser in a view with nothing to select.
+      keyboardStore.registerAction(
+        'workspace.select_all',
+        () => ws.pressSelectAll(),
+        'workspace',
+      ),
       // Space on a focused card toggles it, like Ctrl+click.
       keyboardStore.registerAction(
         'workspace.select_toggle',

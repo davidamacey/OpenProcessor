@@ -3,6 +3,7 @@
  * new-class resolution.
  */
 import type { BulkLabelConflict, Crop, WriteFailure } from '$lib/types';
+import type { ItemFilter } from '$lib/types_itemFilter';
 
 // A queue-capable slot's tab id is the structural `slot:${SlotKey}` template (SlotReviewTab), not a
 // hand-maintained literal per slot. Every other tab id is a served queue id (`GET /review/tabs`).
@@ -67,6 +68,8 @@ export interface SelectDiverseScope {
   cluster_uid?: string | null;
   review_tab?: string | null;
   filters?: Record<string, unknown>;
+  /** The Workspace item filter body. */
+  item_filter?: ItemFilter;
 }
 
 /**
