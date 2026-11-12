@@ -77,6 +77,24 @@ def test_an_operation_is_listed_and_stored_only_in_its_own_project(leak_env: Lea
         assert _stored_op_ids(leak_env, slug) == [], 'the row exists only under the owning project'
 
 
+def test_a_single_label_write_is_recorded_only_in_its_own_project(leak_env: LeakEnv) -> None:
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    resp = client.put(
+        f'{SCOPED.format(project="alpha")}/crops/alpha-item-0002/label', json={'class_id': 1}
+    )
+    assert resp.status_code == 200, resp.text
+    op_id = resp.json()['op_id']
+
+    for slug, expected in (('alpha', [op_id]), ('beta', []), ('default', [])):
+        listed = client.get(f'{SCOPED.format(project=slug)}/label_ops').json()['items']
+        assert [o['op_id'] for o in listed] == expected
+        assert _stored_op_ids(leak_env, slug) == expected
+    other = client.post(
+        f'{SCOPED.format(project="beta")}/label_ops/{op_id}/undo', json={'dry_run': True}
+    )
+    assert other.status_code == 404, other.text
+
+
 def test_listing_reaches_only_the_bound_projects_indexes(leak_env: LeakEnv) -> None:
     client = TestClient(leak_env.app, raise_server_exceptions=False)
     _label(leak_env, client, 'alpha')

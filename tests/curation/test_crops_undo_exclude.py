@@ -106,6 +106,8 @@ async def _label(crops, fake, registry, crop_id: str, class_id: int) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_restores_ingest_proposal_field_for_field(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     before = _class_state(fake.docs(ITEMS)['c1'])
@@ -121,6 +123,8 @@ async def test_undo_restores_ingest_proposal_field_for_field(crops, registry, id
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_restores_prior_vlm_label(crops, registry, ids) -> None:
     doc = _ingest_doc('c2', class_source='detector_proposal', class_detector='detector')
     doc.update(
@@ -168,6 +172,8 @@ async def test_undo_reverses_batch_label_and_move(crops, registry, ids) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_successive_undos_step_back_through_human_labels(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c3': _proposal_doc('c3')}})
     original = _class_state(fake.docs(ITEMS)['c3'])
@@ -240,6 +246,8 @@ async def _unexclude(crops, fake, crop_ids: list[str]) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_exclusion_restores_validation_and_never_moves_the_item(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'v': _proposal_doc('v'), 'u': _proposal_doc('u')}})
     await _label(crops, fake, registry, 'v', ids['gadget'])
@@ -345,6 +353,8 @@ async def test_move_rejects_a_cluster_the_serving_partition_does_not_hold(
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_re_exclude_keeps_the_recorded_pre_exclusion_state(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'v': _proposal_doc('v')}})
     await _label(crops, fake, registry, 'v', ids['widget'])
@@ -356,6 +366,8 @@ async def test_re_exclude_keeps_the_recorded_pre_exclusion_state(crops, registry
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_unexclude_leaves_non_excluded_items_untouched(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'v': _proposal_doc('v')}})
     await _label(crops, fake, registry, 'v', ids['widget'])
@@ -370,6 +382,8 @@ async def test_unexclude_leaves_non_excluded_items_untouched(crops, registry, id
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_unexclude_legacy_exclusion_of_human_label(crops) -> None:
     """Excluded before the pre-exclusion state was recorded: the exclude
     already wiped class_validated, but a human-sourced class can only have
@@ -390,6 +404,8 @@ async def test_unexclude_legacy_exclusion_of_human_label(crops) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'x': _proposal_doc('x')}})
     await _label(crops, fake, registry, 'x', ids['widget'])
@@ -413,6 +429,8 @@ async def test_undo_label_on_excluded_item_keeps_it_excluded(crops, registry, id
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_route_restores_and_returns_the_wire_item(
     crops, registry, ids, client_for
 ) -> None:

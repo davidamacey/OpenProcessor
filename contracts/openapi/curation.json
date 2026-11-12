@@ -8375,6 +8375,36 @@
         "title": "CropLabelRequest",
         "type": "object"
       },
+      "CropLabelResponse": {
+        "description": "``PUT /crops/{crop_id}/label``: the write is recorded as a label operation.",
+        "properties": {
+          "class_id": {
+            "title": "Class Id",
+            "type": "integer"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "op_id": {
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "crop_id",
+          "class_id",
+          "class_name",
+          "op_id"
+        ],
+        "title": "CropLabelResponse",
+        "type": "object"
+      },
       "CropLocate": {
         "description": "``GET /crops/locate``: where a crop sits in the list the same filters and sort would serve.",
         "properties": {
@@ -19434,14 +19464,21 @@
             "title": "Next After"
           },
           "retention": {
+            "description": "Bulk operations kept per project (the newest).",
             "title": "Retention",
+            "type": "integer"
+          },
+          "single_retention": {
+            "description": "Single label writes kept per project (the newest), counted apart from the bulk ones.",
+            "title": "Single Retention",
             "type": "integer"
           }
         },
         "required": [
           "items",
           "limit",
-          "retention"
+          "retention",
+          "single_retention"
         ],
         "title": "LabelOpList",
         "type": "object"
@@ -51714,7 +51751,7 @@
         ]
       },
       "put": {
-        "description": "Set the validated class on a single item.",
+        "description": "Set the validated class on a single item, as a recorded label operation.\n\nThe write is synchronous: the operation's record is written in this request (the same\nrecord, tagging and undo as a bulk label, with no job behind it) and ``op_id`` is\nanswered. ``POST /label_ops/{op_id}/undo`` restores the previous class and the operation\nshows in ``GET /label_ops``. ``404`` for an unknown item, ``409`` when a concurrent write\noutlasts the retries.",
         "operationId": "label_crop_curation_projects__project__crops__crop_id__label_put",
         "parameters": [
           {
@@ -51751,9 +51788,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Label Crop Curation Projects  Project  Crops  Crop Id  Label Put",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CropLabelResponse"
                 }
               }
             },

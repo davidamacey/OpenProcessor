@@ -61,10 +61,12 @@ def inserts(bound_async_engine):
     event.remove(sync_engine, 'before_cursor_execute', counter)
 
 
-async def _create(project: uuid.UUID, *, kind: str = 'label', status: str | None = None):
+async def _create(
+    project: uuid.UUID, *, kind: str = 'label', status: str | None = None, by: str = 'alice'
+):
     async with async_session_factory()() as session, project_tx(session, project):
         op = await create_label_operation(
-            session, project, kind=kind, created_by='alice', params={'class_name': 'car'}
+            session, project, kind=kind, created_by=by, params={'class_name': 'car'}
         )
         if status is not None:
             await save_label_operation(session, project, op.id, status=status, params=op.params)
@@ -149,10 +151,28 @@ async def test_pruning_keeps_the_newest_and_never_deletes_a_writing_op(pg_env) -
     writing = await _create(project)
     done = [(await _create(project, status='written')).id for _ in range(4)]
     async with async_session_factory()() as session, project_tx(session, project):
-        deleted = await prune_label_operations(session, project, keep=2)
+        deleted = await prune_label_operations(
+            session, project, keep=2, single_keep=2, single_writer='human:label_crop'
+        )
         left = {o.id for o in await list_label_operations(session, project, limit=10)}
     assert deleted == 2
     assert left == {writing.id, *done[2:]}
+
+
+@pytest.mark.asyncio
+async def test_pruning_counts_single_writes_apart_from_bulk_operations(pg_env) -> None:
+    project = make_project(pg_env, 'ops-prune-groups')
+    bulk = [(await _create(project, status='written')).id for _ in range(2)]
+    singles = [
+        (await _create(project, status='written', by='human:label_crop')).id for _ in range(5)
+    ]
+    async with async_session_factory()() as session, project_tx(session, project):
+        deleted = await prune_label_operations(
+            session, project, keep=2, single_keep=3, single_writer='human:label_crop'
+        )
+        left = {o.id for o in await list_label_operations(session, project, limit=20)}
+    assert deleted == 2
+    assert left == {*bulk, *singles[2:]}, 'the single writes did not evict a bulk operation'
 
 
 @pytest.mark.asyncio

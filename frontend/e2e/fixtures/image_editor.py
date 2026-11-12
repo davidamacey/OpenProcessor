@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fixtures.contract import box_view, fill, image_detail
+from fixtures.contract import box_view, crop_label_written, fill, image_detail
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
 
@@ -141,7 +141,9 @@ class Editor:
         )
         self.items[crop_id]['class_name'] = name
         self.boxes[crop_id]['label'] = name
-        return self.items[crop_id]
+        return crop_label_written(
+            crop_id, request.post_data_json['class_id'], name, f'op-{crop_id}'
+        )
 
     def create_class(self, request: Any, _match: Any) -> Any:
         name = request.post_data_json['name']

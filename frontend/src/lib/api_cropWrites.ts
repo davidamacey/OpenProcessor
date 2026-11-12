@@ -14,14 +14,16 @@ import type {
 import type { SlotSpec } from '$lib/annotations/types';
 import type { GeometryPatchBody, GeometryWrittenWire } from '$lib/types_editor';
 import type { ExcludeReasonEntry, SelectionExcludeResult } from '$lib/types_itemFilter';
-import type { LabelOpAccepted } from '$lib/types_labelOps';
+import type { CropLabelWritten, LabelOpAccepted } from '$lib/types_labelOps';
 
+/** Label one item. The write is synchronous and recorded as a label operation; undo it by
+ *  the returned `op_id` (`undoStore.recordLabelOp`). */
 export function putCropLabel(
   cropId: string,
   classId: number,
   signal?: AbortSignal,
-): Promise<Crop> {
-  return apiFetch<Crop>(
+): Promise<CropLabelWritten> {
+  return apiFetch<CropLabelWritten>(
     `${scoped()}/crops/${encodeURIComponent(cropId)}/label`,
     {
       method: 'PUT',

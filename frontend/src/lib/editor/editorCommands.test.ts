@@ -10,6 +10,9 @@ vi.mock('$lib/api_images', async () =>
 vi.mock('$lib/api_cropWrites', async () =>
   (await import('./editorApiMock')).editorWritesModule(),
 );
+vi.mock('$lib/labelOps/runLabelOp', async () =>
+  (await import('./editorApiMock')).editorLabelOpsModule(),
+);
 vi.mock('$lib/api_regionBoxes', async () =>
   (await import('./editorApiMock')).editorRegionsModule(),
 );
@@ -73,12 +76,42 @@ describe("each command's revert inverts apply", () => {
     expect(api.unexcludeCrops).toHaveBeenCalledWith(['c1']);
   });
 
-  it('class: labels with the registry id, then undoes the label', async () => {
+  it('class: labels with the registry id, then undoes the recorded label operation', async () => {
     const cmd = classCommand(item, car);
     await cmd.apply();
     expect(api.putCropLabel).toHaveBeenCalledWith('c1', 7);
     await cmd.revert();
-    expect(api.undoCropLabel).toHaveBeenCalledWith('c1');
+    expect(api.undoLabelOpToEnd).toHaveBeenCalledWith('op-1', false);
+  });
+
+  it('class: a redo records a new operation, and the next undo reverts that one', async () => {
+    api.putCropLabel
+      .mockResolvedValueOnce({
+        crop_id: 'c1',
+        class_id: 7,
+        class_name: 'car',
+        op_id: 'op-1',
+      })
+      .mockResolvedValueOnce({
+        crop_id: 'c1',
+        class_id: 7,
+        class_name: 'car',
+        op_id: 'op-2',
+      });
+    const cmd = classCommand(item, car);
+    await cmd.apply();
+    await cmd.revert();
+    await cmd.apply();
+    await cmd.revert();
+    expect(api.undoLabelOpToEnd.mock.calls.map((c) => c[0])).toEqual(['op-1', 'op-2']);
+  });
+
+  it('class: a failed operation undo is reported, not swallowed', async () => {
+    api.undoLabelOpToEnd.mockRejectedValueOnce(new Error('the undo did not finish'));
+    const cmd = classCommand(item, car);
+    await cmd.apply();
+    const r = await cmd.revert();
+    expect(r.ok).toBe(false);
   });
 
   it('region edit: undo is the region undo, and it cannot be redone', async () => {

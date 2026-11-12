@@ -32,6 +32,7 @@ from src.db.repos.records import (
 )
 from src.db.session import async_session_factory, project_tx
 from src.domain import job_states as js
+from src.domain.history import HUMAN_LABEL_WRITER
 from src.domain.label_ops import (
     LABEL_OP_ID_RE,
     LabelOpKind,
@@ -50,7 +51,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 LABEL_OPS_KEEP = 200
-"""Operations kept per project; the oldest are pruned when a new one is created."""
+"""Bulk operations kept per project; the oldest are pruned when a new one is created."""
+
+SINGLE_LABEL_OPS_KEEP = 1000
+"""Single label writes kept per project, counted apart from the bulk operations so that a run of
+single labels never evicts a bulk one. Each is one small row with one member."""
 
 UNDO_PASSES_KEPT = 10
 
@@ -124,10 +129,12 @@ def _record(row: LabelOperationRow) -> LabelOpRecord | None:
 
 
 async def create_op_in(
-    session: Any, new: NewLabelOp, op_id: uuid.UUID, job_id: uuid.UUID
+    session: Any, new: NewLabelOp, op_id: uuid.UUID, job_id: uuid.UUID | None
 ) -> LabelOpRecord:
-    """Write the record (status ``writing``, owned by ``job_id``) in the caller's transaction,
-    before any item is written, and prune the oldest operations beyond :data:`LABEL_OPS_KEEP`."""
+    """Write the record (status ``writing``, owned by ``job_id``, or by no job for a request
+    write) in the caller's transaction,
+    before any item is written, and prune the oldest operations beyond :data:`LABEL_OPS_KEEP`
+    (single label writes: beyond :data:`SINGLE_LABEL_OPS_KEEP`)."""
     if current_project().read_only:
         raise rejection(409, 'project_read_only', 'the project is read-only; nothing was written')
     project_id = current_project_id()
@@ -151,7 +158,13 @@ async def create_op_in(
         op_id=op_id,
         job_id=job_id,
     )
-    await prune_label_operations(session, project_id, keep=LABEL_OPS_KEEP)
+    await prune_label_operations(
+        session,
+        project_id,
+        keep=LABEL_OPS_KEEP,
+        single_keep=SINGLE_LABEL_OPS_KEEP,
+        single_writer=HUMAN_LABEL_WRITER,
+    )
     logger.info('label_op_created', op_id=record.op_id, kind=record.kind, selected=record.selected)
     return record
 
@@ -241,6 +254,7 @@ async def served_status(record: LabelOpRecord) -> ServedStatus:
 
 __all__ = [
     'LABEL_OPS_KEEP',
+    'SINGLE_LABEL_OPS_KEEP',
     'UNDO_PASSES_KEPT',
     'LabelOpRecord',
     'NewLabelOp',

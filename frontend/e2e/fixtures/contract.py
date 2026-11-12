@@ -132,6 +132,15 @@ def label_op_accepted(op_id: str = 'op-1', job_id: str = 'job-1') -> dict[str, A
     return fill('LabelOpAccepted', op_id=op_id, job_id=job_id)
 
 
+def crop_label_written(
+    crop_id: str = 'crop-0', class_id: int = 1, class_name: str = 'ducati', op_id: str = 'op-1'
+) -> dict[str, Any]:
+    """``PUT /crops/{id}/label``: the single write, recorded as a label operation."""
+    return fill(
+        'CropLabelResponse', crop_id=crop_id, class_id=class_id, class_name=class_name, op_id=op_id
+    )
+
+
 def job(job_id: str = 'job-1', status: str = 'completed', **over: Any) -> dict[str, Any]:
     """One ``GET /jobs/{id}`` body. ``result`` is the job's own result document."""
     base = {

@@ -8,13 +8,13 @@ import {
   excludeCrops,
   patchItemGeometry,
   putCropLabel,
-  undoCropLabel,
   undoCropRegion,
   undoItemGeometry,
   unexcludeCrops,
 } from '$lib/api_cropWrites';
 import { apiErrorText, ApiError } from '$lib/api_errors';
 import { createImageItem, getImage } from '$lib/api_images';
+import { undoLabelOpToEnd } from '$lib/labelOps/runLabelOp';
 import type { XYXY } from '$lib/annotations/types';
 import type { Crop } from '$lib/types';
 import type { ImageDetailResponse } from '$lib/types_images';
@@ -148,18 +148,24 @@ export function deleteCommand(item: Crop): EditorCommand {
   };
 }
 
-/** A class change, sent as the registry entry's id and undone by the server's label undo. */
+/**
+ * A class change, sent as the registry entry's id. The server records it as a label operation
+ * and answers its id; undo reverts that operation (the same served undo as Label history), and a
+ * redo records a new one.
+ */
 export function classCommand(item: Crop, cls: RegistryClass): EditorCommand {
   const imageId = item.image_id ?? '';
+  let opId: string | null = null;
   return {
     label: `Set class ${cls.name}`,
     apply: () =>
       settle(imageId, async () => {
-        await putCropLabel(item.id, cls.id);
+        opId = (await putCropLabel(item.id, cls.id)).op_id;
       }),
     revert: () =>
       settle(imageId, async () => {
-        await undoCropLabel(item.id);
+        if (opId === null) throw new Error('the class change was not recorded');
+        await undoLabelOpToEnd(opId, false);
       }),
   };
 }

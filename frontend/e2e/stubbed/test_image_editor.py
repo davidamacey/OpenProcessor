@@ -4,6 +4,7 @@
 - a class typed as "Traffic light" is refused with the served suggestion and created as `traffic_light`
 - a move the server refuses with a 409 shows the served message and the server's box
 - delete then Ctrl+Z writes `batch_exclude` then `batch_unexclude`
+- a class change then Ctrl+Z undoes the label operation the write recorded (`POST /label_ops/{op_id}/undo`)
 - Tab cycles the objects, `.` walks to the next image through `GET /images/locate`
 - at 430 px the object list is a drawer and a touch drag draws
 """
@@ -17,6 +18,7 @@ from typing import Any
 
 from fixtures.image_editor import Editor
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.label_ops import stub_label_op_undo
 from playwright.sync_api import expect
 
 
@@ -125,6 +127,30 @@ def test_delete_then_undo_restores_the_box(stub, page, app_url):
     page.keyboard.press('Control+z')
     expect(page.get_by_test_id('object-deleted')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     assert ed.writes('POST', '/crops/batch_unexclude')[0] == {'crop_ids': ['c1']}
+
+
+def test_class_change_then_undo_reverts_the_recorded_label_operation(stub, page, app_url):
+    ed = Editor(stub)
+    undo_calls: list[dict] = []
+    legacy: list[str] = []
+    stub_label_op_undo(stub, 'op-c1', calls=undo_calls)
+    stub.on(
+        'POST',
+        r'/crops/[^/]+/label/undo$',
+        lambda request, match: legacy.append(match.string) or (200, {}),
+    )
+    ed.open(page, app_url)
+    page.keyboard.press('Tab')
+    page.keyboard.press('j')
+    expect(page.get_by_test_id('save-state')).to_have_text('Saved', timeout=ACTION_TIMEOUT_MS)
+    assert len(ed.writes('PUT', '/label')) == 1
+    with page.expect_response(
+        lambda r: r.request.method == 'POST' and r.url.endswith('/label_ops/op-c1/undo'),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press('Control+z')
+    assert undo_calls == [{'dry_run': False}], undo_calls
+    assert legacy == [], f'the class undo goes through the served operation: {legacy}'
 
 
 def test_tab_cycles_and_dot_walks_to_the_next_image(stub, page, app_url):

@@ -38,6 +38,7 @@ from __future__ import annotations
 import threading
 from urllib.parse import parse_qs, urlparse
 
+from fixtures.contract import crop_label_written
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO, review_url
 from harness.waits import wait_for_paint
@@ -151,9 +152,8 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     def label_handler(request, match):
         label_calls.append(match.string)
-        item = review_item(0)
-        item['class_id'] = (request.post_data_json or {}).get('class_id')
-        return (200, item)
+        class_id = (request.post_data_json or {}).get('class_id')
+        return (200, crop_label_written('crop-0', class_id, op_id='op-crop-0'))
 
     stub.on('PUT', r'/crops/([^/]+)/label$', label_handler)
 

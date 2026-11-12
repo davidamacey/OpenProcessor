@@ -16,6 +16,7 @@ from src.core.db_session import get_db
 if TYPE_CHECKING:
     from _class_registry_fake import InMemoryRegistry
 
+pytest_plugins = ['_records_world']
 
 BASE = '/curation/projects/default'
 
@@ -51,6 +52,8 @@ def test_batch_label_is_refused(client_for, deprecated_ids, which: str) -> None:
     assert 'unknown class_id' in r.text
 
 
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 def test_an_active_class_is_still_accepted(client_for, deprecated_ids) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     r = client_for(fake).put(f'{BASE}/crops/c1/label', json={'class_id': deprecated_ids['active']})

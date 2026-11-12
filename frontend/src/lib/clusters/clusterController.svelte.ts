@@ -153,8 +153,8 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     for (const id of ids) applyLocalLabel(id, classId, cls.name);
     try {
       if (ids.length === 1) {
-        await putCropLabel(ids[0]!, classId);
-        undoStore.recordWrites(ids);
+        const written = await putCropLabel(ids[0]!, classId);
+        undoStore.recordLabelOp(written.op_id, ids);
       } else {
         const out = await runLabelOp(await bulkLabel(ids, classId));
         undoStore.recordLabelOp(out.opId, ids);
@@ -247,8 +247,8 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     const targetClassName = crop.vlm_suggested_class_name ?? null;
     applyLocalLabel(crop.id, targetClassId, targetClassName);
     try {
-      await putCropLabel(crop.id, targetClassId);
-      undoStore.recordWrites([crop.id]);
+      const written = await putCropLabel(crop.id, targetClassId);
+      undoStore.recordLabelOp(written.op_id, [crop.id]);
       void classesStore.refresh();
     } catch (e) {
       toastStore.error(`Accept VLM suggestion failed: ${apiErrorText(e)}`);

@@ -107,6 +107,7 @@ def list_page(rows, request):
         'items': page,
         'limit': limit,
         'retention': 200,
+        'single_retention': 1000,
         'next_after': page[-1]['op_id'] if more else None,
     }
 
@@ -147,6 +148,9 @@ def _open_history(page, app_url):
     expect(page.get_by_test_id('label-op-row')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('label-op-row').first).to_contain_text('UTC · by Human')
     expect(page.get_by_test_id('label-ops-end')).to_be_visible()
+    expect(
+        page.get_by_text('newest 200 bulk operations and the newest 1000 single labels')
+    ).to_be_visible()
     if page.viewport_size['width'] >= 640:
         expect(page.get_by_test_id('breadcrumb')).to_contain_text('Quality')
 

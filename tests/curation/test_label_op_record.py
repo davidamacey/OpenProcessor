@@ -115,19 +115,26 @@ def test_label_ops_list_newest_first_counts_and_limits(
     first = env.label('widget', crop_ids=['c0', 'c1', 'c2'])['op_id']
     target = env.serve()[0]
     second = env.move(target, crop_ids=['c2', 'c3'])['op_id']
-    # A person relabels c1 afterwards: the first operation no longer owns it.
-    assert (
-        env.client.put(
-            f'{env.prefix}/crops/c1/label', json={'class_id': env.class_ids['gizmo']}
-        ).status_code
-        == 200
+    # A person relabels c1 afterwards: the first operation no longer owns it, and the
+    # single write is an operation of its own.
+    taken = env.client.put(
+        f'{env.prefix}/crops/c1/label', json={'class_id': env.class_ids['gizmo']}
     )
+    assert taken.status_code == 200, taken.text
+    third = taken.json()['op_id']
 
     body = env.list_ops().json()
     assert body['limit'] == 20
     assert body['retention'] == store.LABEL_OPS_KEEP == 200
-    assert [o['op_id'] for o in body['items']] == [second, first]
-    newer, older = body['items']
+    assert body['single_retention'] == store.SINGLE_LABEL_OPS_KEEP
+    assert [o['op_id'] for o in body['items']] == [third, second, first]
+    single, newer, older = body['items']
+    assert (single['kind'], single['class_name'], single['selected'], single['current']) == (
+        'label',
+        'gizmo',
+        1,
+        1,
+    )
     assert (newer['kind'], newer['class_name'], newer['target_cluster_uid'], newer['current']) == (
         'move',
         None,
@@ -147,20 +154,17 @@ def test_label_ops_list_newest_first_counts_and_limits(
     assert older['status'] == 'written'
     assert 'class_id' not in older
 
-    assert [o['op_id'] for o in env.list_ops(limit=1).json()['items']] == [second]
+    assert [o['op_id'] for o in env.list_ops(limit=1).json()['items']] == [third]
     assert env.list_ops(limit=51).status_code == 422
     assert env.list_ops(limit=0).status_code == 422
 
     # Nothing is left of the first operation once c0 is taken over as well.
-    assert (
-        env.client.put(
-            f'{env.prefix}/crops/c0/label', json={'class_id': env.class_ids['gizmo']}
-        ).status_code
-        == 200
-    )
+    fourth = env.client.put(
+        f'{env.prefix}/crops/c0/label', json={'class_id': env.class_ids['gizmo']}
+    ).json()['op_id']
     only = env.list_ops(undoable='true', limit=5).json()['items']
-    assert [o['op_id'] for o in only] == [second]
-    assert env.list_ops(undoable='true', limit=1).json()['items'][0]['op_id'] == second
+    assert [o['op_id'] for o in only] == [fourth, third, second]
+    assert env.list_ops(undoable='true', limit=1).json()['items'][0]['op_id'] == fourth
     assert body['next_after'] is None
 
 
@@ -201,6 +205,30 @@ def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
     )
     ids = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert ids == sorted(ids, reverse=True)
+
+
+def test_single_writes_never_evict_a_bulk_operation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path, n=3)
+    monkeypatch.setattr(store, 'LABEL_OPS_KEEP', 2)
+    monkeypatch.setattr(store, 'SINGLE_LABEL_OPS_KEEP', 3)
+    bulk = [env.label('widget', crop_ids=['c0'])['op_id'] for _ in range(2)]
+    singles = []
+    for _ in range(8):
+        resp = env.client.put(
+            f'{env.prefix}/crops/c1/label', json={'class_id': env.class_ids['gizmo']}
+        )
+        assert resp.status_code == 200, resp.text
+        singles.append(resp.json()['op_id'])
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
+    assert set(bulk) <= set(kept), 'the newest bulk operations survive a run of single labels'
+    assert [i for i in kept if i in singles] == singles[:-4:-1], 'the newest 3 single writes'
+
+    env.label('gadget', crop_ids=['c2'])  # a new bulk op prunes only the bulk group
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
+    assert bulk[0] not in kept
+    assert set(singles[-3:]) <= set(kept)
 
 
 def _ops(env: OpsEnv, n: int) -> list[str]:
@@ -304,14 +332,16 @@ def test_label_ops_undoable_paging_skips_non_undoable(
 ) -> None:
     env = _env(monkeypatch, tmp_path)
     ids = _ops(env, 4)  # oldest first; take over c0 and c2 so those two ops have nothing left
+    taken: list[str] = []  # each single write is an undoable operation of its own
     for crop in ('c0', 'c2'):
         resp = env.client.put(
             f'{env.prefix}/crops/{crop}/label', json={'class_id': env.class_ids['gizmo']}
         )
         assert resp.status_code == 200, resp.text
+        taken.append(resp.json()['op_id'])
     served: list[str] = []
     after: str | None = None
-    for _ in range(5):
+    for _ in range(6):
         params: dict[str, Any] = {'undoable': 'true', 'limit': 1}
         if after:
             params['after'] = after
@@ -320,5 +350,5 @@ def test_label_ops_undoable_paging_skips_non_undoable(
         after = body['next_after']
         if after is None:
             break
-    assert served == [ids[3], ids[1]]
+    assert served == [taken[1], taken[0], ids[3], ids[1]]
     assert after is None

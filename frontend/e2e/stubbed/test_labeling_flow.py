@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from fixtures.contract import cluster_card, cluster_list, item_cluster
+from fixtures.contract import cluster_card, cluster_list, crop_label_written, item_cluster
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
@@ -85,7 +85,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     def label_handler(_request, _match):
         if fail_put_label:
             return (422, {'detail': 'stub: label rejected'})
-        return (200, {'ok': True})
+        return (200, crop_label_written('crop-0', op_id='op-crop-0'))
 
     def batch_label_handler(req, _m):
         ids = (_json(req) or {}).get('crop_ids', [])

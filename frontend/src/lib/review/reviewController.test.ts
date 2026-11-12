@@ -22,6 +22,15 @@ vi.mock('$lib/api_cropWrites', async () => {
   };
 });
 
+vi.mock('$lib/labelOps/runLabelOp', () => ({ undoLabelOpToEnd: vi.fn() }));
+vi.mock('$lib/api_cropRead', async () => {
+  const actual =
+    await vi.importActual<typeof import('$lib/api_cropRead')>('$lib/api_cropRead');
+  return { ...actual, getCropsByIds: vi.fn() };
+});
+
+import { getCropsByIds } from '$lib/api_cropRead';
+import { undoLabelOpToEnd } from '$lib/labelOps/runLabelOp';
 import {
   putCropLabel,
   reviewDismissCrop,
@@ -49,6 +58,10 @@ function item(id: string): ReviewItem {
     updated_at: '',
     reason: 'test',
   } as ReviewItem;
+}
+
+function written(id: string) {
+  return { crop_id: id, class_id: 3, class_name: 'widget_a', op_id: `op-${id}` };
 }
 
 function setup(items: ReviewItem[]) {
@@ -85,12 +98,12 @@ afterEach(() => {
 
 describe('assign', () => {
   it('removes the item, advances past it, and records the write on success', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.mocked(putCropLabel).mockResolvedValue(written('a'));
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const successSpy = vi
       .spyOn(toastStore, 'success')
       .mockImplementation(() => 'toast-id');
-    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+    const recordLabelOpSpy = vi.spyOn(undoStore, 'recordLabelOp');
     const a = item('a');
     const b = item('b');
     const { queue, controller, handledIds } = setup([a, b]);
@@ -102,11 +115,11 @@ describe('assign', () => {
     expect(handledIds.has('a')).toBe(true);
     expect(putCropLabel).toHaveBeenCalledWith('a', 3);
     expect(successSpy).toHaveBeenCalledWith('Labeled "widget_a".');
-    expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
+    expect(recordLabelOpSpy).toHaveBeenCalledWith('op-a', ['a']);
   });
 
   it('falls back to the raw class id in the toast when the class is not in the catalog', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.mocked(putCropLabel).mockResolvedValue(written('a'));
     vi.spyOn(classesStore, 'byId').mockReturnValue(undefined);
     const successSpy = vi
       .spyOn(toastStore, 'success')
@@ -369,7 +382,7 @@ describe('undoLast', () => {
   });
 
   it('m2 (2026-09-24 interactive pass): restores the item’s own served reason after assign+undo, never an invented "restored by undo" string', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.mocked(putCropLabel).mockResolvedValue(written('a'));
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');
     const a = { ...item('a'), reason: 'mistakenness_score high' };
@@ -377,12 +390,15 @@ describe('undoLast', () => {
     const { controller, queue } = setup([a, b]);
 
     await controller.assign(a, 3);
-    // undoCropLabel's mock resolves a bare Crop shape with no `reason` at
-    // all — exactly what the real API returns (ReviewItem's `reason` is
-    // a queue-only field). The controller must recover 'a's original
+    // The restored item is a bare Crop shape with no `reason` at all —
+    // exactly what the real API returns (ReviewItem's `reason` is a
+    // queue-only field). The controller must recover 'a's original
     // reason from its own cache, not from this response.
-    vi.mocked(undoCropLabel).mockResolvedValue({ id: 'a' } as never);
-    undoStore.recordWrites(['a']);
+    vi.mocked(undoLabelOpToEnd).mockResolvedValue({
+      restored: 1,
+      kept_changed: 0,
+    } as never);
+    vi.mocked(getCropsByIds).mockResolvedValue([{ id: 'a' }] as never);
 
     await controller.undoLast();
 
