@@ -69,4 +69,16 @@ looked at. Every number on screen is compared with the API (`curl -s localhost:4
 17. Map: the header counts match `GET /map`. A `Shift`+drag rectangle adds an area chip and Gallery shows only those photos. A cell click shows its served summary, and a pin opens the image in the editor.
 18. Table sorted by detector confidence shows the lowest first. Export with "every object labelled" passes. A short public-preset training run on GPU 0 or 2 completes and is promoted. Reprocess with the promoted model fills Disagreements, and working that queue closes the loop. Next steps reflects each stage.
 
+19. The user's job on a real vehicle photo set (a fresh project on an NVMe copy of the private set P sample; its
+    screenshots and data stay out of the repository). Ingest gives every box the detector's class. Embed, cluster and
+    activate. A stand-in user (Claude Haiku through the Anthropic provider) looks at each cluster's representative
+    crops and labels make and model through the same UI and API actions a person uses, part of them driven in the
+    browser: label a whole cluster with a new class created by name, move or exclude outliers, fix boxes, review.
+    Then run the assist loop with Haiku as the VLM on the remaining clusters and correct its output. A human label
+    always wins over the detector class. Export, train on the make-and-model classes on GPU 0, promote, serve, and
+    detect with the new model. Any step that fails or is awkward gets a root-cause fix and the step is repeated.
+
+Note (2026-11-12): since the UX wave, ingest assigns the detector's class itself, so on a fresh project "Create
+classes" (checks 13 and 14) is satisfied at ingest; on older items it is the "Adopt detector classes" step.
+
 Afterwards, delete `wf-accept-<date>` through `DELETE /curation/projects/{project}` and confirm the 404.

@@ -25,6 +25,7 @@ questions and standards they consult.
 | 7 | [07_release_acceptance.md](07_release_acceptance.md) | W6: release prep, acceptance, the tag |
 | 8 | [08_research_prototype_track.md](08_research_prototype_track.md) | short prototype runs during W2-W4 (about 10 GPU hours) |
 | 9a-9h | [09a embeddings](09a_research_embeddings_search.md), [09b clustering](09b_research_clustering.md), [09c clustering protocol](09c_research_clustering_protocol.md), [09d near-duplicates](09d_research_near_duplicates.md), [09e auto-label](09e_research_auto_label_assist.md), [09f spatial](09f_research_spatial_attributes.md), [09g GPU pipeline](09g_research_gpu_pipeline.md), [09h plate text](09h_research_plate_text.md) | the research designs behind the seams and lanes above |
+| 12 | [12_review_workflow_audit.md](12_review_workflow_audit.md), [12a interfaces](12a_workflow_interfaces.md), [12b wave 2](12b_wave2_lane_specs.md), [12c wave 3](12c_wave3_lane_specs.md), [12d wave 4](12d_wave4_lane_specs.md), [12e execution order and acceptance walk](12e_workflow_execution_order.md) | the Cropwright workflow rebuild (added 2026-11-09, runs after W4 on the same integration branch) |
 | 10 | [10_v080_platform_breadth.md](10_v080_platform_breadth.md) | after the tag: v0.8.0 |
 | 11 | [11_side_track_issue_42_small_gpu.md](11_side_track_issue_42_small_gpu.md) | side track #42 (GPU 1, never blocks) |
 | ref | [reference/](reference/): [decision_register](reference/decision_register.md), [owner_questions](reference/owner_questions.md), [traceability](reference/traceability.md), [review_1](reference/review_1_control_plane.md), [review_2](reference/review_2_research.md), [environment_and_setup](reference/environment_and_setup.md), [standards_and_libraries](reference/standards_and_libraries.md), [risks_cleanup_host](reference/risks_cleanup_host.md), [github_actions](reference/github_actions.md), [prior_plans_reconciliation](reference/prior_plans_reconciliation.md), [b0_close_out_done](reference/b0_close_out_done.md) | consulted by every wave |
@@ -60,16 +61,30 @@ Ultralytics version), B4 (stateless API), B5 (speed), R-final (release acceptanc
 
 ---
 
-## 1. Where things stand (2026-11-05)
+## 1. Where things stand (2026-11-12)
+
+The goal every remaining step serves is the user's job in
+[VISION_AND_GOALS.md](../../VISION_AND_GOALS.md) ("The user's job"): an existing detector finds the
+objects, the user labels them in their own classes cluster by cluster (optionally with the assist
+loop's VLM), then trains a model on those classes. Nothing is pushed: `main` is unchanged since the
+plan set, and everything below is on the local integration branch `int/b4-stateless`.
 
 | Item | State |
 |---|---|
-| B0 (close out the 0.6 audit round) and B1 (correctness under many workers) | merged on `main` (B1 is PR #467) |
-| The plan set | on `main` (PRs #478, #481, #482, #485): the PostgreSQL design (files 02-02d), B2 re-planned in six stages (03-03f), exact pins (01), the research plans, this master plan |
-| CI | path-scoped checks (PR #476) and the 4-shard offline suite (PR #477, merged 2026-11-04) are on `main`; nothing to merge before W2.0 |
-| Dependabot PRs | #474 (frontend dev group) and #449 (Triton base 26.10) are **closed**. W2.0 regenerates the frontend dev-group bump itself (`npm update` of that group plus the lock) instead of re-applying #474; #449 needs no action (its Python-base question stays D-38 in section 9.2) |
-| Decisions | the B2 set approved 2026-11-04 as a block; MQ-3, MQ-4, MQ-8, the Flower port and OI-1 / OI-2 answered 2026-11-04. Owner decisions of 2026-11-05: B2 ships as three PRs (section 2); label operations and their undo run on Celery like every other long job (no inline job path); Celery `revoke` is never used (cancel is a database write; the claim refuses a cancelled, paused or terminal row); packages move to the latest releases at bump time (D-66 reversed); 62 of the 69 open research questions answered as recommended, 7 stay open and none before W4 (section 9.3); registration-plate text is ordinary searchable label data (no privacy modes) and plate boxes come from a detector the user brings (section 9.3) |
-| Research plans | seven plans (GPU pipeline, clustering with its protocol file, embeddings and search, near-duplicates, spatial attributes, registration-plate text, the auto-label assistant), each with seams, prototypes, landing lanes and owner questions; integrated 2026-11-04; their questions: section 9.3 |
+| B2 control plane (W2.1-W2.4), B3 one Ultralytics version (W3), B4 stateless API (W4) | done and swept green on `int/b4-stateless` |
+| B5 speed | W5a baseline recorded on the GPU stack; the GPU bundle (decode geometry, crops) merged; W5b-W5d and the processing plans (06d, #67) move to the dedicated speed-research session; W5e plate-text jobs held for the plate-text research numbers |
+| Workflow rebuild (files 12-12e) | waves 1-4 merged and swept; the live acceptance walk of 12e is still to run on the final head |
+| UX wave (owner UI review, 2026-11-12) | wave 1 merged (backend read paths, detector class as a machine label, crop preview, cohort summary, the design system and Lucide icons); wave 2 (Workspace and Review, page layouts) coding |
+| Versions | `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep (07 section 3) |
+
+The remaining order (one merge and one sweep per step; reds go back to one fix lane):
+
+1. Merge UX wave 2 and its fix lane; one confirmation sweep on the merged head; build the images once.
+2. Refresh the live GPU stack on those images and run the 12e acceptance walk (checks 1-19), with
+   screenshots at 1600 and 430 px, including every item of the owner's UI review.
+3. The user's job end to end on a real vehicle photo set (12e check 19).
+4. The speed-research session (B5 rest: #40, #67, #220, the processing plans), from that green head.
+5. R-final (07) and the tag, on the owner's word; then the PRs to `main`.
 
 ## 2. The waves in one table
 

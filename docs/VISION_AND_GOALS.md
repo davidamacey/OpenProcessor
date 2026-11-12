@@ -1,7 +1,8 @@
 # OpenProcessor: Vision and Goals
 
 This document is the canonical statement of what OpenProcessor is for, what
-the v0.6.0 release delivers, and the standards the codebase is held to.
+each release delivers (v0.6.0 is published; v0.7.0 is in progress), and the
+standards the codebase is held to.
 It exists so that anyone — human or AI agent — working in this repository
 can orient quickly: `CLAUDE.md` and `README.md` both link here rather than
 restating it.
@@ -124,26 +125,48 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## What came after v0.6.0
+## v0.7.0: where it stands (2026-11-12)
 
-v0.6.0 is the latest published release (`VERSION` is 0.6.0). Work since then is on the
-`[Unreleased]` list in `CHANGELOG.md`. The next release is cut only when the whole
-program is implemented and tested: correctness (B0, B1), jobs off the API on Celery (B2), one
-Ultralytics version (B3), a stateless API (B4) and speed on the final stack (B5), then one
-acceptance run. Platform breadth comes in the release after that. The plan, with the issue map, is in
-[`design/v070_rebuild/reference/decision_register.md`](design/v070_rebuild/reference/decision_register.md).
+v0.6.0 is the latest published release; `VERSION` stays 0.6.0 until the v0.7.0
+release prep. The v0.7.0 work is implemented and tested on the integration
+branch `int/b4-stateless`, not yet on `main`; `CHANGELOG.md` `[Unreleased]`
+lists it.
 
-Not in v0.6.0, and still not shipped:
+Done on the integration branch:
 
-- **The full zero-copy GPU pipeline** (issue #40). v0.6.0 ships the measured steps
-  (decode once, uint8 inputs to Triton, an FP16 PE image encoder, GPU decode for large
-  photos, data-parallel PE encoding, coalesced ingest writes); keeping the decoded
-  frame resident on the GPU across every model is planned for the next release (B5).
+- **Foundation.** PostgreSQL for control data, every long job on Celery and
+  Valkey, one Ultralytics version, a stateless API that runs as N replicas
+  (B2, B3, B4 in the master plan).
+- **The labelling workflow in Cropwright.** One Workspace (Gallery, Clusters,
+  Detections, Review, Table, Map, Embedding) over one shared filter; served
+  next steps; label operations with undo; the image editor; near-duplicates;
+  training cohorts.
+- **The detector's class as a machine label.** Ingest gives each detected box
+  the detector's class as a non-confident machine label (new classes created
+  by name), so items are named and still clustered and reviewed; "Adopt
+  detector classes" does the same for items already stored.
+
+Left, in order (the master plan section 1 has the detail):
+
+1. The UX wave from the owner's UI review (design system, icons, Workspace and
+   page layouts), its merge, and one confirmation sweep.
+2. The live acceptance walk, then the user's job end to end on a real vehicle
+   photo set: detector labels, cluster labelling of make and model, the assist
+   loop, review, export, train, promote, serve.
+3. The speed work in its own session: the zero-copy GPU pipeline (#40),
+   request-driven processing plans (#67), faces and OCR on resident crops
+   (#220).
+4. Release acceptance (R-final) and the tag, on the owner's word.
+
+Still not shipped in any release:
+
+- **The full zero-copy GPU pipeline** (#40). v0.6.0 ships the measured steps
+  (decode once, uint8 inputs to Triton, an FP16 PE image encoder, GPU decode
+  for large photos, data-parallel PE encoding, coalesced ingest writes).
 - **The 1M-image scale step.** The scale ladder is a goal, not a claim.
-- Request-driven processing plans (#67), faces and OCR on resident crops (#220) and
-  slimmer images (#41). Smaller-GPU engine builds (#42) are in `[Unreleased]`.
-- A technical white paper and additional domain showcases beyond the car-to-wheel
-  example. The white paper draft is [`WHITEPAPER.md`](WHITEPAPER.md).
+- Slimmer images (#41); smaller-GPU engine builds (#42) are in `[Unreleased]`.
+- A technical white paper and additional domain showcases beyond the
+  car-to-wheel example. The white paper draft is [`WHITEPAPER.md`](WHITEPAPER.md).
 
 ## Where to look for more detail
 
