@@ -199,9 +199,9 @@ def test_a_planted_unkeyed_cache_behind_a_shared_helper_is_caught(
     planted: dict[str, Any] = {}
     real = field_coverage_mod.field_coverage
 
-    async def _unkeyed(opensearch: Any, fields: frozenset[str]) -> Any:
+    async def _unkeyed(opensearch: Any, fields: frozenset[str], **kw: Any) -> Any:
         if 'hit' not in planted:
-            planted['hit'] = await real(opensearch, fields)
+            planted['hit'] = await real(opensearch, fields, **kw)
         return planted['hit']
 
     monkeypatch.setattr(field_coverage_mod, 'field_coverage', _unkeyed)

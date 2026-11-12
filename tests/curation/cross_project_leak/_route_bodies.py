@@ -49,7 +49,7 @@ def route_params(slug: str) -> dict[str, str]:
         'name': f'{slug}-model',
         # A promoted model's triton_name is model_prefix + name (plan §5.3).
         'model_name': f'{slug}__model',
-        'tab': 'uncertainty',
+        'tab': 'to_label',
         'alias': f'{slug}-source',
         'artifact': 'results.csv',
         'box_id': 'b1',
