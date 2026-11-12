@@ -299,6 +299,26 @@ class ItemDoc(BaseModel):
     capture: ItemCapture | None = None
 
 
+class CropLocate(BaseModel):
+    """``GET /crops/locate``: where a crop sits in the list the same filters and sort would serve."""
+
+    crop_id: str
+    in_view: bool
+    index: int | None = Field(description='0-based position in the list; null when not in it.')
+    total: int = Field(description='Items in the list.')
+    cursor_before: str | None = Field(
+        description='Pass as `cursor` to `GET /crops` for the page that starts at this crop; '
+        'null for the first row and when not in the list.'
+    )
+    cursor_after: str | None = Field(
+        description='Pass as `cursor` for the page right after this crop; null when not in the list.'
+    )
+    reason: Literal['not_found', 'filtered_out'] | None = Field(
+        description='Why it is not in the list; null when in_view.'
+    )
+    reason_message: str | None = Field(description='The served sentence for `reason`.')
+
+
 class CropsPageResponse(BaseModel):
     total: int
     next_cursor: str | None = Field(
@@ -343,6 +363,7 @@ class CropsPageResponse(BaseModel):
 __all__ = [
     'AssistAttributeWire',
     'AssistBoxWire',
+    'CropLocate',
     'CropsPageResponse',
     'ItemAssistWire',
     'ItemDoc',

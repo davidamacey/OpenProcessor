@@ -1,9 +1,9 @@
 """Review-queue additions: locate, shared filters, the new-class queue.
 
 - ``GET /review/{tab}/locate?crop_id=`` answers where a crop sits in a
-  queue (rank + page) by *counting* the items that sort before it under
+  queue (index + cursors) by *counting* the items that sort before it under
   the same query and sort — so a deep link works at any queue depth.
-  Every queue sort ends in a ``crop_id`` tiebreak so that rank is exact.
+  Every queue sort ends in a ``crop_id`` tiebreak so that the index is exact.
 - ``/review/{tab}`` honours ``class_name``, ``source`` and the
   ``conf_min``/``conf_max`` band.
 - ``new_class_proposals`` lists human-flagged and VLM-proposed new-class
@@ -22,6 +22,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from opensearchpy.exceptions import OpenSearchException
 
+from curation.paging_fakes import PagingOpenSearch, crops_client
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
@@ -88,19 +89,25 @@ def _expected_regions_order(docs: dict[str, dict[str, Any]]) -> list[str]:
 
 def test_locate_rank_matches_queue_order(monkeypatch: pytest.MonkeyPatch) -> None:
     docs = _region_docs()
-    client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
+    # the full-sort double: the cursors compare the whole key, the tiebreak included
+    client = crops_client(PagingOpenSearch({ITEMS: docs}), monkeypatch)
     order = _expected_regions_order(docs)
-    for rank, cid in enumerate(order):
-        r = client.get(
-            '/curation/projects/default/review/regions/locate',
-            params={'crop_id': cid, 'page_size': 3},
-        )
+    base = '/curation/projects/default/review/regions'
+    for position, cid in enumerate(order):
+        r = client.get(f'{base}/locate', params={'crop_id': cid})
         assert r.status_code == 200, r.text
         body = r.json()
         assert body['in_queue'] is True, body
-        assert body['rank'] == rank, (cid, body)
-        assert body['page'] == rank // 3 + 1
+        assert body['index'] == position, (cid, body)
+        assert body['total'] == len(order)
         assert body['sort_applied'] == 'region_score'
+        if position == 0:
+            assert body['cursor_before'] is None
+        else:
+            page = client.get(base, params={'cursor': body['cursor_before'], 'limit': 3}).json()
+            assert [i['id'] for i in page['items']] == order[position : position + 3]
+        after = client.get(base, params={'cursor': body['cursor_after'], 'limit': 3}).json()
+        assert [i['id'] for i in after['items']] == order[position + 1 : position + 4]
 
 
 def test_locate_returns_in_queue_for_a_rejected_candidate(
@@ -147,7 +154,7 @@ def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPat
     body = client.get(
         '/curation/projects/default/review/regions/locate', params={'crop_id': 'done'}
     ).json()
-    assert (body['in_queue'], body['rank'], body['page'], body['reason']) == (
+    assert (body['in_queue'], body['index'], body['cursor_before'], body['reason']) == (
         False,
         None,
         None,

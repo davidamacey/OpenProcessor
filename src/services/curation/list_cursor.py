@@ -39,6 +39,13 @@ def decode_cursor(cursor: str, *, sort_id: str) -> list[Any]:
     return after
 
 
+def with_tiebreak(sort: list[dict[str, Any]], tiebreak: str) -> list[dict[str, Any]]:
+    """``sort`` ending on the unique ``tiebreak`` field (left alone when it already does)."""
+    if sort and tiebreak in sort[-1]:
+        return sort
+    return [*sort, {tiebreak: {'order': 'asc'}}]
+
+
 def page_body(
     body: dict[str, Any],
     *,
@@ -51,9 +58,7 @@ def page_body(
     """``body`` with ``limit + 1`` rows asked for (the extra one says whether a next page exists).
 
     A sort that already ends on ``tiebreak`` is left as it is."""
-    ends_on_tiebreak = bool(sort) and tiebreak in sort[-1]
-    ordered = sort if ends_on_tiebreak else [*sort, {tiebreak: {'order': 'asc'}}]
-    out = {**body, 'size': limit + 1, 'sort': ordered}
+    out = {**body, 'size': limit + 1, 'sort': with_tiebreak(sort, tiebreak)}
     if cursor is not None:
         out['search_after'] = decode_cursor(cursor, sort_id=sort_id)
     return out

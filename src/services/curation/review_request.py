@@ -109,82 +109,9 @@ async def build_review_request(
     )
 
 
-class UnlocatableSortError(ValueError):
-    """A sort clause this module can't express as a range query."""
-
-
-def _sort_key(entry: dict[str, Any] | str) -> tuple[str, str]:
-    if isinstance(entry, str):
-        return entry, 'asc'
-    ((field, spec),) = entry.items()
-    if field.startswith('_'):
-        raise UnlocatableSortError(f'cannot locate under a {field} sort')
-    if isinstance(spec, dict) and spec.get('missing', '_last') != '_last':
-        raise UnlocatableSortError(f'cannot locate under missing={spec["missing"]!r}')
-    order = spec.get('order', 'asc') if isinstance(spec, dict) else str(spec)
-    return field, order
-
-
-def _equal(field: str, value: Any) -> dict[str, Any]:
-    if value is None:
-        return {'bool': {'must_not': {'exists': {'field': field}}}}
-    if isinstance(value, int | float) and not isinstance(value, bool):
-        return {'range': {field: {'gte': value, 'lte': value}}}
-    return {'term': {field: value}}
-
-
-def _strictly_before(field: str, order: str, value: Any) -> dict[str, Any] | None:
-    """Items that sort before ``value`` on ``field`` (missing values sort last)."""
-    if value is None:
-        return {'exists': {'field': field}}
-    return {'range': {field: {'lt' if order == 'asc' else 'gt': value}}}
-
-
-def _rank_clause(ranks: set[int]) -> dict[str, Any]:
-    """Items whose ``vlm_confidence`` ranks (see ``VLM_CONFIDENCE_RANK_SORT``) are in ``ranks``."""
-    known = list(review_sorts.VLM_CONFIDENCE_ORDER)
-    should: list[dict[str, Any]] = []
-    if 0 in ranks:
-        should.append({'bool': {'must_not': [{'terms': {'vlm_confidence': known}}]}})
-    present = [known[r - 1] for r in sorted(ranks) if r > 0]
-    if present:
-        should.append({'terms': {'vlm_confidence': present}})
-    return {'bool': {'should': should, 'minimum_should_match': 1}}
-
-
-def _source_rank(source: dict[str, Any]) -> int:
-    value = source.get('vlm_confidence')
-    order = review_sorts.VLM_CONFIDENCE_ORDER
-    return order.index(value) + 1 if value in order else 0
-
-
-def before_query(sort: list[dict[str, Any]], source: dict[str, Any]) -> dict[str, Any]:
-    """Query for items sorting strictly before the doc ``source`` under ``sort``."""
-    # Per sort key: (items equal to source, items strictly before source).
-    keys: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
-    for entry in sort:
-        if entry == review_sorts.VLM_CONFIDENCE_RANK_SORT:
-            rank = _source_rank(source)
-            keys.append((_rank_clause({rank}), _rank_clause(set(range(rank))) if rank else None))
-            continue
-        field, order = _sort_key(entry)
-        value = source.get(field)
-        if isinstance(value, list):
-            raise UnlocatableSortError(f'cannot locate by multi-valued field {field}')
-        keys.append((_equal(field, value), _strictly_before(field, order, value)))
-    alternatives: list[dict[str, Any]] = [
-        {'bool': {'filter': [*(eq for eq, _b in keys[:i]), before]}}
-        for i, (_eq, before) in enumerate(keys)
-        if before is not None
-    ]
-    return {'bool': {'should': alternatives, 'minimum_should_match': 1}}
-
-
 __all__ = [
     'TIEBREAK',
     'ReviewFilters',
     'ReviewRequest',
-    'UnlocatableSortError',
-    'before_query',
     'build_review_request',
 ]

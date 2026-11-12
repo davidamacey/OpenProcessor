@@ -942,6 +942,7 @@ default state of a new box.
 | Method | Path | Response |
 |---|---|---|
 | GET | `/crops` | `CropsPageResponse`: `crops[]`, `total`, `limit`, `next_cursor`, `sort_applied`, `sort_options[]`, `empty_reason`, `empty_message`, `method`, `version`, `n_pool` |
+| GET | `/crops/locate` | `CropLocate`: where one item sits in the list `GET /crops` would serve for the same query. `crop_id` required; the other parameters are those of `GET /crops` except `cursor`, `limit` and `ids`. `{crop_id, in_view, index, total, cursor_before, cursor_after, reason, reason_message}`: `index` is 0-based, `cursor_before` starts a page at the item (`null` for the first), `cursor_after` resumes right after it. Outside the list `index` is `null` and `reason` is `not_found` or `filtered_out`. Not available under a computed `order` (`400`) |
 | GET | `/crops/{crop_id}` | item (`404` when unknown) |
 | GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500. Items carry `mask_polygon` here (lists send it as null), so one call draws every sibling outline |
 | GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
@@ -1324,9 +1325,10 @@ covered sort, ending at `recent`. `sort_applied` names the sort that ran and
 refuses a `sort` default whose field has no coverage. A zero-result page
 carries `empty_reason`, worded from live index state.
 
-`GET /review/{tab}/locate` returns `{crop_id, in_queue, rank, page,
-page_size, total, reason, sort_applied, sort_fallback_reason}`. `rank` is
-0-based and `page` is 1-based. Outside the queue both are `null` and `reason`
+`GET /review/{tab}/locate` returns `{crop_id, in_queue, index, total,
+cursor_before, cursor_after, reason, sort_applied, sort_fallback_reason}`. `index` is
+0-based. `cursor_before` starts a page at the crop and `cursor_after` resumes right
+after it. Outside the queue `index` and the cursors are `null` and `reason`
 is `not_found` or `filtered_out`. It counts items sorting before the crop,
 so it works at any queue depth. Use it for deep links.
 
