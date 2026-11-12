@@ -1,4 +1,4 @@
-"""Wire models of the project map: `GET .../map`, `.../map/cells` and `.../map/images`."""
+"""Wire models of the project map: `GET .../map` and `.../map/cells`."""
 
 from __future__ import annotations
 
@@ -66,10 +66,3 @@ class MapCellCollection(BaseModel):
     precision: int = Field(description='The grid precision (tile zoom) the cells are at.')
     truncated: bool = False
     join_truncated: bool = False
-
-
-class MapTileImages(BaseModel):
-    tile: str
-    count: int
-    image_ids: list[str]
-    truncated: bool = Field(description='More images are in the cell than `image_ids` lists.')

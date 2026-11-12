@@ -48,14 +48,6 @@ export interface MapCellCollection {
   join_truncated: boolean;
 }
 
-/** `GET /map/images`: the images of one cell (at most 200). */
-export interface MapTileImages {
-  tile: string;
-  count: number;
-  image_ids: string[];
-  truncated: boolean;
-}
-
 /** The filter the map shares with the lists: the shared item filter plus the capture days. */
 export interface MapViewQuery {
   zoom: number;

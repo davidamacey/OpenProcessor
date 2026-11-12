@@ -192,10 +192,12 @@ def test_map_serves_the_gps_point_and_only_it(api: Any, capture_project: dict[st
     assert (lat, lon) == pytest.approx((LATITUDE, LONGITUDE), abs=1e-3)
     assert feature['properties']['count'] == 1
 
-    tile = feature['properties']['tile']
-    listed = api.get(f'{PREFIX}/map/images', params={'tile': tile})
-    assert listed.status_code == 200, listed.text
-    assert listed.json()['image_ids'] == [GPS_ID]
+    assert _image_ids(api, geo_bbox=_bounds_param(feature)) == [GPS_ID]
+
+
+def _bounds_param(feature: dict[str, Any]) -> str:
+    b = feature['properties']['bounds']
+    return f'{b["west"]},{b["south"]},{b["east"]},{b["north"]}'
 
 
 def _image_ids(api: Any, **params: Any) -> list[str]:

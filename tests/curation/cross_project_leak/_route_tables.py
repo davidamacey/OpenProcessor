@@ -28,7 +28,6 @@ POSTGRES_BACKED_PREFIXES: tuple[str, ...] = (
 # 422 and prove nothing about the route. The cell key is `z/x/y`.
 READ_QUERIES: dict[tuple[str, str], dict[str, dict[str, str]]] = {
     ('GET', '/map/cells'): {'params': {'zoom': '4'}},
-    ('GET', '/map/images'): {'params': {'tile': '4/8/8'}},
 }
 
 # Reads of a crop other than ``-item-0001``, because they need state that item does not have.

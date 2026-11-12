@@ -488,7 +488,6 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_autoLabel.ts POST /pipeline/auto_label/start',
   'lib/api_detector.ts GET /detections/summary',
   'lib/api_map.ts GET /map/cells',
-  'lib/api_map.ts GET /map/images',
 ]);
 const unresolvedSeen = new Set<string>();
 
