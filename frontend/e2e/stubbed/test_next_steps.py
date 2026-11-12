@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from fixtures.contract import cluster_list, fill
+from fixtures.contract import cluster_list, fill, image_page
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import save_screens
 from playwright.sync_api import expect
@@ -85,3 +85,12 @@ def test_empty_clusters_view_shows_the_same_steps(stub, page, app_url):
     expect(page.get_by_test_id('clusters-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('next-step')).to_have_count(3)
     save_screens(page, 'workflow_3e', 'workspace-empty-clusters-next-steps')
+
+
+def test_empty_gallery_view_shows_the_same_steps(stub, page, app_url):
+    serve_next_steps(stub, FRESH)
+    stub.on('GET', r'/images(\?|$)', image_page())
+    page.goto(f'{app_url}/p/default/workspace?view=gallery')
+    expect(page.get_by_test_id('view-state-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('next-step')).to_have_count(3)
+    save_screens(page, 'workflow_3e', 'workspace-empty-gallery-next-steps')

@@ -18,6 +18,7 @@ Responses are built from the generated contract (`fill`). Screenshots go under
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -25,6 +26,7 @@ from fixtures.contract import fill
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import save_screens
 from playwright.sync_api import expect
+from test_gallery_view import serve as serve_gallery
 
 
 PHOTO = (
@@ -443,6 +445,7 @@ def test_page_fits_a_430px_phone(stub, page, app_url):
 
 def test_a_group_opens_in_the_workspace(stub, page, app_url):
     _serve(stub)
+    serve_gallery(stub, [])
     page.goto(f'{app_url}{URL}')
     page.get_by_test_id('near-dup-group').first.click(timeout=ACTION_TIMEOUT_MS)
     link = page.get_by_test_id('near-dup-open-workspace')
@@ -451,3 +454,6 @@ def test_a_group_opens_in_the_workspace(stub, page, app_url):
         f'/p/default/workspace?view=gallery&scope=near_dup%3A{GROUP["group_id"]}',
         timeout=ACTION_TIMEOUT_MS,
     )
+    link.click()
+    expect(page).to_have_url(re.compile(r'/p/default/workspace\?view=gallery&scope=near_dup'))
+    expect(page.get_by_test_id('gallery-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
