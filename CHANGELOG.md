@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Embedding scatter under the shared filter.** `GET /viz/projection` takes the shared item filter instead of its own `cluster_uid` and `class_id`: points the filter leaves out are served with `matched: false` (dimmed, not dropped), `legend` lists the classes with their colour slots and counts, and the new `viz_box=x1,y1,x2,y2` filter keeps the items whose scatter point is inside a box (an inverted box is a 422).
 - **Table view.** Detections or images as rows with chosen columns, a server-side sort by header click, cursor paging and a column choice kept in the page address, on `GET /table` and `GET /table/columns`.
 - **Quality page.** Accuracy audit, near-duplicates and label history are tabs of `/quality` (`/quality/audit`, `/quality/near-duplicates`, `/quality/history`); the `/audit`, `/near-duplicates` and `/label-ops` pages are gone and the top bar has one Quality entry.
 - **Next steps.** The Dashboard and the empty Workspace show the served curation loop (`GET /next_steps`), and a near-duplicate group opens in the Workspace.

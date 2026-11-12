@@ -39,7 +39,11 @@ from src.config.env import env_bool, env_int
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._latest_job_models import VizProjectionCancelResponse, VizProjectionState
+from src.services.curation.image_join import resolve_filter_join
+from src.services.curation.item_filter import item_filter_clauses
+from src.services.embedding_spaces.readers import item_write_fields
 
 
 DEFAULT_MAX_N = 20_000
@@ -116,12 +120,25 @@ class ProjectionPoint(BaseModel):
     cluster_uid: str | None = None
     class_name: str | None = None
     class_source: str | None = None
+    # False when the shared filter leaves the point out; the scatter draws it dimmed.
+    matched: bool = True
+    # The legend slot of the point's class; the frontend maps a slot to a theme colour.
+    colour_index: int | None = None
+
+
+class ProjectionLegendEntry(BaseModel):
+    """One class of the scatter: ``class_name`` is null for points with no class."""
+
+    class_name: str | None = None
+    colour_index: int
+    count: int
 
 
 class ProjectionResponse(BaseModel):
     """``GET /viz/projection`` 200 body (cached coordinates)."""
 
     points: list[ProjectionPoint]
+    legend: list[ProjectionLegendEntry]
     projection_version: str | None = None
     fitted_at: str | None = None
     stale: bool
@@ -141,14 +158,15 @@ class ProjectionError(BaseModel):
 )
 async def viz_projection(
     opensearch: OpenSearchDep,
-    cluster_uid: uuid.UUID | None = Query(None),
-    class_id: int | None = Query(None),
+    item_filter: ItemFilterQuery,
     max_points: int = Query(50_000, ge=1, le=200_000),
 ) -> Any:
     """Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers
     a fit (see ``embedding_viz_read.get_cached_projection``'s docstring and
     ``tests/curation/test_curation_viz_router.py::
     test_get_projection_never_imports_or_calls_fit`` for the enforcement).
+    The shared item filter marks the points it leaves out ``matched: false`` (they are not
+    dropped); ``legend`` lists the classes of the served points with their colour slots.
     ``404`` ``projection_not_built``: nothing has been fit yet (rebuild it).
     ``503`` ``projection_unavailable``: the read failed; a projection may
     exist, so retry rather than rebuild.
@@ -162,11 +180,16 @@ async def viz_projection(
     from src.services.curation import embedding_viz_read
 
     try:
+        clauses = item_filter_clauses(
+            item_filter,
+            embedding=await item_write_fields(),
+            image_join=await resolve_filter_join(opensearch, item_filter),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
         return await embedding_viz_read.get_cached_projection(
-            opensearch,
-            cluster_uid=cluster_uid,
-            class_id=class_id,
-            max_points=max_points,
+            opensearch, filter_clauses=clauses, max_points=max_points
         )
     except embedding_viz_read.ProjectionNotBuiltError:
         return JSONResponse(

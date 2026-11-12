@@ -18084,6 +18084,33 @@
               }
             ],
             "title": "Taken To"
+          },
+          "viz_box": {
+            "anyOf": [
+              {
+                "maxItems": 4,
+                "minItems": 4,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viz Box"
           }
         },
         "title": "ItemFilter",
@@ -26460,6 +26487,36 @@
         "title": "ProjectionError",
         "type": "object"
       },
+      "ProjectionLegendEntry": {
+        "description": "One class of the scatter: ``class_name`` is null for points with no class.",
+        "properties": {
+          "class_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Name"
+          },
+          "colour_index": {
+            "title": "Colour Index",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "colour_index",
+          "count"
+        ],
+        "title": "ProjectionLegendEntry",
+        "type": "object"
+      },
       "ProjectionPoint": {
         "properties": {
           "class_name": {
@@ -26495,6 +26552,17 @@
             ],
             "title": "Cluster Uid"
           },
+          "colour_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour Index"
+          },
           "crop_id": {
             "anyOf": [
               {
@@ -26505,6 +26573,11 @@
               }
             ],
             "title": "Crop Id"
+          },
+          "matched": {
+            "default": true,
+            "title": "Matched",
+            "type": "boolean"
           },
           "x": {
             "anyOf": [
@@ -26546,6 +26619,13 @@
             ],
             "title": "Fitted At"
           },
+          "legend": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectionLegendEntry"
+            },
+            "title": "Legend",
+            "type": "array"
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ProjectionPoint"
@@ -26571,6 +26651,7 @@
         },
         "required": [
           "points",
+          "legend",
           "stale"
         ],
         "title": "ProjectionResponse",
@@ -32942,6 +33023,33 @@
               }
             ],
             "title": "Taken To"
+          },
+          "viz_box": {
+            "anyOf": [
+              {
+                "maxItems": 4,
+                "minItems": 4,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Viz Box"
           }
         },
         "title": "ReprocessFilter",
@@ -48073,6 +48181,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -49139,6 +49265,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -50448,6 +50592,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -53424,6 +53586,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -55122,6 +55302,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -55809,6 +56007,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -59677,6 +59893,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -62934,6 +63168,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -65731,6 +65983,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -67419,6 +67689,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -68222,6 +68510,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -68956,6 +69262,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -69851,6 +70175,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -70644,6 +70986,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -71376,6 +71736,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -72311,6 +72689,24 @@
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
+            }
+          },
+          {
             "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
             "name": "image_id",
@@ -72827,6 +73223,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -73410,6 +73824,24 @@
               ],
               "description": "Items in this near-duplicate group (or on images in it).",
               "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+            "in": "query",
+            "name": "viz_box",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
@@ -74879,7 +75311,7 @@
     },
     "/curation/projects/{project}/viz/projection": {
       "get": {
-        "description": "Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers\na fit (see ``embedding_viz_read.get_cached_projection``'s docstring and\n``tests/curation/test_curation_viz_router.py::\ntest_get_projection_never_imports_or_calls_fit`` for the enforcement).\n``404`` ``projection_not_built``: nothing has been fit yet (rebuild it).\n``503`` ``projection_unavailable``: the read failed; a projection may\nexist, so retry rather than rebuild.",
+        "description": "Serve cached ``viz_x``/``viz_y`` coordinates only — never triggers\na fit (see ``embedding_viz_read.get_cached_projection``'s docstring and\n``tests/curation/test_curation_viz_router.py::\ntest_get_projection_never_imports_or_calls_fit`` for the enforcement).\nThe shared item filter marks the points it leaves out ``matched: false`` (they are not\ndropped); ``legend`` lists the classes of the served points with their colour slots.\n``404`` ``projection_not_built``: nothing has been fit yet (rebuild it).\n``503`` ``projection_unavailable``: the read failed; a projection may\nexist, so retry rather than rebuild.",
         "operationId": "viz_projection_curation_projects__project__viz_projection_get",
         "parameters": [
           {
@@ -74893,7 +75325,455 @@
           },
           {
             "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 50000,
+              "maximum": 200000,
+              "minimum": 1,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import",
+                      "drawn"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+            "in": "query",
             "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+              "title": "Cluster Uid"
+            }
+          },
+          {
+            "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_polygon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Polygon"
+            }
+          },
+          {
+            "description": "true = items on images with a served position; false = without one.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items on images with a served position; false = without one.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "Items in this near-duplicate group (or on images in it).",
+            "in": "query",
+            "name": "near_dup_group",
             "required": false,
             "schema": {
               "anyOf": [
@@ -74905,35 +75785,48 @@
                   "type": "null"
                 }
               ],
-              "title": "Cluster Uid"
+              "description": "Items in this near-duplicate group (or on images in it).",
+              "title": "Near Dup Group"
             }
           },
           {
+            "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
             "in": "query",
-            "name": "class_id",
+            "name": "viz_box",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Class Id"
+              "description": "Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.",
+              "title": "Viz Box"
             }
           },
           {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
             "in": "query",
-            "name": "max_points",
+            "name": "image_id",
             "required": false,
             "schema": {
-              "default": 50000,
-              "maximum": 200000,
-              "minimum": 1,
-              "title": "Max Points",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
             }
           }
         ],

@@ -252,8 +252,11 @@ def test_get_projection_serves_cached_points(
             'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
             'class_name': 'sedan',
             'class_source': 'item_model',
+            'matched': True,
+            'colour_index': 0,
         }
     ]
+    assert body['legend'] == [{'class_name': 'sedan', 'colour_index': 0, 'count': 1}]
 
 
 def test_get_projection_max_points_caps_the_search_size(
@@ -278,6 +281,34 @@ def test_get_projection_max_points_over_ceiling_422(
         '/curation/projects/default/viz/projection', params={'max_points': 10_000_000}
     )
     assert r.status_code == 422
+
+
+def test_an_inverted_viz_box_is_422(app_client: _Client, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
+    r = app_client.get('/curation/projects/default/viz/projection', params={'viz_box': '2,0,1,1'})
+    assert r.status_code == 422
+    assert 'viz_box' in r.text
+
+
+def test_the_shared_filter_marks_points_matched(
+    app_client: _Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('OP_VIZ_PROJECTION_ENABLED', '1')
+    current().projection = {'projection_version': 'umap_viz_v1', 'fitted_at': 't0'}
+    point = {'viz_x': 0.5, 'viz_y': 0.5, 'class_name': 'sedan'}
+    hits = [{'_id': 'in', '_source': point}, {'_id': 'out', '_source': point}]
+
+    async def search(*, index: str, body: dict[str, Any]) -> dict[str, Any]:
+        if 'terms' in str(body['query']['bool']['filter'][-1]):
+            return {'hits': {'hits': [{'_id': 'in'}]}}
+        return {'hits': {'hits': hits}}
+
+    app_client.fake_os.search = search
+    app_client.fake_os.count = AsyncMock(return_value={'count': 0})
+
+    r = app_client.get('/curation/projects/default/viz/projection', params={'viz_box': '0,0,1,1'})
+    assert r.status_code == 200
+    assert {p['crop_id']: p['matched'] for p in r.json()['points']} == {'in': True, 'out': False}
 
 
 # =============================================================================

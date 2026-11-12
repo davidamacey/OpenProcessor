@@ -29,6 +29,7 @@ from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause
 from src.domain.geo_box import GeoBox, check_polygon
 from src.domain.item_text import item_text_query
 from src.domain.region_boxes import box_query
+from src.domain.viz_box import VizBox, check_viz_box
 from src.services.curation.crop_browse import classifier_low_confidence_clause, confidence_band
 from src.services.curation.image_join import ImageJoin, ImageJoinMissingError, has_image_predicates
 from src.services.curation.name_match import DETECTOR_NAME_FIELDS, name_clause
@@ -116,6 +117,13 @@ class ItemFilter(BaseModel):
     geo_polygon: list[tuple[float, float]] | None = None
     has_location: bool | None = None
     near_dup_group: uuid.UUID | None = None
+    # A box drawn on the embedding scatter: the items whose cached projection point is inside it.
+    viz_box: VizBox | None = None
+
+    @field_validator('viz_box')
+    @classmethod
+    def _viz_box_not_inverted(cls, box: VizBox | None) -> VizBox | None:
+        return None if box is None else check_viz_box(box)
 
     @field_validator('geo_polygon')
     @classmethod
@@ -389,6 +397,16 @@ def _image_clauses(f: ItemFilter, join: ImageJoin | None) -> list[dict[str, Any]
     return [on_images]
 
 
+def _viz_clauses(f: ItemFilter) -> list[dict[str, Any]]:
+    if f.viz_box is None:
+        return []
+    x1, y1, x2, y2 = f.viz_box
+    return [
+        {'range': {'viz_x': {'gte': x1, 'lte': x2}}},
+        {'range': {'viz_y': {'gte': y1, 'lte': y2}}},
+    ]
+
+
 def item_filter_clauses(
     f: ItemFilter, *, embedding: WriteFields, image_join: ImageJoin | None = None
 ) -> list[dict[str, Any]]:
@@ -414,6 +432,7 @@ def item_filter_clauses(
         *_capture_clauses(f),
         *_quality_clauses(f),
         *_image_clauses(f, image_join),
+        *_viz_clauses(f),
     ]
 
 

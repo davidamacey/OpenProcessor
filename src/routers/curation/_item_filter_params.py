@@ -20,6 +20,7 @@ from fastapi.exceptions import RequestValidationError
 
 from src.domain.embedding_state import EmbeddingState
 from src.domain.geo_box import BOX_MESSAGE, POLYGON_MESSAGE, parse_geo_box, parse_geo_polygon
+from src.domain.viz_box import VIZ_BOX_MESSAGE, parse_viz_box
 from src.services.curation.item_filter import QUERY_IDS_MAX, ItemFilter, Origin, ReviewStatus
 
 
@@ -167,6 +168,13 @@ def item_filter_query(
         uuid.UUID | None,
         Query(description='Items in this near-duplicate group (or on images in it).'),
     ] = None,
+    viz_box: Annotated[
+        str | None,
+        Query(
+            description='Only items whose embedding-scatter point (`viz_x`, `viz_y`) is inside '
+            'this box: x1,y1,x2,y2 with x1 <= x2 and y1 <= y2.'
+        ),
+    ] = None,
     image_id: Annotated[
         list[str] | None,
         Query(
@@ -200,6 +208,7 @@ def item_filter_query(
         geo_polygon=_parsed('geo_polygon', geo_polygon, parse_geo_polygon, POLYGON_MESSAGE),
         has_location=has_location,
         near_dup_group=near_dup_group,
+        viz_box=_parsed('viz_box', viz_box, parse_viz_box, VIZ_BOX_MESSAGE),
     )
 
 
