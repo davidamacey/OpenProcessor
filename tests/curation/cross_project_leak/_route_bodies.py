@@ -195,6 +195,8 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('PATCH', '/crops/{crop_id}/geometry'): {
             'json': {'bbox_norm': [0.1, 0.1, 0.5, 0.5], 'expected_geometry_revision': 0}
         },
+        # The PATCH row above moves the same item first (revision 1), so there is an edit to undo.
+        ('POST', '/crops/{crop_id}/geometry/undo'): {'json': {'expected_geometry_revision': 1}},
         ('POST', '/images/{image_id}/items'): {
             'json': {
                 'bbox_norm': [0.2, 0.2, 0.6, 0.6],
