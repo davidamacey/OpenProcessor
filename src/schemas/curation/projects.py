@@ -18,6 +18,7 @@ from src.config.projects import (
     RESERVED_SLUGS,
 )
 from src.schemas.curation.config_common import JobRefWire, ProjectCapacityWire
+from src.schemas.curation.views import SortOption
 
 
 _STATUS_LABELS: dict[str, str] = {
@@ -95,6 +96,11 @@ class ProjectsResponse(BaseModel):
     labels: ProjectLabels = Field(default_factory=ProjectLabels)
     include_archived: bool
     total: int = Field(description='Projects matching the filters, before `limit` is applied.')
+    next_cursor: str | None = Field(
+        default=None, description='Pass as `cursor` for the next page; null on the last page.'
+    )
+    sort: str = Field(description='The sort id this page is in.')
+    sort_options: list[SortOption] = Field(description='The sorts `sort` accepts, labelled.')
 
 
 class ProjectWarning(BaseModel):

@@ -26608,11 +26608,36 @@
           "limits": {
             "$ref": "#/components/schemas/ProjectLimits"
           },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page.",
+            "title": "Next Cursor"
+          },
           "projects": {
             "items": {
               "$ref": "#/components/schemas/ProjectSummary"
             },
             "title": "Projects",
+            "type": "array"
+          },
+          "sort": {
+            "description": "The sort id this page is in.",
+            "title": "Sort",
+            "type": "string"
+          },
+          "sort_options": {
+            "description": "The sorts `sort` accepts, labelled.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
             "type": "array"
           },
           "total": {
@@ -26627,7 +26652,9 @@
           "capacity",
           "limits",
           "include_archived",
-          "total"
+          "total",
+          "sort",
+          "sort_options"
         ],
         "title": "ProjectsResponse",
         "type": "object"
@@ -43497,7 +43524,7 @@
             }
           },
           {
-            "description": "At most this many projects, in slug order.",
+            "description": "At most this many projects per page.",
             "in": "query",
             "name": "limit",
             "required": false,
@@ -43512,8 +43539,59 @@
                   "type": "null"
                 }
               ],
-              "description": "At most this many projects, in slug order.",
+              "description": "At most this many projects per page.",
               "title": "Limit"
+            }
+          },
+          {
+            "description": "Only projects in one of these statuses (repeatable).",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only projects in one of these statuses (repeatable).",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "One of the served `sort_options` ids.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name:asc",
+              "description": "One of the served `sort_options` ids.",
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           }
         ],

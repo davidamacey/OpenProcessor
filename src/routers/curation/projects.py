@@ -23,6 +23,7 @@ from src.core.db_session import DbSessionDep
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._project_deps import bind_path_project
 from src.routers.curation._project_views import (
     SELECTABLE_STATUSES,
@@ -46,7 +47,13 @@ from src.schemas.curation.projects import (
     ProjectStatsResponse,
 )
 from src.schemas.jobs import JobView
-from src.services.projects import clone as clone_mod, delete as delete_mod, lifecycle
+from src.services.curation.list_cursor import CursorError
+from src.services.projects import (
+    clone as clone_mod,
+    delete as delete_mod,
+    lifecycle,
+    listing as projects_listing,
+)
 from src.services.projects.guard import make_curation_opensearch
 from src.services.projects.records import record_from_row
 from src.services.projects.registry import get_project_registry
@@ -137,8 +144,16 @@ async def list_projects(
     ] = False,
     limit: Annotated[
         int | None,
-        Query(ge=1, le=500, description='At most this many projects, in slug order.'),
+        Query(ge=1, le=500, description='At most this many projects per page.'),
     ] = None,
+    status: Annotated[
+        list[str] | None,
+        Query(description='Only projects in one of these statuses (repeatable).'),
+    ] = None,
+    sort: Annotated[
+        str, Query(description='One of the served `sort_options` ids.')
+    ] = projects_listing.DEFAULT_SORT,
+    cursor: CursorQ = None,
 ) -> ProjectsResponse:
     registry = get_project_registry()
     await registry.ensure_fresh()
@@ -159,21 +174,36 @@ async def list_projects(
             for slug, record in listed.items()
             if needle in slug.lower() or needle in record.display_name.lower()
         }
+    if status:
+        wanted = set(status)
+        listed = {s: r for s, r in listed.items() if r.status in wanted}
     total = len(listed)
-    if limit is not None:
-        listed = dict(sorted(listed.items())[:limit])
+    try:
+        order = projects_listing.sort_by_id(sort)
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
 
     client: Any = None
     counts: dict[str, ProjectCounts] = {}
     try:
         client = await make_curation_opensearch()
-        counts = await _fetch_counts(client, listed)
+        # Only the item-count sort needs a count for every match before the page is cut.
+        if order.id == 'items:desc':
+            counts = await _fetch_counts(client, listed)
     except OpenSearchException as exc:
         logger.warning('project_counts_unavailable', error=str(exc))
-    summaries = [
-        summarize(record, counts.get(slug, UNKNOWN_COUNTS))
-        for slug, record in sorted(listed.items())
-    ]
+    try:
+        rows, next_cursor = projects_listing.page(
+            listed, sort=order, counts=counts, cursor=cursor, limit=limit
+        )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
+    if client is not None and not counts.keys() >= {r.slug for r in rows}:
+        try:
+            counts = await _fetch_counts(client, {r.slug: r for r in rows})
+        except OpenSearchException as exc:
+            logger.warning('project_counts_unavailable', error=str(exc))
+    summaries = [summarize(r, counts.get(r.slug, UNKNOWN_COUNTS)) for r in rows]
 
     capacity = None
     from src.services.projects.capacity import capacity_status
@@ -189,6 +219,9 @@ async def list_projects(
         limits=ProjectLimits(retired_slugs=retired),
         include_archived=include_archived,
         total=total,
+        next_cursor=next_cursor,
+        sort=order.id,
+        sort_options=[{'id': o.id, 'label': o.label} for o in projects_listing.SORTS],
     )
 
 

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from fastapi import HTTPException
 from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 
 from src.config.curation_accessors import base_curation_config
@@ -340,3 +341,92 @@ def test_selectable_filter_counts_only_openable_projects(monkeypatch: pytest.Mon
     result = asyncio.run(projects_router.list_projects(include_archived=False, selectable=True))
     assert [p.slug for p in result.projects] == ['cars', 'default']
     assert result.total == 2
+
+
+def _sixty(monkeypatch: pytest.MonkeyPatch) -> None:
+    reg = _registry_with(
+        _record('default'),
+        *(_record(f'proj-{i:02d}') for i in range(58)),
+        _record('building-one', status='building'),
+    )
+    monkeypatch.setattr(projects_router, 'get_project_registry', lambda: reg)
+
+
+def test_selectable_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    result = asyncio.run(projects_router.list_projects(include_archived=False, selectable=True))
+    assert 'building-one' not in {p.slug for p in result.projects}
+    assert all(p.selectable for p in result.projects)
+    assert result.total == 59
+
+
+def test_status_filter_is_repeatable(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    result = asyncio.run(
+        projects_router.list_projects(include_archived=False, status=['building', 'failed'])
+    )
+    assert [p.slug for p in result.projects] == ['building-one']
+
+
+def test_cursor_walks_all_projects(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    seen: list[str] = []
+    cursor = None
+    pages = 0
+    while True:
+        page = asyncio.run(
+            projects_router.list_projects(include_archived=False, limit=25, cursor=cursor)
+        )
+        pages += 1
+        seen += [p.slug for p in page.projects]
+        assert page.total == 60
+        cursor = page.next_cursor
+        if cursor is None:
+            break
+    assert pages == 3
+    assert len(seen) == len(set(seen)) == 60
+    assert seen == sorted(seen)
+
+
+def test_cursor_walks_a_descending_sort(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    seen: list[str] = []
+    cursor = None
+    while True:
+        page = asyncio.run(
+            projects_router.list_projects(
+                include_archived=False, limit=7, cursor=cursor, sort='updated_at:desc'
+            )
+        )
+        seen += [p.slug for p in page.projects]
+        cursor = page.next_cursor
+        if cursor is None:
+            break
+    assert len(seen) == len(set(seen)) == 60
+
+
+def test_cursor_from_another_sort_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    first = asyncio.run(projects_router.list_projects(include_archived=False, limit=5))
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(
+            projects_router.list_projects(
+                include_archived=False, limit=5, cursor=first.next_cursor, sort='items:desc'
+            )
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_sort_options_served(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    result = asyncio.run(projects_router.list_projects(include_archived=False, limit=1))
+    assert [o['id'] for o in result.sort_options] == ['name:asc', 'updated_at:desc', 'items:desc']
+    assert all(o['label'] for o in result.sort_options)
+    assert result.sort == 'name:asc'
+
+
+def test_unknown_sort_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    _sixty(monkeypatch)
+    with pytest.raises(HTTPException) as excinfo:
+        asyncio.run(projects_router.list_projects(include_archived=False, sort='bogus'))
+    assert excinfo.value.status_code == 400
