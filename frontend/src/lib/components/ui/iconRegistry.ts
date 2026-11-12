@@ -20,6 +20,7 @@ import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 import Circle from '@lucide/svelte/icons/circle';
 import CircleAlert from '@lucide/svelte/icons/circle-exclamation-point';
 import CircleCheck from '@lucide/svelte/icons/circle-check';
+import CircleHelp from '@lucide/svelte/icons/circle-question-mark';
 import CircleDot from '@lucide/svelte/icons/circle-dot';
 import CircleX from '@lucide/svelte/icons/circle-x';
 import Copy from '@lucide/svelte/icons/copy';
@@ -77,6 +78,7 @@ export const ICONS = {
   'circle-alert': CircleAlert,
   'circle-check': CircleCheck,
   'circle-dot': CircleDot,
+  'circle-help': CircleHelp,
   'circle-x': CircleX,
   copy: Copy,
   'corner-down-right': CornerDownRight,

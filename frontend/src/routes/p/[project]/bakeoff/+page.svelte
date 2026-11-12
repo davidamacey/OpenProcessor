@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   /**
    * /bakeoff — model comparison (OpenProcessor #34 v2 wire).
    *
@@ -60,18 +62,17 @@
 
 <svelte:head><title>Bake-off · Cropwright</title></svelte:head>
 
-<div class="mx-auto max-w-7xl p-6 text-fg-1">
-  <h1 class="mb-1 text-2xl font-semibold">Bake-off: model comparison</h1>
-  <p class="mb-6 text-sm text-fg-2">
-    Score trained models and baselines on frozen test splits, per class, in the on-demand
-    evaluator. Classes a model does not cover are shown, not hidden.
-  </p>
+<PageShell width="wide">
+  <PageHeader
+    title="Bake-off: model comparison"
+    description="Score trained models and baselines on frozen test splits, per class, in the on-demand evaluator. Classes a model does not cover are shown, not hidden."
+  />
 
   <div class="mb-6"><ResourceLinksRow /></div>
 
   {#if s.loadErrors.length}
     <ul
-      class="mb-4 space-y-0.5 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+      class="mb-4 space-y-0.5 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
       data-testid="load-errors"
     >
       {#each s.loadErrors as e, i (i)}<li>{e}</li>{/each}
@@ -109,7 +110,7 @@
       {/if}
     </div>
     {#if s.profileDefaultError}
-      <p class="mb-3 text-xs text-warn" data-testid="profile-default-error">
+      <p class="mb-3 text-xs text-warn-text" data-testid="profile-default-error">
         The configured default profile is invalid: {s.profileDefaultError}
       </p>
     {/if}
@@ -229,7 +230,7 @@
         </h2>
         {#if s.matrixError}
           <p
-            class="mb-3 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+            class="mb-3 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
           >
             {s.matrixError}
           </p>
@@ -266,4 +267,4 @@
       {/if}
     </section>
   </div>
-</div>
+</PageShell>

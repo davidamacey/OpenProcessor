@@ -11,40 +11,126 @@
 import { ProjectNotSelectedError } from '$lib/api';
 import { projectsStore } from '$stores/projects.svelte';
 
-/** The page sections that live under `/p/[project]/`. */
-const PROJECT_SECTIONS = [
-  'dashboard',
-  'ingest',
-  'datasets',
-  'workspace',
-  'images',
-  'classes',
-  'export',
-  'quality',
-  'models',
-  'train',
-  'bakeoff',
-  'settings',
+/** The nav groups, in header order. A group with one section is a plain link; a group with
+ *  several is a menu. */
+const NAV_GROUP_LABELS = {
+  home: 'Dashboard',
+  data: 'Data',
+  model: 'Model',
+  quality: 'Quality',
+  settings: 'Settings',
+} as const;
+export type NavGroupId = keyof typeof NAV_GROUP_LABELS;
+
+/**
+ * The one navigation table: every page section under `/p/[project]/`, in the order the header
+ * shows them, with its human label and its group. The header nav, the mobile drawer, the
+ * breadcrumb and the project switcher all read this; nothing else spells a section label.
+ * `hidden` sections have a page but no nav entry (reached from another page).
+ */
+const SECTION_TABLE = [
+  { section: 'dashboard', label: 'Dashboard', group: 'home' },
+  { section: 'ingest', label: 'Ingest', group: 'data' },
+  { section: 'workspace', label: 'Workspace', group: 'data' },
+  { section: 'classes', label: 'Classes', group: 'data' },
+  { section: 'export', label: 'Export', group: 'data' },
+  { section: 'datasets', label: 'Datasets', group: 'data', hidden: true },
+  { section: 'images', label: 'Images', group: 'data', hidden: true },
+  { section: 'models', label: 'Models', group: 'model' },
+  { section: 'train', label: 'Train', group: 'model' },
+  { section: 'bakeoff', label: 'Bake-off', group: 'model' },
+  { section: 'quality', label: 'Quality', group: 'quality' },
+  { section: 'settings', label: 'Settings', group: 'settings' },
 ] as const;
-export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 
-/** The header's primary navigation, in order: one source for the nav links and the breadcrumb. */
-export const PRIMARY_NAV: ReadonlyArray<{ section: ProjectSection; label: string }> = [
-  { section: 'dashboard', label: 'Dashboard' },
-  { section: 'ingest', label: 'Ingest' },
-  { section: 'workspace', label: 'Workspace' },
-  { section: 'classes', label: 'Classes' },
-  { section: 'export', label: 'Export' },
-  { section: 'models', label: 'Models' },
-  { section: 'train', label: 'Train' },
-  { section: 'bakeoff', label: 'Bake-off' },
-  { section: 'quality', label: 'Quality' },
-  { section: 'settings', label: 'Settings' },
-];
+const PROJECT_SECTIONS = SECTION_TABLE.map((r) => r.section);
+export type ProjectSection = (typeof SECTION_TABLE)[number]['section'];
 
-/** The nav label of `section`; the section id for one the header does not link. */
+/** The header's primary navigation, in order: the sections that have a nav entry. */
+export const PRIMARY_NAV: ReadonlyArray<{ section: ProjectSection; label: string }> =
+  SECTION_TABLE.filter((r) => !('hidden' in r)).map(({ section, label }) => ({
+    section,
+    label,
+  }));
+
+export interface NavGroup {
+  id: NavGroupId;
+  label: string;
+  sections: ReadonlyArray<{ section: ProjectSection; label: string }>;
+}
+
+/** PRIMARY_NAV folded into its groups, for the grouped header. */
+export const NAV_GROUPS: ReadonlyArray<NavGroup> = (
+  Object.keys(NAV_GROUP_LABELS) as NavGroupId[]
+).map((id) => ({
+  id,
+  label: NAV_GROUP_LABELS[id],
+  sections: SECTION_TABLE.filter((r) => r.group === id && !('hidden' in r)).map(
+    ({ section, label }) => ({ section, label }),
+  ),
+}));
+
+/** The human label of `section`. */
 export function sectionLabel(section: ProjectSection): string {
-  return PRIMARY_NAV.find((n) => n.section === section)?.label ?? section;
+  return SECTION_TABLE.find((r) => r.section === section)!.label;
+}
+
+/** The nav group a section sits in. */
+export function navGroupOf(section: ProjectSection): NavGroupId {
+  return SECTION_TABLE.find((r) => r.section === section)!.group;
+}
+
+/** Labels of the known sub-pages (the path segment after the section). A segment not listed
+ *  here is an object's name or id and is shown as it is. */
+const SUBPAGE_LABELS: Partial<Record<ProjectSection, Record<string, string>>> = {
+  datasets: { import: 'Import', imports: 'Import history' },
+  quality: {
+    audit: 'Accuracy audit',
+    history: 'Label history',
+    'near-duplicates': 'Near-duplicates',
+  },
+  settings: {
+    'embedding-spaces': 'Embedding spaces',
+    'ingest-policy': 'Ingest policy',
+    models: 'Models',
+    'open-vocab': 'Open vocabulary',
+    presets: 'Presets',
+    'prompt-packs': 'Prompt packs',
+    'region-profiles': 'Region profiles',
+  },
+};
+
+export interface Crumb {
+  label: string;
+  /** An app path for `resolve()`; absent for the group (no page) and for the current page. */
+  href?: string;
+}
+
+/**
+ * The breadcrumb of `pathname`: the nav group (when it has several sections), the section, then
+ * each sub-page or object name. A top-level page of a one-section group (Dashboard, Quality,
+ * Settings) has no trail: the nav already marks it. Empty outside `/p/<slug>/<section>`.
+ */
+export function breadcrumbOf(pathname: string, slug?: string): Crumb[] {
+  const parts = pathname.split('/').filter(Boolean);
+  const section = parts[0] === 'p' && parts[2] && isSection(parts[2]) ? parts[2] : null;
+  if (!section) return [];
+  const rest = parts.slice(3);
+  const group = NAV_GROUPS.find((g) => g.id === navGroupOf(section))!;
+  const crumbs: Crumb[] = [];
+  if (group.sections.length > 1) crumbs.push({ label: group.label });
+  crumbs.push({ label: sectionLabel(section), href: projectHref(`/${section}`, slug) });
+  const labels = SUBPAGE_LABELS[section] ?? {};
+  let path = `/${section}`;
+  rest.forEach((seg, i) => {
+    path += `/${seg}`;
+    const last = i === rest.length - 1;
+    crumbs.push({
+      label: labels[seg] ?? decodeURIComponent(seg),
+      ...(last ? {} : { href: projectHref(path as ProjectSubPath, slug) }),
+    });
+  });
+  return crumbs.length > 1 ? crumbs : [];
 }
 
 /** A path inside a project: a known section, plus any sub-path, query

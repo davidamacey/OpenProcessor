@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * `/datasets/import` — import a labeled dataset into the current project
@@ -102,21 +104,23 @@
   }
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-fg-1">Import a labeled dataset</h1>
-    <a
-      class="text-xs text-accent hover:underline"
-      href={resolve(projectHref('/datasets/imports'))}>All imports</a
-    >
-  </div>
+<PageShell class="space-y-6">
+  <PageHeader title="Import a labeled dataset">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/datasets/imports'))}>All imports</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <DatasetsGate>
     {#snippet children(formats)}
       <p class="text-xs text-fg-3">
         The dataset is imported into this project. To import into a new project,
-        <a class="text-accent hover:underline" href={resolve('/projects')}>create it</a> first
-        and open this page there.
+        <a class="text-accent-text hover:underline" href={resolve('/projects')}
+          >create it</a
+        > first and open this page there.
       </p>
 
       <!-- 1. Source -->
@@ -175,7 +179,7 @@
             belong on a server path.
           </span>
           {#if wizard.uploading}<p class="mt-1 text-fg-2">Uploading…</p>{/if}
-          {#if wizard.uploadError}<p class="mt-1 text-danger">
+          {#if wizard.uploadError}<p class="mt-1 text-danger-text">
               {wizard.uploadError}
             </p>{/if}
         </div>
@@ -192,7 +196,7 @@
           {/if}
         </div>
         {#if wizard.previewError}
-          <p class="text-sm text-danger" data-testid="preview-error">
+          <p class="text-sm text-danger-text" data-testid="preview-error">
             {wizard.previewError}
           </p>
         {:else if wizard.preview}
@@ -236,7 +240,7 @@
                 </select>
               </label>
             {/if}
-            {#if prefillError}<span class="text-danger">{prefillError}</span>{/if}
+            {#if prefillError}<span class="text-danger-text">{prefillError}</span>{/if}
           </div>
           <MappingTable {wizard} {formats} classes={pickableClasses} />
         </section>
@@ -251,7 +255,7 @@
         <section class="space-y-3" data-testid="import-start">
           {#if wizard.refusal}
             <div
-              class="space-y-2 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+              class="space-y-2 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
               data-testid="start-refusal"
             >
               <p>{wizard.refusal.message}</p>
@@ -264,7 +268,7 @@
                 >
               {:else if wizard.refusal.importId}
                 <a
-                  class="text-accent hover:underline"
+                  class="text-accent-text hover:underline"
                   href={resolve(
                     projectHref(
                       `/datasets/imports/${encodeURIComponent(wizard.refusal.importId)}`,
@@ -284,7 +288,7 @@
             <p class="text-sm text-fg-2" data-testid="start-reused">
               Already imported.
               <a
-                class="text-accent hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(
                   projectHref(
                     `/datasets/imports/${encodeURIComponent(wizard.reusedJob.import_id)}`,
@@ -302,13 +306,13 @@
             Start import
           </button>
           {#if wizard.unmappedRows.length > 0}
-            <span class="ml-2 text-xs text-warn">
+            <span class="ml-2 text-xs text-warn-text">
               {wizard.unmappedRows.length === 1
                 ? '1 class still needs a mapping.'
                 : `${wizard.unmappedRows.length} classes still need a mapping.`}
             </span>
           {:else if wizard.preview.blocking && !wizard.canStart}
-            <span class="ml-2 text-xs text-danger"
+            <span class="ml-2 text-xs text-danger-text"
               >The issues above block this import.</span
             >
           {/if}
@@ -350,4 +354,4 @@
       {/if}
     {/snippet}
   </DatasetsGate>
-</div>
+</PageShell>

@@ -1,22 +1,15 @@
 <script lang="ts">
   /**
-   * The project-scoped app shell: top bar (project switcher, breadcrumb,
-   * primary nav, API chip), and every project-scoped
-   * store subscription. Rendered only once `+layout.ts` resolved the
+   * The project-scoped app shell: the top bar (`TopNav`) and every
+   * project-scoped store subscription. Rendered only once `+layout.ts` resolved the
    * `/p/<slug>` segment to a selectable served project; otherwise the
    * "not available" page renders instead and no scoped call fires.
    */
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
-  import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import AppLogo from '$components/AppLogo.svelte';
-  import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
-  import ResourcesMenu from '$components/ResourcesMenu.svelte';
-  import { PRIMARY_NAV, projectHref, sectionLabel, sectionOf } from '$lib/projectPaths';
+  import TopNav from '$components/shell/TopNav.svelte';
   import type { ProjectResolution } from '$stores/projects.svelte';
-  import AboutModal from '$components/AboutModal.svelte';
   import { slotRegistryWarnings } from '$lib/annotations/registeredSlots';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
@@ -31,7 +24,7 @@
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
   import { regionVocabularyStore } from '$stores/regionVocabulary.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
-  import { healthStore, healthChip, HEALTH_CHIP_TEXT } from '$stores/health.svelte';
+  import { healthStore } from '$stores/health.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
   interface Props {
@@ -57,7 +50,6 @@
   const appName =
     (import.meta.env?.PUBLIC_APP_NAME as string | undefined) || 'Cropwright';
   const appBadge = (import.meta.env?.PUBLIC_APP_BADGE as string | undefined) || 'CW';
-  let aboutOpen = $state<boolean>(false);
 
   // Acquire singleton-store subscriptions for the lifetime of the layout.
   // Skipped entirely on a blocking projectsError: every one of these
@@ -182,36 +174,6 @@
     );
     return () => sub.close();
   });
-
-  const path = $derived(page.url.pathname);
-  /** The page section under `/p/<slug>/` (`workspace`, `quality`, ...). */
-  const section = $derived(sectionOf(path));
-
-  function navCurrent(s: string): 'page' | undefined {
-    return section === s ? 'page' : undefined;
-  }
-  function navLinkClass(s: string): string {
-    return `shrink-0 hover:text-white${section === s ? ' text-white' : ''}`;
-  }
-  // The crumb: the section, labelled as its nav link is. No crumb on /dashboard: it is "home",
-  // already labeled by the title/nav.
-  const crumb = $derived(
-    section && section !== 'dashboard'
-      ? { label: sectionLabel(section), href: projectHref(`/${section}`) }
-      : null,
-  );
-
-  const chipState = $derived(healthChip(healthStore.ok, healthStore.lastChecked));
-  const dotClass = $derived(
-    chipState === 'ok' ? 'bg-success' : chipState === 'down' ? 'bg-danger' : 'bg-fg-3',
-  );
-  const dotTitle = $derived(
-    chipState === 'checking'
-      ? `Checking API at ${data.apiBase || window.location.host}…`
-      : healthStore.ok
-        ? `API OK at ${data.apiBase || window.location.host} (last checked ${healthStore.lastChecked ? new Date(healthStore.lastChecked).toLocaleTimeString() : '—'})`
-        : `API unavailable at ${data.apiBase || window.location.host}: ${healthStore.error ?? 'no response'}`,
-  );
 </script>
 
 {#if !active}
@@ -223,80 +185,7 @@
   {/if}
 {:else}
   <div class="flex h-screen flex-col bg-surface-0 text-fg-1">
-    <!-- Top bar -->
-    <header
-      class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-surface-0 px-4 py-1.5 md:h-12 md:flex-nowrap md:py-0"
-    >
-      <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
-        <button
-          type="button"
-          class="flex shrink-0 items-center justify-center rounded border border-line-strong transition-transform duration-150 hover:scale-110 hover:border-fg-3"
-          onclick={() => (aboutOpen = true)}
-          aria-label="About {appName}"
-          title="About {appName}"
-        >
-          <AppLogo class="h-6 w-6" label={appBadge} />
-        </button>
-        <a
-          href={resolve(projectHref('/dashboard'))}
-          class="hidden hover:text-white sm:inline">{appName}</a
-        >
-      </div>
-
-      <ProjectSwitcher />
-
-      <AboutModal open={aboutOpen} onclose={() => (aboutOpen = false)} {appName} />
-
-      <!-- The crumb never shrinks (it truncated to "reviev" /
-         "classe" at 800px); the primary nav strip to its right scrolls
-         with a chevron instead. -->
-      <nav
-        class="hidden shrink-0 items-center gap-1 whitespace-nowrap text-sm sm:flex"
-        aria-label="Breadcrumb"
-        data-testid="breadcrumb"
-      >
-        {#if crumb}
-          <a
-            href={resolve(crumb.href)}
-            class="shrink-0 rounded px-1.5 py-0.5 text-fg-2 hover:bg-surface-1 hover:text-white"
-            aria-current="page"
-          >
-            {crumb.label}
-          </a>
-        {/if}
-      </nav>
-
-      <span class="grow"></span>
-
-      <!-- Narrow widths: the links wrap onto a second row so every one is
-         reachable without scrolling; from md up they sit in the one header
-         row. -->
-      <nav
-        aria-label="Primary"
-        class="order-last flex basis-full flex-wrap gap-x-3 gap-y-1 text-sm text-fg-2 md:order-none md:basis-auto"
-        data-testid="primary-nav"
-      >
-        {#each PRIMARY_NAV as item (item.section)}
-          <a
-            href={resolve(projectHref(`/${item.section}`))}
-            class={navLinkClass(item.section)}
-            aria-current={navCurrent(item.section)}>{item.label}</a
-          >
-        {/each}
-      </nav>
-
-      <ResourcesMenu />
-
-      <span
-        class="chip shrink-0 gap-1.5 rounded-full border-line-strong bg-surface-1 text-fg-2"
-        title={dotTitle}
-      >
-        <span class="h-2 w-2 rounded-full {dotClass}"></span>
-        <span class="font-mono" data-testid="api-health-chip"
-          >{HEALTH_CHIP_TEXT[chipState]}</span
-        >
-      </span>
-    </header>
+    <TopNav apiBase={data.apiBase} {appName} {appBadge} />
 
     <!-- Content. Keyed on the region profile's seedVersion: the
        slot registry is a plain module binding, so when a slow boot left
@@ -308,7 +197,7 @@
       <!-- Served `writable: false` (e.g. an archived project): reads
            work, every write answers 409 server-side. -->
       <div
-        class="shrink-0 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-xs text-warn"
+        class="shrink-0 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-xs text-warn-text"
         data-testid="project-read-only-banner"
       >
         {active.display_name} is {projectsStore.statusLabel(active.status).toLowerCase()} and

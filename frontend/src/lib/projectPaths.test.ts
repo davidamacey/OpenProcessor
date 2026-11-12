@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { API_PREFIX, ProjectNotSelectedError } from '$lib/api';
 import {
   legacyRedirectTarget,
+  NAV_GROUPS,
   PRIMARY_NAV,
+  breadcrumbOf,
+  navGroupOf,
   projectHref,
   sectionLabel,
   similarHref,
@@ -134,6 +137,64 @@ describe('the primary navigation', () => {
   it('gives the breadcrumb the label of the nav link, and the id for a section with no link', () => {
     expect(sectionLabel('bakeoff')).toBe('Bake-off');
     expect(sectionLabel('quality')).toBe('Quality');
-    expect(sectionLabel('images')).toBe('images');
+    expect(sectionLabel('images')).toBe('Images');
+    expect(sectionLabel('datasets')).toBe('Datasets');
+  });
+
+  it('groups the links Dashboard | Data | Model | Quality | Settings, hidden sections in no menu', () => {
+    expect(NAV_GROUPS.map((g) => [g.id, g.sections.map((s) => s.section)])).toEqual([
+      ['home', ['dashboard']],
+      ['data', ['ingest', 'workspace', 'classes', 'export']],
+      ['model', ['models', 'train', 'bakeoff']],
+      ['quality', ['quality']],
+      ['settings', ['settings']],
+    ]);
+    expect(navGroupOf('images')).toBe('data');
+    expect(NAV_GROUPS.flatMap((g) => g.sections).map((s) => s.section)).toEqual(
+      PRIMARY_NAV.map((n) => n.section),
+    );
+  });
+});
+
+describe('breadcrumbOf', () => {
+  const trail = (path: string) =>
+    breadcrumbOf(path, 'alpha').map((c) => [c.label, c.href ?? null]);
+
+  it('has no trail on a page the nav already names', () => {
+    expect(trail('/p/alpha/dashboard')).toEqual([]);
+    expect(trail('/p/alpha/quality')).toEqual([]);
+    expect(trail('/p/alpha/settings')).toEqual([]);
+    expect(trail('/projects')).toEqual([]);
+  });
+
+  it('names the group of a multi-page group, with the section linked', () => {
+    expect(trail('/p/alpha/classes')).toEqual([
+      ['Data', null],
+      ['Classes', '/p/alpha/classes'],
+    ]);
+    expect(trail('/p/alpha/bakeoff')).toEqual([
+      ['Model', null],
+      ['Bake-off', '/p/alpha/bakeoff'],
+    ]);
+  });
+
+  it('adds a human label for a known sub-page and the raw name for an object', () => {
+    expect(trail('/p/alpha/quality/near-duplicates')).toEqual([
+      ['Quality', '/p/alpha/quality'],
+      ['Near-duplicates', null],
+    ]);
+    expect(trail('/p/alpha/settings/prompt-packs/my%20pack')).toEqual([
+      ['Settings', '/p/alpha/settings'],
+      ['Prompt packs', '/p/alpha/settings/prompt-packs'],
+      ['my pack', null],
+    ]);
+    expect(trail('/p/alpha/images/img_1')[2]).toEqual(['img_1', null]);
+  });
+
+  it('labels the hidden sections in plain words, not the path segment', () => {
+    expect(trail('/p/alpha/datasets/import')[1]).toEqual([
+      'Datasets',
+      '/p/alpha/datasets',
+    ]);
   });
 });

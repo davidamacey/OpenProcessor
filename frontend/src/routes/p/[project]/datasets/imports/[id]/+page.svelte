@@ -1,4 +1,6 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   /**
    * `/datasets/imports/[id]` — one import job (any_domain_plan.md §7.12
    * item 2; w10 import reprocess UI plan §3).
@@ -78,22 +80,22 @@
     total > 0 ? Math.min(100, (done / total) * 100) : 0;
 </script>
 
-<div class="mx-auto max-w-6xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-fg-1">
-      Import
-      <span class="font-mono text-sm text-fg-2">{importId}</span>
-    </h1>
-    <a
-      class="text-xs text-accent hover:underline"
-      href={resolve(projectHref('/datasets/imports'))}>All imports</a
-    >
-  </div>
+<PageShell class="space-y-6">
+  <PageHeader title="Import {importId}">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/datasets/imports'))}>All imports</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <DatasetsGate>
     {#snippet children(formats)}
       {#if job.loadError && !job.job}
-        <p class="text-sm text-danger" data-testid="job-load-error">{job.loadError}</p>
+        <p class="text-sm text-danger-text" data-testid="job-load-error">
+          {job.loadError}
+        </p>
       {:else if !job.job}
         <p class="text-sm text-fg-3">Loading…</p>
       {:else}
@@ -115,7 +117,7 @@
               · <code class="font-mono">{j.source.root}</code>
             </span>
             <a
-              class="ml-auto text-xs text-accent underline hover:text-accent"
+              class="ml-auto text-xs text-accent-text underline hover:text-accent-text"
               data-testid="review-imported-link"
               href={resolve(
                 projectHref(
@@ -136,7 +138,7 @@
               {j.progress.images_done.toLocaleString()} / {j.progress.images_total.toLocaleString()}
               images · {j.progress.chunks_done} / {j.progress.chunks_total} chunks
               {#if j.progress.images_failed > 0}
-                · <span class="text-danger"
+                · <span class="text-danger-text"
                   >{j.progress.images_failed.toLocaleString()} failed</span
                 >
               {/if}
@@ -149,7 +151,7 @@
 
           {#if j.waiting_for}
             <p
-              class="rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn"
+              class="rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn-text"
               data-testid="job-waiting"
             >
               Waiting for: {j.waiting_for}
@@ -158,7 +160,7 @@
 
           {#if j.error}
             <p
-              class="rounded border border-danger-line bg-danger-soft p-2 text-sm text-danger"
+              class="rounded border border-danger-line bg-danger-soft p-2 text-sm text-danger-text"
               data-testid="job-error"
             >
               {j.error}
@@ -166,7 +168,7 @@
           {/if}
 
           {#if job.loadError}
-            <p class="text-xs text-warn">Could not refresh: {job.loadError}</p>
+            <p class="text-xs text-warn-text">Could not refresh: {job.loadError}</p>
           {/if}
 
           <div class="flex flex-wrap gap-2">
@@ -198,7 +200,7 @@
             </ul>
           {/if}
           {#if job.actionError && !confirm && !pendingStep}
-            <p class="text-sm text-danger" data-testid="job-action-error">
+            <p class="text-sm text-danger-text" data-testid="job-action-error">
               {job.actionError}
             </p>
           {/if}
@@ -355,7 +357,7 @@
                       <td class="py-1 pr-3">{e.split ?? '—'}</td>
                       <td class="py-1 pr-3">{e.label_state}</td>
                       <td class="py-1 pr-3">{e.status}</td>
-                      <td class="py-1 text-danger">{e.error_kind ?? ''}</td>
+                      <td class="py-1 text-danger-text">{e.error_kind ?? ''}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -368,7 +370,9 @@
             {/if}
           </div>
         </details>
-        {#if job.tablesError}<p class="text-xs text-danger">{job.tablesError}</p>{/if}
+        {#if job.tablesError}<p class="text-xs text-danger-text">
+            {job.tablesError}
+          </p>{/if}
 
         {#if confirm === 'cancel'}
           <ConfirmDialog
@@ -380,7 +384,7 @@
             oncancel={() => (confirm = null)}
           >
             <p>Stop this import after the chunk in progress. It can be resumed later.</p>
-            {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {:else if confirm === 'resume'}
           <ConfirmDialog
@@ -391,7 +395,7 @@
             oncancel={() => (confirm = null)}
           >
             <p>Resume from the first chunk that did not finish.</p>
-            {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {:else if confirm === 'undo'}
           <ConfirmDialog
@@ -451,7 +455,7 @@
                 <dd class="font-mono">{r.images_kept}</dd>
               </dl>
               {#if r.items_kept_human_edited > 0 || r.boxes_kept_human_edited > 0}
-                <p class="text-success" data-testid="undo-kept">
+                <p class="text-success-text" data-testid="undo-kept">
                   Your edits are kept: {r.items_kept_human_edited} items and
                   {r.boxes_kept_human_edited} boxes you changed stay as they are.
                 </p>
@@ -464,7 +468,7 @@
             {:else if !job.actionError}
               <p class="text-xs text-fg-3">Counting what the undo would change…</p>
             {/if}
-            {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {/if}
 
@@ -480,13 +484,13 @@
               {pendingStep.method}
               {pendingStep.path}
             </p>
-            {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+            {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
         {/if}
       {/if}
     {/snippet}
   </DatasetsGate>
-</div>
+</PageShell>
 
 {#snippet Pager({
   page: p,

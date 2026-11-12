@@ -23,10 +23,12 @@
       <button
         type="button"
         class="btn-sm btn-ghost"
+        aria-label="Resources"
         data-testid="resources-trigger"
         {...attrs}
       >
-        Resources
+        <Icon name="circle-help" size={14} class="lg:hidden" />
+        <span class="hidden lg:inline">Resources</span>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} />
       </button>
     {/snippet}

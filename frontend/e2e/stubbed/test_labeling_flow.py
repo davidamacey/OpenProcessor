@@ -314,7 +314,7 @@ def test_labeling_flow(stub, page, app_url):
     # ---- modal backdrops -----------------------------------------
     page.goto(f'{app_url}/p/default/classes')
     page.wait_for_selector('main', timeout=ACTION_TIMEOUT_MS)
-    add_class_btn = page.get_by_role('button', name='+ Add Class').first
+    add_class_btn = page.get_by_role('button', name='Add class', exact=True).first
     expect(add_class_btn).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     add_class_btn.click()
     dialog = page.get_by_role('dialog', name='Add class')

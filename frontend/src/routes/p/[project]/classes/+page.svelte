@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import { apiErrorText, ApiError } from '$lib/api_errors';
   import {
     classStillReferencedDetail,
@@ -240,28 +243,27 @@
   });
 </script>
 
-<div class="mx-auto max-w-7xl p-6">
-  <!-- Header -->
-  <header class="mb-4 flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Class management</h1>
-    <span class="grow"></span>
-    <input
-      type="search"
-      bind:value={query}
-      placeholder="Filter by name, group, id…"
-      class="input w-64 placeholder:text-fg-3"
-    />
-    <button class="btn" type="button" onclick={merge.openMerge} disabled={busy}
-      >Merge classes</button
-    >
-    <button class="btn btn-primary" type="button" onclick={openAdd} disabled={busy}>
-      + Add Class
-    </button>
-  </header>
+<PageShell width="wide">
+  <PageHeader title="Class management">
+    {#snippet actions()}
+      <input
+        type="search"
+        bind:value={query}
+        placeholder="Filter by name, group, id…"
+        class="input w-64 placeholder:text-fg-3"
+      />
+      <button class="btn" type="button" onclick={merge.openMerge} disabled={busy}
+        >Merge classes</button
+      >
+      <button class="btn btn-primary" type="button" onclick={openAdd} disabled={busy}>
+        <Icon name="plus" size={14} />Add class
+      </button>
+    {/snippet}
+  </PageHeader>
 
   {#if reservedConflicts.length > 0}
     <div
-      class="mb-4 rounded-md border border-warn/40 bg-warn/10 px-4 py-3 text-xs text-warn"
+      class="mb-4 rounded-md border border-warn/40 bg-warn/10 px-4 py-3 text-xs text-warn-text"
     >
       <strong>Reserved-hotkey conflict:</strong>
       {#each reservedConflicts as c, i (c.id)}{i > 0 ? ', ' : ''}<strong>{c.name}</strong>
@@ -295,7 +297,7 @@
   <SeedFromDetectorPanel />
 
   <NewClassProposalsPanel p={proposals} {allClasses} />
-</div>
+</PageShell>
 
 <AddClassModal open={addOpen} onclose={() => (addOpen = false)} />
 
