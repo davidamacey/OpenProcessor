@@ -110,4 +110,39 @@ describe('TopNav', () => {
     flushSync();
     expect(document.querySelector('[data-testid="drawer"]')).toBeNull();
   });
+
+  it('names the two navigation landmarks differently', () => {
+    const el = render('/p/default/models');
+    (el.querySelector('[data-testid="nav-open"]') as HTMLButtonElement).click();
+    flushSync();
+    const labels = [...document.querySelectorAll('nav[aria-label]')]
+      .map((n) => n.getAttribute('aria-label'))
+      .filter((l) => l !== 'Breadcrumb');
+    expect(labels).toHaveLength(2);
+    expect(new Set(labels).size).toBe(2);
+  });
+
+  it('closes the drawer when the screen grows to the desktop nav', () => {
+    const listeners = new Set<(e: Event) => void>();
+    let matches = false;
+    vi.stubGlobal('matchMedia', () => ({
+      get matches() {
+        return matches;
+      },
+      addEventListener: (_: string, fn: (e: Event) => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: (e: Event) => void) => listeners.delete(fn),
+    }));
+    try {
+      const el = render('/p/default/models');
+      (el.querySelector('[data-testid="nav-open"]') as HTMLButtonElement).click();
+      flushSync();
+      expect(document.querySelector('[data-testid="drawer"]')).not.toBeNull();
+      matches = true;
+      listeners.forEach((fn) => fn(new Event('change')));
+      flushSync();
+      expect(document.querySelector('[data-testid="drawer"]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
