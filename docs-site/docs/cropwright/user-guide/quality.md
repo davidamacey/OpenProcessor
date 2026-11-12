@@ -147,6 +147,9 @@ Click a group to see every member with its cosine to the representative.
 - **Not a duplicate** pins the member apart from the representative.
 - **Keep together** pins it to the representative.
 
+**Open in Workspace** in the group dialog opens the Workspace scoped to that
+group, to look at its members next to the rest of your items.
+
 A decision is kept for every later run and applies at the next run of that
 level (the card then shows items pending). **Undo** appears on a member you
 decided in this dialog and removes the decision. The API serves no list of
