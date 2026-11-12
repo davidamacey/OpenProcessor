@@ -3,7 +3,9 @@ routes, shows the served dry run before a start, and follows a live loop."""
 
 from __future__ import annotations
 
+from fixtures.contract import auto_label_job
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.vlm_menu import ACTIVE_VLM
 from playwright.sync_api import expect
 from test_cluster_discard import CLASSES, CLUSTERS, crop
 
@@ -145,6 +147,8 @@ NODE = {
 
 
 def serve_clusters_page(stub) -> None:
+    stub.on('GET', r'/pipeline/auto_label/status', auto_label_job())
+    stub.on('GET', r'/vlm/endpoints/active(\?|$)', ACTIVE_VLM)
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
     stub.on(
@@ -173,6 +177,10 @@ def serve_plan_form(stub) -> None:
 
 
 def open_panel(page) -> None:
+    menu = page.get_by_test_id('vlm-menu-toggle')
+    expect(menu).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    if menu.get_attribute('aria-expanded') != 'true':
+        menu.click()
     toggle = page.get_by_test_id('loop-panel-toggle')
     expect(toggle).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     if toggle.get_attribute('aria-expanded') != 'true':

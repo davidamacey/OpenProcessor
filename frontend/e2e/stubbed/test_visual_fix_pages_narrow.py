@@ -9,6 +9,7 @@ from __future__ import annotations
 from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
 from fixtures.wire import REGION_CLASS, labeled_stats, make_box, make_item
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.vlm_menu import open_vlm_menu, serve_workspace_reads
 from harness.waits import wait_for_paint
 
 
@@ -265,7 +266,8 @@ def test_dashboard_auto_label_card_stacks_at_800(stub, page, app_url):
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 20, 'crops': []})
     stub.on('GET', r'/pipeline/auto_label/status', COMPLETED_JOB)
 
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     desc = page.locator('[data-testid="recluster-description"]')
     desc.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check

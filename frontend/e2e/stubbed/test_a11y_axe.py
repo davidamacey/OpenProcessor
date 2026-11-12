@@ -173,6 +173,16 @@ PAGES = [
         show_plan_form,
     ),
     (
+        'workspace-vlm-menu',
+        '/p/default/workspace?view=clusters',
+        serve_plan_form,
+        '[data-testid="vlm-menu-toggle"]',
+        lambda page: (
+            page.get_by_test_id('vlm-menu-toggle').click(),
+            expect(page.get_by_test_id('vlm-menu-assist')).to_be_visible(timeout=ACTION_TIMEOUT_MS),
+        ),
+    ),
+    (
         'clusters-loop-finished',
         '/p/default/workspace?view=clusters',
         lambda stub: serve_loop(stub, 'completed'),

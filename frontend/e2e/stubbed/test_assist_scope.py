@@ -29,6 +29,7 @@ from urllib.parse import urlsplit
 from fixtures.contract import auto_label_job
 from fixtures.wire import labeled_stats
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.vlm_menu import open_vlm_menu, serve_workspace_reads
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
@@ -157,7 +158,8 @@ def test_assist_scope(stub, page, app_url):
     # ================================================================
     starts1 = register_base(stub, METHODS_TODAY)
 
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     start_btn = page.get_by_role('button', name='Auto-label now')
     start_btn.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     # Real wait for the dashboard's on-mount requests to finish before the
@@ -176,7 +178,9 @@ def test_assist_scope(stub, page, app_url):
     start_btn.first.click()
     # p2 (2026-09-24 interactive pass): "Auto-label now" opens an in-page
     # confirm dialog before it actually starts the run.
-    confirm_btn = page.get_by_role('button', name='Start')
+    confirm_btn = page.get_by_role('dialog', name='Confirm auto-label').get_by_role(
+        'button', name='Start'
+    )
     confirm_btn.first.wait_for(timeout=5000)
     with page.expect_response(
         lambda r: r.request.method == 'POST' and '/pipeline/auto_label/start' in r.url,
@@ -196,16 +200,18 @@ def test_assist_scope(stub, page, app_url):
     starts2 = register_base(stub, METHODS_WITH_PROMPT_PACK)
 
     stub.console_errors.clear()
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     chip = page.get_by_text(re.compile(r'^assist:\s*whole dataset'))
     chip.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
+    menu = page.get_by_test_id('vlm-menu-body')
     chip.first.click()
     class_search = page.locator('input[type=search]')
     expect(class_search.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text('Server default').count() >= 1, 'the prompt-pack <select> should appear'
 
-    options_text = page.locator('select option').all_inner_texts()
+    options_text = menu.locator('select option').all_inner_texts()
     assert 'Retired prompt pack' not in options_text, (
         f'the disabled pack must not be offered: {options_text}'
     )
@@ -214,14 +220,14 @@ def test_assist_scope(stub, page, app_url):
     )
 
     class_search.first.fill('pall')
-    pallets_row = page.get_by_text('pallets', exact=False)
+    pallets_row = page.get_by_test_id('vlm-menu-body').get_by_text('pallets', exact=False)
     expect(pallets_row.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     pallets_row.first.click()
     # Clicking a class-search result closes the list synchronously — no
     # network involved, just let the DOM update settle via a real paint.
     wait_for_paint(page)
 
-    selects = page.locator('select')
+    selects = menu.locator('select')
     assert selects.count() == 1, (
         f'exactly one <select> expected (prompt pack only, no detection profile): {selects.count()}'
     )
@@ -239,7 +245,9 @@ def test_assist_scope(stub, page, app_url):
 
     starts2.clear()
     scoped_btn.first.click()
-    confirm_btn2 = page.get_by_role('button', name='Start')
+    confirm_btn2 = page.get_by_role('dialog', name='Confirm auto-label').get_by_role(
+        'button', name='Start'
+    )
     confirm_btn2.first.wait_for(timeout=5000)
     with page.expect_response(
         lambda r: r.request.method == 'POST' and '/pipeline/auto_label/start' in r.url,
@@ -253,7 +261,8 @@ def test_assist_scope(stub, page, app_url):
     assert all(p in qs for p in ['vlm_concurrency', 'max_vlm_crops', 'run_vlm=true']), qs
 
     # Re-expand, reset — chip and button return to the unscoped defaults.
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     chip2 = page.get_by_text(re.compile(r'^assist:'))
     chip2.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     chip2.first.click()
