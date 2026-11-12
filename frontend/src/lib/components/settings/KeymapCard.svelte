@@ -39,15 +39,15 @@
   const ctl = createKeymapCardController();
 </script>
 
-<div id="keyboard" class="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+<div id="keyboard" class="rounded-lg border border-line bg-surface-0 p-4">
   <div class="mb-3 flex items-center justify-between">
     <div>
       <h2 class="text-sm font-semibold text-white">Keyboard shortcuts</h2>
-      <p class="text-xs text-zinc-500">Applies to this project, in every browser.</p>
+      <p class="text-xs text-fg-3">Applies to this project, in every browser.</p>
     </div>
     {#if !keymapStore.isDefault}
       <span
-        class="rounded-full border border-amber-800 bg-amber-950/40 px-2 py-0.5 text-[10px] text-amber-300"
+        class="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-caption text-warn"
       >
         custom keys
       </span>
@@ -56,7 +56,7 @@
 
   {#if ctl.revisionConflictMessage}
     <div
-      class="mb-3 rounded border border-red-800 bg-red-950/40 p-2 text-xs text-red-300"
+      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
     >
       {ctl.revisionConflictMessage} Shortcuts were changed elsewhere.
       <button class="ml-2 underline" onclick={() => void ctl.reloadAfterConflict()}>
@@ -67,7 +67,7 @@
 
   {#if ctl.conflictClasses && ctl.conflictClasses.length > 0}
     <div
-      class="mb-3 rounded border border-amber-800 bg-amber-950/40 p-2 text-xs text-amber-200"
+      class="mb-3 rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn"
       data-testid="class-conflict-dialog"
     >
       <p class="mb-1">These class hotkeys would collide:</p>
@@ -78,15 +78,12 @@
       </ul>
       <div class="flex gap-2">
         <button
-          class="rounded bg-amber-700 px-2 py-1 text-white hover:bg-amber-600"
+          class="rounded bg-warn px-2 py-1 text-white hover:bg-warn"
           onclick={() => void ctl.doSave(true)}
         >
           Unbind these class keys and save
         </button>
-        <button
-          class="text-zinc-400 underline"
-          onclick={() => (ctl.conflictClasses = null)}
-        >
+        <button class="text-fg-2 underline" onclick={() => (ctl.conflictClasses = null)}>
           Cancel
         </button>
       </div>
@@ -99,19 +96,19 @@
 
   <div class="mt-3 flex items-center gap-3">
     <button
-      class="rounded bg-blue-700 px-3 py-1.5 text-sm text-white hover:bg-blue-600 disabled:opacity-50"
+      class="rounded bg-accent-fill px-3 py-1.5 text-sm text-white hover:bg-accent-fill disabled:opacity-50"
       disabled={!ctl.hasChanges || ctl.saving}
       onclick={ctl.openConfirm}
     >
       Save
     </button>
     <button
-      class="text-sm text-zinc-400 underline hover:text-zinc-200"
+      class="text-sm text-fg-2 underline hover:text-fg-1"
       onclick={() => (ctl.resetAllOpen = true)}
     >
       Reset all to defaults
     </button>
-    {#if ctl.validating}<span class="text-xs text-zinc-500">ctl.validating…</span>{/if}
+    {#if ctl.validating}<span class="text-xs text-fg-3">ctl.validating…</span>{/if}
   </div>
 
   <KeymapConfirmModals {ctl} />

@@ -64,7 +64,7 @@
   const role = $derived(regionVocabularyStore.roleFor(parsed.detector));
   const palette = $derived(paletteForRole(role));
   const muted = $derived(isMutedTagFor(builtinDetectorRegistry, parsed.tag));
-  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-[10px]' : '');
+  const sizeCls = $derived(size === 'sm' ? 'px-1.5 text-caption' : '');
 </script>
 
 <!-- DQ-p2: the raw form
@@ -93,7 +93,7 @@
   >
   {#if parsed.tag}
     <span
-      class="max-w-[140px] min-w-0 shrink truncate text-[9px] uppercase tracking-wide"
+      class="max-w-[140px] min-w-0 shrink truncate text-caption uppercase tracking-wide"
     >
       {parsed.tag}
     </span>

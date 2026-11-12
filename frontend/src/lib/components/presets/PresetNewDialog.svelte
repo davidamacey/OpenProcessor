@@ -31,7 +31,7 @@
   onconfirm={() => 'body' in parsed && oncreate(name, description, parsed.body)}
   {oncancel}
 >
-  <label class="flex flex-col gap-1 text-xs text-zinc-400">
+  <label class="flex flex-col gap-1 text-xs text-fg-2">
     Name
     <input
       class="input input-sm font-mono"
@@ -39,11 +39,11 @@
       data-testid="preset-new-name"
     />
   </label>
-  <label class="flex flex-col gap-1 text-xs text-zinc-400">
+  <label class="flex flex-col gap-1 text-xs text-fg-2">
     Description (optional)
     <input class="input input-sm" bind:value={description} />
   </label>
-  <label class="flex flex-col gap-1 text-xs text-zinc-400">
+  <label class="flex flex-col gap-1 text-xs text-fg-2">
     Body (JSON)
     <textarea
       class="input min-h-40 font-mono text-xs"
@@ -52,15 +52,15 @@
       data-testid="preset-new-body"></textarea>
   </label>
   {#if 'error' in parsed}
-    <p class="text-xs text-amber-300" data-testid="preset-new-json-error">
+    <p class="text-xs text-warn" data-testid="preset-new-json-error">
       {parsed.error}
     </p>
   {/if}
-  <p class="text-xs text-zinc-500">
+  <p class="text-xs text-fg-3">
     The server checks the body when you create it and names each field it refuses. To
     start from a document that exists, clone it from the list.
   </p>
   {#if list.createError}
-    <p class="text-red-300" data-testid="preset-create-error">{list.createError}</p>
+    <p class="text-danger" data-testid="preset-create-error">{list.createError}</p>
   {/if}
 </ConfirmDialog>

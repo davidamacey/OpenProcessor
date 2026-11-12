@@ -24,22 +24,22 @@
   <header class="flex flex-wrap items-baseline gap-3">
     <h2 class="text-base font-semibold">Status</h2>
     {#if ctl.status?.profile}
-      <span class="text-xs text-zinc-400" data-testid="near-dup-profile-chip">
-        Profile <span class="font-mono text-zinc-200">{ctl.status.profile.name}</span>
+      <span class="text-xs text-fg-2" data-testid="near-dup-profile-chip">
+        Profile <span class="font-mono text-fg-1">{ctl.status.profile.name}</span>
         revision {ctl.status.profile.revision}
       </span>
     {:else if ctl.status}
-      <span class="text-xs text-amber-300">No active profile: nothing groups.</span>
+      <span class="text-xs text-warn">No active profile: nothing groups.</span>
     {/if}
   </header>
 
   {#if ctl.runMessage}
-    <p class="text-xs text-zinc-300" role="status" data-testid="near-dup-run-message">
+    <p class="text-xs text-fg-2" role="status" data-testid="near-dup-run-message">
       {ctl.runMessage}
     </p>
   {/if}
   {#if ctl.runError}
-    <p class="text-xs text-red-300" role="alert" data-testid="near-dup-run-error">
+    <p class="text-xs text-danger" role="alert" data-testid="near-dup-run-error">
       {ctl.runError}
     </p>
   {/if}
@@ -47,12 +47,12 @@
   <div class="grid gap-3 md:grid-cols-2">
     {#each ctl.status?.levels ?? [] as lv (lv.level)}
       <div
-        class="flex flex-col gap-2 rounded border border-zinc-800 p-3"
+        class="flex flex-col gap-2 rounded border border-line p-3"
         data-testid="near-dup-level-{lv.level}"
       >
         <h3 class="text-sm font-medium">{LABEL[lv.level]}</h3>
         {#if lv.current_run}
-          <p class="text-xs text-zinc-300">
+          <p class="text-xs text-fg-2">
             Current run <span class="font-mono">{lv.current_run.mode}</span>,
             {formatTimestamp(lv.current_run.finished_at ?? lv.current_run.started_at)}:
             {lv.current_run.dedup_groups} duplicate groups,
@@ -60,12 +60,12 @@
             {lv.current_run.grouped_members} of {lv.current_run.members_scored} members grouped.
           </p>
         {:else}
-          <p class="text-xs text-zinc-400" data-testid="near-dup-no-run-{lv.level}">
+          <p class="text-xs text-fg-2" data-testid="near-dup-no-run-{lv.level}">
             No run yet. Start a full build to group this level.
           </p>
         {/if}
         {#if lv.stale_reasons.length > 0}
-          <ul class="text-xs text-amber-300" data-testid="near-dup-stale-{lv.level}">
+          <ul class="text-xs text-warn" data-testid="near-dup-stale-{lv.level}">
             {#each lv.stale_reasons as reason (reason)}
               <li>
                 Stale: {staleReasonText(reason)}{reason === 'pending'
@@ -75,7 +75,7 @@
             {/each}
           </ul>
         {:else}
-          <p class="text-xs text-green-400">Up to date.</p>
+          <p class="text-xs text-success">Up to date.</p>
         {/if}
         <div class="mt-auto flex flex-wrap gap-2">
           {#if lv.pending_count > 0 && lv.current_run && pendingOnly(lv)}

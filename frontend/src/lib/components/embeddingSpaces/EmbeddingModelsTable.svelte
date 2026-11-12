@@ -12,7 +12,7 @@
 <section class="surface relative min-w-0 overflow-x-auto p-4" aria-label="Encoders">
   <h2 class="mb-2 text-base font-semibold">Encoders this deployment can serve</h2>
   <table class="w-full text-left text-sm" data-testid="model-table">
-    <thead class="text-xs text-zinc-500">
+    <thead class="text-xs text-fg-3">
       <tr>
         <th class="py-1 pr-3 font-normal">Encoder</th>
         <th class="py-1 pr-3 font-normal">Modalities</th>
@@ -25,7 +25,7 @@
     <tbody>
       {#each models as m (`${m.model_key}@${m.version}`)}
         <tr
-          class="border-t border-zinc-800 align-top"
+          class="border-t border-line align-top"
           data-testid="model-row"
           data-model={m.model_key}
         >
@@ -37,7 +37,7 @@
           >
           <td class="py-1.5 pr-3 text-xs">{m.licence}</td>
           <td class="py-1.5 text-xs">
-            {#if m.available}yes{:else}<span class="text-amber-300"
+            {#if m.available}yes{:else}<span class="text-warn"
                 >no{m.unavailable_reason ? `: ${m.unavailable_reason}` : ''}</span
               >{/if}
           </td>

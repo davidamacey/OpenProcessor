@@ -264,7 +264,7 @@
 </script>
 
 <div class="flex flex-col gap-2" data-testid="embedding-plot">
-  <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+  <div class="flex flex-wrap items-center gap-2 text-xs text-fg-2">
     {#if built && points.length > 0}
       <button
         type="button"
@@ -276,7 +276,7 @@
       >
         Draw a box
       </button>
-      <span class="text-zinc-500"
+      <span class="text-fg-3"
         >Drag to select, Shift+drag for a box, click a dot to open it.</span
       >
     {/if}
@@ -304,9 +304,7 @@
   </div>
 
   {#if bannerRequired}
-    <div
-      class="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200"
-    >
+    <div class="rounded border border-warn/50 bg-warn/10 px-3 py-1.5 text-xs text-warn">
       This projection is approximate — nearby points on screen are not guaranteed to share
       a cluster. Use it to spot rough neighborhoods, not to make final labeling decisions.
     </div>
@@ -315,19 +313,17 @@
   <div class="flex min-h-0 flex-1 flex-col gap-2 md:flex-row">
     <div
       bind:clientWidth={containerWidth}
-      class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-zinc-800"
+      class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-line"
     >
       {#if !loaded}
-        <p class="p-4 text-sm text-zinc-500" role="status">
-          Loading embedding projection…
-        </p>
+        <p class="p-4 text-sm text-fg-3" role="status">Loading embedding projection…</p>
       {:else if loadError}
-        <p class="p-4 text-sm text-red-400" role="alert">{loadError}</p>
+        <p class="p-4 text-sm text-danger" role="alert">{loadError}</p>
       {:else if !built}
         <div
           class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          <p class="text-sm text-zinc-400">
+          <p class="text-sm text-fg-2">
             No projection has been built yet. Building one runs as a background job (it
             never fits on the request path), so this can take a while on a large pool.
           </p>
@@ -345,9 +341,7 @@
           </button>
         </div>
       {:else if points.length === 0}
-        <p class="p-4 text-sm text-zinc-400">
-          No item has a point on the projection yet.
-        </p>
+        <p class="p-4 text-sm text-fg-2">No item has a point on the projection yet.</p>
         {@render empty?.()}
       {:else}
         <canvas
@@ -364,7 +358,7 @@
           onpointerleave={finishDrag}
         ></canvas>
         <p
-          class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-[10px] text-zinc-500"
+          class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-caption text-fg-3"
           data-testid="embedding-count"
         >
           {points.length.toLocaleString()}
@@ -385,7 +379,7 @@
   {#if points.length > 0}
     <!-- The served class legend: the server decides the classes, their slots and counts. -->
     <ul
-      class="flex max-h-24 flex-wrap items-center gap-x-3 gap-y-1 overflow-y-auto text-[11px] text-zinc-400"
+      class="flex max-h-24 flex-wrap items-center gap-x-3 gap-y-1 overflow-y-auto text-caption text-fg-2"
       data-testid="embedding-legend"
       aria-label="Colour legend: one colour per class"
     >
@@ -396,7 +390,7 @@
             style:background-color={colourForIndex(e.colour_index)}
           ></span>
           {e.class_name ?? 'no class'}
-          <span class="text-zinc-500">({e.count.toLocaleString()})</span>
+          <span class="text-fg-3">({e.count.toLocaleString()})</span>
         </li>
       {/each}
     </ul>

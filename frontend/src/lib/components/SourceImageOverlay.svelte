@@ -135,9 +135,9 @@
   data-align={align}
 >
   {#if loading && !context}
-    <p class="text-xs text-zinc-500">Loading…</p>
+    <p class="text-xs text-fg-3">Loading…</p>
   {:else if error}
-    <p class="text-xs text-red-300">Source image unavailable: {error}</p>
+    <p class="text-xs text-danger">Source image unavailable: {error}</p>
   {:else if sourceMissing}
     <div class="relative h-full min-h-40 w-full">
       <SourceMissingBadge missing={sourceMissing} />
@@ -171,7 +171,7 @@
             {#if s.kind === 'box'}
               {@const [x1, y1, x2, y2] = s.box}
               <div
-                class="absolute border-2 border-sky-400 {s.dimmed
+                class="absolute border-2 border-info {s.dimmed
                   ? 'border-dashed opacity-40'
                   : 'z-10'}"
                 style="left:{pct(x1)}; top:{pct(y1)}; width:{pct(x2 - x1)}; height:{pct(
@@ -182,7 +182,7 @@
                 title={s.title}
               >
                 <span
-                  class="absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
+                  class="absolute -top-4 left-0 rounded-sm bg-surface-0/90 px-1 py-0.5 text-caption leading-none whitespace-nowrap text-fg-1"
                   >{s.label}</span
                 >
               </div>
@@ -213,7 +213,7 @@
       <div class="pointer-events-auto absolute top-1 right-1 z-20 flex gap-1">
         <button
           type="button"
-          class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] whitespace-nowrap text-zinc-300 hover:bg-zinc-900"
+          class="rounded border border-line-strong bg-surface-0/80 px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2 hover:bg-surface-1"
           onclick={() => (showBoxes = !showBoxes)}
         >
           {showBoxes ? 'hide boxes' : 'show boxes'}
@@ -221,7 +221,7 @@
         {#if showBoxes}
           <button
             type="button"
-            class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] whitespace-nowrap text-zinc-300 hover:bg-zinc-900"
+            class="rounded border border-line-strong bg-surface-0/80 px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2 hover:bg-surface-1"
             aria-pressed={allRegions}
             data-testid="overlay-all-regions"
             onclick={() => (allRegions = !allRegions)}

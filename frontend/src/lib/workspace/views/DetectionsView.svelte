@@ -100,8 +100,8 @@
   <h1 class="sr-only">Detections</h1>
   <BulkBar {ws} onapplied={() => void pager.loadFirst()} />
   <div class="min-h-0 flex-1 overflow-auto p-4">
-    <p class="mb-3 text-xs text-zinc-300" data-testid="detections-header">
-      <strong class="text-zinc-100" data-testid="detections-total"
+    <p class="mb-3 text-xs text-fg-2" data-testid="detections-header">
+      <strong class="text-fg-1" data-testid="detections-total"
         >{pager.total.toLocaleString()}</strong
       >
       detection{pager.total === 1 ? '' : 's'}
@@ -125,7 +125,7 @@
         class="mt-4 h-1"
         aria-hidden="true"
       ></div>
-      <p class="mt-2 font-mono text-xs text-zinc-500" data-testid="detections-footer">
+      <p class="mt-2 font-mono text-xs text-fg-3" data-testid="detections-footer">
         {pager.items.length} / {pager.total}
       </p>
     </ViewState>

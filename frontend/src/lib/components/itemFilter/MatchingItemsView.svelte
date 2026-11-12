@@ -71,8 +71,8 @@
 </script>
 
 <div class="mb-3 flex flex-wrap items-center gap-2 text-xs" data-testid="matching-header">
-  <span class="text-zinc-300">
-    <strong class="text-zinc-100" data-testid="matching-total"
+  <span class="text-fg-2">
+    <strong class="text-fg-1" data-testid="matching-total"
       >{pager.total.toLocaleString()}</strong
     >
     matching item{pager.total === 1 ? '' : 's'}
@@ -82,7 +82,7 @@
   {#each ACTIONS as a (a.id)}
     <button
       type="button"
-      class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+      class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
       data-testid="matching-action-{a.id}"
       disabled={pager.loading}
       onclick={() => void actions.open(a.id)}
@@ -92,7 +92,7 @@
   {/each}
   <button
     type="button"
-    class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+    class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
     data-testid="matching-action-assist"
     disabled={pager.loading}
     onclick={() =>
@@ -105,7 +105,7 @@
   </button>
   <button
     type="button"
-    class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+    class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
     onclick={onexit}
   >
     ← Back to clusters
@@ -113,13 +113,13 @@
 </div>
 
 {#if pager.loading && pager.items.length === 0}
-  <p class="text-sm text-zinc-500">Loading...</p>
+  <p class="text-sm text-fg-3">Loading...</p>
 {:else if pager.error}
-  <p class="text-sm text-red-300" role="alert" data-testid="matching-error">
+  <p class="text-sm text-danger" role="alert" data-testid="matching-error">
     {pager.error}
   </p>
 {:else if pager.items.length === 0}
-  <p class="text-sm text-zinc-500">No items match this filter.</p>
+  <p class="text-sm text-fg-3">No items match this filter.</p>
 {:else}
   <CropResultGrid items={pager.items} {sel} {ondetail} />
   <div
@@ -130,7 +130,7 @@
     class="mt-4 h-1"
     aria-hidden="true"
   ></div>
-  <p class="mt-2 font-mono text-xs text-zinc-500" data-testid="matching-footer">
+  <p class="mt-2 font-mono text-xs text-fg-3" data-testid="matching-footer">
     {pager.items.length} / {pager.total}
   </p>
 {/if}

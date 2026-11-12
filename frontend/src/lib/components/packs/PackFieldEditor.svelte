@@ -92,23 +92,23 @@
 </script>
 
 <div
-  class="flex flex-col gap-1.5 border-t border-zinc-800 pt-3 first:border-0 first:pt-0"
+  class="flex flex-col gap-1.5 border-t border-line pt-3 first:border-0 first:pt-0"
   data-testid="pack-field"
   data-field={field.field}
 >
   <div class="flex flex-wrap items-baseline gap-2">
-    <label class="text-sm font-medium text-zinc-100" for="pack-field-{field.field}"
+    <label class="text-sm font-medium text-fg-1" for="pack-field-{field.field}"
       >{field.label}</label
     >
-    <code class="font-mono text-[11px] text-zinc-500">{field.field}</code>
+    <code class="font-mono text-caption text-fg-3">{field.field}</code>
   </div>
-  {#if field.help}<p class="text-xs text-zinc-400">{field.help}</p>{/if}
+  {#if field.help}<p class="text-xs text-fg-2">{field.help}</p>{/if}
 
   {#if field.allowed_placeholders.length > 0 || field.expected_reply_keys.length > 0 || field.optional_reply_keys.length > 0}
-    <div class="flex flex-wrap items-center gap-1 text-[11px]">
+    <div class="flex flex-wrap items-center gap-1 text-caption">
       {#each field.required_placeholders as p (p)}
         <span
-          class="rounded border border-sky-500/50 bg-sky-500/10 px-1.5 py-0.5 font-mono text-sky-200"
+          class="rounded border border-info/50 bg-info/10 px-1.5 py-0.5 font-mono text-info"
           data-testid="placeholder-chip"
           data-required="true"
           title="required placeholder">{`{${p}}`} required</span
@@ -116,24 +116,24 @@
       {/each}
       {#each optionalPlaceholders as p (p)}
         <span
-          class="rounded border border-sky-500/30 px-1.5 py-0.5 font-mono text-sky-300"
+          class="rounded border border-info/30 px-1.5 py-0.5 font-mono text-info"
           data-testid="placeholder-chip"
           data-required="false"
           title="allowed placeholder">{`{${p}}`}</span
         >
       {/each}
       {#if field.expected_reply_keys.length > 0 || field.optional_reply_keys.length > 0}
-        <span class="ml-1 text-zinc-500">reply keys:</span>
+        <span class="ml-1 text-fg-3">reply keys:</span>
       {/if}
       {#each field.expected_reply_keys as k (k)}
         <span
-          class="rounded border border-zinc-600 px-1.5 py-0.5 font-mono text-zinc-200"
+          class="rounded border border-line-strong px-1.5 py-0.5 font-mono text-fg-1"
           data-testid="reply-key-chip">{k}</span
         >
       {/each}
       {#each field.optional_reply_keys as k (k)}
         <span
-          class="rounded border border-dashed border-zinc-700 px-1.5 py-0.5 font-mono text-zinc-400"
+          class="rounded border border-dashed border-line-strong px-1.5 py-0.5 font-mono text-fg-2"
           data-testid="reply-key-chip"
           data-optional="true">{k} optional</span
         >
@@ -163,11 +163,11 @@
             >
           {/if}
           {#if dups.has(idx)}
-            <span class="text-[11px] text-amber-300">Duplicate, ignored</span>
+            <span class="text-caption text-warn">Duplicate, ignored</span>
           {/if}
         </div>
       {:else}
-        <p class="text-xs text-zinc-500">No patterns.</p>
+        <p class="text-xs text-fg-3">No patterns.</p>
       {/each}
       {#if !readonly}
         <button
@@ -177,7 +177,7 @@
           onclick={addPattern}>Add pattern</button
         >
       {/if}
-      <p class="text-[11px] text-zinc-500">
+      <p class="text-caption text-fg-3">
         Case-insensitive globs (<code>blurry_*</code>, <code>*_scene</code>). A proposed
         new class matching one is dropped and never reaches the new-class queue.
       </p>
@@ -193,7 +193,7 @@
             {readonly}
             oninput={(e) => setKey(idx, (e.currentTarget as HTMLInputElement).value)}
           />
-          <span class="text-zinc-500">→</span>
+          <span class="text-fg-3">→</span>
           <input
             class="input input-sm min-w-0 flex-1 font-mono"
             aria-label="{field.label}: value {idx + 1}"
@@ -211,7 +211,7 @@
           {/if}
         </div>
       {:else}
-        <p class="text-xs text-zinc-500">No entries.</p>
+        <p class="text-xs text-fg-3">No entries.</p>
       {/each}
       {#if !readonly}
         <button
@@ -226,7 +226,7 @@
     <textarea
       id="pack-field-{field.field}"
       class="input min-h-24 w-full resize-y font-mono text-xs {hasError
-        ? 'border-red-500/60'
+        ? 'border-danger/60'
         : ''}"
       rows={Math.min(14, Math.max(3, text.split('\n').length + 1))}
       value={text}
@@ -236,16 +236,16 @@
     ></textarea>
   {:else}
     <div data-testid="pack-unknown" class="space-y-1">
-      <p class="text-xs text-amber-300">
+      <p class="text-xs text-warn">
         Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
       </p>
       <pre
-        class="max-h-48 overflow-auto rounded border border-zinc-800 p-2 font-mono text-[11px] text-zinc-400">{unknownText}</pre>
+        class="max-h-48 overflow-auto rounded border border-line p-2 font-mono text-caption text-fg-2">{unknownText}</pre>
     </div>
   {/if}
 
   {#if field.used_by.length > 0}
-    <p class="text-[11px] text-zinc-500">used by: {field.used_by.join(', ')}</p>
+    <p class="text-caption text-fg-3">used by: {field.used_by.join(', ')}</p>
   {/if}
   <ConfigIssueList {issues} showField={isMap || isList} />
 </div>

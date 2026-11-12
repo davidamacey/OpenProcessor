@@ -41,11 +41,11 @@
 
 {#if controller.available}
   <details class="surface mt-4 p-4" data-testid="seed-panel">
-    <summary class="cursor-pointer text-sm font-semibold text-zinc-200">
+    <summary class="cursor-pointer text-sm font-semibold text-fg-1">
       Create classes from the detector
     </summary>
     <div class="mt-3 space-y-3 text-xs">
-      <p class="text-zinc-400">
+      <p class="text-fg-2">
         Choose detector labels to turn into classes. With none chosen, every label is
         used.
       </p>
@@ -57,7 +57,7 @@
               checked={controller.chosen.includes(name)}
               onchange={(e) => toggle(name, e.currentTarget.checked)}
             />
-            <span class="text-zinc-200">{name}</span>
+            <span class="text-fg-1">{name}</span>
           </label>
         {/each}
       </div>
@@ -82,7 +82,7 @@
       </div>
 
       {#if controller.errorLines.length > 0}
-        <div class="space-y-1 text-red-300" data-testid="seed-error">
+        <div class="space-y-1 text-danger" data-testid="seed-error">
           {#each controller.errorLines as line, i (i)}
             <p>{line}</p>
           {/each}
@@ -92,22 +92,22 @@
       {#if controller.result}
         {@const r = controller.result}
         <div class="space-y-2" data-testid="seed-result">
-          <p class="text-zinc-400">Detector {r.detector_model}</p>
+          <p class="text-fg-2">Detector {r.detector_model}</p>
           {#if r.created.length > 0}
             <ul class="list-disc pl-5" data-testid="seed-created">
               {#each r.created as c (c.detector_label)}
-                <li class="text-zinc-200">
+                <li class="text-fg-1">
                   would create <span class="font-mono">{c.name}</span> (from {c.detector_label})
                 </li>
               {/each}
             </ul>
           {:else}
-            <p class="text-zinc-500">Nothing to create.</p>
+            <p class="text-fg-3">Nothing to create.</p>
           {/if}
           {#if r.skipped.length > 0}
             <ul class="list-disc pl-5" data-testid="seed-skipped">
               {#each r.skipped as s (s.detector_label)}
-                <li class="text-zinc-400">
+                <li class="text-fg-2">
                   skipped <span class="font-mono">{s.name}</span>: {humanizeId(s.reason)}
                 </li>
               {/each}
@@ -116,7 +116,7 @@
           {#if r.conflicts.length > 0}
             <ul class="list-disc pl-5" data-testid="seed-conflicts">
               {#each r.conflicts as c (c.class_id_in_detector)}
-                <li class="text-amber-200">
+                <li class="text-warn">
                   conflict on <span class="font-mono">{c.detector_label}</span> (detector
                   class
                   {c.class_id_in_detector}): {humanizeId(c.reason)}
@@ -138,7 +138,7 @@
     onconfirm={() => void doCreate()}
     oncancel={() => (confirming = false)}
   >
-    <p class="text-sm text-zinc-300">
+    <p class="text-sm text-fg-2">
       {controller.result.created.length} new classes will be added to the registry, one per
       detector label listed in the preview.
     </p>

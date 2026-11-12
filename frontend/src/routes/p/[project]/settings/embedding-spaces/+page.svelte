@@ -59,20 +59,20 @@
       }}>Register a space</button
     >
     <a
-      class="text-xs text-blue-300 hover:underline"
+      class="text-xs text-accent hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-zinc-400">
+  <p class="text-sm text-fg-2">
     A space is one set of vectors for a target made by one encoder version. A project
     always has a primary space; register a candidate to build another, then promote it
     when the server allows.
   </p>
 
   {#if st.loadError && !st.spaces}
-    <p class="text-sm text-red-300" data-testid="space-load-error">{st.loadError}</p>
+    <p class="text-sm text-danger" data-testid="space-load-error">{st.loadError}</p>
   {:else if !st.spaces}
-    <p class="text-sm text-zinc-500">Loading…</p>
+    <p class="text-sm text-fg-3">Loading…</p>
   {:else}
     {@const all = st.spaces}
     {#each EMBEDDING_TARGETS as t (t)}
@@ -91,7 +91,7 @@
       {/if}
     {/each}
     {#if all.length === 0}
-      <p class="text-sm text-zinc-400" data-testid="space-empty">
+      <p class="text-sm text-fg-2" data-testid="space-empty">
         This project has no spaces yet.
       </p>
     {/if}
@@ -100,7 +100,7 @@
   {#if st.models}
     <EmbeddingModelsTable models={st.models} />
   {:else if st.modelsError}
-    <p class="text-sm text-red-300" data-testid="models-error">{st.modelsError}</p>
+    <p class="text-sm text-danger" data-testid="models-error">{st.modelsError}</p>
   {/if}
 </div>
 

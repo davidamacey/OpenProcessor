@@ -11,7 +11,7 @@
 <section class="surface flex flex-col gap-3 p-5" data-testid="presets-card">
   <div class="flex min-w-0 flex-col gap-1">
     <h2 class="text-base font-semibold">Presets and embedding spaces</h2>
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Revisioned settings for serving, clustering, the assist loop and near-duplicates,
       and the vector spaces this project searches and clusters in.
     </p>
@@ -21,7 +21,7 @@
       <li class="flex flex-wrap items-center gap-2">
         <a class="btn" href={resolve(projectHref(presetPath(k)))}>{k.title}</a>
         {#if k.scope === 'deployment'}
-          <span class="text-[11px] text-zinc-400">deployment-wide</span>
+          <span class="text-caption text-fg-2">deployment-wide</span>
         {/if}
       </li>
     {/each}

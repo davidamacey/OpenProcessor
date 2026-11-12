@@ -19,7 +19,7 @@
 
 <div class="flex h-full flex-col">
   <nav
-    class="flex flex-wrap gap-1 border-b border-zinc-800 px-4 pt-3 sm:px-6"
+    class="flex flex-wrap gap-1 border-b border-line px-4 pt-3 sm:px-6"
     aria-label="Quality"
     data-testid="quality-tabs"
   >
@@ -30,8 +30,8 @@
         data-testid="quality-tab-{tab.path.split('/')[2]}"
         aria-current={page.url.pathname === href ? 'page' : undefined}
         class="rounded-t px-3 py-2 text-sm {page.url.pathname === href
-          ? 'bg-zinc-800 text-zinc-100'
-          : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}">{tab.label}</a
+          ? 'bg-surface-2 text-fg-1'
+          : 'text-fg-2 hover:bg-surface-1 hover:text-fg-1'}">{tab.label}</a
       >
     {/each}
   </nav>

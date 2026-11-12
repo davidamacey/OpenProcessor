@@ -25,20 +25,20 @@
 </script>
 
 {#if crop.label_locked}
-  <dt class="text-zinc-500">Label</dt>
-  <dd class="text-zinc-200" data-testid="import-label-locked">Locked</dd>
+  <dt class="text-fg-3">Label</dt>
+  <dd class="text-fg-1" data-testid="import-label-locked">Locked</dd>
 {/if}
 {#if crop.dataset_split}
-  <dt class="text-zinc-500">Dataset split</dt>
-  <dd class="text-zinc-200" data-testid="import-split">{crop.dataset_split}</dd>
+  <dt class="text-fg-3">Dataset split</dt>
+  <dd class="text-fg-1" data-testid="import-split">{crop.dataset_split}</dd>
 {/if}
 {#if importIds.length > 0}
-  <dt class="text-zinc-500">Imports</dt>
-  <dd class="flex flex-wrap gap-x-2 font-mono text-zinc-200" data-testid="import-ids">
+  <dt class="text-fg-3">Imports</dt>
+  <dd class="flex flex-wrap gap-x-2 font-mono text-fg-1" data-testid="import-ids">
     {#each importIds as id (id)}
       {#if linkable}
         <a
-          class="text-blue-300 underline hover:text-blue-200"
+          class="text-accent underline hover:text-accent"
           href={resolve(projectHref(`/datasets/imports/${encodeURIComponent(id)}`))}
           >{id}</a
         >
@@ -49,33 +49,33 @@
   </dd>
 {/if}
 {#if crop.imported_at}
-  <dt class="text-zinc-500">Imported</dt>
-  <dd class="font-mono text-zinc-300" title={crop.imported_at} data-testid="import-at">
+  <dt class="text-fg-3">Imported</dt>
+  <dd class="font-mono text-fg-2" title={crop.imported_at} data-testid="import-at">
     {formatTimestamp(crop.imported_at)}
   </dd>
 {/if}
 {#if crop.proposed_by_import}
-  <dt class="text-zinc-500">Proposed by import</dt>
-  <dd class="font-mono text-zinc-200" data-testid="import-proposed-by">
+  <dt class="text-fg-3">Proposed by import</dt>
+  <dd class="font-mono text-fg-1" data-testid="import-proposed-by">
     {crop.proposed_by_import}
   </dd>
 {/if}
 {#if crop.on_negative_frame}
-  <dt class="text-zinc-500">Negative frame</dt>
-  <dd class="text-zinc-200" data-testid="import-negative-frame">on a negative frame</dd>
+  <dt class="text-fg-3">Negative frame</dt>
+  <dd class="text-fg-1" data-testid="import-negative-frame">on a negative frame</dd>
 {/if}
 {#if crop.import_standalone_region}
-  <dt class="text-zinc-500">Standalone region</dt>
-  <dd class="text-zinc-200" data-testid="import-standalone-region">
+  <dt class="text-fg-3">Standalone region</dt>
+  <dd class="text-fg-1" data-testid="import-standalone-region">
     imported without a parent item
   </dd>
 {/if}
 {#if chain.length > 0}
-  <dt class="text-zinc-500">Proposal chain</dt>
+  <dt class="text-fg-3">Proposal chain</dt>
   <dd class="flex flex-wrap gap-1" data-testid="import-proposal-chain">
     {#each chain as step, i (i)}
       <span
-        class="rounded border border-zinc-700 bg-zinc-800/60 px-1 font-mono text-[10px] text-zinc-300"
+        class="rounded border border-line-strong bg-surface-2/60 px-1 font-mono text-caption text-fg-2"
         >{step}</span
       >
     {/each}

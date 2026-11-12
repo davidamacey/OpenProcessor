@@ -71,19 +71,19 @@
 </script>
 
 <div
-  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs"
+  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-xs"
   role="toolbar"
   aria-label="Bulk actions"
   data-testid="bulk-bar"
 >
   <span
-    class="min-w-0 text-zinc-200"
-    class:text-red-300={!!ws.summary.error}
+    class="min-w-0 text-fg-1"
+    class:text-danger={!!ws.summary.error}
     aria-live="polite"
     data-testid="bulk-summary">{text}</span
   >
   {#if count !== null}
-    <span class="font-mono text-zinc-500" data-testid="bulk-count">{count} selected</span>
+    <span class="font-mono text-fg-3" data-testid="bulk-count">{count} selected</span>
   {/if}
   {#if ws.pendingSelectAll}
     <button
@@ -147,13 +147,13 @@
     {/if}
     {#if reasonsOpen}
       <div
-        class="absolute left-0 top-full z-20 mt-1 w-44 rounded sm:left-auto sm:right-0 border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
+        class="absolute left-0 top-full z-20 mt-1 w-44 rounded sm:left-auto sm:right-0 border border-line-strong bg-surface-1 py-1 shadow-lg"
         data-testid="ignore-reasons"
       >
         {#each excludeReasonsStore.reasons as r (r.id)}
           <button
             type="button"
-            class="block w-full px-3 py-1 text-left text-xs text-zinc-200 hover:bg-zinc-800"
+            class="block w-full px-3 py-1 text-left text-xs text-fg-1 hover:bg-surface-2"
             onclick={() => ignore(r.id)}
           >
             {r.label}

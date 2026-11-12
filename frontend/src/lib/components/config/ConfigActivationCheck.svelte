@@ -17,7 +17,7 @@
 </script>
 
 {#if !ed.viewing}
-  <div class="flex flex-col gap-2 border-t border-zinc-800 pt-2">
+  <div class="flex flex-col gap-2 border-t border-line pt-2">
     <button
       type="button"
       class="btn btn-sm self-start"
@@ -27,12 +27,12 @@
       >{ed.activationChecking ? 'Checking…' : 'Check the draft for activation'}</button
     >
     {#if ed.activationCheckError}
-      <p class="text-xs text-red-300">{ed.activationCheckError}</p>
+      <p class="text-xs text-danger">{ed.activationCheckError}</p>
     {/if}
     {#if ed.activationReport}
       {@const r = ed.activationReport}
       <div class="space-y-1" data-testid="activation-check">
-        <p class="text-xs text-zinc-400">
+        <p class="text-xs text-fg-2">
           As it would be checked on activation: {r.errors.length} error{r.errors
             .length === 1
             ? ''

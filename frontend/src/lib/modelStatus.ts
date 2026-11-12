@@ -18,7 +18,7 @@ export interface StatusPill {
   title: string | null;
 }
 
-const NEUTRAL = 'bg-zinc-700/40 text-zinc-400 border-zinc-600';
+const NEUTRAL = 'bg-surface-3/40 text-fg-2 border-line-strong';
 
 export function modelStatusPill(
   model: Pick<ModelInfo, 'status' | 'optional'>,
@@ -27,13 +27,13 @@ export function modelStatusPill(
     case 'ready':
       return {
         label: 'ready',
-        className: 'bg-green-500/20 text-green-200 border-green-500/40',
+        className: 'bg-success/20 text-success border-success/40',
         title: null,
       };
     case 'not_ready':
       return {
         label: 'not ready',
-        className: 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40',
+        className: 'bg-warn/20 text-warn border-warn/40',
         title: null,
       };
     case 'not_configured':
@@ -49,7 +49,7 @@ export function modelStatusPill(
     default:
       return {
         label: 'unavailable',
-        className: 'bg-red-500/20 text-red-200 border-red-500/40',
+        className: 'bg-danger/20 text-danger border-danger/40',
         title: null,
       };
   }

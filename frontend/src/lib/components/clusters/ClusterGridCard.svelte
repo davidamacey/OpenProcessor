@@ -24,8 +24,8 @@
 
   function borderColor(c: Cluster): string {
     // M4: a distinct, neutral border for the non-cluster inventory card.
-    if (c.isSlotCard) return 'border-purple-500/60';
-    return 'border-zinc-700';
+    if (c.isSlotCard) return 'border-holdout/60';
+    return 'border-line-strong';
   }
 
   function open(c: Cluster): void {
@@ -63,12 +63,12 @@
 <li style="content-visibility:auto;contain-intrinsic-size:auto 280px">
   <button
     type="button"
-    class="flex w-full flex-col rounded-md border-2 bg-zinc-900 text-left transition hover:border-zinc-300 {borderColor(
+    class="flex w-full flex-col rounded-md border-2 bg-surface-1 text-left transition hover:border-fg-3 {borderColor(
       c,
     )}"
     onclick={() => open(c)}
   >
-    <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-zinc-950">
+    <div class="grid grid-cols-2 gap-px overflow-hidden rounded-t bg-surface-0">
       {#each c.representative_crop_ids?.slice(0, 4) ?? [] as cropId, i (i)}
         <img
           src={c.representative_thumb_urls?.[i]
@@ -79,11 +79,11 @@
           onerror={(e) => {
             (e.currentTarget as HTMLImageElement).style.opacity = '0.2';
           }}
-          class="aspect-square w-full bg-zinc-950 object-contain"
+          class="aspect-square w-full bg-surface-0 object-contain"
         />
       {/each}
       {#each Array(Math.max(0, 4 - (c.representative_crop_ids?.length ?? 0))) as _, i (i)}
-        <div class="aspect-square w-full bg-zinc-900"></div>
+        <div class="aspect-square w-full bg-surface-1"></div>
       {/each}
     </div>
     <div class="p-3">
@@ -93,7 +93,7 @@
             >{c.slotDisplayName ?? c.dominant_class_name}</span
           >
           <span
-            class="rounded px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-200"
+            class="rounded px-1.5 py-0.5 text-caption font-medium bg-holdout/20 text-holdout"
           >
             inventory
           </span>
@@ -105,7 +105,7 @@
           >
           {#if c.label_agreement != null}
             <span
-              class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300"
+              class="rounded bg-surface-2 px-1.5 py-0.5 text-caption font-medium text-fg-2"
               data-testid="cluster-agreement"
               title="Label agreement: the top class's share of the labelled members · labelled share {c.labelled_share !=
               null
@@ -120,16 +120,16 @@
         {#if c.isSlotCard}
           <!-- C4: the inventory count's scope, see SlotGallery. -->
           <span
-            class="font-mono text-xs text-zinc-400"
+            class="font-mono text-xs text-fg-2"
             title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
             >{c.size.toLocaleString()} listed</span
           >
         {:else}
-          <span class="font-mono text-xs text-zinc-400">{c.size}</span>
+          <span class="font-mono text-xs text-fg-2">{c.size}</span>
         {/if}
       </div>
       <div
-        class="truncate text-sm text-zinc-300"
+        class="truncate text-sm text-fg-2"
         title={c.dominant_class_name ?? `Unlabeled cluster ${c.uid}`}
       >
         {#if c.isSlotCard}
@@ -138,32 +138,32 @@
                item IS the slot's class) — no invented "· 0%".
                F8 D7: the title carries the served display name,
                so this line names the class once, as a class. -->
-          <span class="text-zinc-500">class</span>
+          <span class="text-fg-3">class</span>
           <span class="font-mono">{c.dominant_class_name}</span>
         {:else if c.dominant_class_name}
           {c.dominant_class_name}
           {#if dominantShareText(c)}
-            <span class="text-zinc-500" title={dominantShareTitle(c)}>
+            <span class="text-fg-3" title={dominantShareTitle(c)}>
               · {dominantShareText(c)}
             </span>
           {/if}
         {:else}
-          <span class="text-amber-300">Unlabeled {numberText}</span>
-          <span class="text-zinc-500">· needs label</span>
+          <span class="text-warn">Unlabeled {numberText}</span>
+          <span class="text-fg-3">· needs label</span>
         {/if}
       </div>
       {#if !c.isSlotCard}
-        <div class="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
+        <div class="mt-1.5 flex flex-wrap items-center gap-1 text-caption">
           {#if detector}
             <span
-              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300"
+              class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2"
               data-testid="cluster-detector"
               title={DETECTOR_TOOLTIP}>detector {detector}</span
             >
           {/if}
           {#if c.validation_state}
             <span
-              class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300"
+              class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2"
               data-testid="cluster-validation"
               title="{c.validated_count} of {c.size} members have a human-validated class"
               >{VALIDATION_TEXT[c.validation_state]}</span
@@ -171,7 +171,7 @@
           {/if}
           {#if c.needs_review_count}
             <span
-              class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-200"
+              class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-warn"
               data-testid="cluster-needs-review"
               title={reviewCountsTitle(c.review_counts)}
               >{c.needs_review_count.toLocaleString()} to review</span
@@ -179,7 +179,7 @@
           {/if}
           {#each c.flags ?? [] as id (id)}
             <span
-              class="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-red-200"
+              class="rounded border border-danger/30 bg-danger/10 px-1.5 py-0.5 text-danger"
               data-testid="cluster-flag"
               title={flagById.get(id)?.description}>{flagById.get(id)?.label ?? id}</span
             >

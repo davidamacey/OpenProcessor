@@ -30,8 +30,8 @@
 
 <div class="flex flex-col gap-2 text-xs" data-testid="loop-nodes">
   <div class="flex flex-wrap items-center gap-3">
-    <h3 class="text-sm font-medium text-zinc-200">Clusters and parts</h3>
-    <label class="flex items-center gap-1.5 text-zinc-300">
+    <h3 class="text-sm font-medium text-fg-1">Clusters and parts</h3>
+    <label class="flex items-center gap-1.5 text-fg-2">
       Show
       <select
         class="select-sm"
@@ -49,7 +49,7 @@
   </div>
 
   {#if ctl.nodesError}
-    <p class="text-red-300" role="alert" data-testid="loop-nodes-error">
+    <p class="text-danger" role="alert" data-testid="loop-nodes-error">
       {ctl.nodesError}
     </p>
   {/if}
@@ -57,7 +57,7 @@
   <div class="overflow-x-auto">
     <table class="w-full min-w-[44rem] text-left">
       <caption class="sr-only">Clusters the loop worked on and what it decided</caption>
-      <thead class="text-zinc-500">
+      <thead class="text-fg-3">
         <tr>
           <th scope="col" class="pr-3 font-normal">Node</th>
           <th scope="col" class="pr-3 font-normal">Decision</th>
@@ -69,15 +69,15 @@
           <th scope="col" class="font-normal"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
-      <tbody class="font-mono text-zinc-200">
+      <tbody class="font-mono text-fg-1">
         {#each ctl.nodes as n (n.path)}
           {@const open = ctl.openNode === n.path}
-          <tr class="border-t border-zinc-800/70" data-testid="loop-node-row">
+          <tr class="border-t border-line/70" data-testid="loop-node-row">
             <th scope="row" class="py-1 pr-3 text-left font-normal">{n.path}</th>
             <td class="pr-3 font-sans" title={n.reason ?? ''}>
               {n.decision ? LABEL[n.decision] : 'Open'}
               {#if n.decision === 'unvisited' && n.reason}
-                <span class="block text-zinc-500" data-testid="loop-node-why"
+                <span class="block text-fg-3" data-testid="loop-node-why"
                   >{n.reason_message ?? n.reason}</span
                 >
               {/if}
@@ -119,24 +119,24 @@
           </tr>
           {#if open}
             <tr id="loop-node-detail-{n.path}" data-testid="loop-node-detail">
-              <td colspan="8" class="bg-zinc-900/40 p-3 font-sans">
+              <td colspan="8" class="bg-surface-1/40 p-3 font-sans">
                 {#if n.distribution.length > 0}
-                  <p class="mb-1 text-zinc-300">
+                  <p class="mb-1 text-fg-2">
                     Votes:
                     {n.distribution.map((v) => `${v.class_name} ${v.votes}`).join(', ')}
                   </p>
                 {/if}
                 {#if n.new_class_proposals.length > 0}
-                  <p class="mb-1 text-zinc-300">
+                  <p class="mb-1 text-fg-2">
                     Names the VLM proposed that are not in the registry:
                     {n.new_class_proposals.map((v) => `${v.name} ${v.votes}`).join(', ')}
                   </p>
                 {/if}
                 {#if n.reason}
-                  <p class="mb-1 text-zinc-500">{n.reason}</p>
+                  <p class="mb-1 text-fg-3">{n.reason}</p>
                 {/if}
                 {#if ctl.membersError}
-                  <p class="text-red-300" role="alert">{ctl.membersError}</p>
+                  <p class="text-danger" role="alert">{ctl.membersError}</p>
                 {/if}
                 <ul class="flex flex-wrap gap-1" aria-label="Members of {n.path}">
                   {#each ctl.members.slice(0, THUMBS_SHOWN) as id (id)}
@@ -147,12 +147,12 @@
                         loading="lazy"
                         width="64"
                         height="64"
-                        class="h-16 w-16 rounded bg-zinc-800 object-cover"
+                        class="h-16 w-16 rounded bg-surface-2 object-cover"
                       />
                     </li>
                   {/each}
                 </ul>
-                <p class="mt-1 text-zinc-500" data-testid="loop-members-count">
+                <p class="mt-1 text-fg-3" data-testid="loop-members-count">
                   {formatCount(ctl.members.length)} member ids loaded{ctl.membersNext
                     ? ' (more available)'
                     : ''}{ctl.members.length > THUMBS_SHOWN
@@ -174,7 +174,7 @@
           {/if}
         {:else}
           <tr>
-            <td colspan="8" class="py-2 font-sans text-zinc-500">
+            <td colspan="8" class="py-2 font-sans text-fg-3">
               {ctl.nodesLoading ? 'Loading…' : 'No clusters to show.'}
             </td>
           </tr>

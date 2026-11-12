@@ -22,10 +22,8 @@
      (model / vlm / human / low_conf / ...) without changing
      the cluster card stats. Active filter is reflected in the URL-free
      reactive state so re-mounting the page resets to "all". -->
-<div
-  class="flex flex-wrap items-center gap-1.5 border-b border-zinc-800 px-4 py-1.5 text-xs"
->
-  <span class="text-zinc-500">source:</span>
+<div class="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-1.5 text-xs">
+  <span class="text-fg-3">source:</span>
   <label class="flex items-center gap-1.5">
     <select
       aria-label="Filter by label source"
@@ -43,7 +41,7 @@
     </select>
   </label>
   {#if view.classSourceFilter !== null}
-    <span class="ml-auto text-zinc-500">
+    <span class="ml-auto text-fg-3">
       showing {view.cropPager.total.toLocaleString()} from {classSourcesStore.labelFor(
         view.classSourceFilter,
       )}
@@ -55,9 +53,7 @@
      (what the business sorts on) and hide too-blurry crops. View-only —
      no data is deleted; the slider commits on release to avoid a reload
      per pixel. -->
-<div
-  class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-1.5 text-xs"
->
+<div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-1.5 text-xs">
   <!-- Cluster-scoped semantic search — left-aligned, first control in
        the row, so it reads as the primary way in rather than a control
        squeezed wherever there happens to be leftover flex space. -->
@@ -83,7 +79,7 @@
     bind:value={view.subjectScope}
     labels={['All', 'Largest', 'Largest + 2nd']}
     label="subject:"
-    labelClass="text-zinc-500"
+    labelClass="text-fg-3"
     dense
   />
 
@@ -91,7 +87,7 @@
     bind:value={view.blurSlider}
     oncommit={view.commitBlur}
     max={view.BLUR_MAX}
-    labelClass="ml-2 text-zinc-500"
+    labelClass="ml-2 text-fg-3"
     width="w-40"
     stops
     title="Hide crops blurrier than this (blur_lap_ratio). 1.1/1.3/1.4 are the v1.1.9 sale-quality stops; training tolerance is lower."
@@ -104,8 +100,8 @@
   <button
     type="button"
     class="btn-sm {view.outliersFirst
-      ? 'border-amber-500/60 bg-amber-500/20 text-amber-100'
-      : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}"
+      ? 'border-warn/60 bg-warn/20 text-warn'
+      : 'border-line-strong bg-surface-2 text-fg-2 hover:bg-surface-3'}"
     onclick={() => (view.strategyBar.sort = view.outliersFirst ? 'default' : 'outliers')}
     title="Sort by distance from the cluster centroid (most atypical first) to spot mislabels/junk"
   >
@@ -139,7 +135,7 @@
   {#if view.subjectScope !== 0 || view.minBlurRatio !== null || !view.strategyBar.isDefault || view.facetFilterActive}
     <button
       type="button"
-      class="btn-sm ml-auto bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+      class="btn-sm ml-auto bg-surface-2 text-fg-2 hover:bg-surface-3"
       onclick={() => {
         view.subjectScope = 0;
         view.blurSlider = 0;

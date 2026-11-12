@@ -22,28 +22,28 @@
 
 <div class="space-y-4" data-testid="ingest-sources">
   {#if controller.loadError && !controller.list}
-    <p class="text-xs text-red-300" data-testid="sources-load-error">
+    <p class="text-xs text-danger" data-testid="sources-load-error">
       Could not load sources: {controller.loadError}
     </p>
   {:else if !controller.list}
-    <p class="text-xs text-zinc-500">Loading…</p>
+    <p class="text-xs text-fg-3">Loading…</p>
   {:else}
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       A source is a bucket prefix or a server folder that keeps feeding this project: scan
       it now, watch it, run it on a schedule or let a webhook announce new files. Images
       already stored are skipped.
     </p>
 
     {#if controller.loadError}
-      <p class="text-xs text-amber-300">Could not refresh: {controller.loadError}</p>
+      <p class="text-xs text-warn">Could not refresh: {controller.loadError}</p>
     {/if}
     {#if controller.notice}
-      <p class="text-xs text-emerald-300" data-testid="sources-notice">
+      <p class="text-xs text-success" data-testid="sources-notice">
         {controller.notice}
       </p>
     {/if}
     {#if controller.actionError && controller.editing === null}
-      <p class="text-xs text-red-300" data-testid="sources-action-error">
+      <p class="text-xs text-danger" data-testid="sources-action-error">
         {controller.actionError}
       </p>
     {/if}
@@ -55,7 +55,7 @@
         <SourceCard {source} {controller} />
       {/if}
     {:else}
-      <p class="text-xs text-zinc-500" data-testid="sources-empty">No sources yet.</p>
+      <p class="text-xs text-fg-3" data-testid="sources-empty">No sources yet.</p>
     {/each}
 
     {#if controller.editing === 'new'}

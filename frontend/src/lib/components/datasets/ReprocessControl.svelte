@@ -97,9 +97,9 @@
     label="Reprocess"
     onclose={close}
     layer="top"
-    panelClass="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5 text-sm shadow-2xl"
+    panelClass="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 text-sm shadow-2xl"
   >
-    <h3 class="text-base font-semibold text-zinc-100">
+    <h3 class="text-base font-semibold text-fg-1">
       {#if f.target.kind === 'image'}
         Reprocess image
       {:else if f.target.kind === 'request'}
@@ -123,14 +123,14 @@
             onchange={(e) =>
               f.toggleScope(id, (e.currentTarget as HTMLInputElement).checked)}
           />
-          <span class="text-zinc-200">{scopeLabel(id)}</span>
+          <span class="text-fg-1">{scopeLabel(id)}</span>
         </label>
       {/each}
     </fieldset>
 
     {#if f.scopes.includes('region')}
       <label class="block text-xs">
-        <span class="mb-0.5 block text-zinc-400">Region mode</span>
+        <span class="mb-0.5 block text-fg-2">Region mode</span>
         <select
           class="select select-sm"
           value={f.regionMode}
@@ -150,7 +150,7 @@
 
     {#if f.embedOptionsEditable}
       <fieldset class="space-y-1 text-xs" data-testid="reprocess-embed-options">
-        <legend class="mb-0.5 text-zinc-400">Embed options</legend>
+        <legend class="mb-0.5 text-fg-2">Embed options</legend>
         <label class="flex items-start gap-2">
           <input
             type="checkbox"
@@ -159,10 +159,10 @@
             onchange={(e) =>
               f.setEmbedOnlyMissing((e.currentTarget as HTMLInputElement).checked)}
           />
-          <span class="text-zinc-200">Only items without a vector</span>
+          <span class="text-fg-1">Only items without a vector</span>
         </label>
         <div class="flex flex-wrap gap-x-3 gap-y-1">
-          <span class="text-zinc-400">Parts</span>
+          <span class="text-fg-2">Parts</span>
           {#each EMBED_PARTS as part (part)}
             <label class="flex items-center gap-1">
               <input
@@ -172,7 +172,7 @@
                 onchange={(e) =>
                   f.toggleEmbedPart(part, (e.currentTarget as HTMLInputElement).checked)}
               />
-              <span class="text-zinc-200">{reprocessLabel(part)}</span>
+              <span class="text-fg-1">{reprocessLabel(part)}</span>
             </label>
           {/each}
         </div>
@@ -188,20 +188,20 @@
       <div class="space-y-1" data-testid="reprocess-result">
         <ReprocessCounts res={f.result} {scopeLabel} />
         {#if f.job}
-          <p class="text-xs text-zinc-300" data-testid="reprocess-job">
+          <p class="text-xs text-fg-2" data-testid="reprocess-job">
             Job <code class="font-mono">{f.job.job_id}</code>:
             {datasetsAvailability.statusLabel(f.job.status)}
             {#if f.job.images_total}
               · {(f.job.images_done ?? 0).toLocaleString()} / {f.job.images_total.toLocaleString()}
               images{#if f.job.images_failed}, {f.job.images_failed.toLocaleString()} failed{/if}
             {/if}
-            {#if f.job.error}<span class="text-red-300"> — {f.job.error}</span>{/if}
+            {#if f.job.error}<span class="text-danger"> — {f.job.error}</span>{/if}
           </p>
         {/if}
       </div>
     {/if}
     {#if f.error}
-      <p class="text-sm text-red-300" data-testid="reprocess-error">{f.error}</p>
+      <p class="text-sm text-danger" data-testid="reprocess-error">{f.error}</p>
     {/if}
 
     <div class="flex justify-end gap-2">

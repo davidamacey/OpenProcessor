@@ -125,11 +125,11 @@
     testid="open-vocab-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-red-300" data-testid="open-vocab-load-error">
+      <p class="text-sm text-danger" data-testid="open-vocab-load-error">
         {ed.loadError}
       </p>
     {:else if !ed.doc || !ed.schema || !by}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {:else}
       {@const d = ed.doc}
       <SegmenterNotice segmenter={ed.segmenter} />
@@ -168,7 +168,7 @@
           <ConfigDescriptionField {ed} />
 
           {#if advancedCount > 0}
-            <label class="flex items-center gap-2 text-xs text-zinc-400">
+            <label class="flex items-center gap-2 text-xs text-fg-2">
               <input
                 type="checkbox"
                 bind:checked={showAdvanced}
@@ -189,7 +189,7 @@
               data-testid="open-vocab-group"
               data-group="set"
             >
-              <h2 class="text-sm font-semibold text-zinc-200">Set</h2>
+              <h2 class="text-sm font-semibold text-fg-1">Set</h2>
               {#each visible(by.set) as r (r.field)}
                 <ProfileFieldEditor
                   field={cell(r)}
@@ -224,7 +224,7 @@
               data-testid="open-vocab-group"
               data-group="gating"
             >
-              <h2 class="text-sm font-semibold text-zinc-200">Gating</h2>
+              <h2 class="text-sm font-semibold text-fg-1">Gating</h2>
               {#each visible( [...by.gating, ...by.tier3_hit_rate] ) as r (r.scope + r.field)}
                 <ProfileFieldEditor
                   field={cell(r)}

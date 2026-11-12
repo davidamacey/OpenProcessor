@@ -27,36 +27,36 @@
   <div class="flex flex-wrap items-center gap-2">
     <span
       class="rounded border px-1.5 py-0.5 {probe.ok
-        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-        : 'border-red-500/40 bg-red-500/10 text-red-200'}"
+        ? 'border-success/40 bg-success/10 text-success'
+        : 'border-danger/40 bg-danger/10 text-danger'}"
       data-testid="vlm-probe-ok">{probe.ok ? 'probe ok' : 'probe failed'}</span
     >
-    <span class="text-zinc-500" title={probe.probed_at}
+    <span class="text-fg-3" title={probe.probed_at}
       >probed {formatTimestamp(probe.probed_at)}</span
     >
   </div>
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5">
-    <dt class="text-zinc-500">Latency</dt>
+    <dt class="text-fg-3">Latency</dt>
     <dd class="font-mono">{formatLatencyMs(probe.latency_ms)}</dd>
-    <dt class="text-zinc-500">Models listed</dt>
+    <dt class="text-fg-3">Models listed</dt>
     <dd class="break-all font-mono">
       {(probe.models_listed ?? []).length > 0 ? probe.models_listed!.join(', ') : '—'}
     </dd>
-    <dt class="text-zinc-500">Configured model listed</dt>
+    <dt class="text-fg-3">Configured model listed</dt>
     <dd class="font-mono">{yn(probe.model_listed)}</dd>
-    <dt class="text-zinc-500">Root</dt>
+    <dt class="text-fg-3">Root</dt>
     <dd class="break-all font-mono">{probe.root ?? '—'}</dd>
-    <dt class="text-zinc-500">Max model length</dt>
+    <dt class="text-fg-3">Max model length</dt>
     <dd class="font-mono">{num(probe.max_model_len)}</dd>
-    <dt class="text-zinc-500">Reads images</dt>
+    <dt class="text-fg-3">Reads images</dt>
     <dd class="font-mono">{yn(probe.vision_ok)}</dd>
-    <dt class="text-zinc-500">JSON mode</dt>
+    <dt class="text-fg-3">JSON mode</dt>
     <dd class="font-mono">{yn(probe.json_mode_supported)}</dd>
-    <dt class="text-zinc-500">Reasoning channel</dt>
+    <dt class="text-fg-3">Reasoning channel</dt>
     <dd class="font-mono">{yn(probe.reasoning_channel)}</dd>
-    <dt class="text-zinc-500">Tokens per image</dt>
+    <dt class="text-fg-3">Tokens per image</dt>
     <dd class="font-mono">{num(probe.image_tokens)}</dd>
-    <dt class="text-zinc-500">Max images per call ok</dt>
+    <dt class="text-fg-3">Max images per call ok</dt>
     <dd class="font-mono">{yn(probe.max_images_ok)}</dd>
   </dl>
   <ConfigIssueList issues={probe.issues ?? []} showField />

@@ -28,14 +28,14 @@
   const chip = (on: boolean): string =>
     `btn-sm border text-xs transition-colors ${
       on
-        ? 'border-blue-500/60 bg-blue-500/20 text-blue-100'
-        : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'
+        ? 'border-accent/60 bg-accent/20 text-accent'
+        : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'
     }`;
 </script>
 
 {#if view.facetsError}
   <p
-    class="border-b border-zinc-800 px-4 py-1.5 text-xs text-amber-300"
+    class="border-b border-line px-4 py-1.5 text-xs text-warn"
     role="alert"
     data-testid="cluster-facets-error"
   >
@@ -44,16 +44,16 @@
 {:else if facets}
   <details
     bind:open
-    class="border-b border-zinc-800 px-4 py-2 text-xs"
+    class="border-b border-line px-4 py-2 text-xs"
     data-testid="cluster-facets"
   >
-    <summary class="cursor-pointer text-zinc-300">
+    <summary class="cursor-pointer text-fg-2">
       Facets{view.facetFilterActive ? ' (filtered)' : ''}
     </summary>
     <div class="mt-2 flex flex-col gap-1.5" role="group" aria-label="Cluster facets">
       {#if facets.detector_classes.length > 0}
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="w-28 shrink-0 text-zinc-500">Detector class</span>
+          <span class="w-28 shrink-0 text-fg-3">Detector class</span>
           {#each facets.detector_classes as f (f.value)}
             <button
               type="button"
@@ -63,14 +63,14 @@
               onclick={() => view.toggleDetectorClass(f.value)}
             >
               {f.value}
-              <span class="ml-1 font-mono text-zinc-400">{f.count.toLocaleString()}</span>
+              <span class="ml-1 font-mono text-fg-2">{f.count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
       {/if}
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="w-28 shrink-0 text-zinc-500">Validation</span>
+        <span class="w-28 shrink-0 text-fg-3">Validation</span>
         <button
           type="button"
           class={chip(view.facetValidated === true)}
@@ -79,7 +79,7 @@
           onclick={() => view.toggleValidated(true)}
         >
           validated
-          <span class="ml-1 font-mono text-zinc-400"
+          <span class="ml-1 font-mono text-fg-2"
             >{facets.validation.validated.toLocaleString()}</span
           >
         </button>
@@ -91,7 +91,7 @@
           onclick={() => view.toggleValidated(false)}
         >
           not validated
-          <span class="ml-1 font-mono text-zinc-400"
+          <span class="ml-1 font-mono text-fg-2"
             >{facets.validation.unvalidated.toLocaleString()}</span
           >
         </button>
@@ -99,7 +99,7 @@
 
       {#if Object.keys(facets.review_tabs).length > 0}
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="w-28 shrink-0 text-zinc-500">Review</span>
+          <span class="w-28 shrink-0 text-fg-3">Review</span>
           {#each Object.entries(facets.review_tabs) as [tab, count] (tab)}
             <button
               type="button"
@@ -110,7 +110,7 @@
               onclick={() => view.toggleReviewTab(tab)}
             >
               {reviewTabsVocabularyStore.labelFor(tab, tab)}
-              <span class="ml-1 font-mono text-zinc-400">{count.toLocaleString()}</span>
+              <span class="ml-1 font-mono text-fg-2">{count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
@@ -118,7 +118,7 @@
 
       {#if facets.detector_confidence.length > 0}
         <div class="flex flex-wrap items-center gap-1.5">
-          <span class="w-28 shrink-0 text-zinc-500">Detector confidence</span>
+          <span class="w-28 shrink-0 text-fg-3">Detector confidence</span>
           {#each facets.detector_confidence as b (b.min)}
             <button
               type="button"
@@ -128,17 +128,17 @@
               onclick={() => view.toggleBand(b)}
             >
               {binLabel(b)}
-              <span class="ml-1 font-mono text-zinc-400">{b.count.toLocaleString()}</span>
+              <span class="ml-1 font-mono text-fg-2">{b.count.toLocaleString()}</span>
             </button>
           {/each}
-          <span class="text-zinc-500" data-testid="facet-confidence-missing">
+          <span class="text-fg-3" data-testid="facet-confidence-missing">
             none: {facets.detector_confidence_missing.toLocaleString()}
           </span>
         </div>
       {/if}
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <label class="flex items-center gap-2 text-zinc-500">
+        <label class="flex items-center gap-2 text-fg-3">
           <span class="w-28 shrink-0">Sort by</span>
           <select
             class="select-sm"

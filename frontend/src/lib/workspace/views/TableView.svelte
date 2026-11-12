@@ -169,14 +169,14 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="table-view">
   <h1 class="sr-only">Table</h1>
   <BulkBar {ws} onapplied={() => void ctl.reload()} />
-  <div class="flex items-center gap-3 px-4 pt-3 text-xs text-zinc-300">
+  <div class="flex items-center gap-3 px-4 pt-3 text-xs text-fg-2">
     <div role="group" aria-label="Rows" class="flex gap-1">
       {#each ['detections', 'images'] as const as kind (kind)}
         <button
           type="button"
           class="rounded border px-2 py-1 {ctl.rowsKind === kind
-            ? 'border-sky-500 text-zinc-100'
-            : 'border-zinc-700'}"
+            ? 'border-info text-fg-1'
+            : 'border-line-strong'}"
           aria-pressed={ctl.rowsKind === kind}
           data-testid="table-rows-{kind}"
           onclick={() => void ctl.setRows(kind)}
@@ -185,7 +185,7 @@
       {/each}
     </div>
     <p data-testid="table-total">
-      <strong class="text-zinc-100">{ctl.total.toLocaleString()}</strong> rows
+      <strong class="text-fg-1">{ctl.total.toLocaleString()}</strong> rows
       <HiddenItemsNote hidden={ctl.hidden} />
     </p>
     <div class="ml-auto">

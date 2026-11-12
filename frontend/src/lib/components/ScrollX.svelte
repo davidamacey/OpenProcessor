@@ -44,11 +44,11 @@
   </div>
   {#if moreRight}
     <div
-      class="pointer-events-none absolute inset-y-0 right-0 w-1 rounded-r-lg bg-blue-500/50"
+      class="pointer-events-none absolute inset-y-0 right-0 w-1 rounded-r-lg bg-accent/50"
       aria-hidden="true"
     ></div>
     <span
-      class="pointer-events-none absolute right-1 top-1 rounded bg-zinc-900/90 px-1.5 py-0.5 text-[10px] text-zinc-300"
+      class="pointer-events-none absolute right-1 top-1 rounded bg-surface-1/90 px-1.5 py-0.5 text-caption text-fg-2"
       data-testid="scroll-hint">scroll →</span
     >
   {/if}

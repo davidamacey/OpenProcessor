@@ -24,10 +24,10 @@
 {#if copy}
   <span
     class="shrink-0 rounded-sm border px-1 py-0.5 {compact
-      ? 'text-[10px]'
+      ? 'text-caption'
       : 'text-xs'} {copy.warning
-      ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
-      : 'border-zinc-600 bg-zinc-800 text-zinc-300'}"
+      ? 'border-warn/40 bg-warn/15 text-warn'
+      : 'border-line-strong bg-surface-2 text-fg-2'}"
     title={`${space ? `${space}: ` : ''}${copy.label}. ${copy.tooltip}`}
     data-testid="embedding-state-badge"
     data-embedding-state={embeddingState}

@@ -4,13 +4,13 @@
   const kindClass = (k: 'info' | 'success' | 'warn' | 'error'): string => {
     switch (k) {
       case 'success':
-        return 'border-green-500/40 bg-green-500/10 text-green-200';
+        return 'border-success/40 bg-success/10 text-success';
       case 'warn':
-        return 'border-orange-500/40 bg-orange-500/10 text-orange-100';
+        return 'border-warn/40 bg-warn/10 text-warn';
       case 'error':
-        return 'border-red-500/40 bg-red-500/10 text-red-100';
+        return 'border-danger/40 bg-danger/10 text-danger';
       default:
-        return 'border-blue-500/40 bg-blue-500/10 text-blue-100';
+        return 'border-accent/40 bg-accent/10 text-accent';
     }
   };
 </script>
@@ -30,7 +30,7 @@
         <span class="grow whitespace-pre-wrap break-words">{t.text}</span>
         <button
           type="button"
-          class="text-zinc-300 hover:text-white"
+          class="text-fg-2 hover:text-white"
           aria-label="Dismiss"
           onclick={() => toastStore.dismiss(t.id)}
         >

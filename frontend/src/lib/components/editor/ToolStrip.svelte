@@ -45,7 +45,7 @@
   }: Props = $props();
 
   const BTN =
-    'flex h-9 min-w-9 items-center justify-center rounded-md border border-zinc-700 px-2 text-sm text-zinc-200 hover:bg-zinc-800 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none disabled:opacity-40 aria-pressed:border-sky-400 aria-pressed:bg-sky-500/20';
+    'flex h-9 min-w-9 items-center justify-center rounded-md border border-line-strong px-2 text-sm text-fg-1 hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none disabled:opacity-40 aria-pressed:border-info aria-pressed:bg-info/20';
 
   function hint(id: string, text: string): string {
     const key = keymapStore.glyph(id);
@@ -104,7 +104,7 @@
     tool === 'draw' && sticky,
   )}
   {@render button('editor.tool_pan', 'Pan', '✋', () => ontool('pan'), tool === 'pan')}
-  <span class="mx-1 hidden h-px bg-zinc-800 lg:block" role="separator"></span>
+  <span class="mx-1 hidden h-px bg-surface-2 lg:block" role="separator"></span>
   {@render button('editor.zoom_in', 'Zoom in', '+', onzoomin)}
   {@render button('editor.zoom_out', 'Zoom out', '−', onzoomout)}
   {@render button('editor.zoom_fit', 'Fit the picture', 'Fit', onfit)}
@@ -114,7 +114,7 @@
     `${Math.round(zoomPercent)}%`,
     onactual,
   )}
-  <span class="mx-1 hidden h-px bg-zinc-800 lg:block" role="separator"></span>
+  <span class="mx-1 hidden h-px bg-surface-2 lg:block" role="separator"></span>
   {@render button(
     'editor.undo',
     'Undo',

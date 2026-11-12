@@ -36,7 +36,7 @@
 </script>
 
 <div class="space-y-1" data-testid="class-name-picker">
-  <p class="text-xs text-zinc-400">{label}</p>
+  <p class="text-xs text-fg-2">{label}</p>
   {#if options.length > 0}
     <div class="flex max-h-32 flex-wrap gap-x-3 gap-y-1 overflow-y-auto text-xs">
       {#each options as name, i (i)}
@@ -46,7 +46,7 @@
             checked={value.includes(name)}
             onchange={(e) => toggle(name, e.currentTarget.checked)}
           />
-          <span class="text-zinc-200">{name}</span>
+          <span class="text-fg-1">{name}</span>
         </label>
       {/each}
     </div>

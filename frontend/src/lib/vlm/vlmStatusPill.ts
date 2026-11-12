@@ -9,7 +9,7 @@
 import { modelStatusPill, type StatusPill } from '$lib/modelStatus';
 import type { ModelInfo } from '$lib/types_models';
 
-const NEUTRAL = 'bg-zinc-700/40 text-zinc-400 border-zinc-600';
+const NEUTRAL = 'bg-surface-3/40 text-fg-2 border-line-strong';
 const TRITON_STATUSES = new Set([
   'ready',
   'not_ready',

@@ -23,36 +23,36 @@
 
 <section class="surface space-y-2 p-4" data-testid="policy-preview">
   <h2 class="text-sm font-semibold">Cost preview</h2>
-  <p class="text-xs text-zinc-500">
+  <p class="text-xs text-fg-3">
     For detections already stored; the policy changes only future ingests.
   </p>
   {#if editor.previewError}
-    <p class="text-xs text-red-300" data-testid="policy-preview-error">
+    <p class="text-xs text-danger" data-testid="policy-preview-error">
       {editor.previewError}
     </p>
   {:else if p}
     {#if editor.previewStale}
-      <p class="text-xs text-amber-300" data-testid="policy-preview-stale">
+      <p class="text-xs text-warn" data-testid="policy-preview-stale">
         Recomputing for the edited policy; the figures below are for the previous one.
       </p>
     {/if}
     <p
-      class="text-sm text-zinc-200 {editor.previewStale ? 'opacity-40' : ''}"
+      class="text-sm text-fg-1 {editor.previewStale ? 'opacity-40' : ''}"
       data-testid="policy-preview-summary"
     >
       {summary}
     </p>
-    <p class="text-xs text-zinc-400" data-testid="policy-preview-labeled">
+    <p class="text-xs text-fg-2" data-testid="policy-preview-labeled">
       {labeledText}
     </p>
     {#if p.truncated}
-      <p class="text-xs text-zinc-400" data-testid="policy-preview-truncated">
+      <p class="text-xs text-fg-2" data-testid="policy-preview-truncated">
         Estimated from {p.scanned} detections.
       </p>
     {/if}
     {#if p.by_class.length > 0}
       <table class="w-full text-left text-xs">
-        <thead class="text-zinc-500">
+        <thead class="text-fg-3">
           <tr>
             <th class="pr-3">class</th>
             <th class="pr-3">would embed</th>
@@ -61,16 +61,16 @@
         </thead>
         <tbody>
           {#each p.by_class as c (c.name)}
-            <tr class="border-t border-zinc-900">
-              <td class="pr-3 text-zinc-200">{c.name}</td>
-              <td class="pr-3 text-zinc-300">{c.would_embed}</td>
-              <td class="text-zinc-400">{c.would_not_embed}</td>
+            <tr class="border-t border-line">
+              <td class="pr-3 text-fg-1">{c.name}</td>
+              <td class="pr-3 text-fg-2">{c.would_embed}</td>
+              <td class="text-fg-2">{c.would_not_embed}</td>
             </tr>
           {/each}
         </tbody>
       </table>
     {/if}
   {:else if editor.previewing}
-    <p class="text-xs text-zinc-500">Estimating...</p>
+    <p class="text-xs text-fg-3">Estimating...</p>
   {/if}
 </section>

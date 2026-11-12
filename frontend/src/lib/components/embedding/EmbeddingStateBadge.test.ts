@@ -28,7 +28,7 @@ describe('EmbeddingStateBadge', () => {
     const el = badge('failed')!;
     expect(el.textContent).toBe('No vector: encoder failed');
     expect(el.getAttribute('title')).toContain('run Embed to retry');
-    expect(el.className).toContain('amber');
+    expect(el.className).toContain('warn');
   });
 
   it('has a short compact form for card chips, the full wording in the tooltip', () => {
@@ -47,7 +47,7 @@ describe('EmbeddingStateBadge', () => {
   it('names an item the policy did not select, in a neutral tone', () => {
     const el = badge('not_selected')!;
     expect(el.textContent).toBe('Not embedded');
-    expect(el.className).not.toContain('amber');
+    expect(el.className).not.toContain('warn');
   });
 
   it('renders nothing for embedded or an unrecorded state', () => {

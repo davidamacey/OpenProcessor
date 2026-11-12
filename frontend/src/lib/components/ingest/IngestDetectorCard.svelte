@@ -27,39 +27,39 @@
 </script>
 
 <section
-  class="space-y-2 rounded border border-zinc-800 bg-zinc-900/40 p-3 text-sm"
+  class="space-y-2 rounded border border-line bg-surface-1/40 p-3 text-sm"
   data-testid="ingest-detector-card"
 >
-  <h2 class="font-medium text-zinc-200">Detector</h2>
+  <h2 class="font-medium text-fg-1">Detector</h2>
   {#if detector === null}
-    <p class="text-zinc-400">No detector reported.</p>
+    <p class="text-fg-2">No detector reported.</p>
   {:else}
     <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-      <dt class="text-zinc-500">Model</dt>
-      <dd class="font-mono text-zinc-200">
+      <dt class="text-fg-3">Model</dt>
+      <dd class="font-mono text-fg-1">
         {detector.model} (version {detector.version})
       </dd>
-      <dt class="text-zinc-500">Input size</dt>
-      <dd class="text-zinc-200">{detector.input_size}</dd>
-      <dt class="text-zinc-500">Assigns a class</dt>
-      <dd class="text-zinc-200" data-testid="detector-assigns-class">
+      <dt class="text-fg-3">Input size</dt>
+      <dd class="text-fg-1">{detector.input_size}</dd>
+      <dt class="text-fg-3">Assigns a class</dt>
+      <dd class="text-fg-1" data-testid="detector-assigns-class">
         {detector.assigns_class ? 'yes' : 'no'}
       </dd>
-      <dt class="text-zinc-500">Confidence floor applies</dt>
-      <dd class="text-zinc-200">{detector.confidence_floor_applies ? 'yes' : 'no'}</dd>
+      <dt class="text-fg-3">Confidence floor applies</dt>
+      <dd class="text-fg-1">{detector.confidence_floor_applies ? 'yes' : 'no'}</dd>
     </dl>
     <details class="text-xs">
-      <summary class="cursor-pointer text-zinc-300">{detector.n_labels} labels</summary>
+      <summary class="cursor-pointer text-fg-2">{detector.n_labels} labels</summary>
       <table class="mt-2 w-full text-left">
-        <thead class="text-zinc-500">
+        <thead class="text-fg-3">
           <tr><th class="pr-3">id</th><th class="pr-3">name</th><th>slug</th></tr>
         </thead>
         <tbody>
           {#each detector.labels as l (l.class_id)}
-            <tr class="border-t border-zinc-900">
-              <td class="pr-3 font-mono text-zinc-400">{l.class_id}</td>
-              <td class="pr-3 text-zinc-200">{l.name}</td>
-              <td class="font-mono text-zinc-400">{l.slug}</td>
+            <tr class="border-t border-line">
+              <td class="pr-3 font-mono text-fg-2">{l.class_id}</td>
+              <td class="pr-3 text-fg-1">{l.name}</td>
+              <td class="font-mono text-fg-2">{l.slug}</td>
             </tr>
           {/each}
         </tbody>
@@ -67,11 +67,11 @@
     </details>
   {/if}
   {#if policy}
-    <p class="text-xs text-zinc-400" data-testid="detector-policy-summary">
+    <p class="text-xs text-fg-2" data-testid="detector-policy-summary">
       Embedding: {policy.embedding?.mode ?? 'all'}{#if detectFacts.length > 0}; detect
         filter: {detectFacts.join(', ')}{/if}.
       <a
-        class="text-blue-300 hover:underline"
+        class="text-accent hover:underline"
         href={resolve(projectHref('/settings/ingest-policy'))}>Edit the ingest policy</a
       >
     </p>

@@ -31,14 +31,14 @@
 >
   <div class="flex min-w-0 flex-col gap-1">
     <h2 class="text-base font-semibold">Ingest policy</h2>
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Which detections an ingest keeps and which of those get a vector.
       {#if mode}
         <span data-testid="ingest-policy-card-mode">Embedding: {mode}.</span>
       {/if}
     </p>
     {#if error}
-      <p class="text-xs text-red-300" data-testid="ingest-policy-card-error">{error}</p>
+      <p class="text-xs text-danger" data-testid="ingest-policy-card-error">{error}</p>
     {/if}
   </div>
   <span class="grow"></span>

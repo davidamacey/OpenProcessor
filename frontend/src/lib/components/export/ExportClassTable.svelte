@@ -47,33 +47,32 @@
   }
 
   function gapClass(gap: number): string {
-    if (gap <= 0) return 'bg-green-500/20 text-green-200 border-green-500/40';
-    if (gap <= 200) return 'bg-orange-500/20 text-orange-200 border-orange-500/40';
-    return 'bg-red-500/20 text-red-200 border-red-500/40';
+    if (gap <= 0) return 'bg-success/20 text-success border-success/40';
+    if (gap <= 200) return 'bg-warn/20 text-warn border-warn/40';
+    return 'bg-danger/20 text-danger border-danger/40';
   }
 
   function testBadge(deficient: boolean): string {
     return deficient
-      ? 'bg-red-500/20 text-red-200 border-red-500/40'
-      : 'bg-zinc-800 text-zinc-300 border-zinc-700';
+      ? 'bg-danger/20 text-danger border-danger/40'
+      : 'bg-surface-2 text-fg-2 border-line-strong';
   }
 
   // m16 (2026-09-24 interactive pass): the served per-class `adequacy`
   // tier wasn't rendered anywhere on this page. Just a display of the
   // server's own value — no client-side threshold logic.
   function adequacyClass(adequacy: string | null): string {
-    if (adequacy === 'block') return 'bg-red-500/20 text-red-200 border-red-500/40';
-    if (adequacy === 'warn')
-      return 'bg-orange-500/20 text-orange-200 border-orange-500/40';
-    if (adequacy === 'ok') return 'bg-green-500/20 text-green-200 border-green-500/40';
-    return 'bg-zinc-800 text-zinc-400 border-zinc-700';
+    if (adequacy === 'block') return 'bg-danger/20 text-danger border-danger/40';
+    if (adequacy === 'warn') return 'bg-warn/20 text-warn border-warn/40';
+    if (adequacy === 'ok') return 'bg-success/20 text-success border-success/40';
+    return 'bg-surface-2 text-fg-2 border-line-strong';
   }
 </script>
 
 {#snippet header(field: string, label: string, align: string, title?: string)}
   <th
     class="px-3 py-2 font-medium {align} {sortable(field)
-      ? 'cursor-pointer hover:text-zinc-100'
+      ? 'cursor-pointer hover:text-fg-1'
       : ''}"
     aria-sort={ariaSort(field)}
     {title}
@@ -84,19 +83,19 @@
 {/snippet}
 
 {#snippet classRow(row: ExportRow)}
-  <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
-    <td class="px-3 py-1.5 text-zinc-200">{row.class_name}</td>
-    <td class="px-3 py-1.5 font-mono text-xs text-zinc-500">{row.class_id}</td>
-    <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+  <tr class="border-b border-line hover:bg-surface-1/40">
+    <td class="px-3 py-1.5 text-fg-1">{row.class_name}</td>
+    <td class="px-3 py-1.5 font-mono text-xs text-fg-3">{row.class_id}</td>
+    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
       {row.total.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-zinc-400">
+    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
       {row.validated.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-zinc-200">
+    <td class="px-3 py-1.5 text-right font-mono text-fg-1">
       {row.trainable.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-zinc-300">
+    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
       {row.aug_target.toLocaleString()}
     </td>
     <td class="px-3 py-1.5 text-right">
@@ -120,7 +119,7 @@
     </td>
     <td class="px-3 py-1.5 text-right">
       {#if row.adequacy == null}
-        <span class="font-mono text-xs text-zinc-500">—</span>
+        <span class="font-mono text-xs text-fg-3">—</span>
       {:else}
         <span
           class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
@@ -137,17 +136,17 @@
 <!-- Dataset table -->
 <section class="surface max-h-[70vh] shrink-0 overflow-auto">
   {#if loading && rows.length === 0}
-    <div class="p-6 text-sm text-zinc-500">Loading dataset stats…</div>
+    <div class="p-6 text-sm text-fg-3">Loading dataset stats…</div>
   {:else if error}
-    <div class="p-6 text-sm text-red-300">{error}</div>
+    <div class="p-6 text-sm text-danger">{error}</div>
   {:else if rows.length === 0}
-    <div class="p-6 text-sm text-zinc-500">
+    <div class="p-6 text-sm text-fg-3">
       No classes in this project yet. Add them on the Classes page.
     </div>
   {:else}
     <table class="w-full text-sm">
       <thead
-        class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
+        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-xs uppercase text-fg-2"
       >
         <tr>
           {@render header('class_name', 'Class', '')}
@@ -193,11 +192,11 @@
           {@render classRow(row)}
         {/each}
         {#if emptyRows.length > 0}
-          <tr class="border-b border-zinc-900">
+          <tr class="border-b border-line">
             <td colspan="9" class="px-3 py-1.5">
               <button
                 type="button"
-                class="text-xs text-zinc-400 hover:text-zinc-200"
+                class="text-xs text-fg-2 hover:text-fg-1"
                 aria-expanded={showEmptyClasses}
                 data-testid="export-empty-classes-toggle"
                 onclick={() => (showEmptyClasses = !showEmptyClasses)}

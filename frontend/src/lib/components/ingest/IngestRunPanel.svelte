@@ -140,11 +140,11 @@
 
 <div class="space-y-3">
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs text-zinc-400">
+    <label class="text-xs text-fg-2">
       Source tag
       <input class="input input-sm block" bind:value={source} disabled={isRunning} />
     </label>
-    <label class="flex items-center gap-1.5 text-xs text-zinc-400">
+    <label class="flex items-center gap-1.5 text-xs text-fg-2">
       <input type="checkbox" bind:checked={skipLookup} disabled={isRunning} />
       Skip the already-indexed check
     </label>
@@ -158,8 +158,8 @@
   </div>
 
   {#if advancedOpen}
-    <div class="flex flex-wrap items-end gap-3 rounded border border-zinc-800 p-3">
-      <label class="text-xs text-zinc-400">
+    <div class="flex flex-wrap items-end gap-3 rounded border border-line p-3">
+      <label class="text-xs text-fg-2">
         Identifier prefix
         <input
           class="input input-sm block"
@@ -171,7 +171,7 @@
           }}
         />
       </label>
-      <label class="text-xs text-zinc-400">
+      <label class="text-xs text-fg-2">
         Concurrency
         <input
           class="input input-sm block w-16"
@@ -186,7 +186,7 @@
   {/if}
 
   {#if files.length >= LARGE_SELECTION_HINT}
-    <p class="text-xs text-amber-300">
+    <p class="text-xs text-warn">
       Large selection ({files.length} files) — the command-line uploader (<code
         >scripts/curation/ingest_upload.py</code
       > on the backend) is faster for very large archives.
@@ -222,25 +222,25 @@
   </div>
 
   {#if run.pauseReason}
-    <p class="text-xs text-amber-300">Paused — {run.pauseReason}</p>
+    <p class="text-xs text-warn">Paused — {run.pauseReason}</p>
   {/if}
   {#if run.errorReason}
-    <p class="text-xs text-red-300">{run.errorReason}</p>
+    <p class="text-xs text-danger">{run.errorReason}</p>
   {/if}
 
   {#if run.totals.queued === 0 && run.totals.skipped_known > 0 && run.state === 'done'}
     <!-- Every selected file was already indexed, so nothing was
          sent. Say so instead of rendering nothing. -->
-    <p class="text-xs text-zinc-300" data-testid="ingest-all-skipped">
+    <p class="text-xs text-fg-2" data-testid="ingest-all-skipped">
       Nothing uploaded: {run.totals.skipped_known} already indexed (the backend already has
       these files). Tick "Skip the already-indexed check" to send them anyway.
     </p>
   {/if}
 
   {#if run.totals.queued > 0 || run.results.size > 0}
-    <div class="h-2 w-full overflow-hidden rounded bg-zinc-800">
+    <div class="h-2 w-full overflow-hidden rounded bg-surface-2">
       <div
-        class="h-full bg-blue-600 transition-[width]"
+        class="h-full bg-accent-fill transition-[width]"
         style="width: {progressPct}%"
       ></div>
     </div>
@@ -259,7 +259,7 @@
       >
       {#if run.totals.secondary_detector_failures > 0}
         <span
-          class="chip border-amber-700 text-amber-200"
+          class="chip border-warn-line text-warn"
           title="These images ingested, but the secondary detector failed on them (primary-detector crops only). See the Ingested tab."
           data-testid="ingest-secondary-failures"
           >secondary detector failed {run.totals.secondary_detector_failures}</span
@@ -268,12 +268,12 @@
     </div>
 
     <div>
-      <div class="flex gap-1 border-b border-zinc-800 text-xs">
+      <div class="flex gap-1 border-b border-line text-xs">
         {#each TABS as t (t.kind)}
           <button
             class="px-2 py-1 {activeTab === t.kind
-              ? 'border-b-2 border-blue-500 text-white'
-              : 'text-zinc-400'}"
+              ? 'border-b-2 border-accent text-white'
+              : 'text-fg-2'}"
             type="button"
             onclick={() => {
               activeTab = t.kind;
@@ -291,9 +291,9 @@
 
       {#if activeTab === 'failed' && run.results.errorKindCounts().length > 0}
         <!-- BA-7: group/filter Failed by the served error_kind. -->
-        <div class="flex flex-wrap gap-1 border-b border-zinc-800 py-2 text-xs">
+        <div class="flex flex-wrap gap-1 border-b border-line py-2 text-xs">
           <button
-            class="chip {errorKindFilter === null ? 'bg-blue-900 text-blue-100' : ''}"
+            class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent' : ''}"
             type="button"
             onclick={() => (errorKindFilter = null)}
           >
@@ -301,7 +301,7 @@
           </button>
           {#each run.results.errorKindCounts() as [kind, count] (kind)}
             <button
-              class="chip {errorKindFilter === kind ? 'bg-blue-900 text-blue-100' : ''}"
+              class="chip {errorKindFilter === kind ? 'bg-accent-soft text-accent' : ''}"
               type="button"
               onclick={() => (errorKindFilter = kind)}
             >
@@ -312,10 +312,10 @@
       {/if}
 
       {#if activeTab === 'ingested' && run.results.countNotEmbedded() > 0}
-        <div class="flex gap-1 border-b border-zinc-800 py-2 text-xs">
+        <div class="flex gap-1 border-b border-line py-2 text-xs">
           <button
-            class="chip border-amber-700 text-amber-200 {notEmbeddedOnly
-              ? 'bg-amber-950'
+            class="chip border-warn-line text-warn {notEmbeddedOnly
+              ? 'bg-warn-soft'
               : ''}"
             type="button"
             data-testid="ingest-not-embedded-chip"
@@ -327,23 +327,23 @@
       {/if}
       <ul class="max-h-64 overflow-y-auto text-xs">
         {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE, activeTab === 'failed' ? (errorKindFilter ?? undefined) : undefined, activeTab === 'ingested' && notEmbeddedOnly) as [id, r] (id)}
-          <li class="border-b border-zinc-900 py-1 font-mono">
+          <li class="border-b border-line py-1 font-mono">
             {r.identifier}
             {#if r.error_kind}
-              <span class="text-zinc-500"> [{r.error_kind}]</span>
+              <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}
             {#if r.error}
-              <span class="text-red-300"> — {r.error}</span>
+              <span class="text-danger"> — {r.error}</span>
             {/if}
             {#if r.n_embedded != null || r.n_not_embedded}
-              <span class="text-zinc-500">
+              <span class="text-fg-3">
                 — embedded {r.n_embedded ?? 0} / not embedded {r.n_not_embedded ??
                   0}{#if r.n_embed_failed}
                   ({r.n_embed_failed} encoder failed){/if}</span
               >
             {/if}
             {#if r.secondary_detector_error}
-              <span class="text-amber-300">
+              <span class="text-warn">
                 — secondary detector: {r.secondary_detector_error}</span
               >
             {/if}

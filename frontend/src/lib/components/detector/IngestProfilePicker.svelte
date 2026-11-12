@@ -49,18 +49,18 @@
 >
   <h2 class="text-sm font-semibold" tabindex="-1" bind:this={heading}>Ingest profiles</h2>
   {#if ctl.loadError}
-    <p class="text-xs text-red-300" role="alert" data-testid="ingest-profiles-error">
+    <p class="text-xs text-danger" role="alert" data-testid="ingest-profiles-error">
       {ctl.loadError}
     </p>
   {:else if ctl.list === null}
-    <p class="text-xs text-zinc-400">Loading ingest profiles.</p>
+    <p class="text-xs text-fg-2">Loading ingest profiles.</p>
   {:else if ctl.list.profiles.length === 0}
-    <p class="text-xs text-zinc-400" data-testid="ingest-profiles-empty">
+    <p class="text-xs text-fg-2" data-testid="ingest-profiles-empty">
       No ingest profiles are stored for this project.
     </p>
   {:else}
     <ul
-      class="divide-y divide-zinc-800"
+      class="divide-y divide-line"
       data-testid="ingest-profile-list"
       aria-busy={ctl.activating !== null || ctl.loading}
     >
@@ -72,17 +72,17 @@
           data-name={p.name}
           data-active={p.active}
         >
-          <span class="font-mono text-zinc-100">{p.name}</span>
-          {#if p.revision !== null}<span class="text-zinc-500">r{p.revision}</span>{/if}
-          <span class="text-zinc-400">
-            detector <span class="font-mono text-zinc-200">{p.primary_model}</span>
+          <span class="font-mono text-fg-1">{p.name}</span>
+          {#if p.revision !== null}<span class="text-fg-3">r{p.revision}</span>{/if}
+          <span class="text-fg-2">
+            detector <span class="font-mono text-fg-1">{p.primary_model}</span>
             {#if p.secondary_model}
-              + <span class="font-mono text-zinc-200">{p.secondary_model}</span>{/if}
+              + <span class="font-mono text-fg-1">{p.secondary_model}</span>{/if}
           </span>
           <span class="grow"></span>
           {#if p.active}
             <span
-              class="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-200"
+              class="rounded border border-success/40 bg-success/10 px-2 py-0.5 text-success"
               data-testid="ingest-profile-active-chip">Active</span
             >
           {:else}
@@ -105,7 +105,7 @@
 
   {#if refusal}
     <div
-      class="space-y-2 rounded border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200"
+      class="space-y-2 rounded border border-danger/40 bg-danger/10 p-3 text-xs text-danger"
       data-testid="ingest-profile-refusal"
       role="alert"
       tabindex="-1"
@@ -136,7 +136,7 @@
 
   {#if ctl.followUpError}
     <p
-      class="text-xs text-red-300"
+      class="text-xs text-danger"
       role="alert"
       data-testid="ingest-profile-followup-error"
     >
@@ -148,7 +148,7 @@
   <div role="status" data-testid="ingest-profile-status">
     {#if !refusal && ctl.lastValidation && ctl.lastValidation.warnings.length > 0}
       <div class="space-y-1 text-xs" data-testid="ingest-profile-warnings">
-        <p class="text-amber-200">Activated, with warnings.</p>
+        <p class="text-warn">Activated, with warnings.</p>
         <ConfigIssueList issues={ctl.lastValidation.warnings} showField />
       </div>
     {/if}

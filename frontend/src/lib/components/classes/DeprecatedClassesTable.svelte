@@ -21,7 +21,7 @@
   <section class="mt-4">
     <button
       type="button"
-      class="flex items-center gap-2 text-xs text-zinc-400 hover:text-zinc-200"
+      class="flex items-center gap-2 text-xs text-fg-2 hover:text-fg-1"
       onclick={() => (showDeprecated = !showDeprecated)}
     >
       <span aria-hidden="true">{showDeprecated ? '▼' : '▶'}</span>
@@ -30,9 +30,7 @@
     {#if showDeprecated}
       <div class="surface mt-2 overflow-auto">
         <table class="w-full text-sm">
-          <thead
-            class="border-b border-zinc-800 text-left text-xs uppercase text-zinc-500"
-          >
+          <thead class="border-b border-line text-left text-xs uppercase text-fg-3">
             <tr>
               <th class="px-3 py-2 font-medium">ID</th>
               <th class="px-3 py-2 font-medium">Name</th>
@@ -42,7 +40,7 @@
           </thead>
           <tbody>
             {#each deprecatedRows as cls (cls.id)}
-              <tr class="border-b border-zinc-900 text-zinc-500">
+              <tr class="border-b border-line text-fg-3">
                 <td class="px-3 py-1.5 font-mono text-xs">{cls.id}</td>
                 <td class="px-3 py-1.5 line-through">{cls.name}</td>
                 <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
@@ -50,10 +48,7 @@
                   {#if cls.merged_into != null}
                     <!-- 51b05d7: a merged class can't be restored (its
                          crops live on the target); say where they went. -->
-                    <span
-                      class="text-xs text-zinc-500"
-                      data-testid="merged-into-{cls.id}"
-                    >
+                    <span class="text-xs text-fg-3" data-testid="merged-into-{cls.id}">
                       merged into {classesStore.byId(cls.merged_into)?.name ??
                         `#${cls.merged_into}`}
                     </span>

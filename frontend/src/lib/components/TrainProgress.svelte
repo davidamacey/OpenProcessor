@@ -35,30 +35,30 @@
     switch (s) {
       case 'running':
       case 'starting':
-        return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
+        return 'bg-accent/20 text-accent border-accent/40';
       case 'exporting':
-        return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
+        return 'bg-holdout/20 text-holdout border-holdout/40';
       case 'finished':
-        return 'bg-green-500/20 text-green-200 border-green-500/40';
+        return 'bg-success/20 text-success border-success/40';
       case 'failed':
-        return 'bg-red-500/20 text-red-200 border-red-500/40';
+        return 'bg-danger/20 text-danger border-danger/40';
       case 'cancelled':
       case 'skipped':
-        return 'bg-zinc-700 text-zinc-300 border-zinc-600';
+        return 'bg-surface-3 text-fg-2 border-line-strong';
       case 'lost':
-        return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+        return 'bg-warn/20 text-warn border-warn/40';
       case 'queued':
       default:
-        return 'bg-zinc-800 text-zinc-300 border-zinc-700';
+        return 'bg-surface-2 text-fg-2 border-line-strong';
     }
   }
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
+<section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
     <h2 class="font-mono text-sm text-white">{status.job_id}</h2>
     <span
-      class="rounded-sm border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide {statePillClass(
+      class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {statePillClass(
         status.state,
       )}"
     >
@@ -91,41 +91,39 @@
 
   <div class="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
     <div>
-      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">Epoch</dt>
-      <dd class="font-mono text-zinc-100">
+      <dt class="text-caption uppercase tracking-wide text-fg-3">Epoch</dt>
+      <dd class="font-mono text-fg-1">
         {cur} / {tot || '—'}
         {#if status.epoch_time_s}
-          <span class="text-zinc-500">· {status.epoch_time_s.toFixed(1)}s/ep</span>
+          <span class="text-fg-3">· {status.epoch_time_s.toFixed(1)}s/ep</span>
         {/if}
       </dd>
     </div>
     <div>
-      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">ETA</dt>
-      <dd class="font-mono text-zinc-100">{formatDuration(etaSec)}</dd>
+      <dt class="text-caption uppercase tracking-wide text-fg-3">ETA</dt>
+      <dd class="font-mono text-fg-1">{formatDuration(etaSec)}</dd>
     </div>
     <div>
       <dt
-        class="text-[11px] uppercase tracking-wide text-zinc-500"
+        class="text-caption uppercase tracking-wide text-fg-3"
         title="The last completed training epoch's own validation pass — not the best checkpoint's, which Ultralytics only re-validates once, after training ends"
       >
         Last epoch mAP50{#if lastEpoch?.epoch != null}
-          <span class="normal-case text-zinc-600"> (ep {lastEpoch.epoch})</span>
+          <span class="normal-case text-fg-3"> (ep {lastEpoch.epoch})</span>
         {/if}
       </dt>
-      <dd class="font-mono text-zinc-100">{formatMetric(lastEpoch?.map50)}</dd>
+      <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50)}</dd>
     </div>
     <div>
-      <dt class="text-[11px] uppercase tracking-wide text-zinc-500">
-        Last epoch mAP50-95
-      </dt>
-      <dd class="font-mono text-zinc-100">{formatMetric(lastEpoch?.map50_95)}</dd>
+      <dt class="text-caption uppercase tracking-wide text-fg-3">Last epoch mAP50-95</dt>
+      <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50_95)}</dd>
     </div>
   </div>
 
   {#if tot > 0}
-    <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+    <div class="mb-3 h-2 w-full overflow-hidden rounded-full bg-surface-2">
       <div
-        class="h-full rounded-full bg-blue-500 transition-all"
+        class="h-full rounded-full bg-accent transition-all"
         style="width: {pct}%"
       ></div>
     </div>
@@ -135,13 +133,13 @@
     <div class="flex flex-wrap gap-2">
       {#each status.gpu as g, i (g.index ?? i)}
         <span
-          class="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-300"
+          class="rounded-md border border-line-strong bg-surface-0 px-2 py-1 font-mono text-xs text-fg-2"
           title="GPU {g.index ?? i} utilization / memory"
         >
           GPU {g.index ?? i}
-          <span class="text-zinc-100">{g.util_pct ?? '—'}%</span>
-          <span class="text-zinc-500">·</span>
-          <span class="text-zinc-100">
+          <span class="text-fg-1">{g.util_pct ?? '—'}%</span>
+          <span class="text-fg-3">·</span>
+          <span class="text-fg-1">
             {((g.mem_used_mb ?? 0) / 1024).toFixed(1)} /
             {((g.mem_total_mb ?? 0) / 1024).toFixed(1)} GB
           </span>
@@ -152,7 +150,7 @@
 
   {#if status.error}
     <p
-      class="mt-3 truncate rounded border border-red-500/30 bg-red-500/10 px-2 py-1 font-mono text-[11px] text-red-200"
+      class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger"
       title={status.error}
     >
       {status.error}

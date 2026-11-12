@@ -28,14 +28,14 @@
 </script>
 
 <article
-  class="space-y-2 rounded border border-zinc-800 p-3"
+  class="space-y-2 rounded border border-line p-3"
   data-testid="source-card"
   data-source-id={source.source_id}
 >
   <header class="flex flex-wrap items-baseline justify-between gap-2">
     <div class="min-w-0">
-      <h3 class="text-sm font-semibold text-zinc-100">{source.name}</h3>
-      <p class="font-mono text-xs break-all text-zinc-400">{source.location}</p>
+      <h3 class="text-sm font-semibold text-fg-1">{source.name}</h3>
+      <p class="font-mono text-xs break-all text-fg-2">{source.location}</p>
     </div>
     <span class="chip">{source.backend === 's3' ? 'S3' : 'folder'}</span>
   </header>
@@ -43,16 +43,16 @@
   <div class="flex flex-wrap gap-2 text-xs" data-testid="source-counts">
     <span class="chip">pending {source.counts.pending}</span>
     <span class="chip">ingested {source.counts.done}</span>
-    <span class="chip {source.counts.failed > 0 ? 'border-amber-700 text-amber-200' : ''}"
+    <span class="chip {source.counts.failed > 0 ? 'border-warn-line text-warn' : ''}"
       >retrying {source.counts.failed}</span
     >
-    <span class="chip {source.counts.dead > 0 ? 'border-red-700 text-red-200' : ''}"
+    <span class="chip {source.counts.dead > 0 ? 'border-danger-line text-danger' : ''}"
       >gave up {source.counts.dead}</span
     >
   </div>
 
   {#if source.scan.active}
-    <p class="text-xs text-blue-300" data-testid="source-scan">{scanText(source.scan)}</p>
+    <p class="text-xs text-accent" data-testid="source-scan">{scanText(source.scan)}</p>
   {/if}
 
   <dl
@@ -61,14 +61,14 @@
   >
     {#if triggers.watch?.enabled}
       <div>
-        <dt class="text-zinc-500">Watch every {triggers.watch.interval_s}s</dt>
-        <dd class="text-zinc-200">
+        <dt class="text-fg-3">Watch every {triggers.watch.interval_s}s</dt>
+        <dd class="text-fg-1">
           last {formatWhen(source.watch.last_poll_at)} · next {formatWhen(
             source.watch.next_poll_at,
           )}
         </dd>
         {#if source.watch.error}
-          <dd class="text-red-300" data-testid="source-watch-error">
+          <dd class="text-danger" data-testid="source-watch-error">
             {source.watch.error}
             {#if source.watch.backoff_until}(retry after {formatWhen(
                 source.watch.backoff_until,
@@ -79,10 +79,10 @@
     {/if}
     {#if triggers.schedule?.enabled}
       <div>
-        <dt class="text-zinc-500">
+        <dt class="text-fg-3">
           Schedule <span class="font-mono">{triggers.schedule.cron}</span> UTC
         </dt>
-        <dd class="text-zinc-200">
+        <dd class="text-fg-1">
           last {formatWhen(source.schedule.last_fire_at)} · next {formatWhen(
             source.schedule.next_fire_at,
           )}
@@ -91,11 +91,11 @@
     {/if}
     {#if triggers.webhook_enabled}
       <div class="sm:col-span-2">
-        <dt class="text-zinc-500">Webhook</dt>
-        <dd class="font-mono break-all text-zinc-200" data-testid="source-webhook-path">
+        <dt class="text-fg-3">Webhook</dt>
+        <dd class="font-mono break-all text-fg-1" data-testid="source-webhook-path">
           {source.webhook.path}
         </dd>
-        <dd class="text-zinc-400">
+        <dd class="text-fg-2">
           {source.webhook.received} received · {source.webhook.queued} queued · {source
             .webhook.duplicates} repeated · {source.webhook.ignored} ignored · last {formatWhen(
             source.webhook.last_event_at,
@@ -104,24 +104,24 @@
       </div>
     {/if}
     {#if noTriggers}
-      <div class="text-zinc-500">No triggers: runs only when you start it.</div>
+      <div class="text-fg-3">No triggers: runs only when you start it.</div>
     {/if}
   </dl>
 
   {#if source.last_run}
-    <p class="text-xs text-zinc-300" data-testid="source-last-run">
+    <p class="text-xs text-fg-2" data-testid="source-last-run">
       Last run
       <span class={STATUS_TONE[source.last_run.status] ?? ''}
         >{source.last_run.status.replaceAll('_', ' ')}</span
       >
       · {formatWhen(source.last_run.started_at)} · ingested {source.last_run.ingested} · duplicates
       {source.last_run.duplicates} · failed {source.last_run.failed}
-      {#if source.last_run.error}<span class="text-red-300">
+      {#if source.last_run.error}<span class="text-danger">
           — {source.last_run.error}</span
         >{/if}
     </p>
   {:else if source.scan.last}
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Last scan {formatWhen(source.scan.last.finished_at)}: {source.scan.last.listed} listed,
       {source.scan.last.queued} new.
     </p>
@@ -129,15 +129,15 @@
 
   {#if source.errors && source.errors.length > 0}
     <details class="text-xs" data-testid="source-errors">
-      <summary class="cursor-pointer text-red-300"
+      <summary class="cursor-pointer text-danger"
         >{source.errors.length} object{source.errors.length === 1 ? '' : 's'} with errors</summary
       >
       <ul class="mt-1 max-h-40 overflow-y-auto">
         {#each source.errors as e (e.key + e.etag)}
-          <li class="border-b border-zinc-900 py-1 break-all">
+          <li class="border-b border-line py-1 break-all">
             <span class="font-mono">{e.key}</span>
-            <span class="text-zinc-500"> [{e.state}, {e.attempts} tries]</span>
-            <span class="text-red-300"> — {e.error}</span>
+            <span class="text-fg-3"> [{e.state}, {e.attempts} tries]</span>
+            <span class="text-danger"> — {e.error}</span>
           </li>
         {/each}
       </ul>
@@ -178,7 +178,7 @@
       Remove
     </button>
     {#if !source.can_run && source.blocked_message}
-      <span class="text-xs text-amber-300" data-testid="source-blocked"
+      <span class="text-xs text-warn" data-testid="source-blocked"
         >{source.blocked_message}</span
       >
     {/if}
@@ -197,7 +197,7 @@
       Remove {source.name}? Its triggers stop and its queue is forgotten. Images already
       ingested stay in the project.
     </p>
-    {#if controller.actionError}<p class="text-red-300" data-testid="source-remove-error">
+    {#if controller.actionError}<p class="text-danger" data-testid="source-remove-error">
         {controller.actionError}
       </p>{/if}
   </ConfirmDialog>

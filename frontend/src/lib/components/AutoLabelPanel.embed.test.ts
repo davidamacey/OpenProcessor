@@ -120,7 +120,7 @@ describe('AutoLabelPanel embed_missing', () => {
       '[data-testid="last-run-stages"] tr[data-stage-status]',
     )!;
     expect(row.getAttribute('data-stage-status')).toBe('error');
-    expect(row.className).toContain('red');
+    expect(row.className).toContain('danger');
     expect(row.textContent).toContain('embedding items without a vector');
   });
 });

@@ -93,7 +93,7 @@
 <div class="relative">
   <button
     type="button"
-    class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+    class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
     aria-expanded={open}
     data-testid="image-search-toggle"
     bind:this={toggleEl}
@@ -103,7 +103,7 @@
   </button>
   {#if open}
     <div
-      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:max-h-[70dvh] max-sm:max-w-none max-sm:overflow-y-auto rounded-md border border-zinc-700 bg-zinc-900 p-3 text-xs shadow-lg"
+      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:max-h-[70dvh] max-sm:max-w-none max-sm:overflow-y-auto rounded-md border border-line-strong bg-surface-1 p-3 text-xs shadow-lg"
       style={narrowStyle}
       data-testid="image-search-panel"
     >
@@ -125,22 +125,22 @@
           />
           {#if box}
             <div
-              class="pointer-events-none absolute border-2 border-blue-400 bg-blue-400/20"
+              class="pointer-events-none absolute border-2 border-accent bg-accent/20"
               style="left:{box[0] * 100}%;top:{box[1] * 100}%;width:{(box[2] - box[0]) *
                 100}%;height:{(box[3] - box[1]) * 100}%"
             ></div>
           {/if}
         </div>
-        <p class="mt-1 text-zinc-500">
+        <p class="mt-1 text-fg-3">
           {box
             ? 'Searching by the marked region.'
             : 'Drag on the picture to search by a region.'}
         </p>
       {:else}
         <label
-          class="flex h-24 cursor-pointer items-center justify-center rounded border border-dashed text-zinc-400 {dragOver
-            ? 'border-blue-400 bg-blue-500/10'
-            : 'border-zinc-600'}"
+          class="flex h-24 cursor-pointer items-center justify-center rounded border border-dashed text-fg-2 {dragOver
+            ? 'border-accent bg-accent/10'
+            : 'border-line-strong'}"
           ondragover={(e) => {
             e.preventDefault();
             dragOver = true;
@@ -165,7 +165,7 @@
       <div class="mt-2 flex items-center gap-2">
         <button
           type="button"
-          class="btn-sm border border-blue-500/50 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 disabled:opacity-50"
+          class="btn-sm border border-accent/50 bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
           disabled={!file || busy}
           data-testid="image-search-run"
           onclick={submit}
@@ -175,7 +175,7 @@
         {#if box}
           <button
             type="button"
-            class="btn-sm border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            class="btn-sm border border-line-strong text-fg-2 hover:bg-surface-2"
             onclick={() => (box = null)}
           >
             Clear region
@@ -184,7 +184,7 @@
         {#if file}
           <button
             type="button"
-            class="btn-sm border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            class="btn-sm border border-line-strong text-fg-2 hover:bg-surface-2"
             onclick={() => setFile(null)}
           >
             Change picture

@@ -43,7 +43,7 @@
     align = 'center',
     layer = 'base',
     scrim = 'bg-black/60',
-    panelClass = 'w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-2xl',
+    panelClass = 'w-full max-w-md rounded-lg border border-line bg-surface-0 p-5 shadow-2xl',
     children,
     ...rest
   }: Props = $props();

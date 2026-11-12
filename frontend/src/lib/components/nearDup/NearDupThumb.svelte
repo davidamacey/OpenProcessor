@@ -25,12 +25,12 @@
     alt={label}
     loading="lazy"
     onerror={() => (failed = true)}
-    class="{box} shrink-0 rounded border border-zinc-800 bg-zinc-900 object-cover"
+    class="{box} shrink-0 rounded border border-line bg-surface-1 object-cover"
     data-testid="near-dup-thumb"
   />
 {:else}
   <div
-    class="{box} flex shrink-0 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-center text-[10px] text-zinc-500"
+    class="{box} flex shrink-0 items-center justify-center rounded border border-line bg-surface-1 text-center text-caption text-fg-3"
     data-testid="near-dup-thumb-missing"
   >
     no preview

@@ -100,28 +100,28 @@
 </script>
 
 <div
-  class="flex flex-col gap-1.5 border-t border-zinc-800 pt-3 first:border-0 first:pt-0"
+  class="flex flex-col gap-1.5 border-t border-line pt-3 first:border-0 first:pt-0"
   class:opacity-60={applies === false}
   data-testid="profile-field"
   data-field={field.field}
   data-type={field.type}
 >
   <div class="flex flex-wrap items-baseline gap-2">
-    <label class="text-sm font-medium text-zinc-100" for={id}>{field.label}</label>
-    <code class="font-mono text-[11px] text-zinc-500">{field.field}</code>
+    <label class="text-sm font-medium text-fg-1" for={id}>{field.label}</label>
+    <code class="font-mono text-caption text-fg-3">{field.field}</code>
     {#if field.advanced}
-      <span class="rounded border border-zinc-700 px-1 text-[10px] text-zinc-400"
+      <span class="rounded border border-line-strong px-1 text-caption text-fg-2"
         >advanced</span
       >
     {/if}
   </div>
-  {#if field.help}<p class="text-xs text-zinc-400">{field.help}</p>{/if}
-  <p class="text-[11px] text-zinc-500" data-testid="field-facts">
+  {#if field.help}<p class="text-xs text-fg-2">{field.help}</p>{/if}
+  <p class="text-caption text-fg-3" data-testid="field-facts">
     default: <span class="font-mono">{valueText(field.default)}</span>
     {#if rangeText}· {rangeText}{/if}
   </p>
   {#if applies === false}
-    <p class="text-[11px] text-amber-300/80" data-testid="field-not-applied">
+    <p class="text-caption text-warn/80" data-testid="field-not-applied">
       Not used by the saved revision ({field.applies_when} is off).
     </p>
   {/if}
@@ -135,12 +135,12 @@
         disabled={readonly}
         onchange={(e) => onchange((e.currentTarget as HTMLInputElement).checked)}
       />
-      <span class="text-zinc-300">{value === true ? 'on' : 'off'}</span>
+      <span class="text-fg-2">{value === true ? 'on' : 'off'}</span>
     </label>
   {:else if field.type === 'enum' && (field.enum ?? choices)}
     <select
       {id}
-      class="select select-sm max-w-md {hasError ? 'border-red-500/60' : ''}"
+      class="select select-sm max-w-md {hasError ? 'border-danger/60' : ''}"
       value={typeof value === 'string' ? value : ''}
       disabled={readonly}
       onchange={(e) => onchange((e.currentTarget as HTMLSelectElement).value)}
@@ -152,7 +152,7 @@
   {:else if field.type === 'string' && choices}
     <select
       {id}
-      class="select select-sm max-w-md font-mono {hasError ? 'border-red-500/60' : ''}"
+      class="select select-sm max-w-md font-mono {hasError ? 'border-danger/60' : ''}"
       value={typeof value === 'string' ? value : ''}
       disabled={readonly}
       data-testid="field-choice"
@@ -165,7 +165,7 @@
   {:else if field.type === 'string'}
     <input
       {id}
-      class="input input-sm max-w-md font-mono {hasError ? 'border-red-500/60' : ''}"
+      class="input input-sm max-w-md font-mono {hasError ? 'border-danger/60' : ''}"
       value={typeof value === 'string' ? value : ''}
       {readonly}
       oninput={(e) => onchange((e.currentTarget as HTMLInputElement).value)}
@@ -174,7 +174,7 @@
     <input
       {id}
       type="number"
-      class="input input-sm w-40 font-mono {hasError ? 'border-red-500/60' : ''}"
+      class="input input-sm w-40 font-mono {hasError ? 'border-danger/60' : ''}"
       step={field.type === 'int' ? 1 : 'any'}
       min={field.min ?? undefined}
       max={field.max ?? undefined}
@@ -187,20 +187,20 @@
     <div class="flex flex-wrap items-center gap-1" data-testid="field-list">
       {#each list as item, idx (idx)}
         <span
-          class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 font-mono text-xs"
+          class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-xs"
           data-testid="list-item"
           >{choices?.find((c) => c.id === item)?.label ?? String(item)}
           {#if !readonly}
             <button
               type="button"
-              class="text-zinc-500 hover:text-zinc-200"
+              class="text-fg-3 hover:text-fg-1"
               aria-label="Remove {String(item)}"
               onclick={() => removeItem(idx)}>×</button
             >
           {/if}
         </span>
       {/each}
-      {#if list.length === 0}<span class="text-xs text-zinc-500">none</span>{/if}
+      {#if list.length === 0}<span class="text-xs text-fg-3">none</span>{/if}
     </div>
     {#if !readonly}
       <div class="flex flex-wrap items-center gap-2">

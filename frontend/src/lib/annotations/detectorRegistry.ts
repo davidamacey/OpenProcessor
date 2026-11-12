@@ -20,32 +20,32 @@ import type { Palette } from './types';
 import type { RegionVocabularyRole } from '$lib/api_regions';
 
 export const PALETTES = {
-  blue: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-200' },
+  blue: { border: 'border-accent/50', bg: 'bg-accent/10', text: 'text-accent' },
   purple: {
-    border: 'border-purple-500/50',
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-200',
+    border: 'border-holdout/50',
+    bg: 'bg-holdout/10',
+    text: 'text-holdout',
   },
-  amber: { border: 'border-amber-500/50', bg: 'bg-amber-500/10', text: 'text-amber-200' },
+  amber: { border: 'border-warn/50', bg: 'bg-warn/10', text: 'text-warn' },
   emerald: {
-    border: 'border-emerald-500/50',
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-200',
+    border: 'border-success/50',
+    bg: 'bg-success/10',
+    text: 'text-success',
   },
-  teal: { border: 'border-teal-500/50', bg: 'bg-teal-500/10', text: 'text-teal-200' },
-  rose: { border: 'border-rose-500/50', bg: 'bg-rose-500/10', text: 'text-rose-200' },
-  sky: { border: 'border-sky-500/50', bg: 'bg-sky-500/10', text: 'text-sky-200' },
+  teal: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info' },
+  rose: { border: 'border-danger/50', bg: 'bg-danger/10', text: 'text-danger' },
+  sky: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info' },
   indigo: {
-    border: 'border-indigo-500/50',
-    bg: 'bg-indigo-500/10',
-    text: 'text-indigo-200',
+    border: 'border-accent/50',
+    bg: 'bg-accent/10',
+    text: 'text-accent',
   },
   orange: {
-    border: 'border-orange-500/50',
-    bg: 'bg-orange-500/10',
-    text: 'text-orange-200',
+    border: 'border-warn/50',
+    bg: 'bg-warn/10',
+    text: 'text-warn',
   },
-  zinc: { border: 'border-zinc-700', bg: 'bg-zinc-800/60', text: 'text-zinc-300' },
+  zinc: { border: 'border-line-strong', bg: 'bg-surface-2/60', text: 'text-fg-2' },
 } as const satisfies Record<string, Palette>;
 
 export type PaletteName = keyof typeof PALETTES;

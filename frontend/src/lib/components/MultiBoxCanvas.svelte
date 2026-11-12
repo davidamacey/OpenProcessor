@@ -227,7 +227,7 @@
 </script>
 
 <div
-  class="relative flex touch-none items-center justify-center overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 select-none {containerClass}"
+  class="relative flex touch-none items-center justify-center overflow-hidden rounded-md border border-line bg-surface-1 select-none {containerClass}"
 >
   <div
     bind:this={canvasEl}
@@ -266,14 +266,14 @@
         aria-label={b.label}
       >
         <span
-          class="absolute -top-2 -left-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-[10px] text-zinc-100"
+          class="absolute -top-2 -left-2 flex h-4 w-4 items-center justify-center rounded-full bg-surface-1 text-caption text-fg-1"
           style="border:1px solid {ringColorFor(b.state)}"
         >
           {i + 1}
         </span>
         {#if b.locked}
           <span
-            class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-zinc-100"
+            class="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-surface-1 text-fg-1"
             style="border:1px solid {ringColorFor(b.state)}"
             title={reprocessVocabularyStore.lockText()}
             data-testid="box-locked"
@@ -295,7 +295,7 @@
 
     {#if pendingCreate}
       <div
-        class="pointer-events-none absolute border-2 border-dashed border-sky-400"
+        class="pointer-events-none absolute border-2 border-dashed border-info"
         style="left:{(pendingCreate.cx - pendingCreate.w / 2) *
           100}%;top:{(pendingCreate.cy - pendingCreate.h / 2) *
           100}%;width:{pendingCreate.w * 100}%;height:{pendingCreate.h * 100}%"
@@ -304,7 +304,7 @@
 
     {#if boxes.length === 0 && !pendingCreate}
       <span
-        class="absolute top-2 left-2 rounded-sm border border-zinc-700 bg-zinc-900/80 px-1.5 py-0.5 text-[11px] text-zinc-300"
+        class="absolute top-2 left-2 rounded-sm border border-line-strong bg-surface-1/80 px-1.5 py-0.5 text-caption text-fg-2"
       >
         drag to draw a box
       </span>

@@ -22,7 +22,7 @@
 
 {#if parts.length > 0}
   <span
-    class="text-zinc-500"
+    class="text-fg-3"
     data-testid="hidden-items-note"
     title="These items are kept out of every list unless you ask for them."
   >

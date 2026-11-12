@@ -14,21 +14,21 @@
 {#if open}
   <Modal label="About {appName}" {onclose}>
     <div class="mb-3 flex items-center gap-2">
-      <AppLogo class="h-8 w-8 shrink-0 rounded border border-zinc-700" />
+      <AppLogo class="h-8 w-8 shrink-0 rounded border border-line-strong" />
       <h3 class="text-base font-semibold">{appName}</h3>
     </div>
 
-    <p class="mb-2 text-sm font-medium text-zinc-100">
+    <p class="mb-2 text-sm font-medium text-fg-1">
       Sort your crops smarter — cluster, label, and review with AI-assisted suggestions.
     </p>
-    <p class="mb-3 text-sm text-zinc-300">
+    <p class="mb-3 text-sm text-fg-2">
       Any object class can be configured as an "annotation slot" — secondary bbox
       detection, OCR/text fields, detector provenance, and review-queue lifecycle — so the
       same app works across domains, not just one dataset.
     </p>
 
-    <div class="mb-4 rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
-      <p class="mb-2 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+    <div class="mb-4 rounded-md border border-line bg-surface-1/50 p-3">
+      <p class="mb-2 text-caption font-medium tracking-wide text-fg-3 uppercase">
         The dataset cycle
       </p>
       <svg
@@ -205,10 +205,10 @@
       </svg>
     </div>
 
-    <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-zinc-400">
-      <dt class="text-zinc-500">License</dt>
+    <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-fg-2">
+      <dt class="text-fg-3">License</dt>
       <dd>AGPL-3.0</dd>
-      <dt class="text-zinc-500">Stack</dt>
+      <dt class="text-fg-3">Stack</dt>
       <dd>SvelteKit 2 · Svelte 5 runes · TypeScript</dd>
     </dl>
 

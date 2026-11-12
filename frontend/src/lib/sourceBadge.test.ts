@@ -5,7 +5,7 @@ describe('sourceBadge', () => {
   it("labels an ingest proposal by the catalog's label, not its raw id", () => {
     const b = sourceBadge('coco_yolo11_proposal', false, 'proposal', 'yolo11 proposal');
     expect(b.text).toBe('yolo11 proposal');
-    expect(b.cls).toContain('zinc');
+    expect(b.cls).toContain('surface-3');
   });
 
   it('marks an unconfirmed VLM label with the unvalidated flag, not a literal "?" (p4, 2026-09-24 interactive pass)', () => {
@@ -40,7 +40,7 @@ describe('sourceBadge', () => {
       'Open-vocabulary target',
     );
     expect(b.text).toBe('Open-vocabulary target');
-    expect(b.cls).toContain('sky');
+    expect(b.cls).toContain('info');
     expect(b.cls).not.toBe(sourceBadge('x', false, 'proposal', 'x').cls);
     expect(b.unvalidated).toBe(false);
   });
@@ -48,7 +48,7 @@ describe('sourceBadge', () => {
   it('renders an id outside the catalog verbatim and neutral, inferring nothing', () => {
     const b = sourceBadge('vlm_unmatched', false, null, '');
     expect(b.text).toBe('vlm_unmatched');
-    expect(b.cls).toContain('zinc');
+    expect(b.cls).toContain('surface-3');
     expect(sourceBadge('', false, null, '').text).toBe('unlabeled');
   });
 });

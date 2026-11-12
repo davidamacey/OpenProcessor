@@ -36,8 +36,8 @@ describe('ClassSplitTable', () => {
     const rows = [...target.querySelectorAll('tbody tr')];
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain((1200).toLocaleString());
-    expect(rows[0]!.className).not.toContain('bg-red-500/10');
-    expect(rows[1]!.className).toContain('bg-red-500/10');
+    expect(rows[0]!.className).not.toContain('bg-danger/10');
+    expect(rows[1]!.className).toContain('bg-danger/10');
     expect(target.firstElementChild!.className).toContain('max-h-64');
   });
 });

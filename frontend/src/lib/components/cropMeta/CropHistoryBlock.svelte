@@ -12,36 +12,36 @@
   let { historyEntries, historyError, historyLoading }: Props = $props();
 </script>
 
-<div class="mt-4 border-t border-zinc-800 pt-3">
-  <div class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-500">History</div>
+<div class="mt-4 border-t border-line pt-3">
+  <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">History</div>
   {#if historyLoading}
-    <p class="text-[11px] text-zinc-500">Loading…</p>
+    <p class="text-caption text-fg-3">Loading…</p>
   {:else if historyError}
-    <p class="text-[11px] text-red-300">History unavailable: {historyError}</p>
+    <p class="text-caption text-danger">History unavailable: {historyError}</p>
   {:else if !historyEntries || historyEntries.length === 0}
-    <p class="text-[11px] text-zinc-500">No prior writes recorded.</p>
+    <p class="text-caption text-fg-3">No prior writes recorded.</p>
   {:else}
-    <ul class="space-y-1 text-[11px]">
+    <ul class="space-y-1 text-caption">
       {#each historyEntries as entry, i (i)}
         <!-- K7 (visual audit 2026-09-24): every row names its resulting
              class ("no class" when the write left none) with the source
              labelled, and a short timestamp (raw value in the tooltip). -->
         <li
-          class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-zinc-400"
+          class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-fg-2"
           data-testid="history-entry"
         >
-          <span class="font-mono text-zinc-300">{entry.writer ?? 'unknown'}</span>
-          <span class={entry.class_name ? '' : 'text-zinc-500'}
+          <span class="font-mono text-fg-2">{entry.writer ?? 'unknown'}</span>
+          <span class={entry.class_name ? '' : 'text-fg-3'}
             >→ {entry.class_name ?? 'no class'}</span
           >
           {#if entry.class_source}
-            <span class="text-zinc-600"
+            <span class="text-fg-3"
               >source: {classSourcesStore.labelFor(entry.class_source) ||
                 entry.class_source}</span
             >
           {/if}
           {#if entry.at}
-            <span class="font-mono text-zinc-600" title={entry.at}
+            <span class="font-mono text-fg-3" title={entry.at}
               >{formatTimestamp(entry.at)}</span
             >
           {/if}

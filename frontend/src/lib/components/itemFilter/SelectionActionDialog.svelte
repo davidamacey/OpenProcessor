@@ -57,7 +57,7 @@
   >
     {#if c.action === 'label'}
       <label class="flex items-center gap-2">
-        <span class="text-zinc-400">Class</span>
+        <span class="text-fg-2">Class</span>
         <select
           class="select-sm"
           data-testid="selection-class"
@@ -75,7 +75,7 @@
       </label>
     {:else if c.action === 'move'}
       <label class="flex items-center gap-2">
-        <span class="text-zinc-400">Cluster</span>
+        <span class="text-fg-2">Cluster</span>
         <select
           class="select-sm"
           data-testid="selection-cluster"
@@ -99,7 +99,7 @@
       {#if c.loading && c.selected == null}
         Counting…
       {:else if c.selected != null}
-        This will change <strong class="text-zinc-100">{c.selected}</strong>
+        This will change <strong class="text-fg-1">{c.selected}</strong>
         {c.selected === 1 ? 'item' : 'items'}.
       {:else if !c.error}
         Pick the missing choice to see how many items this changes.
@@ -108,7 +108,7 @@
 
     <div class="flex flex-wrap items-center gap-3 text-xs">
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Limit to</span>
+        <span class="text-fg-2">Limit to</span>
         <input
           type="number"
           min="1"
@@ -123,7 +123,7 @@
         />
       </label>
       <label class="flex items-center gap-1.5">
-        <span class="text-zinc-400">Sample</span>
+        <span class="text-fg-2">Sample</span>
         <select
           class="select-sm"
           data-testid="selection-sample"
@@ -144,7 +144,7 @@
       </label>
       {#if c.sample === 'random'}
         <label class="flex items-center gap-1.5">
-          <span class="text-zinc-400">Seed</span>
+          <span class="text-fg-2">Seed</span>
           <input
             type="number"
             class="input-sm w-24"
@@ -160,7 +160,7 @@
     </div>
 
     {#if c.error}
-      <p class="text-red-300" role="alert" data-testid="selection-error">{c.error}</p>
+      <p class="text-danger" role="alert" data-testid="selection-error">{c.error}</p>
     {/if}
   </ConfirmDialog>
 {/if}

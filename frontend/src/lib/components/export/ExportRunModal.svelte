@@ -20,27 +20,27 @@
   <Modal label="Export progress" onclose={run.closeExportModal}>
     <h3 class="mb-3 text-base font-semibold">YOLO export</h3>
     {#if run.exportState?.status === 'running' || run.exportRunning}
-      <p class="mb-3 text-xs text-zinc-400">
+      <p class="mb-3 text-xs text-fg-2">
         Running… polling every 5s. Safe to leave the page open.
       </p>
       {#if run.exportState?.progress != null}
-        <div class="mb-2 h-2 w-full overflow-hidden rounded bg-zinc-900">
+        <div class="mb-2 h-2 w-full overflow-hidden rounded bg-surface-1">
           <div
-            class="h-full bg-blue-500"
+            class="h-full bg-accent"
             style:width="{Math.round((run.exportState.progress ?? 0) * 100)}%"
           ></div>
         </div>
       {/if}
-      <p class="text-xs font-mono text-zinc-300">{run.exportState?.message ?? '…'}</p>
+      <p class="text-xs font-mono text-fg-2">{run.exportState?.message ?? '…'}</p>
     {:else if run.exportState?.status === 'success'}
-      <p class="mb-2 text-sm text-green-300">Export complete.</p>
+      <p class="mb-2 text-sm text-success">Export complete.</p>
       {#if run.exportState.export_dir}
-        <p class="mb-3 break-all font-mono text-xs text-zinc-300">
+        <p class="mb-3 break-all font-mono text-xs text-fg-2">
           {run.exportState.export_dir}
         </p>
       {/if}
       {#if run.exportState.split_counts || run.exportState.image_count != null || run.exportState.object_count != null}
-        <p class="mb-3 font-mono text-xs text-zinc-300">
+        <p class="mb-3 font-mono text-xs text-fg-2">
           {formatCount(run.exportState.object_count)} objects in {formatCount(
             run.exportState.image_count,
           )} images
@@ -54,7 +54,7 @@
         </p>
       {/if}
       {#if run.exportState.images_dropped_not_fully_labeled}
-        <p class="mb-3 text-xs text-orange-300">
+        <p class="mb-3 text-xs text-warn">
           {formatCount(run.exportState.images_dropped_not_fully_labeled)} image(s) dropped —
           not fully labeled.
         </p>
@@ -69,12 +69,12 @@
         </button>
       </div>
     {:else if run.exportState?.status === 'failed'}
-      <p class="mb-2 text-sm text-red-300">Export failed.</p>
-      <p class="font-mono text-xs text-red-200">
+      <p class="mb-2 text-sm text-danger">Export failed.</p>
+      <p class="font-mono text-xs text-danger">
         {run.exportState.error ?? 'unknown error'}
       </p>
     {:else}
-      <p class="text-xs text-zinc-400">No active export.</p>
+      <p class="text-xs text-fg-2">No active export.</p>
     {/if}
     <div class="mt-4 flex justify-end">
       <button

@@ -12,7 +12,7 @@
 
 {#if refresh.stale.length > 0 || refresh.message || refresh.error}
   <div
-    class="mb-3 rounded border border-orange-500/40 bg-orange-500/10 px-3 py-2 text-xs text-orange-200"
+    class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
     data-testid="near-dup-stale"
   >
     {#if refresh.stale.length > 0}
@@ -41,7 +41,7 @@
     {#if refresh.message}<p class="mt-1" data-testid="near-dup-message">
         {refresh.message}
       </p>{/if}
-    {#if refresh.error}<p class="mt-1 text-red-300" data-testid="near-dup-error">
+    {#if refresh.error}<p class="mt-1 text-danger" data-testid="near-dup-error">
         {refresh.error}
       </p>{/if}
   </div>

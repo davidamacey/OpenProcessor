@@ -68,11 +68,11 @@ function withPct(rows: RawRow[], denominator: number): BreakdownRow[] {
 }
 
 const LABELED_TONES: Record<string, string> = {
-  by_human: 'bg-green-500',
-  by_import: 'bg-amber-500',
-  by_vlm: 'bg-blue-500',
-  by_classifier: 'bg-purple-500',
-  other: 'bg-zinc-500',
+  by_human: 'bg-success',
+  by_import: 'bg-warn',
+  by_vlm: 'bg-accent',
+  by_classifier: 'bg-holdout',
+  other: 'bg-fg-3',
 };
 
 /** The served `labeled.rows` with a bar colour per provenance; counts, labels and shares are the server's. */
@@ -83,7 +83,7 @@ export function labeledRowsOf(stats: DatasetStats | null): BreakdownRow[] {
     key: r.key,
     label: r.label,
     count: r.count,
-    tone: LABELED_TONES[r.key] ?? 'bg-zinc-500',
+    tone: LABELED_TONES[r.key] ?? 'bg-fg-3',
     pct: r.share * 100,
   }));
 }
@@ -111,19 +111,19 @@ export function slotRowsOf(
         key: 'by_detector',
         label: 'Detector',
         count: p.by_detector,
-        tone: 'bg-cyan-500',
+        tone: 'bg-info',
       },
       {
         key: 'by_segmenter',
         label: 'Segmenter fallback',
         count: p.by_segmenter,
-        tone: 'bg-teal-500',
+        tone: 'bg-info',
       },
       {
         key: 'by_human_drew',
         label: 'Human-drew bbox',
         count: p.by_human_drew,
-        tone: 'bg-green-500',
+        tone: 'bg-success',
       },
       // The operator confirmed an AI-proposed bbox; by_human_drew is only a
       // from-scratch bbox, validated_by_human is the union of both.
@@ -131,7 +131,7 @@ export function slotRowsOf(
         key: 'validated_by_human',
         label: 'Confirmed by human',
         count: p.validated_by_human,
-        tone: 'bg-emerald-500',
+        tone: 'bg-success',
       },
     ],
     total,

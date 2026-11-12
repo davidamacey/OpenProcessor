@@ -49,22 +49,22 @@
          grid, not a new page. Infinite scroll is not offered: {API_PREFIX}/search/text isn't
          paginated the way the cluster grid's sentinel expects. -->
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-      <span class="flex items-center gap-2 text-zinc-300" data-testid="search-summary">
-        <strong class="text-zinc-100">{modes.searchTotal.toLocaleString()}</strong>
+      <span class="flex items-center gap-2 text-fg-2" data-testid="search-summary">
+        <strong class="text-fg-1">{modes.searchTotal.toLocaleString()}</strong>
         {#if modes.similarTo}
           result{modes.searchTotal === 1 ? '' : 's'} like
           <img
             src={getThumbUrl(modes.similarTo, 64)}
             alt="The source crop"
-            class="h-8 w-8 rounded-sm border border-zinc-700 object-cover"
+            class="h-8 w-8 rounded-sm border border-line-strong object-cover"
           />
-          <span class="font-medium text-blue-200">{modes.similarTo}</span>
+          <span class="font-medium text-accent">{modes.similarTo}</span>
         {:else if modes.imageQueryName}
           result{modes.searchTotal === 1 ? '' : 's'} like the picture
-          <span class="font-medium text-blue-200">{modes.imageQueryName}</span>
+          <span class="font-medium text-accent">{modes.imageQueryName}</span>
         {:else}
           result{modes.searchTotal === 1 ? '' : 's'} for
-          <span class="font-medium text-blue-200">"{modes.searchQuery}"</span>
+          <span class="font-medium text-accent">"{modes.searchQuery}"</span>
           across the dataset
         {/if}
       </span>
@@ -74,18 +74,18 @@
       <span class="grow"></span>
       <button
         type="button"
-        class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+        class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitSearchMode}
       >
         ← Back to clusters
       </button>
     </div>
     {#if modes.similarError}
-      <p class="text-sm text-amber-200" role="status" data-testid="similar-error">
+      <p class="text-sm text-warn" role="status" data-testid="similar-error">
         {modes.similarError}
       </p>
     {:else if modes.searchResults.length === 0}
-      <p class="text-sm text-zinc-500">
+      <p class="text-sm text-fg-3">
         {modes.similarTo || modes.imageQueryName
           ? 'No similar crops in this scope.'
           : 'No crops matched that search.'}
@@ -102,7 +102,7 @@
           {#if modes.matchOf(crop.id)}
             {@const match = modes.matchOf(crop.id)}
             <span
-              class="rounded-sm border border-blue-500/40 bg-blue-500/10 px-1 py-0.5 font-mono text-[10px] text-blue-200"
+              class="rounded-sm border border-accent/40 bg-accent/10 px-1 py-0.5 font-mono text-caption text-accent"
               title={match?.stale
                 ? 'Matched region; its vector predates a move of the box'
                 : 'Matched region'}
@@ -126,14 +126,14 @@
     <!-- Ignored bucket (G7): excluded crops, restorable via
          batch_unexclude. Same mode-swap pattern as search above. -->
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-      <span class="text-zinc-300">
-        <strong class="text-zinc-100">{modes.ignoredTotal.toLocaleString()}</strong>
+      <span class="text-fg-2">
+        <strong class="text-fg-1">{modes.ignoredTotal.toLocaleString()}</strong>
         ignored crop{modes.ignoredTotal === 1 ? '' : 's'}
       </span>
       <span class="grow"></span>
       <button
         type="button"
-        class="btn-sm border border-green-500/50 bg-green-500/10 text-green-200 hover:bg-green-500/20"
+        class="btn-sm border border-success/50 bg-success/10 text-success hover:bg-success/20"
         onclick={() => void modes.restoreIgnored()}
         disabled={modes.ignoredSel.size === 0}
       >
@@ -141,16 +141,16 @@
       </button>
       <button
         type="button"
-        class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+        class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitIgnoredMode}
       >
         ← Back to clusters
       </button>
     </div>
     {#if modes.ignoredLoading && modes.ignoredItems.length === 0}
-      <p class="text-sm text-zinc-500">Loading...</p>
+      <p class="text-sm text-fg-3">Loading...</p>
     {:else if modes.ignoredItems.length === 0}
-      <p class="text-sm text-zinc-500">Nothing ignored.</p>
+      <p class="text-sm text-fg-3">Nothing ignored.</p>
     {:else}
       <CropResultGrid
         items={modes.ignoredItems}
@@ -161,7 +161,7 @@
         {#snippet cornerBadge(crop)}
           {#if crop.excluded_reason}
             <span
-              class="rounded border border-amber-500/50 bg-amber-500/15 px-1 py-0.5 text-[9px] text-amber-200"
+              class="rounded border border-warn/50 bg-warn/15 px-1 py-0.5 text-caption text-warn"
             >
               {crop.excluded_reason}
             </span>
@@ -172,29 +172,29 @@
   {:else if modes.itemTextModeActive}
     <!-- Item-text search results (G8). -->
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
-      <span class="text-zinc-300">
-        <strong class="text-zinc-100">{modes.itemTextTotal.toLocaleString()}</strong>
+      <span class="text-fg-2">
+        <strong class="text-fg-1">{modes.itemTextTotal.toLocaleString()}</strong>
         result{modes.itemTextTotal === 1 ? '' : 's'} for
-        <span class="font-medium text-blue-200">"{modes.itemTextQuery}"</span>
+        <span class="font-medium text-accent">"{modes.itemTextQuery}"</span>
       </span>
       <span class="grow"></span>
       <button
         type="button"
-        class="btn-sm border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+        class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitItemTextMode}
       >
         ← Back to clusters
       </button>
     </div>
     {#if modes.itemTextLoading && modes.itemTextItems.length === 0}
-      <p class="text-sm text-zinc-500">Loading...</p>
+      <p class="text-sm text-fg-3">Loading...</p>
     {:else if modes.itemTextError}
       <!-- m18: the 400 detail is already shown next to the input in
            ClustersToolbar — showing the empty-state copy here too read as
            two contradictory messages ("here's why it failed" AND
            "0 results… no crops matched"). Show only the error. -->
     {:else if modes.itemTextItems.length === 0}
-      <p class="text-sm text-zinc-500">No crops matched that text.</p>
+      <p class="text-sm text-fg-3">No crops matched that text.</p>
     {:else}
       <CropResultGrid
         items={modes.itemTextItems}
@@ -215,13 +215,13 @@
          slotGalleryController.svelte.ts. -->
     <SlotGallery gallery={slotGallery} />
   {:else if list.clusterPager.loading && list.gridItems.length === 0}
-    <p class="text-sm text-zinc-500" role="status">Loading clusters…</p>
+    <p class="text-sm text-fg-3" role="status">Loading clusters…</p>
   {:else if list.clusterPager.error}
-    <div class="text-sm text-red-300" role="alert" data-testid="clusters-error">
+    <div class="text-sm text-danger" role="alert" data-testid="clusters-error">
       <p>Could not load clusters: {list.clusterPager.error}</p>
       <button
         type="button"
-        class="btn-sm mt-2 border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+        class="btn-sm mt-2 border border-line-strong bg-surface-1 text-fg-1 hover:bg-surface-2"
         onclick={() => void list.loadFirst()}
       >
         Retry
@@ -229,11 +229,11 @@
     </div>
   {:else if list.gridItems.length === 0}
     {#if list.filterActive}
-      <div class="text-sm text-zinc-400" data-testid="clusters-filtered-empty">
+      <div class="text-sm text-fg-2" data-testid="clusters-filtered-empty">
         <p>No clusters match these filters.</p>
         <button
           type="button"
-          class="btn-sm mt-2 border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+          class="btn-sm mt-2 border border-line-strong bg-surface-1 text-fg-1 hover:bg-surface-2"
           onclick={() => list.clearFilter()}
         >
           Clear filters
@@ -241,7 +241,7 @@
       </div>
     {:else}
       <div class="space-y-3" data-testid="clusters-empty">
-        <p class="text-sm text-zinc-400" data-testid="clusters-empty-message">
+        <p class="text-sm text-fg-2" data-testid="clusters-empty-message">
           {list.emptyMessage ?? 'No clusters to show.'}
         </p>
         {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
@@ -253,7 +253,7 @@
   {:else}
     {#if list.truncated}
       <p
-        class="mb-3 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
         role="status"
         data-testid="clusters-truncated"
       >

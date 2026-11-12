@@ -64,11 +64,11 @@
 
 <div class="flex flex-col gap-3" data-testid="local-vlm">
   {#if !local.configured}
-    <p class="text-sm text-zinc-400" data-testid="local-vlm-reason">{local.reason}</p>
+    <p class="text-sm text-fg-2" data-testid="local-vlm-reason">{local.reason}</p>
   {:else}
-    <p class="text-xs text-zinc-400" data-testid="local-vlm-served">
+    <p class="text-xs text-fg-2" data-testid="local-vlm-served">
       Serving:
-      <span class="font-mono text-zinc-200">{local.served?.model ?? '—'}</span>
+      <span class="font-mono text-fg-1">{local.served?.model ?? '—'}</span>
       {#if local.served?.catalog_id}
         (catalog <span class="font-mono">{local.served.catalog_id}</span>)
       {/if}
@@ -79,7 +79,7 @@
 
     {#if local.restart_required}
       <div
-        class="flex flex-col gap-2 rounded border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100"
+        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 p-3 text-sm text-warn"
         data-testid="local-vlm-restart"
       >
         <p>{local.reason}</p>
@@ -89,7 +89,7 @@
           </p>
           <div class="flex flex-wrap items-center gap-2">
             <code
-              class="break-all rounded bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-200"
+              class="break-all rounded bg-surface-0 px-2 py-1 font-mono text-xs text-fg-1"
               data-testid="local-vlm-command">{local.desired.command}</code
             >
             <button
@@ -114,12 +114,12 @@
     {/if}
 
     {#if error && !switching && !cancelling}
-      <p class="text-sm text-red-300" data-testid="local-vlm-error">{error}</p>
+      <p class="text-sm text-danger" data-testid="local-vlm-error">{error}</p>
     {/if}
 
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs" data-testid="local-vlm-table">
-        <thead class="text-zinc-500">
+        <thead class="text-fg-3">
           <tr>
             <th class="py-1 pr-3 font-normal">Model</th>
             <th class="py-1 pr-3 font-normal">Repo</th>
@@ -138,18 +138,18 @@
         <tbody>
           {#each catalog.entries as e (e.id)}
             <tr
-              class="border-t border-zinc-800 align-top"
+              class="border-t border-line align-top"
               data-testid="local-vlm-row"
               data-id={e.id}
             >
               <td class="py-1.5 pr-3">
-                <span class="text-zinc-100">{e.choice.label}</span>
+                <span class="text-fg-1">{e.choice.label}</span>
                 {#if e.serving}<span
-                    class="ml-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 text-[10px] text-emerald-300"
+                    class="ml-1 rounded border border-success/40 bg-success/10 px-1 text-caption text-success"
                     data-testid="local-vlm-serving">serving</span
                   >{/if}
                 {#if e.desired}<span
-                    class="ml-1 rounded border border-amber-500/40 bg-amber-500/10 px-1 text-[10px] text-amber-200"
+                    class="ml-1 rounded border border-warn/40 bg-warn/10 px-1 text-caption text-warn"
                     data-testid="local-vlm-desired">requested</span
                   >{/if}
               </td>
@@ -158,7 +158,7 @@
                 {#if externalHref(e.license_url)}
                   <!-- eslint-disable svelte/no-navigation-without-resolve -- external license page, not a SvelteKit route -->
                   <a
-                    class="text-blue-300 hover:underline"
+                    class="text-accent hover:underline"
                     href={externalHref(e.license_url)}
                     target="_blank"
                     rel="noreferrer noopener">{e.license}</a
@@ -166,7 +166,7 @@
                   <!-- eslint-enable svelte/no-navigation-without-resolve -->
                 {:else}
                   {e.license}
-                {/if}{#if e.gated}<span class="ml-1 text-amber-300">gated</span>{/if}
+                {/if}{#if e.gated}<span class="ml-1 text-warn">gated</span>{/if}
               </td>
               <td class="py-1.5 pr-3 font-mono"
                 >{e.params_b == null ? '—' : `${e.params_b}B`}{e.quantization
@@ -208,15 +208,15 @@
     onconfirm={() => void confirmSwitch()}
     oncancel={() => (switching = null)}
   >
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       This records a request. The server keeps serving the current model until it is
       restarted.
     </p>
-    {#if error}<p class="text-red-300" data-testid="local-vlm-switch-error">
+    {#if error}<p class="text-danger" data-testid="local-vlm-switch-error">
         {error}
       </p>{/if}
     {#if errorCode === 'vlm_catalog_does_not_fit'}
-      <label class="flex items-center gap-2 text-xs text-amber-200">
+      <label class="flex items-center gap-2 text-xs text-warn">
         <input type="checkbox" bind:checked={force} data-testid="local-vlm-force" />
         Select anyway (the server says this does not fit the GPU)
       </label>
@@ -233,10 +233,10 @@
     onconfirm={() => void confirmCancel()}
     oncancel={() => (cancelling = false)}
   >
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       The server keeps serving its current model; the pending request is dropped.
     </p>
-    {#if error}<p class="text-red-300" data-testid="local-vlm-cancel-error">
+    {#if error}<p class="text-danger" data-testid="local-vlm-cancel-error">
         {error}
       </p>{/if}
   </ConfirmDialog>

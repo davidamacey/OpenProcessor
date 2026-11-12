@@ -346,7 +346,7 @@
 
 {#if noWebgl}
   <p
-    class="surface p-6 text-sm text-amber-300"
+    class="surface p-6 text-sm text-warn"
     role="status"
     data-testid="map-webgl-unsupported"
   >
@@ -355,18 +355,14 @@
   </p>
 {/if}
 {#if loadError}
-  <p
-    class="surface p-6 text-sm text-amber-300"
-    role="status"
-    data-testid="map-load-error"
-  >
+  <p class="surface p-6 text-sm text-warn" role="status" data-testid="map-load-error">
     Map could not load: {loadError}
   </p>
 {/if}
 <div
   bind:this={container}
   class:hidden={noWebgl}
-  class="h-full min-h-[320px] w-full rounded border border-zinc-800"
+  class="h-full min-h-[320px] w-full rounded border border-line"
   data-testid="map-canvas"
   role="application"
   aria-label="Map of where the photos were taken"

@@ -12,10 +12,10 @@
 <div class="flex flex-col gap-0.5 text-xs" data-testid="run-progress" data-run={run.id}>
   <div class="flex flex-wrap items-center gap-2">
     <span
-      class="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-200"
+      class="rounded border border-line-strong px-1.5 text-caption text-fg-1"
       data-testid="run-status">{run.job_status ?? 'waiting'}</span
     >
-    <span class="text-zinc-400">{run.mode}</span>
+    <span class="text-fg-2">{run.mode}</span>
   </div>
   {#if run.docs_total != null}
     <progress
@@ -25,7 +25,7 @@
       aria-label="Documents embedded"
     ></progress>
   {/if}
-  <span class="text-zinc-400" data-testid="run-counts"
+  <span class="text-fg-2" data-testid="run-counts"
     >{run.docs_done}{run.docs_total != null ? ` of ${run.docs_total}` : ''} done · {run.docs_failed}
     failed · {run.docs_skipped} skipped</span
   >

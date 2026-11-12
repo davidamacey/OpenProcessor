@@ -32,14 +32,14 @@
 </script>
 
 <!-- Toolbar -->
-<div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
+<div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5">
   <h1 class="text-lg font-semibold">Clusters</h1>
   <ShortcutsButton />
 
   {#if classFilter != null}
     <!-- C2 (visual audit 2026-09-24): name the class, not its id. -->
     <span
-      class="rounded-md border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-200"
+      class="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent"
       title="class id {classFilter}"
       data-testid="class-filter-chip"
     >
@@ -86,7 +86,7 @@
       />
     {/key}
     <div
-      class="inline-flex overflow-hidden rounded-md border border-zinc-700 text-xs"
+      class="inline-flex overflow-hidden rounded-md border border-line-strong text-xs"
       role="group"
       aria-label="Search target"
       data-testid="search-target"
@@ -95,8 +95,8 @@
         <button
           type="button"
           class="px-2 py-1 {modes.searchTarget === opt.id
-            ? 'bg-blue-500/20 text-blue-200'
-            : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}"
+            ? 'bg-accent/20 text-accent'
+            : 'bg-surface-1 text-fg-2 hover:bg-surface-2'}"
           aria-pressed={modes.searchTarget === opt.id}
           onclick={() => void modes.setSearchTarget(opt.id as 'item' | 'box')}
         >
@@ -120,14 +120,14 @@
       type="text"
       bind:value={modes.itemTextQuery}
       placeholder="Item text…"
-      class="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+      class="w-28 rounded border border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-1 focus:border-accent focus:outline-none"
     />
-    <button type="submit" class="btn-sm border border-zinc-700 bg-zinc-900 text-xs">
+    <button type="submit" class="btn-sm border border-line-strong bg-surface-1 text-xs">
       Search text
     </button>
   </form>
   {#if modes.itemTextError}
-    <span class="text-[11px] text-amber-300">{modes.itemTextError}</span>
+    <span class="text-caption text-warn">{modes.itemTextError}</span>
   {/if}
 
   <!-- Ignored bucket (G7) -->
@@ -138,8 +138,8 @@
       else void modes.loadIgnored();
     }}
     class="btn-sm border text-xs transition-colors {modes.ignoredModeActive
-      ? 'border-amber-500/60 bg-amber-500/20 text-amber-200'
-      : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-amber-500/40'}"
+      ? 'border-warn/60 bg-warn/20 text-warn'
+      : 'border-line-strong bg-surface-1 text-fg-2 hover:border-warn/40'}"
     title="Crops excluded from training + clustering"
   >
     {modes.ignoredModeActive ? '✓ ' : ''}Ignored
@@ -150,8 +150,8 @@
     type="button"
     onclick={() => (matchingModeActive ? exitMatchingMode() : enterMatchingMode())}
     class="btn-sm border text-xs transition-colors {matchingModeActive
-      ? 'border-blue-500/60 bg-blue-500/20 text-blue-200'
-      : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500/40'}"
+      ? 'border-accent/60 bg-accent/20 text-accent'
+      : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'}"
     data-testid="matching-mode-toggle"
     title="List every item the filter below matches, and act on all of them"
   >

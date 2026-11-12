@@ -8,22 +8,22 @@ import { adequacyChipClass, adequacyTooltip } from './adequacy';
 // validated_count.
 describe('adequacyChipClass', () => {
   it('renders green for the server "ok" tier', () => {
-    expect(adequacyChipClass('ok')).toContain('green');
+    expect(adequacyChipClass('ok')).toContain('success');
   });
 
   it('renders orange for the server "warn" tier', () => {
-    expect(adequacyChipClass('warn')).toContain('orange');
+    expect(adequacyChipClass('warn')).toContain('warn');
   });
 
   it('renders red for the server "block" tier', () => {
-    expect(adequacyChipClass('block')).toContain('red');
+    expect(adequacyChipClass('block')).toContain('danger');
   });
 
   it('renders neutral, not a guessed color, for an absent/unknown level', () => {
     const cls = adequacyChipClass(undefined);
-    expect(cls).not.toContain('green');
-    expect(cls).not.toContain('orange');
-    expect(cls).not.toContain('red');
+    expect(cls).not.toContain('success');
+    expect(cls).not.toContain('warn');
+    expect(cls).not.toContain('danger');
   });
 });
 

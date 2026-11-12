@@ -61,7 +61,7 @@
     aria-label="Run on existing images"
   >
     <h2 class="text-base font-semibold">Run on existing images</h2>
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       New images are covered as they arrive. To run the active set on the images already
       in the pool, check what would run first, then confirm.
     </p>

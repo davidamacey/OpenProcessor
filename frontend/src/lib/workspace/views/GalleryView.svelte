@@ -63,9 +63,9 @@
   <h1 class="sr-only">Gallery</h1>
   <BulkBar {ws} onapplied={() => void gallery.loadFirst()} />
   <div class="min-h-0 flex-1 overflow-auto p-4">
-    <div class="mb-3 flex flex-wrap items-center gap-3 text-xs text-zinc-300">
+    <div class="mb-3 flex flex-wrap items-center gap-3 text-xs text-fg-2">
       <p data-testid="gallery-header">
-        <strong class="text-zinc-100" data-testid="gallery-total"
+        <strong class="text-fg-1" data-testid="gallery-total"
           >{gallery.total.toLocaleString()}</strong
         >
         image{gallery.total === 1 ? '' : 's'}
@@ -90,7 +90,7 @@
         />
       {/if}
       {#if gallery.joinTruncated}
-        <span class="text-zinc-500" data-testid="gallery-join-truncated"
+        <span class="text-fg-3" data-testid="gallery-join-truncated"
           >The item filter matched more images than can be listed; narrow it.</span
         >
       {/if}
@@ -111,7 +111,7 @@
         onopen={open}
         onloadmore={() => void gallery.loadMore()}
       />
-      <p class="mt-2 font-mono text-xs text-zinc-500" data-testid="gallery-footer">
+      <p class="mt-2 font-mono text-xs text-fg-3" data-testid="gallery-footer">
         {gallery.cards.length} / {gallery.total}
       </p>
     </ViewState>

@@ -32,14 +32,14 @@
 
 {#if attributes.length > 0 || said}
   <div
-    class="flex flex-wrap items-center gap-1 text-[11px]"
+    class="flex flex-wrap items-center gap-1 text-caption"
     data-testid="assist-suggestions"
     title="Suggestions from the VLM, not labels. Nothing here changes the item's class or boxes."
   >
-    <span class="text-[10px] uppercase tracking-wide text-zinc-500">VLM suggests</span>
+    <span class="text-caption uppercase tracking-wide text-fg-3">VLM suggests</span>
     {#if said}
       <span
-        class="rounded border border-dashed border-amber-500/50 px-1 text-amber-200"
+        class="rounded border border-dashed border-warn/50 px-1 text-warn"
         data-testid="assist-said"
       >
         VLM said: {said}{assist?.class_confidence ? ` (${assist.class_confidence})` : ''}
@@ -47,13 +47,13 @@
     {/if}
     {#each attributes as a (a.key)}
       <span
-        class="inline-flex items-center gap-1 rounded border border-dashed border-sky-500/50 px-1 text-sky-200"
+        class="inline-flex items-center gap-1 rounded border border-dashed border-info/50 px-1 text-info"
         data-testid="assist-chip"
         data-confidence={a.confidence}
       >
-        <span class="text-sky-300/70">{a.key}:</span>
+        <span class="text-info/70">{a.key}:</span>
         <span>{a.value}</span>
-        <span class="text-[10px] text-zinc-500">{a.confidence}</span>
+        <span class="text-caption text-fg-3">{a.confidence}</span>
       </span>
     {/each}
   </div>

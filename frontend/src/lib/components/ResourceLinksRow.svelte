@@ -24,10 +24,10 @@
 
 {#if links.length}
   <div
-    class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400"
+    class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-2"
     data-testid="resource-row"
   >
-    <span class="text-zinc-500">Dashboards:</span>
+    <span class="text-fg-3">Dashboards:</span>
     {#each links as l (l.id)}
       <ResourceLinkItem view={l} />
     {/each}

@@ -86,7 +86,7 @@
       data-testid="item-filter-more"
       open={moreActive > 0}
     >
-      <summary class="chip cursor-pointer list-none text-zinc-300">
+      <summary class="chip cursor-pointer list-none text-fg-2">
         More filters{moreActive > 0 ? ` (${moreActive})` : ''}
       </summary>
       <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
@@ -100,7 +100,7 @@
   {#each chips as chip, i (`${chip.param}:${i}`)}
     <button
       type="button"
-      class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
+      class="chip border-accent/60 bg-accent/15 text-accent"
       data-testid="item-filter-chip"
       title="Remove this filter"
       onclick={() => {
@@ -127,11 +127,7 @@
   {/if}
 </div>
 {#if error}
-  <p
-    class="mt-1 w-full text-xs text-red-300"
-    role="alert"
-    data-testid="item-filter-error"
-  >
+  <p class="mt-1 w-full text-xs text-danger" role="alert" data-testid="item-filter-error">
     {error}
   </p>
 {/if}

@@ -64,15 +64,15 @@
 <section class="surface flex flex-col gap-4 p-5" data-testid="vlm-scope-panel">
   <div class="flex flex-col gap-1">
     <h2 class="text-base font-semibold">VLM scope</h2>
-    <p class="text-xs text-zinc-400">
+    <p class="text-xs text-fg-2">
       Which crops the always-on VLM worker and auto-label runs label, and how many a day.
     </p>
   </div>
 
   {#if editor.loading}
-    <p class="text-sm text-zinc-500">Loading…</p>
+    <p class="text-sm text-fg-3">Loading…</p>
   {:else if editor.loadError}
-    <p class="text-sm text-red-300" data-testid="vlm-scope-load-error">
+    <p class="text-sm text-danger" data-testid="vlm-scope-load-error">
       {editor.loadError}
     </p>
   {:else}
@@ -82,8 +82,8 @@
         <label
           class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-sm {scope ===
           s
-            ? 'border-blue-500/60 bg-blue-500/10'
-            : 'border-zinc-800 hover:border-zinc-700'}"
+            ? 'border-accent/60 bg-accent/10'
+            : 'border-line hover:border-line-strong'}"
         >
           <input
             type="radio"
@@ -95,8 +95,8 @@
             data-testid="vlm-scope-{s}"
           />
           <span class="flex min-w-0 flex-col gap-0.5">
-            <span class="font-medium text-zinc-100">{VLM_SCOPE_COPY[s].label}</span>
-            <span class="text-xs text-zinc-400">{VLM_SCOPE_COPY[s].blurb}</span>
+            <span class="font-medium text-fg-1">{VLM_SCOPE_COPY[s].label}</span>
+            <span class="text-xs text-fg-2">{VLM_SCOPE_COPY[s].blurb}</span>
           </span>
         </label>
       {/each}
@@ -105,7 +105,7 @@
     {#if knobs.length > 0}
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="vlm-scope-knobs">
         {#if knobs.includes('conf_max')}
-          <label class="flex flex-col gap-1 text-xs text-zinc-300">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Detector confidence limit
             <input
               class="input"
@@ -117,13 +117,13 @@
               oninput={(e) => setNumber('conf_max', e)}
               data-testid="vlm-knob-conf_max"
             />
-            <span class="text-zinc-500"
+            <span class="text-fg-3"
               >Crops the detector is at least this sure of are skipped.</span
             >
           </label>
         {/if}
         {#if knobs.includes('per_cluster')}
-          <label class="flex flex-col gap-1 text-xs text-zinc-300">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Representatives per cluster
             <input
               class="input"
@@ -138,7 +138,7 @@
           </label>
         {/if}
         {#if knobs.includes('sample_frac')}
-          <label class="flex flex-col gap-1 text-xs text-zinc-300">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Random sample fraction
             <input
               class="input"
@@ -150,11 +150,11 @@
               oninput={(e) => setNumber('sample_frac', e)}
               data-testid="vlm-knob-sample_frac"
             />
-            <span class="text-zinc-500">1 keeps every crop the scope selects.</span>
+            <span class="text-fg-3">1 keeps every crop the scope selects.</span>
           </label>
         {/if}
         {#if knobs.includes('max_crops_per_day')}
-          <label class="flex flex-col gap-1 text-xs text-zinc-300">
+          <label class="flex flex-col gap-1 text-xs text-fg-2">
             Crops per day
             <input
               class="input"
@@ -165,20 +165,20 @@
               oninput={(e) => setInt('max_crops_per_day', e)}
               data-testid="vlm-knob-max_crops_per_day"
             />
-            <span class="text-zinc-500">0 means no limit.</span>
+            <span class="text-fg-3">0 means no limit.</span>
           </label>
         {/if}
       </div>
     {/if}
 
     <fieldset class="flex flex-col gap-2" data-testid="region-verify">
-      <legend class="mb-1 text-sm font-medium text-zinc-200">Region verification</legend>
+      <legend class="mb-1 text-sm font-medium text-fg-1">Region verification</legend>
       {#each REGION_VERIFY_MODES as m (m)}
         <label
           class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-sm {regionVerify ===
           m
-            ? 'border-blue-500/60 bg-blue-500/10'
-            : 'border-zinc-800 hover:border-zinc-700'}"
+            ? 'border-accent/60 bg-accent/10'
+            : 'border-line hover:border-line-strong'}"
         >
           <input
             type="radio"
@@ -190,18 +190,18 @@
             data-testid="region-verify-{m}"
           />
           <span class="flex min-w-0 flex-col gap-0.5">
-            <span class="font-medium text-zinc-100">{REGION_VERIFY_COPY[m].label}</span>
-            <span class="text-xs text-zinc-400">{REGION_VERIFY_COPY[m].blurb}</span>
+            <span class="font-medium text-fg-1">{REGION_VERIFY_COPY[m].label}</span>
+            <span class="text-xs text-fg-2">{REGION_VERIFY_COPY[m].blurb}</span>
           </span>
         </label>
       {/each}
     </fieldset>
 
-    <p class="text-xs text-zinc-500">{VLM_POLICY_EFFECT}</p>
+    <p class="text-xs text-fg-3">{VLM_POLICY_EFFECT}</p>
 
     {#if editor.saveLines.length > 0}
       <div
-        class="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+        class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
         data-testid="vlm-scope-save-error"
       >
         {#each editor.saveLines as line (line)}
@@ -231,7 +231,7 @@
         {editor.saving ? 'Saving…' : 'Save scope'}
       </button>
       {#if editor.saved}
-        <span class="text-xs text-green-300" data-testid="vlm-scope-saved">Saved.</span>
+        <span class="text-xs text-success" data-testid="vlm-scope-saved">Saved.</span>
       {/if}
     </div>
   {/if}

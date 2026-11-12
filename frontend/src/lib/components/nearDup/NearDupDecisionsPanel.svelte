@@ -18,14 +18,14 @@
 <section class="surface flex flex-col gap-3 p-4" data-testid="near-dup-decisions">
   <h2 class="text-base font-semibold">Decisions</h2>
   {#if ctl.error}
-    <p class="text-sm text-red-300" role="alert" data-testid="near-dup-decisions-error">
+    <p class="text-sm text-danger" role="alert" data-testid="near-dup-decisions-error">
       {ctl.error}
     </p>
   {/if}
   {#if !ctl.loaded}
-    <p class="text-xs text-zinc-500">Loading decisions…</p>
+    <p class="text-xs text-fg-3">Loading decisions…</p>
   {:else if ctl.items.length === 0}
-    <p class="text-sm text-zinc-400" data-testid="near-dup-decisions-empty">
+    <p class="text-sm text-fg-2" data-testid="near-dup-decisions-empty">
       No pair is pinned. Open a group and mark a member "Not a duplicate" or "Keep
       together".
     </p>
@@ -33,7 +33,7 @@
     <ul class="flex flex-col gap-2">
       {#each ctl.items as d (d.id)}
         <li
-          class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
+          class="flex flex-wrap items-center gap-3 rounded border border-line p-2"
           data-testid="near-dup-decision"
         >
           <NearDupThumb
@@ -46,14 +46,12 @@
             label={`${d.level} ${d.b_id}`}
             size="sm"
           />
-          <span class="flex min-w-0 grow flex-col text-xs text-zinc-300">
-            <span class="text-sm font-medium text-zinc-100"
+          <span class="flex min-w-0 grow flex-col text-xs text-fg-2">
+            <span class="text-sm font-medium text-fg-1"
               >{KIND[d.decision] ?? d.decision}</span
             >
             <span class="break-all font-mono">{d.a_id} / {d.b_id}</span>
-            <span class="text-zinc-500"
-              >{d.level} level, {d.decided_by}, {d.decided_at}</span
-            >
+            <span class="text-fg-3">{d.level} level, {d.decided_by}, {d.decided_at}</span>
           </span>
           <button
             type="button"

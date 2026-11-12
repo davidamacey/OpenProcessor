@@ -39,17 +39,17 @@ const TONE_RING_RGB: Record<BoxStateTone, string> = {
 };
 
 const TONE_BORDER_CLASS: Record<BoxStateTone, string> = {
-  accepted: 'border-green-400',
-  proposed: 'border-yellow-400',
-  rejected: 'border-red-400',
-  neutral: 'border-zinc-500',
+  accepted: 'border-success',
+  proposed: 'border-warn',
+  rejected: 'border-danger',
+  neutral: 'border-fg-3',
 };
 
 const TONE_CHIP_CLASS: Record<BoxStateTone, string> = {
-  accepted: 'border-green-500/40 bg-green-500/15 text-green-200',
-  proposed: 'border-yellow-500/40 bg-yellow-500/15 text-yellow-200',
-  rejected: 'border-red-500/40 bg-red-500/15 text-red-200',
-  neutral: 'border-zinc-600/40 bg-zinc-700/20 text-zinc-300',
+  accepted: 'border-success/40 bg-success/15 text-success',
+  proposed: 'border-warn/40 bg-warn/15 text-warn',
+  rejected: 'border-danger/40 bg-danger/15 text-danger',
+  neutral: 'border-line-strong/40 bg-surface-3/20 text-fg-2',
 };
 
 /** `rgb(...)` ring color for a served (or, on a pre-tone backend, neutral)

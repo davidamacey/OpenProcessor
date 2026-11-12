@@ -12,7 +12,7 @@
   let { ed }: Props = $props();
 </script>
 
-<label class="flex flex-col gap-1 text-xs text-zinc-400">
+<label class="flex flex-col gap-1 text-xs text-fg-2">
   Description
   <input
     class="input input-sm text-sm"

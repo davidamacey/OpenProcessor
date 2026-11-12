@@ -26,11 +26,11 @@
 
 <!-- Export controls + downloads + training command -->
 <section class="surface p-4">
-  <h2 class="mb-3 text-sm font-semibold text-zinc-300">Export to staging</h2>
+  <h2 class="mb-3 text-sm font-semibold text-fg-2">Export to staging</h2>
   <NearDupStalePanel refresh={run.nearDup} />
   <div class="flex flex-wrap items-end gap-3">
     <label class="text-xs">
-      <span class="mb-1 block text-zinc-400">Version tag (optional)</span>
+      <span class="mb-1 block text-fg-2">Version tag (optional)</span>
       <input
         type="text"
         bind:value={run.versionTag}
@@ -39,25 +39,25 @@
       />
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-zinc-300"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
       title="Drop any exported image that still has an unvalidated or otherwise unlabeled object on it, instead of letting the detector learn that object as background."
     >
       <input
         type="checkbox"
         bind:checked={run.requireFullyLabeled}
-        class="h-4 w-4 cursor-pointer accent-blue-500"
+        class="h-4 w-4 cursor-pointer accent-accent"
       />
       Only images whose every object is labeled
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-zinc-300"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
       title="Keep one item per near-duplicate group. Needs a current near-duplicate run."
     >
       <input
         type="checkbox"
         data-testid="export-collapse-near-dup"
         bind:checked={run.collapseNearDuplicates}
-        class="h-4 w-4 cursor-pointer accent-blue-500"
+        class="h-4 w-4 cursor-pointer accent-accent"
       />
       Collapse near-duplicates
     </label>
@@ -111,14 +111,14 @@
         manifest.json
       </button>
       {#if !hasMulticlassExport}
-        <span class="text-[11px] text-zinc-500">No frozen multi-class export yet</span>
+        <span class="text-caption text-fg-3">No frozen multi-class export yet</span>
       {/if}
     </div>
   </div>
 
   {#if run.exportBlocked && run.blockingReasons.length > 0}
     <ul
-      class="mt-2 list-inside list-disc text-xs text-amber-300"
+      class="mt-2 list-inside list-disc text-xs text-warn"
       data-testid="export-blocking-reasons"
     >
       {#each run.blockingReasons as reason, i (i)}
@@ -130,23 +130,23 @@
   <ExportItemFilter state={run.exportFilter} />
 
   {#if run.exportState}
-    <div class="mt-3 text-xs text-zinc-400">
-      Last status: <span class="font-mono text-zinc-200">{run.exportState.status}</span>
+    <div class="mt-3 text-xs text-fg-2">
+      Last status: <span class="font-mono text-fg-1">{run.exportState.status}</span>
       {#if run.exportState.last_run}
         · {formatTimestamp(run.exportState.last_run)}
       {/if}
       {#if run.exportState.export_dir}
-        · <span class="font-mono text-zinc-300">{run.exportState.export_dir}</span>
+        · <span class="font-mono text-fg-2">{run.exportState.export_dir}</span>
       {/if}
       {#if run.exportState.error}
-        · <span class="text-red-300">{run.exportState.error}</span>
+        · <span class="text-danger">{run.exportState.error}</span>
       {/if}
     </div>
     {#if run.exportState.status === 'success'}
-      <p class="mt-2 text-xs text-zinc-400">
+      <p class="mt-2 text-xs text-fg-2">
         Next: <a
           href={resolve(projectHref('/train'))}
-          class="text-blue-400 underline hover:text-blue-300"
+          class="text-accent underline hover:text-accent"
           >train on this export from the Train cockpit</a
         >.
       </p>
@@ -161,19 +161,17 @@
     {#if run.exportState.image_count != null || run.exportState.object_count != null || run.exportState.class_count != null || run.exportState.split_counts}
       <div class="mt-3 flex flex-wrap gap-2 text-xs">
         {#if run.exportState.image_count != null || run.exportState.object_count != null}
-          <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-            <span class="ml-1 font-mono text-zinc-200"
+          <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
+            <span class="ml-1 font-mono text-fg-1"
               >{formatCount(run.exportState.object_count)}</span
             >
-            <span class="text-zinc-500">objects in</span>
-            <span class="ml-1 font-mono text-zinc-200"
+            <span class="text-fg-3">objects in</span>
+            <span class="ml-1 font-mono text-fg-1"
               >{formatCount(run.exportState.image_count)}</span
             >
-            <span class="text-zinc-500">images</span>
+            <span class="text-fg-3">images</span>
             {#if run.exportState.group_key}
-              <span class="ml-1 text-zinc-500"
-                >(grouped by {run.exportState.group_key})</span
-              >
+              <span class="ml-1 text-fg-3">(grouped by {run.exportState.group_key})</span>
             {/if}
           </span>
         {/if}
@@ -185,36 +183,34 @@
                only as the fallback for an export/backend written before
                the field existed. -->
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             data-testid="export-class-count"
           >
             {#if run.exportState.classes_with_objects != null}
-              <span class="font-mono text-zinc-200"
+              <span class="font-mono text-fg-1"
                 >{run.exportState.classes_with_objects}</span
               >
-              <span class="text-zinc-500">classes with objects</span>
-              <span class="ml-1 text-zinc-500"
+              <span class="text-fg-3">classes with objects</span>
+              <span class="ml-1 text-fg-3"
                 >({run.exportState.class_count} in registry)</span
               >
             {:else if run.exportState.class_split_counts}
-              <span class="font-mono text-zinc-200"
+              <span class="font-mono text-fg-1"
                 >{run.exportClassSplit.withObjects.length}</span
               >
-              <span class="text-zinc-500">classes with objects</span>
-              <span class="ml-1 text-zinc-500"
+              <span class="text-fg-3">classes with objects</span>
+              <span class="ml-1 text-fg-3"
                 >({run.exportState.class_count} in registry)</span
               >
             {:else}
-              <span class="text-zinc-500">classes in registry</span>
-              <span class="ml-1 font-mono text-zinc-200"
-                >{run.exportState.class_count}</span
-              >
+              <span class="text-fg-3">classes in registry</span>
+              <span class="ml-1 font-mono text-fg-1">{run.exportState.class_count}</span>
             {/if}
           </span>
         {/if}
         {#if run.exportState.split_counts}
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1 font-mono"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 font-mono"
             title="Images per split"
           >
             images: train {run.exportState.split_counts.train.toLocaleString()} · val {run.exportState.split_counts.val.toLocaleString()}
@@ -223,7 +219,7 @@
         {/if}
         {#if run.exportState.split_object_counts}
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1 font-mono"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 font-mono"
             title="Objects (label lines) per split"
           >
             objects: train {run.exportState.split_object_counts.train.toLocaleString()} · val
@@ -238,48 +234,48 @@
          export (formatCount renders "—"); the whole block hides when
          nothing here was ever recorded. -->
     {#if run.exportState.require_fully_labeled_images != null || run.exportState.unlabeled_items_on_exported_images != null || run.exportState.images_with_unlabeled_items != null || run.exportState.images_dropped_not_fully_labeled != null || run.exportState.skipped_items != null}
-      <div class="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+      <div class="mt-2 flex flex-wrap gap-2 text-xs text-fg-2">
         {#if run.exportState.require_fully_labeled_images != null}
-          <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-            require_fully_labeled_images: <span class="font-mono text-zinc-200"
+          <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
+            require_fully_labeled_images: <span class="font-mono text-fg-1"
               >{run.exportState.require_fully_labeled_images ? 'true' : 'false'}</span
             >
           </span>
         {/if}
         {#if run.exportState.unlabeled_items_on_exported_images != null}
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             title="Objects on exported images the export did not label — learned as background."
           >
-            unlabeled objects on exported images: <span class="font-mono text-zinc-200"
+            unlabeled objects on exported images: <span class="font-mono text-fg-1"
               >{formatCount(run.exportState.unlabeled_items_on_exported_images)}</span
             >
           </span>
         {/if}
         {#if run.exportState.images_with_unlabeled_items != null}
-          <span class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1">
-            images with an unlabeled object: <span class="font-mono text-zinc-200"
+          <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
+            images with an unlabeled object: <span class="font-mono text-fg-1"
               >{formatCount(run.exportState.images_with_unlabeled_items)}</span
             >
           </span>
         {/if}
         {#if run.exportState.images_dropped_not_fully_labeled != null}
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             title="Images left out by require_fully_labeled_images (0 when it was off)."
           >
-            images dropped (not fully labeled): <span class="font-mono text-zinc-200"
+            images dropped (not fully labeled): <span class="font-mono text-fg-1"
               >{formatCount(run.exportState.images_dropped_not_fully_labeled)}</span
             >
           </span>
         {/if}
         {#if run.exportState.skipped_items != null}
           <span
-            class="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             title="Validated items the export couldn't write: no source image id, or no usable box/class."
             data-testid="export-skipped-items"
           >
-            skipped items: <span class="font-mono text-zinc-200"
+            skipped items: <span class="font-mono text-fg-1"
               >{formatCount(run.exportState.skipped_items.no_image_id)} no image id · {formatCount(
                 run.exportState.skipped_items.no_usable_box_or_class,
               )} no usable box/class</span
@@ -291,12 +287,12 @@
 
     {#if run.exportState.class_split_counts && run.exportState.class_split_counts.length > 0}
       <details class="mt-3 text-xs">
-        <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
+        <summary class="cursor-pointer text-fg-2 hover:text-fg-1">
           Per-class object counts ({run.exportClassSplit.withObjects.length} classes with objects)
         </summary>
         <ClassSplitTable class="mt-2 max-h-64" rows={run.exportClassSplit.withObjects} />
         {#if run.exportClassSplit.empty.length > 0}
-          <p class="mt-1 text-zinc-500" data-testid="export-empty-classes">
+          <p class="mt-1 text-fg-3" data-testid="export-empty-classes">
             {run.exportClassSplit.empty.length} class{run.exportClassSplit.empty
               .length === 1
               ? ''

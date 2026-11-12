@@ -20,7 +20,7 @@ describe('the crop/region image never collapses to 0px when Details opens', () =
     // there), the floor + ceiling from lg up; overflow-hidden so a region
     // canvas can't paint over the first metadata row.
     expect(src).toMatch(
-      /flex h-\[\d+px\] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-\[\d+%\] lg:min-h-\[\d+px\]/,
+      /flex h-\[\d+px\] shrink-0 items-center justify-center overflow-hidden bg-surface-0 lg:h-auto lg:max-h-\[\d+%\] lg:min-h-\[\d+px\]/,
     );
   });
 

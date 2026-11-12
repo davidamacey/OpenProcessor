@@ -60,36 +60,34 @@
 </script>
 
 <div>
-  <h3 class="mb-2 text-sm font-semibold text-zinc-200">Region detection worklog</h3>
+  <h3 class="mb-2 text-sm font-semibold text-fg-1">Region detection worklog</h3>
   {#if error}
-    <p class="text-xs text-red-300">Detection worklog unavailable (backend: {error})</p>
+    <p class="text-xs text-danger">Detection worklog unavailable (backend: {error})</p>
   {:else if !drain}
-    <p class="text-xs text-zinc-500">Loading…</p>
+    <p class="text-xs text-fg-3">Loading…</p>
   {:else}
     <div class="flex gap-4 text-xs">
       <div>
-        <div class="text-zinc-500">Pending detection</div>
-        <div class="font-mono text-zinc-200">{drain.pending_detection}</div>
+        <div class="text-fg-3">Pending detection</div>
+        <div class="font-mono text-fg-1">{drain.pending_detection}</div>
       </div>
       <div>
-        <div class="text-zinc-500">Pending verification</div>
-        <div class="font-mono text-zinc-200">{drain.pending_verification}</div>
+        <div class="text-fg-3">Pending verification</div>
+        <div class="font-mono text-fg-1">{drain.pending_verification}</div>
       </div>
       <div>
-        <div class="text-zinc-500">Total unfinished</div>
+        <div class="text-fg-3">Total unfinished</div>
         <div
-          class="font-mono {drain.total_unfinished === 0
-            ? 'text-emerald-400'
-            : 'text-zinc-200'}"
+          class="font-mono {drain.total_unfinished === 0 ? 'text-success' : 'text-fg-1'}"
           data-testid="region-drain-total-unfinished"
         >
           {drain.total_unfinished}
         </div>
       </div>
       <div>
-        <div class="text-zinc-500">Drained</div>
+        <div class="text-fg-3">Drained</div>
         <div
-          class="font-mono {drain.drained ? 'text-emerald-400' : 'text-zinc-200'}"
+          class="font-mono {drain.drained ? 'text-success' : 'text-fg-1'}"
           data-testid="region-drain-drained"
         >
           {drain.drained ? 'yes' : 'no'}
@@ -99,23 +97,23 @@
     {#if drain.stall_reason}
       <!-- V-1: why the worklog can't drain, served verbatim. -->
       <p
-        class="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200"
+        class="mt-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
         data-testid="region-drain-stall-reason"
       >
         Stalled: {drain.stall_reason}
       </p>
     {/if}
     {#if drain.region_dependencies && drain.region_dependencies.some((d) => !d.ready)}
-      <ul class="mt-2 space-y-0.5 text-[11px]" data-testid="region-drain-dependencies">
+      <ul class="mt-2 space-y-0.5 text-caption" data-testid="region-drain-dependencies">
         {#each drain.region_dependencies.filter((d) => !d.ready) as dep (dep.role + dep.model)}
-          <li class="text-zinc-400">
-            <span class="text-zinc-300">{dep.role}</span>
+          <li class="text-fg-2">
+            <span class="text-fg-2">{dep.role}</span>
             <span class="font-mono">{dep.model}</span>: not ready — {dep.detail}
           </li>
         {/each}
       </ul>
     {/if}
-    <p class="mt-1 text-[11px] text-zinc-500">
+    <p class="mt-1 text-caption text-fg-3">
       Last checked: {formatTime(lastChecked)}
       {#if drain.drained}
         · stable for {Math.round(drain.stable_for_s)}s

@@ -49,7 +49,7 @@
   data-testid="served-filter-{spec.param}"
   title={spec.description || undefined}
 >
-  <span class="text-zinc-400">{spec.label}</span>
+  <span class="text-fg-2">{spec.label}</span>
   {#if spec.kind === 'enum'}
     <select
       value={enumValue}
@@ -67,8 +67,8 @@
         <button
           type="button"
           class="chip {list.includes(opt.value)
-            ? 'border-blue-500/60 bg-blue-600 text-white'
-            : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-700'}"
+            ? 'border-accent/60 bg-accent-fill text-white'
+            : 'bg-surface-1 text-fg-2 hover:bg-surface-3'}"
           aria-pressed={list.includes(opt.value)}
           {disabled}
           onclick={() => toggle(opt.value)}

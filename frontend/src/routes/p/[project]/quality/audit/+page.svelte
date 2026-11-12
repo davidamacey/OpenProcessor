@@ -40,10 +40,10 @@
   <AuditStartForm {audit} />
 
   {#if audit.loading && !audit.report}
-    <section class="surface p-6 text-sm text-zinc-500">Loading…</section>
+    <section class="surface p-6 text-sm text-fg-3">Loading…</section>
   {:else if audit.loadError}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-red-300" data-testid="audit-load-error">{audit.loadError}</p>
+      <p class="text-danger" data-testid="audit-load-error">{audit.loadError}</p>
       <button type="button" class="btn w-fit" onclick={() => void audit.load()}
         >Retry</button
       >
@@ -56,15 +56,15 @@
     >
       <span
         ><span class="font-mono text-lg" data-testid="audit-audited">{r.audited}</span>
-        <span class="text-zinc-400">labeled by a human</span></span
+        <span class="text-fg-2">labeled by a human</span></span
       >
       <span
         ><span class="font-mono text-lg" data-testid="audit-pending">{r.pending}</span>
-        <span class="text-zinc-400">still waiting</span></span
+        <span class="text-fg-2">still waiting</span></span
       >
       <ul class="flex flex-wrap gap-2 text-xs" data-testid="audit-outcomes">
         {#each Object.entries(r.outcomes) as [outcome, n] (outcome)}
-          <li class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-300">
+          <li class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2">
             {humanizeId(outcome)}: <span class="font-mono">{n}</span>
           </li>
         {/each}
@@ -97,9 +97,9 @@
           href={resolve(projectHref(`/workspace${reviewSearch({ queue: 'audit' })}`))}
           data-testid="audit-open-queue">Label the sample in Review</a
         >
-        <span class="text-zinc-400">{r.pending.toLocaleString()} crops are waiting.</span>
+        <span class="text-fg-2">{r.pending.toLocaleString()} crops are waiting.</span>
       {:else}
-        <span class="text-zinc-500" data-testid="audit-nothing-waiting"
+        <span class="text-fg-3" data-testid="audit-nothing-waiting"
           >Nothing is waiting. Draw a sample to start an audit.</span
         >
       {/if}

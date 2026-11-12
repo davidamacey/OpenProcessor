@@ -26,7 +26,7 @@
     labels = ['All', 'Largest', '+2nd'],
     titles = [],
     label,
-    labelClass = 'text-zinc-400',
+    labelClass = 'text-fg-2',
     dense = false,
   }: Props = $props();
 
@@ -37,13 +37,13 @@
   {#if label}
     <span class={labelClass}>{label}</span>
   {/if}
-  <div class="inline-flex overflow-hidden rounded border border-zinc-700">
+  <div class="inline-flex overflow-hidden rounded border border-line-strong">
     {#each options as opt (opt.v)}
       <button
         type="button"
         class="chip rounded-none border-0 {value === opt.v
-          ? 'bg-blue-600 text-white'
-          : `${dense ? 'bg-zinc-800' : 'bg-zinc-900'} text-zinc-300 hover:bg-zinc-700`}"
+          ? 'bg-accent-fill text-white'
+          : `${dense ? 'bg-surface-2' : 'bg-surface-1'} text-fg-2 hover:bg-surface-3`}"
         title={titles[opt.v]}
         onclick={() => (value = opt.v)}
       >

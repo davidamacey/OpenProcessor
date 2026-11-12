@@ -52,7 +52,7 @@
 
 {#if ready.length > 1}
   <div class="inline-flex items-center gap-2" data-testid="search-space-picker">
-    <label class="flex items-center gap-1 text-zinc-400">
+    <label class="flex items-center gap-1 text-fg-2">
       Space
       <select
         class="input-sm"
@@ -68,7 +68,7 @@
         {/each}
       </select>
     </label>
-    <label class="flex items-center gap-1 text-zinc-400">
+    <label class="flex items-center gap-1 text-fg-2">
       <input
         type="checkbox"
         data-testid="search-space-fuse"

@@ -252,32 +252,32 @@
 
 <section class="space-y-3">
   <!-- Model size + profile -->
-  <div class="rounded-md border border-zinc-800 bg-zinc-900 p-3">
+  <div class="rounded-md border border-line bg-surface-1 p-3">
     <div class="mb-3 flex flex-wrap items-center gap-3">
-      <span class="text-[11px] uppercase tracking-wide text-zinc-500">Model size</span>
+      <span class="text-caption uppercase tracking-wide text-fg-3">Model size</span>
       {#each SIZES as s (s)}
         <button
           type="button"
           class="rounded-md border px-2 py-1 text-sm transition {modelSize === s
-            ? 'border-blue-500 bg-blue-500/15 text-white'
-            : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-zinc-500'}"
+            ? 'border-accent bg-accent/15 text-white'
+            : 'border-line-strong bg-surface-0 text-fg-2 hover:border-fg-3'}"
           onclick={() => (modelSize = s)}
         >
           {s}
         </button>
       {/each}
-      <span class="text-xs text-zinc-500">YOLO26 (n=fastest, x=most accurate)</span>
+      <span class="text-xs text-fg-3">YOLO26 (n=fastest, x=most accurate)</span>
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <span class="text-[11px] uppercase tracking-wide text-zinc-500">Profile</span>
+      <span class="text-caption uppercase tracking-wide text-fg-3">Profile</span>
       {#each PROFILE_NAMES as p (p)}
         {@const desc = profiles.find((x) => x.name === p)?.description ?? ''}
         <button
           type="button"
           class="rounded-md border px-2 py-1 text-sm transition {profileName === p
-            ? 'border-blue-500 bg-blue-500/15 text-white'
-            : 'border-zinc-700 bg-zinc-950 text-zinc-300 hover:border-zinc-500'}"
+            ? 'border-accent bg-accent/15 text-white'
+            : 'border-line-strong bg-surface-0 text-fg-2 hover:border-fg-3'}"
           onclick={() => applyProfile(p)}
           title={desc}
         >
@@ -288,12 +288,12 @@
   </div>
 
   <!-- GPU -->
-  <div class="rounded-md border border-zinc-800 bg-zinc-900 p-3">
-    <span class="mb-2 block text-[11px] uppercase tracking-wide text-zinc-500">GPUs</span>
+  <div class="rounded-md border border-line bg-surface-1 p-3">
+    <span class="mb-2 block text-caption uppercase tracking-wide text-fg-3">GPUs</span>
     {#if gpuError}
-      <p class="text-[11px] text-red-300">GPU options unavailable: {gpuError}</p>
+      <p class="text-caption text-danger">GPU options unavailable: {gpuError}</p>
     {:else if !gpuOptions}
-      <p class="text-[11px] text-zinc-500">Loading GPU options…</p>
+      <p class="text-caption text-fg-3">Loading GPU options…</p>
     {:else if gpuOptions.unrestricted}
       <input
         type="text"
@@ -312,15 +312,15 @@
               value={opt.value}
               checked={cudaDevices === opt.value}
               onchange={() => (cudaDevices = opt.value)}
-              class="accent-blue-500"
+              class="accent-accent"
             />
-            <span class="text-zinc-200">{opt.label}</span>
+            <span class="text-fg-1">{opt.label}</span>
           </label>
         {/each}
       </div>
     {/if}
     {#if gpuAdvisory}
-      <p class="mt-2 text-[11px] text-yellow-300">{gpuAdvisory}</p>
+      <p class="mt-2 text-caption text-warn">{gpuAdvisory}</p>
     {/if}
   </div>
 
@@ -331,9 +331,7 @@
        while training a single-class dataset. Replaced with a
        plain note instead of an interactive picker that has no effect. -->
   {#if singleClassExport}
-    <p
-      class="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400"
-    >
+    <p class="rounded-md border border-line bg-surface-1 px-3 py-2 text-xs text-fg-2">
       Single-class dataset — trains the one class the export was built for, not a
       selection from the class registry.
     </p>
@@ -357,51 +355,51 @@
 
   <!-- Submit row -->
   <div
-    class="flex flex-wrap items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900 p-3"
+    class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1 p-3"
   >
-    <label class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+    <label class="flex cursor-pointer items-center gap-2 text-xs text-fg-2">
       <input
         type="checkbox"
         bind:checked={campaignMode}
-        class="h-4 w-4 cursor-pointer accent-blue-500"
+        class="h-4 w-4 cursor-pointer accent-accent"
       />
       Multi-size campaign
     </label>
 
     <label
-      class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300"
+      class="flex cursor-pointer items-center gap-2 text-xs text-fg-2"
       title="On successful finish, auto-export FP16/INT8 ONNX (+ CoreML on the Mac) and benchmark size, accuracy, and speed."
     >
       <input
         type="checkbox"
         bind:checked={autoQuantizeBakeoff}
-        class="h-4 w-4 cursor-pointer accent-emerald-500"
+        class="h-4 w-4 cursor-pointer accent-success"
       />
       Auto-export &amp; benchmark on finish
     </label>
 
     {#if campaignMode}
-      <span class="text-[11px] text-zinc-500">sizes</span>
+      <span class="text-caption text-fg-3">sizes</span>
       {#each SIZES as s (s)}
         <button
           type="button"
           class="rounded-md border px-2 py-0.5 text-xs {campaignSizes.includes(s)
-            ? 'border-blue-500 bg-blue-500/15 text-white'
-            : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:border-zinc-500'}"
+            ? 'border-accent bg-accent/15 text-white'
+            : 'border-line-strong bg-surface-0 text-fg-2 hover:border-fg-3'}"
           onclick={() => toggleCampaignSize(s)}
         >
           {s}
         </button>
       {/each}
-      <label class="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+      <label class="flex cursor-pointer items-center gap-2 text-xs text-fg-2">
         <input
           type="checkbox"
           bind:checked={autoPromoteBest}
-          class="h-4 w-4 cursor-pointer accent-blue-500"
+          class="h-4 w-4 cursor-pointer accent-accent"
         />
         auto-promote best
       </label>
-      <label class="flex items-center gap-2 text-xs text-zinc-300">
+      <label class="flex items-center gap-2 text-xs text-fg-2">
         stop_when mAP50 ≥
         <input
           type="number"
@@ -409,7 +407,7 @@
           min="0"
           max="1"
           bind:value={stopWhenMap50}
-          class="w-20 rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 font-mono text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-20 rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono text-xs text-fg-1 focus:border-accent focus:outline-none"
         />
       </label>
     {/if}
@@ -417,7 +415,7 @@
     <span class="grow"></span>
 
     {#if isBlocked}
-      <label class="flex items-center gap-1.5 text-xs text-amber-200">
+      <label class="flex items-center gap-1.5 text-xs text-warn">
         <input type="checkbox" bind:checked={force} data-testid="train-force" />
         Start anyway (bypass blocking checks)
       </label>

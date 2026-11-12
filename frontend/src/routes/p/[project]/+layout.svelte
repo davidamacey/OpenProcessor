@@ -203,11 +203,7 @@
 
   const chipState = $derived(healthChip(healthStore.ok, healthStore.lastChecked));
   const dotClass = $derived(
-    chipState === 'ok'
-      ? 'bg-green-500'
-      : chipState === 'down'
-        ? 'bg-red-500'
-        : 'bg-zinc-500',
+    chipState === 'ok' ? 'bg-success' : chipState === 'down' ? 'bg-danger' : 'bg-fg-3',
   );
   const dotTitle = $derived(
     chipState === 'checking'
@@ -226,15 +222,15 @@
     <ProjectUnavailable resolution={data.resolution} />
   {/if}
 {:else}
-  <div class="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+  <div class="flex h-screen flex-col bg-surface-0 text-fg-1">
     <!-- Top bar -->
     <header
-      class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-zinc-800 bg-zinc-950 px-4 py-1.5 md:h-12 md:flex-nowrap md:py-0"
+      class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line bg-surface-0 px-4 py-1.5 md:h-12 md:flex-nowrap md:py-0"
     >
       <div class="flex shrink-0 items-center gap-2 text-sm font-semibold tracking-tight">
         <button
           type="button"
-          class="flex shrink-0 items-center justify-center rounded border border-zinc-700 transition-transform duration-150 hover:scale-110 hover:border-zinc-500"
+          class="flex shrink-0 items-center justify-center rounded border border-line-strong transition-transform duration-150 hover:scale-110 hover:border-fg-3"
           onclick={() => (aboutOpen = true)}
           aria-label="About {appName}"
           title="About {appName}"
@@ -262,7 +258,7 @@
         {#if crumb}
           <a
             href={resolve(crumb.href)}
-            class="shrink-0 rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
+            class="shrink-0 rounded px-1.5 py-0.5 text-fg-2 hover:bg-surface-1 hover:text-white"
             aria-current="page"
           >
             {crumb.label}
@@ -277,7 +273,7 @@
          row. -->
       <nav
         aria-label="Primary"
-        class="order-last flex basis-full flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-300 md:order-none md:basis-auto"
+        class="order-last flex basis-full flex-wrap gap-x-3 gap-y-1 text-sm text-fg-2 md:order-none md:basis-auto"
         data-testid="primary-nav"
       >
         {#each PRIMARY_NAV as item (item.section)}
@@ -292,7 +288,7 @@
       <ResourcesMenu />
 
       <span
-        class="chip shrink-0 gap-1.5 rounded-full border-zinc-700 bg-zinc-900 text-zinc-300"
+        class="chip shrink-0 gap-1.5 rounded-full border-line-strong bg-surface-1 text-fg-2"
         title={dotTitle}
       >
         <span class="h-2 w-2 rounded-full {dotClass}"></span>
@@ -312,7 +308,7 @@
       <!-- Served `writable: false` (e.g. an archived project): reads
            work, every write answers 409 server-side. -->
       <div
-        class="shrink-0 border-b border-amber-900/60 bg-amber-950/40 px-4 py-1.5 text-xs text-amber-200"
+        class="shrink-0 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-xs text-warn"
         data-testid="project-read-only-banner"
       >
         {active.display_name} is {projectsStore.statusLabel(active.status).toLowerCase()} and

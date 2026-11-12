@@ -33,7 +33,7 @@
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-zinc-800 bg-zinc-900/40 px-4 py-2 text-xs"
+  class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface-1/40 px-4 py-2 text-xs"
   role="group"
   aria-label="Cluster sort and filters"
   data-testid="cluster-list-filters"
@@ -60,7 +60,7 @@
     onchange={(detector_class) => list.setFilter({ ...filter, detector_class })}
   />
 
-  <div class="flex items-center gap-1.5 text-zinc-400">
+  <div class="flex items-center gap-1.5 text-fg-2">
     <span>Size</span>
     <input
       type="number"
@@ -85,7 +85,7 @@
     />
   </div>
 
-  <label class="flex items-center gap-2 text-zinc-400">
+  <label class="flex items-center gap-2 text-fg-2">
     Validation
     <select
       class="select-sm"
@@ -104,7 +104,7 @@
     </select>
   </label>
 
-  <label class="flex items-center gap-1.5 text-zinc-300">
+  <label class="flex items-center gap-1.5 text-fg-2">
     <input
       type="checkbox"
       checked={filter.needs_review}
@@ -120,8 +120,8 @@
         <button
           type="button"
           class="btn-sm border text-xs transition-colors {filter.flag.includes(f.id)
-            ? 'border-red-500/60 bg-red-500/20 text-red-100'
-            : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-red-500/40'}"
+            ? 'border-danger/60 bg-danger/20 text-danger'
+            : 'border-line-strong bg-surface-1 text-fg-2 hover:border-danger/40'}"
           aria-pressed={filter.flag.includes(f.id)}
           title={f.description}
           data-testid="cluster-flag-filter-{f.id}"
@@ -136,7 +136,7 @@
   {#if list.filterActive}
     <button
       type="button"
-      class="btn-sm ml-auto border border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+      class="btn-sm ml-auto border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
       data-testid="cluster-filters-clear"
       onclick={() => list.clearFilter()}
     >

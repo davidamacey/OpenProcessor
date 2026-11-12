@@ -60,9 +60,9 @@
 
 <svelte:head><title>Bake-off · Cropwright</title></svelte:head>
 
-<div class="mx-auto max-w-7xl p-6 text-zinc-200">
+<div class="mx-auto max-w-7xl p-6 text-fg-1">
   <h1 class="mb-1 text-2xl font-semibold">Bake-off: model comparison</h1>
-  <p class="mb-6 text-sm text-zinc-400">
+  <p class="mb-6 text-sm text-fg-2">
     Score trained models and baselines on frozen test splits, per class, in the on-demand
     evaluator. Classes a model does not cover are shown, not hidden.
   </p>
@@ -71,23 +71,23 @@
 
   {#if s.loadErrors.length}
     <ul
-      class="mb-4 space-y-0.5 rounded border border-red-700 bg-red-950 p-3 text-sm text-red-200"
+      class="mb-4 space-y-0.5 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
       data-testid="load-errors"
     >
       {#each s.loadErrors as e, i (i)}<li>{e}</li>{/each}
     </ul>
   {/if}
 
-  <section class="mb-6 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-zinc-300">Set up a comparison</h2>
+  <section class="mb-6 rounded-lg border border-line bg-surface-1/50 p-4">
+    <h2 class="mb-3 text-sm font-medium text-fg-2">Set up a comparison</h2>
 
     <div class="mb-4 flex flex-wrap items-center gap-3 text-sm">
       <label>
-        <span class="text-zinc-400">Profile</span>
+        <span class="text-fg-2">Profile</span>
         <select
           value={s.profile}
           onchange={(e) => void controller.setProfile(e.currentTarget.value)}
-          class="ml-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs"
+          class="ml-2 rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs"
           data-testid="profile-select"
         >
           {#if !s.profiles.some((p) => p.name === s.profile)}
@@ -99,7 +99,7 @@
         </select>
       </label>
       {#if activeProfile}
-        <span class="text-xs text-zinc-500" data-testid="profile-summary">
+        <span class="text-xs text-fg-3" data-testid="profile-summary">
           {activeProfile.description}{activeProfile.description ? ' · ' : ''}ranked by
           {metricLabel(activeProfile.rank_metric)} · op conf {activeProfile.op_conf} · op IoU
           {activeProfile.op_iou} · {activeProfile.imgsz}px
@@ -109,14 +109,14 @@
       {/if}
     </div>
     {#if s.profileDefaultError}
-      <p class="mb-3 text-xs text-amber-300" data-testid="profile-default-error">
+      <p class="mb-3 text-xs text-warn" data-testid="profile-default-error">
         The configured default profile is invalid: {s.profileDefaultError}
       </p>
     {/if}
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>
-        <h3 class="mb-2 text-sm font-medium text-zinc-300">
+        <h3 class="mb-2 text-sm font-medium text-fg-2">
           Datasets ({s.selectedDatasets.length}/{s.datasets.length})
         </h3>
         <div class="max-h-80 overflow-auto pr-1">
@@ -128,7 +128,7 @@
         </div>
       </div>
       <div>
-        <h3 class="mb-2 text-sm font-medium text-zinc-300">Models ({nModels})</h3>
+        <h3 class="mb-2 text-sm font-medium text-fg-2">Models ({nModels})</h3>
         <div class="max-h-80 overflow-auto pr-1">
           <ModelPicker
             trained={s.trained}
@@ -162,9 +162,7 @@
         Run comparison
       </button>
       {#if !canRun}
-        <span class="text-xs text-zinc-500"
-          >Select at least one dataset and one model.</span
-        >
+        <span class="text-xs text-fg-3">Select at least one dataset and one model.</span>
       {/if}
     </div>
   </section>
@@ -192,46 +190,46 @@
 
   <div class="grid grid-cols-[220px_minmax(0,1fr)] gap-6">
     <aside>
-      <h2 class="mb-2 text-sm font-medium text-zinc-400">Previous runs</h2>
+      <h2 class="mb-2 text-sm font-medium text-fg-2">Previous runs</h2>
       <ul class="space-y-1" data-testid="runs-list">
         {#each s.runs as r (r.job_id)}
           <li>
             <button
               type="button"
               onclick={() => void controller.viewRun(r.job_id)}
-              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-zinc-800 {s.viewJob ===
+              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-surface-2 {s.viewJob ===
               r.job_id
-                ? 'bg-zinc-800'
+                ? 'bg-surface-2'
                 : ''}"
               data-job-id={r.job_id}
             >
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
-                <span class="shrink-0 text-zinc-500">{r.state}</span>
+                <span class="shrink-0 text-fg-3">{r.state}</span>
               </div>
-              <div class="text-[10px] text-zinc-600">
+              <div class="text-caption text-fg-3">
                 {r.models.length} model{r.models.length === 1 ? '' : 's'} × {r.datasets
                   .length} dataset{r.datasets.length === 1 ? '' : 's'}{r.profile
                   ? ` · ${r.profile}`
                   : ''}
               </div>
-              <div class="text-[10px] text-zinc-600">{formatTimestamp(r.started_at)}</div>
+              <div class="text-caption text-fg-3">{formatTimestamp(r.started_at)}</div>
             </button>
           </li>
         {:else}
-          <li class="text-xs text-zinc-600">No comparison runs yet.</li>
+          <li class="text-xs text-fg-3">No comparison runs yet.</li>
         {/each}
       </ul>
     </aside>
 
     <section class="min-w-0" data-testid="results">
       {#if s.viewJob}
-        <h2 class="mb-3 text-sm font-medium text-zinc-400">
+        <h2 class="mb-3 text-sm font-medium text-fg-2">
           Results · <span class="font-mono">{s.viewJob}</span>
         </h2>
         {#if s.matrixError}
           <p
-            class="mb-3 rounded border border-red-800 bg-red-950/60 p-3 text-sm text-red-200"
+            class="mb-3 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
           >
             {s.matrixError}
           </p>
@@ -249,8 +247,8 @@
                 role="tab"
                 aria-selected={s.viewDataset === id}
                 class="rounded px-2 py-1 text-xs {s.viewDataset === id
-                  ? 'bg-zinc-700 text-zinc-100'
-                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}"
+                  ? 'bg-surface-3 text-fg-1'
+                  : 'bg-surface-1 text-fg-2 hover:bg-surface-2'}"
                 onclick={() => void controller.setViewDataset(id)}
                 >{datasetName(id)}</button
               >
@@ -264,7 +262,7 @@
           loading={s.loadingResults}
         />
       {:else}
-        <p class="text-sm text-zinc-500">Select a run to view its results.</p>
+        <p class="text-sm text-fg-3">Select a run to view its results.</p>
       {/if}
     </section>
   </div>

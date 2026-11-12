@@ -78,14 +78,14 @@
   class="flex h-[35vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
   data-testid="review-source-panel"
 >
-  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
+  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-fg-2">
     <span>source</span>
     <span class="grow"></span>
     <span class="font-mono">{current.source ?? ''}</span>
   </div>
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
-  <div class="flex min-h-0 flex-1 items-start justify-center bg-zinc-950">
+  <div class="flex min-h-0 flex-1 items-start justify-center bg-surface-0">
     <!-- Boxes/labels are drawn client-side from
          GET {API_PREFIX}/images/{image_id} over the clean pixels. -->
     {#if current.image_id}
@@ -96,14 +96,14 @@
         align="start"
       />
     {:else}
-      <p class="text-xs text-zinc-500">No source image is recorded for this item.</p>
+      <p class="text-xs text-fg-3">No source image is recorded for this item.</p>
     {/if}
   </div>
 </div>
 
 <!-- Crop + meta -->
 <div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
-  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-zinc-400">
+  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-fg-2">
     <span>crop</span>
     <span class="grow"></span>
     <span class="font-mono">{current.id.slice(0, 12)}…</span>
@@ -129,7 +129,7 @@
   <!-- F8 D4: overflow-hidden so a region canvas never paints over the
        first metadata row (the Reason row read half-clipped). -->
   <div
-    class="relative flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-zinc-950 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
+    class="relative flex h-[210px] shrink-0 items-center justify-center overflow-hidden bg-surface-0 lg:h-auto lg:max-h-[40%] lg:min-h-[210px]"
   >
     {#if isMultiBoxSlot && activeSlot}
       <!-- Multi-box:
@@ -209,8 +209,8 @@
         <button
           type="button"
           class="chip {i === multiBox.selectedIndex
-            ? 'border-sky-500/60 bg-sky-500/15 text-sky-100'
-            : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}"
+            ? 'border-info/60 bg-info/15 text-info'
+            : 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'}"
           onclick={() => multiBox.select(i)}
         >
           #{i + 1}
@@ -218,11 +218,11 @@
         </button>
       {/each}
       {#if multiBox.boxes.length === 0}
-        <span class="text-[11px] text-zinc-500">no boxes</span>
+        <span class="text-caption text-fg-3">no boxes</span>
       {/if}
       {#if current && slotOf(current, activeSlot)?.boxSet?.setComplete === false}
         <span
-          class="chip border-amber-500/40 bg-amber-500/15 text-amber-200"
+          class="chip border-warn/40 bg-warn/15 text-warn"
           title="The VLM reported visible regions that are missing from this list"
           data-testid="set-incomplete"
         >
@@ -233,7 +233,7 @@
         <!-- The served region_profile.limits.max_boxes_per_write —
              never a client-guessed cap. -->
         <span
-          class="text-[11px] text-zinc-500"
+          class="text-caption text-fg-3"
           title="Served limit on boxes per write (region_profile.limits.max_boxes_per_write)"
         >
           {multiBox.boxes.length} / {multiBox.maxBoxes} max
@@ -264,7 +264,7 @@
     {#if loader.semanticSearchAvailable}
       <!-- A link, not a button: it navigates and opens in a new tab. -->
       <a
-        class="btn-sm mt-2 inline-block border border-zinc-700 bg-zinc-900 text-xs text-zinc-200 hover:bg-zinc-800"
+        class="btn-sm mt-2 inline-block border border-line-strong bg-surface-1 text-xs text-fg-1 hover:bg-surface-2"
         href={resolve(similarHref(current.id))}
         data-testid="review-similar">More like this</a
       >

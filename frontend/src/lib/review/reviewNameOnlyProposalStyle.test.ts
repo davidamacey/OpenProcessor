@@ -13,12 +13,12 @@ describe('a name-only proposal is styled as a hint, not a confirmable proposal',
     expect(src).toMatch(/\{#if current\.proposed_class_id == null\}/);
   });
 
-  it('the name-only branch uses a neutral color, not text-yellow-200', () => {
+  it('the name-only branch uses a neutral color, not text-warn', () => {
     const block = src.match(
       /\{#if current\.proposed_class_id == null\}[\s\S]*?\{:else\}/,
     )?.[0];
     expect(block).not.toBeUndefined();
-    expect(block).not.toMatch(/text-yellow-200/);
+    expect(block).not.toMatch(/text-warn/);
     expect(block).toMatch(/hint only/);
   });
 });

@@ -19,7 +19,7 @@
   /* Text. fg-3 is for captions of 12px or more only. */
   --color-fg-1: rgb(244 244 245);
   --color-fg-2: rgb(176 176 186);
-  --color-fg-3: rgb(138 138 148);
+  --color-fg-3: rgb(142 142 152); /* spec 138 138 148 measures 4.39:1 on surface-3 */
 
   /* Accent: one primary action per view, the active nav/tab, the selected card ring,
      links and focus. The fill is the white-label-safe blue (4.5:1). */

@@ -106,7 +106,7 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <div class="flex flex-wrap items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
+  <div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5">
     <button
       type="button"
       class="btn shrink-0"
@@ -118,21 +118,21 @@
     </button>
     <h1 class="flex items-baseline gap-2 text-lg font-semibold" data-testid="scope-title">
       {#if view.clusterName}
-        <span class="capitalize text-zinc-100">{view.clusterName}</span>
-        <span class="font-mono text-sm font-normal text-zinc-500" title={view.clusterUid}
+        <span class="capitalize text-fg-1">{view.clusterName}</span>
+        <span class="font-mono text-sm font-normal text-fg-3" title={view.clusterUid}
           >{displayNoText(view.cluster ?? {})}</span
         >
       {:else}
-        <span class="text-zinc-100" title={view.clusterUid}
+        <span class="text-fg-1" title={view.clusterUid}
           >Cluster {displayNoText(view.cluster ?? {})}</span
         >
         {#if view.cluster?.is_unlabeled}
-          <span class="text-sm font-normal text-amber-400/80">unlabeled</span>
+          <span class="text-sm font-normal text-warn/80">unlabeled</span>
         {/if}
       {/if}
     </h1>
     {#if view.cardError}
-      <span class="text-xs text-amber-300" data-testid="cluster-card-error"
+      <span class="text-xs text-warn" data-testid="cluster-card-error"
         >Cluster details unavailable: {view.cardError}</span
       >
     {/if}
@@ -181,7 +181,7 @@
   <ClusterFacetBar {view} />
   {#if clusterAssist.loadError}
     <p
-      class="border-b border-zinc-800 px-4 py-1.5 text-xs text-amber-300"
+      class="border-b border-line px-4 py-1.5 text-xs text-warn"
       data-testid="cluster-assist-error"
     >
       VLM proposals unavailable: {clusterAssist.loadError}
@@ -189,7 +189,7 @@
   {/if}
   {#if clusterAssist.latest}
     {#key clusterAssist.latest.run_id}
-      <div class="border-b border-zinc-800 px-4 py-2">
+      <div class="border-b border-line px-4 py-2">
         <ClusterProposalPanel
           run={clusterAssist.latest}
           onapplied={() => {

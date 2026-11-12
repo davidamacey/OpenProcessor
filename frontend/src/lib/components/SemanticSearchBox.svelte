@@ -103,7 +103,7 @@
 <div class="inline-flex items-center gap-2 text-xs">
   <div class="relative w-72 shrink-0">
     <span
-      class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500"
+      class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3"
       aria-hidden="true"
     >
       <svg
@@ -135,12 +135,12 @@
       }}
       {placeholder}
       spellcheck="false"
-      class="input-sm w-full rounded-full pl-8 pr-7 placeholder:text-zinc-500"
+      class="input-sm w-full rounded-full pl-8 pr-7 placeholder:text-fg-3"
     />
     {#if box.query}
       <button
         type="button"
-        class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-fg-3 hover:bg-surface-2 hover:text-fg-1"
         onclick={() => {
           box.clear();
           onQueryChange?.('');
@@ -161,19 +161,17 @@
   />
 
   {#if box.loading}
-    <span class="text-zinc-500">searching…</span>
+    <span class="text-fg-3">searching…</span>
   {:else if box.error}
-    <span
-      class="rounded border border-red-500/50 bg-red-500/10 px-1.5 py-0.5 text-red-200"
-    >
+    <span class="rounded border border-danger/50 bg-danger/10 px-1.5 py-0.5 text-danger">
       {box.error}
     </span>
   {:else if box.active}
-    <span class="text-zinc-400">
+    <span class="text-fg-2">
       Showing {lastShown} of {lastTotal} result{lastTotal === 1 ? '' : 's'} for “{lastQuery}”
     </span>
     {#if lastSpace}
-      <span class="text-zinc-500" data-testid="search-space-echo">
+      <span class="text-fg-3" data-testid="search-space-echo">
         in {lastSpace}{lastFuse.length ? ` + ${lastFuse.join(', ')}` : ''}
       </span>
     {/if}

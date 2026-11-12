@@ -58,35 +58,35 @@
 
 <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 p-6">
   {#if !kind || !list || !flow}
-    <p class="text-sm text-zinc-400" data-testid="preset-unknown-kind">
+    <p class="text-sm text-fg-2" data-testid="preset-unknown-kind">
       There is no such kind of preset.
     </p>
     <a
-      class="text-xs text-blue-300 hover:underline"
+      class="text-xs text-accent hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
     <header class="flex flex-wrap items-baseline gap-3">
       <h1 class="text-2xl font-semibold tracking-tight">{kind.title}</h1>
       <span
-        class="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-300"
+        class="rounded border border-line-strong px-1.5 text-caption text-fg-2"
         data-testid="preset-scope"
         >{kind.scope === 'deployment' ? 'deployment-wide' : 'this project'}</span
       >
       <span class="grow"></span>
       <a
-        class="text-xs text-blue-300 hover:underline"
+        class="text-xs text-accent hover:underline"
         href={resolve(projectHref('/settings'))}>Back to settings</a
       >
     </header>
-    <p class="text-sm text-zinc-400">{kind.blurb} {activationReach(kind)}</p>
+    <p class="text-sm text-fg-2">{kind.blurb} {activationReach(kind)}</p>
 
     <PresetActiveSummary active={list.active} />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-red-300" data-testid="preset-load-error">{list.loadError}</p>
+      <p class="text-sm text-danger" data-testid="preset-load-error">{list.loadError}</p>
     {:else if !list.list}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {:else}
       {@const items = list.list.items}
       <section
@@ -107,7 +107,7 @@
           >
         </div>
         <table class="w-full text-left text-sm" data-testid="preset-table">
-          <thead class="text-xs text-zinc-500">
+          <thead class="text-xs text-fg-3">
             <tr>
               <th class="py-1 pr-3 font-normal">Name</th>
               <th class="py-1 pr-3 font-normal">Description</th>
@@ -119,13 +119,13 @@
           <tbody>
             {#each items as d (d.name)}
               <tr
-                class="border-t border-zinc-800 align-top"
+                class="border-t border-line align-top"
                 data-testid="preset-row"
                 data-name={d.name}
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-blue-300 hover:underline"
+                    class="font-mono text-accent hover:underline"
                     href={resolve(projectHref(editorPath(d.name)))}>{d.name}</a
                   >
                   {#each list.active.entries.filter((e) => e.state === 'active' && e.name === d.name) as e (e.axis ?? 'deployment')}
@@ -133,19 +133,19 @@
                       class="mt-0.5 flex flex-col items-start gap-0.5 whitespace-nowrap"
                     >
                       <span
-                        class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-[11px] text-emerald-300"
+                        class="rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
                         data-testid="preset-active-chip"
                         >active{axisLabel(e.axis) ? ` · ${axisLabel(e.axis)}` : ''} r{e.revision}</span
                       >
                       {#if e.revision !== d.revision}
-                        <span class="text-[11px] text-amber-300"
+                        <span class="text-caption text-warn"
                           >saved r{d.revision}, active r{e.revision}</span
                         >
                       {/if}
                     </div>
                   {/each}
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-zinc-300">{d.description || '—'}</td>
+                <td class="py-1.5 pr-3 text-xs text-fg-2">{d.description || '—'}</td>
                 <td class="py-1.5 pr-3 font-mono text-xs">{d.revision}</td>
                 <ConfigRowTail row={d} {flow}>
                   {#snippet lead()}
@@ -159,7 +159,7 @@
           </tbody>
         </table>
         {#if items.length === 0}
-          <p class="mt-2 text-sm text-zinc-400" data-testid="preset-empty">
+          <p class="mt-2 text-sm text-fg-2" data-testid="preset-empty">
             No {kind.title.toLowerCase()} yet.
           </p>
         {/if}

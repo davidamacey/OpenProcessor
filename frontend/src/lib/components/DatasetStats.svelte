@@ -69,8 +69,8 @@
 
 <section class="space-y-4">
   <header class="flex items-center justify-between">
-    <h2 class="text-sm font-semibold text-zinc-300">Pipeline stats</h2>
-    <div class="flex items-center gap-2 text-xs text-zinc-500">
+    <h2 class="text-sm font-semibold text-fg-2">Pipeline stats</h2>
+    <div class="flex items-center gap-2 text-xs text-fg-3">
       <span title={lastUpdated ? new Date(lastUpdated).toLocaleString() : ''}>
         updated {fmtRelative(lastUpdated)}
       </span>
@@ -81,13 +81,13 @@
            streaming errors isn't "live" in any sense an operator cares
            about. -->
       <span
-        class="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
-        class:bg-emerald-700={connected && !error}
-        class:text-emerald-50={connected && !error}
-        class:bg-amber-700={connected && !!error}
-        class:text-amber-50={connected && !!error}
-        class:bg-zinc-700={!connected}
-        class:text-zinc-300={!connected}
+        class="rounded px-1.5 py-0.5 text-caption uppercase tracking-wide"
+        class:bg-success={connected && !error}
+        class:text-success={connected && !error}
+        class:bg-warn={connected && !!error}
+        class:text-warn={connected && !!error}
+        class:bg-surface-3={!connected}
+        class:text-fg-2={!connected}
         title={!connected
           ? 'Reconnecting…'
           : error
@@ -101,7 +101,7 @@
 
   {#if error}
     <div
-      class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+      class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
       title={error}
     >
       Stats unavailable: {summarizeStatsError(error)}
@@ -110,27 +110,27 @@
   {/if}
   {#if !stats}
     {#if !error}
-      <p class="text-sm text-zinc-500">Loading…</p>
+      <p class="text-sm text-fg-3">Loading…</p>
     {/if}
   {:else}
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
       <!-- Headline -->
       <div class="surface p-4 lg:col-span-1">
-        <div class="text-xs uppercase tracking-wide text-zinc-500">Total crops</div>
-        <div class="mt-2 font-mono text-3xl font-semibold text-zinc-100">
+        <div class="text-xs uppercase tracking-wide text-fg-3">Total crops</div>
+        <div class="mt-2 font-mono text-3xl font-semibold text-fg-1">
           {fmt(stats.total_crops)}
         </div>
         <dl class="mt-4 space-y-1.5 text-xs">
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Validated (ground truth)</dt>
-            <dd class="font-mono text-green-300">{fmt(stats.validated)}</dd>
+            <dt class="text-fg-2">Validated (ground truth)</dt>
+            <dd class="font-mono text-success">{fmt(stats.validated)}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Test holdout</dt>
+            <dt class="text-fg-2">Test holdout</dt>
             <dd class="font-mono">{fmt(stats.test_holdout)}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Distinct sources</dt>
+            <dt class="text-fg-2">Distinct sources</dt>
             <dd class="font-mono">{stats.by_source.length}</dd>
           </div>
         </dl>
@@ -139,34 +139,34 @@
       <!-- Labeled breakdown -->
       <div class="surface p-4 lg:col-span-2">
         <header class="mb-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-zinc-300">Labeled by source</h3>
-          <span class="text-xs text-zinc-500" data-testid="labeled-total"
+          <h3 class="text-sm font-semibold text-fg-2">Labeled by source</h3>
+          <span class="text-xs text-fg-3" data-testid="labeled-total"
             >{fmt(labeledTotal)} total</span
           >
         </header>
-        <p class="mb-2 text-xs text-zinc-500" data-testid="labeled-not-ground-truth">
+        <p class="mb-2 text-xs text-fg-3" data-testid="labeled-not-ground-truth">
           A label is not ground truth until a human validates it. Only {fmt(
             stats.validated,
           )} of {fmt(stats.total_crops)} crops are validated; VLM and detector labels are suggestions.
         </p>
         {#if labeledRows.length === 0}
-          <p class="text-sm text-zinc-500">No labels yet.</p>
+          <p class="text-sm text-fg-3">No labels yet.</p>
         {:else}
           <ul class="space-y-1.5">
             {#each labeledRows as row (row.key)}
               <li class="flex items-center gap-3 text-xs">
-                <span class="w-24 shrink-0 text-zinc-300">{row.label}</span>
-                <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
+                <span class="w-24 shrink-0 text-fg-2">{row.label}</span>
+                <div class="relative h-3 grow overflow-hidden rounded bg-surface-1">
                   <div
                     class="h-full {row.tone}"
                     style:width="{Math.max(0.5, row.pct)}%"
                     title="{row.pct}%"
                   ></div>
                 </div>
-                <span class="w-20 shrink-0 text-right font-mono text-zinc-300">
+                <span class="w-20 shrink-0 text-right font-mono text-fg-2">
                   {fmt(row.count)}
                 </span>
-                <span class="w-12 shrink-0 text-right font-mono text-zinc-500">
+                <span class="w-12 shrink-0 text-right font-mono text-fg-3">
                   {row.pct.toFixed(1)}%
                 </span>
               </li>
@@ -178,21 +178,21 @@
       <!-- Embedding (v0.4.0): items with and without a vector, as served. -->
       {#if stats.embedding}
         <div class="surface p-4 lg:col-span-1" data-testid="dataset-embedding">
-          <h3 class="mb-3 text-sm font-semibold text-zinc-300">Embedding</h3>
+          <h3 class="mb-3 text-sm font-semibold text-fg-2">Embedding</h3>
           <dl class="space-y-1.5 text-xs">
             <div class="flex justify-between">
-              <dt class="text-zinc-400">Embedded</dt>
+              <dt class="text-fg-2">Embedded</dt>
               <dd class="font-mono">{fmt(stats.embedding.embedded)}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-zinc-400">Not embedded</dt>
+              <dt class="text-fg-2">Not embedded</dt>
               <dd class="font-mono">{fmt(stats.embedding.not_embedded)}</dd>
             </div>
           </dl>
           {#if stateChips.length > 0}
             <div class="mt-2 flex flex-wrap gap-1" data-testid="embedding-by-state">
               {#each stateChips as chip (chip.state)}
-                <span class="chip text-[10px]" title={chip.title}
+                <span class="chip text-caption" title={chip.title}
                   >{chip.label} {fmt(chip.count)}</span
                 >
               {/each}
@@ -203,16 +203,16 @@
 
       <!-- Last clustering -->
       <div class="surface p-4 lg:col-span-1">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">Last clustering</h3>
+        <h3 class="mb-3 text-sm font-semibold text-fg-2">Last clustering</h3>
         <dl class="space-y-1.5 text-xs">
           <div class="flex justify-between">
-            <dt class="text-zinc-400">When</dt>
-            <dd class="text-zinc-300" title={stats.clusters.last_run_at ?? '—'}>
+            <dt class="text-fg-2">When</dt>
+            <dd class="text-fg-2" title={stats.clusters.last_run_at ?? '—'}>
               {formatTimestamp(stats.clusters.last_run_at)}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Clusters (total now)</dt>
+            <dt class="text-fg-2">Clusters (total now)</dt>
             <dd class="font-mono" data-testid="dataset-cluster-count">
               {fmt(stats.clusters.cluster_count)}
             </dd>
@@ -220,7 +220,7 @@
           {#if stats.clusters.last_run_cluster_count != null}
             <div class="flex justify-between">
               <dt
-                class="text-zinc-400"
+                class="text-fg-2"
                 title="Clusters the most recent run created. A run only clusters the residual pool (crops not already in a class cluster), so this is usually far smaller than the total."
               >
                 Made by last run
@@ -229,16 +229,16 @@
             </div>
           {/if}
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Residual</dt>
+            <dt class="text-fg-2">Residual</dt>
             <dd class="font-mono">{fmt(stats.clusters.residual_count)}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Noise (cid&lt;0)</dt>
+            <dt class="text-fg-2">Noise (cid&lt;0)</dt>
             <dd class="font-mono">{fmt(stats.clusters.noise_count)}</dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Method</dt>
-            <dd class="font-mono text-zinc-300">
+            <dt class="text-fg-2">Method</dt>
+            <dd class="font-mono text-fg-2">
               {stats.clusters.method ?? '—'}
             </dd>
           </div>
@@ -262,8 +262,8 @@
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div class="surface p-4 lg:col-span-2">
           <header class="mb-3 flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-zinc-300">{statsSpec.panelTitle}</h3>
-            <span class="text-xs text-zinc-500">
+            <h3 class="text-sm font-semibold text-fg-2">{statsSpec.panelTitle}</h3>
+            <span class="text-xs text-fg-3">
               {fmt(p?.boxed ?? 0)} with a box ·
               <span title="Accepted by the automatic verifier; not a human review">
                 {fmt(p?.confirmed ?? 0)} verifier-confirmed
@@ -271,23 +271,23 @@
             </span>
           </header>
           {#if slotRows.length === 0}
-            <p class="text-sm text-zinc-500">No detections yet.</p>
+            <p class="text-sm text-fg-3">No detections yet.</p>
           {:else}
             <ul class="space-y-1.5">
               {#each slotRows as row (row.key)}
                 <li class="flex items-center gap-3 text-xs">
-                  <span class="w-32 shrink-0 text-zinc-300">{row.label}</span>
-                  <div class="relative h-3 grow overflow-hidden rounded bg-zinc-900">
+                  <span class="w-32 shrink-0 text-fg-2">{row.label}</span>
+                  <div class="relative h-3 grow overflow-hidden rounded bg-surface-1">
                     <div
                       class="h-full {row.tone}"
                       style:width="{Math.max(0.5, row.pct)}%"
                       title="{row.pct}% of total crops"
                     ></div>
                   </div>
-                  <span class="w-20 shrink-0 text-right font-mono text-zinc-300">
+                  <span class="w-20 shrink-0 text-right font-mono text-fg-2">
                     {fmt(row.count)}
                   </span>
-                  <span class="w-12 shrink-0 text-right font-mono text-zinc-500">
+                  <span class="w-12 shrink-0 text-right font-mono text-fg-3">
                     {row.pct.toFixed(1)}%
                   </span>
                 </li>
@@ -298,14 +298,14 @@
 
         <!-- Coverage summary -->
         <div class="surface p-4">
-          <h3 class="mb-3 text-sm font-semibold text-zinc-300">
+          <h3 class="mb-3 text-sm font-semibold text-fg-2">
             {statsSpec.coverageTitle}
           </h3>
           <div class="flex items-baseline gap-2">
-            <span class="font-mono text-2xl text-zinc-100">
+            <span class="font-mono text-2xl text-fg-1">
               {((p?.coverage_share ?? 0) * 100).toFixed(1)}%
             </span>
-            <span class="text-xs text-zinc-500">of crops have a box</span>
+            <span class="text-xs text-fg-3">of crops have a box</span>
           </div>
           <!-- DQ-m11: this
                used to assert "(includes rejected/failed attempts)" about
@@ -319,7 +319,7 @@
                credit tally that may not include every rejected/no-box
                attempt on this deployment — not a confident inclusion
                claim. -->
-          <p class="mt-2 text-xs text-zinc-500">
+          <p class="mt-2 text-xs text-fg-3">
             {fmt(p?.boxed ?? 0)} crops carry a box ({fmt(p?.confirmed ?? 0)} verifier-confirmed,
             not human-reviewed). The remaining
             {fmt(stats.total_crops - (p?.boxed ?? 0))} either had no visible detection (the
@@ -337,33 +337,33 @@
       <!-- Unlabeled / pending -->
       <div class="surface p-4">
         <header class="mb-3 flex items-center justify-between">
-          <h3 class="text-sm font-semibold text-zinc-300">Unlabeled</h3>
+          <h3 class="text-sm font-semibold text-fg-2">Unlabeled</h3>
           <!-- The header used to sum pending_detection +
                pending_verification + no_label_source, but those buckets
                overlap (a crop can be pending region detection AND have no
                class), so the "total" could exceed total_crops. The server
                serves no combined total, so the header shows its own
                class-less count and the rows below say what each is. -->
-          <span class="text-xs text-zinc-500" data-testid="unlabeled-header-count"
+          <span class="text-xs text-fg-3" data-testid="unlabeled-header-count"
             >{fmt(stats.unlabeled.no_label_source)} without a class</span
           >
         </header>
         <dl class="space-y-1.5 text-sm">
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Pending detection</dt>
-            <dd class="font-mono text-orange-300">
+            <dt class="text-fg-2">Pending detection</dt>
+            <dd class="font-mono text-warn">
               {fmt(stats.unlabeled.pending_detection)}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">Pending verification</dt>
-            <dd class="font-mono text-orange-300">
+            <dt class="text-fg-2">Pending verification</dt>
+            <dd class="font-mono text-warn">
               {fmt(stats.unlabeled.pending_verification)}
             </dd>
           </div>
           <div class="flex justify-between">
-            <dt class="text-zinc-400">No label source (class_id missing)</dt>
-            <dd class="font-mono text-red-300">
+            <dt class="text-fg-2">No label source (class_id missing)</dt>
+            <dd class="font-mono text-danger">
               {fmt(stats.unlabeled.no_label_source)}
             </dd>
           </div>
@@ -372,12 +372,12 @@
                shows up here instead of double-counting as "VLM-labeled". -->
           <div class="flex justify-between">
             <dt
-              class="text-zinc-400"
+              class="text-fg-2"
               title="VLM looked at the crop but didn't resolve a class"
             >
               VLM, no class
             </dt>
-            <dd class="font-mono text-red-300">
+            <dd class="font-mono text-danger">
               {fmt(stats.unlabeled.vlm_no_class)}
             </dd>
           </div>
@@ -386,17 +386,17 @@
                instead of the old, always-0 labeled.by_proposal). -->
           <div class="flex justify-between">
             <dt
-              class="text-zinc-400"
+              class="text-fg-2"
               title="A detector proposed this crop as an object, but nothing has classified it yet (a subset of the class-less count)"
             >
               Detector proposal, no class
             </dt>
-            <dd class="font-mono text-red-300">
+            <dd class="font-mono text-danger">
               {fmt(stats.unlabeled.by_proposal)}
             </dd>
           </div>
         </dl>
-        <p class="mt-2 text-xs text-zinc-500">
+        <p class="mt-2 text-xs text-fg-3">
           Pending detection / verification count region-worklog state, not class labels,
           so they can overlap the class-less count.
         </p>
@@ -404,21 +404,19 @@
 
       <!-- In-progress queue + ETA -->
       <div class="surface p-4">
-        <h3 class="mb-3 text-sm font-semibold text-zinc-300">In-flight pipeline</h3>
+        <h3 class="mb-3 text-sm font-semibold text-fg-2">In-flight pipeline</h3>
         <div class="flex items-baseline gap-3">
-          <span class="font-mono text-2xl text-zinc-100">
+          <span class="font-mono text-2xl text-fg-1">
             {fmt(stats.in_progress.region_drain_total_unfinished)}
           </span>
-          <span class="text-sm text-zinc-400"
-            >crops awaiting detection / verification</span
-          >
+          <span class="text-sm text-fg-2">crops awaiting detection / verification</span>
         </div>
 
         {#if stats.in_progress.region_stall_reason}
           <!-- V-1: the server says why the drain can't progress (a region
                dependency is down); shown verbatim. -->
           <p
-            class="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+            class="mt-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
             data-testid="region-stall-reason"
           >
             Stalled: {stats.in_progress.region_stall_reason}
@@ -432,10 +430,10 @@
                the operator can sanity-check. -->
           <dl class="mt-3 space-y-1 text-xs">
             <div class="flex items-baseline justify-between">
-              <dt class="text-zinc-400">ETA to drain</dt>
-              <dd class="font-mono text-zinc-100">
+              <dt class="text-fg-2">ETA to drain</dt>
+              <dd class="font-mono text-fg-1">
                 {#if etaSeconds == null}
-                  <span class="text-zinc-500" title="Need ≥10s + 2 samples to compute">
+                  <span class="text-fg-3" title="Need ≥10s + 2 samples to compute">
                     {drainRate == null
                       ? 'computing…'
                       : drainRate <= 0
@@ -448,29 +446,29 @@
               </dd>
             </div>
             <div class="flex items-baseline justify-between">
-              <dt class="text-zinc-400">Drain rate</dt>
+              <dt class="text-fg-2">Drain rate</dt>
               <dd class="font-mono">
                 {#if drainRate == null}
-                  <span class="text-zinc-500">…</span>
+                  <span class="text-fg-3">…</span>
                 {:else if drainRate < 0}
-                  <span class="text-red-300">+{formatRate(-drainRate)} (growing)</span>
+                  <span class="text-danger">+{formatRate(-drainRate)} (growing)</span>
                 {:else if drainRate === 0}
-                  <span class="text-zinc-500">0 (stalled)</span>
+                  <span class="text-fg-3">0 (stalled)</span>
                 {:else}
-                  <span class="text-blue-300">{formatRate(drainRate)}</span>
+                  <span class="text-accent">{formatRate(drainRate)}</span>
                 {/if}
               </dd>
             </div>
           </dl>
 
           <!-- Indeterminate "the queue is draining" bar -->
-          <div class="mt-3 h-1.5 overflow-hidden rounded bg-zinc-900">
-            <div class="h-full w-1/3 animate-pulse rounded bg-blue-500"></div>
+          <div class="mt-3 h-1.5 overflow-hidden rounded bg-surface-1">
+            <div class="h-full w-1/3 animate-pulse rounded bg-accent"></div>
           </div>
         {:else}
-          <p class="mt-3 text-xs text-green-400">queue drained</p>
+          <p class="mt-3 text-xs text-success">queue drained</p>
         {/if}
-        <p class="mt-3 text-xs text-zinc-500">
+        <p class="mt-3 text-xs text-fg-3">
           Matches the API's <code class="font-mono">ingest/region_drain</code> total. While
           &gt; 0 the ingest walker waits before triggering the next clustering pass.
         </p>

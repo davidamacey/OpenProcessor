@@ -90,10 +90,10 @@
 
 <div class="space-y-3">
   <div>
-    <p class="text-xs text-zinc-500">
+    <p class="text-xs text-fg-3">
       Paths must be under one of these folders on the server:
     </p>
-    <ul class="mt-1 text-xs text-zinc-300">
+    <ul class="mt-1 text-xs text-fg-2">
       {#each config.batchSourceRoots as root (root)}
         <li class="font-mono">{root}</li>
       {/each}
@@ -101,13 +101,13 @@
   </div>
 
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs text-zinc-400">
+    <label class="text-xs text-fg-2">
       Source tag
       <input class="input input-sm block" bind:value={source} disabled={submitting} />
     </label>
   </div>
 
-  <label class="block text-xs text-zinc-400">
+  <label class="block text-xs text-fg-2">
     Image paths (one per line, absolute paths inside the API container)
     <textarea
       class="input block h-24 w-full font-mono text-xs"
@@ -115,7 +115,7 @@
       disabled={submitting}></textarea>
   </label>
   {#if overLimit}
-    <p class="text-xs text-red-300">
+    <p class="text-xs text-danger">
       {paths.length} paths exceeds this backend's per-request limit of {config.batchMaxItems}
       — split into smaller batches.
     </p>
@@ -135,7 +135,7 @@
   </div>
 
   {#if submitError}
-    <p class="text-xs text-red-300">{submitError}</p>
+    <p class="text-xs text-danger">{submitError}</p>
   {/if}
 
   {#if result}
@@ -154,7 +154,7 @@
       >
       {#if (result.summary.secondary_detector_failures ?? 0) > 0}
         <span
-          class="chip border-amber-700 text-amber-200"
+          class="chip border-warn-line text-warn"
           data-testid="batch-secondary-failures"
           >secondary detector failed {result.summary.secondary_detector_failures}</span
         >
@@ -164,9 +164,9 @@
     {#if notEmbedded.length > 0}
       <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-not-embedded-list">
         {#each notEmbedded as r, i (i)}
-          <li class="border-b border-zinc-900 py-1 font-mono">
+          <li class="border-b border-line py-1 font-mono">
             {r.image_path}
-            <span class="text-amber-300">
+            <span class="text-warn">
               — embedded {r.n_embedded} / not embedded {r.n_not_embedded}{#if r.n_embed_failed > 0}
                 ({r.n_embed_failed} encoder failed){/if}</span
             >
@@ -179,9 +179,9 @@
       <!-- d72cc63: these images ingested with primary-detector crops only. -->
       <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-secondary-list">
         {#each secondaryFailures as r, i (i)}
-          <li class="border-b border-zinc-900 py-1 font-mono">
+          <li class="border-b border-line py-1 font-mono">
             {r.image_path}
-            <span class="text-amber-300">
+            <span class="text-warn">
               — secondary detector: {r.secondary_detector_error}</span
             >
           </li>
@@ -192,7 +192,7 @@
     {#if errorKindCounts.length > 0}
       <div class="flex flex-wrap gap-1 text-xs">
         <button
-          class="chip {errorKindFilter === null ? 'bg-blue-900 text-blue-100' : ''}"
+          class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent' : ''}"
           type="button"
           onclick={() => (errorKindFilter = null)}
         >
@@ -200,7 +200,7 @@
         </button>
         {#each errorKindCounts as [kind, count] (kind)}
           <button
-            class="chip {errorKindFilter === kind ? 'bg-blue-900 text-blue-100' : ''}"
+            class="chip {errorKindFilter === kind ? 'bg-accent-soft text-accent' : ''}"
             type="button"
             onclick={() => (errorKindFilter = kind)}
           >
@@ -210,13 +210,13 @@
       </div>
       <ul class="max-h-48 overflow-y-auto text-xs">
         {#each visibleFailures as r, i (i)}
-          <li class="border-b border-zinc-900 py-1 font-mono">
+          <li class="border-b border-line py-1 font-mono">
             {r.image_path}
             {#if r.error_kind}
-              <span class="text-zinc-500"> [{r.error_kind}]</span>
+              <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}
             {#if r.error}
-              <span class="text-red-300"> — {r.error}</span>
+              <span class="text-danger"> — {r.error}</span>
             {/if}
           </li>
         {/each}

@@ -32,7 +32,7 @@
 
 {#if pending > 0}
   <div
-    class="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200"
+    class="mt-2 flex flex-wrap items-center gap-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
     data-testid="vector-refresh-notice"
   >
     <span>

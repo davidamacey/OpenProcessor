@@ -38,7 +38,7 @@
     {#if live.liveNewCount > 0 && live.scrolledPastFirst20}
       <button
         type="button"
-        class="sticky top-2 z-10 mx-auto block animate-pulse rounded-full border border-blue-500/60 bg-blue-500/20 px-3 py-1 text-xs text-blue-100 shadow-lg backdrop-blur hover:bg-blue-500/30"
+        class="sticky top-2 z-10 mx-auto block animate-pulse rounded-full border border-accent/60 bg-accent/20 px-3 py-1 text-xs text-accent shadow-lg backdrop-blur hover:bg-accent/30"
         onclick={live.refreshFromLive}
         title="Scroll to top and reload with the latest crops"
       >
@@ -46,16 +46,16 @@
       </button>
     {/if}
     {#if view.cropPager.loading && view.cropPager.items.length === 0}
-      <p class="text-sm text-zinc-500" data-testid="cluster-first-load">
+      <p class="text-sm text-fg-3" data-testid="cluster-first-load">
         Loading...
         {#if view.slowFirstLoad}<span data-testid="cluster-slow-load-hint"
             >{firstLoadHint(view.cluster?.size ?? null)}</span
           >{/if}
       </p>
     {:else if view.cropPager.error}
-      <p class="text-sm text-red-300">API unavailable: {view.cropPager.error}</p>
+      <p class="text-sm text-danger">API unavailable: {view.cropPager.error}</p>
     {:else if view.filteredCrops.length === 0}
-      <p class="text-sm text-zinc-500">No crops in this cluster yet.</p>
+      <p class="text-sm text-fg-3">No crops in this cluster yet.</p>
     {:else}
       <!-- One dndzone. A card drags out to the ClassSidebar exactly as
            before (type='crop-card'). -->
@@ -124,19 +124,18 @@
 
 <!-- Status bar (sentinel lives inside the scroll container, see above) -->
 <div
-  class="flex items-center justify-between gap-2 border-t border-zinc-800 px-4 py-2 text-sm"
+  class="flex items-center justify-between gap-2 border-t border-line px-4 py-2 text-sm"
   data-testid="cluster-status-bar"
 >
-  <span class="font-mono text-xs text-zinc-500">
+  <span class="font-mono text-xs text-fg-3">
     <span
       title="Loaded / reviewable members matching the current filters. Test-holdout and ignored crops are never listed, so this can be lower than the header's cluster size."
       >{listedText(view.pagerState)}</span
     >
-    {#if view.sel.size > 0}<span class="ml-2 text-blue-300"
-        >· {view.sel.size} selected</span
+    {#if view.sel.size > 0}<span class="ml-2 text-accent">· {view.sel.size} selected</span
       >{/if}
   </span>
-  <span class="font-mono text-xs text-zinc-400">
+  <span class="font-mono text-xs text-fg-2">
     {statusBarText(view.pagerState)}
   </span>
 </div>

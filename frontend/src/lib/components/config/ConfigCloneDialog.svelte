@@ -56,18 +56,18 @@
   onconfirm={() => onconfirm(name, description, fromProject || null)}
   {oncancel}
 >
-  <label class="flex flex-col gap-1 text-xs text-zinc-400">
+  <label class="flex flex-col gap-1 text-xs text-fg-2">
     {nameLabel}
     <input class="input input-sm font-mono" bind:value={name} data-testid="clone-name" />
   </label>
   {#if withDescription}
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Description (optional)
       <input class="input input-sm" bind:value={description} />
     </label>
   {/if}
   {#if offerProjects && otherProjects.length > 0}
-    <label class="flex flex-col gap-1 text-xs text-zinc-400">
+    <label class="flex flex-col gap-1 text-xs text-fg-2">
       Copy from another project (optional)
       <select
         class="input input-sm"
@@ -82,7 +82,7 @@
     </label>
   {/if}
   {#if error}
-    <p class="text-red-300" data-testid="clone-error">{error}</p>
+    <p class="text-danger" data-testid="clone-error">{error}</p>
   {/if}
   {#if report}
     <ConfigIssueList issues={[...report.errors, ...report.warnings]} showField />

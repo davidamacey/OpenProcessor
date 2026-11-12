@@ -249,7 +249,7 @@
       type="search"
       bind:value={query}
       placeholder="Filter by name, group, id…"
-      class="input w-64 placeholder:text-zinc-500"
+      class="input w-64 placeholder:text-fg-3"
     />
     <button class="btn" type="button" onclick={merge.openMerge} disabled={busy}
       >Merge classes</button
@@ -261,7 +261,7 @@
 
   {#if reservedConflicts.length > 0}
     <div
-      class="mb-4 rounded-md border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-xs text-orange-200"
+      class="mb-4 rounded-md border border-warn/40 bg-warn/10 px-4 py-3 text-xs text-warn"
     >
       <strong>Reserved-hotkey conflict:</strong>
       {#each reservedConflicts as c, i (c.id)}{i > 0 ? ', ' : ''}<strong>{c.name}</strong>

@@ -40,19 +40,19 @@
 
 <section class="surface overflow-x-auto">
   {#if classesStore.loading && allClasses.length === 0}
-    <div class="p-6 text-sm text-zinc-500">Loading classes…</div>
+    <div class="p-6 text-sm text-fg-3">Loading classes…</div>
   {:else if classesStore.error}
-    <div class="p-6 text-sm text-red-300">API unavailable: {classesStore.error}</div>
+    <div class="p-6 text-sm text-danger">API unavailable: {classesStore.error}</div>
   {:else if allClasses.length === 0}
-    <div class="p-6 text-sm text-zinc-500">
+    <div class="p-6 text-sm text-fg-3">
       No classes yet. Add one, or create them from the detector below.
     </div>
   {:else if activeRows.length === 0}
-    <div class="p-6 text-sm text-zinc-500">No classes match this filter.</div>
+    <div class="p-6 text-sm text-fg-3">No classes match this filter.</div>
   {:else}
     <table class="w-full text-sm">
       <thead
-        class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
+        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-xs uppercase text-fg-2"
       >
         <tr>
           <!-- L5: ID and Added hide below lg (1024px) so the table fits 800px. -->
@@ -80,11 +80,11 @@
         {#each activeRows as cls (cls.id)}
           {@const heldOut = testHeldOutByClass.get(cls.id) ?? 0}
           <tr
-            class="border-b border-zinc-900 hover:bg-zinc-900/40"
+            class="border-b border-line hover:bg-surface-1/40"
             data-testid="class-row-{cls.id}"
           >
             <td
-              class="hidden px-2 py-1.5 lg:px-3 font-mono text-xs text-zinc-400 lg:table-cell"
+              class="hidden px-2 py-1.5 lg:px-3 font-mono text-xs text-fg-2 lg:table-cell"
               >{cls.id}</td
             >
             <td class="px-2 py-1.5 lg:px-3">
@@ -92,7 +92,7 @@
                 <input
                   type="text"
                   bind:value={editName}
-                  class="w-full rounded border border-blue-500/60 bg-zinc-900 px-1.5 py-0.5 text-sm focus:outline-none"
+                  class="w-full rounded border border-accent/60 bg-surface-1 px-1.5 py-0.5 text-sm focus:outline-none"
                   onkeydown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -107,7 +107,7 @@
               {:else}
                 <button
                   type="button"
-                  class="rounded px-1 py-0.5 text-left hover:bg-zinc-800"
+                  class="rounded px-1 py-0.5 text-left hover:bg-surface-2"
                   onclick={() => startEdit(cls)}
                   title="Click to rename"
                 >
@@ -117,7 +117,7 @@
             </td>
             <td class="px-2 py-1.5 lg:px-3">
               <select
-                class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none"
+                class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs focus:border-accent focus:outline-none"
                 aria-label="Group for {cls.name}"
                 value={cls.group ?? ''}
                 onchange={(e) =>
@@ -140,7 +140,7 @@
                 placeholder="—"
                 aria-label="Hotkey for {cls.name}"
                 title="Single char keyboard shortcut for this class. Empty to clear."
-                class="w-10 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-center font-mono text-xs uppercase focus:border-blue-500 focus:outline-none"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-center font-mono text-xs uppercase focus:border-accent focus:outline-none"
                 onchange={(e) =>
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value)}
                 disabled={busy}
@@ -157,16 +157,16 @@
               </span>
               {#if heldOut > 0}
                 <span
-                  class="ml-1 whitespace-nowrap text-[10px] text-zinc-500"
+                  class="ml-1 whitespace-nowrap text-caption text-fg-3"
                   data-testid="validated-test-suffix">incl. {heldOut} test</span
                 >
               {/if}
             </td>
             <td
-              class="px-2 py-1.5 lg:px-3 text-right font-mono text-zinc-400"
+              class="px-2 py-1.5 lg:px-3 text-right font-mono text-fg-2"
               data-testid="item-count">{cls.count}</td
             >
-            <td class="hidden px-2 py-1.5 lg:px-3 text-xs text-zinc-500 lg:table-cell">
+            <td class="hidden px-2 py-1.5 lg:px-3 text-xs text-fg-3 lg:table-cell">
               {formatDateOnly(cls.added_at)}
             </td>
             <td class="px-2 py-1.5 lg:px-3 text-right">

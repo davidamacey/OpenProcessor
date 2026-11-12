@@ -21,9 +21,9 @@
      backend genuinely failed (e.g. the opensearch aggregation 500 seen
      live), never a page-breaking crash. -->
 {#if p.proposalsLoading}
-  <div class="surface mt-4 p-4 text-xs text-zinc-500">Loading proposals…</div>
+  <div class="surface mt-4 p-4 text-xs text-fg-3">Loading proposals…</div>
 {:else if p.proposalsError}
-  <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-red-300">
+  <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-danger">
     <span>Proposals unavailable: {p.proposalsError}</span>
     <button type="button" class="btn-sm" onclick={() => void p.loadProposals()}>
       retry
@@ -31,14 +31,14 @@
   </div>
 {:else if p.proposalsSummary && (p.proposalsSummary.top_terms.length > 0 || p.proposalsSummary.flagged_terms.length > 0)}
   <details class="surface mt-4 p-4" data-testid="proposals-section">
-    <summary class="cursor-pointer text-sm font-semibold text-zinc-200">
+    <summary class="cursor-pointer text-sm font-semibold text-fg-1">
       New class proposals
-      <span class="ml-1 font-normal text-zinc-500"
+      <span class="ml-1 font-normal text-fg-3"
         >({p.proposalsSummary.total_pending} pending{#if p.proposalsSummary.without_term > 0},
           {p.proposalsSummary.without_term} with no proposed term{/if})</span
       >
     </summary>
-    <p class="mb-3 mt-2 text-xs text-zinc-500">
+    <p class="mb-3 mt-2 text-xs text-fg-3">
       Crops the VLM flagged as needing a class the registry doesn't have yet. Each row is
       a proposed term with a few sample thumbnails — create a class or map onto an
       existing one to resolve <strong>every</strong> pending crop proposing that term (not
@@ -54,7 +54,7 @@
     {#if p.proposalsSummary.term_rules}
       {@const rules = termRulesText(p.proposalsSummary.term_rules)}
       {#if rules}
-        <p class="mb-3 text-[11px] text-zinc-600" data-testid="proposal-term-rules">
+        <p class="mb-3 text-caption text-fg-3" data-testid="proposal-term-rules">
           {rules}
         </p>
       {/if}
@@ -68,7 +68,7 @@
       {#each proposalRows(p.proposalsSummary) as row (row.term.label)}
         {@const term = row.term}
         <li
-          class="flex flex-wrap items-center gap-3 rounded border border-zinc-800 p-2"
+          class="flex flex-wrap items-center gap-3 rounded border border-line p-2"
           data-testid="proposal-row"
         >
           <div class="flex shrink-0 items-center gap-1">
@@ -82,11 +82,11 @@
             {/each}
           </div>
           <div class="min-w-0 shrink-0">
-            <div class="text-sm text-zinc-100">{term.label}</div>
-            <div class="text-[11px] text-zinc-500">
+            <div class="text-sm text-fg-1">{term.label}</div>
+            <div class="text-caption text-fg-3">
               {term.count} crop(s)
               {#if term.flag}
-                · <span class="text-amber-300">{p.flagReason(term)}</span>
+                · <span class="text-warn">{p.flagReason(term)}</span>
               {/if}
             </div>
           </div>

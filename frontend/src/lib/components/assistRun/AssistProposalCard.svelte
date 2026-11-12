@@ -47,19 +47,19 @@
 
 {#if proposal && run.run_id}
   <section
-    class="flex flex-col gap-3 rounded-md border border-sky-500/30 bg-sky-500/5 p-3 text-sm"
+    class="flex flex-col gap-3 rounded-md border border-info/30 bg-info/5 p-3 text-sm"
     data-testid="assist-proposal-card"
   >
     <header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <h3 class="text-sm font-semibold text-zinc-100">
+      <h3 class="text-sm font-semibold text-fg-1">
         VLM proposal for {scopeLabel(run.request.target)}
       </h3>
-      <span class="text-xs text-zinc-500">run {run.run_id}</span>
+      <span class="text-xs text-fg-3">run {run.run_id}</span>
     </header>
 
     {#if run.scope_now?.changed}
       <p
-        class="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
         data-testid="proposal-stale"
       >
         The scope has changed since this run: {run.scope_now.overlap} of the
@@ -70,22 +70,22 @@
 
     {#if proposal.class_name}
       <p class="flex flex-wrap items-baseline gap-2">
-        <span class="text-zinc-400">Proposed class</span>
-        <strong class="text-base text-zinc-50" data-testid="proposal-class"
+        <span class="text-fg-2">Proposed class</span>
+        <strong class="text-base text-fg-1" data-testid="proposal-class"
           >{proposal.class_name}</strong
         >
         {#if !proposal.in_registry}
-          <span class="text-xs text-amber-300">not in the class registry</span>
+          <span class="text-xs text-warn">not in the class registry</span>
         {/if}
       </p>
     {:else}
-      <p class="text-zinc-300" data-testid="proposal-nogate">
+      <p class="text-fg-2" data-testid="proposal-nogate">
         No class reached the agreement gate: the top class got {pct(proposal.agreement)} of
         {proposal.answered} answers, and {pct(proposal.min_agreement)} is needed.
       </p>
     {/if}
 
-    <p class="text-xs text-zinc-400" data-testid="proposal-agreement">
+    <p class="text-xs text-fg-2" data-testid="proposal-agreement">
       {pct(proposal.agreement)} agreement across {proposal.answered} sampled answers (gate
       {pct(proposal.min_agreement)}), from {run.resolved.sampled} of
       {run.resolved.scope_count} members.
@@ -94,16 +94,16 @@
     <ul class="flex flex-col gap-1" data-testid="proposal-distribution">
       {#each proposal.distribution as d (d.class_name)}
         <li class="flex items-center gap-2 text-xs">
-          <span class="w-32 shrink-0 truncate text-zinc-200" title={d.class_name}
+          <span class="w-32 shrink-0 truncate text-fg-1" title={d.class_name}
             >{d.class_name}</span
           >
-          <span class="h-2 grow rounded bg-zinc-800">
+          <span class="h-2 grow rounded bg-surface-2">
             <span
-              class="block h-2 rounded bg-sky-500/60"
+              class="block h-2 rounded bg-info/60"
               style="width: {(d.votes / maxVotes) * 100}%"
             ></span>
           </span>
-          <span class="w-8 shrink-0 text-right font-mono text-zinc-400">{d.votes}</span>
+          <span class="w-8 shrink-0 text-right font-mono text-fg-2">{d.votes}</span>
           <button
             type="button"
             class="btn-sm"
@@ -116,10 +116,10 @@
     </ul>
 
     {#if proposal.new_class_proposals.length > 0}
-      <p class="text-xs text-zinc-400" data-testid="proposal-new-classes">
+      <p class="text-xs text-fg-2" data-testid="proposal-new-classes">
         The VLM also proposed classes the registry lacks:
         {#each proposal.new_class_proposals as n, i (n.name)}
-          <span class="text-zinc-200">{n.name}</span> ({n.votes}){i <
+          <span class="text-fg-1">{n.name}</span> ({n.votes}){i <
           proposal.new_class_proposals.length - 1
             ? ', '
             : ''}
@@ -129,15 +129,14 @@
 
     {#if proposal.attribute_summary.length > 0}
       <div class="flex flex-col gap-1" data-testid="proposal-attributes">
-        <span class="text-[10px] uppercase tracking-wide text-zinc-500"
+        <span class="text-caption uppercase tracking-wide text-fg-3"
           >Attribute suggestions, not labels</span
         >
         {#each proposal.attribute_summary as a (a.key)}
           <div class="flex flex-wrap items-center gap-1 text-xs">
-            <span class="text-zinc-400">{a.key} ({a.answered} answered):</span>
+            <span class="text-fg-2">{a.key} ({a.answered} answered):</span>
             {#each a.values as v (v.value)}
-              <span
-                class="rounded border border-dashed border-sky-500/50 px-1 text-sky-200"
+              <span class="rounded border border-dashed border-info/50 px-1 text-info"
                 >{v.value} {v.count}</span
               >
             {/each}
@@ -148,7 +147,7 @@
 
     {#if ctl.applied}
       <p
-        class="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-200"
+        class="rounded border border-success/40 bg-success/10 px-2 py-1 text-xs text-success"
         data-testid="proposal-applied"
       >
         Labeled {ctl.applied.updated ?? 0} crops as {ctl.applied.class_name}; {ctl.applied
@@ -158,7 +157,7 @@
     {:else}
       {#if ctl.error}
         <p
-          class="rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-200"
+          class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger"
           data-testid="proposal-error"
         >
           {ctl.error}
@@ -197,7 +196,7 @@
           >
             Apply {chosen} to {ctl.dry.selected} members
           </button>
-          <span class="text-xs text-zinc-400" data-testid="proposal-locked">
+          <span class="text-xs text-fg-2" data-testid="proposal-locked">
             {ctl.dry.skipped_locked} left alone: locked, validated or held out. Labels are written
             as a human's.
           </span>

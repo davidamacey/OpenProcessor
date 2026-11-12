@@ -117,7 +117,7 @@
 <!-- Narrow screens: a short strip above the content, so the page keeps the full width.
      md and up: the fixed 16rem column beside it. -->
 <section class="relative flex min-h-0 flex-1 flex-col" aria-label="Classes">
-  <h2 class="p-3 text-xs font-semibold tracking-wide text-zinc-400 uppercase">Classes</h2>
+  <h2 class="p-3 text-xs font-semibold tracking-wide text-fg-2 uppercase">Classes</h2>
 
   <!-- Drop hint is an ABSOLUTE overlay (pointer-events-none) so it can't
        reflow the class list mid-drag. Previously it was in flow and its
@@ -126,7 +126,7 @@
        fixed under the cursor. -->
   {#if dragActive}
     <div
-      class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-blue-500/40 bg-blue-600/90 px-3 py-1.5 text-center text-[11px] font-medium text-blue-50 shadow-lg backdrop-blur"
+      class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-accent/40 bg-accent-fill/90 px-3 py-1.5 text-center text-caption font-medium text-accent shadow-lg backdrop-blur"
     >
       {#if hoveredClass}
         Drop on <span class="font-semibold text-white">{hoveredClass.name}</span>
@@ -138,20 +138,20 @@
 
   <div class="flex-1 overflow-y-auto">
     {#if classesStore.loading && classesStore.classes.length === 0}
-      <div class="p-4 text-sm text-zinc-500">Loading classes...</div>
+      <div class="p-4 text-sm text-fg-3">Loading classes...</div>
     {:else if classesStore.error}
-      <div class="p-4 text-sm text-red-300">API unavailable</div>
+      <div class="p-4 text-sm text-danger">API unavailable</div>
     {:else if classes.length === 0}
-      <div class="p-4 text-sm text-zinc-500">No classes</div>
+      <div class="p-4 text-sm text-fg-3">No classes</div>
     {:else}
       <ul class="py-1">
         <li>
           <button
             type="button"
-            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-900 {selectedName ===
+            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-surface-1 {selectedName ===
             null
-              ? 'bg-zinc-800 text-white'
-              : 'text-zinc-300'}"
+              ? 'bg-surface-2 text-white'
+              : 'text-fg-2'}"
             onclick={() => onselect(null)}
           >
             <span>All classes</span>
@@ -163,10 +163,10 @@
             <div
               class="crop-drop-row flex w-full items-center justify-between gap-2 transition-colors
                 {isHover
-                ? 'bg-blue-500/30 ring-2 ring-inset ring-blue-400'
+                ? 'bg-accent/30 ring-2 ring-inset ring-accent'
                 : selectedName === cls.name
-                  ? 'bg-zinc-800'
-                  : 'hover:bg-zinc-900'}"
+                  ? 'bg-surface-2'
+                  : 'hover:bg-surface-1'}"
               use:dndzone={{
                 items: [],
                 type: 'crop-card',
@@ -191,15 +191,15 @@
                   class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedName ===
                   cls.name
                     ? 'text-white'
-                    : 'text-zinc-300'}"
+                    : 'text-fg-2'}"
                   onclick={() => onselect(cls)}
                   title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
                 >
                   <span class="flex grow items-center gap-1.5 truncate">
                     {#if cls.hotkey_letter}
                       <kbd
-                        class="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[10px] uppercase
-                             text-blue-300"
+                        class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase
+                             text-accent"
                         title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
                       >
                         {cls.hotkey_letter}
@@ -227,7 +227,7 @@
     {/if}
   </div>
 
-  <div class="border-t border-zinc-800 p-2">
+  <div class="border-t border-line p-2">
     <button
       type="button"
       class="btn w-full justify-center"

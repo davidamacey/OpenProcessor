@@ -35,12 +35,12 @@
   }: Props = $props();
 
   const TONE: Record<CellTone, string> = {
-    validated: 'text-emerald-300',
-    machine: 'text-sky-300',
-    unlabeled: 'text-amber-300',
-    holdout: 'text-violet-300',
-    rejected: 'text-red-300',
-    muted: 'text-zinc-500',
+    validated: 'text-success',
+    machine: 'text-info',
+    unlabeled: 'text-warn',
+    holdout: 'text-holdout',
+    rejected: 'text-danger',
+    muted: 'text-fg-3',
   };
   const ALIGN = { start: 'text-left', end: 'text-right', center: 'text-center' } as const;
 
@@ -61,17 +61,17 @@
 </script>
 
 <div
-  class="max-h-full overflow-auto rounded border border-zinc-800"
+  class="max-h-full overflow-auto rounded border border-line"
   data-testid="data-table-scroll"
 >
   <table class="w-full border-collapse text-xs" data-testid="data-table">
-    <thead class="sticky top-0 z-10 bg-zinc-900">
+    <thead class="sticky top-0 z-10 bg-surface-1">
       <tr>
         <th scope="col" class="w-8 px-2 py-1"><span class="sr-only">Select</span></th>
         {#each columns as c (c.id)}
           <th
             scope="col"
-            class="px-2 py-1 font-medium whitespace-nowrap text-zinc-300 {c.kind ===
+            class="px-2 py-1 font-medium whitespace-nowrap text-fg-2 {c.kind ===
             'thumbnail'
               ? 'w-14'
               : ''} {ALIGN[c.align]}"
@@ -82,7 +82,7 @@
             {:else if c.sortable}
               <button
                 type="button"
-                class="hover:text-zinc-100 focus-visible:outline-2"
+                class="hover:text-fg-1 focus-visible:outline-2"
                 aria-label={sortLabel(c)}
                 data-testid="data-table-sort-{c.id}"
                 onclick={() => onsort(c.id)}
@@ -103,11 +103,9 @@
       {#each rows as r (keyOf(r))}
         {@const key = keyOf(r)}
         <tr
-          class="border-t border-zinc-800 hover:bg-zinc-900/60 {selectedIds.has(key)
-            ? 'bg-sky-950/40'
-            : ''} {focusedId === key
-            ? 'outline-2 -outline-offset-2 outline-sky-500'
-            : ''}"
+          class="border-t border-line hover:bg-surface-1/60 {selectedIds.has(key)
+            ? 'bg-info-soft'
+            : ''} {focusedId === key ? 'outline-2 -outline-offset-2 outline-info' : ''}"
           aria-selected={selectedIds.has(key)}
           data-testid="data-table-row"
           data-row-key={key}
@@ -132,14 +130,14 @@
                   src={resolveApiUrl(r.thumbnail_url)}
                   alt=""
                   loading="lazy"
-                  class="h-8 w-8 rounded border border-zinc-800 object-cover"
+                  class="h-8 w-8 rounded border border-line object-cover"
                 />
               {:else}
                 {@const cell = r.cells[c.id]}
                 <span
                   class="{c.kind === 'number' ? 'tabular-nums' : ''} {cell?.tone
                     ? TONE[cell.tone]
-                    : 'text-zinc-200'}">{cell?.text ?? ''}</span
+                    : 'text-fg-1'}">{cell?.text ?? ''}</span
                 >
               {/if}
             </td>

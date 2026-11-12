@@ -74,8 +74,8 @@
 
 <section class="flex flex-col gap-3" data-testid="open-vocab-targets">
   <div class="flex flex-wrap items-baseline gap-3">
-    <h2 class="text-sm font-semibold text-zinc-200">Targets</h2>
-    <span class="text-xs text-zinc-400" data-testid="targets-facts">{facts}</span>
+    <h2 class="text-sm font-semibold text-fg-1">Targets</h2>
+    <span class="text-xs text-fg-2" data-testid="targets-facts">{facts}</span>
     <span class="grow"></span>
     {#if !readonly}
       <button type="button" class="btn btn-sm" data-testid="target-add" onclick={onadd}
@@ -85,7 +85,7 @@
   </div>
 
   {#if targets.length === 0}
-    <p class="text-sm text-zinc-400" data-testid="targets-empty">
+    <p class="text-sm text-fg-2" data-testid="targets-empty">
       No targets yet. Add one to say what to look for.
     </p>
   {/if}
@@ -96,16 +96,10 @@
 
   <ol class="flex flex-col gap-3">
     {#each targets as t, i (i)}
-      <li
-        class="rounded border border-zinc-800 p-3"
-        data-testid="target-row"
-        data-index={i}
-      >
+      <li class="rounded border border-line p-3" data-testid="target-row" data-index={i}>
         <div class="mb-2 flex flex-wrap items-center gap-2">
-          <span class="font-mono text-xs text-zinc-500">#{i}</span>
-          <span class="truncate text-sm text-zinc-200"
-            >{t.prompt || 'untitled target'}</span
-          >
+          <span class="font-mono text-xs text-fg-3">#{i}</span>
+          <span class="truncate text-sm text-fg-1">{t.prompt || 'untitled target'}</span>
           <span class="grow"></span>
           {#if !readonly}
             <button
@@ -137,11 +131,10 @@
           {#each basic as r (r.field)}
             {#if r.field === 'class_name'}
               <div class="flex flex-col gap-1.5" data-testid="target-class-cell">
-                <label
-                  class="text-sm font-medium text-zinc-100"
-                  for="target-{i}-class-name">{r.label}</label
+                <label class="text-sm font-medium text-fg-1" for="target-{i}-class-name"
+                  >{r.label}</label
                 >
-                {#if r.help}<p class="text-xs text-zinc-400">{r.help}</p>{/if}
+                {#if r.help}<p class="text-xs text-fg-2">{r.help}</p>{/if}
                 <input
                   id="target-{i}-class-name"
                   class="input input-sm max-w-md font-mono"
@@ -156,7 +149,7 @@
                     )}
                 />
                 {#if (t.class_name ?? '') === ''}
-                  <p class="text-[11px] text-zinc-500" data-testid="discovery-hint">
+                  <p class="text-caption text-fg-3" data-testid="discovery-hint">
                     Empty: discovery mode, hits are stored as unlabeled proposals named by
                     the prompt.
                   </p>
@@ -164,8 +157,8 @@
                 {#each issuesForTargetField(report, i, r.field) as iss (iss.id)}
                   <p
                     class="text-xs {iss.severity === 'error'
-                      ? 'text-red-300'
-                      : 'text-amber-300'}"
+                      ? 'text-danger'
+                      : 'text-warn'}"
                     data-testid="cell-issue"
                   >
                     {iss.message}
@@ -190,7 +183,7 @@
         {#if advanced.length > 0}
           <button
             type="button"
-            class="mt-2 text-xs text-blue-300 hover:underline"
+            class="mt-2 text-xs text-accent hover:underline"
             data-testid="target-advanced-toggle"
             onclick={() => (open[i] = !open[i])}
             >{open[i] ? 'Hide' : 'Show'} advanced ({advanced.length})</button

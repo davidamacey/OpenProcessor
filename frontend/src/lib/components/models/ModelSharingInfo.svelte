@@ -36,24 +36,24 @@
 
 {#if role !== 'none' || model.class_mapping}
   <div
-    class="mt-3 space-y-2 border-t border-zinc-800 pt-3 text-xs"
+    class="mt-3 space-y-2 border-t border-line pt-3 text-xs"
     data-testid="model-sharing-{model.name}"
   >
     {#if role === 'foreign' && model.project}
       <div class="flex flex-wrap items-center gap-1.5">
         <span
-          class="rounded border border-sky-800 bg-sky-950/50 px-1.5 py-0.5 text-sky-200"
+          class="rounded border border-info-line bg-info-soft px-1.5 py-0.5 text-info"
           title="Promoted in project {model.project}"
           data-testid="model-project-chip">from {projectName(model.project)}</span
         >
         <span
-          class="rounded border border-zinc-700 bg-zinc-950 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400"
+          class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 text-caption uppercase tracking-wide text-fg-2"
           >shared</span
         >
       </div>
     {:else if role === 'owner'}
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <span class="text-zinc-400" data-testid="model-sharing-state"
+        <span class="text-fg-2" data-testid="model-sharing-state"
           >{model.shared ? 'Shared with other projects' : 'Not shared'}</span
         >
         {#if canToggleSharing(model)}
@@ -71,15 +71,15 @@
 
     {#if model.class_mapping}
       <div data-testid="model-class-mapping">
-        <span class="text-zinc-300" data-testid="model-mapped-count"
+        <span class="text-fg-2" data-testid="model-mapped-count"
           >{mappingText(model.class_mapping)}</span
         >
         {#if model.class_mapping.unmapped.length}
           <details class="mt-1" data-testid="model-unmapped">
-            <summary class="cursor-pointer text-amber-300"
+            <summary class="cursor-pointer text-warn"
               >{unmappedText(model.class_mapping)}</summary
             >
-            <p class="mt-1 break-words text-zinc-400" data-testid="model-unmapped-names">
+            <p class="mt-1 break-words text-fg-2" data-testid="model-unmapped-names">
               {model.class_mapping.unmapped.join(', ')}
             </p>
           </details>
@@ -92,19 +92,18 @@
               void sharing.loadMapping(model.name);
           }}
         >
-          <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200"
-            >Class mapping</summary
+          <summary class="cursor-pointer text-fg-2 hover:text-fg-1">Class mapping</summary
           >
           {#if mappingState?.status === 'loading'}
-            <p class="mt-1 text-zinc-500">Loading…</p>
+            <p class="mt-1 text-fg-3">Loading…</p>
           {:else if mappingState?.status === 'error'}
-            <p class="mt-1 text-red-300" data-testid="model-mapping-error">
+            <p class="mt-1 text-danger" data-testid="model-mapping-error">
               {mappingState.message}
             </p>
           {:else if mappingState?.status === 'ok'}
             {@const m = mappingState.mapping}
             <table class="mt-1 w-full" data-testid="model-mapping-table">
-              <thead class="text-left text-[10px] uppercase tracking-wide text-zinc-500">
+              <thead class="text-left text-caption uppercase tracking-wide text-fg-3">
                 <tr>
                   <th class="py-0.5 pr-2 font-normal">Model class</th>
                   <th class="py-0.5 pr-2 font-normal">This project</th>
@@ -113,14 +112,12 @@
               </thead>
               <tbody>
                 {#each m.entries as e (e.model_id)}
-                  <tr class="border-t border-zinc-800/60">
-                    <td class="py-0.5 pr-2 text-zinc-200">{e.model_name}</td>
-                    <td
-                      class="py-0.5 pr-2 {e.class_name
-                        ? 'text-zinc-200'
-                        : 'text-zinc-500'}">{e.class_name ?? '—'}</td
+                  <tr class="border-t border-line/60">
+                    <td class="py-0.5 pr-2 text-fg-1">{e.model_name}</td>
+                    <td class="py-0.5 pr-2 {e.class_name ? 'text-fg-1' : 'text-fg-3'}"
+                      >{e.class_name ?? '—'}</td
                     >
-                    <td class="py-0.5 text-zinc-400"
+                    <td class="py-0.5 text-fg-2"
                       >{m.labels?.match?.[e.match] ?? e.match}</td
                     >
                   </tr>
@@ -128,7 +125,7 @@
               </tbody>
             </table>
             {#if m.not_covered.length}
-              <p class="mt-1 text-zinc-500" data-testid="model-not-covered">
+              <p class="mt-1 text-fg-3" data-testid="model-not-covered">
                 Not predicted by this model: {m.not_covered.join(', ')}
               </p>
             {/if}

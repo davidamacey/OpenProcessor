@@ -26,7 +26,7 @@
   data-testid="loop-rollback"
 >
   <div class="flex flex-wrap items-center gap-3">
-    <h3 class="text-sm font-medium text-zinc-200">Rollback</h3>
+    <h3 class="text-sm font-medium text-fg-1">Rollback</h3>
     {#if !ctl.rollbackPlan}
       <button
         type="button"
@@ -38,24 +38,24 @@
         Roll back all propagated labels
       </button>
       {#if ctl.control && !ctl.control.can_rollback}
-        <span class="text-zinc-500">Not available for this loop now.</span>
+        <span class="text-fg-3">Not available for this loop now.</span>
       {/if}
     {/if}
   </div>
 
   {#if ctl.rollbackPlan}
     <div
-      class="rounded border border-amber-500/40 bg-amber-500/10 p-3"
+      class="rounded border border-warn/40 bg-warn/10 p-3"
       role="group"
       aria-label="Confirm rollback"
       data-testid="loop-rollback-plan"
     >
-      <p class="text-zinc-100">
+      <p class="text-fg-1">
         Restore {formatCount(ctl.rollbackPlan.restored)} of
         {formatCount(ctl.rollbackPlan.matched)} items to the class they had before, in
         {scopeText}.
       </p>
-      <p class="mt-1 text-zinc-400">
+      <p class="mt-1 text-fg-2">
         {formatCount(ctl.rollbackPlan.kept_changed)} were changed since the loop wrote them
         and stay as they are ({formatCount(ctl.rollbackPlan.conflicts)} conflicts). Answers
         the VLM gave directly are kept.
@@ -83,7 +83,7 @@
   {/if}
 
   {#if ctl.rollbackResult}
-    <p class="text-zinc-300" role="status" data-testid="loop-rollback-result">
+    <p class="text-fg-2" role="status" data-testid="loop-rollback-result">
       Rolled back: {formatCount(ctl.rollbackResult.restored)} restored,
       {formatCount(ctl.rollbackResult.kept_changed)} kept because they changed since,
       {formatCount(ctl.rollbackResult.conflicts)} conflicts.

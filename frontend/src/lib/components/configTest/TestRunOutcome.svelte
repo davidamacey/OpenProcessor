@@ -34,7 +34,7 @@
 
 {#if t.error}
   <div class="space-y-1" data-testid="test-error">
-    <p class="text-red-300">{t.error}</p>
+    <p class="text-danger">{t.error}</p>
     {#if t.errorReport}
       <ConfigIssueList
         issues={[...t.errorReport.errors, ...t.errorReport.warnings]}
@@ -45,10 +45,7 @@
 {/if}
 
 {#if t.result}
-  <div
-    class="flex flex-col gap-3 border-t border-zinc-800 pt-3"
-    data-testid="test-result"
-  >
+  <div class="flex flex-col gap-3 border-t border-line pt-3" data-testid="test-result">
     {@render result(t.result)}
   </div>
 {/if}

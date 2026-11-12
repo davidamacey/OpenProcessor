@@ -58,7 +58,7 @@
 
 <div class="space-y-2">
   {#if note}
-    <p class="text-[11px] text-zinc-500">{note}</p>
+    <p class="text-caption text-fg-3">{note}</p>
   {/if}
   <ClusterRunPanel />
   <AutoLabelPanel {gate} />

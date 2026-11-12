@@ -1,8 +1,7 @@
 /**
- * Dim text (`text-zinc-500` for hints and captions, `text-zinc-600` for the
- * dimmest labels) must stay legible on the surfaces it sits on. Tailwind's
- * stock zinc-500/600 measure 3.7:1 and 2.6:1 against the dark card surface,
- * under the WCAG AA 4.5:1 floor, so app.css lifts both in `@theme`.
+ * The design tokens in app.css `@theme` must keep text legible on the surfaces it sits on:
+ * fg-2 and fg-3 reach WCAG AA (4.5:1) on every card-level surface, and the filled accent and
+ * danger backgrounds carry white label text at 4.5:1.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -14,49 +13,48 @@ const css = readFileSync(
   'utf-8',
 );
 
+type Rgb = [number, number, number];
+
 function channel(v: number): number {
   const c = v / 255;
   return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
-function luminance(hex: string): number {
-  const n = parseInt(hex.slice(1), 16);
-  return (
-    0.2126 * channel((n >> 16) & 255) +
-    0.7152 * channel((n >> 8) & 255) +
-    0.0722 * channel(n & 255)
-  );
+function luminance([r, g, b]: Rgb): number {
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
-function contrast(a: string, b: string): number {
+function contrast(a: Rgb, b: Rgb): number {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
-function themeColor(name: string): string {
-  const m = css.match(new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6})`));
-  expect(m, `app.css must override --color-${name} in @theme`).not.toBeNull();
-  return m![1]!;
+function token(name: string): Rgb {
+  const m = css.match(new RegExp(`--color-${name}:\\s*rgb\\((\\d+) (\\d+) (\\d+)\\)`));
+  expect(m, `app.css @theme must define --color-${name} as rgb(r g b)`).not.toBeNull();
+  return [Number(m![1]), Number(m![2]), Number(m![3])];
 }
 
-const CARD_SURFACE = '#18181b'; // zinc-900, the lightest surface dim text sits on
-
-describe('dim text contrast', () => {
-  it.each(['zinc-500', 'zinc-600'])('%s reaches 4.5:1 on the card surface', (name) => {
-    expect(contrast(themeColor(name), CARD_SURFACE)).toBeGreaterThanOrEqual(4.5);
+describe('text contrast on the surfaces', () => {
+  const surfaces = ['surface-0', 'surface-1', 'surface-2', 'surface-3'];
+  it.each(['fg-1', 'fg-2', 'fg-3'])('%s reaches 4.5:1 on every surface', (fg) => {
+    for (const s of surfaces) {
+      expect(contrast(token(fg), token(s)), `${fg} on ${s}`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
 
+describe('semantic text and the accent', () => {
+  it.each(['accent', 'success', 'warn', 'danger', 'info', 'holdout'])(
+    '%s text reaches 4.5:1 on the card surface',
+    (name) => {
+      expect(contrast(token(name), token('surface-1'))).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+});
+
 describe('filled button contrast', () => {
-  it.each(['btn-primary-bg', 'btn-danger-bg'])('white on --%s reaches 4.5:1', (name) => {
-    const m = css.match(new RegExp(`--${name}:\\s*(\\d+) (\\d+) (\\d+);`));
-    expect(m, `app.css must define --${name}`).not.toBeNull();
-    const hex =
-      '#' +
-      m!
-        .slice(1, 4)
-        .map((n) => Number(n).toString(16).padStart(2, '0'))
-        .join('');
-    expect(contrast('#ffffff', hex)).toBeGreaterThanOrEqual(4.5);
+  it.each(['accent-fill', 'danger-fill'])('white on --color-%s reaches 4.5:1', (name) => {
+    expect(contrast([255, 255, 255], token(name))).toBeGreaterThanOrEqual(4.5);
   });
 });

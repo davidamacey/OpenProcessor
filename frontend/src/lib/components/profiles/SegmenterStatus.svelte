@@ -16,14 +16,14 @@
 </script>
 
 <div
-  class="rounded border border-zinc-800 bg-zinc-900/40 p-2 text-xs"
+  class="rounded border border-line bg-surface-1/40 p-2 text-xs"
   data-testid="segmenter-status"
 >
   {#if segmenters.length === 0}
-    <p class="text-zinc-400">No segmenter is configured on this deployment.</p>
+    <p class="text-fg-2">No segmenter is configured on this deployment.</p>
   {:else}
     <table class="w-full text-left">
-      <thead class="text-zinc-500">
+      <thead class="text-fg-3">
         <tr>
           <th class="py-0.5 pr-3 font-normal">Segmenter</th>
           <th class="py-0.5 pr-3 font-normal">Status</th>
@@ -34,10 +34,10 @@
       </thead>
       <tbody>
         {#each segmenters as s (s.name)}
-          <tr class="border-t border-zinc-800" data-testid="segmenter-row">
+          <tr class="border-t border-line" data-testid="segmenter-row">
             <td class="py-0.5 pr-3">
               <span class="font-mono">{s.choice.label}</span>
-              {#if s.endpoint}<span class="block font-mono text-[10px] text-zinc-500"
+              {#if s.endpoint}<span class="block font-mono text-caption text-fg-3"
                   >{s.endpoint}</span
                 >{/if}
             </td>

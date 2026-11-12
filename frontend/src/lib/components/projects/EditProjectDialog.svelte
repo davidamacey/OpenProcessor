@@ -74,7 +74,7 @@
 {#if project && base}
   <Modal label="Edit project" {onclose} data-testid="edit-project-dialog">
     <h3 class="mb-1 text-base font-semibold">Edit project</h3>
-    <p class="mb-3 font-mono text-xs text-zinc-500">{base.slug}</p>
+    <p class="mb-3 font-mono text-xs text-fg-3">{base.slug}</p>
     <form
       onsubmit={async (e) => {
         e.preventDefault();
@@ -82,31 +82,31 @@
       }}
     >
       <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-zinc-400">Display name</span>
+        <span class="mb-1 block text-xs text-fg-2">Display name</span>
         <input
           type="text"
           bind:value={displayName}
           data-testid="edit-project-name"
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
         />
       </label>
       <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-zinc-400">Description</span>
+        <span class="mb-1 block text-xs text-fg-2">Description</span>
         <textarea
           bind:value={description}
           rows="2"
           data-testid="edit-project-description"
-          class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 focus:border-blue-500 focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
         ></textarea>
       </label>
 
       {#if errorText}
-        <div class="mb-3 text-xs text-red-300" data-testid="edit-project-error">
+        <div class="mb-3 text-xs text-danger" data-testid="edit-project-error">
           <p>{errorText}</p>
           {#if conflict}
             <button
               type="button"
-              class="mt-1 text-blue-400 hover:underline"
+              class="mt-1 text-accent hover:underline"
               data-testid="edit-project-reload"
               onclick={() => void reload()}>Reload the latest version</button
             >

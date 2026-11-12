@@ -23,21 +23,21 @@
     switch (s) {
       case 'running':
       case 'starting':
-        return 'bg-blue-500/20 text-blue-200 border-blue-500/40';
+        return 'bg-accent/20 text-accent border-accent/40';
       case 'exporting':
-        return 'bg-purple-500/20 text-purple-200 border-purple-500/40';
+        return 'bg-holdout/20 text-holdout border-holdout/40';
       case 'finished':
-        return 'bg-green-500/20 text-green-200 border-green-500/40';
+        return 'bg-success/20 text-success border-success/40';
       case 'failed':
-        return 'bg-red-500/20 text-red-200 border-red-500/40';
+        return 'bg-danger/20 text-danger border-danger/40';
       case 'cancelled':
       case 'skipped':
-        return 'bg-zinc-700 text-zinc-300 border-zinc-600';
+        return 'bg-surface-3 text-fg-2 border-line-strong';
       case 'lost':
-        return 'bg-yellow-500/20 text-yellow-200 border-yellow-500/40';
+        return 'bg-warn/20 text-warn border-warn/40';
       case 'queued':
       default:
-        return 'bg-zinc-800 text-zinc-300 border-zinc-700';
+        return 'bg-surface-2 text-fg-2 border-line-strong';
     }
   }
 
@@ -66,11 +66,11 @@
   const ordered = $derived([...runs].sort((a, b) => a.job_id.localeCompare(b.job_id)));
 </script>
 
-<section class="rounded-md border border-zinc-800 bg-zinc-900 p-4">
+<section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
     <h2 class="font-mono text-sm text-white">{campaignId}</h2>
     <span
-      class="rounded-sm border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-blue-200"
+      class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption uppercase tracking-wide text-accent"
     >
       campaign
     </span>
@@ -99,27 +99,27 @@
     {/if}
   </header>
 
-  <ul class="divide-y divide-zinc-800 rounded border border-zinc-800 bg-zinc-950">
+  <ul class="divide-y divide-line rounded border border-line bg-surface-0">
     {#each ordered as r (r.job_id)}
       <li
         class="grid grid-cols-1 gap-2 px-3 py-2 text-sm sm:grid-cols-[auto_8rem_auto_1fr]"
       >
         <span
-          class="rounded-sm border px-1.5 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide {statePillClass(
+          class="rounded-sm border px-1.5 py-0.5 text-center text-caption font-medium uppercase tracking-wide {statePillClass(
             r.state,
           )}"
         >
           {r.state}
         </span>
-        <span class="truncate font-mono text-xs text-zinc-400" title={r.job_id}>
+        <span class="truncate font-mono text-xs text-fg-2" title={r.job_id}>
           {r.job_id}
         </span>
-        <span class="font-mono text-xs text-zinc-300">
+        <span class="font-mono text-xs text-fg-2">
           {r.current_epoch ?? '—'} / {r.total_epochs ?? '—'} epochs
         </span>
-        <span class="font-mono text-xs text-zinc-300">
+        <span class="font-mono text-xs text-fg-2">
           mAP50 {bestMapDisplay(r).value?.toFixed(3) ?? '—'}
-          <span class="text-zinc-500">·</span>
+          <span class="text-fg-3">·</span>
           mAP50-95 {r.eval?.map50_95?.toFixed(3) ?? '—'}
         </span>
       </li>
@@ -127,12 +127,12 @@
   </ul>
 
   {#if best}
-    <p class="mt-3 text-xs text-zinc-400">
+    <p class="mt-3 text-xs text-fg-2">
       Best so far:
-      <span class="font-mono text-zinc-200">{best.job_id}</span>
-      <span class="text-zinc-500">·</span>
+      <span class="font-mono text-fg-1">{best.job_id}</span>
+      <span class="text-fg-3">·</span>
       mAP50
-      <span class="font-mono text-zinc-200"
+      <span class="font-mono text-fg-1"
         >{bestMapDisplay(best).value?.toFixed(3) ?? '—'}</span
       >
     </p>

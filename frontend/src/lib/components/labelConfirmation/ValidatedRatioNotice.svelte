@@ -20,8 +20,8 @@
 
 <section
   class="rounded-md border px-4 py-3 text-sm {partial
-    ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-    : 'border-green-500/40 bg-green-500/10 text-green-100'}"
+    ? 'border-warn/40 bg-warn/10 text-warn'
+    : 'border-success/40 bg-success/10 text-success'}"
   data-testid="validated-ratio"
   data-level={none ? 'none' : partial ? 'partial' : 'full'}
 >

@@ -38,19 +38,19 @@
   <button
     type="button"
     bind:this={trigger}
-    class="rounded px-1 text-sm text-zinc-300 hover:text-white"
+    class="rounded px-1 text-sm text-fg-2 hover:text-white"
     aria-haspopup="true"
     aria-expanded={open}
     data-testid="resources-trigger"
     onclick={() => (open = !open)}
     onkeydown={onKeydown}
   >
-    Resources <span class="text-zinc-500" aria-hidden="true">▾</span>
+    Resources <span class="text-fg-3" aria-hidden="true">▾</span>
   </button>
   {#if open}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="absolute right-0 top-full z-50 mt-1 w-64 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-xl"
+      class="absolute right-0 top-full z-50 mt-1 w-64 rounded border border-line-strong bg-surface-1 py-1 shadow-xl"
       role="group"
       aria-label="Resources"
       data-testid="resources-list"
@@ -58,7 +58,7 @@
       onkeydown={onKeydown}
     >
       {#each links as l (l.id)}
-        <ResourceLinkItem view={l} class="px-3 py-1.5 text-sm hover:bg-zinc-800" />
+        <ResourceLinkItem view={l} class="px-3 py-1.5 text-sm hover:bg-surface-2" />
       {/each}
     </div>
   {/if}

@@ -55,15 +55,15 @@
 </script>
 
 <details class="mt-3 text-xs" open={active} data-testid="export-item-filter">
-  <summary class="cursor-pointer text-zinc-400">Only items matching a filter</summary>
+  <summary class="cursor-pointer text-fg-2">Only items matching a filter</summary>
   <div class="mt-2 space-y-2">
     <ItemFilterBar state={filter} visible={withoutOpenVocab} {error} />
     {#if active}
-      <p class="text-zinc-300" data-testid="export-matching-count">
+      <p class="text-fg-2" data-testid="export-matching-count">
         {#if loading}
           Counting…
         {:else if count != null}
-          Matching items: <strong class="text-zinc-100">{count.toLocaleString()}</strong>
+          Matching items: <strong class="text-fg-1">{count.toLocaleString()}</strong>
         {/if}
       </p>
     {/if}

@@ -61,13 +61,13 @@
 {#snippet pool(name: string, b: LoopPoolBudget)}
   <div class="flex flex-col gap-1" data-testid="loop-pool-{name.toLowerCase()}">
     <div class="flex justify-between gap-2">
-      <span class="text-zinc-400">{name} crops</span>
-      <span class="font-mono text-zinc-100"
+      <span class="text-fg-2">{name} crops</span>
+      <span class="font-mono text-fg-1"
         >{formatCount(b.crops_spent)} / {formatCount(b.max_crops)}</span
       >
     </div>
     <div
-      class="h-1.5 rounded bg-zinc-800"
+      class="h-1.5 rounded bg-surface-2"
       role="progressbar"
       aria-label="{name} crops spent"
       aria-valuemin="0"
@@ -75,11 +75,11 @@
       aria-valuenow={b.crops_spent}
     >
       <div
-        class="h-1.5 rounded bg-sky-500/70"
+        class="h-1.5 rounded bg-info/70"
         style="width: {pct(b.crops_spent, b.max_crops)}%"
       ></div>
     </div>
-    <div class="flex justify-between gap-2 text-zinc-500">
+    <div class="flex justify-between gap-2 text-fg-3">
       <span>{formatCount(b.crops_reserved)} in flight</span>
       <span>{formatCount(b.requests_spent)} / {formatCount(b.max_requests)} requests</span
       >
@@ -97,25 +97,25 @@
     data-status={loop.status}
   >
     <div class="flex flex-wrap items-center gap-3">
-      <p class="text-sm text-zinc-100" role="status" data-testid="loop-status">
+      <p class="text-sm text-fg-1" role="status" data-testid="loop-status">
         {STATUS_TEXT[loop.status] ?? loop.status}
         {#if loop.status === 'paused' && loop.pause_reason}
-          <span class="text-zinc-400"
+          <span class="text-fg-2"
             >: {PAUSE_TEXT[loop.pause_reason] ?? loop.pause_reason}</span
           >
         {:else if loop.stop_reason}
-          <span class="text-zinc-400"
+          <span class="text-fg-2"
             >: {STOP_TEXT[loop.stop_reason] ?? loop.stop_reason}</span
           >
         {/if}
       </p>
-      <span class="font-mono text-zinc-500" title={loop.created_at ?? ''}
+      <span class="font-mono text-fg-3" title={loop.created_at ?? ''}
         >{loop.loop_id} · {formatTimestamp(loop.started_at ?? loop.created_at)}</span
       >
       {#if control}
         <div class="ml-auto flex flex-wrap items-center gap-2">
           {#if control.state === 'pausing'}
-            <span class="text-zinc-400" data-testid="loop-pausing"
+            <span class="text-fg-2" data-testid="loop-pausing"
               >Pausing at the next cluster</span
             >
           {/if}
@@ -163,7 +163,7 @@
               Resume the loop
             </button>
           {:else if control.resume_blocked_reason}
-            <span class="text-amber-300" data-testid="loop-resume-blocked"
+            <span class="text-warn" data-testid="loop-resume-blocked"
               >{BLOCKED_TEXT[control.resume_blocked_reason] ??
                 control.resume_blocked_reason}</span
             >
@@ -173,10 +173,10 @@
     </div>
 
     {#if loop.error}
-      <p class="text-red-300" data-testid="loop-error">{loop.error}</p>
+      <p class="text-danger" data-testid="loop-error">{loop.error}</p>
     {/if}
     {#if ctl.actionError}
-      <p class="text-red-300" role="alert" data-testid="loop-action-error">
+      <p class="text-danger" role="alert" data-testid="loop-action-error">
         {ctl.actionError}
       </p>
     {/if}
@@ -188,8 +188,8 @@
           {@render pool('Audit', loop.budget.audit)}
         {/if}
         <div class="flex flex-col gap-1">
-          <span class="text-zinc-400">Time</span>
-          <span class="font-mono text-zinc-100" data-testid="loop-wall"
+          <span class="text-fg-2">Time</span>
+          <span class="font-mono text-fg-1" data-testid="loop-wall"
             >{formatDuration(loop.budget.wall_s)} used</span
           >
         </div>
@@ -202,32 +202,32 @@
         data-testid="loop-totals"
       >
         <div>
-          <dt class="text-zinc-500">Labels propagated</dt>
-          <dd class="font-mono text-base text-zinc-100" data-testid="loop-propagated">
+          <dt class="text-fg-3">Labels propagated</dt>
+          <dd class="font-mono text-base text-fg-1" data-testid="loop-propagated">
             {formatCount(loop.totals.items_propagated)}
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Labeled by the VLM directly</dt>
-          <dd class="font-mono text-base text-zinc-100">
+          <dt class="text-fg-3">Labeled by the VLM directly</dt>
+          <dd class="font-mono text-base text-fg-1">
             {formatCount(loop.totals.items_direct)}
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Clusters left for review</dt>
-          <dd class="font-mono text-base text-zinc-100">
+          <dt class="text-fg-3">Clusters left for review</dt>
+          <dd class="font-mono text-base text-fg-1">
             {formatCount(loop.totals.clusters_left_for_review)}
           </dd>
         </div>
         <div>
-          <dt class="text-zinc-500">Items left for review</dt>
-          <dd class="font-mono text-base text-zinc-100">
+          <dt class="text-fg-3">Items left for review</dt>
+          <dd class="font-mono text-base text-fg-1">
             {formatCount(loop.totals.items_left_for_review)}
           </dd>
         </div>
       </dl>
       {#if Object.values(loop.totals.skipped).some((n) => n > 0)}
-        <p class="text-zinc-500" data-testid="loop-skipped">
+        <p class="text-fg-3" data-testid="loop-skipped">
           Skipped:
           {Object.entries(loop.totals.skipped)
             .filter(([, n]) => n > 0)
@@ -239,10 +239,10 @@
 
     {#if loop.levels.length > 0}
       <table class="w-full text-left" data-testid="loop-levels">
-        <caption class="mb-1 text-left text-sm font-medium text-zinc-200"
+        <caption class="mb-1 text-left text-sm font-medium text-fg-1"
           >Progress by level</caption
         >
-        <thead class="text-zinc-500">
+        <thead class="text-fg-3">
           <tr>
             <th scope="col" class="pr-3 font-normal">Level</th>
             <th scope="col" class="pr-3 font-normal">Clusters</th>
@@ -255,7 +255,7 @@
             <th scope="col" class="font-normal">Crops spent</th>
           </tr>
         </thead>
-        <tbody class="font-mono text-zinc-200">
+        <tbody class="font-mono text-fg-1">
           {#each loop.levels as l (l.level)}
             <tr>
               <th scope="row" class="pr-3 text-left font-normal">{l.level}</th>
@@ -275,13 +275,13 @@
 
     {#if loop.audit}
       <div data-testid="loop-audit" data-audit-status={loop.audit.status}>
-        <h3 class="mb-1 text-sm font-medium text-zinc-200">Second opinion</h3>
+        <h3 class="mb-1 text-sm font-medium text-fg-1">Second opinion</h3>
         {#if loop.audit.status === 'off'}
-          <p class="text-zinc-400">
+          <p class="text-fg-2">
             Off: no second model re-checked the labels this loop propagated.
           </p>
         {:else}
-          <p class="text-zinc-300">
+          <p class="text-fg-2">
             <span data-testid="loop-audit-status"
               >{loop.audit.status.replace('_', ' ')}</span
             >:

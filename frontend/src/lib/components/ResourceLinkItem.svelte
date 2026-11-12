@@ -16,19 +16,16 @@
       rel="noopener noreferrer"
       data-testid="resource-link"
       title={view.hint || undefined}
-      class="text-zinc-200 hover:text-white">{view.label} ↗</a
+      class="text-fg-1 hover:text-white">{view.label} ↗</a
     >
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {#if view.notRunning}
-      <span class="text-xs text-amber-400" data-testid="resource-not-running"
-        >not running</span
+      <span class="text-xs text-warn" data-testid="resource-not-running">not running</span
       >
     {/if}
   {:else}
-    <span
-      class="text-zinc-500"
-      data-testid="resource-muted"
-      title={view.hint || undefined}>{view.label}: {view.note}</span
+    <span class="text-fg-3" data-testid="resource-muted" title={view.hint || undefined}
+      >{view.label}: {view.note}</span
     >
   {/if}
 </div>

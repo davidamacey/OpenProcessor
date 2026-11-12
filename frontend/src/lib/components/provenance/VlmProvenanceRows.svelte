@@ -19,11 +19,8 @@
 </script>
 
 {#each rows as r (r.id)}
-  <dt class="text-zinc-500">{r.label}</dt>
-  <dd
-    class="break-all font-mono text-xs text-zinc-200"
-    data-testid="vlm-provenance-{r.id}"
-  >
+  <dt class="text-fg-3">{r.label}</dt>
+  <dd class="break-all font-mono text-xs text-fg-1" data-testid="vlm-provenance-{r.id}">
     {r.value}
   </dd>
 {/each}

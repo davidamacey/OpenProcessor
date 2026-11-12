@@ -96,27 +96,27 @@
   aria-label={copy.title}
 >
   {#if ctl.loadError && !ctl.active}
-    <p class="text-red-300">Could not read what is active: {ctl.loadError}</p>
+    <p class="text-danger">Could not read what is active: {ctl.loadError}</p>
   {:else if !ctl.active}
-    <p class="text-zinc-500">Loading what is active…</p>
+    <p class="text-fg-3">Loading what is active…</p>
   {:else}
     {@const a = ctl.active}
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-zinc-400">{copy.title}</span>
+      <span class="text-fg-2">{copy.title}</span>
       {#if a.active.name == null}
-        <span class="font-medium text-zinc-200" data-testid="active-ref"
+        <span class="font-medium text-fg-1" data-testid="active-ref"
           >{noneText(a.source)}</span
         >
       {:else}
-        <span class="font-mono font-medium text-emerald-300" data-testid="active-ref"
+        <span class="font-mono font-medium text-success" data-testid="active-ref"
           >{refText(a.active)}</span
         >
       {/if}
-      {#if a.source}<span class="text-xs text-zinc-500" data-testid="active-source"
+      {#if a.source}<span class="text-xs text-fg-3" data-testid="active-source"
           >({sourceLabels?.[a.source] ?? a.source})</span
         >{/if}
       {#if a.activated_at}
-        <span class="text-xs text-zinc-500" title={a.activated_at}
+        <span class="text-xs text-fg-3" title={a.activated_at}
           >since {formatTimestamp(a.activated_at)}</span
         >
       {/if}
@@ -142,7 +142,7 @@
     </div>
     {#if a.stale}
       <p
-        class="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-200"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
         data-testid="active-stale"
       >
         The server could not refresh its config and is showing its last known state.
@@ -151,7 +151,7 @@
     {#if a.applied && a.applied.length > 0}
       <div class="overflow-x-auto">
         <table class="text-xs" data-testid="active-applied">
-          <thead class="text-left text-zinc-500">
+          <thead class="text-left text-fg-3">
             <tr>
               <th class="py-0.5 pr-3 font-normal">Process</th>
               <th class="py-0.5 pr-3 font-normal">Host</th>
@@ -163,7 +163,7 @@
           </thead>
           <tbody>
             {#each a.applied as r, i (i)}
-              <tr class="border-t border-zinc-800">
+              <tr class="border-t border-line">
                 <td class="py-0.5 pr-3">{r.process}</td>
                 <td class="py-0.5 pr-3 font-mono">{r.host}</td>
                 <td class="py-0.5 pr-3 font-mono">{appliedRefText(r[copy.appliedRef])}</td
@@ -175,7 +175,7 @@
                 <td class="py-0.5">
                   {#if r.lagging}
                     <span
-                      class="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 text-amber-200"
+                      class="rounded border border-warn/40 bg-warn/10 px-1.5 text-warn"
                       data-testid="applied-lagging">lagging</span
                     >
                   {/if}
@@ -187,7 +187,7 @@
       </div>
     {/if}
     {#if ctl.actionError && !confirming}
-      <p class="text-xs text-red-300" data-testid="active-action-error">
+      <p class="text-xs text-danger" data-testid="active-action-error">
         {ctl.actionError}
       </p>
     {/if}
@@ -207,8 +207,8 @@
       →
       <strong class="font-mono">{refText(ctl.active.previous)}</strong>
     </p>
-    <p class="text-xs text-zinc-400">{copy.rollbackBlurb}</p>
-    {#if ctl.actionError}<p class="text-red-300" data-testid="rollback-error">
+    <p class="text-xs text-fg-2">{copy.rollbackBlurb}</p>
+    {#if ctl.actionError}<p class="text-danger" data-testid="rollback-error">
         {ctl.actionError}
       </p>{/if}
   </ConfirmDialog>
@@ -228,8 +228,8 @@
       →
       <strong>{copy.noneText}</strong>
     </p>
-    <p class="text-xs text-zinc-400">{copy.deactivate.blurb}</p>
-    {#if ctl.actionError}<p class="text-red-300" data-testid="deactivate-error">
+    <p class="text-xs text-fg-2">{copy.deactivate.blurb}</p>
+    {#if ctl.actionError}<p class="text-danger" data-testid="deactivate-error">
         {ctl.actionError}
       </p>{/if}
   </ConfirmDialog>

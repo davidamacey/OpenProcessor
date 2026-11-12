@@ -35,7 +35,7 @@
 
 <div class="space-y-4 text-xs" data-testid="import-options">
   <fieldset>
-    <legend class="mb-1 font-semibold text-zinc-300">Processing</legend>
+    <legend class="mb-1 font-semibold text-fg-2">Processing</legend>
     <label class="flex items-start gap-2 py-0.5">
       <input
         type="radio"
@@ -43,7 +43,7 @@
         checked={wizard.options.processing === undefined}
         onchange={() => wizard.setOption('processing', undefined)}
       />
-      <span class="text-zinc-400">Server default</span>
+      <span class="text-fg-2">Server default</span>
     </label>
     {#each formats.processing_modes as p (p.value)}
       <label class="flex items-start gap-2 py-0.5">
@@ -55,8 +55,8 @@
           onchange={() => wizard.setOption('processing', p.value)}
         />
         <span>
-          <span class="text-zinc-200">{p.label}</span>
-          {#if p.description}<span class="block text-zinc-500">{p.description}</span>{/if}
+          <span class="text-fg-1">{p.label}</span>
+          {#if p.description}<span class="block text-fg-3">{p.description}</span>{/if}
         </span>
       </label>
     {/each}
@@ -64,7 +64,7 @@
 
   <div class="grid gap-3 sm:grid-cols-2">
     <label class="block">
-      <span class="mb-0.5 block text-zinc-400">Label trust</span>
+      <span class="mb-0.5 block text-fg-2">Label trust</span>
       <select
         class="select select-sm w-full"
         value={wizard.options.label_trust ?? ''}
@@ -82,7 +82,7 @@
     </label>
 
     <label class="block">
-      <span class="mb-0.5 block text-zinc-400">Freeze the test split as the holdout</span>
+      <span class="mb-0.5 block text-fg-2">Freeze the test split as the holdout</span>
       <select
         class="select select-sm w-full"
         aria-label="Freeze the test split as the holdout"
@@ -94,14 +94,14 @@
         <option value="true">Freeze it</option>
         <option value="false">Don't freeze it</option>
       </select>
-      <span class="mt-0.5 block text-zinc-500">
+      <span class="mt-0.5 block text-fg-3">
         Frozen test images are held out: they never enter training.
       </span>
     </label>
 
     {#if wizard.preview?.region}
       <label class="block">
-        <span class="mb-0.5 block text-zinc-400">Region parents</span>
+        <span class="mb-0.5 block text-fg-2">Region parents</span>
         <select
           class="select select-sm w-full"
           value={wizard.options.parents ?? ''}
@@ -120,7 +120,7 @@
     {/if}
 
     <label class="block">
-      <span class="mb-0.5 block text-zinc-400">Import name</span>
+      <span class="mb-0.5 block text-fg-2">Import name</span>
       <input
         class="input input-sm w-full"
         value={wizard.options.name ?? ''}
@@ -128,7 +128,7 @@
       />
     </label>
     <label class="block">
-      <span class="mb-0.5 block text-zinc-400">Source tag</span>
+      <span class="mb-0.5 block text-fg-2">Source tag</span>
       <input
         class="input input-sm w-full"
         value={wizard.options.source_tag ?? ''}
@@ -139,10 +139,10 @@
   </div>
 
   <details>
-    <summary class="cursor-pointer text-zinc-400">Advanced</summary>
+    <summary class="cursor-pointer text-fg-2">Advanced</summary>
     <div class="mt-2 grid gap-3 sm:grid-cols-3">
       <label class="block">
-        <span class="mb-0.5 block text-zinc-400">Images without a label file</span>
+        <span class="mb-0.5 block text-fg-2">Images without a label file</span>
         <select
           class="select select-sm w-full"
           value={wizard.options.missing_label ?? ''}
@@ -159,7 +159,7 @@
         </select>
       </label>
       <label class="block">
-        <span class="mb-0.5 block text-zinc-400">Reviewed-negative region parents</span>
+        <span class="mb-0.5 block text-fg-2">Reviewed-negative region parents</span>
         <select
           class="select select-sm w-full"
           value={triValue(wizard.options.region_negatives)}
@@ -172,7 +172,7 @@
         </select>
       </label>
       <label class="block">
-        <span class="mb-0.5 block text-zinc-400">Region containment</span>
+        <span class="mb-0.5 block text-fg-2">Region containment</span>
         <input
           type="number"
           step="0.05"
@@ -189,7 +189,7 @@
   </details>
 
   {#if wizard.preview?.force_allowed}
-    <label class="flex items-center gap-2 text-amber-200" data-testid="force-toggle">
+    <label class="flex items-center gap-2 text-warn" data-testid="force-toggle">
       <input
         type="checkbox"
         checked={wizard.options.force === true}

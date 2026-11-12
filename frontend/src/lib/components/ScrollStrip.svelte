@@ -109,7 +109,7 @@
     {#if canLeft}
       <button
         type="button"
-        class="absolute left-0 z-10 flex h-full items-center border-r border-zinc-800 bg-zinc-950 px-1 text-zinc-400 hover:text-white"
+        class="absolute left-0 z-10 flex h-full items-center border-r border-line bg-surface-0 px-1 text-fg-2 hover:text-white"
         aria-label="Scroll left — more items"
         title="More items to the left"
         data-testid={testId ? `${testId}-more-left` : undefined}
@@ -128,7 +128,7 @@
     {#if canRight}
       <button
         type="button"
-        class="absolute right-0 z-10 flex h-full items-center border-l border-zinc-800 bg-zinc-950 px-1 text-zinc-400 hover:text-white"
+        class="absolute right-0 z-10 flex h-full items-center border-l border-line bg-surface-0 px-1 text-fg-2 hover:text-white"
         aria-label="Scroll right — more items"
         title="More items to the right"
         data-testid={testId ? `${testId}-more-right` : undefined}

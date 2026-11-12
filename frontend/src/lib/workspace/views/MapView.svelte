@@ -82,7 +82,7 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="map-view">
   <h1 class="sr-only">Map</h1>
   {#if ctl.meta?.available}
-    <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-xs text-zinc-300">
+    <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-xs text-fg-2">
       <span data-testid="map-located">{ctl.meta.n_located.toLocaleString()} located</span>
       <span aria-hidden="true">·</span>
       {#if ctl.meta.n_without_location > 0}
@@ -96,12 +96,12 @@
       {:else}
         <span data-testid="map-without-location">0 without location</span>
       {/if}
-      <span class="chip text-zinc-400" data-testid="map-policy"
+      <span class="chip text-fg-2" data-testid="map-policy"
         >Location: {ctl.meta.location_policy === 'store_coarse'
           ? 'coarse (about 1 km)'
           : 'exact'}</span
       >
-      <span class="text-zinc-500">Shift+drag selects an area, or</span>
+      <span class="text-fg-3">Shift+drag selects an area, or</span>
       <button
         type="button"
         class="btn-sm"
@@ -112,14 +112,14 @@
     </p>
   {/if}
   {#if ctl.loadingMeta}
-    <p class="p-4 text-sm text-zinc-500" role="status">Loading…</p>
+    <p class="p-4 text-sm text-fg-3" role="status">Loading…</p>
   {:else if ctl.metaError}
     <div class="flex flex-col items-start gap-3 p-4 text-sm">
-      <p class="text-red-300" role="alert" data-testid="map-error">{ctl.metaError}</p>
+      <p class="text-danger" role="alert" data-testid="map-error">{ctl.metaError}</p>
       <button type="button" class="btn" onclick={() => void ctl.loadMeta()}>Retry</button>
     </div>
   {:else if ctl.meta && !ctl.meta.available}
-    <p class="p-6 text-sm text-zinc-400" data-testid="map-unavailable">
+    <p class="p-6 text-sm text-fg-2" data-testid="map-unavailable">
       {#if ctl.meta.location_policy === 'drop'}
         This project does not store where photos were taken (its location policy is
         <code>drop</code>).
@@ -129,15 +129,15 @@
     </p>
   {:else if ctl.meta}
     {#if ctl.cellsError}
-      <p class="px-4 text-xs text-red-300" role="alert">{ctl.cellsError}</p>
+      <p class="px-4 text-xs text-danger" role="alert">{ctl.cellsError}</p>
     {/if}
     {#if ctl.cells?.truncated}
-      <p class="px-4 text-xs text-amber-300" data-testid="map-truncated">
+      <p class="px-4 text-xs text-warn" data-testid="map-truncated">
         More cells match than fit on the map; zoom in to see them.
       </p>
     {/if}
     {#if ctl.cells?.join_truncated}
-      <p class="px-4 text-xs text-amber-300" data-testid="map-join-truncated">
+      <p class="px-4 text-xs text-warn" data-testid="map-join-truncated">
         The filter matches more photos than the map can use at once; narrow it to see all
         of them.
       </p>
@@ -159,9 +159,7 @@
         }}
       />
       {#if ctl.loadingCells}
-        <span class="chip absolute left-6 top-4 bg-zinc-900/90 text-zinc-300"
-          >Loading…</span
-        >
+        <span class="chip absolute left-6 top-4 bg-surface-1/90 text-fg-2">Loading…</span>
       {/if}
     </div>
   {/if}

@@ -37,11 +37,11 @@
 
 {#if ctl.supported}
   <section
-    class="border-b border-zinc-800 bg-zinc-900/30 px-4 py-2"
+    class="border-b border-line bg-surface-1/30 px-4 py-2"
     aria-labelledby="loop-panel-heading"
     data-testid="loop-panel"
   >
-    <h2 id="loop-panel-heading" class="text-sm font-medium text-zinc-200">
+    <h2 id="loop-panel-heading" class="text-sm font-medium text-fg-1">
       <button
         type="button"
         class="flex items-center gap-2 text-left"
@@ -52,7 +52,7 @@
       >
         Auto-label loop
         {#if ctl.loop}
-          <span class="chip font-normal text-zinc-400" data-testid="loop-panel-chip"
+          <span class="chip font-normal text-fg-2" data-testid="loop-panel-chip"
             >{ctl.loop.status}</span
           >
         {/if}
@@ -61,7 +61,7 @@
     {#if open}
       <div id="loop-panel-body" class="mt-3 flex flex-col gap-5 pb-3">
         {#if ctl.loadError}
-          <p class="text-xs text-red-300" role="alert" data-testid="loop-load-error">
+          <p class="text-xs text-danger" role="alert" data-testid="loop-load-error">
             {ctl.loadError}
           </p>
         {/if}
