@@ -2,7 +2,7 @@
  * Pure box geometry in normalized coordinates: pointer mapping, clamping and the draw and move
  * maths both box editors share. No Svelte, no network, so it is unit-tested without a mount.
  */
-import type { BBoxNormLike } from './types';
+import type { BBoxNormLike, XYXY } from './types';
 
 export function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));
@@ -62,4 +62,79 @@ export function moveBox(initial: BBoxNormLike, dx: number, dy: number): BBoxNorm
     w: initial.w,
     h: initial.h,
   });
+}
+
+/** The `[x1, y1, x2, y2]` edges of a centre-and-size box. */
+export function toXyxy(b: BBoxNormLike): XYXY {
+  return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
+}
+
+/** The smallest box the editor draws or resizes to, as a fraction of the image side. */
+export const MIN_BOX_SIDE = 0.004;
+
+/** Whether a drawn box is big enough to keep (a click is not a box). */
+export function isDrawable(box: XYXY): boolean {
+  return box[2] - box[0] >= MIN_BOX_SIDE && box[3] - box[1] >= MIN_BOX_SIDE;
+}
+
+/** The corners of two drag points as ordered, clamped edges. */
+export function xyxyFromPoints(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): XYXY {
+  return [
+    clamp01(Math.min(a.x, b.x)),
+    clamp01(Math.min(a.y, b.y)),
+    clamp01(Math.max(a.x, b.x)),
+    clamp01(Math.max(a.y, b.y)),
+  ];
+}
+
+/** `box` shifted by the offset, keeping its size: it slides to the frame edge, it does not shrink. */
+export function translateXyxy(box: XYXY, dx: number, dy: number): XYXY {
+  const w = box[2] - box[0];
+  const h = box[3] - box[1];
+  const x1 = Math.min(1 - w, Math.max(0, box[0] + dx));
+  const y1 = Math.min(1 - h, Math.max(0, box[1] + dy));
+  return [x1, y1, x1 + w, y1 + h];
+}
+
+export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+/** Where each handle sits and which edges it moves. */
+export const RESIZE_HANDLES: Record<
+  ResizeHandle,
+  {
+    x: 0 | 0.5 | 1;
+    y: 0 | 0.5 | 1;
+    west: boolean;
+    east: boolean;
+    north: boolean;
+    south: boolean;
+  }
+> = {
+  nw: { x: 0, y: 0, west: true, east: false, north: true, south: false },
+  n: { x: 0.5, y: 0, west: false, east: false, north: true, south: false },
+  ne: { x: 1, y: 0, west: false, east: true, north: true, south: false },
+  e: { x: 1, y: 0.5, west: false, east: true, north: false, south: false },
+  se: { x: 1, y: 1, west: false, east: true, north: false, south: true },
+  s: { x: 0.5, y: 1, west: false, east: false, north: false, south: true },
+  sw: { x: 0, y: 1, west: true, east: false, north: false, south: true },
+  w: { x: 0, y: 0.5, west: true, east: false, north: false, south: false },
+};
+
+/** `box` with the edges `handle` owns moved by the offset, clamped to the frame and to the minimum side. */
+export function resizeXyxy(
+  box: XYXY,
+  handle: ResizeHandle,
+  dx: number,
+  dy: number,
+): XYXY {
+  const h = RESIZE_HANDLES[handle];
+  let [x1, y1, x2, y2] = box;
+  if (h.west) x1 = Math.min(x2 - MIN_BOX_SIDE, clamp01(x1 + dx));
+  if (h.east) x2 = Math.max(x1 + MIN_BOX_SIDE, clamp01(x2 + dx));
+  if (h.north) y1 = Math.min(y2 - MIN_BOX_SIDE, clamp01(y1 + dy));
+  if (h.south) y2 = Math.max(y1 + MIN_BOX_SIDE, clamp01(y2 + dy));
+  return [x1, y1, x2, y2];
 }
