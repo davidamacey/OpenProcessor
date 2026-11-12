@@ -23,7 +23,7 @@ describe('ClassSplitTable', () => {
           {
             class_id: 1,
             export_id: 0,
-            class_name: 'car',
+            class_name: 'widget',
             train: 1200,
             val: 30,
             test: 10,

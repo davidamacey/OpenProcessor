@@ -28,7 +28,7 @@ beforeEach(() => {
       const u = String(url);
       urls.push(u);
       const body = u.endsWith('/images/img-1')
-        ? { image: { width: 800, height: 600, source: 'src' }, items: [] }
+        ? { image: { width: 800, height: 600, source: 'src' }, items: [], boxes: [] }
         : u.endsWith('/history')
           ? { crop_id: 'crop-1', entries: [] }
           : {};

@@ -155,6 +155,7 @@ const areaParams = (f: ClusterFilter) => ({
   geo_bbox: f.geo_bbox,
   geo_polygon: f.geo_polygon,
   has_location: f.has_location,
+  viz_box: f.viz_box,
   near_dup_group: f.near_dup_group,
 });
 

@@ -390,6 +390,7 @@ const CASES: [string, string[]][] = [
       geo_bbox: true,
       geo_polygon: true,
       has_location: true,
+      viz_box: true,
       near_dup_group: true,
       conf_max: true,
       conf_min: true,

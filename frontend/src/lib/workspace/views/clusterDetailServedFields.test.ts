@@ -20,10 +20,13 @@ describe('class-for-cluster lookup reads the served class name, not an id guess'
   it('clsForCluster matches the registry class by the card’s dominant_class_name', () => {
     const clsBlock = src.match(/const clsForCluster = \$derived\(([\s\S]*?)\);/)?.[0];
     expect(clsBlock).not.toBeUndefined();
-    expect(clsBlock).toMatch(/cluster\?\.dominant_class_name/);
-    expect(clsBlock).toMatch(/c\.name === cluster!\.dominant_class_name/);
+    expect(clsBlock).toMatch(/registryClassFor\(cluster\?\.dominant_class_name\)/);
+    const lookup = src.match(/function registryClassFor\(([\s\S]*?)\n\}/)?.[0];
+    expect(lookup).toMatch(/c\.name === name/);
     // Class identity is the name: no registry row is matched by an id.
-    expect(clsBlock).not.toMatch(/dominant_class_id|cluster_kind|c\.id ===/);
+    expect(`${clsBlock}${lookup}`).not.toMatch(
+      /dominant_class_id|cluster_kind|c\.id ===/,
+    );
   });
 });
 

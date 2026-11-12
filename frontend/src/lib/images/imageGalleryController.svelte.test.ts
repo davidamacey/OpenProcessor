@@ -10,7 +10,7 @@ const mocked = vi.mocked(listImages);
 
 function make(sort: string | null = null) {
   return createImageGalleryController({
-    itemQuery: () => ({ class_name: ['car'] }),
+    itemQuery: () => ({ class_name: ['widget'] }),
     sortId: () => sort,
   });
 }
@@ -67,8 +67,8 @@ describe('createImageGalleryController', () => {
     await g.loadFirst();
     g.select('a', undefined);
     g.select('b', { ctrlKey: true } as MouseEvent);
-    expect(toItemSelection(g.workspaceSelection, { class_names: ['car'] })).toEqual({
-      filter: { class_names: ['car'], image_ids: ['a', 'b'] },
+    expect(toItemSelection(g.workspaceSelection, { class_names: ['widget'] })).toEqual({
+      filter: { class_names: ['widget'], image_ids: ['a', 'b'] },
     });
   });
 
@@ -78,7 +78,7 @@ describe('createImageGalleryController', () => {
     g.unlabeledOnly = true;
     await g.loadFirst();
     expect(mocked.mock.calls[0]![0]).toEqual({
-      class_name: ['car'],
+      class_name: ['widget'],
       label_state: 'has_unlabeled',
       sort: 'indexed_at:asc',
     });

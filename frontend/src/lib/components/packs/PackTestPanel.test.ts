@@ -118,7 +118,11 @@ describe('PackTestPanel', () => {
         return json(packTestResponseFixture());
       }
       // The preview's source-image context.
-      return json({ image: { image_id: 'img_1', width: 10, height: 10 }, items: [] });
+      return json({
+        image: { image_id: 'img_1', width: 10, height: 10 },
+        items: [],
+        boxes: [],
+      });
     });
     vi.stubGlobal('fetch', fetchMock);
     render(schemaFixture().calls);
@@ -260,7 +264,11 @@ describe('PackTestPanel', () => {
       const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
         String(url).endsWith('/prompt_packs/test')
           ? json(packTestResponseFixture())
-          : json({ image: { image_id: 'img_1', width: 10, height: 10 }, items: [] }),
+          : json({
+              image: { image_id: 'img_1', width: 10, height: 10 },
+              items: [],
+              boxes: [],
+            }),
       );
       vi.stubGlobal('fetch', fetchMock);
       render(schemaFixture().calls);

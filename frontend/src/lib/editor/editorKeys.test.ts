@@ -166,7 +166,7 @@ describe('editor keys', () => {
   it('a class hotkey sets the selected object class through the drop bus', async () => {
     const c = fakeController();
     dispose = registerEditorKeys(c);
-    const cls = { id: 7, name: 'car' } as RegistryClass;
+    const cls = { id: 7, name: 'widget' } as RegistryClass;
     await dropOnClassStore.dispatch(cls, []);
     expect(c.setClass).toHaveBeenCalledWith(cls);
   });

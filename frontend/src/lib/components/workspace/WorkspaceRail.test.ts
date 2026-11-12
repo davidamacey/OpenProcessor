@@ -54,7 +54,7 @@ beforeEach(() => {
   document.body.appendChild(target);
   const ws = {
     url: { queue: 'to_label' },
-    itemQuery: () => ({ class_name: ['car'], review_tab: 'to_label' }),
+    itemQuery: () => ({ class_name: ['widget'], review_tab: 'to_label' }),
     railOpen: true,
     filter: { classNames: [] },
     setQueue: vi.fn(),
@@ -74,7 +74,7 @@ afterEach(() => {
 
 describe('WorkspaceRail', () => {
   it('asks for the counts under the filter, not under the queue it shows', () => {
-    expect(vi.mocked(getReviewTabs)).toHaveBeenCalledWith({ class_name: ['car'] });
+    expect(vi.mocked(getReviewTabs)).toHaveBeenCalledWith({ class_name: ['widget'] });
   });
 
   it('queue counts are the served count', () => {

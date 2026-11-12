@@ -11,7 +11,7 @@ describe('promoteGateDetail', () => {
         detail: {
           message: 'gate failed',
           failures: [
-            { code: 'map', message: 'mAP low', class_name: 'car' },
+            { code: 'map', message: 'mAP low', class_name: 'widget' },
             { code: 'n', message: 'few samples' },
             { code: 5, message: 'bad' },
             null,
@@ -25,7 +25,7 @@ describe('promoteGateDetail', () => {
     expect(d).toEqual({
       message: 'gate failed',
       failures: [
-        { code: 'map', message: 'mAP low', class_name: 'car' },
+        { code: 'map', message: 'mAP low', class_name: 'widget' },
         { code: 'n', message: 'few samples', class_name: null },
       ],
       force_allowed: true,

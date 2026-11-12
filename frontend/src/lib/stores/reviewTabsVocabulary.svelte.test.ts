@@ -293,7 +293,7 @@ describe('reviewTabsVocabularyStore served queue counts', () => {
         jsonResponse(200, {
           tabs: [
             tab('to_label', 'To label', {
-              count: url.includes('class_name=car') ? 3 : 9,
+              count: url.includes('class_name=widget') ? 3 : 9,
             }),
           ],
           empty_state: EMPTY_STATE,
@@ -306,9 +306,9 @@ describe('reviewTabsVocabularyStore served queue counts', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(9);
 
-    await reviewTabsVocabularyStore.load({ class_name: ['car'] });
+    await reviewTabsVocabularyStore.load({ class_name: ['widget'] });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('class_name=car');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('class_name=widget');
     expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(3);
   });
 
@@ -326,7 +326,7 @@ describe('reviewTabsVocabularyStore served queue counts', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
     const first = reviewTabsVocabularyStore.load({});
-    await reviewTabsVocabularyStore.load({ class_name: ['car'] });
+    await reviewTabsVocabularyStore.load({ class_name: ['widget'] });
     release(
       jsonResponse(200, {
         tabs: [tab('to_label', 'To label', { count: 9 })],

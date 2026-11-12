@@ -9,7 +9,6 @@
     TRAINABLE_COLUMN_TITLE,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
-  import { scoped } from '$lib/api';
   import type { SortOption } from '$lib/types_cursor';
 
   interface Props {
@@ -166,7 +165,7 @@
             'count',
             'Total (labelled)',
             'text-right',
-            `Crops with this class_id (GET ${scoped()}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes.`,
+            `Crops with this class_id (GET /stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes.`,
           )}
           <!-- E1 (visual audit 2026-09-24): Validated counts the frozen
                test crops too; Trainable and Gap are the served

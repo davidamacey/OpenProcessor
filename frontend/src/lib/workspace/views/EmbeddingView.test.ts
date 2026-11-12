@@ -25,12 +25,12 @@ const HEIGHT = 520;
 const PADDING = 20;
 
 const POINTS = [
-  { crop_id: 'in-1', x: 0, y: 0, matched: true, colour_index: 0, class_name: 'sedan' },
-  { crop_id: 'in-2', x: 1, y: 1, matched: true, colour_index: 0, class_name: 'sedan' },
+  { crop_id: 'in-1', x: 0, y: 0, matched: true, colour_index: 0, class_name: 'gizmo' },
+  { crop_id: 'in-2', x: 1, y: 1, matched: true, colour_index: 0, class_name: 'gizmo' },
   { crop_id: 'out-1', x: 9, y: 9, matched: false, colour_index: 1, class_name: 'truck' },
 ].map((p) => ({ cluster_uid: null, class_source: null, ...p }));
 const LEGEND = [
-  { class_name: 'sedan', colour_index: 0, count: 2 },
+  { class_name: 'gizmo', colour_index: 0, count: 2 },
   { class_name: 'truck', colour_index: 1, count: 1 },
 ];
 const SCALE = computeScale(POINTS, WIDTH, HEIGHT, PADDING);
@@ -43,7 +43,7 @@ function fakeWs() {
   return {
     filter: new ItemFilterState(),
     selection: NO_SELECTION,
-    itemQuery: () => ({ class_name: ['sedan'] }),
+    itemQuery: () => ({ class_name: ['gizmo'] }),
     select: vi.fn(),
     applyFilter: vi.fn(),
     setFocus: vi.fn(),
@@ -139,14 +139,14 @@ afterEach(() => {
 describe('Embedding view', () => {
   it('asks the projection with the Workspace query', async () => {
     await open();
-    expect(getVizProjection.mock.calls[0]![0]).toEqual({ class_name: ['sedan'] });
+    expect(getVizProjection.mock.calls[0]![0]).toEqual({ class_name: ['gizmo'] });
   });
 
   it('lists the served legend with its served counts', async () => {
     await open();
     const entries = [...target.querySelectorAll('[data-testid=embedding-legend-entry]')];
     expect(entries.map((e) => e.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-      'sedan (2)',
+      'gizmo (2)',
       'truck (1)',
     ]);
   });

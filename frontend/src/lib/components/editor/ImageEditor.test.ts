@@ -65,7 +65,7 @@ beforeEach(() => {
   stubCanvasLayout(W, H);
   resetEditorApi();
   nav.goto.mockReset();
-  classesStore.classes = [cls(7, 'car'), cls(8, 'bus')];
+  classesStore.classes = [cls(7, 'widget'), cls(8, 'bus')];
   api.getImage.mockImplementation(async () => served());
   api.locateImage.mockResolvedValue({
     image_id: 'img-1',

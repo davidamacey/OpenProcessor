@@ -493,6 +493,8 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_images.ts GET /images/locate',
   'lib/api_map.ts GET /map/cells',
   'lib/api_table.ts GET /table',
+  // A spread of the shared `ItemFilterQuery` (like /table and /stats/dataset above).
+  'lib/api_viz.ts GET /viz/projection',
 ]);
 const unresolvedSeen = new Set<string>();
 

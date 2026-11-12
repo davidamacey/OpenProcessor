@@ -31,7 +31,6 @@ function read(rel: string): string {
 const ASSIGNMENT_SURFACES = [
   'src/lib/classPicker.ts',
   'src/lib/components/workspace/RailClasses.svelte',
-  'src/lib/components/EmbeddingPlot.svelte',
   'src/lib/components/ShortcutOverlay.svelte',
   'src/lib/classHotkey.ts',
   'src/routes/p/[project]/+layout.svelte',
@@ -41,14 +40,6 @@ describe('widget_tag assignment-hiding wiring', () => {
   it.each(ASSIGNMENT_SURFACES)('%s imports from $lib/classVisibility', (rel) => {
     const src = read(rel);
     expect(src).toMatch(/from ['"]\$lib\/classVisibility['"]/);
-  });
-
-  it('embedding-plot assign <select> filters through isAssignableClass, not raw classesStore.classes', () => {
-    const src = read('src/lib/components/EmbeddingPlot.svelte');
-    expect(src).not.toMatch(/\{#each classesStore\.classes as cls/);
-    expect(src).toMatch(
-      /\{#each classesStore\.classes\.filter\(isAssignableClass\) as cls/,
-    );
   });
 
   it('the class-subset picker (export/train) does NOT import classVisibility', () => {

@@ -92,9 +92,9 @@ describe('ToolStrip', () => {
   });
 
   it('names what undo would undo, with its key', () => {
-    render({ canUndo: true, undoLabel: 'Draw car' });
+    render({ canUndo: true, undoLabel: 'Draw widget' });
     expect(btn('editor.undo').title).toBe(
-      `Undo: Draw car (${keymapStore.glyph('editor.undo')})`,
+      `Undo: Draw widget (${keymapStore.glyph('editor.undo')})`,
     );
   });
 
