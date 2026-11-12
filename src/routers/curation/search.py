@@ -16,7 +16,6 @@ from typing import Annotated, Any
 
 from fastapi import HTTPException, Query, Request, Response
 
-from src.config.env import env_bool
 from src.config.settings import TritonModelConfig
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
@@ -24,25 +23,15 @@ from src.core.wire_json import WireJSONResponse
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
+from src.routers.curation._search_params import SearchWindowQuery, checked_filter_join
 from src.routers.curation._space_refusals import space_refusals
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
-from src.services.curation.image_join import resolve_filter_join
-from src.services.curation.item_filter import item_filter_clauses
-from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.search_timing import bind_search_timer
 
 
 logger = get_logger(__name__)
-
-
-def _semantic_search_enabled() -> bool:
-    """Read fresh each call (not a module constant) — same
-    ``OP_SCORES_ENABLED``/``OP_SELECT_DIVERSE_ENABLED`` live-read
-    convention ``strategy_registry.py`` documents, so tests can
-    ``monkeypatch.setenv`` without reimporting."""
-    return env_bool('OP_SEMANTIC_SEARCH_ENABLED', default=True)
 
 
 def _get_pe_encoder(request: Request) -> Any:
@@ -58,11 +47,10 @@ async def search_text(
     request: Request,
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
+    window: SearchWindowQuery,
     q: Annotated[
         str, Query(min_length=1, description='Free-text query, e.g. "white pickup truck".')
     ],
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
     cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(
         None,
@@ -73,13 +61,6 @@ async def search_text(
             "with that tab's plain listing. Omitted searches the whole pool."
         ),
     ),
-    date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
-    date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    hide_near_duplicates: bool = False,
-    min_score: float | None = Query(
-        None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
-    ),
     target: Annotated[
         SearchTarget,
         Query(
@@ -89,26 +70,6 @@ async def search_text(
             )
         ),
     ] = SearchTarget.ITEM,
-    include_test: bool = False,
-    space: Annotated[
-        str | None,
-        Query(
-            description=(
-                "The space to search (a live space key of the target); default the target's "
-                'primary. Echoed in the response as `space`.'
-            )
-        ),
-    ] = None,
-    fuse: Annotated[
-        list[str] | None,
-        Query(
-            description=(
-                'More live space keys to search; the per-space rankings are merged by reciprocal '
-                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
-                'found it and names it in `score_space`.'
-            )
-        ),
-    ] = None,
 ) -> Response:
     """Semantic kNN search over the items index's ``pe_embedding`` field.
 
@@ -119,19 +80,7 @@ async def search_text(
     ``{items, total, page, page_size}`` — same envelope shape as
     ``GET /curation/review/{tab}``.
     """
-    if not _semantic_search_enabled():
-        raise HTTPException(
-            status_code=400,
-            detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
-        )
-
-    try:
-        join = await resolve_filter_join(opensearch, item_filter)
-        item_filter_clauses(
-            item_filter, embedding=await item_write_fields(), image_join=join
-        )  # a malformed band is the caller's 400, not an outage
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    join = await checked_filter_join(opensearch, item_filter)
 
     pe_encoder = _get_pe_encoder(request)
     if pe_encoder is None or not pe_encoder.ensure_text_ready():
@@ -165,21 +114,12 @@ async def search_text(
                     pe_encoder=pe_encoder,
                     executor=executor,
                     query=q,
-                    page=page,
-                    page_size=page_size,
-                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
                     tab=tab,
-                    date_from=date_from,
-                    date_to=date_to,
                     item_filter=item_filter,
                     image_join=join,
-                    min_blur_ratio=min_blur_ratio,
-                    hide_near_duplicates=hide_near_duplicates,
-                    min_score=min_score,
-                    include_test=include_test,
                     target=target,
-                    space_key=space,
-                    fuse=fuse or [],
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    **window.service_kwargs(),
                 )
         except (HTTPException, RequestRejectedError):
             raise
@@ -205,6 +145,7 @@ async def search_text(
 async def search_similar(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
+    window: SearchWindowQuery,
     crop_id: Annotated[
         str, Query(min_length=1, description='The source crop in this project ("More like this").')
     ],
@@ -215,17 +156,8 @@ async def search_similar(
         ),
     ] = None,
     exclude_self: bool = True,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
     cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(None, description='Optional review-tab cohort id, as /search/text.'),
-    date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
-    date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    hide_near_duplicates: bool = False,
-    min_score: float | None = Query(
-        None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
-    ),
     target: Annotated[
         SearchTarget,
         Query(
@@ -235,26 +167,6 @@ async def search_similar(
             )
         ),
     ] = SearchTarget.ITEM,
-    include_test: bool = False,
-    space: Annotated[
-        str | None,
-        Query(
-            description=(
-                "The space to search (a live space key of the target); default the target's "
-                'primary. Echoed in the response as `space`.'
-            )
-        ),
-    ] = None,
-    fuse: Annotated[
-        list[str] | None,
-        Query(
-            description=(
-                'More live space keys to search; the per-space rankings are merged by reciprocal '
-                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
-                'found it and names it in `score_space`.'
-            )
-        ),
-    ] = None,
 ) -> Response:
     """kNN over ``pe_embedding`` using the stored vector of ``crop_id`` as the query.
 
@@ -262,19 +174,7 @@ async def search_similar(
     ``GET /search/text``; ``semantic_score`` is the similarity to the source crop (or box,
     with ``box_id``).
     """
-    if not _semantic_search_enabled():
-        raise HTTPException(
-            status_code=400,
-            detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
-        )
-
-    try:
-        join = await resolve_filter_join(opensearch, item_filter)
-        item_filter_clauses(
-            item_filter, embedding=await item_write_fields(), image_join=join
-        )  # a malformed band is the caller's 400, not an outage
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    join = await checked_filter_join(opensearch, item_filter)
 
     with bind_search_timer('similar') as timer:
         try:
@@ -285,20 +185,11 @@ async def search_similar(
                     box_id=box_id,
                     target=target,
                     exclude_self=exclude_self,
-                    page=page,
-                    page_size=page_size,
-                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
                     tab=tab,
-                    date_from=date_from,
-                    date_to=date_to,
                     item_filter=item_filter,
                     image_join=join,
-                    min_blur_ratio=min_blur_ratio,
-                    hide_near_duplicates=hide_near_duplicates,
-                    min_score=min_score,
-                    include_test=include_test,
-                    space_key=space,
-                    fuse=fuse or [],
+                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                    **window.service_kwargs(),
                 )
         except (HTTPException, RequestRejectedError):
             raise

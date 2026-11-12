@@ -26,15 +26,15 @@ if a class exists and is validated, ``label_source`` is legitimate.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import OpenSearchException
-
-from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.domain.history import record_class_snapshot
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.repair_scan import scan_plans
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.curation.repair_scan import StaleRepairError, apply_occ_repairs, planner
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 REPAIR_WRITER = 'operator:repair_stale_label_source'
@@ -79,38 +79,17 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
     )
 
 
-async def plan_repairs(
-    client: Any,
-    *,
-    index: str,
-    id_prefix: str | None = None,
-    page_size: int = 500,
-) -> list[RepairPlan]:
-    """Scan ``index`` for candidates (paged by ``crop_id``) and plan each."""
-    return await scan_plans(
-        client,
-        index=index,
-        query=candidate_query(id_prefix=id_prefix),
-        plan_one=plan_repair,
-        page_size=page_size,
-    )
-
-
-class _StaleError(Exception):
-    pass
+plan_repairs = planner(candidate_query, plan_repair)
 
 
 async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> dict[str, int]:
     """Clear ``label_source`` on every planned item, under OCC. Returns
     ``repaired`` / ``skipped_changed`` / ``errors`` counts."""
-    counts = {'repaired': 0, 'skipped_changed': 0, 'errors': 0}
-    for plan in plans:
-        # plan=plan default binds this loop iteration's plan by value (the
-        # closure is invoked later, inside occ_update_one, after the loop
-        # variable would otherwise have moved on).
-        def _merge(current: dict[str, Any], plan: RepairPlan = plan) -> dict[str, Any]:  # noqa: ARG001  # default argument binds the loop variable
+
+    def merger_for(_plan: RepairPlan) -> Callable[[dict[str, Any]], dict[str, Any]]:
+        def _merge(current: dict[str, Any]) -> dict[str, Any]:
             if not is_candidate(current):
-                raise _StaleError
+                raise StaleRepairError
             return {
                 'label_source': None,
                 'class_id_history': record_class_snapshot(
@@ -118,23 +97,16 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
                 ),
             }
 
-        try:
-            await occ_update_one(
-                client,
-                vector_excludes=await vector_source_excludes(),
-                doc_id=plan.crop_id,
-                merger=_merge,
-                index=index,
-                writer_id=REPAIR_WRITER,
-            )
-        except (_StaleError, OCCFinalConflictError):
-            counts['skipped_changed'] += 1
-            continue
-        except OpenSearchException:
-            counts['errors'] += 1
-            continue
-        counts['repaired'] += 1
-    return counts
+        return _merge
+
+    return await apply_occ_repairs(
+        client,
+        plans,
+        index=index,
+        writer_id=REPAIR_WRITER,
+        merger_for=merger_for,
+        counts={'repaired': 0, 'skipped_changed': 0, 'errors': 0},
+    )
 
 
 __all__ = [

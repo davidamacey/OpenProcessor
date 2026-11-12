@@ -12,6 +12,7 @@
   import TestPreviewItem from '$components/config/TestPreviewItem.svelte';
   import CropFrameShapes from '$components/configTest/CropFrameShapes.svelte';
   import TestRefs from '$components/configTest/TestRefs.svelte';
+  import TestRunOutcome from '$components/configTest/TestRunOutcome.svelte';
   import TestVlmPicker from '$components/configTest/TestVlmPicker.svelte';
   import ProfileTestLegs from '$components/profiles/ProfileTestLegs.svelte';
   import { candidateShapes } from '$lib/configTest/overlayShapes';
@@ -117,34 +118,8 @@
       </div>
     {/if}
   </div>
-  <div>
-    <button
-      type="button"
-      class="btn btn-primary btn-sm"
-      disabled={!t.canRun}
-      onclick={run}
-      data-testid="test-run">{t.running ? 'Testing…' : 'Run test'}</button
-    >
-  </div>
-
-  {#if t.error}
-    <div class="space-y-1" data-testid="test-error">
-      <p class="text-red-300">{t.error}</p>
-      {#if t.errorReport}
-        <ConfigIssueList
-          issues={[...t.errorReport.errors, ...t.errorReport.warnings]}
-          showField
-        />
-      {/if}
-    </div>
-  {/if}
-
-  {#if t.result}
-    {@const r = t.result}
-    <div
-      class="flex flex-col gap-3 border-t border-zinc-800 pt-3"
-      data-testid="test-result"
-    >
+  <TestRunOutcome {t} onrun={run}>
+    {#snippet result(r)}
       <p class="text-xs">
         <span class="text-zinc-500">Profile</span>
         <span class="font-mono" data-testid="test-profile-ref">{refText(r.profile)}</span>
@@ -239,6 +214,6 @@
           {/if}
         </div>
       {/if}
-    </div>
-  {/if}
+    {/snippet}
+  </TestRunOutcome>
 </section>

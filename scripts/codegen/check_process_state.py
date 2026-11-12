@@ -22,7 +22,6 @@ shared state across processes: use a database claim, OCC or a lease (``src/db/re
 
 from __future__ import annotations
 
-import argparse
 import ast
 import subprocess
 import sys
@@ -178,31 +177,23 @@ def scan(repo_root: Path, files: list[str] | None = None) -> tuple[dict[str, int
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', type=Path, default=BASELINE_PATH)
-    parser.add_argument('--tighten', action='store_true', help='Lower baseline values, drop stale.')
-    parser.add_argument('--root', type=Path, default=REPO_ROOT)
-    args = parser.parse_args(argv)
-
-    found, broken = scan(args.root)
-    baseline = _baseline.load(args.baseline)
-    errors = [f'{rel}: cannot be parsed, so its process state is unchecked' for rel in broken]
-    errors += _baseline.compare(found, baseline, unit='use(s)')
-    if args.tighten:
-        changed = _baseline.tighten(args.baseline, found, baseline)
-        sys.stderr.write(f'tightened {changed} baseline line(s)\n')
-        errors = [e for e in errors if 'new violation' in e or 'grew past' in e or 'parsed' in e]
-    if errors:
-        sys.stderr.write(
-            'ERROR: new per-process state in the API. A task spawned for a request, a lock or a '
-            'module-level mutable container exists once per worker. Use asyncio.TaskGroup, a '
-            'job, or a database claim; if the use is a per-process cache with a revision check '
-            'or a local throttle, add it to baselines/process_state.txt with that reason.\n'
+    return int(
+        _baseline.run_scan_ratchet(
+            argv,
+            doc=__doc__,
+            baseline_path=BASELINE_PATH,
+            repo_root=REPO_ROOT,
+            scan=scan,
+            unit='use(s)',
+            unreadable='cannot be parsed, so its process state is unchecked',
+            failure=(
+                'new per-process state in the API. A task spawned for a request, a lock or a '
+                'module-level mutable container exists once per worker. Use asyncio.TaskGroup, a '
+                'job, or a database claim; if the use is a per-process cache with a revision check '
+                'or a local throttle, add it to baselines/process_state.txt with that reason.'
+            ),
         )
-        for e in errors:
-            sys.stderr.write(f'  {e}\n')
-        return 1
-    return 0
+    )
 
 
 if __name__ == '__main__':

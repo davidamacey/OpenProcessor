@@ -10,6 +10,7 @@
 import { getClasses } from '$lib/api_classes';
 import { apiErrorText } from '$lib/api_errors';
 import { onProjectChange } from '$lib/projectChange';
+import { RefCountedRun } from '$lib/stores/refCountedRun';
 import type { ClassThresholds, RegistryClass } from '$lib/types_classes';
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -38,43 +39,23 @@ class ClassesStore {
 
   #timer: ReturnType<typeof setInterval> | null = null;
   #abort: AbortController | null = null;
-  #refCount = 0;
-  #stopHandle: ReturnType<typeof setTimeout> | null = null;
-
-  /** Increment subscriber count; first subscriber starts polling.
-   *
-   * m26 (2026-09-24 interactive pass): the root layout's mount/release/
-   * remount during app boot (verified live: acquire() fires repeatedly
-   * with refCount back at 0 each time — an SPA-boot quirk, not a bug in
-   * this store) used to tear down and immediately restart polling each
-   * time, aborting an in-flight fetch and refiring a new one. A pending
-   * teardown is now cancelled by a same-tick-or-soon re-acquire instead
-   * of actually running. */
-  acquire(): () => void {
-    if (this.#stopHandle) {
-      clearTimeout(this.#stopHandle);
-      this.#stopHandle = null;
-    }
-    this.#refCount += 1;
-    if (this.#refCount === 1 && !this.#timer) {
+  #run = new RefCountedRun({
+    isRunning: () => this.#timer !== null,
+    start: () => {
       void this.refresh();
       this.#timer = setInterval(() => void this.refresh(), REFRESH_INTERVAL_MS);
-    }
-    return () => this.#release();
-  }
+    },
+    stop: () => {
+      if (this.#timer) clearInterval(this.#timer);
+      this.#timer = null;
+      this.#abort?.abort();
+      this.#abort = null;
+    },
+  });
 
-  #release(): void {
-    this.#refCount = Math.max(0, this.#refCount - 1);
-    if (this.#refCount === 0 && !this.#stopHandle) {
-      this.#stopHandle = setTimeout(() => {
-        this.#stopHandle = null;
-        if (this.#refCount !== 0) return;
-        if (this.#timer) clearInterval(this.#timer);
-        this.#timer = null;
-        this.#abort?.abort();
-        this.#abort = null;
-      }, 0);
-    }
+  /** Increment subscriber count; first subscriber starts polling. */
+  acquire(): () => void {
+    return this.#run.acquire();
   }
 
   async refresh(): Promise<void> {
@@ -112,7 +93,7 @@ class ClassesStore {
     this.lastUpdated = null;
     this.error = null;
     this.loading = false;
-    if (this.#refCount > 0) void this.refresh();
+    if (this.#run.held) void this.refresh();
   }
 
   /**

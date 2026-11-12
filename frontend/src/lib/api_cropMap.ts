@@ -3,7 +3,7 @@
  * labeler's `Crop`. A leaf: imports no other `api*` module.
  */
 import type { ClusterRef } from '$contracts/ts/itemWire';
-import type { EmbeddingState } from '$lib/types_itemFilter';
+import type { ItemProvenanceFields } from '$lib/types_itemProvenance';
 import type { Crop, ItemTextLine } from '$lib/types';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import type { XYXY } from '$lib/annotations/types';
@@ -21,7 +21,7 @@ function xyxyToBBoxNorm(bb: number[]): import('$lib/types').BBoxNorm {
 }
 
 /** Raw crop shape from the {API_PREFIX}/crops API. */
-export type RawCrop = {
+export type RawCrop = ItemProvenanceFields & {
   crop_id: string;
   image_id?: string;
   image_path: string;
@@ -101,33 +101,12 @@ export type RawCrop = {
   excluded_reason?: string | null;
   excluded_at?: string | null;
   item_text_lines?: unknown;
-  // VLM / import / combine item provenance (`ItemDoc`); each is
-  // served on every item, a missing key maps to null / false / [].
+  // VLM item provenance (`ItemDoc`); served on every item, a missing key maps to null.
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
   vlm_prompt_pack?: string | null;
-  label_locked?: boolean;
-  import_ids?: string[];
-  dataset_split?: string | null;
-  imported_at?: string | null;
-  proposed_by_import?: string | null;
-  on_negative_frame?: boolean;
-  import_standalone_region?: boolean;
-  proposal_chain?: string[];
-  origin_project?: string | null;
-  origin_item_id?: string | null;
-  origin_image_id?: string | null;
-  origin_split?: string | null;
-  combine_conflict?: boolean;
-  combine_conflict_origins?: string[];
-  combine_merged_origins?: string[];
-  // v0.4.0 embedding state and open-vocabulary provenance (contract
-  // fce17771 `ItemDoc`); a missing key maps to null.
-  embedding_states?: Record<string, EmbeddingState>;
   // Near-duplicate group of the item (untyped in the contract: a lineage id when grouped).
   near_dup_group_id?: unknown;
-  near_dup_group_size?: number | null;
-  near_dup_is_representative?: boolean | null;
   source_prompt?: string | null;
   open_vocab_set?: string | null;
   open_vocab_revision?: number | null;

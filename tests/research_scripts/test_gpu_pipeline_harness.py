@@ -179,3 +179,36 @@ def test_kernel_busy_takes_the_union_of_overlapping_kernels(tmp_path: Path) -> N
     assert out['memcpy_ms'] == pytest.approx(1.0)
     assert out['window_ms'] == pytest.approx(10.0)
     assert out['busy_share'] == pytest.approx(0.8)
+
+
+def test_run_mode_dispatch_and_gpu_arguments_check() -> None:
+    import argparse
+
+    p = argparse.ArgumentParser()
+    calls: list[str] = []
+
+    def cpu(_f: list[Path]) -> dict:
+        calls.append('cpu')
+        return {'m': 'cpu'}
+
+    def run(_a: argparse.Namespace, _f: list[Path]) -> dict:
+        calls.append('run')
+        return {'m': 'run'}
+
+    def profile(_a: argparse.Namespace, argv: list[str]) -> dict:
+        calls.append(f'profile:{argv}')
+        return {'m': 'profile'}
+
+    fns = {'cpu_smoke': cpu, 'run_gpu': run, 'profile_gpu': profile}
+    ns = argparse.Namespace(mode='cpu-smoke', det_plan=None, pe_plan=None, gpu_index=None)
+    assert common.run_mode(p, ns, None, [], **fns) == {'m': 'cpu'}
+    with pytest.raises(SystemExit):
+        common.run_mode(p, argparse.Namespace(**{**vars(ns), 'mode': 'run'}), None, [], **fns)
+    gpu = {**vars(ns), 'det_plan': Path('d'), 'pe_plan': Path('p'), 'gpu_index': 0}
+    assert common.run_mode(p, argparse.Namespace(**{**gpu, 'mode': 'run'}), None, [], **fns) == {
+        'm': 'run'
+    }
+    assert common.run_mode(
+        p, argparse.Namespace(**{**gpu, 'mode': 'profile'}), ['--x'], [], **fns
+    ) == {'m': 'profile'}
+    assert calls == ['cpu', 'run', "profile:['--x']"]

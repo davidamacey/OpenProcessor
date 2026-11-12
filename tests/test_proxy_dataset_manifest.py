@@ -321,3 +321,17 @@ class TestLfwExtraction:
         with pytest.raises(FetchError, match='unexpected member'):
             ff.extract_lfw(tmp_path / 'a.tgz', tmp_path / 'images')
         assert not (tmp_path / 'evil.jpg').exists()
+
+
+def test_cmd_verify_exit_code_follows_the_report(tmp_path: Path, caplog) -> None:
+    import argparse
+
+    from scripts.datasets.proxy_manifest import cmd_verify
+
+    root, manifest = _dataset(tmp_path)
+    write_dataset(root, manifest, [], None)
+    assert cmd_verify(argparse.Namespace(directory=root)) == 0
+    (root / 'images/a.jpg').unlink()
+    with caplog.at_level('INFO'):
+        assert cmd_verify(argparse.Namespace(directory=root)) == 1
+    assert any('FAILED' in r.getMessage() for r in caplog.records)

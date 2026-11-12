@@ -18,14 +18,12 @@ from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchImageResponse
+from src.routers.curation._search_params import SearchWindowQuery, checked_filter_join
 from src.routers.curation._space_refusals import space_refusals
-from src.routers.curation.search import _get_pe_encoder, _semantic_search_enabled
+from src.routers.curation.search import _get_pe_encoder
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search_image
-from src.services.curation.image_join import resolve_filter_join
-from src.services.curation.item_filter import item_filter_clauses
-from src.services.embedding_spaces.readers import item_write_fields
 from src.services.rejections import rejection
 
 
@@ -47,6 +45,7 @@ async def search_image(
     request: Request,
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
+    window: SearchWindowQuery,
     image: Annotated[UploadFile | None, File(description='The query picture.')] = None,
     image_id: Annotated[
         str | None, Form(description='An image already in this project, instead of an upload.')
@@ -59,37 +58,8 @@ async def search_image(
         SearchTarget,
         Query(description='`item` ranks crop vectors; `box` ranks per-box vectors.'),
     ] = SearchTarget.ITEM,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
     cluster_uid: uuid.UUID | None = Query(None),
     tab: str | None = Query(None, description='Optional review-tab cohort id, as /search/text.'),
-    date_from: str | None = Query(None, description='ISO date/datetime lower bound on created_at.'),
-    date_to: str | None = Query(None, description='ISO date/datetime upper bound on created_at.'),
-    min_blur_ratio: float | None = Query(None, ge=0.0),
-    hide_near_duplicates: bool = False,
-    min_score: float | None = Query(
-        None, ge=0.0, le=1.0, description='Drop hits below this cosine-similarity score.'
-    ),
-    include_test: bool = False,
-    space: Annotated[
-        str | None,
-        Query(
-            description=(
-                "The space to search (a live space key of the target); default the target's "
-                'primary. Echoed in the response as `space`.'
-            )
-        ),
-    ] = None,
-    fuse: Annotated[
-        list[str] | None,
-        Query(
-            description=(
-                'More live space keys to search; the per-space rankings are merged by reciprocal '
-                'rank fusion. Each item keeps the cosine `semantic_score` of the first space that '
-                'found it and names it in `score_space`.'
-            )
-        ),
-    ] = None,
 ) -> dict[str, Any]:
     """kNN over the PE vectors using the encoded picture as the query.
 
@@ -97,18 +67,7 @@ async def search_image(
     ``semantic_score`` is the similarity to the picture; with ``target=box`` each item also
     carries ``matched_box_id``. Nothing is stored.
     """
-    if not _semantic_search_enabled():
-        raise HTTPException(
-            status_code=400,
-            detail='semantic search is disabled (OP_SEMANTIC_SEARCH_ENABLED is set off; unset it or set 1 to enable)',
-        )
-    try:
-        join = await resolve_filter_join(opensearch, item_filter)
-        item_filter_clauses(
-            item_filter, embedding=await item_write_fields(), image_join=join
-        )  # a malformed band is the caller's 400, not an outage
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    join = await checked_filter_join(opensearch, item_filter)
 
     if (image is None) == (image_id is None):
         raise rejection(400, 'invalid_request', 'send exactly one of image and image_id')
@@ -127,21 +86,12 @@ async def search_image(
                 data=data,
                 image_id=image_id,
                 box=semantic_search_image.parse_box(box),
-                page=page,
-                page_size=page_size,
                 target=target,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
                 tab=tab,
-                date_from=date_from,
-                date_to=date_to,
                 item_filter=item_filter,
                 image_join=join,
-                min_blur_ratio=min_blur_ratio,
-                hide_near_duplicates=hide_near_duplicates,
-                min_score=min_score,
-                include_test=include_test,
-                space_key=space,
-                fuse=fuse or [],
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                **window.service_kwargs(),
             )
     except (HTTPException, RequestRejectedError):
         raise

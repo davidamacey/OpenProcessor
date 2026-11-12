@@ -6,17 +6,15 @@
    * chips, every validation issue, the revisions and the active pack are
    * served; `PackEditor` holds the draft and follows the server.
    */
-  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import ConfigActivateDialog from '$components/config/ConfigActivateDialog.svelte';
-  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigDocHeader from '$components/config/ConfigDocHeader.svelte';
+  import ConfigEditorDialogs from '$components/config/ConfigEditorDialogs.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
-  import ConfigRestoreDialog from '$components/config/ConfigRestoreDialog.svelte';
   import ConfigRevisions from '$components/config/ConfigRevisions.svelte';
   import ConfigSavePanel from '$components/config/ConfigSavePanel.svelte';
-  import ConfigViewingBanner from '$components/config/ConfigViewingBanner.svelte';
+  import ConfigEditorLead from '$components/config/ConfigEditorLead.svelte';
+  import ConfigDescriptionField from '$components/config/ConfigDescriptionField.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
   import PackFieldEditor from '$components/packs/PackFieldEditor.svelte';
   import PackTestPanel from '$components/packs/PackTestPanel.svelte';
@@ -24,11 +22,10 @@
   import { createPackEditor } from '$lib/packs/packEditorController.svelte';
   import { createPackList } from '$lib/packs/packListController.svelte';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
+  import { createConfigEditorFlow } from '$lib/config/editorFlow.svelte';
   import { projectHref } from '$lib/projectPaths';
-  import type { ConfigDocBase } from '$lib/types_config';
   import type { PackSchemaField } from '$lib/types_packs';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
     keyboardStore.setScope('settings');
@@ -73,53 +70,21 @@
     return out;
   });
 
-  let activating = $state<ConfigDocBase<unknown> | null>(null);
-  let restoring = $state(false);
-  let cloning = $state(false);
-
-  function openActivate(target: ConfigDocBase<unknown>): void {
-    ed.active.clearAction();
-    activating = target;
-  }
-
-  async function doSave(): Promise<void> {
-    if (await ed.save()) toastStore.success(`Saved revision ${ed.doc?.revision}`);
-  }
-
-  async function doClone(name: string): Promise<void> {
-    const doc = await cloner.clone({ name: packName, source: null }, name, '');
-    if (!doc) return;
-    cloning = false;
-    toastStore.success(`Created ${doc.name}`);
-    await goto(
-      resolve(projectHref(`/settings/prompt-packs/${encodeURIComponent(doc.name)}`)),
-    );
-  }
+  const flow = createConfigEditorFlow({
+    ed: () => ed,
+    cloner,
+    name: () => packName,
+    editorPath: (n) => projectHref(`/settings/prompt-packs/${encodeURIComponent(n)}`),
+  });
 </script>
 
 <div class="mx-auto flex max-w-7xl flex-col gap-4 p-6">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="font-mono text-2xl font-semibold tracking-tight">{packName}</h1>
-    {#if ed.doc}
-      {@const d = ed.doc}
-      <span class="text-sm text-zinc-400" data-testid="config-meta">
-        {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
-          ? ' · read-only'
-          : ''}
-      </span>
-      {#if d.active}
-        <span
-          class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-xs text-emerald-300"
-          >active{d.active_revision != null ? ` r${d.active_revision}` : ''}</span
-        >
-      {/if}
-    {/if}
-    <span class="grow"></span>
-    <a
-      class="text-xs text-blue-300 hover:underline"
-      href={resolve(projectHref('/settings/prompt-packs'))}>All prompt packs</a
-    >
-  </header>
+  <ConfigDocHeader
+    name={packName}
+    doc={ed.doc}
+    listPath="/settings/prompt-packs"
+    listLabel="All prompt packs"
+  />
 
   <ConfigGate
     store={packsAvailability}
@@ -137,36 +102,9 @@
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="surface flex min-w-0 flex-col gap-4 p-4" aria-label="Pack fields">
-          <ConfigViewingBanner
-            {ed}
-            onrestore={() => (restoring = true)}
-            onactivate={() => ed.viewing && openActivate(ed.viewing)}
-          />
+          <ConfigEditorLead {ed} {flow} noun="pack" />
 
-          {#if d.read_only}
-            <div class="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
-              <span>This pack is read-only. Clone it to make an editable copy.</span>
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => {
-                  cloner.clearClone();
-                  cloning = true;
-                }}>Clone to edit</button
-              >
-            </div>
-          {/if}
-
-          <label class="flex flex-col gap-1 text-xs text-zinc-400">
-            Description
-            <input
-              class="input input-sm text-sm"
-              value={ed.viewing ? (ed.viewing.description ?? '') : ed.draftDescription}
-              readonly={!ed.editable}
-              oninput={(e) =>
-                ed.setDescription((e.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
+          <ConfigDescriptionField {ed} />
 
           {#if ed.schema.placeholders.length > 0}
             <details class="text-xs">
@@ -214,8 +152,8 @@
             {ed}
             report={shownReport}
             noun="pack"
-            onsave={() => void doSave()}
-            onactivate={() => openActivate(d)}
+            onsave={() => void flow.doSave()}
+            onactivate={() => flow.openActivate(d)}
           />
           <ConfigRevisions {ed} />
         </aside>
@@ -234,37 +172,11 @@
   </ConfigGate>
 </div>
 
-{#if activating}
-  <ConfigActivateDialog
-    {ed}
-    target={activating}
-    blurb="Every VLM step that doesn't pick its own pack uses the active pack."
-    onclose={() => (activating = null)}
-    onactivated={(t) =>
-      toastStore.success(
-        `Activated ${t.name}${t.revision == null ? '' : ` r${t.revision}`}`,
-      )}
-  />
-{/if}
-
-{#if restoring}
-  <ConfigRestoreDialog
-    {ed}
-    noun="pack"
-    onclose={() => (restoring = false)}
-    onrestored={(from, to) =>
-      toastStore.success(`Restored revision ${from} as revision ${to}`)}
-  />
-{/if}
-
-{#if cloning}
-  <ConfigCloneDialog
-    title="Clone {packName}"
-    nameLabel="New pack name"
-    busy={cloner.busy}
-    error={cloner.cloneError}
-    report={cloner.cloneReport}
-    onconfirm={(name) => void doClone(name)}
-    oncancel={() => (cloning = false)}
-  />
-{/if}
+<ConfigEditorDialogs
+  {flow}
+  {ed}
+  {cloner}
+  name={packName}
+  noun="pack"
+  blurb="Every VLM step that doesn't pick its own pack uses the active pack."
+/>

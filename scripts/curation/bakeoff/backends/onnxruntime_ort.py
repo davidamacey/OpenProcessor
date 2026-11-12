@@ -16,12 +16,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .base import Detection
-from .yolo_post import decode_yolo26_e2e, decode_yolo_v11, letterbox, nms, to_input_tensor
+from .yolo_post import decode_output, letterbox, to_input_tensor
 
 
 if TYPE_CHECKING:
     import numpy as np
+
+    from .base import Detection
 
 
 # Display tag per active execution provider, so latency is read in context.
@@ -84,33 +85,16 @@ class OnnxRuntimeDetector:
         )
         # YOLO26 exports an NMS-free head [1, max_det, 6] = (x1,y1,x2,y2,score,cls);
         # older YOLO (v8/v11) export the raw [1, 4+nc, N] grid needing decode + NMS.
-        if out.ndim == 3 and out.shape[-1] == 6:
-            boxes, scores, class_ids = decode_yolo26_e2e(
-                out, scale=scale, pad=pad, conf_thresh=self.conf
-            )
-            keep = list(range(len(scores)))  # already NMS-free
-        else:
-            boxes, scores, class_ids = decode_yolo_v11(
-                out,
-                scale=scale,
-                pad=pad,
-                input_size=self.imgsz,
-                conf_thresh=self.conf,
-                coords_normalized=self.coords_normalized,
-                num_classes=len(self.class_names) if self.class_names else None,
-            )
-            keep = nms(boxes, scores, self.iou, class_ids)
-        return [
-            Detection(
-                float(boxes[i, 0]),
-                float(boxes[i, 1]),
-                float(boxes[i, 2]),
-                float(boxes[i, 3]),
-                float(scores[i]),
-                int(class_ids[i]),
-            )
-            for i in keep
-        ]
+        return decode_output(
+            out,
+            scale=scale,
+            pad=pad,
+            imgsz=self.imgsz,
+            conf=self.conf,
+            iou=self.iou,
+            coords_normalized=self.coords_normalized,
+            class_names=self.class_names,
+        )
 
 
 def _metadata_names(sess: object) -> dict[int, str] | None:

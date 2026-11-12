@@ -8,19 +8,12 @@
  * default. The response is rendered as served; nothing here projects a
  * box or judges a candidate.
  */
-import { untrack } from 'svelte';
-import { apiErrorText } from '$lib/api_errors';
-import { configErrorDetail } from '$lib/api_profiles';
 import { testRegionProfile } from '$lib/api_configTest';
-import type { ValidationReport } from '$lib/types_config';
+import { ConfigTestRun, type TestSource } from '$lib/configTest/configTestRun.svelte';
 import type { RegionProfileBody } from '$lib/types_profiles';
-import type {
-  RegionTestRequest,
-  RegionTestResponse,
-  TestVlmSelection,
-} from '$lib/types_configTest';
+import type { RegionTestRequest, RegionTestResponse } from '$lib/types_configTest';
 
-export type ProfileTestSource = 'draft' | 'saved';
+export type ProfileTestSource = TestSource;
 
 export interface ProfileTestContext {
   name: string;
@@ -28,52 +21,22 @@ export interface ProfileTestContext {
   draft: RegionProfileBody;
 }
 
-export class ProfileTest {
+export class ProfileTest extends ConfigTestRun<
+  ProfileTestContext,
+  RegionTestRequest,
+  RegionTestResponse
+> {
   cropId = $state('');
-  source = $state<ProfileTestSource>('draft');
   /** Free text; sent only when non-empty. */
   segmenterPrompt = $state('');
   verify = $state(false);
-  /** The VLM to answer a verify, when the operator picked one; null =
-   *  the server's default (the active endpoint). */
-  vlmSelection = $state<TestVlmSelection | null>(null);
-
-  running = $state(false);
-  result = $state<RegionTestResponse | null>(null);
-  error = $state<string | null>(null);
-  errorReport = $state<ValidationReport | null>(null);
-  /** Ids the server named in a `crop_not_found` refusal. */
-  missingCropIds = $state<string[]>([]);
-
-  #test: typeof testRegionProfile;
-  #abort: AbortController | null = null;
-  #forcedFrom: ProfileTestSource | null = null;
 
   constructor(test: typeof testRegionProfile = testRegionProfile) {
-    this.#test = test;
+    super(test);
   }
 
-  /** No draft to test (a read-only profile, or a revision being viewed):
-   *  forces the saved source; when a draft is back, restores what the
-   *  operator had before, never overriding a choice they made. */
-  setSavedOnly(savedOnly: boolean): void {
-    if (savedOnly && this.#forcedFrom == null) {
-      this.#forcedFrom = untrack(() => this.source);
-      this.source = 'saved';
-    } else if (!savedOnly && this.#forcedFrom != null) {
-      this.source = this.#forcedFrom;
-      this.#forcedFrom = null;
-    }
-  }
-
-  /** Enough input to run (a rerun while one is in flight aborts it). */
   get ready(): boolean {
     return this.cropId.trim() !== '';
-  }
-
-  /** What the Run button enables on. */
-  get canRun(): boolean {
-    return !this.running && this.ready;
   }
 
   request(ctx: ProfileTestContext): RegionTestRequest {
@@ -89,36 +52,6 @@ export class ProfileTest {
     // The VLM only answers the verify pass.
     if (this.verify && this.vlmSelection) Object.assign(req, this.vlmSelection);
     return req;
-  }
-
-  async run(ctx: ProfileTestContext): Promise<void> {
-    if (!this.ready) return;
-    this.#abort?.abort();
-    const ctl = new AbortController();
-    this.#abort = ctl;
-    this.running = true;
-    this.error = null;
-    this.errorReport = null;
-    this.missingCropIds = [];
-    try {
-      this.result = await this.#test(this.request(ctx), ctl.signal);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      this.result = null;
-      this.error = apiErrorText(e);
-      const d = configErrorDetail(e);
-      this.errorReport = d?.report ?? null;
-      this.missingCropIds = d?.error === 'crop_not_found' ? (d.crop_ids ?? []) : [];
-    } finally {
-      if (this.#abort === ctl) {
-        this.running = false;
-        this.#abort = null;
-      }
-    }
-  }
-
-  stop(): void {
-    this.#abort?.abort();
   }
 }
 

@@ -18,16 +18,16 @@ apply (a human edit, a validation) or is now human-owned/validated.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import OpenSearchException
-
-from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.domain.history import record_class_snapshot
 from src.services.curation.class_sources import VLM_UNMATCHED_CLASS_SOURCE, unmatched_class_clear
 from src.services.curation.class_write_guard import class_write_locked
-from src.services.curation.repair_scan import scan_plans
-from src.services.embedding_spaces.readers import vector_source_excludes
+from src.services.curation.repair_scan import StaleRepairError, apply_occ_repairs, planner
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 REPAIR_WRITER = 'operator:repair_unmatched_class'
@@ -85,25 +85,7 @@ def plan_repair(crop_id: str, doc: dict[str, Any]) -> RepairPlan | None:
     return RepairPlan(crop_id, True, current, unmatched_class_clear(doc))
 
 
-async def plan_repairs(
-    client: Any,
-    *,
-    index: str,
-    id_prefix: str | None = None,
-    page_size: int = 500,
-) -> list[RepairPlan]:
-    """Scan ``index`` for candidates (paged by ``crop_id``) and plan each."""
-    return await scan_plans(
-        client,
-        index=index,
-        query=candidate_query(id_prefix=id_prefix),
-        plan_one=plan_repair,
-        page_size=page_size,
-    )
-
-
-class _StaleError(Exception):
-    pass
+plan_repairs = planner(candidate_query, plan_repair)
 
 
 async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> dict[str, int]:
@@ -121,15 +103,11 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
     ``class_source`` at all): every applicable plan is by definition a
     real class-state change worth making restorable.
     """
-    counts = {'repaired': 0, 'skipped_changed': 0, 'not_applicable': 0, 'errors': 0}
-    for plan in plans:
-        if not plan.applicable:
-            counts['not_applicable'] += 1
-            continue
 
-        def _merge(current: dict[str, Any], plan: RepairPlan = plan) -> dict[str, Any]:
+    def merger_for(plan: RepairPlan) -> Callable[[dict[str, Any]], dict[str, Any]]:
+        def _merge(current: dict[str, Any]) -> dict[str, Any]:
             if not is_candidate(current) or current.get('class_id') != plan.current['class_id']:
-                raise _StaleError
+                raise StaleRepairError
             return {
                 **unmatched_class_clear(current),
                 'class_id_history': record_class_snapshot(
@@ -137,23 +115,17 @@ async def apply_repairs(client: Any, plans: list[RepairPlan], *, index: str) -> 
                 ),
             }
 
-        try:
-            await occ_update_one(
-                client,
-                vector_excludes=await vector_source_excludes(),
-                doc_id=plan.crop_id,
-                merger=_merge,
-                index=index,
-                writer_id=REPAIR_WRITER,
-            )
-        except (_StaleError, OCCFinalConflictError):
-            counts['skipped_changed'] += 1
-            continue
-        except OpenSearchException:
-            counts['errors'] += 1
-            continue
-        counts['repaired'] += 1
-    return counts
+        return _merge
+
+    return await apply_occ_repairs(
+        client,
+        plans,
+        index=index,
+        writer_id=REPAIR_WRITER,
+        merger_for=merger_for,
+        counts={'repaired': 0, 'skipped_changed': 0, 'not_applicable': 0, 'errors': 0},
+        is_applicable=lambda plan: plan.applicable,
+    )
 
 
 __all__ = [
