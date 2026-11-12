@@ -6,6 +6,7 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { getTable, getTableColumns } from '$lib/api_table';
 import { createPager } from '$lib/pager.svelte';
+import type { HiddenCounts } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import type { SortOption } from '$lib/types_cursor';
 import type {
@@ -25,8 +26,8 @@ export interface TableUrlState {
 }
 
 export interface TableDeps {
-  /** The query string the page was opened with (read once). */
-  readonly initialUrlParams: Pick<URLSearchParams, 'get'>;
+  /** What the page was opened with (read once). */
+  readonly initial: TableUrlState;
   itemFilter(): ItemFilterQuery;
   writeUrl(state: TableUrlState): void;
 }
@@ -34,15 +35,16 @@ export interface TableDeps {
 export const rowKey = (r: TableRow): string => r.crop_id ?? r.image_id;
 
 export function createTableController(deps: TableDeps) {
-  const p = deps.initialUrlParams;
-  let rowsKind = $state<TableRows>(p.get('rows') === 'images' ? 'images' : 'detections');
-  let chosen = $state<string[]>((p.get('columns') ?? '').split(',').filter(Boolean));
-  let sort = $state<string | null>(p.get('sort') || null);
+  const { initial } = deps;
+  let rowsKind = $state<TableRows>(initial.rows);
+  let chosen = $state<string[]>([...initial.columns]);
+  let sort = $state<string | null>(initial.sort);
   let vocabulary = $state<TableColumns | null>(null);
   let shownColumns = $state<TableColumn[]>([]);
   let sortApplied = $state('');
   let sortOptions = $state<SortOption[]>([]);
   let emptyMessage = $state<string | null>(null);
+  let hidden = $state<HiddenCounts>({ test_holdout: 0, excluded: 0 });
   const selected = new SvelteSet<string>();
   let focused = $state<string | null>(null);
 
@@ -56,6 +58,7 @@ export function createTableController(deps: TableDeps) {
       sortApplied = res.sort_applied;
       sortOptions = res.sort_options;
       emptyMessage = res.empty_message ?? null;
+      hidden = res.hidden;
       return res;
     },
     keyOf: rowKey,
@@ -121,6 +124,9 @@ export function createTableController(deps: TableDeps) {
     },
     get emptyMessage() {
       return emptyMessage;
+    },
+    get hidden() {
+      return hidden;
     },
     get selectedIds() {
       return selected;

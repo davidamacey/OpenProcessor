@@ -123,7 +123,7 @@
             />
           </td>
           {#each columns as c (c.id)}
-            <td class="px-2 py-1 {ALIGN[c.align]}">
+            <td class="px-2 py-1 whitespace-nowrap {ALIGN[c.align]}">
               {#if c.kind === 'thumbnail'}
                 <img
                   src={resolveApiUrl(r.thumbnail_url)}

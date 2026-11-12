@@ -28,6 +28,7 @@ from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
 from test_similar_crops import serve_similar
 from test_source_missing import serve_cluster_grid, serve_review_pane
+from test_table_view import serve as serve_table_view
 
 
 AXE_JS = Path(__file__).resolve().parents[2] / 'node_modules' / 'axe-core' / 'axe.min.js'
@@ -107,6 +108,11 @@ def serve_open_vocab_list(stub) -> None:
     serve_open_vocab(stub)
     stub.on('GET', r'/scores/coverage(\?|$)', {'coverage': {}})
     stub.on('GET', r'/scores/status(\?|$)', {'status': 'idle'})
+
+
+def serve_table(stub) -> None:
+    serve_clusters(stub)
+    serve_table_view(stub)
 
 
 def serve_clusters_with_filters(stub) -> None:
@@ -201,6 +207,12 @@ PAGES = [
         '/p/default/workspace?view=detections',
         serve_clusters,
         '[data-testid="detections-view"]',
+    ),
+    (
+        'workspace-table',
+        '/p/default/workspace?view=table',
+        serve_table,
+        '[data-testid="data-table-row"]',
     ),
     (
         'workspace-class-picker',

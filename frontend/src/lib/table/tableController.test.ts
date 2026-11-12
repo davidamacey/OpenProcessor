@@ -1,7 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setScopedPrefix } from '$lib/api';
-import { createTableController } from '$lib/table/tableController.svelte';
+import {
+  createTableController,
+  type TableUrlState,
+} from '$lib/table/tableController.svelte';
 import type { TableColumns, TablePage, TableRow } from '$lib/types_table';
 
 const fetchMock = vi.fn();
@@ -60,10 +63,10 @@ function page(
   };
 }
 
-function make(params = '') {
+function make(initial: Partial<TableUrlState> = {}) {
   const writeUrl = vi.fn();
   const c = createTableController({
-    initialUrlParams: new URLSearchParams(params),
+    initial: { rows: 'detections', columns: [], sort: null, ...initial },
     itemFilter: () => ({}),
     writeUrl,
   });
@@ -136,7 +139,11 @@ describe('table controller', () => {
     fetchMock
       .mockResolvedValueOnce(ok({ ...VOCAB, rows: 'images' }))
       .mockResolvedValueOnce(ok(page([], null)));
-    const { c } = make('rows=images&columns=thumbnail,class_name&sort=class_name:asc');
+    const { c } = make({
+      rows: 'images',
+      columns: ['thumbnail', 'class_name'],
+      sort: 'class_name:asc',
+    });
     await c.load();
     const u = urlOf(1);
     expect(u.searchParams.get('rows')).toBe('images');
