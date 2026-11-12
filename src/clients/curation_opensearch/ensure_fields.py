@@ -7,14 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.curation_opensearch.base import (
-    F,
-    _is_recoverable_mapping_conflict,
-    config,
-    default_knn_spec,
-    knn_field_body,
-    logger,
-)
+from src.clients.curation_opensearch.base import F, config, default_knn_spec, knn_field_body, logger
 from src.clients.curation_opensearch.bodies_core import (
     _CLASS_HISTORY_MAPPING,
     _EXCLUSION_MAPPING,
@@ -22,6 +15,7 @@ from src.clients.curation_opensearch.bodies_core import (
     _region_auto_confirm_mapping,
     _region_boxes_mapping,
 )
+from src.clients.curation_opensearch.mapping_put import put_properties, put_properties_one_by_one
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
@@ -54,36 +48,7 @@ async def ensure_items_vlm_raw_label_fields(
             **VLM_CLASS_ATTEMPT_MAPPING,
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=list(body['properties'].keys()),
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_label_cluster_fields(
@@ -109,36 +74,7 @@ async def ensure_items_label_cluster_fields(
             'vlm_label_cluster_distance': {'type': 'float'},
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=list(body['properties'].keys()),
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_provenance_fields(
@@ -174,41 +110,7 @@ async def ensure_items_provenance_fields(
             'class_labeled_at': {'type': 'date'},
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=list(body['properties'].keys()),
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-        }
-    except OpenSearchException as exc:
-        # OpenSearch's ``mapper_parsing_exception`` arrives wrapped in an
-        # ``opensearchpy`` transport error; we don't import the client class
-        # here so we string-match the error type. Either way, the failure
-        # is logged and the bootstrap continues — additive mapping
-        # collisions are non-fatal for the rest of the API surface.
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_validation_split_fields(
@@ -228,38 +130,13 @@ async def ensure_items_validation_split_fields(
     writers SHOULD NOT set it (the pre-commit guard blocks new writes).
     """
     index = config.items_index
-    fields = ['class_validated', F.validated]
     body = {
         'properties': {
             'class_validated': {'type': 'boolean'},
             F.validated: {'type': 'boolean'},
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': fields,
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': fields,
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_history_fields(
@@ -299,75 +176,21 @@ async def ensure_items_history_fields(
             'class_id_history': _CLASS_HISTORY_MAPPING,
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=list(body['properties']),
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': list(body['properties']),
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': list(body['properties']),
-            'error': msg,
-        }
-
-
-async def _put_items_fields_one_by_one(
-    client: AsyncOpenSearch, mapping: dict[str, Any]
-) -> dict[str, Any]:
-    """One ``PUT _mapping`` per field of ``mapping``: indexes created before
-    these were mapped may already carry a dynamic mapping for a field, and a
-    conflict on one must not block the others."""
-    index = config.items_index
-    added: list[str] = []
-    conflicts: list[str] = []
-    for field, spec in mapping.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except OpenSearchException as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-            conflicts.append(field)
-    logger.info(
-        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
-    )
-    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_exclusion_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the exclusion fields (:data:`_EXCLUSION_MAPPING`) onto the items mapping."""
-    return await _put_items_fields_one_by_one(client, _EXCLUSION_MAPPING)
+    return await put_properties_one_by_one(client, config.items_index, _EXCLUSION_MAPPING)
 
 
 async def ensure_items_geometry_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the item geometry fields (:data:`_GEOMETRY_MAPPING`) onto the items mapping."""
-    return await _put_items_fields_one_by_one(client, _GEOMETRY_MAPPING)
+    return await put_properties_one_by_one(client, config.items_index, _GEOMETRY_MAPPING)
 
 
 async def ensure_items_text_fields(
@@ -381,23 +204,9 @@ async def ensure_items_text_fields(
     cannot block the others. Additive and idempotent.
     """
     index = config.items_index
-    added: list[str] = []
-    conflicts: list[str] = []
-    specs = {**_region_auto_confirm_mapping(), **ITEM_TEXT_MAPPING}
-    for field, spec in specs.items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except OpenSearchException as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-            conflicts.append(field)
-    logger.info(
-        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
+    return await put_properties_one_by_one(
+        client, index, {**_region_auto_confirm_mapping(), **ITEM_TEXT_MAPPING}
     )
-    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
 
 
 async def ensure_items_embedding_fields(
@@ -414,36 +223,7 @@ async def ensure_items_embedding_fields(
             'pe_embedding': knn_field_body(default_knn_spec(), config.encoder_embedding_dim),
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=['pe_embedding'],
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': ['pe_embedding'],
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': ['pe_embedding'],
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_region_boxes_fields(
@@ -460,19 +240,4 @@ async def ensure_items_region_boxes_fields(
     field's type cannot change in place.
     """
     index = config.items_index
-    added: list[str] = []
-    conflicts: list[str] = []
-    for field, spec in _region_boxes_mapping().items():
-        try:
-            await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
-            added.append(field)
-        except OpenSearchException as exc:
-            msg = str(exc)
-            if not _is_recoverable_mapping_conflict(msg):
-                logger.error('curation_mapping_migration_failed', index=index, error=msg)
-                return {'acknowledged': False, 'index': index, 'fields_added': added, 'error': msg}
-            conflicts.append(field)
-    logger.info(
-        'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
-    )
-    return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
+    return await put_properties_one_by_one(client, index, _region_boxes_mapping())

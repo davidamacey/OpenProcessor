@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.curation_opensearch.base import _is_recoverable_mapping_conflict, config, logger
+from src.clients.curation_opensearch.base import config, logger
 from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
+from src.clients.curation_opensearch.mapping_put import put_properties
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
 
@@ -89,65 +90,15 @@ async def ensure_images_upload_fields(
             **IMAGES_WRITE_ID_MAPPING,
         }
     }
-    fields = list(body['properties'])
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=fields,
-            acknowledged=ack,
-        )
-        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': fields,
-            'error': msg,
-        }
+    list(body['properties'])
+    return await put_properties(client, index, body['properties'])
 
 
 async def _put_items_keyword_field(client: AsyncOpenSearch, field: str) -> dict[str, Any]:
     """Additive, idempotent ``PUT <index>/_mapping`` of one keyword field."""
     index = config.items_index
     body = {'properties': {field: {'type': 'keyword'}}}
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=[field],
-            acknowledged=ack,
-        )
-        return {'acknowledged': ack, 'index': index, 'fields_added': [field]}
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': [field],
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_request_id_field(client: AsyncOpenSearch) -> dict[str, Any]:
@@ -181,36 +132,7 @@ async def ensure_items_quality_fields(
             'blur_full_var': {'type': 'float'},
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info(
-            'curation_mapping_migration',
-            index=index,
-            fields=list(body['properties'].keys()),
-            acknowledged=ack,
-        )
-        return {
-            'acknowledged': ack,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-        }
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {
-            'acknowledged': False,
-            'index': index,
-            'fields_added': list(body['properties'].keys()),
-            'error': msg,
-        }
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_score_fields(
@@ -232,17 +154,6 @@ async def ensure_items_score_fields(
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
     index = config.items_index
-    fields = [
-        'uniqueness_score',
-        'uniqueness_method',
-        'uniqueness_version',
-        'uniqueness_scored_at',
-        'mistakenness_score',
-        'mistakenness_method',
-        'mistakenness_version',
-        'mistakenness_scored_at',
-        *NEAR_DUP_MAPPING,
-    ]
     body = {
         'properties': {
             'uniqueness_score': {'type': 'float'},
@@ -256,22 +167,7 @@ async def ensure_items_score_fields(
             **NEAR_DUP_MAPPING,
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
-        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {'acknowledged': False, 'index': index, 'fields_added': fields, 'error': msg}
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_probe_fields(
@@ -292,14 +188,6 @@ async def ensure_items_probe_fields(
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
     index = config.items_index
-    fields = [
-        'probe_pred_class_id',
-        'probe_pred_confidence',
-        'probe_disagreement',
-        'probe_pred_margin',
-        'probe_model_version',
-        'probe_scored_at',
-    ]
     body = {
         'properties': {
             'probe_pred_class_id': {'type': 'integer'},
@@ -310,22 +198,7 @@ async def ensure_items_probe_fields(
             'probe_scored_at': {'type': 'date'},
         }
     }
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
-        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {'acknowledged': False, 'index': index, 'fields_added': fields, 'error': msg}
+    return await put_properties(client, index, body['properties'])
 
 
 async def ensure_items_viz_fields(
@@ -349,21 +222,6 @@ async def ensure_items_viz_fields(
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
     index = config.items_index
-    fields = list(ITEMS_VIZ_MAPPING)
+    list(ITEMS_VIZ_MAPPING)
     body = {'properties': ITEMS_VIZ_MAPPING}
-    try:
-        resp = await client.indices.put_mapping(index=index, body=body)
-        ack = bool(resp.get('acknowledged', False))
-        logger.info('curation_mapping_migration', index=index, fields=fields, acknowledged=ack)
-        return {'acknowledged': ack, 'index': index, 'fields_added': fields}
-    except OpenSearchException as exc:
-        msg = str(exc)
-        is_field_conflict = _is_recoverable_mapping_conflict(msg)
-        log_fn = logger.info if is_field_conflict else logger.error
-        log_fn(
-            'curation_mapping_migration_failed',
-            index=index,
-            error=msg,
-            recoverable=is_field_conflict,
-        )
-        return {'acknowledged': False, 'index': index, 'fields_added': fields, 'error': msg}
+    return await put_properties(client, index, body['properties'])
