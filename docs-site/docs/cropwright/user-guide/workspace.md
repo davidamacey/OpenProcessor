@@ -83,15 +83,7 @@ follows it, and **Undo** targets the operation by its id. **Undo**
 first shows the backend's dry run (what it would restore, what it would keep,
 the conflicts); only **Confirm undo** changes anything.
 
-## Map (`/p/<project>/map`)
+## Map
 
-**Map** appears in the top bar only when the project has photos with a stored
-position. It shows where the photos were taken as grid cells over a map; the
-server decides the cells for the viewport, the counts and whether a map exists
-at all. The filter bar is the shared item filter plus a capture-day range
-(`YYYY-MM-DD`, inclusive). A click on a small cell lists its photos beside the
-map; a click on a large one zooms in. The header states the project's location
-policy: **exact**, or **coarse (about 1 km)** when the policy is
-`store_coarse`. With the policy `drop` no position is stored, so the page says
-the project does not store where photos were taken. If the filter matches more
-cells or photos than fit, the page says so; zoom in or narrow the filter.
+**Map** is a view in the view bar when the project has photos with a stored
+position. See [Map](./map.md).

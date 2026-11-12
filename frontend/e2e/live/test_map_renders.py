@@ -1,4 +1,4 @@
-"""`/map` draws a real MapLibre canvas on a project that has located photos.
+"""The Workspace Map view draws a real MapLibre canvas on a project that has located photos.
 
 The page degrades to a "Map needs WebGL2" note when the browser has no WebGL2; that note must
 never be what this test sees, or a real render failure would pass as a graceful fallback.
@@ -19,7 +19,9 @@ def test_map_renders_a_canvas_when_photos_have_gps(
     if not meta.get('available'):
         pytest.skip('the project has no served map (no GPS photos, or a drop location policy)')
     page = guarded_page.page
-    page.goto(f'{live_url}{page_path(live_project, "/map")}', wait_until='domcontentloaded')
+    page.goto(
+        f'{live_url}{page_path(live_project, "/workspace?view=map")}', wait_until='domcontentloaded'
+    )
 
     canvas = page.locator('[data-testid="map-canvas"] canvas.maplibregl-canvas')
     canvas.wait_for(state='visible')
@@ -30,4 +32,4 @@ def test_map_renders_a_canvas_when_photos_have_gps(
     )
     assert page.evaluate("!!document.createElement('canvas').getContext('webgl2')")
     page.locator('[data-testid="map-located"]').wait_for(state='visible')
-    assert str(meta['n_located']) in page.locator('[data-testid="map-located"]').inner_text()
+    assert f'{meta["n_located"]:,}' in page.locator('[data-testid="map-located"]').inner_text()

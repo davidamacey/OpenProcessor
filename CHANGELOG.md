@@ -198,6 +198,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Removed
 
+- `GET /map/images` (list a cell's photos with `GET /images?geo_bbox=` and the cell's served bounds).
 - **`--control-plane-only` (and `OP_CONTROL_PLANE_ONLY`).** Every service needs its dependencies and the API refuses to start without Triton, so a stack without Triton cannot run. The installer and `./openprocessor` refuse the flag with that explanation, and an upgrade of an install made with it stops before changing anything. Install on a host with an NVIDIA GPU and the NVIDIA container runtime, or stay on 0.6.0. `--control-plane-only` is gone from `scripts/release/acceptance_run.sh` too: acceptance runs the normal stack.
 - **Routes:** `POST /clusters/refine/{cluster_id}`, `POST /regions/clusters/refine/{cluster_id}`, `POST /regions/cluster`, `GET /regions/cluster/status`, `GET /regions/fp_centroids/status`, `POST /clusters/auto_promote` and the `label_purity`, `purity` and sub-cluster fields. Cluster runs, partitions and `label_agreement` replace them.
 - **Services and files:** the `curation-cluster-refresh` service and `scripts/curation/cluster_refresh_daemon.py`, the file job protocols and their directories (above), the in-process text encoder backends, and the file event bus.

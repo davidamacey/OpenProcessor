@@ -411,12 +411,12 @@ key), `capture` (reads the capture of images that have none, the upgrade path) a
 
 ### Map
 
-The Cropwright Map page shows where the photos were taken when the project has stored positions and
+The Cropwright Map view of the Workspace shows where the photos were taken when the project has stored positions and
 its policy serves them (`GET /map` is `available`). The server aggregates positions in OpenSearch
 (`geotile_grid` over a `geo_point`, a marker at each cell's centroid, at most 5000 cells per response),
 so a large project never ships its points: `GET /map/cells` answers a GeoJSON FeatureCollection
-(`application/geo+json`) for a zoom and a bounding box, `GET /map/images` lists the photos of one cell.
-Both take the shared item filter and `taken_from` / `taken_to`; an item-level predicate is resolved to
+(`application/geo+json`) for a zoom and a bounding box; a cell's photos are listed with `GET /images?geo_bbox=` and
+summarised with `POST /selection/summary`, using the cell's served bounds. Both map routes take the shared item filter and `taken_from` / `taken_to`; an item-level predicate is resolved to
 the matching images first (at most 10000, `join_truncated` says when it was more).
 
 The browser draws the basemap from `OP_MAP_TILE_URL` (default
