@@ -7,6 +7,7 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { Crop } from '$lib/types';
+import type { CursorPage } from '$lib/types_cursor';
 import type {
   AuditReport,
   AuditStartRequest,
@@ -61,34 +62,17 @@ export function getAuditReport(
   );
 }
 
-export interface AuditQueuePage {
-  items: Crop[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
 /** `GET /audit/queue`: drawn crops still waiting for a human label. */
 export async function getAuditQueue(
-  page = 1,
-  pageSize = 30,
+  cursor: string | null = null,
+  limit = 30,
   batchId?: string | null,
   signal?: AbortSignal,
-): Promise<AuditQueuePage> {
-  const res = await apiFetch<{
-    items: RawCrop[];
-    total: number;
-    page: number;
-    page_size: number;
-  }>(
-    `${scoped()}/audit/queue${qs({ page, page_size: pageSize, batch_id: batchId ?? undefined })}`,
+): Promise<CursorPage<Crop>> {
+  const res = await apiFetch<Omit<CursorPage<Crop>, 'items'> & { items: RawCrop[] }>(
+    `${scoped()}/audit/queue${qs({ cursor: cursor ?? undefined, limit, batch_id: batchId ?? undefined })}`,
     {},
     signal,
   );
-  return {
-    items: res.items.map(mapRawCrop),
-    total: res.total,
-    page: res.page,
-    pageSize: res.page_size,
-  };
+  return { ...res, items: res.items.map(mapRawCrop) };
 }

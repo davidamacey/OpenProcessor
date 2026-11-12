@@ -89,7 +89,6 @@
           label_validated: true,
           sort: 'updated_at:desc',
           limit: 20,
-          page: 1,
         }),
         getTestHoldoutStats(),
       ]);

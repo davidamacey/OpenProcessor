@@ -59,7 +59,7 @@ def test_cluster_single_discard(stub, page, app_url):
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
 
     def discard_handler(request, match):

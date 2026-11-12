@@ -50,7 +50,7 @@ def test_ignore_reason_menu_stays_inside_the_viewport_at_430(stub, page, app_url
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [_crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [_crop(i) for i in range(3)]},
     )
     stub.on('GET', r'/clusters(\?|$)', cluster_list())
 

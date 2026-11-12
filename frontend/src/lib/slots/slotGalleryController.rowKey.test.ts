@@ -27,6 +27,7 @@ describe('region gallery rows are keyed by the served row_key', () => {
       .mockResolvedValueOnce({
         items: [row('c1', 'b1', 'k-first')],
         total: 4,
+        next_cursor: 'c2',
       } as never)
       .mockResolvedValueOnce({
         items: [
@@ -36,6 +37,7 @@ describe('region gallery rows are keyed by the served row_key', () => {
           row('c2', null, 'c2#item'),
         ],
         total: 4,
+        next_cursor: null,
       } as never);
     const gallery = createSlotGalleryController(widgetTagSlot);
     await gallery.pager.loadFirst();

@@ -95,7 +95,7 @@ def register_no_profile(stub) -> None:
             )
             for i in range(3)
         ]
-        return (200, {'total': 3, 'page': 1, 'page_size': 60, 'crops': items})
+        return (200, {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': items})
 
     stub.on('GET', r'/crops(\?|$)', crops_handler)
 

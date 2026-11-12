@@ -12,7 +12,7 @@ import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import { isDiverseOverlayAvailable, isSemanticSearchAvailable } from '$lib/strategies';
 import { createStrategyBar } from '$lib/strategyBar.svelte';
-import type { Cluster, Crop, PaginatedResponse } from '$lib/types';
+import type { Cluster, Crop } from '$lib/types';
 import type { ReprocessRequest } from '$lib/types_import';
 import type { ClusterFacets, ConfidenceBin } from '$lib/types_clusterList';
 import { apiErrorText } from '$lib/api_errors';
@@ -88,9 +88,9 @@ export function createClusterDetailController() {
   // Crop pager. cropQuery() feeds page 1 and every later page, so a filter
   // can't be applied to the first request and silently dropped on the next.
   const cropPager = createPager<Crop>({
-    fetchPage: async (page) => {
+    fetchPage: async (cursor) => {
       const query = cropQuery();
-      const res = await getCluster(clusterUid, page, pageSize, undefined, query);
+      const res = await getCluster(clusterUid, cursor, pageSize, undefined, query);
       cluster = res.cluster;
       cardError = res.cardError;
       orderMeta =
@@ -105,7 +105,7 @@ export function createClusterDetailController() {
         count: res.crops.n_unembedded ?? null,
         request: res.crops.suggested_reprocess ?? null,
       };
-      return res.crops as PaginatedResponse<Crop>;
+      return res.crops;
     },
     keyOf: (c) => c.id,
     accept: (c) => exclusionGuard.accept(c),

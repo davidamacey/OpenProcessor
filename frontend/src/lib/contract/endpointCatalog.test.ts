@@ -475,8 +475,8 @@ const TRACK_WRAPPER_FILES = new Set<string>([
  *  entry, fails instead of reporting a check that asserted nothing. */
 const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_clusters.ts GET /clusters',
-  'lib/api_clusters.ts GET /crops',
   'lib/api_cropRead.ts GET /crops',
+  'lib/api_cropRead.ts GET /crops/locate',
   'lib/api_review.ts GET /review/*',
   'lib/api_review.ts GET /review/*/locate',
   'lib/api_cropRead.ts GET /search/similar',

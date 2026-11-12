@@ -50,8 +50,8 @@ def open_region_review(stub, page, app_url, vector_refresh) -> list[dict]:
             {
                 'items': [tag_item('tag-1'), tag_item('tag-2')],
                 'total': 2,
-                'page': 1,
-                'page_size': 30,
+                'next_cursor': None,
+                'limit': 30,
             },
         ),
     )

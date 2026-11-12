@@ -177,14 +177,14 @@ describe('vlmEmptyReasonText / humanizeId (R6)', () => {
   });
 });
 
-describe('queuePosition (F8 D6)', () => {
-  it('is the served rank + 1 for a crop located on a later page', () => {
-    // /locate: rank 67, page_size 30 -> page 3, index 7 within that page.
-    expect(queuePosition(3, 30, 7)).toBe(68);
+describe('queuePosition', () => {
+  it('is the served index + 1 for a crop located deep in the queue', () => {
+    // /locate: index 67, the buffer starts at the located item.
+    expect(queuePosition(67, 0)).toBe(68);
   });
 
-  it('is the cursor + 1 when the buffer starts at page 1', () => {
-    expect(queuePosition(1, 30, 0)).toBe(1);
-    expect(queuePosition(1, 30, 45)).toBe(46);
+  it('is the cursor + 1 when the buffer starts at the first row', () => {
+    expect(queuePosition(0, 0)).toBe(1);
+    expect(queuePosition(0, 45)).toBe(46);
   });
 });

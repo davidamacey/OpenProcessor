@@ -36,7 +36,7 @@ describe('the detail view carries no retired cluster geometry', () => {
 
   it('asks for the best-scored-first order the server serves (core_first), keyed by the cluster uid', () => {
     expect(src).toMatch(/'core_first'/);
-    expect(src).toMatch(/getCluster\(clusterUid, page, pageSize/);
+    expect(src).toMatch(/getCluster\(clusterUid, cursor, pageSize/);
     expect(src).not.toMatch(/clusterId/);
   });
 });

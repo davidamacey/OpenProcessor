@@ -16,11 +16,11 @@ afterEach(() => vi.clearAllMocks());
 
 describe('createMatchingItems', () => {
   it('sends the whole filter, open-vocabulary pair included, on every page', async () => {
-    vi.mocked(getCrops).mockImplementation(async (f = {}) => ({
-      items: [crop(`p${f.page}`)],
+    vi.mocked(getCrops).mockImplementation(async (_f, cursor) => ({
+      items: [crop(cursor === null ? 'p1' : 'p2')],
       total: 2,
-      page: f.page ?? 1,
-      page_size: 1,
+      next_cursor: cursor === null ? 'c2' : null,
+      limit: 1,
     }));
     const m = createMatchingItems(() => ({
       class_name: ['widget'],
@@ -29,21 +29,15 @@ describe('createMatchingItems', () => {
     }));
     await m.pager.loadFirst();
     await m.pager.loadMore();
-    expect(vi.mocked(getCrops).mock.calls.map(([f]) => f)).toEqual([
-      {
-        class_name: ['widget'],
-        open_vocab_set: 'tags',
-        source_prompt: 'blue widget',
-        page: 1,
-        limit: 48,
-      },
-      {
-        class_name: ['widget'],
-        open_vocab_set: 'tags',
-        source_prompt: 'blue widget',
-        page: 2,
-        limit: 48,
-      },
+    const filter = {
+      class_name: ['widget'],
+      open_vocab_set: 'tags',
+      source_prompt: 'blue widget',
+      limit: 48,
+    };
+    expect(vi.mocked(getCrops).mock.calls.map(([f, cursor]) => [f, cursor])).toEqual([
+      [filter, null],
+      [filter, 'c2'],
     ]);
     expect(m.pager.items.map((c) => c.id)).toEqual(['p1', 'p2']);
     expect(m.pager.total).toBe(2);
@@ -53,8 +47,8 @@ describe('createMatchingItems', () => {
     vi.mocked(getCrops).mockResolvedValue({
       items: [],
       total: 0,
-      page: 1,
-      page_size: 48,
+      next_cursor: null,
+      limit: 48,
     });
     let q: Record<string, unknown> = { class_name: ['a'] };
     const m = createMatchingItems(() => q);

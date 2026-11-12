@@ -133,7 +133,7 @@ def register_base(stub, methods_body):
     stub.on('GET', r'/methods(\?|$)', methods_body)
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
     stub.on('GET', r'/stats/dataset(\?|$)', DATASET_STATS)
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
 
     snapshot = {'state': {}, 'stats': DATASET_STATS}
     sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'

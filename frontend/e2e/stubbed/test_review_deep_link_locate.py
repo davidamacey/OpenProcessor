@@ -4,7 +4,7 @@ deep link at a deep page used to page 1..loc.page sequentially via
 and for that whole window rendered page 1's item #1 with its keybindings
 live, so a keypress acted on the wrong crop.
 
-Fixed by `queue.loadPage(loc.page)` (one request, src/lib/pager.svelte.ts)
+Fixed by `queue.loadAt(loc.cursor_before, loc.index)` (one request, src/lib/pager.svelte.ts)
 and a new `awaitingDeepLink` state that keeps the tab-action keybindings
 unregistered and renders a "Locating crop…" placeholder instead of item #1
 until the target page lands (src/routes/review/+page.svelte).
@@ -57,6 +57,7 @@ CLASSES = [
 ]
 
 METHODS = {'strategies': [], 'flags': {}}
+LOCATE_CURSOR = 'cursor-before-target'
 
 
 def review_item(i: int) -> dict:
@@ -76,7 +77,7 @@ def review_item(i: int) -> dict:
 
 
 def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, page, app_url):
-    review_page_requests: list[int] = []
+    review_page_requests: list[str | None] = []
     label_calls: list[str] = []
     locate_gate = threading.Event()
 
@@ -96,12 +97,12 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     def review_handler(request, _match):
         qparams = parse_qs(urlparse(request.url).query)
-        page_num = int(qparams.get('page', ['1'])[0])
-        review_page_requests.append(page_num)
-        # Page 1 serves item #1 (crop-0) so the "shows item #1 while
-        # locating" regression is provable. Page 101 (the located page)
+        cursor = qparams.get('cursor', [None])[0]
+        review_page_requests.append(cursor)
+        # The first page serves item #1 (crop-0) so the "shows item #1 while
+        # locating" regression is provable. The page the locate cursor starts
         # serves the actual target, crop-target.
-        if page_num == 101:
+        if cursor == LOCATE_CURSOR:
             item = review_item(999)
             # mapRawCrop() maps Crop.id from the wire's `crop_id` field,
             # not `id` -- both are set so the frontend actually resolves
@@ -112,7 +113,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             items = [item]
         else:
             items = [review_item(0)]
-        return (200, {'items': items, 'total': 3010, 'page': page_num, 'page_size': 30})
+        return (200, {'items': items, 'total': 3010, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/all(\?|$)', review_handler)
 
@@ -126,10 +127,10 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             {
                 'crop_id': 'crop-target',
                 'in_queue': True,
-                'rank': 3000,
-                'page': 101,
-                'page_size': 30,
+                'index': 3000,
                 'total': 3010,
+                'cursor_before': LOCATE_CURSOR,
+                'cursor_after': 'after-target',
                 'reason': None,
                 'sort_applied': 'atypicality',
                 'sort_fallback_reason': None,
@@ -173,11 +174,11 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
         f'a keypress fired while locating must never label crop-0 (item #1): {label_calls}'
     )
 
-    # Exactly the initial page-1 load plus the located page-101 request —
-    # never anything for pages 2..100.
-    assert review_page_requests == [1, 101], review_page_requests
+    # Exactly the initial first-page load plus the one request the locate cursor
+    # starts — never a walk through the pages in between.
+    assert review_page_requests == [None, LOCATE_CURSOR], review_page_requests
 
-    # F8 D6: the counter shows the served queue position (rank 3000 ->
+    # F8 D6: the counter shows the served queue position (index 3000 ->
     # #3001), not the cursor's index within the one loaded page.
     counter = page.get_by_test_id('queue-counter').first.inner_text()
     assert counter.startswith('#3001 '), counter

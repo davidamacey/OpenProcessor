@@ -101,7 +101,7 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
     stub.on(
         'GET',

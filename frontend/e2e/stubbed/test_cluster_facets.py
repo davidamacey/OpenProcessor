@@ -56,7 +56,10 @@ def serve_cluster(stub, crop_queries: list[dict]) -> None:
 
     def crops(request, _match):
         crop_queries.append(parse_qs(urlparse(request.url).query))
-        return (200, {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]})
+        return (
+            200,
+            {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
+        )
 
     stub.on('GET', r'/crops(\?|$)', crops)
 

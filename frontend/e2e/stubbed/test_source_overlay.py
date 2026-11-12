@@ -59,7 +59,7 @@ def test_review_source_panel_draws_client_side_boxes(stub, page, app_url):
 
     def review_handler(_request, _match):
         items = [review_item(i) for i in range(3)]
-        return (200, {'items': items, 'total': 3, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 3, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
 

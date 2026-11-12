@@ -73,7 +73,7 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
 
     def review_handler(_request, _match):
         items = [review_item(i) for i in range(3)]
-        return (200, {'items': items, 'total': 3, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 3, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
 
@@ -118,7 +118,12 @@ def _stub_review(stub) -> None:
         r'/review/(?!tabs)',
         lambda _r, _m: (
             200,
-            {'items': [review_item(i) for i in range(3)], 'total': 3, 'page': 1, 'page_size': 30},
+            {
+                'items': [review_item(i) for i in range(3)],
+                'total': 3,
+                'next_cursor': None,
+                'limit': 30,
+            },
         ),
     )
 

@@ -80,7 +80,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 6, 'page': 1, 'page_size': 60, 'crops': [_crop(i) for i in range(6)]},
+        {'total': 6, 'next_cursor': None, 'limit': 60, 'crops': [_crop(i) for i in range(6)]},
     )
 
     page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
@@ -178,7 +178,7 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
         'sort_options': [{'id': 'size_desc', 'label': 'Largest first'}],
     }
     stub.on('GET', r'/clusters(\?|$)', served)
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 60, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 60, 'crops': []})
 
     stub.on('GET', r'/regions(\?|$)', {'items': [], 'total': 0})
 
@@ -262,7 +262,7 @@ def test_dashboard_auto_label_card_stacks_at_800(stub, page, app_url):
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/stats/dataset(\?|$)', DASHBOARD_STATS)
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 20, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 20, 'crops': []})
     stub.on('GET', r'/pipeline/auto_label/status', COMPLETED_JOB)
 
     page.goto(f'{app_url}/p/default/dashboard')

@@ -39,7 +39,7 @@ def serve_clusters(stub) -> None:
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
 
 
@@ -59,7 +59,12 @@ def serve_review(stub) -> None:
         r'/review/(?!tabs)',
         (
             200,
-            {'items': [review_item(i) for i in range(3)], 'total': 3, 'page': 1, 'page_size': 30},
+            {
+                'items': [review_item(i) for i in range(3)],
+                'total': 3,
+                'next_cursor': None,
+                'limit': 30,
+            },
         ),
     )
     stub.on(

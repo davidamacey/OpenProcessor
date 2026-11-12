@@ -39,8 +39,8 @@ function response(
   return {
     items,
     total: items.length,
-    page: 1,
-    page_size: items.length,
+    next_cursor: null,
+    limit: items.length,
     representatives_offset: 0,
     representatives_limit: 24,
     sort: 'size_desc',

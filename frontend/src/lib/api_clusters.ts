@@ -1,12 +1,11 @@
 /**
  * Cluster cards, one cluster's crops and moving crops between clusters (`/clusters*`).
  */
-import type { SortOption } from '$lib/types_cursor';
+import { getCrops } from '$lib/api_cropRead';
+import type { CursorPage, SortOption } from '$lib/types_cursor';
 import { apiFetch, qs, scoped } from '$lib/api';
-import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import { apiErrorText } from '$lib/api_errors';
-import type { Cluster, ClusterFilter, Crop, PaginatedResponse } from '$lib/types';
-import type { ReprocessRequest } from '$lib/types_import';
+import type { Cluster, ClusterFilter, Crop, CropFilter } from '$lib/types';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   ClusterActivationAccepted,
@@ -145,7 +144,7 @@ function _rawClusterToCluster(c: RawCluster): Cluster {
   };
 }
 
-export interface ClustersResponse extends PaginatedResponse<Cluster> {
+export interface ClustersResponse extends CursorPage<Cluster> {
   /** D-4: the representatives window this response actually populated
    *  (echoed straight off the raw response) — a caller paging through
    *  windows advances by this, not by what it asked for. */
@@ -171,8 +170,8 @@ function _rawToClustersResponse(
   return {
     items,
     total: raw.total ?? items.length,
-    page: 1,
-    page_size: items.length,
+    next_cursor: null,
+    limit: items.length,
     sort: raw.sort ?? null,
     sort_options: raw.sort_options ?? [],
     flag_vocabulary: raw.flag_vocabulary ?? [],
@@ -262,8 +261,8 @@ export function getClusterFacets(
 
 export async function getCluster(
   uid: string,
-  page = 1,
-  pageSize = 60,
+  cursor: string | null = null,
+  limit = 60,
   signal?: AbortSignal,
   opts: {
     classSource?: string | null;
@@ -303,57 +302,39 @@ export async function getCluster(
 ): Promise<{
   /** The served card (`GET /clusters/{uid}`); null when the server refused it, see `cardError`. */
   cluster: Cluster | null;
-  crops: PaginatedResponse<Crop>;
+  crops: CursorPage<Crop>;
   /** Why the cluster card could not be read (the crops still render), or null. */
   cardError: string | null;
 }> {
-  // Two parallel calls: paginated crops + the authoritative cluster
-  // card from {API_PREFIX}/clusters/{uid} (server-computed). The page no longer
+  // Two parallel calls: one page of crops + the authoritative cluster card
+  // from {API_PREFIX}/clusters/{uid} (server-computed). The page no longer
   // derives any of the cluster's identity fields client-side.
   //
   // `classSource` narrows the crop grid to one source bucket
   // (model / vlm / human / low_conf / ...) without touching
   // the cluster card stats — the header still shows the whole-cluster
   // totals so the operator sees the filter against the full size.
-  type CropPage = {
-    total: number;
-    page: number;
-    page_size: number;
-    crops: RawCrop[];
-    /** Only present for a pool-scale overlay ordering (e.g.
-     *  `order=diverse`) — see `PaginatedResponse.order_method` /
-     *  `.order_version` / `.n_pool` in types.ts. Untyped/optional and
-     *  parsed tolerantly below: the shape belongs to whichever `order`
-     *  overlay is active, not something this function should assume. */
-    method?: unknown;
-    version?: unknown;
-    n_pool?: unknown;
-    /** v0.4.0 ordered views: matching items with no vector, and the
-     *  request that would embed them (set only when the count is > 0). */
-    n_unembedded?: number | null;
-    suggested_reprocess?: ReprocessRequest | null;
-  };
-  const cropQuery: Record<string, unknown> = {
+  const filter: CropFilter = {
     cluster_uid: uid,
-    page,
-    page_size: pageSize,
+    limit,
+    class_source: opts.classSource ?? undefined,
+    max_rank: opts.maxRank ?? undefined,
+    min_blur_ratio: opts.minBlurRatio ?? undefined,
+    classifier_conf_lt: opts.classifierConfLt ?? undefined,
+    order: opts.order ?? undefined,
+    k: opts.k ?? undefined,
+    detector_class_name: opts.detectorClassName?.length
+      ? opts.detectorClassName
+      : undefined,
+    detector_conf_min: opts.detectorConfMin ?? undefined,
+    detector_conf_max: opts.detectorConfMax ?? undefined,
+    review_tab: opts.reviewTab ?? undefined,
+    label_validated: opts.labelValidated ?? undefined,
+    sort: opts.sort ?? undefined,
   };
-  if (opts.classSource) cropQuery.class_source = opts.classSource;
-  if (opts.maxRank != null) cropQuery.max_rank = opts.maxRank;
-  if (opts.minBlurRatio != null) cropQuery.min_blur_ratio = opts.minBlurRatio;
-  if (opts.classifierConfLt != null) cropQuery.classifier_conf_lt = opts.classifierConfLt;
-  if (opts.order) cropQuery.order = opts.order;
-  if (opts.k != null) cropQuery.k = opts.k;
-  if (opts.detectorClassName?.length)
-    cropQuery.detector_class_name = opts.detectorClassName;
-  if (opts.detectorConfMin != null) cropQuery.detector_conf_min = opts.detectorConfMin;
-  if (opts.detectorConfMax != null) cropQuery.detector_conf_max = opts.detectorConfMax;
-  if (opts.reviewTab) cropQuery.review_tab = opts.reviewTab;
-  if (opts.labelValidated != null) cropQuery.label_validated = opts.labelValidated;
-  if (opts.sort) cropQuery.sort = opts.sort;
   let cardError: string | null = null;
-  const [cropPage, card] = await Promise.all([
-    apiFetch<CropPage>(`${scoped()}/crops${qs(cropQuery)}`, {}, signal),
+  const [crops, card] = await Promise.all([
+    getCrops(filter, cursor, signal),
     apiFetch<RawCluster>(
       `${scoped()}/clusters/${encodeURIComponent(uid)}${qs({ per_cluster: 4 })}`,
       {},
@@ -364,23 +345,7 @@ export async function getCluster(
       return null;
     }),
   ]);
-  const items = cropPage.crops.map(mapRawCrop);
-  const cluster = card ? _rawClusterToCluster(card) : null;
-  return {
-    cluster,
-    cardError,
-    crops: {
-      items,
-      total: cropPage.total,
-      page: cropPage.page,
-      page_size: cropPage.page_size,
-      order_method: typeof cropPage.method === 'string' ? cropPage.method : null,
-      order_version: typeof cropPage.version === 'string' ? cropPage.version : null,
-      n_pool: typeof cropPage.n_pool === 'number' ? cropPage.n_pool : null,
-      n_unembedded: cropPage.n_unembedded ?? null,
-      suggested_reprocess: cropPage.suggested_reprocess ?? null,
-    },
-  };
+  return { cluster: card ? _rawClusterToCluster(card) : null, cardError, crops };
 }
 
 // -- DnD: move crops between clusters ------------------------------------

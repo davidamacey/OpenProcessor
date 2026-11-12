@@ -72,7 +72,7 @@ def _serve_map(stub, page, app_url: str, meta: dict[str, Any]) -> dict[str, list
     def crops(request, _m):
         seen['crops'].append(request.url)
         rows = [make_item(crop_id=f'crop-{i}', image_id=i) for i in IMAGE_IDS]
-        return (200, {'total': len(rows), 'page': 1, 'page_size': 48, 'crops': rows})
+        return (200, {'total': len(rows), 'next_cursor': None, 'limit': 48, 'crops': rows})
 
     def tile(route, request):
         seen['tiles'].append(request.url)

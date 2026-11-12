@@ -5,7 +5,7 @@
 import { apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type { ReprocessRequest } from '$lib/types_import';
-import type { HiddenCounts, PaginatedResponse } from '$lib/types';
+import type { CursorPage, ListPosition } from '$lib/types_cursor';
 import type {
   ResolveNewClassRequest,
   ResolveNewClassResponse,
@@ -112,11 +112,11 @@ export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse>
 
 export async function getReviewQueue(
   tab: ReviewTab,
-  page = 1,
-  pageSize = 30,
+  cursor: string | null = null,
+  limit = 30,
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
-): Promise<PaginatedResponse<ReviewItem>> {
+): Promise<CursorPage<ReviewItem>> {
   // The {API_PREFIX}/review API ships bbox_norm + region_bbox_norm as
   // [x1,y1,x2,y2] arrays. The labeler's ReviewItem extends Crop where
   // bboxes are {cx,cy,w,h} objects. Normalize each item through
@@ -134,22 +134,9 @@ export async function getReviewQueue(
     needs_new_class?: boolean;
     needs_new_class_note?: string | null;
   };
-  type RawPage = {
-    total: number;
-    page: number;
-    page_size: number;
-    items: RawReviewItem[];
-    /** Set when the requested `?sort=` fell back to the default — see
-     *  PaginatedResponse.sort_fallback_reason in types.ts. */
-    sort_fallback_reason?: string | null;
-    /** The sort id actually applied — see PaginatedResponse.sort_applied. */
-    sort_applied?: string | null;
-    /** Set when total === 0 — see PaginatedResponse.empty_reason (#36 item 9). */
-    empty_reason?: string | null;
-    hidden?: HiddenCounts | null;
-  };
+  type RawPage = Omit<CursorPage<ReviewItem>, 'items'> & { items: RawReviewItem[] };
   const raw = await apiFetch<RawPage>(
-    `${scoped()}/review/${tab}${qs({ page, page_size: pageSize, ...filter })}`,
+    `${scoped()}/review/${tab}${qs({ cursor: cursor ?? undefined, limit, ...filter })}`,
     {},
     signal,
   );
@@ -165,16 +152,7 @@ export async function getReviewQueue(
       needs_new_class_note: it.needs_new_class_note ?? null,
     };
   });
-  return {
-    items,
-    total: raw.total ?? items.length,
-    page: raw.page ?? page,
-    page_size: raw.page_size ?? pageSize,
-    sort_fallback_reason: raw.sort_fallback_reason ?? null,
-    sort_applied: raw.sort_applied ?? null,
-    empty_reason: raw.empty_reason ?? null,
-    hidden: raw.hidden ?? null,
-  };
+  return { ...raw, items };
 }
 
 /** `GET {API_PREFIX}/review/{tab}/locate`— where a specific crop sits in a
@@ -183,44 +161,27 @@ export async function getReviewQueue(
  *  `in_queue: false` means the crop doesn't match this tab's
  *  filters (or is already handled) — `reason` explains why when the
  *  backend sends one. */
-export interface ReviewLocateResult {
+export interface ReviewLocateResult extends ListPosition {
   crop_id: string;
   in_queue: boolean;
-  rank: number | null;
-  page: number | null;
-  page_size: number;
-  total: number;
-  reason: string | null;
   sort_applied: string | null;
-  /** M11: mirrors `PaginatedResponse.sort_fallback_reason` — set when the
+  /** M11: mirrors `CursorPage.sort_fallback_reason` — set when the
    *  sort `/locate` resolved (tab default, or the caller's own `sort`)
    *  fell back because its field has 0% coverage. */
   sort_fallback_reason: string | null;
 }
 
-export async function locateInReviewQueue(
+export function locateInReviewQueue(
   tab: string,
   cropId: string,
-  pageSize: number,
   filter: Record<string, unknown> = {},
   signal?: AbortSignal,
 ): Promise<ReviewLocateResult> {
-  const raw = await apiFetch<Partial<ReviewLocateResult>>(
-    `${scoped()}/review/${tab}/locate${qs({ crop_id: cropId, page_size: pageSize, ...filter })}`,
+  return apiFetch<ReviewLocateResult>(
+    `${scoped()}/review/${tab}/locate${qs({ crop_id: cropId, ...filter })}`,
     {},
     signal,
   );
-  return {
-    crop_id: raw.crop_id ?? cropId,
-    in_queue: !!raw.in_queue,
-    rank: raw.rank ?? null,
-    page: raw.page ?? null,
-    page_size: raw.page_size ?? pageSize,
-    total: raw.total ?? 0,
-    reason: raw.reason ?? null,
-    sort_applied: raw.sort_applied ?? null,
-    sort_fallback_reason: raw.sort_fallback_reason ?? null,
-  };
 }
 
 /** `GET {API_PREFIX}/review/new_class_proposals/summary` — the aggregate

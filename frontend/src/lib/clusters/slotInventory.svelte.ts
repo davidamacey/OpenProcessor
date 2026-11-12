@@ -48,8 +48,7 @@ export function createSlotInventory() {
       // Pull a slightly larger window than 4 so we can drop items
       // missing a sub-box without falling below the tile count.
       const res = await getRegions(browsePath, {
-        page: 1,
-        page_size: 12,
+        limit: 12,
       });
       // A tile is one box's close-up, so only rows with a served box
       // thumbnail qualify.

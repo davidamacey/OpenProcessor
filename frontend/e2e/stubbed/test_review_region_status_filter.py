@@ -187,7 +187,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
         region_calls.append(request.url)
         return (
             200,
-            {'items': [needs_human_item()], 'total': 1, 'page': 1, 'page_size': 30},
+            {'items': [needs_human_item()], 'total': 1, 'next_cursor': None, 'limit': 30},
         )
 
     stub.on('GET', r'/review/regions(\?|$)', review_handler)
@@ -247,7 +247,7 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
         region_calls.append(request.url)
         return (
             200,
-            {'items': [needs_human_item()], 'total': 1, 'page': 1, 'page_size': 30},
+            {'items': [needs_human_item()], 'total': 1, 'next_cursor': None, 'limit': 30},
         )
 
     stub.on('GET', r'/review/regions(\?|$)', review_handler)

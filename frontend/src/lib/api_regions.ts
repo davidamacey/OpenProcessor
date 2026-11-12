@@ -8,6 +8,7 @@ import type { SlotData, SlotKey, XYXY } from '$lib/annotations/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import type { Cluster } from '$lib/types';
+import type { CursorPage } from '$lib/types_cursor';
 import type { ServedRegionProfile } from '$lib/types_health';
 
 // -- region browse / training-cohort selection --------------------------
@@ -64,10 +65,7 @@ export interface RegionBrowseItem {
   region_box_id?: string | null;
 }
 
-export interface RegionsPage {
-  total: number;
-  page: number;
-  page_size: number;
+export interface RegionsPage extends Omit<CursorPage<RegionBrowseItem>, 'items'> {
   items: RegionBrowseItem[];
   mode?: string;
   selection_reason?: string;
@@ -86,8 +84,8 @@ export interface RegionsQuery extends Omit<
   ItemFilterQuery,
   'open_vocab_set' | 'source_prompt' | 'cluster_uid'
 > {
-  page?: number;
-  page_size?: number;
+  cursor?: string;
+  limit?: number;
   /** Rows whose box is in this cluster of the serving region partition. */
   cluster_uid?: string;
   /** Only regions on the top-N largest crops (crop_rank_in_image<=N). */
@@ -225,7 +223,7 @@ export type TrainingCohortMode = string;
 
 export function getTrainingCandidates(
   mode: TrainingCohortMode,
-  params: { page?: number; page_size?: number; class_id?: number } = {},
+  params: { cursor?: string; limit?: number; class_id?: number } = {},
   signal?: AbortSignal,
 ): Promise<RegionsPage> {
   return apiFetch<RegionsPage>(

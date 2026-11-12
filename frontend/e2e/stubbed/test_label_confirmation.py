@@ -154,7 +154,12 @@ def _stub_review(stub, tabs):
     stub.on(
         'GET',
         r'/review/(?!tabs)',
-        lambda _r, _m: {'items': [_disagreement_item()], 'total': 1, 'page': 1, 'page_size': 30},
+        lambda _r, _m: {
+            'items': [_disagreement_item()],
+            'total': 1,
+            'next_cursor': None,
+            'limit': 30,
+        },
     )
 
 
@@ -184,7 +189,7 @@ def test_detector_disagreements_tab_shows_served_label_and_item_wording(stub, pa
         r'/review/detector_disagreements(\?|$)',
         lambda req, _m: (
             seen.append(req.url)
-            or {'items': [_disagreement_item()], 'total': 1, 'page': 1, 'page_size': 30}
+            or {'items': [_disagreement_item()], 'total': 1, 'next_cursor': None, 'limit': 30}
         ),
     )
     page.goto(f'{app_url}/p/default/review?tab=detector_disagreements')
@@ -405,7 +410,7 @@ def test_dashboard_says_a_label_is_not_ground_truth(stub, page, app_url):
     )
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     stats = {
         'as_of': '2026-10-09T00:00:00Z',
         'total_crops': 14023,

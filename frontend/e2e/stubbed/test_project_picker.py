@@ -32,7 +32,9 @@ def test_picker_is_bounded_scrollable_and_searchable(stub, page, app_url):
     stub.on('GET', rf'^{re.escape(API_PREFIX)}/projects$', _page_of_projects)
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on(
-        'GET', r'/review/(?!tabs)', (200, {'items': [], 'total': 0, 'page': 1, 'page_size': 30})
+        'GET',
+        r'/review/(?!tabs)',
+        (200, {'items': [], 'total': 0, 'next_cursor': None, 'limit': 30}),
     )
     page.goto(f'{app_url}/p/default/review')
     page.get_by_test_id('project-switcher-trigger').click()

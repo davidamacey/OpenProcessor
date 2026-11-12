@@ -142,8 +142,8 @@ def test_failed_badge_on_a_card(stub, page, app_url):
         stub,
         {
             'total': 2,
-            'page': 1,
-            'page_size': 60,
+            'next_cursor': None,
+            'limit': 60,
             'crops': [_crop(0, 'failed'), _crop(1, 'embedded')],
         },
     )
@@ -186,7 +186,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     stub.on('GET', r'/detections/summary(\?|$)', copy.deepcopy(SUMMARY))
     stub.on('GET', r'/stats/dataset(\?|$)', copy.deepcopy(DATASET_STATS))
     stub.on('GET', r'/datasets/formats(\?|$)', copy.deepcopy(FORMATS))
@@ -285,7 +285,7 @@ def test_failed_auto_label_job_shows_its_error_and_stage(stub, page, app_url):
     stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     failed = {
         **IDLE_JOB,
         'job_id': 'j1',

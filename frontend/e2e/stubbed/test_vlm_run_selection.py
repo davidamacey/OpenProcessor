@@ -97,7 +97,7 @@ def register_dashboard(
     stub.on('GET', r'/methods(\?|$)', {'strategies': strategies, 'flags': {}})
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
     stub.on('GET', r'/stats/dataset(\?|$)', DATASET_STATS)
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     snapshot = {'state': {}, 'stats': DATASET_STATS}
     stub.on(
         'GET',

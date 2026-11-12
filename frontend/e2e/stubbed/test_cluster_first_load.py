@@ -18,7 +18,7 @@ def test_first_page_of_a_slow_cluster_says_what_it_is_doing(stub, page, app_url)
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
     held: list = []
     # Registered after the stub's catch-all, so it wins: hold the crops page.
@@ -40,7 +40,7 @@ def test_first_page_of_a_slow_cluster_says_what_it_is_doing(stub, page, app_url)
     expect(footer).not_to_contain_text('0 / 0 listed')
 
     body = json.dumps(
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]}
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]}
     )
     for route in held:
         route.fulfill(status=200, content_type='application/json', body=body)

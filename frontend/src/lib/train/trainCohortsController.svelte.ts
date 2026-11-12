@@ -184,7 +184,7 @@ export function createTrainCohortsController() {
     if (kind === 'training_candidates') {
       const mode = params.mode as TrainingCohortMode;
       const res = await getTrainingCandidates(mode, {
-        page_size: pageSize,
+        limit: pageSize,
         class_id: classId,
       });
       return { total: res.total, items: res.items };
@@ -207,7 +207,7 @@ export function createTrainCohortsController() {
       return { total: res.total, items: res.items };
     }
     if (kind === 'model_disagreements') {
-      const res = await getReviewQueue('model_disagreements', 1, pageSize, {
+      const res = await getReviewQueue('model_disagreements', null, pageSize, {
         class_name: [className],
       });
       return { total: res.total, items: res.items };

@@ -42,7 +42,7 @@ def _setup(stub):
     stub.on(
         'GET',
         r'/review/(?!tabs)',
-        (200, {'items': [item], 'total': 1, 'page': 1, 'page_size': 30}),
+        (200, {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30}),
     )
     stub.on(
         'GET',

@@ -159,7 +159,7 @@ def _stub_common(stub) -> None:
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [_crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [_crop(i) for i in range(3)]},
     )
     stub.on('GET', r'/models/status', {'models': []})
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
@@ -194,7 +194,7 @@ def _stub_common(stub) -> None:
     def review(_request, _match):
         return (
             200,
-            {'items': [_crop(i) for i in range(3)], 'total': 3, 'page': 1, 'page_size': 30},
+            {'items': [_crop(i) for i in range(3)], 'total': 3, 'next_cursor': None, 'limit': 30},
         )
 
     stub.on('GET', r'/review/(?!tabs)', review)

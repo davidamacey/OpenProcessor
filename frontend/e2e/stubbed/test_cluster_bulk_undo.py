@@ -63,7 +63,7 @@ def test_cluster_bulk_label_then_single_undo_queues_one_op_undo(stub, page, app_
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
     stub_label_op(
         stub, r'/crops/batch_label$', 'op-label-1', updated=2, method='PUT', calls=label_calls

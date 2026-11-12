@@ -579,7 +579,7 @@ def test_conflict_review_link_leads_to_a_review_that_sends_the_filter(stub, page
             vlm_endpoint='env@abc123',
             vlm_model='example/vision-model',
         )
-        return (200, {'items': [item], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', combined_items)
     stub.on('GET', r'/crops/[^/]+/history$', {'crop_id': 'crop-0', 'entries': []})

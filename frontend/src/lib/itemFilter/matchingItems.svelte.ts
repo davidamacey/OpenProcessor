@@ -21,8 +21,8 @@ export interface MatchingItems {
 export function createMatchingItems(query: () => ItemFilterQuery): MatchingItems {
   let hidden = $state<HiddenCounts | null>(null);
   const pager = createPager<Crop>({
-    fetchPage: async (page) => {
-      const res = await getCrops({ ...query(), page, limit: MATCHING_PAGE_SIZE });
+    fetchPage: async (cursor) => {
+      const res = await getCrops({ ...query(), limit: MATCHING_PAGE_SIZE }, cursor);
       hidden = res.hidden ?? null;
       return res;
     },

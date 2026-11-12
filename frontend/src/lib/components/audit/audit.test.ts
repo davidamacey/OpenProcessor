@@ -142,7 +142,9 @@ describe('AuditStartForm', () => {
         confusion: {},
         outcomes: {},
       }),
-      queue: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 30 }),
+      queue: vi
+        .fn()
+        .mockResolvedValue({ items: [], total: 0, next_cursor: null, limit: 30 }),
       start,
     });
 
@@ -203,6 +205,7 @@ describe('AuditStartForm', () => {
 });
 
 describe('AuditQueueList', () => {
+  const noPaging = { hasPrevious: false, onprevious: () => {}, onnext: () => {} };
   const queue = (n: number, total = n) => ({
     items: Array.from({ length: n }, (_, i) =>
       mapRawCrop(
@@ -217,15 +220,15 @@ describe('AuditQueueList', () => {
       ),
     ),
     total,
-    page: 1,
-    pageSize: 30,
+    next_cursor: null as string | null,
+    limit: 30,
   });
 
   it('lists each drawn crop with its class, the detector class and a Review link', () => {
     classSourcesStore.list = [
       { id: 'vlm', label: 'VLM', role: 'vlm', short_label: 'VLM' },
     ] as never;
-    const el = render(AuditQueueList, { queue: queue(2), ongoto: () => {} });
+    const el = render(AuditQueueList, { queue: queue(2), ...noPaging });
     const rows = [...el.querySelectorAll('[data-testid="audit-queue-item"]')];
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain('widget_a');
@@ -247,29 +250,38 @@ describe('AuditQueueList', () => {
       audit_label_source: 'vlm',
       audit_outcome: null,
     };
-    const el = render(AuditQueueList, { queue: q, ongoto: () => {} });
+    const el = render(AuditQueueList, { queue: q, ...noPaging });
     const badge = el.querySelector('[data-testid="audit-queue-drawn"]');
     expect(badge?.textContent).toContain('widget_c');
   });
 
   it('shows no audit badge on a crop that was never drawn', () => {
-    const el = render(AuditQueueList, { queue: queue(1), ongoto: () => {} });
+    const el = render(AuditQueueList, { queue: queue(1), ...noPaging });
     expect(el.querySelector('[data-testid="audit-queue-drawn"]')).toBeNull();
   });
 
-  it('pages by the served total and page size', () => {
-    const ongoto = vi.fn();
-    const el = render(AuditQueueList, { queue: queue(30, 65), ongoto });
-    expect(el.textContent).toContain('Page 1 of 3');
-    const next = [...el.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Next',
-    )!;
-    next.click();
-    expect(ongoto).toHaveBeenCalledWith(2);
+  it('offers Next only while the server has a next cursor, and Previous only after Next', () => {
+    const onnext = vi.fn();
+    const more = { ...queue(30, 65), next_cursor: 'c2' };
+    const el = render(AuditQueueList, { queue: more, ...noPaging, onnext });
+    const button = (label: string) =>
+      [...el.querySelectorAll('button')].find((b) => b.textContent === label)!;
+    expect(button('Previous').disabled).toBe(true);
+    button('Next').click();
+    expect(onnext).toHaveBeenCalledTimes(1);
+    const last = render(AuditQueueList, {
+      queue: queue(30, 65),
+      ...noPaging,
+      hasPrevious: true,
+    });
+    const lastButton = (label: string) =>
+      [...last.querySelectorAll('button')].find((b) => b.textContent === label)!;
+    expect(lastButton('Next').disabled).toBe(true);
+    expect(lastButton('Previous').disabled).toBe(false);
   });
 
   it('says nothing is waiting when the queue is empty', () => {
-    const el = render(AuditQueueList, { queue: queue(0), ongoto: () => {} });
+    const el = render(AuditQueueList, { queue: queue(0), ...noPaging });
     expect(el.textContent).toContain('Nothing is waiting');
   });
 });
