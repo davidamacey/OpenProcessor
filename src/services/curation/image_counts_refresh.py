@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from src.clients.image_counts_dirty import DirtyImages, mark_dirty
+from src.clients.image_counts_dirty import PARKED_TTL_S, DirtyImages, mark_dirty
 from src.config.curation_accessors import images_index, items_index
 from src.config.image_counts import sweep_per_tick
 from src.core.logging import get_logger
@@ -91,26 +91,40 @@ async def recount_images(opensearch: Any, image_ids: list[str]) -> int:
     return updated
 
 
-async def sweep_uncounted(opensearch: Any, limit: int | None = None) -> int:
+async def sweep_uncounted(opensearch: Any, dirty: DirtyImages, limit: int | None = None) -> int:
     """Recount up to ``limit`` images that have no ``counts_at`` (default: ``sweep_per_tick()``);
-    returns how many were counted (an image the index refuses stays uncounted and is logged)."""
+    returns how many were counted.
+
+    An image the images index refuses is parked (``DirtyImages.park``) and left out of the sweep
+    for an hour, so one that is refused for good cannot keep the first slot of every sweep.
+    """
     limit = sweep_per_tick() if limit is None else limit
     if limit == 0:
         return 0
+    must_not: list[dict[str, Any]] = [{'exists': {'field': 'counts_at'}}]
+    if parked := await dirty.parked():
+        must_not.append({'terms': {'image_id': parked}})
     resp = await opensearch.search(
         index=images_index(),
         body={
             'size': limit,
             'sort': [{'image_id': 'asc'}],
             '_source': False,
-            'query': {'bool': {'must_not': {'exists': {'field': 'counts_at'}}}},
+            'query': {'bool': {'must_not': must_not}},
         },
     )
     ids = [str(h['_id']) for h in resp['hits']['hits']]
     try:
         await recount_images(opensearch, ids)
     except CountsWriteError as exc:
-        logger.warning('image_counts_sweep_refused', refused=len(exc.failed), of=len(ids))
+        await dirty.park(exc.failed)
+        logger.warning(
+            'image_counts_sweep_refused',
+            refused=len(exc.failed),
+            of=len(ids),
+            parked_for_s=PARKED_TTL_S,
+            sample=exc.failed[:3],
+        )
         return len(ids) - len(exc.failed)
     return len(ids)
 
@@ -146,7 +160,7 @@ async def drain(
                 continue
             await dirty.done(batch)
             report.recounted += len(batch)
-    report.swept = await sweep_uncounted(opensearch)
+    report.swept = await sweep_uncounted(opensearch, dirty)
     if report.recounted or report.swept or report.refused:
         logger.info(
             'image_counts_drained',

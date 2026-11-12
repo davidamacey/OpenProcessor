@@ -12,6 +12,8 @@ The set is keyed by the bound project's slug, so projects never share one.
 * RENAME: https://valkey.io/commands/rename/
 * SRANDMEMBER: https://valkey.io/commands/srandmember/
 * SREM: https://valkey.io/commands/srem/
+* SMEMBERS: https://valkey.io/commands/smembers/
+* EXPIRE: https://valkey.io/commands/expire/
 """
 
 from __future__ import annotations
@@ -35,6 +37,8 @@ logger = get_logger(__name__)
 
 KEY_PREFIX: Final = 'op:image_counts:'
 _TIMEOUT_S: Final = 1.0
+#: How long the sweep leaves an image alone after the images index refused its count write.
+PARKED_TTL_S: Final = 3600
 
 #: The item fields the stored counts depend on: a write that touches none of them cannot change a
 #: count (``counts.items``, ``labeled``, ``validated``, ``unlabeled``, ``in_holdout``).
@@ -47,6 +51,10 @@ def dirty_key() -> str:
 
 def claimed_key() -> str:
     return f'{KEY_PREFIX}claimed:{current_project().record.slug}'
+
+
+def refused_key() -> str:
+    return f'{KEY_PREFIX}refused:{current_project().record.slug}'
 
 
 def valkey_client() -> aioredis.Redis:
@@ -154,3 +162,13 @@ class DirtyImages:
         if image_ids:
             await self._client.sadd(dirty_key(), *image_ids)
             await self._client.srem(claimed_key(), *image_ids)
+
+    async def park(self, image_ids: list[str]) -> None:
+        """Keep the sweep off ``image_ids`` for :data:`PARKED_TTL_S` (the whole set expires that
+        long after the last addition, so a parked image is tried again about an hour later)."""
+        if image_ids:
+            await self._client.sadd(refused_key(), *image_ids)
+            await self._client.expire(refused_key(), PARKED_TTL_S)
+
+    async def parked(self) -> list[str]:
+        return sorted(str(m) for m in await self._client.smembers(refused_key()))

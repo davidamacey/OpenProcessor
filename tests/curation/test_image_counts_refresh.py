@@ -25,6 +25,7 @@ CFG = base_curation_config()
 ITEMS = CFG.items_index
 IMAGES = index_name(CFG, IndexRole.IMAGES)
 DIRTY = 'op:image_counts:dirty:default'
+REFUSED = 'op:image_counts:refused:default'
 
 
 def _item(n: str, image: str, **extra: Any) -> dict[str, Any]:
@@ -246,6 +247,7 @@ def test_a_refused_count_write_requeues_its_image_and_does_not_wedge_the_drain(
     # set, so no claimed set is left for the next tick to resume forever.
     assert 'counts' in docs['img-b']
     assert 'counts' not in docs['img-a']
+    assert image_counts_dirty.pop(REFUSED) == {'img-a'}  # the sweep parked it too
     assert image_counts_dirty == {DIRTY: {'img-a'}}
     assert (report.recounted, report.refused) == (1, 1)
     # The sweep still ran in the same pass (it counts the never-counted images).
@@ -256,7 +258,7 @@ def test_a_refused_count_write_requeues_its_image_and_does_not_wedge_the_drain(
     image_counts_dirty[DIRTY] |= {'img-c'}
     second = _drain(fake, image_counts_dirty)
     assert second.recounted == 1
-    assert image_counts_dirty == {DIRTY: {'img-a'}}
+    assert image_counts_dirty == {DIRTY: {'img-a'}, REFUSED: {'img-a'}}
 
 
 def test_a_refused_image_is_counted_once_the_index_accepts_it_again(
@@ -270,7 +272,39 @@ def test_a_refused_image_is_counted_once_the_index_accepts_it_again(
     monkeypatch.setattr(fake, 'bulk', real_bulk)
     _drain(fake, image_counts_dirty)
     assert fake.docs(IMAGES)['img-a']['counts']['items'] == 2
-    assert image_counts_dirty == {}
+    assert image_counts_dirty == {REFUSED: {'img-a'}}
+
+
+def test_a_permanently_refused_uncounted_image_does_not_hold_the_sweep_slot(
+    image_counts_dirty: dict[str, set[str]], monkeypatch: Any
+) -> None:
+    """The sweep takes images in id order, so an image the index always refuses stayed first and
+    a sweep of one never reached the images behind it."""
+    fake = _world()
+    monkeypatch.setenv('OP_IMAGE_COUNTS_SWEEP_PER_TICK', '1')
+    _refusing(fake, monkeypatch, {'img-a'})
+    for _ in range(4):
+        _drain(fake, image_counts_dirty)
+    docs = fake.docs(IMAGES)
+    assert 'counts' not in docs['img-a']
+    assert all('counts' in docs[i] for i in ('img-b', 'img-c', 'img-d'))
+    assert image_counts_dirty[REFUSED] == {'img-a'}
+
+
+def test_a_parked_image_is_swept_again_when_its_parking_ends(
+    image_counts_dirty: dict[str, set[str]], monkeypatch: Any
+) -> None:
+    fake = _world()
+    monkeypatch.setenv('OP_IMAGE_COUNTS_SWEEP_PER_TICK', '10')
+    real_bulk = fake.bulk
+    _refusing(fake, monkeypatch, {'img-a'})
+    _drain(fake, image_counts_dirty)
+    monkeypatch.setattr(fake, 'bulk', real_bulk)
+    _drain(fake, image_counts_dirty)
+    assert 'counts' not in fake.docs(IMAGES)['img-a']  # still parked
+    image_counts_dirty.pop(REFUSED)  # the key's TTL ran out
+    _drain(fake, image_counts_dirty)
+    assert fake.docs(IMAGES)['img-a']['counts']['items'] == 2
 
 
 def test_the_sweep_size_is_a_setting_and_zero_turns_the_sweep_off(
