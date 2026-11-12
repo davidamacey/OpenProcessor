@@ -70,6 +70,14 @@ def test_the_plan_creates_the_unknown_names_and_skips_deprecated_and_region_clas
     assert plan.blocked_items == 5
 
 
+def test_a_name_with_no_slug_is_neither_planned_nor_counted() -> None:
+    registry = _Registry(_Entry(1, 'car'))
+    adoptable = {'car': 5, '  ': 3, '!!!': 2}
+    plan = plan_adoption(DetectorCensus(adoptable, adoptable), cast('Any', registry.classes))
+    assert plan.create == ()
+    assert plan.items == 5
+
+
 def test_the_merge_writes_the_machine_class_and_tags_the_operation() -> None:
     merged = adoption_merger(CLASSES, OP)(_item())
     assert merged['class_id'] == 4
