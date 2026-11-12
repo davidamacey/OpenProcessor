@@ -30,6 +30,7 @@
  *   (+ `region_status`/`region_revision`) in one step, so nothing new is
  *   needed on the undo side.
  */
+import { untrack } from 'svelte';
 import {
   toEditableBoxes,
   nextBoxIndex,
@@ -146,7 +147,13 @@ export function createMultiBoxRegionController(
     // which can land after the operator has already pressed Tab: the same
     // crop keeps the selection (clamped), only a new crop starts at box 1.
     const sameCrop = (crop?.id ?? null) === seededCropId;
-    selectedIndex = seededSelection(sameCrop, selectedIndex, editable.length);
+    // The caller runs this from an $effect; reading the selection there would make every Tab,
+    // click or drawn box re-seed and drop the edits.
+    selectedIndex = seededSelection(
+      sameCrop,
+      untrack(() => selectedIndex),
+      editable.length,
+    );
     if (!sameCrop) vectorRefresh = null;
     seededCropId = crop?.id ?? null;
   }
