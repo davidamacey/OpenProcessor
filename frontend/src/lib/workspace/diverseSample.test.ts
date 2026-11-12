@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
   selectDiverse: vi.fn(),
   getSelectStatus: vi.fn(),
+  getDiverseItems: vi.fn(),
   cancelSelect: vi.fn(),
 }));
 vi.mock('$lib/api_select', () => api);
@@ -41,19 +42,28 @@ describe('diverse sample', () => {
   it('polls the served job and selects its result when it completes', async () => {
     api.selectDiverse.mockResolvedValue({ kind: 'job', job_id: 'j1' });
     api.getSelectStatus
-      .mockResolvedValueOnce({ status: 'running', result: null })
+      .mockResolvedValueOnce({ job_id: 'j1', status: 'running', result: null })
       .mockResolvedValueOnce({
+        job_id: 'j1',
         status: 'completed',
-        result: { crop_ids: ['x'], method: 'm', version: 'v', n_pool: 400 },
+        result: { method: 'm', version: 'v', n_pool: 400, n_selected: 3 },
       });
+    api.getDiverseItems
+      .mockResolvedValueOnce({ ids: ['x', 'y'], next_cursor: 'c1' })
+      .mockResolvedValueOnce({ ids: ['z'], next_cursor: null });
     const { sample, selectItems } = make();
     await sample.start();
     expect(sample.phase).toBe('running');
     await vi.advanceTimersByTimeAsync(2000);
     expect(sample.phase).toBe('running');
     await vi.advanceTimersByTimeAsync(2000);
-    expect(selectItems).toHaveBeenCalledWith(['x']);
+    expect(api.getDiverseItems.mock.calls.map((c) => [c[0], c[1]])).toEqual([
+      ['j1', null],
+      ['j1', 'c1'],
+    ]);
+    expect(selectItems).toHaveBeenCalledWith(['x', 'y', 'z']);
     expect(sample.phase).toBe('idle');
+    expect(sample.message).toBe('Picked 3 of 400');
   });
 
   it('says why when the feature is off or a selection is already running', async () => {
