@@ -16540,6 +16540,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -17193,6 +17209,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [
@@ -29928,6 +29955,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -30593,6 +30636,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [
@@ -34211,6 +34265,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -34864,6 +34934,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "reason": {
             "description": "Why the item is in this tab's queue.",
@@ -36207,6 +36288,22 @@
               }
             ]
           },
+          "clarity_label": {
+            "anyOf": [
+              {
+                "enum": [
+                  "soft",
+                  "clear",
+                  "sharp"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarity Label"
+          },
           "class_confidence": {
             "anyOf": [
               {
@@ -36884,6 +36981,17 @@
             "default": "",
             "title": "Proposed Class Name",
             "type": "string"
+          },
+          "rank_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank Label"
           },
           "region_auto_confirmed": {
             "anyOf": [

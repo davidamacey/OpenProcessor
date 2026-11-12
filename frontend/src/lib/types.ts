@@ -155,6 +155,10 @@ export interface Crop {
   /** Crop/full Laplacian ratio (higher = clearer).
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
+  /** The served word for the clarity score (the thresholds are the backend's). */
+  clarity_label?: 'soft' | 'clear' | 'sharp' | null;
+  /** The served size rank in its photo: "largest", "2nd", … */
+  rank_label?: string | null;
   /** Raw detector confidence (recorded even below the 0.75 floor). */
   classifier_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */

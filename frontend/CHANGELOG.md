@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Items serve `clarity_label` (soft, clear, sharp) and `rank_label` (largest, 2nd, …), thresholds in `src/domain/item_labels.py`; the card chip shows them instead of "b0.14" (G-20).
 - The source-image overlay labels every item box and draws region boxes only for the selected item; an "All regions" toggle draws them for all (G-19).
 - Every grid pages by cursor: the shared pager follows the served `next_cursor`, a deep link loads the page that starts at the located item in one request, and no view sees a page number. The audit queue has Previous and Next.
 - Image overlays draw the served boxes and names (`BoxLayer`); region boxes show their read text or the region name and number instead of "Object N".

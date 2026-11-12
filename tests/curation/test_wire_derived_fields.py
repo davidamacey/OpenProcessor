@@ -289,3 +289,16 @@ def test_display_name_falls_back_to_the_detectors_own_name() -> None:
 def test_display_name_is_empty_when_nothing_names_the_item() -> None:
     item = _item(class_source='item_proposal')
     assert (item['display_name'], item['display_name_kind']) == ('', 'none')
+
+
+# ------------------------------------------------------- clarity and rank labels
+
+
+def test_clarity_and_rank_labels() -> None:
+    assert _item(blur_lap_ratio=0.5)['clarity_label'] == 'soft'
+    assert _item(blur_lap_ratio=1.2)['clarity_label'] == 'clear'
+    assert _item(blur_lap_ratio=1.8)['clarity_label'] == 'sharp'
+    assert _item()['clarity_label'] is None
+    ranks = {r: _item(crop_rank_in_image=r)['rank_label'] for r in (1, 2, 3, 4, 11, 12, 22)}
+    assert ranks == {1: 'largest', 2: '2nd', 3: '3rd', 4: '4th', 11: '11th', 12: '12th', 22: '22nd'}
+    assert _item()['rank_label'] is None
