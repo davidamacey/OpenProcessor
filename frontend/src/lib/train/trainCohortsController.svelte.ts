@@ -1,6 +1,6 @@
 /**
  * /train's training-cohort picker: per-class cohort definitions and
- * counts (loaded lazily as each class group scrolls into view), the
+ * counts (served with each cohort, loaded lazily as each class group scrolls into view), the
  * selected cohort's preview grid, and the click-through to /review.
  */
 import { goto } from '$app/navigation';
@@ -106,6 +106,7 @@ export function createTrainCohortsController() {
       },
       rowKind: c.row_kind === 'region' ? 'slot' : 'crop',
       reviewTarget: c.row_kind === 'region' ? 'slotQueue' : 'all',
+      count: c.count,
     };
   }
 
@@ -236,32 +237,16 @@ export function createTrainCohortsController() {
   async function loadGroupCounts(group: CohortGroup): Promise<void> {
     const cohorts = await loadGroupCohorts(group);
     classCohorts = { ...classCohorts, [group.classId]: cohorts };
-    const results = await Promise.allSettled(
-      cohorts.map((c) => runCohortQuery(c, 1, group.className)),
-    );
     const next: Record<string, number | null> = { ...cohortCounts };
-    cohorts.forEach((cohort, i) => {
-      const r = results[i];
-      next[cohortKey(group.classId, cohort)] =
-        r?.status === 'fulfilled' ? r.value.total : null;
-    });
+    for (const c of cohorts) next[cohortKey(group.classId, c)] = c.count ?? null;
     cohortCounts = next;
   }
 
+  /** Re-reads the served definitions and counts of every class group already shown. */
   async function refreshCohortCounts(): Promise<void> {
-    const all = cohortGroups.flatMap((g) =>
-      g.cohorts.map((c) => ({ group: g, cohort: c })),
-    );
-    const results = await Promise.allSettled(
-      all.map(({ group, cohort }) => runCohortQuery(cohort, 1, group.className)),
-    );
-    const next: Record<string, number | null> = { ...cohortCounts };
-    all.forEach(({ group, cohort }, i) => {
-      const r = results[i];
-      next[cohortKey(group.classId, cohort)] =
-        r?.status === 'fulfilled' ? r.value.total : null;
-    });
-    cohortCounts = next;
+    for (const group of cohortGroups) {
+      if (group.cohorts.length > 0) await loadGroupCounts(group);
+    }
   }
 
   async function loadCohortPreview(

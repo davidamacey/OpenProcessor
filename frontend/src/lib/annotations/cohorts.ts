@@ -72,6 +72,8 @@ export interface CohortSpec {
   /** Where a preview card click should land. Slot cohorts jump to the
    *  slot's queue tab; crop cohorts to `?tab=all`. */
   reviewTarget?: 'slotQueue' | 'all';
+  /** The served size for the class (`GET /training_cohorts`); absent on a hand-declared cohort. */
+  count?: number | null;
 }
 
 export interface TrainingCohortsCapability {

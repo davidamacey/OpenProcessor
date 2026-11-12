@@ -52,4 +52,10 @@ describe('/train cohort definitions come from GET /training_cohorts?class_id=', 
     expect(fn).toMatch(/params\.classifier_conf_lt/);
     expect(fn).toMatch(/params\.label_validated/);
   });
+
+  it('counts are the served per-cohort count, not one query per cohort from the browser', () => {
+    expect(src).not.toMatch(/Promise\.allSettled/);
+    expect(src).not.toMatch(/runCohortQuery\([^)]*,\s*1\s*,/);
+    expect(src).toMatch(/c\.count/);
+  });
 });
