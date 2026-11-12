@@ -66,7 +66,8 @@ class ClassesStore {
     try {
       const data = await getClasses(ctrl.signal);
       this.classes = data.classes;
-      this.thresholds = data.thresholds;
+      // A response without thresholds (an older backend) leaves the empty ones; readers show nothing.
+      this.thresholds = data.thresholds ?? EMPTY_THRESHOLDS;
       this.reservedHotkeys = data.reserved_hotkeys;
       this.lastUpdated = Date.now();
       this.error = null;
