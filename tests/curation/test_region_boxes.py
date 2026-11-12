@@ -403,6 +403,7 @@ def test_serialize_item_carries_region_boxes_and_stats() -> None:
             **stored,
             'bbox_in_parent': None,
             'locked': False,
+            'display_name': 'Region 1',
             'thumbnail_url': item['region_boxes'][0]['thumbnail_url'],
         }
     ]
