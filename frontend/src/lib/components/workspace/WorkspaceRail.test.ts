@@ -91,6 +91,25 @@ describe('WorkspaceRail', () => {
     expect(rows).toEqual(['gadget 7', 'widget 4,321']);
   });
 
+  it('says what the count colours mean, from the served thresholds', () => {
+    expect(target.querySelector('[data-testid="class-count-legend"]')).toBeNull();
+    classesStore.thresholds = {
+      ...classesStore.thresholds,
+      block_below: 10,
+      warn_below: 30,
+    };
+    flushSync();
+    const legend = target.querySelector('[data-testid="class-count-legend"]')!;
+    const text = legend.textContent!.replace(/\s+/g, ' ');
+    expect(text).toContain('under 10');
+    expect(text).toContain('under 30');
+    classesStore.thresholds = {
+      ...classesStore.thresholds,
+      block_below: 0,
+      warn_below: 0,
+    };
+  });
+
   it('no client sort', () => {
     const here = path.dirname(fileURLToPath(import.meta.url));
     for (const f of ['WorkspaceRail.svelte', 'RailClasses.svelte']) {
