@@ -123,6 +123,22 @@ class Stub:
         # (later registration wins).
         self.on('GET', r'/images/[^/]+$', self._image_detail)
         self.on('GET', r'/images/[^/]+/file(/|$|\?)', self._image)
+        # The image editor locates its image in the list it came from on every visit; the
+        # default is an image outside any list (the editor works without the filmstrip).
+        self.on(
+            'GET',
+            r'/images/locate(\?|$)',
+            fill(
+                'ImageLocate',
+                in_view=False,
+                index=None,
+                cursor_before=None,
+                cursor_after=None,
+                previous_image_id=None,
+                reason='filtered_out',
+                reason_message='The image is not in the current filtered view.',
+            ),
+        )
         self.on('GET', r'(/events|/stream)(/|$|\?)', (204, '', 'text/plain'))
         self.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
         # /clusters/[id] lists the assist runs for the viewed cluster on every visit.

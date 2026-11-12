@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 import pytest
+from fixtures.image_editor import Editor
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
@@ -228,6 +229,12 @@ PAGES = [
         serve_clusters,
         '[data-testid="detections-view"] img',
         open_class_picker,
+    ),
+    (
+        'image-editor',
+        '/p/default/images/img-1?view=gallery',
+        Editor,
+        '[data-testid="overlay-box"]',
     ),
     ('review', '/p/default/review', serve_review, 'main'),
     ('review-similar', '/p/default/review', serve_review_similar, '[data-testid="review-similar"]'),
