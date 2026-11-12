@@ -10,7 +10,12 @@ import pytest
 
 from curation.bakeoff_harness._helpers import _BOX, _det, _mc_dataset
 from scripts.curation.bakeoff import class_map, metrics, scoring
-from scripts.curation.bakeoff.backends.yolo_post import decode_yolo26_e2e, decode_yolo_v11, nms
+from scripts.curation.bakeoff.backends.yolo_post import (
+    decode_output,
+    decode_yolo26_e2e,
+    decode_yolo_v11,
+    nms,
+)
 from scripts.curation.bakeoff.dataset import YoloTestSet
 
 
@@ -269,3 +274,38 @@ def test_unmapped_model_class_counted(tmp_path: Path) -> None:
     assert cov['predictions_outside_scored_classes'] == 1
     assert blocks['overall']['fp'] == 0  # unmapped/outside predictions are not scored
     assert blocks['overall']['map_50'] == pytest.approx(1.0)
+
+
+# --- decode_output: the shared tail of every raw-tensor backend ---------------------
+
+
+def _decode_kwargs() -> dict:
+    return {
+        'scale': 1.0,
+        'pad': (0, 0),
+        'imgsz': 100,
+        'conf': 0.25,
+        'iou': 0.5,
+        'coords_normalized': False,
+        'class_names': None,
+    }
+
+
+def test_decode_output_nms_free_head_keeps_every_confident_row() -> None:
+    head = np.array([[[10, 10, 50, 50, 0.9, 3], [12, 12, 52, 52, 0.8, 3], [0, 0, 1, 1, 0.1, 0]]])
+    got = decode_output(head.astype(np.float32), **_decode_kwargs())
+    # no NMS on the YOLO26 head: the two overlapping same-class rows both stay
+    assert [d.class_id for d in got] == [3, 3]
+    assert [d.score for d in got] == pytest.approx([0.9, 0.8])
+
+
+def test_decode_output_grid_head_runs_nms() -> None:
+    # [1, 4 + 2, 3] grid: two overlapping class-0 anchors and one class-1 anchor
+    grid = np.zeros((1, 6, 3), dtype=np.float32)
+    grid[0, :4, 0] = [30, 30, 40, 40]
+    grid[0, :4, 1] = [31, 31, 40, 40]
+    grid[0, :4, 2] = [80, 80, 10, 10]
+    grid[0, 4, 0], grid[0, 4, 1], grid[0, 5, 2] = 0.9, 0.8, 0.7
+    got = decode_output(grid, **{**_decode_kwargs(), 'class_names': {0: 'a', 1: 'b'}})
+    assert sorted(d.class_id for d in got) == [0, 1]
+    assert len(got) == 2

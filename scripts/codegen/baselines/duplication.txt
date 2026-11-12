@@ -15,7 +15,6 @@ frontend/src/routes/p/[project]/settings/open-vocab/[name]/+page.svelte <-> fron
 frontend/src/routes/p/[project]/settings/prompt-packs/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/+page.svelte	45	baseline at introduction; extract a shared helper to shrink
 scripts/codegen/check_cited_paths.py <-> scripts/codegen/check_process_ids.py	20	baseline at introduction; extract a shared helper to shrink
 scripts/codegen/check_cited_paths.py <-> scripts/codegen/check_process_state.py	14	baseline at introduction; extract a shared helper to shrink
-scripts/curation/bakeoff/backends/coreml.py <-> scripts/curation/bakeoff/backends/onnxruntime_ort.py	23	baseline at introduction; extract a shared helper to shrink
 scripts/datasets/fetch_face_proxy.py <-> scripts/datasets/fetch_vehicle_proxy.py	17	baseline at introduction; extract a shared helper to shrink
 scripts/research/cluster_diag/class_prior_run.py <-> scripts/research/cluster_diag/y_run.py	16	baseline at introduction; extract a shared helper to shrink
 scripts/research/gpu_pipeline/pr0_stage_split.py <-> scripts/research/gpu_pipeline/pr2_resize_ops.py	15	baseline at introduction; extract a shared helper to shrink
