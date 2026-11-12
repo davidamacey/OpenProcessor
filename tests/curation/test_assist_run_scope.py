@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from curation.query_fakes import QueryFakeOpenSearch
+from src.config import IndexRole, index_name
 from src.config.curation_accessors import base_curation_config
 from src.core.exceptions import RequestRejectedError
 from src.domain.assist_sampling import MAX_ASSIST_ITEMS
@@ -16,6 +17,12 @@ from src.services.curation.assist.scope import membership_digest, membership_ove
 
 
 ITEMS = base_curation_config().items_index
+
+
+def base_images_index() -> str:
+    return index_name(base_curation_config(), IndexRole.IMAGES)
+
+
 CLUSTER = '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11'
 OTHER = '0c9a9f5e-3b7d-4a6f-8f0e-5d1b2c3d4e5f'
 
@@ -143,20 +150,48 @@ def test_an_empty_filter_is_refused() -> None:
     assert info.value.detail['error'] == 'invalid_request'
 
 
-@pytest.mark.parametrize(
-    'predicate',
-    [
-        {'has_location': True},
-        {'geo_bbox': {'west': 0, 'south': 0, 'east': 5, 'north': 5}},
-        {'near_dup_group': '00000000-0000-0000-0000-000000000001'},
-    ],
-)
-def test_a_filter_target_with_an_image_predicate_is_refused_up_front(
-    predicate: dict[str, Any],
-) -> None:
-    with pytest.raises(RequestRejectedError) as info:
-        validate_request(_request({'kind': 'filter', 'filter': predicate}))
-    assert (info.value.status_code, info.value.detail['error']) == (422, 'invalid_request')
+def _located_world() -> QueryFakeOpenSearch:
+    images = {
+        'img-a00': {'image_id': 'img-a00', 'capture.location': {'lat': 1, 'lon': 2}},
+        'img-a01': {'image_id': 'img-a01', 'capture.location': {'lat': 1.5, 'lon': 2.5}},
+        'img-a02': {'image_id': 'img-a02', 'capture.location': {'lat': 40, 'lon': 90}},
+        'img-b00': {'image_id': 'img-b00'},
+    }
+    return QueryFakeOpenSearch({ITEMS: _world().docs(ITEMS), base_images_index(): images})
+
+
+@pytest.fixture
+def store_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def policy() -> str:
+        return 'store'
+
+    monkeypatch.setattr('src.services.curation.image_join.get_location_policy', policy)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('store_policy')
+async def test_a_map_area_scope_resolves_its_image_join() -> None:
+    box = {'west': 0, 'south': 0, 'east': 5, 'north': 5}
+    request = _request({'kind': 'filter', 'filter': {'geo_bbox': box}})
+    validate_request(request)
+    scope = await resolve_scope(_located_world(), request)
+    assert sorted(scope.sampled_ids) == ['a00', 'a01']
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('store_policy')
+async def test_a_located_scope_resolves_its_image_join() -> None:
+    request = _request({'kind': 'filter', 'filter': {'has_location': True}})
+    scope = await resolve_scope(_located_world(), request)
+    assert sorted(scope.sampled_ids) == ['a00', 'a01', 'a02']
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('store_policy')
+async def test_a_truncated_image_join_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr('src.services.curation.image_join.JOIN_MAX_IMAGES', 2)
+    request = _request({'kind': 'filter', 'filter': {'has_location': True}})
+    assert await _code(resolve_scope(_located_world(), request)) == (422, 'assist_too_large')
 
 
 def test_a_size_without_a_representative_sample_is_refused() -> None:
