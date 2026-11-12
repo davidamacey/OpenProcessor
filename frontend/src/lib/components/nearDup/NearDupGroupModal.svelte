@@ -5,6 +5,8 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import Modal from '$components/Modal.svelte';
   import NearDupThumb from '$lib/components/nearDup/NearDupThumb.svelte';
   import { createNearDupGroupController } from '$lib/nearDup/nearDupGroupController.svelte';
@@ -57,6 +59,15 @@
       {group.purpose === 'dedup' ? 'Duplicate group' : 'Leak group'}, {group.size} members
     </h2>
     <span class="grow"></span>
+    <a
+      class="btn-sm"
+      data-testid="near-dup-open-workspace"
+      href={resolve(
+        projectHref(
+          `/workspace?view=gallery&scope=${encodeURIComponent(`near_dup:${group.group_id}`)}`,
+        ),
+      )}>Open in Workspace</a
+    >
     <button type="button" class="btn-sm" onclick={onclose}>Close</button>
   </header>
 

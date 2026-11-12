@@ -242,7 +242,7 @@ def _stub_audit(stub):
 
 def test_audit_page_renders_the_served_report_and_links_the_queue(stub, page, app_url):
     _stub_audit(stub)
-    page.goto(f'{app_url}/p/default/audit')
+    page.goto(f'{app_url}/p/default/quality/audit')
     expect(page.get_by_test_id('audit-audited')).to_have_text('52', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('audit-pending')).to_have_text('31')
     rows = page.get_by_test_id('audit-detector').get_by_test_id('audit-class-row')
@@ -280,7 +280,7 @@ def test_audit_draw_sends_only_the_typed_values_and_shows_the_strata(stub, page,
             ],
         },
     )
-    page.goto(f'{app_url}/p/default/audit')
+    page.goto(f'{app_url}/p/default/quality/audit')
     page.get_by_test_id('audit-start').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('audit-sample-size').fill('120')
     page.get_by_test_id('audit-start-button').click()
@@ -309,7 +309,7 @@ def test_audit_draw_refusal_is_shown_as_served(stub, page, app_url):
             },
         ),
     )
-    page.goto(f'{app_url}/p/default/audit')
+    page.goto(f'{app_url}/p/default/quality/audit')
     page.get_by_test_id('audit-start').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('audit-start-button').click()
     expect(page.get_by_test_id('audit-start-error')).to_contain_text(
@@ -317,11 +317,11 @@ def test_audit_draw_refusal_is_shown_as_served(stub, page, app_url):
     )
 
 
-def test_audit_is_in_the_primary_nav(stub, page, app_url):
+def test_quality_is_in_the_primary_nav(stub, page, app_url):
     _stub_audit(stub)
-    page.goto(f'{app_url}/p/default/audit')
+    page.goto(f'{app_url}/p/default/quality/audit')
     nav = page.get_by_test_id('primary-nav')
-    expect(nav.get_by_role('link', name='Audit')).to_have_attribute(
+    expect(nav.get_by_role('link', name='Quality')).to_have_attribute(
         'aria-current', 'page', timeout=ACTION_TIMEOUT_MS
     )
 

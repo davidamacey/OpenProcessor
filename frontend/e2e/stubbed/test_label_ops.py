@@ -143,12 +143,12 @@ def serve(stub, ops=None, queries=None):
 
 
 def _open_history(page, app_url):
-    page.goto(f'{app_url}/p/default/label-ops')
+    page.goto(f'{app_url}/p/default/quality/history')
     expect(page.get_by_test_id('label-op-row')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('label-op-row').first).to_contain_text('UTC · by Human')
     expect(page.get_by_test_id('label-ops-end')).to_be_visible()
     if page.viewport_size['width'] >= 640:
-        expect(page.get_by_test_id('breadcrumb')).to_contain_text('Label ops')
+        expect(page.get_by_test_id('breadcrumb')).to_contain_text('quality')
 
 
 def test_history_list_dry_run_then_confirm(stub, page, app_url):
@@ -246,7 +246,7 @@ def test_served_refusal_is_shown_verbatim(stub, page, app_url):
 
 def test_empty_and_error_states(stub, page, app_url):
     serve(stub, ops=[])
-    page.goto(f'{app_url}/p/default/label-ops')
+    page.goto(f'{app_url}/p/default/quality/history')
     expect(page.get_by_test_id('label-ops-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     stub.on('GET', r'/label_ops(\?|$)', (500, {'detail': 'index unavailable'}))
@@ -265,7 +265,7 @@ def test_load_older_pages_to_the_end(stub, page, app_url):
     ):
         queries.clear()
         page.set_viewport_size(size)
-        page.goto(f'{app_url}/p/default/label-ops')
+        page.goto(f'{app_url}/p/default/quality/history')
         rows = page.get_by_test_id('label-op-row')
         expect(rows).to_have_count(20, timeout=ACTION_TIMEOUT_MS)
         expect(page.get_by_test_id('label-ops-end')).to_have_count(0)
@@ -289,7 +289,7 @@ def test_load_older_pages_to_the_end(stub, page, app_url):
 def test_load_older_failure_is_shown_and_retries(stub, page, app_url):
     rows = many_ops(25)
     serve(stub, ops=rows)
-    page.goto(f'{app_url}/p/default/label-ops')
+    page.goto(f'{app_url}/p/default/quality/history')
     expect(page.get_by_test_id('label-op-row')).to_have_count(20, timeout=ACTION_TIMEOUT_MS)
 
     stub.on('GET', r'/label_ops(\?|$)', (500, {'detail': 'index unavailable'}))

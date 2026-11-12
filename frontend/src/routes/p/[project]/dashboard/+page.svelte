@@ -27,6 +27,9 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
+  import NextStepsCard from '$lib/components/NextStepsCard.svelte';
+  import { nextStepsStore } from '$stores/nextSteps.svelte';
+  import { projectsStore } from '$stores/projects.svelte';
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
@@ -47,6 +50,10 @@
 
   $effect(() => {
     keyboardStore.setScope('dashboard');
+  });
+
+  $effect(() => {
+    void nextStepsStore.init();
   });
 
   // ---- Class balance + recent labels (from the legacy `/` page) --------
@@ -153,6 +160,14 @@
         >{apiBase || (typeof window !== 'undefined' ? window.location.host : '')}</code
       >.
     </div>
+  {/if}
+
+  {#if nextStepsStore.steps.length > 0 && projectsStore.current}
+    <NextStepsCard
+      steps={nextStepsStore.steps}
+      next={nextStepsStore.next}
+      slug={projectsStore.current.slug}
+    />
   {/if}
 
   <!-- Quick actions -->

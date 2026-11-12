@@ -14,6 +14,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Added
 
 - **Table view.** Detections or images as rows with chosen columns, a server-side sort by header click, cursor paging and a column choice kept in the page address, on `GET /table` and `GET /table/columns`.
+- **Quality page.** Accuracy audit, near-duplicates and label history are tabs of `/quality` (`/quality/audit`, `/quality/near-duplicates`, `/quality/history`); the `/audit`, `/near-duplicates` and `/label-ops` pages are gone and the top bar has one Quality entry.
+- **Next steps.** The Dashboard and the empty Workspace show the served curation loop (`GET /next_steps`), and a near-duplicate group opens in the Workspace.
 - **Locate a crop.** `GET /crops/locate?crop_id=` takes the same filter and sort as `GET /crops` and answers where the crop sits (`index`, `total`) with the cursors that load a page starting at it (`cursor_before`) or right after it (`cursor_after`), or why it is not in the list (`not_found`, `filtered_out`).
 - **VLM providers.** A VLM endpoint names its `provider` (`vllm`, `ollama`, `anthropic`, `openai_compatible`), which sets the defaults for `json_mode` and the new `temperature` (override either) and the headers sent; the `env` endpoint reads `OP_VLM_PROVIDER`, `OP_VLM_JSON_MODE` and `OP_VLM_TEMPERATURE`. The probe sends the endpoint's own parameters. A provider answering HTTP 4xx is no longer retried or reported as `vlm_unreachable`: `vlm_label_batch` and `vlm_verify_region_batch` end `failed` with `error_code` `vlm_request_rejected` naming the endpoint, status and provider message.
 

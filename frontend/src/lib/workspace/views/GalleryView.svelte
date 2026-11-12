@@ -7,6 +7,7 @@
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
   import SortSelect from '$components/workspace/SortSelect.svelte';
+  import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
   import ImageGrid from '$components/images/ImageGrid.svelte';
   import { createImageGalleryController } from '$lib/images/imageGalleryController.svelte';
@@ -105,6 +106,9 @@
         {gallery.cards.length} / {gallery.total}
       </p>
     </ViewState>
+    {#if gallery.status === 'empty'}
+      <EmptyNextSteps />
+    {/if}
   </div>
 </div>
 

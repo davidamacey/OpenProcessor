@@ -67,7 +67,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/workspace?view=review&queue=disagreements', "[data-testid='queue-counter']"),
     ('/workspace?view=review&queue=audit', "[data-testid='queue-counter']"),
     ('/workspace?view=review&queue=regions', "[data-testid='queue-counter']"),
-    ('/audit', 'h1'),
+    ('/quality/audit', 'h1'),
     ('/classes', 'h1'),
     ('/export', 'h1'),
     ('/models', 'h1'),
