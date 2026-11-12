@@ -73,20 +73,20 @@ describe('DQ-M8: the detector score is labeled for what it is next to a VLM-sour
   });
 });
 
-describe('dq-queues cutover (2026-09-24): class_confidence / vlm_raw_class / vlm_class_empty_reason', () => {
+describe("dq-queues cutover (2026-09-24): class_confidence / vlm_raw_class / vlm_class_empty_reason (the crop dialog; embedded beside the Review pane they are the pane's rows)", () => {
   it('renders a "Label confidence" row gated on class_confidence != null, with the source prefix', () => {
-    expect(src).toMatch(/\{#if crop\.class_confidence != null\}/);
+    expect(src).toMatch(/\{#if !embedded && crop\.class_confidence != null\}/);
     expect(src).toMatch(/Label confidence/);
     expect(src).toMatch(/classConfidenceSourceLabel/);
   });
 
   it("shows the VLM's verbatim class answer when present", () => {
-    expect(src).toMatch(/\{#if crop\.vlm_raw_class\}/);
+    expect(src).toMatch(/\{#if !embedded && crop\.vlm_raw_class\}/);
     expect(src).toMatch(/VLM said/);
   });
 
   it('shows vlm_class_empty_reason when set', () => {
-    expect(src).toMatch(/\{#if crop\.vlm_class_empty_reason\}/);
+    expect(src).toMatch(/\{#if !embedded && crop\.vlm_class_empty_reason\}/);
     expect(src).toMatch(/VLM empty reason/);
   });
 });
