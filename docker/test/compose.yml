@@ -34,10 +34,14 @@ x-process-env: &process-env
   # ''), NOT OPENSEARCH_HOSTS — that one is the dashboards variable.
   OPENSEARCH_URL: http://opensearch:9200
   # The API refuses to start without a live Triton (no degraded mode), so
-  # fake-triton answers liveness and readiness, and serves the four
+  # fake-triton answers liveness and readiness, and serves the
   # deterministic models of fake_triton.py; every other inference call stays
   # unimplemented, so a path that needs another model still fails loudly.
   TRITON_URL: fake-triton:8001
+  # A training promote writes its model here and asks fake-triton (which mounts the same directory
+  # read-only) to load it, so the promote success path runs without a GPU.
+  OP_TRITON_MODEL_REPO: /verify-data/triton_models
+  OP_TRITON_HTTP_URL: http://fake-triton:8000
   # Serve byte-identical paths to what an existing labeler frontend
   # already calls, so it can be pointed at the harness without a
   # rebuild. Every curation router builds its prefix at module
@@ -97,7 +101,7 @@ services:
       - sh
       - -c
       - |
-        mkdir -p /verify-data/state /verify-data/source /verify-data/secrets/postgres /verify-data/secrets/valkey
+        mkdir -p /verify-data/triton_models /verify-data/state /verify-data/source /verify-data/secrets/postgres /verify-data/secrets/valkey
         for n in super owner app; do printf 'verify-%s-password' "$$n" > /verify-data/secrets/postgres/$${n}_password; done
         printf 'verify-queue-password' > /verify-data/secrets/valkey/password
         printf 'requirepass verify-queue-password\n' > /verify-data/secrets/valkey/valkey.conf
@@ -210,6 +214,7 @@ services:
     command: ["python", "-u", "/fake/fake_triton.py"]
     volumes:
       - ./fake_triton.py:/fake/fake_triton.py:ro
+      - ./verify-data/triton_models:/triton-models:ro
     healthcheck:
       test:
         - CMD
@@ -402,6 +407,7 @@ services:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes:
       - ./fake_trainer.py:/opt/fake_trainer/fake_trainer.py:ro
+      - ./fake_onnx.py:/opt/fake_trainer/fake_onnx.py:ro
       - ../../src:/app/src:ro
       - ./verify-data:/verify-data
       - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro

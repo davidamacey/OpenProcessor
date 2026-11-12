@@ -35,7 +35,7 @@ ordinary `pytest tests/` never touches any of this.
 | `opensearch` | 14702 | OpenSearch 3.6, single node, 512 MB heap |
 | `api` | 14701 | this repo's API image, `--workers=1` |
 | `fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
-| `fake-triton` | — | answers Triton's liveness and readiness (the API refuses to start without a live Triton), lists its models in the repository index, and serves four deterministic models over gRPC: the fused detector `yolov11_small_trt_end2end` (one box per picture), `pe_image_encoder` (a vector from the picture's coarse colour layout), `pe_text_encoder` (a vector from the token ids) and `ocr_pipeline` (one fixed line, `FAKE-PLATE-0042`); every other model call is unimplemented (`docker/test/fake_triton.py`) |
+| `fake-triton` | — | answers Triton's liveness and readiness (the API refuses to start without a live Triton), lists its models in the repository index, and serves deterministic models over gRPC (KServe v2 protocol, tensor names and shapes from `models/<name>/config.pbtxt`): the fused detector `yolov11_small_trt_end2end` (one box per picture), `pe_image_encoder` (a vector from the picture's coarse colour layout), `pe_text_encoder` (a vector from the token ids), `scrfd_10g_bnkps` (one face with five landmarks), `arcface_w600k_r50` (a 512-d vector from the aligned crop), `mobileclip2_s2_image_encoder` and `mobileclip2_s2_text_encoder` (512-d) and `ocr_pipeline` (one fixed line, `FAKE-PLATE-0042`). A model a promote wrote under `verify-data/triton_models` is listed once loaded and answers like the detector, over gRPC and the HTTP infer call of the promote warm-up. Every other model call is unimplemented (`docker/test/fake_triton.py`) |
 | `jobs-worker`, `periodic-worker`, `jobs-beat` | — | the Celery consumers and the one beat (same image, mounts and environment as the API); scale with `--scale jobs-worker=2` |
 | `assist-loop-worker` | — | the `assist_loop` queue consumer |
 | `trainer` | — | the fake `gpu_train` consumer (`fake_trainer.py`) |
@@ -85,7 +85,9 @@ verdict lands in OpenSearch under the documented field names.
 `fake_trainer.py` is a real `gpu_train` queue consumer (the production worker shape from
 `src/tasks/runtime`) whose fit is three fake epochs: it claims the `train` job, reports progress
 per epoch, honours a cancel request at the next epoch boundary, and stores a run log under the run's
-artifact prefix and a manifest in `training_runs`. It never touches a GPU or loads a model.
+artifact prefix and a manifest in `training_runs`. A finished run also gets `best.pt` and a tiny
+valid `best.onnx` (`fake_onnx.py`, the NMS-free `[N, 300, 6]` head) under `verify-data/fake_runs`,
+so a promote reaches its success path. It never touches a GPU or loads a real model.
 
 ## Explicitly NOT verifiable here (needs a GPU / Triton)
 
