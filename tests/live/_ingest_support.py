@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image, ImageDraw
 
-from .conftest import API_PREFIX, VERIFY_DATA_DIR, create_project, wait_until
+from .conftest import API_PREFIX, VERIFY_DATA_DIR, create_project, request_when_free, wait_until
 
 
 if TYPE_CHECKING:
@@ -86,7 +86,13 @@ def ingest_project(api: Any, opensearch: Any, stem: str) -> Iterator[IngestProje
             else:
                 path.rmdir()
         project.host_dir.rmdir()
-        deleted = api.delete(f'{API_PREFIX}/projects/{slug}', params={'confirm': slug})
+        # A force-removed detection worker stays a running job until its liveness lapses; the
+        # served project_busy answer says to retry.
+        deleted = request_when_free(
+            lambda: api.delete(f'{API_PREFIX}/projects/{slug}', params={'confirm': slug}),
+            busy='project_busy',
+            timeout=90.0,
+        )
         assert deleted.status_code == 202, deleted.text
 
 
