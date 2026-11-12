@@ -20,7 +20,7 @@ describe('ClusterDetails', () => {
     const el = mountUi(ClusterDetails, { ws: ws(card()), id: 'u1' });
     const name = el.querySelector('[data-testid="cluster-details-name"]')!.textContent!;
     expect(name).toContain('bus');
-    expect(name).toContain("detector's most common class");
+    expect(name).toContain('from the detector');
   });
 
   it('says "not named yet" when the server served no name', () => {

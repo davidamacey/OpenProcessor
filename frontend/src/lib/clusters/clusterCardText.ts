@@ -13,7 +13,7 @@ export function displayNoText(c: { display_no?: number | null }): string {
 
 /** What a cluster's name is, in plain words, when it is not a class name; null when it is. */
 export function displayNameNote(kind: ClusterNameKind): string | null {
-  return kind === 'detector' ? "detector's most common class" : null;
+  return kind === 'detector' ? 'from the detector' : null;
 }
 
 function pct(v: number): string {

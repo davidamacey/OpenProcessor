@@ -186,7 +186,7 @@ def test_cluster_cards_show_the_served_name(stub, page, app_url):
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
     name = page.get_by_test_id('cluster-name')
     expect(name).to_have_text('bus', timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_text("detector's most common class")).to_be_visible()
+    expect(page.get_by_text('from the detector')).to_be_visible()
     expect(page.get_by_test_id('cluster-near-dups')).to_have_text('2 duplicate groups')
     expect(page.get_by_text('needs label')).to_have_count(1)
     shot(page, 'clusters-names', widths=(1600, 430))

@@ -57,7 +57,7 @@ describe('ClusterGridCard name', () => {
   it("shows the served detector name and says in words that it is the detector's", () => {
     const el = render({ display_name: 'bus', display_name_kind: 'detector' });
     expect(name(el)?.textContent).toBe('bus');
-    expect(el.textContent).toContain("detector's most common class");
+    expect(el.textContent).toContain('from the detector');
     expect(el.textContent).not.toContain('needs label');
   });
 

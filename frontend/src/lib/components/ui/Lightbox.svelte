@@ -40,7 +40,7 @@
 <Modal
   {label}
   {onclose}
-  scrim="bg-black/85"
+  scrim="bg-black/95"
   panelClass="flex h-full w-full max-w-[96vw] flex-col"
   data-testid="lightbox"
 >
