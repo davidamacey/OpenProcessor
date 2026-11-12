@@ -4,20 +4,17 @@
    * Everything listed is served; `PackList` follows it. Absent (one line)
    * until the backend serves prompt packs.
    */
-  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import PackActivePanel from '$components/packs/PackActivePanel.svelte';
-  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigRowTail from '$components/config/ConfigRowTail.svelte';
+  import ConfigListDialogs from '$components/config/ConfigListDialogs.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
-  import { formatTimestamp } from '$lib/format/date';
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
-  import type { CloneSource } from '$lib/config/configList.svelte';
+  import { createCloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';
   import { createPackList } from '$lib/packs/packListController.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { PromptPackSummary } from '$lib/types_packs';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
     keyboardStore.setScope('settings');
@@ -31,37 +28,9 @@
     return () => list.stop();
   });
 
-  let cloneFrom = $state<CloneSource | null>(null);
-  let deleting = $state<PromptPackSummary | null>(null);
-
-  function openClone(from: CloneSource): void {
-    list.clearClone();
-    cloneFrom = from;
-  }
-
-  async function doClone(
-    name: string,
-    description: string,
-    fromProject: string | null,
-  ): Promise<void> {
-    if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, name, description, fromProject);
-    if (!doc) return;
-    cloneFrom = null;
-    toastStore.success(`Created ${doc.name}`);
-    await goto(
-      resolve(projectHref(`/settings/prompt-packs/${encodeURIComponent(doc.name)}`)),
-    );
-  }
-
-  async function doDelete(): Promise<void> {
-    const row = deleting;
-    if (!row) return;
-    if (await list.remove(row)) {
-      deleting = null;
-      toastStore.success(`Deleted ${row.name}`);
-    }
-  }
+  const flow = createCloneDeleteFlow<PromptPackSummary>(list, (name) =>
+    projectHref(`/settings/prompt-packs/${encodeURIComponent(name)}`),
+  );
 </script>
 
 <div class="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -138,27 +107,7 @@
                 </td>
                 <td class="py-1.5 pr-3 font-mono text-xs">{p.revision ?? '—'}</td>
                 <td class="py-1.5 pr-3 text-xs text-zinc-300">{p.description ?? ''}</td>
-                <td class="py-1.5 pr-3 text-xs text-zinc-500">
-                  {p.updated_at ? formatTimestamp(p.updated_at) : '—'}
-                </td>
-                <td class="py-1.5 text-right whitespace-nowrap">
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    onclick={() => openClone({ name: p.name, source: null })}
-                    >Clone</button
-                  >
-                  {#if !p.read_only}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      onclick={() => {
-                        list.deleteError = null;
-                        deleting = p;
-                      }}>Delete</button
-                    >
-                  {/if}
-                </td>
+                <ConfigRowTail row={p} {flow} />
               </tr>
             {/each}
           </tbody>
@@ -179,7 +128,7 @@
                 <button
                   type="button"
                   class="btn btn-sm"
-                  onclick={() => openClone({ name: t.name, source: 'template' })}
+                  onclick={() => flow.openClone({ name: t.name, source: 'template' })}
                   >Clone</button
                 >
               </li>
@@ -191,35 +140,8 @@
   </ConfigGate>
 </div>
 
-{#if cloneFrom}
-  <ConfigCloneDialog
-    title="Clone {cloneFrom.name}{cloneFrom.source === 'template' ? ' (template)' : ''}"
-    nameLabel="New pack name"
-    withDescription
-    busy={list.busy}
-    error={list.cloneError}
-    report={list.cloneReport}
-    offerProjects={cloneFrom.source !== 'template'}
-    onconfirm={(name, description, fromProject) =>
-      void doClone(name, description, fromProject)}
-    oncancel={() => (cloneFrom = null)}
-  />
-{/if}
-
-{#if deleting}
-  <ConfirmDialog
-    title="Delete {deleting.name}"
-    confirmLabel="Delete"
-    danger
-    busy={list.busy}
-    onconfirm={() => void doDelete()}
-    oncancel={() => (deleting = null)}
-  >
-    <p>
-      Deletes the pack at revision {deleting.revision}. Its revision history is kept.
-    </p>
-    {#if list.deleteError}<p class="text-red-300" data-testid="delete-error">
-        {list.deleteError}
-      </p>{/if}
-  </ConfirmDialog>
-{/if}
+<ConfigListDialogs {flow} {list} nameLabel="New pack name">
+  {#snippet deleteNote(row)}
+    Deletes the pack at revision {row.revision}. Its revision history is kept.
+  {/snippet}
+</ConfigListDialogs>

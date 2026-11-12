@@ -8,12 +8,12 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ConfigActivePanel from '$components/config/ConfigActivePanel.svelte';
-  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigRowTail from '$components/config/ConfigRowTail.svelte';
+  import ConfigListDialogs from '$components/config/ConfigListDialogs.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
   import OpenVocabRerunPanel from '$components/openVocab/OpenVocabRerunPanel.svelte';
   import SegmenterNotice from '$components/openVocab/SegmenterNotice.svelte';
-  import type { CloneSource } from '$lib/config/configList.svelte';
-  import { formatTimestamp } from '$lib/format/date';
+  import { createCloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';
   import { openVocabAvailability } from '$lib/openVocab/openVocabAvailability.svelte';
   import { OPEN_VOCAB_ACTIVE_COPY } from '$lib/openVocab/openVocabCopy';
   import { createOpenVocabList } from '$lib/openVocab/openVocabListController.svelte';
@@ -34,31 +34,13 @@
     return () => list.stop();
   });
 
-  let cloneFrom = $state<CloneSource | null>(null);
-  let deleting = $state<OpenVocabSummary | null>(null);
   let creating = $state(false);
   let newName = $state('');
 
   const editorPath = (name: string) =>
     projectHref(`/settings/open-vocab/${encodeURIComponent(name)}`);
 
-  function openClone(from: CloneSource): void {
-    list.clearClone();
-    cloneFrom = from;
-  }
-
-  async function doClone(
-    name: string,
-    description: string,
-    fromProject: string | null,
-  ): Promise<void> {
-    if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, name, description, fromProject);
-    if (!doc) return;
-    cloneFrom = null;
-    toastStore.success(`Created ${doc.name}`);
-    await goto(resolve(editorPath(doc.name)));
-  }
+  const flow = createCloneDeleteFlow<OpenVocabSummary>(list, editorPath);
 
   async function doCreate(): Promise<void> {
     const doc = await list.create(newName);
@@ -67,15 +49,6 @@
     newName = '';
     toastStore.success(`Created ${doc.name}`);
     await goto(resolve(editorPath(doc.name)));
-  }
-
-  async function doDelete(): Promise<void> {
-    const row = deleting;
-    if (!row) return;
-    if (await list.remove(row)) {
-      deleting = null;
-      toastStore.success(`Deleted ${row.name}`);
-    }
   }
 </script>
 
@@ -178,28 +151,11 @@
                   {s.n_enabled_targets} enabled of {s.n_targets}
                 </td>
                 <td class="py-1.5 pr-3 text-xs">{s.run_on_ingest ? 'yes' : 'no'}</td>
-                <td class="py-1.5 pr-3 text-xs text-zinc-500">
-                  {s.updated_at ? formatTimestamp(s.updated_at) : '—'}
-                </td>
-                <td class="py-1.5 text-right whitespace-nowrap">
-                  <a class="btn btn-sm" href={resolve(editorPath(s.name))}>Open</a>
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    onclick={() => openClone({ name: s.name, source: null })}
-                    >Clone</button
-                  >
-                  {#if !s.read_only}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      onclick={() => {
-                        list.deleteError = null;
-                        deleting = s;
-                      }}>Delete</button
-                    >
-                  {/if}
-                </td>
+                <ConfigRowTail row={s} {flow}>
+                  {#snippet lead()}
+                    <a class="btn btn-sm" href={resolve(editorPath(s.name))}>Open</a>
+                  {/snippet}
+                </ConfigRowTail>
               </tr>
             {/each}
           </tbody>
@@ -228,7 +184,7 @@
                 <button
                   type="button"
                   class="btn btn-sm"
-                  onclick={() => openClone({ name: t.name, source: 'template' })}
+                  onclick={() => flow.openClone({ name: t.name, source: 'template' })}
                   >Clone</button
                 >
               </li>
@@ -271,36 +227,8 @@
   </ConfirmDialog>
 {/if}
 
-{#if cloneFrom}
-  <ConfigCloneDialog
-    title="Clone {cloneFrom.name}{cloneFrom.source === 'template' ? ' (template)' : ''}"
-    nameLabel="New set name"
-    withDescription
-    busy={list.busy}
-    error={list.cloneError}
-    report={list.cloneReport}
-    offerProjects={cloneFrom.source !== 'template'}
-    onconfirm={(name, description, fromProject) =>
-      void doClone(name, description, fromProject)}
-    oncancel={() => (cloneFrom = null)}
-  />
-{/if}
-
-{#if deleting}
-  <ConfirmDialog
-    title="Delete {deleting.name}"
-    confirmLabel="Delete"
-    danger
-    busy={list.busy}
-    onconfirm={() => void doDelete()}
-    oncancel={() => (deleting = null)}
-  >
-    <p>
-      Deletes the set at revision {deleting.revision}. Items it already found keep their
-      results.
-    </p>
-    {#if list.deleteError}<p class="text-red-300" data-testid="delete-error">
-        {list.deleteError}
-      </p>{/if}
-  </ConfirmDialog>
-{/if}
+<ConfigListDialogs {flow} {list} nameLabel="New set name">
+  {#snippet deleteNote(row)}
+    Deletes the set at revision {row.revision}. Items it already found keep their results.
+  {/snippet}
+</ConfigListDialogs>

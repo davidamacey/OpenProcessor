@@ -1,8 +1,5 @@
 frontend/src/lib/api_cropMap.ts <-> frontend/src/lib/types.ts	21	baseline at introduction; extract a shared helper to shrink
-frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
-frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/[name]/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/[name]/+page.svelte	54	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/[name]/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/[name]/+page.svelte	77	baseline at introduction; extract a shared helper to shrink
-frontend/src/routes/p/[project]/settings/prompt-packs/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/+page.svelte	45	baseline at introduction; extract a shared helper to shrink
 src/services/config_store/ingest_profiles.py <-> src/services/config_store/open_vocab.py	27	baseline at introduction; extract a shared helper to shrink
 src/services/curation/export_single_class_rows.py <-> src/services/curation/export_single_class_rows.py	13	baseline at introduction; extract a shared helper to shrink
