@@ -55,6 +55,7 @@ const CASES: [string, string[]][] = [
       items: true,
       limit: true,
       retention: true,
+      single_retention: true,
       next_after: true,
     }),
   ],

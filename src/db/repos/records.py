@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable, Iterable, Iterator, Sequence
 
+    from sqlalchemy import ColumnElement
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -431,13 +432,14 @@ async def label_operation_members(
     return [LabelOperationMemberLoad(item_id=r.item_id, prior=r.prior) for r in rows]
 
 
-async def prune_label_operations(session: AsyncSession, project_id: uuid.UUID, *, keep: int) -> int:
-    """Delete the oldest operations beyond ``keep``; one writing or undoing is never deleted."""
+async def _prune_group(
+    session: AsyncSession, project_id: uuid.UUID, *, keep: int, group: ColumnElement[bool]
+) -> int:
     ids = list(
         (
             await session.execute(
                 select(LabelOperation.id)
-                .where(LabelOperation.project_id == project_id)
+                .where(LabelOperation.project_id == project_id, group)
                 .order_by(LabelOperation.id.desc())
                 .offset(keep)
             )
@@ -451,6 +453,26 @@ async def prune_label_operations(session: AsyncSession, project_id: uuid.UUID, *
         )
     )
     return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+
+async def prune_label_operations(
+    session: AsyncSession,
+    project_id: uuid.UUID,
+    *,
+    keep: int,
+    single_keep: int,
+    single_writer: str,
+) -> int:
+    """Delete the oldest operations beyond the caps; one writing or undoing is never deleted.
+
+    The operations written by ``single_writer`` (one item each, a person's label) are capped at
+    ``single_keep`` and every other operation at ``keep``, so a run of single labels never
+    evicts a bulk operation."""
+    return await _prune_group(
+        session, project_id, keep=keep, group=LabelOperation.created_by != single_writer
+    ) + await _prune_group(
+        session, project_id, keep=single_keep, group=LabelOperation.created_by == single_writer
+    )
 
 
 async def load_label_operation(

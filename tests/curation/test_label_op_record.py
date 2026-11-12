@@ -126,6 +126,7 @@ def test_label_ops_list_newest_first_counts_and_limits(
     body = env.list_ops().json()
     assert body['limit'] == 20
     assert body['retention'] == store.LABEL_OPS_KEEP == 200
+    assert body['single_retention'] == store.SINGLE_LABEL_OPS_KEEP
     assert [o['op_id'] for o in body['items']] == [third, second, first]
     single, newer, older = body['items']
     assert (single['kind'], single['class_name'], single['selected'], single['current']) == (
@@ -204,6 +205,30 @@ def test_retention_keeps_the_newest_200_and_never_prunes_a_live_op(
     )
     ids = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
     assert ids == sorted(ids, reverse=True)
+
+
+def test_single_writes_never_evict_a_bulk_operation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    env = _env(monkeypatch, tmp_path, n=3)
+    monkeypatch.setattr(store, 'LABEL_OPS_KEEP', 2)
+    monkeypatch.setattr(store, 'SINGLE_LABEL_OPS_KEEP', 3)
+    bulk = [env.label('widget', crop_ids=['c0'])['op_id'] for _ in range(2)]
+    singles = []
+    for _ in range(8):
+        resp = env.client.put(
+            f'{env.prefix}/crops/c1/label', json={'class_id': env.class_ids['gizmo']}
+        )
+        assert resp.status_code == 200, resp.text
+        singles.append(resp.json()['op_id'])
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
+    assert set(bulk) <= set(kept), 'the newest bulk operations survive a run of single labels'
+    assert [i for i in kept if i in singles] == singles[:-4:-1], 'the newest 3 single writes'
+
+    env.label('gadget', crop_ids=['c2'])  # a new bulk op prunes only the bulk group
+    kept = [o['op_id'] for o in env.list_ops(limit=50).json()['items']]
+    assert bulk[0] not in kept
+    assert set(singles[-3:]) <= set(kept)
 
 
 def _ops(env: OpsEnv, n: int) -> list[str]:

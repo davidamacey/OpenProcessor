@@ -84,7 +84,7 @@ Consequences, all deliberate:
 
 | Data | Where | Bound | Retention |
 |---|---|---|---|
-| Op record (`state.json`) | `<project_state_dir>/label_ops/<op_id>/state.json`, written through `FileJob` (`src/services/curation/file_job.py`: atomic temp and rename) | under 4 KB | newest 200 ops per project (`LABEL_OPS_KEEP`), pruned on create; an op that is writing or undoing is never pruned |
+| Op record (`state.json`) | `<project_state_dir>/label_ops/<op_id>/state.json`, written through `FileJob` (`src/services/curation/file_job.py`: atomic temp and rename) | under 4 KB | newest 200 bulk ops per project (`LABEL_OPS_KEEP`) and, counted apart, the newest 1,000 single label writes (`SINGLE_LABEL_OPS_KEEP`), pruned on create; an op that is writing or undoing is never pruned |
 | Members (the ids the op wrote) | `<op dir>/members.json`, written atomically after the bulk write returns | at most `MAX_BULK_SELECTION` = 20,000 ids (about 0.9 MB) for a selection, 5,000 for explicit ids | with the record |
 | Leases | `label_op:<op_id>` (held while the op writes), `label_undo` (held while any undo of the project runs); OpenSearch job leases (`src/clients/job_lease.py`), kept alive by the heartbeat thread | empty files | with the dir |
 | Item tag | new top-level items field `label_op_id` (keyword, indexed) | one keyword | until the next human class write or an undo |

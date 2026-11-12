@@ -66,7 +66,10 @@ export interface CropLabelWritten {
 export interface LabelOpList {
   items: LabelOp[];
   limit: number;
+  /** Bulk operations kept. */
   retention: number;
+  /** Single label writes kept, counted apart from the bulk ones. */
+  single_retention: number;
   next_after: string | null;
 }
 

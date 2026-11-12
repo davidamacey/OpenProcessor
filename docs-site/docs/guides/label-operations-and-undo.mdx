@@ -20,8 +20,10 @@ after a reload, undoes it the same way. Each written item is tagged with `label_
 same `op_id`.
 
 - Records are PostgreSQL rows (an operation plus a member row per item written), written before
-  the first item. The newest 200 per project are kept; one being written or undone is never
-  pruned.
+  the first item. The newest 200 bulk operations per project are kept, and the newest 1,000
+  single label writes are kept apart from them, so a run of single labels never evicts a bulk
+  operation (`retention` and `single_retention` in the list). One being written or undone is
+  never pruned.
 - A crash while writing leaves `interrupted`, while undoing `undo_interrupted`; both can be
   undone again.
 - Operations name the class they wrote, never a class id.

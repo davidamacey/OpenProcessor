@@ -11,6 +11,7 @@ from __future__ import annotations
 from fixtures.contract import fill
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.label_ops import stub_crop_label, stub_label_op_undo
+from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 from test_label_ops import list_page
 from test_review_actions import CLASSES, METHODS, review_item
@@ -81,6 +82,7 @@ def test_single_label_undo_survives_a_reload(stub, page, app_url):
 
     page.reload()
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
     page.keyboard.press('z')
     expect(page.get_by_text('Nothing to undo.').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert undo_calls == [], 'the reloaded page has no client-side undo stack'
