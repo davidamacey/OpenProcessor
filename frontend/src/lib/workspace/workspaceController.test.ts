@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 
-const nav = vi.hoisted(() => ({ goto: vi.fn() }));
+const nav = vi.hoisted(() => ({ goto: vi.fn(), getCrop: vi.fn() }));
 vi.mock('$app/state', async () => await import('$lib/test/pageState.svelte'));
 vi.mock('$app/navigation', () => ({ goto: nav.goto }));
+vi.mock('$lib/api_cropRead', () => ({ getCrop: nav.getCrop }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
 vi.mock('$lib/projectPaths', () => ({ projectHref: (p: string) => `/p/default${p}` }));
 
@@ -204,5 +205,31 @@ describe('WorkspaceController', () => {
     expect(href).not.toContain('mode=');
     expect(href).not.toContain('open_vocab_set');
     expect(href).not.toContain('source_prompt');
+  });
+
+  it('opens the focused image in the editor, keeping the Workspace query', async () => {
+    visit('?view=gallery&class_name=widget&focus=image%3Aimg-7');
+    const c = make();
+    await c.openEditor();
+    expect(lastGoto().href).toBe(
+      '/p/default/images/img-7?view=gallery&class_name=widget&focus=image%3Aimg-7',
+    );
+    expect(nav.getCrop).not.toHaveBeenCalled();
+  });
+
+  it("opens the focused item's image in the editor", async () => {
+    nav.getCrop.mockResolvedValue({ id: 'c9', image_id: 'img-9' });
+    visit('?focus=item%3Ac9');
+    const c = make();
+    await c.openEditor();
+    expect(nav.getCrop).toHaveBeenCalledWith('c9');
+    expect(lastGoto().href).toBe('/p/default/images/img-9?focus=item%3Ac9');
+  });
+
+  it('opens nothing when nothing with an image has focus', async () => {
+    visit('?focus=cluster%3Au1');
+    const c = make();
+    await c.openEditor();
+    expect(nav.goto).not.toHaveBeenCalled();
   });
 });

@@ -101,10 +101,7 @@ describe('locateImage', () => {
       reason: null,
       reason_message: null,
     });
-    const res = await locateImage(
-      { class_name: ['car'], sort: 'taken_at', label_state: 'has_unlabeled' },
-      'img-9',
-    );
+    const res = await locateImage({ class_name: ['car'], sort: 'taken_at' }, 'img-9');
     const [url] = f.mock.calls[0];
     const u = new URL(url, 'http://x');
     expect(u.pathname).toBe(`${API_PREFIX}/images/locate`);

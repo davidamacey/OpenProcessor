@@ -5,6 +5,9 @@
   import { getCrop } from '$lib/api_cropRead';
   import { apiErrorText } from '$lib/api_errors';
   import type { Crop } from '$lib/types';
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import { editorHref } from '$lib/editor/editorUrl';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
   let { id }: { ws: WorkspaceController; id: string | null } = $props();
@@ -30,6 +33,15 @@
 
 <ViewState {status} message={error ?? 'Pick a detection to see its details.'}>
   {#if crop}
+    {#if crop.image_id}
+      <a
+        class="btn mb-3 inline-block"
+        href={resolve(editorHref(crop.image_id, page.url.search))}
+        data-testid="open-editor"
+      >
+        Open in the image editor
+      </a>
+    {/if}
     <CropMetaPanel {crop} onreprocessed={(c) => (crop = c)} />
   {/if}
 </ViewState>

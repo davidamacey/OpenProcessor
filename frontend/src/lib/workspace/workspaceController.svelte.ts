@@ -13,9 +13,12 @@ import { MediaQuery, SvelteURLSearchParams } from 'svelte/reactivity';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
+import { editorHref } from '$lib/editor/editorUrl';
+import { getCrop } from '$lib/api_cropRead';
 import { projectHref } from '$lib/projectPaths';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nextStepsStore } from '$stores/nextSteps.svelte';
+import { buildItemQuery } from './itemQuery';
 import {
   createSelectionSummary,
   type SelectionSummaryState,
@@ -156,6 +159,15 @@ export class WorkspaceController {
     this.#write({ scope }, false);
   }
 
+  /** Opens the focused image, or the focused item's image, in the editor with this query. */
+  async openEditor(): Promise<void> {
+    const focus = this.#url.focus;
+    if (focus?.kind !== 'image' && focus?.kind !== 'item') return;
+    const imageId =
+      focus.kind === 'image' ? focus.id : (await getCrop(focus.id)).image_id;
+    if (imageId) void goto(resolve(editorHref(imageId, page.url.search)));
+  }
+
   /** Opens a cluster in place; the filter and the view stay. */
   openCluster(uid: string | null): void {
     this.setScope(uid ? { kind: 'cluster', id: uid } : null);
@@ -198,13 +210,7 @@ export class WorkspaceController {
   itemQuery(include?: (param: string) => boolean): ItemFilterQuery & {
     review_tab?: string;
   } {
-    const q: ItemFilterQuery & { review_tab?: string } = this.#applied.toQuery(include);
-    const { queue, scope } = this.#url;
-    if (queue) q.review_tab = queue;
-    if (scope?.kind === 'cluster') q.cluster_uid = [scope.id];
-    if (scope?.kind === 'near_dup') q.near_dup_group = scope.id;
-    if (scope?.kind === 'image') q.image_id = [scope.id];
-    return q;
+    return buildItemQuery(this.#applied, this.#url, include);
   }
 
   /** The same combination in `ItemFilter` body form. */

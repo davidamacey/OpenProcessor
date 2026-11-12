@@ -8,7 +8,7 @@
    */
   import { untrack } from 'svelte';
   import BoxLayer from '$components/boxes/BoxLayer.svelte';
-  import type { ImageBox } from '$lib/types';
+  import type { ImageBox } from '$lib/types_images';
   import type { XYXY } from '$lib/annotations/types';
   import {
     isDrawable,

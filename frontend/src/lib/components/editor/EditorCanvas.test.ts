@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { XYXY } from '$lib/annotations/types';
 import { flushSync, mount, unmount } from 'svelte';
 import { imageBox } from '$lib/test/fixtures/imageDetail';
-import type { ImageBox } from '$lib/types';
+import { pointer as rawPointer, stubCanvasLayout } from '$lib/test/canvasLayout';
+import type { ImageBox } from '$lib/types_images';
 import EditorCanvas, { type EditorTool } from './EditorCanvas.svelte';
 
 const W = 800;
@@ -11,33 +12,7 @@ const H = 600;
 let target: HTMLDivElement;
 let instance: Record<string, unknown> | undefined;
 
-function px(el: HTMLElement, name: 'left' | 'top' | 'width' | 'height'): number {
-  return parseFloat(el.style.getPropertyValue(name)) || 0;
-}
-
-beforeEach(() => {
-  // jsdom lays nothing out: the container is 800x600 and a frame is wherever its style puts it.
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(W);
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(H);
-  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
-    this: Element,
-  ) {
-    const el = this as HTMLElement;
-    const framed = el.dataset.testid === 'editor-frame';
-    const [left, top, width, height] = framed
-      ? [px(el, 'left'), px(el, 'top'), px(el, 'width'), px(el, 'height')]
-      : [0, 0, W, H];
-    return {
-      left,
-      top,
-      width,
-      height,
-      right: left + width,
-      bottom: top + height,
-    } as DOMRect;
-  });
-  HTMLElement.prototype.setPointerCapture = () => {};
-});
+beforeEach(() => stubCanvasLayout(W, H));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -94,15 +69,12 @@ const canvasEl = () =>
 const frameEl = () => target.querySelector('[data-testid="editor-frame"]') as HTMLElement;
 
 function pointer(el: Element, type: string, x: number, y: number): void {
-  el.dispatchEvent(
-    Object.assign(new Event(type, { bubbles: true }), {
-      clientX: x,
-      clientY: y,
-      pointerId: 1,
-      button: 0,
-    }),
-  );
+  rawPointer(el, type, x, y);
   flushSync();
+}
+
+function px(el: HTMLElement, name: 'left' | 'top' | 'width' | 'height'): number {
+  return parseFloat(el.style.getPropertyValue(name)) || 0;
 }
 
 describe('EditorCanvas drawing', () => {

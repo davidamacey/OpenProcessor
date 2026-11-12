@@ -11,6 +11,8 @@ import { imageDetail } from '$lib/test/fixtures/imageDetail';
 export const editorApi = {
   createImageItem: vi.fn(),
   getImage: vi.fn(),
+  locateImage: vi.fn(),
+  listImages: vi.fn(),
   patchItemGeometry: vi.fn(),
   undoItemGeometry: vi.fn(),
   excludeCrops: vi.fn(),
@@ -24,6 +26,10 @@ export const editorApi = {
 export const editorImagesModule = () => ({
   createImageItem: editorApi.createImageItem,
   getImage: editorApi.getImage,
+  locateImage: editorApi.locateImage,
+  listImages: editorApi.listImages,
+  getImageFileUrl: (id: string, d: number) => `/files/${id}?d=${d}`,
+  getImageThumbUrl: (id: string) => `/thumbs/${id}`,
 });
 
 export const editorWritesModule = () => ({

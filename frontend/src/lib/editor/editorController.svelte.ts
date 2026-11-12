@@ -7,9 +7,10 @@
 import { apiErrorText } from '$lib/api_errors';
 import { getImage } from '$lib/api_images';
 import { resizeXyxy, translateXyxy } from '$lib/annotations/boxGeometry';
-import type { XYXY } from '$lib/annotations/types';
+import type { SlotSpec, XYXY } from '$lib/annotations/types';
 import type { EditorTool } from '$components/editor/EditorCanvas.svelte';
-import type { BoxTone, Crop, ImageBox, ImageDetailResponse } from '$lib/types';
+import type { BoxTone, Crop } from '$lib/types';
+import type { ImageBox, ImageDetailResponse } from '$lib/types_images';
 import type { RegistryClass } from '$lib/types_classes';
 import type { ImageLocate } from '$lib/types_editor';
 import {
@@ -18,6 +19,7 @@ import {
   deleteCommand,
   drawCommand,
   moveCommand,
+  regionEditCommand,
 } from './editorCommands.svelte';
 
 /** How many images after the current one the filmstrip shows. */
@@ -36,6 +38,8 @@ export interface EditorDeps {
   fetchPage(cursor: string, signal: AbortSignal): Promise<FilmstripPage>;
   /** Open another image, or leave for the Workspace with `null`. */
   navigate(imageId: string | null): void;
+  /** The region slot an item's region boxes belong to; absent or null when the deployment has none. */
+  regionSlot?(item: Crop): SlotSpec | null | undefined;
 }
 
 /** What the class picker is choosing a class for. */
@@ -269,6 +273,13 @@ export function createEditorController(deps: EditorDeps) {
     }
   }
 
+  /** The region editor saved the selected item's boxes: record it for undo and reload. */
+  async function regionsSaved(): Promise<void> {
+    const item = itemFor(selectedCropId);
+    regionsOpen = false;
+    if (item) await stack.record(regionEditCommand(item), deps.imageId);
+  }
+
   function dismissDrop(): void {
     drop = null;
   }
@@ -386,8 +397,14 @@ export function createEditorController(deps: EditorDeps) {
     toggleLabels() {
       labels = !labels;
     },
+    /** The slot the selected item's region editor edits, or null when it has none. */
+    get regionSlot(): SlotSpec | null {
+      const item = itemFor(selectedCropId);
+      return item ? (deps.regionSlot?.(item) ?? null) : null;
+    },
     editRegions() {
-      if (selectedCropId) regionsOpen = !regionsOpen;
+      const item = itemFor(selectedCropId);
+      if (item && deps.regionSlot?.(item)) regionsOpen = !regionsOpen;
     },
     closeRegions() {
       regionsOpen = false;
@@ -401,6 +418,7 @@ export function createEditorController(deps: EditorDeps) {
     move,
     confirmDrop,
     dismissDrop,
+    regionsSaved,
     nudge,
     nudgeFar: (dx: number, dy: number) => nudge(dx * FAR, dy * FAR),
     resizeCorner,

@@ -384,6 +384,40 @@ describe('walking the list', () => {
   });
 });
 
+describe('region editor', () => {
+  it('opens only for an item that has a region slot, and records the save for undo', async () => {
+    const slot = { key: 'objects' } as never;
+    const deps = {
+      imageId: 'img-1',
+      locate: vi.fn().mockResolvedValue(where()),
+      fetchPage: vi.fn().mockResolvedValue({ items: [] }),
+      navigate: vi.fn(),
+      regionSlot: vi.fn().mockReturnValue(slot),
+    };
+    api.getImage.mockResolvedValue(served());
+    const c = createEditorController(deps);
+    await vi.waitFor(() => expect(c.filmstrip).not.toBeNull());
+    c.editRegions();
+    expect(c.regionsOpen).toBe(false);
+    c.select('c1');
+    c.editRegions();
+    expect(c.regionsOpen).toBe(true);
+    expect(c.regionSlot).toBe(slot);
+    await c.regionsSaved();
+    expect(c.regionsOpen).toBe(false);
+    expect(c.stack.canUndo).toBe(true);
+    await c.undo();
+    expect(api.undoCropRegion).toHaveBeenCalledWith('c1');
+  });
+
+  it('does not open when the deployment has no region slot', async () => {
+    const { c } = await setup();
+    c.select('c1');
+    c.editRegions();
+    expect(c.regionsOpen).toBe(false);
+  });
+});
+
 describe('view state', () => {
   it('toggles the labels and switches tools', async () => {
     const { c } = await setup();

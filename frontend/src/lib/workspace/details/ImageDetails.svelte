@@ -2,7 +2,7 @@
   /** The focused image: its facts, its served counts and a way into the editor. */
   import { resolve } from '$app/paths';
   import ViewState from '$components/state/ViewState.svelte';
-  import { getImage } from '$lib/api_cropRead';
+  import { getImage } from '$lib/api_images';
   import { apiErrorText } from '$lib/api_errors';
   import { formatTimestamp } from '$lib/format/date';
   import { projectHref } from '$lib/projectPaths';

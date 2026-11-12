@@ -57,6 +57,11 @@
       ),
       keyboardStore.registerAction('workspace.escape', escape, 'workspace'),
       keyboardStore.registerAction(
+        'workspace.open_editor',
+        () => ws.openEditor(),
+        'workspace',
+      ),
+      keyboardStore.registerAction(
         'workspace.class_picker',
         () => {
           if (ws.selection.kind !== 'none') ws.pickerOpen = true;

@@ -20,7 +20,7 @@ const {
   deleteCommand,
   drawCommand,
   moveCommand,
-  regionCommand,
+  regionEditCommand,
 } = await import('./editorCommands.svelte');
 
 const item = editorItem();
@@ -81,13 +81,12 @@ describe("each command's revert inverts apply", () => {
     expect(api.undoCropLabel).toHaveBeenCalledWith('c1');
   });
 
-  it('region: replaces the region boxes, then undoes the region write', async () => {
-    const boxes = [{ box_id: null, bbox_norm: BOX }];
-    const cmd = regionCommand(item, boxes);
-    await cmd.apply();
-    expect(api.putRegionBoxes).toHaveBeenCalledWith('c1', boxes);
+  it('region edit: undo is the region undo, and it cannot be redone', async () => {
+    const cmd = regionEditCommand(item);
     await cmd.revert();
     expect(api.undoCropRegion).toHaveBeenCalledWith('c1');
+    expect(cmd.redoable).toBe(false);
+    expect((await cmd.apply()).ok).toBe(false);
   });
 
   it('every successful write returns the served image', async () => {
@@ -148,6 +147,17 @@ describe('CommandStack', () => {
       bbox_norm: BOX,
       expected_geometry_revision: 4,
     });
+  });
+
+  it('records a write made elsewhere so it can be undone, but never offers a redo', async () => {
+    const { s, hooks } = stack();
+    await s.record(regionEditCommand(item), 'img-1');
+    expect(s.canUndo).toBe(true);
+    expect(hooks.onImage).toHaveBeenCalledOnce();
+    await s.undo();
+    expect(api.undoCropRegion).toHaveBeenCalledWith('c1');
+    expect(s.canUndo).toBe(false);
+    expect(s.canRedo).toBe(false);
   });
 
   it('a new write clears the redo list', async () => {

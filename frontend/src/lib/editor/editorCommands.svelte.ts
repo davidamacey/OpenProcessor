@@ -15,10 +15,9 @@ import {
 } from '$lib/api_cropWrites';
 import { apiErrorText, ApiError } from '$lib/api_errors';
 import { createImageItem, getImage } from '$lib/api_images';
-import { putRegionBoxes } from '$lib/api_regionBoxes';
-import type { RegionBoxInput } from '$lib/annotations/multiBox';
 import type { XYXY } from '$lib/annotations/types';
-import type { Crop, ImageDetailResponse } from '$lib/types';
+import type { Crop } from '$lib/types';
+import type { ImageDetailResponse } from '$lib/types_images';
 import type { RegistryClass } from '$lib/types_classes';
 import { newUuid } from '$lib/uuid';
 
@@ -38,6 +37,8 @@ export interface EditorCommand {
   label: string;
   apply(): Promise<CommandResult>;
   revert(): Promise<CommandResult>;
+  /** False when an undone command has no forward write to replay. Default true. */
+  redoable?: boolean;
 }
 
 function failure(e: unknown): CommandResult {
@@ -163,14 +164,21 @@ export function classCommand(item: Crop, cls: RegistryClass): EditorCommand {
   };
 }
 
-/** A replacement of one item's region boxes. */
-export function regionCommand(item: Crop, boxes: RegionBoxInput[]): EditorCommand {
+/**
+ * A region-box edit the region editor already wrote. The stack records it so Undo reaches it
+ * (the server's region undo restores the whole earlier list); there is no inverse of the undo to
+ * replay, so it cannot be redone.
+ */
+export function regionEditCommand(item: Crop): EditorCommand {
   const imageId = item.image_id ?? '';
   return {
     label: 'Edit region boxes',
+    redoable: false,
     apply: () =>
-      settle(imageId, async () => {
-        await putRegionBoxes(item.id, boxes);
+      Promise.resolve({
+        ok: false,
+        message: 'A region edit cannot be redone; edit the boxes again.',
+        conflict: false,
       }),
     revert: () =>
       settle(imageId, async () => {
@@ -232,12 +240,21 @@ export class CommandStack {
     });
   }
 
+  /** Adds a command whose forward write already happened elsewhere; the image is reloaded. */
+  record(cmd: EditorCommand, imageId: string): Promise<void> {
+    return this.#enqueue(async () => {
+      this.#done = [...this.#done, cmd];
+      this.#undone = [];
+      this.#settle(await settle(imageId, async () => {}));
+    });
+  }
+
   undo(): Promise<void> {
     return this.#enqueue(async () => {
       const cmd = this.#done.at(-1);
       if (!cmd) return;
       const r = await cmd.revert();
-      if (r.ok) this.#undone = [...this.#undone, cmd];
+      if (r.ok && cmd.redoable !== false) this.#undone = [...this.#undone, cmd];
       if (r.ok || r.conflict) this.#done = this.#done.slice(0, -1);
       this.#settle(r);
     });
