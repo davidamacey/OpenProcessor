@@ -69,3 +69,14 @@ def test_a_stale_entry_fails_and_tighten_drops_it(scratch_repo: ScratchRepo, bas
     assert run(scratch_repo, base) == 1
     assert run(scratch_repo, base, '--tighten') == 0
     assert base.read_text() == ''
+
+
+def test_the_committed_baseline_matches_the_tree() -> None:
+    """The hook passes on the real tree in both modes, so ``--all-files`` and a staged run agree."""
+    assert guard.main([]) == 0
+    files = [
+        f'frontend/{p.relative_to(guard.REPO_ROOT / "frontend").as_posix()}'
+        for p in sorted((guard.REPO_ROOT / 'frontend' / 'src').rglob('*'))
+        if p.suffix in {'.js', '.ts', '.svelte'}
+    ]
+    assert guard.main(files) == 0
