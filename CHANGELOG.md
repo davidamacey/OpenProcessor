@@ -53,6 +53,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Class counts agree with the class list.** A class name filter (`class_names`, `exclude_class_names`) matched an item's detector proposal name even after the item was labelled another class, so a class's list was longer than its `GET /classes` count (person 444 against 432). The proposal now names an item only while it has no class.
 - **Image editor: held arrow keys.** Moves queued before the first answer was back all sent the item's old geometry revision (a `409`) and moved from the old box; each move now takes the revision and box the commands ahead of it left.
 - **Class picker accepts a typed name.** `POST /classes` stores a display name such as "Traffic light" under its registry slug (`traffic_light`, the same rule ingest by name uses) and answers that `class_name`; a name with no letter or digit is still `422 invalid_class_name`. The `suggested_name` field of that error is removed.
 - **The Anthropic `env` endpoint probes and labels.** With `OP_VLM_PROVIDER` unset, an `OP_VLM_URL` on `api.anthropic.com` is now the `anthropic` provider (it was `vllm`, so no `anthropic-version` header was sent and `/models` answered 400); an explicit `OP_VLM_PROVIDER` still wins.
