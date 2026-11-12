@@ -97,11 +97,13 @@ async def recorded_relabel(
     *,
     op: NewLabelOp,
     merger_for: Callable[[str], Merger],
-    job_id: uuid.UUID,
+    job_id: uuid.UUID | None,
 ) -> dict[str, Any]:
-    """Write ``ids`` as one recorded operation inside a job that is already running (the
-    auto-label loop), owned by ``job_id``: the batch relabel response plus ``op_id``.
-    ``merger_for(op_id)`` builds the merge body that tags each item with the operation."""
+    """Write ``ids`` as one recorded operation in this call: inside a job that is already
+    running (the auto-label loop), owned by ``job_id``, or, with ``job_id=None``, as a
+    synchronous request write (the single label) that no job owns. Returns the batch relabel
+    response plus ``op_id``. ``merger_for(op_id)`` builds the merge body that tags each item
+    with the operation."""
     async with async_session_factory()() as session, project_tx(session, current_project_id()):
         op_id = await new_label_operation_id(session)
         record = await create_op_in(session, op, op_id, job_id)

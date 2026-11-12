@@ -7,69 +7,91 @@ from typing import Any
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from src.clients.occ import OCCFinalConflictError, occ_update_one
+from src.clients.curation_opensearch.crops import mget_crops
+from src.clients.occ import OCCFinalConflictError
 from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.db.session import project_tx
+from src.domain.history import HUMAN_LABEL_WRITER
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegistryDep, get_class_registry, router
 from src.routers.curation._crop_write_models import (
     CropBatchLabelRequest,
     CropFlagNewClassRequest,
     CropLabelRequest,
+    CropLabelResponse,
     CropMoveRequest,
 )
 from src.routers.curation._selection import selected_crop_ids
 from src.routers.curation._selection_write_models import LabelOpAccepted, SelectionDryRunResponse
 from src.services.clustering.serving_cluster import serving_cluster_partition
-from src.services.curation.class_label import ItemLabel, class_label_update
-from src.services.curation.label_ops.record import start as start_relabel
+from src.services.curation.crop_bulk import HUMAN_RELABEL_RETRIES
+from src.services.curation.label_ops.record import (
+    merger_for,
+    recorded_relabel,
+    start as start_relabel,
+)
 from src.services.curation.label_ops.store import NewLabelOp
-from src.services.embedding_spaces.readers import vector_source_excludes
 from src.utils.timeutil import now_iso
 
 
-@router.put('/crops/{crop_id}/label')
+@router.put('/crops/{crop_id}/label', response_model=CropLabelResponse)
 async def label_crop(
     crop_id: str,
     payload: CropLabelRequest,
     opensearch: OpenSearchDep,
     registry: RegistryDep,
 ) -> dict[str, Any]:
-    """Set the validated class on a single item."""
+    """Set the validated class on a single item, as a recorded label operation.
+
+    The write is synchronous: the operation's record is written in this request (the same
+    record, tagging and undo as a bulk label, with no job behind it) and ``op_id`` is
+    answered. ``POST /label_ops/{op_id}/undo`` restores the previous class and the operation
+    shows in ``GET /label_ops``. ``404`` for an unknown item, ``409`` when a concurrent write
+    outlasts the retries.
+    """
     reg = await registry.snapshot()
     if not reg.validate_id(payload.class_id):
         raise HTTPException(status_code=400, detail=f'unknown class_id {payload.class_id}')
     entry = reg.get(payload.class_id)
     class_name = entry.class_name if entry is not None else ''
 
-    def _merge_label(current: dict[str, Any]) -> dict[str, Any]:
-        return class_label_update(
-            current,
-            ItemLabel.human(
-                class_id=payload.class_id,
-                class_name=class_name,
-                label_source=payload.label_source,
-                writer='human:label_crop',
-            ),
-        )
-
-    excludes = await vector_source_excludes()
-    try:
-        await occ_update_one(
-            opensearch,
-            vector_excludes=excludes,
-            doc_id=crop_id,
-            merger=_merge_label,
-            refresh='wait_for',
-            writer_id='human:label_crop',
-        )
-    except OCCFinalConflictError:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}: {exc}') from exc
-    return {'crop_id': crop_id, 'class_id': payload.class_id, 'class_name': class_name}
+    found = await mget_crops(
+        opensearch, [crop_id], index=items_index(), source_includes=['crop_id']
+    )
+    if crop_id not in found:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    spec = {
+        'kind': 'label',
+        'class_id': payload.class_id,
+        'class_name': class_name,
+        'label_source': payload.label_source,
+        'writer': HUMAN_LABEL_WRITER,
+    }
+    out = await recorded_relabel(
+        opensearch,
+        [crop_id],
+        op=NewLabelOp(
+            kind='label',
+            writer=HUMAN_LABEL_WRITER,
+            class_name=class_name,
+            class_id=payload.class_id,
+            label_source=payload.label_source,
+            target='crop_ids',
+            selected=1,
+        ),
+        merger_for=lambda op_id: merger_for(spec, op_id),
+        job_id=None,
+    )
+    if out['conflicts']:
+        raise OCCFinalConflictError(crop_id, HUMAN_RELABEL_RETRIES)
+    return {
+        'crop_id': crop_id,
+        'class_id': payload.class_id,
+        'class_name': class_name,
+        'op_id': out['op_id'],
+    }
 
 
 async def _queue_relabel(

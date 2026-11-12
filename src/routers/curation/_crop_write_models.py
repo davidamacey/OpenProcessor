@@ -20,6 +20,15 @@ class CropLabelRequest(BaseModel):
     label_source: HumanLabelSource = 'human'
 
 
+class CropLabelResponse(BaseModel):
+    """``PUT /crops/{crop_id}/label``: the write is recorded as a label operation."""
+
+    crop_id: str
+    class_id: int
+    class_name: str
+    op_id: str = Field(description='The recorded operation (undo it by id).')
+
+
 class CropBatchLabelRequest(SelectionTargets):
     class_id: int
     label_source: HumanLabelSource = 'human'

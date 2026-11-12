@@ -38,7 +38,6 @@ LEGACY_DICT = frozenset(
         'POST /crops/{crop_id}/discard',
         'GET /crops/{crop_id}/history',
         'DELETE /crops/{crop_id}/label',
-        'PUT /crops/{crop_id}/label',
         'POST /crops/{crop_id}/label/undo',
         'POST /crops/{crop_id}/region/undo',
         'POST /crops/{crop_id}/review_dismiss',

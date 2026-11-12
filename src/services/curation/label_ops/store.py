@@ -124,9 +124,10 @@ def _record(row: LabelOperationRow) -> LabelOpRecord | None:
 
 
 async def create_op_in(
-    session: Any, new: NewLabelOp, op_id: uuid.UUID, job_id: uuid.UUID
+    session: Any, new: NewLabelOp, op_id: uuid.UUID, job_id: uuid.UUID | None
 ) -> LabelOpRecord:
-    """Write the record (status ``writing``, owned by ``job_id``) in the caller's transaction,
+    """Write the record (status ``writing``, owned by ``job_id``, or by no job for a request
+    write) in the caller's transaction,
     before any item is written, and prune the oldest operations beyond :data:`LABEL_OPS_KEEP`."""
     if current_project().read_only:
         raise rejection(409, 'project_read_only', 'the project is read-only; nothing was written')
