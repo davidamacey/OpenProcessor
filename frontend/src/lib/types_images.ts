@@ -72,6 +72,8 @@ export interface ImageViewParams {
   /** One of the served `sort_options` ids; omitted, the server's default applies. */
   sort?: string | null;
   include_test?: boolean;
+  /** Page size, 1 to 200; omitted, the server's default applies. */
+  limit?: number;
 }
 
 /** One card of `GET /images`: the facts, the served counts and the boxes to draw. */

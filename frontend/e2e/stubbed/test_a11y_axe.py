@@ -23,6 +23,7 @@ from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_gallery_view import serve as serve_gallery
 from test_label_ops import serve as serve_label_ops
+from test_map_view import _cells as map_cells, _meta as map_meta
 from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
@@ -43,6 +44,12 @@ def serve_clusters(stub) -> None:
         r'/crops(\?|$)',
         {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
+
+
+def serve_map(stub) -> None:
+    stub.on('GET', r'/map$', (200, map_meta('')))
+    stub.on('GET', r'/map/cells(\?|$)', (200, map_cells(), 'application/geo+json'))
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
 
 
 def serve_projects_page(stub) -> None:
@@ -186,6 +193,7 @@ PAGES = [
         serve_cluster_with_facets,
         '[data-testid="cluster-facets"]',
     ),
+    ('workspace-map', '/p/default/workspace?view=map', serve_map, '[data-testid=map-located]'),
     (
         'workspace-gallery',
         '/p/default/workspace?view=gallery',

@@ -32,7 +32,6 @@ from src.schemas.curation.map import (
     MapCellGeometry,
     MapCellProperties,
     MapMeta,
-    MapTileImages,
 )
 from src.services.curation.image_facts import thumbnail_url
 from src.services.curation.image_join import (
@@ -54,7 +53,6 @@ CELL_ZOOM_OFFSET: Final = 3
 MAX_PRECISION: Final = 22
 #: A coarse policy keeps about 1 km: tiles at zoom 15 are about 1.2 km wide at the equator.
 COARSE_MAX_PRECISION: Final = 15
-TILE_IMAGES_MAX: Final = 200
 
 
 class MapQueryError(ValueError):
@@ -275,29 +273,6 @@ def tile_box(tile: str) -> GeoBox:
     )
 
 
-async def tile_images(
-    opensearch: Any, policy: str, f: ItemFilter, embedding: WriteFields, tile: str
-) -> MapTileImages:
-    """The images in one grid cell, to open the review list on them (at most 200)."""
-    box = tile_box(tile)
-    if policy == 'drop':
-        return MapTileImages(tile=tile, count=0, image_ids=[], truncated=False)
-    query, _ = await image_query(opensearch, f, embedding, box, policy)
-    resp = await opensearch.search(
-        index=images_index(),
-        body={
-            'size': TILE_IMAGES_MAX,
-            'track_total_hits': True,
-            'query': query,
-            '_source': False,
-            'sort': [{'image_id': 'asc'}],
-        },
-    )
-    total = int(resp['hits']['total']['value'])
-    ids = [hit['_id'] for hit in resp['hits']['hits']]
-    return MapTileImages(tile=tile, count=total, image_ids=ids, truncated=total > len(ids))
-
-
 __all__ = [
     'CELL_ZOOM_OFFSET',
     'MAX_CELLS',
@@ -305,5 +280,4 @@ __all__ = [
     'map_cells',
     'map_meta',
     'tile_box',
-    'tile_images',
 ]

@@ -1,9 +1,8 @@
 """Curation router sub-module: the project map.
 
-``GET /map`` says whether the Map page is available and gives its tile settings;
+``GET /map`` says whether the Map view is available and gives its tile settings;
 ``GET /map/cells`` serves the matching images as a GeoJSON FeatureCollection of grid cells at a
-zoom (``application/geo+json``, RFC 7946); ``GET /map/images`` lists the images of one cell so the
-review list can open on them. All three take the shared item filter (``ItemFilterQuery``), including
+zoom (``application/geo+json``, RFC 7946). Both take the shared item filter (``ItemFilterQuery``), including
 ``taken_from`` / ``taken_to``, and follow the project's ``location_policy``: under ``drop`` nothing
 is served, under ``store_coarse`` cells are no finer than about 1 km.
 """
@@ -17,7 +16,7 @@ from src.config import get_curation_config
 from src.domain.geo_box import parse_geo_box
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
-from src.schemas.curation.map import MapCellCollection, MapMeta, MapTileImages
+from src.schemas.curation.map import MapCellCollection, MapMeta
 from src.services.curation import map_cells
 from src.services.curation.location_policy_store import get_location_policy
 from src.services.embedding_spaces.readers import item_write_fields
@@ -81,22 +80,3 @@ async def get_map_cells(
     except ValueError as exc:
         raise _bad_request(exc) from exc
     return JSONResponse(collection.model_dump(mode='json'), media_type=GEOJSON)
-
-
-@router.get('/map/images', response_model=MapTileImages, tags=['Map'])
-async def get_map_tile_images(
-    opensearch: OpenSearchDep,
-    item_filter: ItemFilterQuery,
-    tile: Annotated[str, Query(description='A cell key from `/map/cells`: `z/x/y`.')],
-) -> MapTileImages:
-    """The images in one grid cell (at most 200), for `GET /crops?image_id=...`."""
-    try:
-        return await map_cells.tile_images(
-            opensearch,
-            await get_location_policy(),
-            item_filter,
-            await item_write_fields(),
-            tile,
-        )
-    except map_cells.MapQueryError as exc:
-        raise _bad_request(exc) from exc

@@ -165,7 +165,6 @@ EXTRA_PARAMS: dict[str, dict[str, Any]] = {
     '/review/{tab}/locate': {'crop_id': 'a1'},
     '/search/similar': {'crop_id': 'a1'},
     '/search/text': {'q': 'car'},
-    '/map/images': {'tile': '1/1/0'},
 }
 PATH_VALUES = {'tab': 'all'}
 

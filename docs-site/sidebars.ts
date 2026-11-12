@@ -143,6 +143,7 @@ const sidebars: SidebarsConfig = {
         'cropwright/user-guide/dataset-import',
         'cropwright/user-guide/workspace',
         'cropwright/user-guide/gallery',
+        'cropwright/user-guide/map',
         'cropwright/user-guide/near-duplicates',
         'cropwright/user-guide/assist',
         'cropwright/user-guide/item-filter',

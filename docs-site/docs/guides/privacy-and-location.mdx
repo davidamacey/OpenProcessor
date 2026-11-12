@@ -51,7 +51,7 @@ When a project stores positions and its policy serves them, Cropwright shows a
 Map page (MapLibre). The server aggregates positions in OpenSearch (a
 `geotile_grid`, at most 5000 cells per response), so a large project never ships
 its points: `GET /map/cells` answers GeoJSON for a zoom and bounding box and
-`GET /map/images` lists the photos of one cell. Both take the shared item filter.
+a cell's photos are listed with `GET /images?geo_bbox=` using the cell's served bounds. Both map routes take the shared item filter.
 
 ![Map page with located photos](/img/screenshots/cropwright/map-1440.png)
 

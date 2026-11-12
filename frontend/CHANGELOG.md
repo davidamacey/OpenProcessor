@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Workspace page (`/workspace`) with Clusters and Detections views, a served queues and classes rail, a details panel, a bulk bar that states the served selection summary and dry-runs every action, and a class picker with inline create. The filter, queue, open cluster and selection stay when you switch view; Back restores the previous view.
 - Ignore reasons are the served list (`GET /exclude_reasons`).
 
 ### Removed
 
+- `/map`: the Map is a Workspace view (`/workspace?view=map`) with area filters; its crop side panel is the cell details.
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
 - Gallery view of whole images with served boxes and counts; crop dialog siblings open their crop.
 

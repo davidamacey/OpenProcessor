@@ -27,7 +27,6 @@ const PROJECT_SECTIONS = [
   'bakeoff',
   'label-ops',
   'near-duplicates',
-  'map',
   'settings',
 ] as const;
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];

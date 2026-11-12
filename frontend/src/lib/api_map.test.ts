@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setScopedPrefix } from '$lib/api';
-import { getMapCells, getMapMeta, getMapTileImages } from '$lib/api_map';
+import { getMapCells, getMapMeta } from '$lib/api_map';
 
 const fetchMock = vi.fn();
 
@@ -47,15 +47,5 @@ describe('map wrappers', () => {
       }),
     );
     expect(await getMapCells({ zoom: 6, bbox: '7,46,9,48' }, {})).toEqual(body);
-  });
-
-  it('asks for the images of one cell', async () => {
-    fetchMock.mockResolvedValue(
-      ok({ tile: '9/1/1', count: 0, image_ids: [], truncated: false }),
-    );
-    await getMapTileImages('9/1/1', {});
-    const url = new URL(fetchMock.mock.calls[0][0], 'http://x');
-    expect(url.pathname).toBe('/curation/projects/default/map/images');
-    expect(url.searchParams.get('tile')).toBe('9/1/1');
   });
 });

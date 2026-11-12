@@ -121,9 +121,6 @@ async def test_drop_serves_nothing_and_asks_the_index_nothing() -> None:
     got = await _cells(os, 'drop')
     assert got.features == []
     assert os.calls == []
-    tiles = await map_cells.tile_images(os, 'drop', ItemFilter(), DEFAULT_WRITE_FIELDS, '3/4/2')
-    assert (tiles.count, tiles.image_ids) == (0, [])
-    assert os.calls == []
     meta = await map_cells.map_meta(os, 'drop', tile_url='u/{z}/{x}/{y}', tile_attribution='a')
     assert (meta.available, meta.n_located, meta.bounds) == (False, 0, None)
 
@@ -219,16 +216,6 @@ def test_a_tile_key_is_a_box_in_degrees() -> None:
     for bad in ('3/9/0', 'a/b/c', '1/2', '23/0/0'):
         with pytest.raises(map_cells.MapQueryError):
             map_cells.tile_box(bad)
-
-
-@pytest.mark.asyncio
-async def test_a_cells_images_are_listed_up_to_the_cap_with_the_total() -> None:
-    os = FakeSearch()
-    got = await map_cells.tile_images(os, 'store', ItemFilter(), DEFAULT_WRITE_FIELDS, '9/267/179')
-    assert (got.count, got.image_ids, got.truncated) == (250, ['i1', 'i2'], True)
-    body = os.calls[0][1]
-    assert body['size'] == map_cells.TILE_IMAGES_MAX
-    assert any('geo_bounding_box' in c for c in body['query']['bool']['filter'])
 
 
 @pytest.mark.asyncio

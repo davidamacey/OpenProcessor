@@ -7,6 +7,9 @@ import ClustersView from './views/ClustersView.svelte';
 import GalleryView from './views/GalleryView.svelte';
 import DetectionsView from './views/DetectionsView.svelte';
 import TableView from './views/TableView.svelte';
+import MapView from './views/MapView.svelte';
+import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
+import { page } from '$app/state';
 import type { WorkspaceController } from './workspaceController.svelte';
 import type { ViewId } from './workspaceUrl';
 
@@ -16,7 +19,9 @@ export interface ViewEntry {
   label: string;
   component: Component<{ ws: WorkspaceController }>;
   /** The keymap context the view's keys are registered under. */
-  keyContext: 'cluster' | 'table';
+  keyContext: 'cluster' | 'table' | 'map';
+  /** Absent means always available; the Map view needs a project that serves a map. */
+  available?: (ws: WorkspaceController) => boolean;
 }
 
 export const VIEWS: readonly ViewEntry[] = [
@@ -29,7 +34,19 @@ export const VIEWS: readonly ViewEntry[] = [
     keyContext: 'cluster',
   },
   { id: 'table', label: 'Table', component: TableView, keyContext: 'table' },
+  {
+    id: 'map',
+    label: 'Map',
+    component: MapView,
+    keyContext: 'map',
+    available: () => mapAvailabilityStore.availableFor(page.params.project),
+  },
 ];
+
+/** The views the tabs and the view keys offer for this project. */
+export function availableViews(ws: WorkspaceController): ViewEntry[] {
+  return VIEWS.filter((v) => !v.available || v.available(ws));
+}
 
 /** The entry for `id`; a view this build does not have opens the first one. */
 export function viewEntry(id: ViewId): ViewEntry {

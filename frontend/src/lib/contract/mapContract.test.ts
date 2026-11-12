@@ -52,15 +52,6 @@ const CASES: [string, string[]][] = [
       thumbnail_url: true,
     }),
   ],
-  [
-    'MapTileImages',
-    keys<keyof T.MapTileImages>({
-      tile: true,
-      count: true,
-      image_ids: true,
-      truncated: true,
-    }),
-  ],
 ];
 
 describe('map wire types equal the contract', () => {
@@ -86,6 +77,6 @@ describe('map wire types equal the contract', () => {
     expect(
       Object.keys(paths).filter((p) => /\/projects\/\{project\}\/map(\/|$)/.test(p))
         .length,
-    ).toBe(3);
+    ).toBe(2);
   });
 });
