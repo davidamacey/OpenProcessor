@@ -17,6 +17,7 @@ EXPECTED = {
     'reaper',
     'ingest_dispatch',
     'open_vocab_sweep',
+    'image_counts_drain',
     'job_stats',
     'vlm_batch_staging_sweep',
     'upload_sweep',
@@ -62,6 +63,10 @@ def test_every_entry_is_a_registered_task_on_the_periodic_queue_that_expires(wor
 def test_the_app_applies_the_built_schedule(worker_app) -> None:
     # db_backup is present only when the environment asks for it at the time the app configures
     assert set(worker_app.conf.beat_schedule) - {'db_backup'} == EXPECTED - {'db_backup'}
+
+
+def test_the_image_counts_drain_runs_every_five_seconds() -> None:
+    assert build_schedule()['image_counts_drain']['schedule'] == 5.0
 
 
 def test_the_ingest_dispatch_interval_is_the_env_value_and_zero_turns_it_off(

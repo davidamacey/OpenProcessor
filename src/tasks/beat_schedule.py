@@ -28,6 +28,7 @@ SERVING_INVENTORY_INTERVAL_S = 60
 NEAR_DUP_FULL_BUILD_INTERVAL_S = 7 * 24 * 60 * 60
 GPU_ARBITER_INTERVAL_S = 15
 RESOURCE_REACHABILITY_INTERVAL_S = 30
+IMAGE_COUNTS_DRAIN_INTERVAL_S = 5
 
 
 def _every(task: str, seconds: float) -> dict[str, Any]:
@@ -42,6 +43,9 @@ def build_schedule() -> dict[str, dict[str, Any]]:
     sweep = env_int('OP_OPEN_VOCAB_SWEEP_S', OPEN_VOCAB_SWEEP_DEFAULT_S, minimum=0)
     if sweep > 0:
         schedule['open_vocab_sweep'] = _every('op.periodic.open_vocab_sweep', sweep)
+    schedule['image_counts_drain'] = _every(
+        'op.periodic.image_counts_drain', IMAGE_COUNTS_DRAIN_INTERVAL_S
+    )
     schedule['job_stats'] = _every('op.periodic.job_stats', JOB_STATS_INTERVAL_S)
     schedule['vlm_batch_staging_sweep'] = _every(
         'op.periodic.vlm_batch_staging_sweep', VLM_STAGING_SWEEP_INTERVAL_S
