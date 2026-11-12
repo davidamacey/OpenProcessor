@@ -9,6 +9,7 @@
  * `itemQuery()` and `itemBody()` are the only places that combine the
  * filter, the queue and the scope: views call them and never build a filter.
  */
+import { untrack } from 'svelte';
 import { MediaQuery, SvelteURLSearchParams } from 'svelte/reactivity';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -18,6 +19,7 @@ import { getCrop } from '$lib/api_cropRead';
 import { projectHref } from '$lib/projectPaths';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nextStepsStore } from '$stores/nextSteps.svelte';
+import { focusFitsView } from './detailsViews';
 import { buildItemQuery } from './itemQuery';
 import {
   createSelectionSummary,
@@ -78,6 +80,8 @@ export class WorkspaceController {
   /** The item Review stands on, kept here as well as in the URL so a quick `Esc` right after a
    *  confirm still returns to it, before the URL write has landed. */
   #reviewFocus: string | null = null;
+  /** The focus the last view switch set aside because the new view cannot show it. */
+  #parkedFocus: FocusRef | null = null;
   /** The open cluster's served card, set by the cluster scope for the details panel. */
   scopeCard = $state<Cluster | null>(null);
 
@@ -94,6 +98,17 @@ export class WorkspaceController {
       this.summary = createSelectionSummary(() => this.itemSelection());
       $effect(() => {
         this.filter.fromUrl(page.url.searchParams);
+      });
+      let kind: SelectionKind | null = null;
+      $effect(() => {
+        const next = this.selectionKind;
+        if (
+          kind !== null &&
+          next !== kind &&
+          untrack(() => this.selection.kind) !== 'matching'
+        )
+          untrack(() => this.clearSelection());
+        kind = next;
       });
       $effect(() => {
         const served = nextStepsStore.defaultView;
@@ -180,8 +195,17 @@ export class WorkspaceController {
     });
   }
 
+  /** Switches view. A focus the new view cannot show is parked, not left to render the wrong
+   *  details; a parked one comes back in the first view that can show it. */
   setView(view: ViewId): void {
-    this.#write({ view }, false);
+    const candidate = this.#url.focus ?? this.#parkedFocus;
+    if (!candidate || focusFitsView(candidate.kind, view)) {
+      this.#parkedFocus = null;
+      this.#write({ view, focus: candidate }, false);
+      return;
+    }
+    this.#parkedFocus = candidate;
+    this.#write({ view, focus: null }, false);
   }
 
   /** Another queue opens in its own order: the Review sort belongs to the queue it was picked in. */
@@ -235,8 +259,9 @@ export class WorkspaceController {
   closeReview(): void {
     const focus: FocusRef | null = this.#reviewFocus
       ? { kind: 'item', id: this.#reviewFocus }
-      : this.#url.focus;
+      : (this.#url.focus ?? this.#parkedFocus);
     this.#reviewFocus = null;
+    this.#parkedFocus = null;
     this.#write({ view: this.#reviewOrigin, focus }, false);
   }
 

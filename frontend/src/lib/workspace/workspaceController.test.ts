@@ -45,22 +45,79 @@ afterEach(() => {
 
 describe('WorkspaceController', () => {
   it('switching views keeps filter, queue, scope and selection', () => {
-    visit('?view=clusters&class_name=widget&queue=to_label&scope=cluster%3Au1');
+    visit('?view=detections&class_name=widget&queue=to_label&scope=cluster%3Au1');
     const c = make();
-    c.select({ kind: 'clusters', clusterUids: ['u1'] });
+    c.select({ kind: 'items', cropIds: ['c1'] });
     const selection = c.selection;
     const before = JSON.stringify(c.itemQuery());
 
-    c.setView('detections');
+    c.setView('table');
     const { href, opts } = lastGoto();
     visit(href.slice(href.indexOf('?')));
     flushSync();
 
-    expect(c.view).toBe('detections');
+    expect(c.view).toBe('table');
     expect(JSON.stringify(c.itemQuery())).toBe(before);
     expect(c.url.scope).toEqual({ kind: 'cluster', id: 'u1' });
     expect(c.selection).toBe(selection);
     expect(opts).toMatchObject({ replace: false, reset: false });
+  });
+
+  it('switching to a view with another selection kind clears the selection', () => {
+    visit('?view=clusters');
+    const c = make();
+    c.select({ kind: 'clusters', clusterUids: ['u1'] });
+    c.setView('detections');
+    const { href } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+    expect(c.selection.kind).toBe('none');
+  });
+
+  it('keeps an all-matching selection across views', () => {
+    visit('?view=clusters');
+    const c = make();
+    c.select({ kind: 'matching' });
+    visit('?view=detections');
+    flushSync();
+    expect(c.selection.kind).toBe('matching');
+  });
+
+  it('parks a focus the next view cannot show, and restores it where it fits', () => {
+    visit('?view=detections&focus=item%3Acrop-1');
+    const c = make();
+    c.setView('map');
+    const first = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(first.get('view')).toBe('map');
+    expect(first.has('focus')).toBe(false);
+    visit(`?${first.toString()}`);
+    flushSync();
+    c.setView('table');
+    const second = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(second.get('focus')).toBe('item:crop-1');
+  });
+
+  it('keeps a focus the next view can show', () => {
+    visit('?view=detections&focus=item%3Acrop-1');
+    const c = make();
+    c.setView('table');
+    expect(new URLSearchParams(lastGoto().href.split('?')[1]).get('focus')).toBe(
+      'item:crop-1',
+    );
+  });
+
+  it('closeReview restores a focus parked when Review was left', () => {
+    visit('?view=review&focus=item%3Acrop-1');
+    const c = make();
+    c.setView('gallery');
+    const params = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(params.has('focus')).toBe(false);
+    visit(`?${params.toString()}`);
+    flushSync();
+    c.closeReview();
+    expect(new URLSearchParams(lastGoto().href.split('?')[1]).get('focus')).toBe(
+      'item:crop-1',
+    );
   });
 
   it('back restores the previous view and filter', () => {
