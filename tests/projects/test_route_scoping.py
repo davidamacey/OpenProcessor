@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from fastapi.routing import RouteContext
 
 
@@ -69,6 +71,7 @@ GLOBAL_ROUTES = frozenset(
         # it are scoped under the project.
         ('GET', f'{API}/embedding/models'),
         ('GET', f'{API}/serving_profiles'),
+        ('GET', f'{API}/serving_profiles/schema'),
         ('GET', f'{API}/serving_profiles/active'),
         ('GET', f'{API}/serving_profiles/{{name}}'),
         ('PUT', f'{API}/serving_profiles/{{name}}'),
@@ -159,6 +162,25 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
         return None
 
     monkeypatch.setattr(registry_mod.ProjectRegistry, 'ensure_fresh', _fresh)
+
+    # GET /projects pages from Postgres; the listing itself is tested in test_projects_list_bounds.
+    from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
+
+    from src.core.db_session import get_db
+    from src.routers.curation import projects as projects_router
+
+    async def _empty_page(_session: Any, **_k: Any) -> tuple[list[Any], None, int]:
+        return [], None, 0
+
+    async def _no_database() -> AsyncIterator[None]:
+        yield None
+
+    async def _no_curation_opensearch() -> Any:
+        raise OpenSearchConnectionError('N/A', 'disabled in test', OSError('none'))
+
+    monkeypatch.setattr(projects_router.projects_listing, 'fetch_page', _empty_page)
+    monkeypatch.setattr(projects_router, 'make_curation_opensearch', _no_curation_opensearch)
+    app.dependency_overrides[get_db] = _no_database
     app.dependency_overrides[_raw_opensearch_dep] = lambda: (
         _NoOpenSearch()
     )  # FastAPI parses a class here as a dependency with parameters
@@ -170,6 +192,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
     finally:
         app.dependency_overrides.pop(_raw_opensearch_dep, None)
         app.dependency_overrides.pop(get_async_triton, None)
+        app.dependency_overrides.pop(get_db, None)
 
 
 def test_global_health_is_deployment_only(client: TestClient) -> None:
