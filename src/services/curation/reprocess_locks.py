@@ -25,6 +25,7 @@ from typing import Any
 from src.clients.occ_locks import is_locked_class, is_locked_item
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.item_geometry import GEOMETRY_SOURCE_HUMAN, NOT_AN_OBJECT
 
 
 def region_set_locked(src: dict[str, Any], F: RegionFields | None = None) -> bool:
@@ -67,9 +68,33 @@ def class_locked_clause() -> dict[str, Any]:
     }
 
 
+def geometry_locked_clause() -> dict[str, Any]:
+    """Query form of the human part of :func:`~src.clients.occ_locks.is_locked_geometry`:
+    a person moved or drew the box, or deleted the item as not an object. The import and
+    holdout parts are already in :func:`class_locked_clause`."""
+    return {
+        'bool': {
+            'should': [
+                {'term': {'geometry_source': GEOMETRY_SOURCE_HUMAN}},
+                {
+                    'bool': {
+                        'filter': [
+                            {'term': {'class_excluded': True}},
+                            {'term': {'excluded_by': 'human'}},
+                            {'term': {'excluded_reason': NOT_AN_OBJECT}},
+                        ]
+                    }
+                },
+            ],
+            'minimum_should_match': 1,
+        }
+    }
+
+
 __all__ = [
     'class_locked',
     'class_locked_clause',
+    'geometry_locked_clause',
     'item_locked',
     'region_locked_clause',
     'region_set_locked',
