@@ -1,5 +1,4 @@
 frontend/src/lib/api_cropMap.ts <-> frontend/src/lib/types.ts	21	baseline at introduction; extract a shared helper to shrink
-frontend/src/lib/components/packs/PackTestPanel.svelte <-> frontend/src/lib/components/profiles/ProfileTestPanel.svelte	30	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/[name]/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/[name]/+page.svelte	54	baseline at introduction; extract a shared helper to shrink
