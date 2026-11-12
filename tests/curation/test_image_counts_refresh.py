@@ -298,3 +298,23 @@ def test_projects_never_share_a_dirty_set(image_counts_dirty: dict[str, set[str]
         assert _run(dirty.claim()) is True
         assert _run(dirty.batch(10)) == ['img-y']
     assert image_counts_dirty['op:image_counts:dirty:default'] == {'img-x'}
+
+
+def test_a_valkey_outage_does_not_fail_the_write_that_marks(monkeypatch: Any) -> None:
+    import redis
+
+    from src.clients import image_counts_dirty
+
+    class _Down:
+        closed = False
+
+        async def sadd(self, *_a: Any) -> int:
+            raise redis.ConnectionError('valkey is down')
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    client = _Down()
+    monkeypatch.setattr(image_counts_dirty, 'valkey_client', lambda: client)
+    assert _run(image_counts_dirty.mark_dirty(['img-a'])) == 0
+    assert client.closed
