@@ -8,31 +8,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING
 
-from src.services.config_store import documents, get_config_store, templates
-from src.services.config_store.documents import (
-    ActiveConflictError,
-    CloneSource,
-    RevisionConflictError,
-)
-from src.services.config_store.kind_records import (
-    KindRecord,
-    build_kind_record,
-    revision_summaries,
-    stored_record,
-)
-from src.services.config_store.stored_ops import delete_and_apply, save_and_apply
+from src.services.config_store import get_config_store
+from src.services.config_store.documents import ActiveConflictError, RevisionConflictError
+from src.services.config_store.kind_records import KindRecord, StoredKind
 
 
 if TYPE_CHECKING:
-    from src.services.config_store.documents import Activated
-    from src.services.config_store.profiles import RevisionSummary
     from src.services.detection.open_vocab_set import OpenVocabSet
-
-
-_TEMPLATES_DIR = Path(__file__).resolve().parents[3] / 'examples' / 'open_vocab'
-_KIND: Literal['open_vocab_set'] = 'open_vocab_set'
 
 
 @dataclass(frozen=True)
@@ -40,100 +24,26 @@ class OpenVocabRecord(KindRecord):
     pass
 
 
-def load_template(name: str) -> dict[str, Any] | None:
-    return templates.load_template(_TEMPLATES_DIR, name)
+_KIND = StoredKind(
+    OpenVocabRecord,
+    kind='open_vocab_set',
+    axis='open_vocab',
+    etag_prefix='open_vocab',
+    templates_dir=Path(__file__).resolve().parents[3] / 'examples' / 'open_vocab',
+    stored=lambda cur: cur.open_vocab_sets,
+    active=lambda cur: cur.active_open_vocab,
+)
 
-
-def template_names() -> list[str]:
-    return list(templates.template_names(_TEMPLATES_DIR))
-
-
-def all_known_names() -> frozenset[str]:
-    return frozenset({*get_config_store().current.open_vocab_sets, *template_names()})
-
-
-def _active_ref() -> tuple[str | None, int | None]:
-    return templates.active_ref(get_config_store().current.active_open_vocab)
-
-
-def build_record(name: str, *, revision: int | None = None) -> OpenVocabRecord | None:
-    return build_kind_record(
-        OpenVocabRecord,
-        etag_prefix='open_vocab',
-        name=name,
-        revision=revision,
-        stored=get_config_store().current.open_vocab_sets.get(name),
-        template=load_template(name),
-        active_ref=_active_ref(),
-    )
-
-
-async def get_revision_record(name: str, revision: int) -> OpenVocabRecord | None:
-    stored = await documents.get_revision(kind=_KIND, name=name, revision=revision)
-    if stored is None:
-        return None
-    return stored_record(
-        OpenVocabRecord,
-        etag_prefix='open_vocab',
-        stored=stored,
-        name=name,
-        active_ref=_active_ref(),
-        read_only=True,
-    )
-
-
-async def list_revisions(name: str) -> list[RevisionSummary] | None:
-    if name not in get_config_store().current.open_vocab_sets:
-        return None
-    infos = await documents.list_revisions(kind='open_vocab_set', name=name)
-    return revision_summaries(infos)
-
-
-async def save_set(
-    *,
-    name: str,
-    body: dict[str, Any],
-    expected_revision: int | None,
-    description: str = '',
-    cloned_from: CloneSource | None = None,
-) -> OpenVocabRecord:
-    await save_and_apply(
-        'open_vocab_set',
-        name=name,
-        body=body,
-        expected_revision=expected_revision,
-        description=description,
-        cloned_from=cloned_from,
-    )
-    record = build_record(name)
-    assert record is not None
-    return record
-
-
-async def delete_set(*, name: str, expected_revision: int) -> None:
-    await delete_and_apply('open_vocab_set', name=name, expected_revision=expected_revision)
-
-
-async def activate_set(
-    *, name: str | None, revision: int | None, expected_active: dict[str, Any] | None
-) -> Activated:
-    from src.services.config_store.store import activate_axis
-
-    return await activate_axis(
-        get_config_store(),
-        axis='open_vocab',
-        name=name,
-        revision=revision,
-        expected_active=expected_active,
-    )
-
-
-async def rollback_set(*, expected_active: dict[str, Any] | None) -> Activated:
-    from src.services.config_store.activation_apply import rollback_axis
-
-    return await rollback_axis(
-        get_config_store(), axis='open_vocab', expected_active=expected_active
-    )
+load_template = _KIND.load_template
+template_names = _KIND.template_names
+all_known_names = _KIND.all_known_names
+build_record = _KIND.build_record
+get_revision_record = _KIND.get_revision_record
+list_revisions = _KIND.list_revisions
+save_set = _KIND.save
+delete_set = _KIND.delete
+activate_set = _KIND.activate
+rollback_set = _KIND.rollback
 
 
 def active_open_vocab_set() -> OpenVocabSet | None:

@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from src.services.config_store import ingest_profiles, open_vocab
+from src.services.config_store import ingest_profiles, kind_records, open_vocab
 
 
 _STORED = types.SimpleNamespace(
@@ -26,7 +26,9 @@ def _store(monkeypatch: pytest.MonkeyPatch, module: Any, attr: str, active_attr:
     current = types.SimpleNamespace(
         **{attr: {'mine': _STORED}, active_attr: active},
     )
-    monkeypatch.setattr(module, 'get_config_store', lambda: types.SimpleNamespace(current=current))
+    monkeypatch.setattr(
+        kind_records, 'get_config_store', lambda: types.SimpleNamespace(current=current)
+    )
 
 
 @pytest.mark.parametrize(
@@ -72,15 +74,15 @@ def test_build_record_stored_pinned_and_template(
 
 def test_active_pair_flags_the_matching_revision(monkeypatch: pytest.MonkeyPatch) -> None:
     _store(monkeypatch, ingest_profiles, 'ingest_profiles', 'active_ingest_profile', 'placeholder')
-    monkeypatch.setattr(ingest_profiles.templates, 'active_ref', lambda _a: ('mine', 3))
+    monkeypatch.setattr(kind_records.templates, 'active_ref', lambda _a: ('mine', 3))
     rec = ingest_profiles.build_record('mine')
     assert rec is not None
     assert (rec.active, rec.active_revision) == (True, 3)
-    monkeypatch.setattr(ingest_profiles.templates, 'active_ref', lambda _a: ('mine', 2))
+    monkeypatch.setattr(kind_records.templates, 'active_ref', lambda _a: ('mine', 2))
     rec = ingest_profiles.build_record('mine')
     assert rec is not None
     assert (rec.active, rec.active_revision) == (False, 2)
-    monkeypatch.setattr(ingest_profiles.templates, 'active_ref', lambda _a: ('other', 3))
+    monkeypatch.setattr(kind_records.templates, 'active_ref', lambda _a: ('other', 3))
     rec = ingest_profiles.build_record('mine')
     assert rec is not None
     assert (rec.active, rec.active_revision) == (False, None)

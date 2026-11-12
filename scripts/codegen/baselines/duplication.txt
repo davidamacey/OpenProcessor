@@ -1,3 +1,2 @@
 frontend/src/lib/api_cropMap.ts <-> frontend/src/lib/types.ts	21	baseline at introduction; extract a shared helper to shrink
-src/services/config_store/ingest_profiles.py <-> src/services/config_store/open_vocab.py	27	baseline at introduction; extract a shared helper to shrink
 src/services/curation/export_single_class_rows.py <-> src/services/curation/export_single_class_rows.py	13	baseline at introduction; extract a shared helper to shrink
