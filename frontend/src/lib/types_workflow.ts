@@ -25,6 +25,9 @@ export interface WorkflowStep {
   section: string;
   /** Optional search string for the link, e.g. `view=clusters`. */
   query?: string | null;
+  /** A write the step offers instead of a page: `adopt_detector_classes` is
+   *  `POST /label_ops/adopt_detector`. Null when the step is done or has none. */
+  action?: 'adopt_detector_classes' | null;
 }
 
 export interface WorkflowSteps {

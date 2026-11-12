@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.domain.embedding_state import DEFERRED, EMBEDDED, NOT_SELECTED
+from src.domain.ingest_class_sources import DETECTOR_CLASS_SOURCE
 from src.services.curation.class_write_guard import class_write_locked
 from src.services.curation.name_match import name_matches, normalized_names
 from src.utils.class_names import normalize_class_name
@@ -50,15 +51,16 @@ class _Criteria(BaseModel):
 class DetectFilter(_Criteria):
     """Which detector outputs are stored. Every field empty = store all.
 
-    ``class_resolution`` ``by_name`` gives a detection the registry class whose
-    name equals the detector's own label (``traffic light`` -> ``traffic_light``),
-    written like a classifier's label so the VLM skips it; ``proposal`` (the
-    default) leaves every detection an unlabeled proposal.
+    ``class_resolution`` ``by_name`` (the default) gives a detection the registry class whose
+    name equals the detector's own label (``traffic light`` -> ``traffic_light``), creating the
+    class when the registry lacks it, written as the detector's own machine label
+    (:data:`~src.domain.ingest_class_sources.DETECTOR_CLASS_SOURCE`: reviewable, still in the
+    clustering pool); ``proposal`` leaves every detection an unlabeled proposal.
     """
 
     classes: list[str] | None = None
     exclude_classes: list[str] = Field(default_factory=list)
-    class_resolution: Literal['proposal', 'by_name'] = 'proposal'
+    class_resolution: Literal['proposal', 'by_name'] = 'by_name'
 
 
 class EmbeddingPolicy(_Criteria):
@@ -210,24 +212,39 @@ def select_for_embedding(
     return embedding_states([candidate_from_item(it, width, height) for it in items], policy)
 
 
+def awaits_class_by_name(item: DetectedItem, low_conf_source: str | None = None) -> bool:
+    """Whether ``by_name`` resolution may give ``item`` a class: it has none and no label, it
+    carries the detector's own label, and it is not one the primary left below its confidence
+    floor on purpose (``low_conf_source``, its ``{name}_low_conf`` source)."""
+    return (
+        item.class_id is None
+        and item.label is None
+        and bool(item.proposal_name)
+        and item.class_source != low_conf_source
+    )
+
+
 def assign_classes_by_name(
-    items: Sequence[DetectedItem], registry: Mapping[str, tuple[int, str]], detector_name: str
+    items: Sequence[DetectedItem],
+    registry: Mapping[str, tuple[int, str]],
+    low_conf_source: str | None = None,
 ) -> int:
     """Give each unlabeled detection the registry class named like its proposal
     (``registry`` maps normalized class name to ``(class_id, class_name)``).
-    Returns how many were resolved. The class is written with the detector's
-    classifier-style ``class_source`` (``{detector_name}_model``); the proposal
-    name is kept for lineage."""
+    Returns how many were resolved. The class is written as the detector's own
+    machine label (``DETECTOR_CLASS_SOURCE``, never validated); the proposal
+    name is kept for lineage. A detection below the primary's confidence floor
+    (``low_conf_source``) stays a low-confidence proposal."""
     resolved = 0
     for item in items:
-        if item.class_id is not None or item.label is not None or not item.proposal_name:
+        if not awaits_class_by_name(item, low_conf_source):
             continue
-        found = registry.get(normalize_class_name(item.proposal_name))
+        found = registry.get(normalize_class_name(item.proposal_name or ''))
         if found is None:
             continue
         item.class_id, item.class_name = found
         item.detector_class_id = found[0]
-        item.class_source = f'{detector_name}_model'
+        item.class_source = DETECTOR_CLASS_SOURCE
         resolved += 1
     return resolved
 
@@ -265,6 +282,7 @@ __all__ = [
     'IngestPolicyBody',
     'apply_detect_filter',
     'assign_classes_by_name',
+    'awaits_class_by_name',
     'candidate_from_doc',
     'candidate_from_item',
     'detect_keep_mask',

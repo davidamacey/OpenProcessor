@@ -22,6 +22,7 @@ export const CLASS_SOURCE_ROLES = [
   'label_import',
   'open_vocab',
   'propagated',
+  'detector',
 ] as const;
 
 export type ClassSourceRole = (typeof CLASS_SOURCE_ROLES)[number];

@@ -8,7 +8,7 @@ collaborators declared below.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config import get_region_fields
 from src.core.logging import get_logger
@@ -16,10 +16,12 @@ from src.services.curation.ingest_policy import (
     IngestPolicy,
     apply_detect_filter,
     assign_classes_by_name,
+    awaits_class_by_name,
     registry_name_index,
 )
 from src.services.curation.ingest_writer import get_ingest_writer
 from src.services.detection.geometry import letterbox_params
+from src.utils.class_names import class_name_deprecation_index, normalize_class_name
 from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
 
@@ -34,6 +36,13 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+class ClassEnsurer(Protocol):
+    """Adds the registry class for a detector label (``name`` in registry-name form, ``label`` as
+    the detector spells it) when it is missing; answers ``(class_id, class_name)``."""
+
+    async def __call__(self, name: str, label: str) -> tuple[int, str]: ...
 
 
 @dataclass
@@ -58,6 +67,11 @@ class IngestItemsMixin:
     detector: WholeImageDetector
     region_seed_status: Any
     policy: IngestPolicy
+    # Creates a detector label's registry class; ``None`` resolves only against the registry as
+    # it is (a caller with no registry to write to).
+    class_ensurer: ClassEnsurer | None
+    # Classes this service already created, by registry name: one registry write per name.
+    ensured_classes: dict[str, tuple[int, str]]
 
     # Fields whose presence on an existing items doc signals a human
     # write that ingest must never clobber on re-ingest.
@@ -155,9 +169,9 @@ class IngestItemsMixin:
                     logger.warning(
                         'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
                     )
-        return self.filter_detections(items, img.width, img.height, secondary_detector_error)
+        return await self.filter_detections(items, img.width, img.height, secondary_detector_error)
 
-    def filter_detections(
+    async def filter_detections(
         self,
         items: list[DetectedItem],
         width: int,
@@ -167,5 +181,25 @@ class IngestItemsMixin:
         """The project's detect filter and class resolution over detected items."""
         items, n_filtered = apply_detect_filter(items, self.policy.detect, width, height)
         if self.policy.detect.class_resolution == 'by_name':
-            assign_classes_by_name(items, registry_name_index(self.registry), self.profile.name)
+            low_conf = f'{self.profile.name}_low_conf'
+            await self._create_detector_classes(items, low_conf)
+            assign_classes_by_name(
+                items, {**registry_name_index(self.registry), **self.ensured_classes}, low_conf
+            )
         return DetectResult(items, secondary_detector_error, n_filtered)
+
+    async def _create_detector_classes(self, items: list[DetectedItem], low_conf: str) -> None:
+        """Add the registry class of every detector label these items carry that the registry
+        does not know at all. A deprecated class of that name, or the region class, counts as
+        known: neither is brought back or duplicated (the rule ``seed_from_detector`` follows)."""
+        if self.class_ensurer is None:
+            return
+        known = class_name_deprecation_index(self.registry.classes)
+        for item in items:
+            if not awaits_class_by_name(item, low_conf):
+                continue
+            label = item.proposal_name or ''
+            slug = normalize_class_name(label)
+            if not slug or slug in known or slug in self.ensured_classes:
+                continue
+            self.ensured_classes[slug] = await self.class_ensurer(slug, label)

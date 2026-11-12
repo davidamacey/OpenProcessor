@@ -23,6 +23,7 @@ from src.services.clustering.assign import serving_partition_id
 from src.services.clustering.partitions import list_partitions
 from src.services.curation.audit import has_pending_sample
 from src.services.curation.dataset_thresholds import adequacy
+from src.services.curation.detector_adoption import detector_census, plan_adoption
 from src.services.curation.review_tab_status import NO_AUDIT_SAMPLE
 
 
@@ -48,10 +49,42 @@ class WorkflowFacts:
     training_runs: int = 0
     promoted_model: bool = False
     audit_pending: bool = False
+    detector_classes_missing: int = 0
+    detector_items_undecided: int = 0
 
 
 def _plural(count: int, one: str, many: str) -> str:
     return f'{count} {one if count == 1 else many}'
+
+
+def _classes_step(f: WorkflowFacts) -> WorkflowStep:
+    """Done when the registry has classes and every class the detector named is in it, with every
+    item the detector named carrying one; otherwise it offers to adopt them."""
+    gaps = []
+    if f.detector_classes_missing:
+        gaps.append(
+            f'{_plural(f.detector_classes_missing, "detector class is", "detector classes are")} '
+            'not in the registry'
+        )
+    if f.detector_items_undecided:
+        gaps.append(
+            f'{_plural(f.detector_items_undecided, "item has", "items have")} a detector class '
+            'and no class'
+        )
+    if gaps:
+        detail = '; '.join(gaps) + '.'
+    elif f.active_classes:
+        detail = f'{_plural(f.active_classes, "class", "classes")} in the registry.'
+    else:
+        detail = 'The registry has no classes.'
+    return WorkflowStep(
+        id='classes',
+        label='Create classes from the detector',
+        detail=detail,
+        done=f.active_classes > 0 and not gaps,
+        section='classes',
+        action='adopt_detector_classes' if gaps else None,
+    )
 
 
 def build_steps(f: WorkflowFacts) -> WorkflowSteps:
@@ -65,15 +98,7 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
             done=f.images > 0,
             section='ingest',
         ),
-        WorkflowStep(
-            id='classes',
-            label='Create classes from the detector',
-            detail=f'{_plural(f.active_classes, "class", "classes")} in the registry.'
-            if f.active_classes
-            else 'The registry has no classes.',
-            done=f.active_classes > 0,
-            section='classes',
-        ),
+        _classes_step(f),
         WorkflowStep(
             id='cluster',
             label='Group the detections into clusters',
@@ -200,6 +225,7 @@ async def gather_facts(
         (await opensearch.count(index=images_index(), body={'query': {'match_all': {}}}))['count']
     )
     active, missing, below = class_facts(classes, counts)
+    plan = plan_adoption(await detector_census(opensearch), classes)
     async with project_tx(session, project):
         partitions = await list_partitions(session, target='item', limit=1)
         serving = await serving_partition_id(
@@ -217,6 +243,8 @@ async def gather_facts(
             exports=await _count(session, DatasetExport, project),
             training_runs=await _count(session, TrainingRun, project),
             audit_pending=await has_pending_sample(opensearch),
+            detector_classes_missing=len(plan.create),
+            detector_items_undecided=plan.items,
             promoted_model=await _flag(
                 session,
                 select(Promotion.id).where(

@@ -48,6 +48,7 @@ from src.services.projects.registry import (
     get_project_registry,
     set_project_registry,
 )
+from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
@@ -370,13 +371,14 @@ def test_wheel_example_end_to_end(
         == expected['boxes_per_class']['Car'] + expected['boxes_per_class']['automobile']
     )
 
-    # -- hop 3: the primary detector's proposals never take a class by index --
+    # -- hop 3: the primary detector's proposals take the class named like the detector's own
+    # label, as a machine label (never validated), and never one by index --
     proposals = [d for d in items.values() if d.get('proposed_by_import')]
     assert len(proposals) == report['proposals_created'] == 12
-    assert {d.get('class_name') for d in proposals} == {None}
-    assert {d.get('class_id') for d in proposals} == {None}
-    assert {d['class_source'] for d in proposals} == {'item_proposal'}
-    assert not {d.get('proposal_name') for d in proposals} & set(ids)
+    assert {d['class_source'] for d in proposals} == {'detector'}
+    assert {d['class_validated'] for d in proposals} == {False}
+    assert all(d['class_name'] == normalize_class_name(d['proposal_name']) for d in proposals)
+    assert not {d['class_name'] for d in proposals} & set(ids)
 
     # -- hop 4: the example profile and pack, through the config routes ------
     for kind in ('region_profiles', 'prompt_packs'):

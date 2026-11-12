@@ -19,6 +19,15 @@ if TYPE_CHECKING:
     from src.config import DetectionProfile
 
 
+DETECTOR_CLASS_GROUP = 'detector'
+"""The registry group of a class created from a detector label."""
+
+
+def detector_class_notes(label: str) -> str:
+    """The note a class created from the detector label ``label`` carries."""
+    return f'detector label: {label}'
+
+
 SkipReason = Literal['exists', 'deprecated']
 ConflictReason = Literal['duplicate_slug', 'unnamed_label']
 

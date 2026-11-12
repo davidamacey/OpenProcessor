@@ -90,6 +90,7 @@ def test_fixed_writer_values_and_roles(clean_env: pytest.MonkeyPatch) -> None:
     assert by_id['external_label'] == 'label_import'
     assert by_id['unlabeled_proposal'] == 'proposal'
     assert by_id['open_vocab_proposal'] == 'open_vocab'
+    assert by_id['detector'] == 'detector'
 
 
 def test_catalog_entries_are_well_formed(clean_env: pytest.MonkeyPatch) -> None:
@@ -150,6 +151,8 @@ _DYNAMIC_WRITES: dict[str, str | None] = {
     'OPEN_VOCAB_TARGET_CLASS_SOURCE': 'open_vocab_target',
     # ItemLabel.propagated(): the auto-label loop's carried-over class.
     'PROPAGATED_CLASS_SOURCE': 'assist_propagated',
+    # The detector's own class: by-name resolution at ingest, and an adoption of it.
+    'DETECTOR_CLASS_SOURCE': 'detector',
     # Label import: caller-chosen, default 'external_label'.
     'label_source': 'external_label',
     'item.class_source': None,
@@ -313,3 +316,32 @@ def test_every_catalog_entry_has_a_short_badge_label() -> None:
     for entry in class_source_catalog():
         assert entry['short_label'], entry
         assert len(entry['short_label'].split()) <= 2, entry
+
+
+# ---------------------------------------------------------------------------
+# The detector's own class: a machine label that is not confident
+# ---------------------------------------------------------------------------
+
+
+def test_detector_source_is_not_confident(clean_env: pytest.MonkeyPatch) -> None:
+    """A confident source drops the item from the clustering pool; the detector's guess must
+    stay in it."""
+    from src.domain.ingest_class_sources import DETECTOR_CLASS_SOURCE, confident_class_sources
+
+    assert DETECTOR_CLASS_SOURCE == 'detector'
+    assert DETECTOR_CLASS_SOURCE not in confident_class_sources()
+
+
+def test_detector_source_is_in_the_check_machine_queue() -> None:
+    """The queue is 'has a class, and the source is not a human one'."""
+    from fnmatch import fnmatchcase
+
+    from src.domain.ingest_class_sources import DETECTOR_CLASS_SOURCE
+    from src.services.curation.review_tab_clauses import SIMPLE_TABS
+
+    must, must_not, _reason = SIMPLE_TABS['check_machine'](False, None)
+    assert {'exists': {'field': 'class_id'}} in must
+    wildcards = [c['wildcard']['class_source']['value'] for c in must_not if 'wildcard' in c]
+    assert wildcards
+    assert not any(fnmatchcase(DETECTOR_CLASS_SOURCE, w) for w in wildcards)
+    assert all(fnmatchcase('human_move', w) for w in wildcards)

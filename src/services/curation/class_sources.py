@@ -20,6 +20,7 @@ from typing import Any, Final, Literal, get_args
 from src.domain.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
+    DETECTOR_CLASS_SOURCE,
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     OPEN_VOCAB_CLASS_SOURCE,
@@ -78,6 +79,7 @@ CLASS_SOURCE_ROLES: tuple[str, ...] = (
     'label_import',
     'open_vocab',
     'propagated',
+    'detector',
 )
 
 _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
@@ -117,6 +119,12 @@ _FIXED_ENTRIES: tuple[tuple[str, str, str, str], ...] = (
         'Class named by an open-vocabulary target',
         'open_vocab',
         'Target class',
+    ),
+    (
+        DETECTOR_CLASS_SOURCE,
+        'Class named by the detector for its box',
+        'detector',
+        'Detector',
     ),
     (
         PROPAGATED_CLASS_SOURCE,

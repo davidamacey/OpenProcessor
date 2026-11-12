@@ -11,7 +11,14 @@ from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._selection_write_models import LabelOpAccepted
-from src.schemas.curation.label_ops import LabelOpList, LabelOpUndoRequest, LabelOpUndoResponse
+from src.schemas.curation.label_ops import (
+    AdoptDetectorRequest,
+    AdoptDetectorResponse,
+    LabelOpList,
+    LabelOpUndoRequest,
+    LabelOpUndoResponse,
+)
+from src.services.curation.detector_adoption import detector_census, plan_adoption, start_adoption
 from src.services.curation.label_ops.undo import start as undo_start, undo_dry_run
 from src.services.curation.label_ops.views import list_label_ops
 
@@ -69,4 +76,58 @@ async def undo_op(
     job = await undo_start(session, current_project_id(), op_id, opensearch)
     return JSONResponse(
         status_code=202, content=LabelOpAccepted(op_id=op_id, job_id=str(job.id)).model_dump()
+    )
+
+
+@router.post(
+    '/label_ops/adopt_detector',
+    response_model=None,
+    responses={
+        200: {'model': AdoptDetectorResponse, 'description': 'A dry run, or nothing to label.'},
+        202: {'model': AdoptDetectorResponse, 'description': 'The operation is queued as a job.'},
+        409: {'description': 'project_read_only.'},
+    },
+)
+async def adopt_detector(
+    payload: AdoptDetectorRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    session: DbSessionDep,
+) -> Any:
+    """Give the items the detector named but nobody classed that class, as an undoable operation.
+
+    Each item with a detector label and no class gets the registry class of that name as a
+    machine label (`class_source` `detector`, never validated); the registry classes the
+    detector's labels need are added first, so every label the detector produced is in the
+    registry. A person's, an import's or a validated class, a test-holdout item and an excluded
+    one are never written, and a detector name that matches a deprecated class or the region class
+    is skipped and reported. The operation shows in `GET /label_ops` and is undone like a bulk
+    label. `dry_run` (the default) counts and writes nothing; send `{"dry_run": false}` to run it
+    (202 with the operation and its job). One operation writes at most 20,000 items: `remaining`
+    says how many are left, adopt again for them.
+    """
+    doc = await registry.snapshot()
+    if payload.dry_run:
+        plan = plan_adoption(await detector_census(opensearch), doc.classes)
+        return AdoptDetectorResponse(
+            dry_run=True,
+            items=plan.items,
+            classes_to_create=list(plan.create),
+            blocked=list(plan.blocked),
+            blocked_items=plan.blocked_items,
+            remaining=0,
+        )
+    started = await start_adoption(session, current_project_id(), opensearch, doc)
+    body = AdoptDetectorResponse(
+        dry_run=False,
+        items=started.plan.items,
+        classes_to_create=list(started.created),
+        blocked=list(started.plan.blocked),
+        blocked_items=started.plan.blocked_items,
+        remaining=started.remaining,
+        op_id=None if started.op_id is None else str(started.op_id),
+        job_id=None if started.job_id is None else str(started.job_id),
+    )
+    return JSONResponse(
+        status_code=200 if started.op_id is None else 202, content=body.model_dump()
     )

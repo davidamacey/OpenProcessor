@@ -39,7 +39,13 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-LABEL_OPERATION_KINDS = ('label', 'move', 'assist_loop_propagate', 'assist_loop_review')
+LABEL_OPERATION_KINDS = (
+    'label',
+    'move',
+    'assist_loop_propagate',
+    'assist_loop_review',
+    'adopt_detector',
+)
 """The kinds of ``label_operations.kind`` (a free-text column; this tuple is the one vocabulary)."""
 
 MEMBER_BATCH = 5_000

@@ -22,6 +22,7 @@ from typing import Any, Literal
 
 from src.domain.audit_math import audit_outcome_fields
 from src.domain.ingest_class_sources import (
+    DETECTOR_CLASS_SOURCE,
     HUMAN_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     LABEL_SOURCE_IMPORT,
@@ -33,6 +34,9 @@ from src.utils.timeutil import now_iso
 
 MOVE_ASSIGNED_BY = 'edit'
 """``cluster_assigned_by`` of an item a human moved into a cluster."""
+
+ADOPT_DETECTOR_LABELER = 'adopt_detector'
+"""``class_labeler`` of a class the detector named that an adoption wrote."""
 
 ASSIST_LOOP = 'assist_loop'
 """``label_source``, detector and labeler of a propagated class."""
@@ -74,7 +78,7 @@ class ItemLabel:
 
     class_id: int
     class_name: str
-    source: Literal['human', 'import', 'propagated']
+    source: Literal['human', 'import', 'propagated', 'detector']
     writer: str
     label_source: str | None = None
     validated: bool = True
@@ -99,6 +103,21 @@ class ItemLabel:
             source='human',
             writer=writer,
             label_source=label_source,
+            op_id=op_id,
+        )
+
+    @classmethod
+    def detector(
+        cls, *, class_id: int, class_name: str, writer: str, op_id: str | None = None
+    ) -> ItemLabel:
+        """The class the detector itself named, adopted onto an item that had none: a machine
+        label, never validated."""
+        return cls(
+            class_id=class_id,
+            class_name=class_name,
+            source='detector',
+            writer=writer,
+            validated=False,
             op_id=op_id,
         )
 
@@ -153,6 +172,16 @@ def class_label_fields(label: ItemLabel) -> dict[str, Any]:
             'label_op_id': label.op_id,
             **human_class_provenance(),
         }
+    elif label.source == 'detector':
+        fields = {
+            'class_id': label.class_id,
+            'class_name': label.class_name,
+            'class_source': DETECTOR_CLASS_SOURCE,
+            'class_validated': False,
+            'label_source': DETECTOR_CLASS_SOURCE,
+            'class_labeler': ADOPT_DETECTOR_LABELER,
+            'class_labeled_at': now_iso(),
+        }
     elif label.source == 'propagated':
         fields = {
             'class_id': label.class_id,
@@ -199,7 +228,7 @@ def class_label_update(current: dict[str, Any], label: ItemLabel) -> dict[str, A
     fields = class_label_fields(label)
     fields['class_id_history'] = history
     fields['updated_at'] = now_iso()
-    if label.source == 'propagated':
+    if label.source in ('propagated', 'detector'):
         # The tag the operation's undo looks for; None clears a stale one, as a human label does.
         fields['label_op_id'] = label.op_id
     if label.source == 'human' and label.validated:

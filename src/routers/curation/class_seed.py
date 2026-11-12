@@ -17,7 +17,11 @@ from src.routers.curation._error_models import (
 )
 from src.routers.curation.classes_write import create_registry_class
 from src.services.classes.registry import ClassRegistryError
-from src.services.curation.detector_vocabulary import detector_labels, plan_seed
+from src.services.curation.detector_vocabulary import (
+    detector_class_notes,
+    detector_labels,
+    plan_seed,
+)
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
     refreshed_ingest_profiles,
@@ -80,7 +84,7 @@ async def seed_from_detector(
                     reg,
                     name=label.slug,
                     group=payload.group,
-                    notes=f'detector label: {label.name}',
+                    notes=detector_class_notes(label.name),
                 )
                 class_id = created_class['class_id']
             except ClassRegistryError:

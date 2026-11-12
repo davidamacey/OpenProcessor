@@ -37,6 +37,7 @@ from src.domain.label_ops import (
     LABEL_OP_ID_RE,
     LabelOpKind,
     OpFingerprint,
+    detector_fingerprint,
     label_fingerprint,
     move_fingerprint,
     propagated_fingerprint,
@@ -139,7 +140,9 @@ async def create_op_in(
         raise rejection(409, 'project_read_only', 'the project is read-only; nothing was written')
     project_id = current_project_id()
     at = now_iso()
-    if new.kind in ('label', 'assist_loop_propagate'):
+    if new.kind == 'adopt_detector':
+        fingerprint = detector_fingerprint(op_id=str(op_id), writer=new.writer, at=at)
+    elif new.kind in ('label', 'assist_loop_propagate'):
         assert new.class_name is not None
         make = label_fingerprint if new.kind == 'label' else propagated_fingerprint
         fingerprint = make(op_id=str(op_id), writer=new.writer, at=at, class_name=new.class_name)

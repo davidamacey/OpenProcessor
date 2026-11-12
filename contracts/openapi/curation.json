@@ -429,6 +429,92 @@
         "title": "ActiveRegionProfileSummary",
         "type": "object"
       },
+      "AdoptDetectorRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "AdoptDetectorRequest",
+        "type": "object"
+      },
+      "AdoptDetectorResponse": {
+        "description": "``POST /label_ops/adopt_detector``: what adoption would do (a dry run) or did.\n\nThe counts are by detector name. A real run adds the registry classes the detector's labels\nneed, then queues the recorded operation (``op_id`` and ``job_id``, both null when no item was\nleft to label).",
+        "properties": {
+          "blocked": {
+            "description": "Detector names of a deprecated class or the region class: skipped.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked",
+            "type": "array"
+          },
+          "blocked_items": {
+            "description": "Items left without a class because of `blocked`.",
+            "title": "Blocked Items",
+            "type": "integer"
+          },
+          "classes_to_create": {
+            "description": "Detector names the registry lacks (a dry run) or that were added (a real run).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Classes To Create",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "Items that have a detector class but no class of their own.",
+            "title": "Items",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id"
+          },
+          "op_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id"
+          },
+          "remaining": {
+            "description": "Items beyond this operation (one writes at most 20,000): adopt again.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "items",
+          "classes_to_create",
+          "blocked",
+          "blocked_items",
+          "remaining"
+        ],
+        "title": "AdoptDetectorResponse",
+        "type": "object"
+      },
       "ApiErrorResponse": {
         "description": "The body of every error :func:`api_error` raises.",
         "properties": {
@@ -6436,6 +6522,110 @@
         "title": "CocoAnnotationFileSpec",
         "type": "object"
       },
+      "CohortColumn": {
+        "description": "One cohort of the summary: how to fetch its rows and how many it holds in all.",
+        "properties": {
+          "cutoffs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Cutoffs",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "row_kind": {
+            "enum": [
+              "crop",
+              "region"
+            ],
+            "title": "Row Kind",
+            "type": "string"
+          },
+          "total": {
+            "description": "Items the cohort holds, over every class and none.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "cutoffs",
+          "endpoint",
+          "params",
+          "row_kind",
+          "total"
+        ],
+        "title": "CohortColumn",
+        "type": "object"
+      },
+      "CohortRow": {
+        "description": "One class (or detector label) with its count in every cohort.",
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a detector label the registry lacks.",
+            "title": "Class Id"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Items per cohort id; every cohort is present.",
+            "title": "Counts",
+            "type": "object"
+          },
+          "kind": {
+            "description": "`class`: an active registry class. `detector`: a label the detector named on items without a class, for which the registry has no class.",
+            "enum": [
+              "class",
+              "detector"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "kind",
+          "counts"
+        ],
+        "title": "CohortRow",
+        "type": "object"
+      },
       "CombineInclude": {
         "additionalProperties": false,
         "properties": {
@@ -10787,10 +10977,10 @@
       },
       "DetectFilter": {
         "additionalProperties": false,
-        "description": "Which detector outputs are stored. Every field empty = store all.\n\n``class_resolution`` ``by_name`` gives a detection the registry class whose\nname equals the detector's own label (``traffic light`` -> ``traffic_light``),\nwritten like a classifier's label so the VLM skips it; ``proposal`` (the\ndefault) leaves every detection an unlabeled proposal.",
+        "description": "Which detector outputs are stored. Every field empty = store all.\n\n``class_resolution`` ``by_name`` (the default) gives a detection the registry class whose\nname equals the detector's own label (``traffic light`` -> ``traffic_light``), creating the\nclass when the registry lacks it, written as the detector's own machine label\n(:data:`~src.domain.ingest_class_sources.DETECTOR_CLASS_SOURCE`: reviewable, still in the\nclustering pool); ``proposal`` leaves every detection an unlabeled proposal.",
         "properties": {
           "class_resolution": {
-            "default": "proposal",
+            "default": "by_name",
             "enum": [
               "proposal",
               "by_name"
@@ -19498,7 +19688,8 @@
               "label",
               "move",
               "assist_loop_propagate",
-              "assist_loop_review"
+              "assist_loop_review",
+              "adopt_detector"
             ],
             "title": "Kind",
             "type": "string"
@@ -40636,6 +40827,32 @@
         "title": "TrainingCohortList",
         "type": "object"
       },
+      "TrainingCohortSummary": {
+        "description": "``GET /training_cohorts/summary``: the classes x cohorts matrix, counted in one request.",
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/CohortColumn"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "rows": {
+            "description": "Classes by id, then the detector-only labels.",
+            "items": {
+              "$ref": "#/components/schemas/CohortRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohorts",
+          "rows"
+        ],
+        "title": "TrainingCohortSummary",
+        "type": "object"
+      },
       "TriggersWire": {
         "additionalProperties": false,
         "properties": {
@@ -43542,6 +43759,19 @@
       },
       "WorkflowStep": {
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "const": "adopt_detector_classes",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A write the step offers instead of a page: `adopt_detector_classes` is `POST /label_ops/adopt_detector`. Null when the step is done or has none.",
+            "title": "Action"
+          },
           "detail": {
             "description": "A served sentence with the counts behind `done`.",
             "title": "Detail",
@@ -52223,6 +52453,105 @@
         ]
       }
     },
+    "/curation/projects/{project}/crops/{crop_id}/preview": {
+      "get": {
+        "description": "The item's box with its surroundings, scaled so its longest side is between `min_side` and\n`max_side`: a small box is enlarged, which a thumbnail never does.\n\nThe cut is the box grown by `pad` of its size on every side (kept inside the image) and\nresampled with Lanczos, Pillow's high-quality filter for both enlarging and shrinking\n(https://pillow.readthedocs.io/en/stable/handbook/concepts.html#filters). `outline` draws the\nbox in the highlight yellow. LRU cached; the response is `no-cache` with an `ETag` of the\nimage, the box and the parameters, so a moved box is a new body and an unmoved one a 304.\n`422 preview_sides` when `min_side` is above `max_side`.",
+        "operationId": "crop_context_preview_curation_projects__project__crops__crop_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Context added on every side, as a share of the box width and height.",
+            "in": "query",
+            "name": "pad",
+            "required": false,
+            "schema": {
+              "default": 0.6,
+              "description": "Context added on every side, as a share of the box width and height.",
+              "maximum": 2.0,
+              "minimum": 0.0,
+              "title": "Pad",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Enlarge the cut until its longest side is this.",
+            "in": "query",
+            "name": "min_side",
+            "required": false,
+            "schema": {
+              "default": 320,
+              "description": "Enlarge the cut until its longest side is this.",
+              "maximum": 2048,
+              "minimum": 32,
+              "title": "Min Side",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Shrink the cut until its longest side is this.",
+            "in": "query",
+            "name": "max_side",
+            "required": false,
+            "schema": {
+              "default": 1024,
+              "description": "Shrink the cut until its longest side is this.",
+              "maximum": 2048,
+              "minimum": 64,
+              "title": "Max Side",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Draw the item box on the cut.",
+            "in": "query",
+            "name": "outline",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Draw the item box on the cut.",
+              "title": "Outline",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crop Context Preview",
+        "tags": [
+          "Curation - Crops"
+        ]
+      }
+    },
     "/curation/projects/{project}/crops/{crop_id}/region/undo": {
       "post": {
         "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
@@ -52795,7 +53124,7 @@
             "schema": {
               "default": 128,
               "description": "Square thumbnail size",
-              "maximum": 512,
+              "maximum": 1024,
               "minimum": 32,
               "title": "Size",
               "type": "integer"
@@ -59783,6 +60112,72 @@
           }
         },
         "summary": "Get Label Ops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/label_ops/adopt_detector": {
+      "post": {
+        "description": "Give the items the detector named but nobody classed that class, as an undoable operation.\n\nEach item with a detector label and no class gets the registry class of that name as a\nmachine label (`class_source` `detector`, never validated); the registry classes the\ndetector's labels need are added first, so every label the detector produced is in the\nregistry. A person's, an import's or a validated class, a test-holdout item and an excluded\none are never written, and a detector name that matches a deprecated class or the region class\nis skipped and reported. The operation shows in `GET /label_ops` and is undone like a bulk\nlabel. `dry_run` (the default) counts and writes nothing; send `{\"dry_run\": false}` to run it\n(202 with the operation and its job). One operation writes at most 20,000 items: `remaining`\nsays how many are left, adopt again for them.",
+        "operationId": "adopt_detector_curation_projects__project__label_ops_adopt_detector_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdoptDetectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptDetectorResponse"
+                }
+              }
+            },
+            "description": "A dry run, or nothing to label."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptDetectorResponse"
+                }
+              }
+            },
+            "description": "The operation is queued as a job."
+          },
+          "409": {
+            "description": "project_read_only."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Detector",
         "tags": [
           "Curation"
         ]
@@ -75989,6 +76384,49 @@
           }
         },
         "summary": "Training Cohorts",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/training_cohorts/summary": {
+      "get": {
+        "description": "Every class x every cohort, counted in one request: `{cohorts, rows}`.\n\n`cohorts` are the catalog's (`GET /training_cohorts`) with a `total`; `rows` has one row per\nactive class (by id) with its count in each cohort, then one per detector label that is on\nitems without a class and that the registry has no class for (`kind: detector`). The\ncohort *Detector proposals not decided* (the `to_label` queue: the item has no class yet) is\nlisted only while such items exist, and is counted by the detector's own label, so a label\nthe registry lacks is visible. The counts come from one search per cohort (never per class),\nsent as one multi-search.",
+        "operationId": "training_cohort_summary_curation_projects__project__training_cohorts_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingCohortSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Training Cohort Summary",
         "tags": [
           "Curation"
         ]

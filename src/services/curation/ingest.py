@@ -109,6 +109,7 @@ if TYPE_CHECKING:
     from src.config import CurationConfig, DetectionProfile
     from src.domain.capture_metadata import CaptureMetadata
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
+    from src.services.curation.ingest_items import ClassEnsurer
     from src.utils.image_decode import DecodedImage
 
 
@@ -135,6 +136,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         policy: IngestPolicy | None = None,
         capture_reader: Callable[[bytes], Awaitable[CaptureMetadata]] | None = None,
         location_policy: Callable[[], Awaitable[str]] | None = None,
+        class_ensurer: ClassEnsurer | None = None,
     ) -> None:
         # Accept either a wrapper exposing `.client` or a raw AsyncOpenSearch.
         self.opensearch = getattr(opensearch, 'client', opensearch)
@@ -153,6 +155,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         self.region_seed_status = region_seed_status()
         # The project's detect filter and embedding policy; defaults = today's behaviour.
         self.policy = policy or IngestPolicy()
+        self.class_ensurer = class_ensurer
+        self.ensured_classes = {}
         # How a new image's capture metadata is read and which location policy it is stored under.
         # Without a reader the capture is unknown (the capture backfill fills it); without a
         # policy source no coordinate is stored (fail closed).
@@ -337,7 +341,9 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
 
         try:
             if ctx.pil is None:
-                detected = self.filter_detections(prefilled_items or [], ctx.width, ctx.height)
+                detected = await self.filter_detections(
+                    prefilled_items or [], ctx.width, ctx.height
+                )
             else:
                 detected = await self.detect_items(
                     ctx.pil,

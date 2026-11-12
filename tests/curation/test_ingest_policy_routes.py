@@ -67,7 +67,7 @@ def test_get_returns_defaults_when_never_written(client: TestClient) -> None:
         'max_per_image': None,
         'classes': None,
         'exclude_classes': [],
-        'class_resolution': 'proposal',
+        'class_resolution': 'by_name',
     }
     assert 'detector' not in body
 

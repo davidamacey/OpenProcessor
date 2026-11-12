@@ -40,6 +40,11 @@ OPEN_VOCAB_TARGET_CLASS_SOURCE = 'open_vocab_target'
 # the auto-label loop (or an explicit apply asking for the same kind): machine
 # output, never validated, so it stays reviewable and out of the export.
 PROPAGATED_CLASS_SOURCE = 'assist_propagated'
+# The class the primary detector itself named for a box, written as a machine label: the item
+# has a class (so it shows in "check machine labels"), but the label is only a guess, so the
+# source is NOT in ``confident_class_sources`` and the item stays in the clustering pool and
+# open to the VLM.
+DETECTOR_CLASS_SOURCE = 'detector'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
 # ``label_source`` (not ``class_source``) value stamped by dataset import.
@@ -95,6 +100,7 @@ __all__ = [
     'CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE',
     'CLUSTER_MAJORITY_CLASS_SOURCE',
     'DEFAULT_PROPOSAL_CLASS_SOURCE',
+    'DETECTOR_CLASS_SOURCE',
     'HUMAN_CLASS_SOURCE',
     'LABEL_IMPORT_CLASS_SOURCE',
     'LABEL_SOURCE_IMPORT',
