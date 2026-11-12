@@ -5,18 +5,17 @@
    * revisions and the active set are served; `OpenVocabEditor` holds the
    * draft and follows the server.
    */
-  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { resolve } from '$app/paths';
-  import ConfigActivateDialog from '$components/config/ConfigActivateDialog.svelte';
   import ConfigActivePanel from '$components/config/ConfigActivePanel.svelte';
-  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigDocHeader from '$components/config/ConfigDocHeader.svelte';
+  import ConfigEditorDialogs from '$components/config/ConfigEditorDialogs.svelte';
+  import ConfigActivationCheck from '$components/config/ConfigActivationCheck.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
-  import ConfigRestoreDialog from '$components/config/ConfigRestoreDialog.svelte';
   import ConfigRevisions from '$components/config/ConfigRevisions.svelte';
   import ConfigSavePanel from '$components/config/ConfigSavePanel.svelte';
-  import ConfigViewingBanner from '$components/config/ConfigViewingBanner.svelte';
+  import ConfigEditorLead from '$components/config/ConfigEditorLead.svelte';
+  import ConfigDescriptionField from '$components/config/ConfigDescriptionField.svelte';
   import SegmenterNotice from '$components/openVocab/SegmenterNotice.svelte';
   import OpenVocabTargetsTable from '$components/openVocab/OpenVocabTargetsTable.svelte';
   import OpenVocabTestPanel from '$components/openVocab/OpenVocabTestPanel.svelte';
@@ -32,8 +31,8 @@
     unplacedOpenVocabIssues,
   } from '$lib/openVocab/openVocabFields';
   import { createOpenVocabList } from '$lib/openVocab/openVocabListController.svelte';
+  import { createConfigEditorFlow } from '$lib/config/editorFlow.svelte';
   import { projectHref } from '$lib/projectPaths';
-  import type { ConfigDocBase } from '$lib/types_config';
   import type {
     OpenVocabBody,
     OpenVocabFieldSchema,
@@ -42,7 +41,6 @@
   import type { ProfileFieldValue } from '$lib/types_profiles';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
     keyboardStore.setScope('settings');
@@ -69,28 +67,12 @@
   const advancedCount = $derived(ed.schema?.fields.filter((f) => f.advanced).length ?? 0);
 
   let showAdvanced = $state(false);
-  let activating = $state<ConfigDocBase<unknown> | null>(null);
-  let restoring = $state(false);
-  let cloning = $state(false);
-
-  function openActivate(target: ConfigDocBase<unknown>): void {
-    ed.active.clearAction();
-    activating = target;
-  }
-
-  async function doSave(): Promise<void> {
-    if (await ed.save()) toastStore.success(`Saved revision ${ed.doc?.revision}`);
-  }
-
-  async function doClone(name: string): Promise<void> {
-    const doc = await cloner.clone({ name: setName, source: null }, name, '');
-    if (!doc) return;
-    cloning = false;
-    toastStore.success(`Created ${doc.name}`);
-    await goto(
-      resolve(projectHref(`/settings/open-vocab/${encodeURIComponent(doc.name)}`)),
-    );
-  }
+  const flow = createConfigEditorFlow({
+    ed: () => ed,
+    cloner,
+    name: () => setName,
+    editorPath: (n) => projectHref(`/settings/open-vocab/${encodeURIComponent(n)}`),
+  });
 
   /** The row as the profile field editor's row, named by its issue path so
    *  every cell on the page has its own label target. */
@@ -128,36 +110,13 @@
 </script>
 
 <div class="mx-auto flex max-w-7xl flex-col gap-4 p-6">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="font-mono text-2xl font-semibold tracking-tight">{setName}</h1>
-    {#if ed.doc}
-      {@const d = ed.doc}
-      <span class="text-sm text-zinc-400" data-testid="config-meta">
-        {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
-          ? ' · read-only'
-          : ''}
-      </span>
-      {#if d.active}
-        <span
-          class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-xs text-emerald-300"
-          >active{d.active_revision != null ? ` r${d.active_revision}` : ''}</span
-        >
-        {#if d.revision != null && d.active_revision != null && d.revision !== d.active_revision}
-          <span class="text-xs text-amber-300" data-testid="saved-vs-active"
-            >saved r{d.revision}, active r{d.active_revision}</span
-          >
-        {/if}
-      {/if}
-      {#if d.cloned_from}
-        <span class="font-mono text-xs text-zinc-500">cloned from {d.cloned_from}</span>
-      {/if}
-    {/if}
-    <span class="grow"></span>
-    <a
-      class="text-xs text-blue-300 hover:underline"
-      href={resolve(projectHref('/settings/open-vocab'))}>All open-vocabulary sets</a
-    >
-  </header>
+  <ConfigDocHeader
+    name={setName}
+    doc={ed.doc}
+    listPath="/settings/open-vocab"
+    listLabel="All open-vocabulary sets"
+    lineage
+  />
 
   <ConfigGate
     store={openVocabAvailability}
@@ -204,36 +163,9 @@
           class="surface flex min-w-0 flex-col gap-4 p-4"
           aria-label="Open-vocabulary set fields"
         >
-          <ConfigViewingBanner
-            {ed}
-            onrestore={() => (restoring = true)}
-            onactivate={() => ed.viewing && openActivate(ed.viewing)}
-          />
+          <ConfigEditorLead {ed} {flow} noun="set" />
 
-          {#if d.read_only}
-            <div class="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
-              <span>This set is read-only. Clone it to make an editable copy.</span>
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => {
-                  cloner.clearClone();
-                  cloning = true;
-                }}>Clone to edit</button
-              >
-            </div>
-          {/if}
-
-          <label class="flex flex-col gap-1 text-xs text-zinc-400">
-            Description
-            <input
-              class="input input-sm text-sm"
-              value={ed.viewing ? (ed.viewing.description ?? '') : ed.draftDescription}
-              readonly={!ed.editable}
-              oninput={(e) =>
-                ed.setDescription((e.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
+          <ConfigDescriptionField {ed} />
 
           {#if advancedCount > 0}
             <label class="flex items-center gap-2 text-xs text-zinc-400">
@@ -315,41 +247,11 @@
             {ed}
             report={shownReport}
             noun="set"
-            onsave={() => void doSave()}
-            onactivate={() => openActivate(d)}
+            onsave={() => void flow.doSave()}
+            onactivate={() => flow.openActivate(d)}
           >
             {#snippet extra()}
-              {#if !ed.viewing}
-                <div class="flex flex-col gap-2 border-t border-zinc-800 pt-2">
-                  <button
-                    type="button"
-                    class="btn btn-sm self-start"
-                    disabled={ed.activationChecking}
-                    data-testid="check-activation"
-                    onclick={() => void ed.checkActivation()}
-                    >{ed.activationChecking
-                      ? 'Checking…'
-                      : 'Check the draft for activation'}</button
-                  >
-                  {#if ed.activationCheckError}
-                    <p class="text-xs text-red-300">{ed.activationCheckError}</p>
-                  {/if}
-                  {#if ed.activationReport}
-                    {@const r = ed.activationReport}
-                    <div class="space-y-1" data-testid="activation-check">
-                      <p class="text-xs text-zinc-400">
-                        As it would be checked on activation: {r.errors.length} error{r
-                          .errors.length === 1
-                          ? ''
-                          : 's'}, {r.warnings.length} warning{r.warnings.length === 1
-                          ? ''
-                          : 's'}{r.force_allowed ? '; the server allows overriding' : ''}.
-                      </p>
-                      <ConfigIssueList issues={[...r.errors, ...r.warnings]} showField />
-                    </div>
-                  {/if}
-                </div>
-              {/if}
+              <ConfigActivationCheck {ed} oncheck={() => void ed.checkActivation()} />
             {/snippet}
           </ConfigSavePanel>
           <ConfigRevisions {ed} />
@@ -368,37 +270,11 @@
   </ConfigGate>
 </div>
 
-{#if activating}
-  <ConfigActivateDialog
-    {ed}
-    target={activating}
-    blurb="Passes that run from now on use the active set. Items already found keep their results; running it over existing images is a separate step."
-    onclose={() => (activating = null)}
-    onactivated={(t) =>
-      toastStore.success(
-        `Activated ${t.name}${t.revision == null ? '' : ` r${t.revision}`}`,
-      )}
-  />
-{/if}
-
-{#if restoring}
-  <ConfigRestoreDialog
-    {ed}
-    noun="set"
-    onclose={() => (restoring = false)}
-    onrestored={(from, to) =>
-      toastStore.success(`Restored revision ${from} as revision ${to}`)}
-  />
-{/if}
-
-{#if cloning}
-  <ConfigCloneDialog
-    title="Clone {setName}"
-    nameLabel="New set name"
-    busy={cloner.busy}
-    error={cloner.cloneError}
-    report={cloner.cloneReport}
-    onconfirm={(name) => void doClone(name)}
-    oncancel={() => (cloning = false)}
-  />
-{/if}
+<ConfigEditorDialogs
+  {flow}
+  {ed}
+  {cloner}
+  name={setName}
+  noun="set"
+  blurb="Passes that run from now on use the active set. Items already found keep their results; running it over existing images is a separate step."
+/>
