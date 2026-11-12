@@ -24,7 +24,9 @@
 <section class="surface space-y-2 p-4" data-testid="active-ingest-profile">
   <h2 class="text-sm font-semibold">Detector (ingest profile)</h2>
   {#if error}
-    <p class="text-xs text-danger" data-testid="active-ingest-profile-error">{error}</p>
+    <p class="text-xs text-danger-text" data-testid="active-ingest-profile-error">
+      {error}
+    </p>
   {:else if profile === null}
     <p class="text-xs text-fg-2">Loading the active ingest profile.</p>
   {:else if profile.active.name === null}
@@ -44,7 +46,7 @@
   <p class="text-xs text-fg-3">
     The detector a project ingests with is chosen by its active ingest profile, not by
     this policy. See
-    <a class="text-accent hover:underline" href={DOCS} target="_blank" rel="noopener"
+    <a class="text-accent-text hover:underline" href={DOCS} target="_blank" rel="noopener"
       >Ingest profiles</a
     >.
   </p>

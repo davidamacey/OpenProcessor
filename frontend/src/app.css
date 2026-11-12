@@ -27,25 +27,33 @@
   --color-accent-fill: rgb(0 102 214);
   --color-accent-soft: rgb(10 132 255 / 0.14);
   --color-accent-line: rgb(10 132 255 / 0.45);
+  /* The -text variants are for text and icons on the tinted (soft) backgrounds, where the base
+     colour falls under 4.5:1. */
+  --color-accent-text: rgb(191 219 254);
 
   /* Semantic colours, each with a 12% soft and a 35% line variant. The -fill variants are
      the darker backgrounds that carry white label text at 4.5:1. */
   --color-success: rgb(48 209 88);
   --color-success-soft: rgb(48 209 88 / 0.12);
   --color-success-line: rgb(48 209 88 / 0.35);
+  --color-success-text: rgb(134 239 172);
   --color-warn: rgb(255 159 10);
   --color-warn-soft: rgb(255 159 10 / 0.12);
   --color-warn-line: rgb(255 159 10 / 0.35);
+  --color-warn-text: rgb(252 211 77);
   --color-danger: rgb(255 69 58);
   --color-danger-soft: rgb(255 69 58 / 0.12);
   --color-danger-line: rgb(255 69 58 / 0.35);
+  --color-danger-text: rgb(252 165 165);
   --color-danger-fill: rgb(201 36 28);
   --color-info: rgb(100 210 255);
   --color-info-soft: rgb(100 210 255 / 0.12);
   --color-info-line: rgb(100 210 255 / 0.35);
+  --color-info-text: rgb(125 211 252);
   --color-holdout: rgb(191 90 242);
   --color-holdout-soft: rgb(191 90 242 / 0.12);
   --color-holdout-line: rgb(191 90 242 / 0.35);
+  --color-holdout-text: rgb(216 180 254);
 
   /* Box tones on an image. --hl is reserved for the selected thing on an image. */
   --color-tone-validated: var(--color-success);
@@ -125,8 +133,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-* {
-  border-color: var(--color-line);
+/* The default hairline colour. It MUST be in a layer: an unlayered `* { border-color }` beats
+   every border-colour utility and component class (the Tailwind utilities are layered), which
+   left each border the same colour whatever its class said. */
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
 }
 
 button {
@@ -171,14 +184,6 @@ button {
   }
 }
 
-/* A card surface (the `Card` component renders this too). */
-.surface {
-  background-color: var(--color-surface-1);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-e1);
-}
-
 /* Control classes MUST live inside @layer components: Tailwind v4 utilities
    are emitted into @layer utilities, and unlayered CSS always wins over
    layered CSS regardless of source order, so an unlayered .btn silently
@@ -187,6 +192,14 @@ button {
    `ui/Button.svelte` and `ui/Chip.svelte` render these same classes: they are the one
    implementation of the control tiers. */
 @layer components {
+  /* A card surface (the `Card` component renders this too). */
+  .surface {
+    background-color: var(--color-surface-1);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-e1);
+  }
+
   .btn,
   .btn-sm {
     display: inline-flex;
@@ -261,7 +274,7 @@ button {
   .btn[aria-pressed='true'] {
     border-color: var(--color-accent-line);
     background-color: var(--color-accent-soft);
-    color: var(--color-accent);
+    color: var(--color-accent-text);
   }
 
   /* Square icon-only variant: width matches height for whichever tier
@@ -373,48 +386,48 @@ button {
   .chip-accent {
     background-color: var(--color-accent-soft);
     border-color: var(--color-accent-line);
-    color: var(--color-accent);
+    color: var(--color-accent-text);
   }
   .chip-success {
     background-color: var(--color-success-soft);
     border-color: var(--color-success-line);
-    color: var(--color-success);
+    color: var(--color-success-text);
   }
   .chip-warn {
     background-color: var(--color-warn-soft);
     border-color: var(--color-warn-line);
-    color: var(--color-warn);
+    color: var(--color-warn-text);
   }
   .chip-danger {
     background-color: var(--color-danger-soft);
     border-color: var(--color-danger-line);
-    color: var(--color-danger);
+    color: var(--color-danger-text);
   }
   .chip-info {
     background-color: var(--color-info-soft);
     border-color: var(--color-info-line);
-    color: var(--color-info);
+    color: var(--color-info-text);
   }
   .chip-holdout {
     background-color: var(--color-holdout-soft);
     border-color: var(--color-holdout-line);
-    color: var(--color-holdout);
+    color: var(--color-holdout-text);
   }
-}
 
-kbd {
-  display: inline-block;
-  padding: 0.125rem 0.375rem;
-  /* Explicit line-height: monospace fonts default to a taller line box
-     in some engines, which was silently stretching any .btn/.chip that
-     contained a <kbd> hint taller than its kbd-less siblings in the same
-     row (32px -> 38px). Matches the xs control tier's line-height. */
-  line-height: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.75rem;
-  background-color: var(--color-surface-3);
-  border: 1px solid var(--color-line-strong);
-  border-bottom-width: 2px;
-  border-radius: var(--radius-chip);
-  color: var(--color-fg-1);
+  kbd {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    /* Explicit line-height: monospace fonts default to a taller line box
+       in some engines, which was silently stretching any .btn/.chip that
+       contained a <kbd> hint taller than its kbd-less siblings in the same
+       row (32px -> 38px). Matches the xs control tier's line-height. */
+    line-height: 0.75rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.75rem;
+    background-color: var(--color-surface-3);
+    border: 1px solid var(--color-line-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-chip);
+    color: var(--color-fg-1);
+  }
 }

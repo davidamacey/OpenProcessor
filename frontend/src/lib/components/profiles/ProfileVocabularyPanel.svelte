@@ -44,7 +44,7 @@
                 {m.state ?? '—'}{m.ready === false ? ' (not ready)' : ''}
               </td>
               <td class="py-0.5 text-fg-2">
-                {#if m.configured}<span class="mr-2 text-success"
+                {#if m.configured}<span class="mr-2 text-success-text"
                     >configured for this role</span
                   >{/if}
                 {#if m.project}<span class="mr-2"
@@ -128,7 +128,7 @@
             {#each vocab.vlm.endpoints as v (v.name)}
               <tr class="border-t border-line">
                 <td class="py-0.5 pr-3 font-mono"
-                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-success"
+                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-success-text"
                       >active</span
                     >{/if}</td
                 >
@@ -144,7 +144,7 @@
                 >
                 <td class="py-0.5 font-mono"
                   >{v.status ?? '—'}{#if v.warning}<span
-                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 font-sans text-danger"
+                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 font-sans text-danger-text"
                       data-testid="vocab-vlm-warning">{v.warning}</span
                     >{/if}</td
                 >

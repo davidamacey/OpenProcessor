@@ -81,7 +81,7 @@
     <h1 class="text-lg font-semibold text-fg-1">Ingest</h1>
     {#if datasetsAvailability.available === true}
       <a
-        class="text-sm text-accent hover:underline"
+        class="text-sm text-accent-text hover:underline"
         data-testid="ingest-dataset-import-link"
         href={resolve(projectHref('/datasets/import'))}>Import a labeled dataset</a
       >
@@ -89,7 +89,9 @@
   </div>
 
   {#if configError}
-    <p class="text-sm text-danger">Could not load the ingest config: {configError}</p>
+    <p class="text-sm text-danger-text">
+      Could not load the ingest config: {configError}
+    </p>
   {:else if !config}
     <p class="text-sm text-fg-3">Loading…</p>
   {:else}
@@ -103,7 +105,9 @@
       </p>
     {:else}
       {#if !config.uploadPersistsBytes}
-        <p class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn">
+        <p
+          class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
+        >
           This backend indexes uploads without keeping the image; use server-path ingest
           or the command-line uploader.
         </p>

@@ -186,7 +186,7 @@
       {/if}
     </div>
     {#if gate?.blocked}
-      <p class="mt-1 text-caption text-warn">{gate.reason}</p>
+      <p class="mt-1 text-caption text-warn-text">{gate.reason}</p>
     {/if}
   </div>
 
@@ -222,17 +222,17 @@
         <span
           class="rounded px-2 py-0.5 font-mono uppercase
             {job.status === 'running'
-            ? 'bg-accent/20 text-accent'
+            ? 'bg-accent/20 text-accent-text'
             : job.status === 'completed'
-              ? 'bg-success/20 text-success'
+              ? 'bg-success/20 text-success-text'
               : job.status === 'failed'
-                ? 'bg-danger/20 text-danger'
+                ? 'bg-danger/20 text-danger-text'
                 : job.status === 'cancelled' ||
                     job.status === 'cancelling' ||
                     job.status === 'paused' ||
                     job.status === 'completed_with_errors' ||
                     job.status === 'interrupted'
-                  ? 'bg-warn/20 text-warn'
+                  ? 'bg-warn/20 text-warn-text'
                   : 'bg-surface-3/40 text-fg-2'}"
           data-testid="auto-label-status"
         >
@@ -284,10 +284,10 @@
       {/if}
 
       {#if job.error}
-        <p class="text-xs text-danger">Error: {job.error}</p>
+        <p class="text-xs text-danger-text">Error: {job.error}</p>
       {/if}
       {#if job.error_detail}
-        <p class="text-xs text-danger/80" data-testid="auto-label-error-detail">
+        <p class="text-xs text-danger-text/80" data-testid="auto-label-error-detail">
           {job.error_detail}
         </p>
       {/if}
@@ -335,7 +335,7 @@
                 {#each summarizeRunStages(job.result) as row (row.key)}
                   <tr
                     class="border-t border-line align-top {row.status === 'error'
-                      ? 'bg-danger/10 text-danger'
+                      ? 'bg-danger/10 text-danger-text'
                       : ''}"
                     data-stage-status={row.status}
                   >

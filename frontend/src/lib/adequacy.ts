@@ -19,11 +19,11 @@ export type AdequacyLevel = 'block' | 'warn' | 'ok';
 export function adequacyChipClass(level: string | null | undefined): string {
   switch (level) {
     case 'ok':
-      return 'bg-success/20 text-success border-success/40';
+      return 'bg-success/20 text-success-text border-success/40';
     case 'warn':
-      return 'bg-warn/20 text-warn border-warn/40';
+      return 'bg-warn/20 text-warn-text border-warn/40';
     case 'block':
-      return 'bg-danger/20 text-danger border-danger/40';
+      return 'bg-danger/20 text-danger-text border-danger/40';
     default:
       return 'bg-surface-2/40 text-fg-2 border-line-strong';
   }

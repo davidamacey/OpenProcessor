@@ -226,7 +226,7 @@
                 </p>
               {/if}
             {:else if presetsError}
-              <p class="text-caption text-danger">
+              <p class="text-caption text-danger-text">
                 Could not load presets: {presetsError}
               </p>
             {:else}

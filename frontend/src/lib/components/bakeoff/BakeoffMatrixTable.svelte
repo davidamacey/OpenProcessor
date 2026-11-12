@@ -81,7 +81,7 @@
               {@const best = isBest(matrix, ds.id, metric, m.model)}
               <td
                 class="px-2 py-2 text-right tabular-nums {best
-                  ? 'font-bold text-success'
+                  ? 'font-bold text-success-text'
                   : ''}"
                 data-testid="matrix-cell"
                 data-dataset={ds.id}
@@ -102,6 +102,7 @@
   </div>
   <p class="mt-2 text-xs text-fg-3">
     {metricUnit(metric)}; the best value per dataset is
-    <span class="font-bold text-success">bold</span> (every tied model); #n is the served rank.
+    <span class="font-bold text-success-text">bold</span> (every tied model); #n is the served
+    rank.
   </p>
 </div>

@@ -55,13 +55,15 @@
             type="button"
             class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors
                    {selected
-              ? 'border-accent bg-accent/10 text-accent'
+              ? 'border-accent bg-accent/10 text-accent-text'
               : 'border-line-strong bg-surface-0 text-fg-2 hover:border-accent/50'}"
             onclick={() => void ctl.loadCohortPreview(group, cohort)}
             title={cohort.description}
           >
             <span class="font-medium">{cohort.label}</span>
-            <span class="font-mono text-caption {selected ? 'text-accent' : 'text-fg-3'}">
+            <span
+              class="font-mono text-caption {selected ? 'text-accent-text' : 'text-fg-3'}"
+            >
               {#if cohort.count === undefined}
                 <span
                   title="Count not available: a cohort declared in the annotation profile is not counted by the server"
@@ -88,7 +90,9 @@
         {#if activeCohort}
           <div class="mt-3 border-t border-line pt-3">
             {#if ctl.cohortPreviewError}
-              <p class="text-xs text-danger">Preview failed: {ctl.cohortPreviewError}</p>
+              <p class="text-xs text-danger-text">
+                Preview failed: {ctl.cohortPreviewError}
+              </p>
             {:else if ctl.cohortPreviewLoading && ctl.cohortPreview.length === 0}
               <p class="text-xs text-fg-3">Loading preview…</p>
             {:else if ctl.cohortPreview.length === 0}

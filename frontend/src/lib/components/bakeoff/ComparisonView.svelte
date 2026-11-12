@@ -50,7 +50,7 @@
     </p>
   {:else if error}
     <p
-      class="rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger"
+      class="rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
       data-testid="comparison-error"
     >
       {error}
@@ -79,7 +79,7 @@
 
     {#if c.warnings.length}
       <ul
-        class="mb-3 list-disc rounded border border-warn-line bg-warn-soft p-2 pl-6 text-xs text-warn"
+        class="mb-3 list-disc rounded border border-warn-line bg-warn-soft p-2 pl-6 text-xs text-warn-text"
         data-testid="comparison-warnings"
       >
         {#each c.warnings as w, i (i)}<li>{w}</li>{/each}
@@ -118,11 +118,11 @@
                     .class_mapping.method}
                 </div>
                 {#each r.class_mapping.warnings as w, i (i)}
-                  <div class="text-caption text-warn">{w}</div>
+                  <div class="text-caption text-warn-text">{w}</div>
                 {/each}
                 {#if hasOverlap(r.train_test_overlap)}
                   <div
-                    class="mt-0.5 text-caption text-danger"
+                    class="mt-0.5 text-caption text-danger-text"
                     data-testid="row-overlap-warning"
                   >
                     overlap: {formatOverlap(r.train_test_overlap)}
@@ -152,7 +152,7 @@
 
     {#if c.failed.length}
       <ul
-        class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
+        class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
         data-testid="comparison-failed"
       >
         {#each c.failed as f (f.model)}

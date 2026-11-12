@@ -65,7 +65,7 @@
       class="surface flex flex-col gap-3 p-6 text-sm"
       data-testid="near-dup-load-error"
     >
-      <p class="text-danger" role="alert">{ctl.loadError}</p>
+      <p class="text-danger-text" role="alert">{ctl.loadError}</p>
       <button type="button" class="btn w-fit" onclick={() => void ctl.loadOverview()}
         >Retry</button
       >

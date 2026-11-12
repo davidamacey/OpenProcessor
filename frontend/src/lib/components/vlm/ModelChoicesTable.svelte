@@ -48,8 +48,9 @@
           >
             <td class="py-1.5 pr-3">
               {#if link}
-                <a class="text-accent hover:underline" href={resolve(projectHref(link))}
-                  >{c.label}</a
+                <a
+                  class="text-accent-text hover:underline"
+                  href={resolve(projectHref(link))}>{c.label}</a
                 >
               {:else}
                 <span class="text-fg-1">{c.label}</span>

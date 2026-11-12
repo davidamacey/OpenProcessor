@@ -22,7 +22,7 @@
 
 <div class="space-y-4" data-testid="ingest-sources">
   {#if controller.loadError && !controller.list}
-    <p class="text-xs text-danger" data-testid="sources-load-error">
+    <p class="text-xs text-danger-text" data-testid="sources-load-error">
       Could not load sources: {controller.loadError}
     </p>
   {:else if !controller.list}
@@ -35,15 +35,15 @@
     </p>
 
     {#if controller.loadError}
-      <p class="text-xs text-warn">Could not refresh: {controller.loadError}</p>
+      <p class="text-xs text-warn-text">Could not refresh: {controller.loadError}</p>
     {/if}
     {#if controller.notice}
-      <p class="text-xs text-success" data-testid="sources-notice">
+      <p class="text-xs text-success-text" data-testid="sources-notice">
         {controller.notice}
       </p>
     {/if}
     {#if controller.actionError && controller.editing === null}
-      <p class="text-xs text-danger" data-testid="sources-action-error">
+      <p class="text-xs text-danger-text" data-testid="sources-action-error">
         {controller.actionError}
       </p>
     {/if}

@@ -17,10 +17,10 @@ export function scanText(scan: SourceScanStatus): string {
 
 export const STATUS_TONE: Record<string, string> = {
   queued: 'text-fg-2',
-  running: 'text-accent',
-  completed: 'text-success',
-  completed_with_errors: 'text-warn',
-  failed: 'text-danger',
-  cancelled: 'text-warn',
-  interrupted: 'text-warn',
+  running: 'text-accent-text',
+  completed: 'text-success-text',
+  completed_with_errors: 'text-warn-text',
+  failed: 'text-danger-text',
+  cancelled: 'text-warn-text',
+  interrupted: 'text-warn-text',
 };

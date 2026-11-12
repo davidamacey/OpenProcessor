@@ -36,11 +36,11 @@
   }: Props = $props();
 
   const TONE: Record<CellTone, string> = {
-    validated: 'text-success',
-    machine: 'text-info',
-    unlabeled: 'text-warn',
-    holdout: 'text-holdout',
-    rejected: 'text-danger',
+    validated: 'text-success-text',
+    machine: 'text-info-text',
+    unlabeled: 'text-warn-text',
+    holdout: 'text-holdout-text',
+    rejected: 'text-danger-text',
     muted: 'text-fg-3',
   };
   const ALIGN = { start: 'text-left', end: 'text-right', center: 'text-center' } as const;

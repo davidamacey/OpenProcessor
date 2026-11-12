@@ -157,8 +157,8 @@
                 {#each issuesForTargetField(report, i, r.field) as iss (iss.id)}
                   <p
                     class="text-xs {iss.severity === 'error'
-                      ? 'text-danger'
-                      : 'text-warn'}"
+                      ? 'text-danger-text'
+                      : 'text-warn-text'}"
                     data-testid="cell-issue"
                   >
                     {iss.message}
@@ -183,7 +183,7 @@
         {#if advanced.length > 0}
           <button
             type="button"
-            class="mt-2 text-xs text-accent hover:underline"
+            class="mt-2 text-xs text-accent-text hover:underline"
             data-testid="target-advanced-toggle"
             onclick={() => (open[i] = !open[i])}
             >{open[i] ? 'Hide' : 'Show'} advanced ({advanced.length})</button

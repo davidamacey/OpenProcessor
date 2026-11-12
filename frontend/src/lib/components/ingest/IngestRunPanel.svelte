@@ -186,7 +186,7 @@
   {/if}
 
   {#if files.length >= LARGE_SELECTION_HINT}
-    <p class="text-xs text-warn">
+    <p class="text-xs text-warn-text">
       Large selection ({files.length} files) — the command-line uploader (<code
         >scripts/curation/ingest_upload.py</code
       > on the backend) is faster for very large archives.
@@ -222,10 +222,10 @@
   </div>
 
   {#if run.pauseReason}
-    <p class="text-xs text-warn">Paused — {run.pauseReason}</p>
+    <p class="text-xs text-warn-text">Paused — {run.pauseReason}</p>
   {/if}
   {#if run.errorReason}
-    <p class="text-xs text-danger">{run.errorReason}</p>
+    <p class="text-xs text-danger-text">{run.errorReason}</p>
   {/if}
 
   {#if run.totals.queued === 0 && run.totals.skipped_known > 0 && run.state === 'done'}
@@ -259,7 +259,7 @@
       >
       {#if run.totals.secondary_detector_failures > 0}
         <span
-          class="chip border-warn-line text-warn"
+          class="chip border-warn-line text-warn-text"
           title="These images ingested, but the secondary detector failed on them (primary-detector crops only). See the Ingested tab."
           data-testid="ingest-secondary-failures"
           >secondary detector failed {run.totals.secondary_detector_failures}</span
@@ -293,7 +293,9 @@
         <!-- BA-7: group/filter Failed by the served error_kind. -->
         <div class="flex flex-wrap gap-1 border-b border-line py-2 text-xs">
           <button
-            class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent' : ''}"
+            class="chip {errorKindFilter === null
+              ? 'bg-accent-soft text-accent-text'
+              : ''}"
             type="button"
             onclick={() => (errorKindFilter = null)}
           >
@@ -301,7 +303,9 @@
           </button>
           {#each run.results.errorKindCounts() as [kind, count] (kind)}
             <button
-              class="chip {errorKindFilter === kind ? 'bg-accent-soft text-accent' : ''}"
+              class="chip {errorKindFilter === kind
+                ? 'bg-accent-soft text-accent-text'
+                : ''}"
               type="button"
               onclick={() => (errorKindFilter = kind)}
             >
@@ -314,7 +318,7 @@
       {#if activeTab === 'ingested' && run.results.countNotEmbedded() > 0}
         <div class="flex gap-1 border-b border-line py-2 text-xs">
           <button
-            class="chip border-warn-line text-warn {notEmbeddedOnly
+            class="chip border-warn-line text-warn-text {notEmbeddedOnly
               ? 'bg-warn-soft'
               : ''}"
             type="button"
@@ -333,7 +337,7 @@
               <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}
             {#if r.error}
-              <span class="text-danger"> — {r.error}</span>
+              <span class="text-danger-text"> — {r.error}</span>
             {/if}
             {#if r.n_embedded != null || r.n_not_embedded}
               <span class="text-fg-3">
@@ -343,7 +347,7 @@
               >
             {/if}
             {#if r.secondary_detector_error}
-              <span class="text-warn">
+              <span class="text-warn-text">
                 — secondary detector: {r.secondary_detector_error}</span
               >
             {/if}

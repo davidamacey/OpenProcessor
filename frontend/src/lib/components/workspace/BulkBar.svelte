@@ -78,7 +78,7 @@
 >
   <span
     class="min-w-0 text-fg-1"
-    class:text-danger={!!ws.summary.error}
+    class:text-danger-text={!!ws.summary.error}
     aria-live="polite"
     data-testid="bulk-summary">{text}</span
   >

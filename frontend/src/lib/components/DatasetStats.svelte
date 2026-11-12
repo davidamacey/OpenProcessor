@@ -83,9 +83,9 @@
       <span
         class="rounded px-1.5 py-0.5 text-caption uppercase tracking-wide"
         class:bg-success={connected && !error}
-        class:text-success={connected && !error}
+        class:text-success-text={connected && !error}
         class:bg-warn={connected && !!error}
-        class:text-warn={connected && !!error}
+        class:text-warn-text={connected && !!error}
         class:bg-surface-3={!connected}
         class:text-fg-2={!connected}
         title={!connected
@@ -101,7 +101,7 @@
 
   {#if error}
     <div
-      class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+      class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
       title={error}
     >
       Stats unavailable: {summarizeStatsError(error)}
@@ -123,7 +123,7 @@
         <dl class="mt-4 space-y-1.5 text-xs">
           <div class="flex justify-between">
             <dt class="text-fg-2">Validated (ground truth)</dt>
-            <dd class="font-mono text-success">{fmt(stats.validated)}</dd>
+            <dd class="font-mono text-success-text">{fmt(stats.validated)}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Test holdout</dt>
@@ -351,19 +351,19 @@
         <dl class="space-y-1.5 text-sm">
           <div class="flex justify-between">
             <dt class="text-fg-2">Pending detection</dt>
-            <dd class="font-mono text-warn">
+            <dd class="font-mono text-warn-text">
               {fmt(stats.unlabeled.pending_detection)}
             </dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Pending verification</dt>
-            <dd class="font-mono text-warn">
+            <dd class="font-mono text-warn-text">
               {fmt(stats.unlabeled.pending_verification)}
             </dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">No label source (class_id missing)</dt>
-            <dd class="font-mono text-danger">
+            <dd class="font-mono text-danger-text">
               {fmt(stats.unlabeled.no_label_source)}
             </dd>
           </div>
@@ -377,7 +377,7 @@
             >
               VLM, no class
             </dt>
-            <dd class="font-mono text-danger">
+            <dd class="font-mono text-danger-text">
               {fmt(stats.unlabeled.vlm_no_class)}
             </dd>
           </div>
@@ -391,7 +391,7 @@
             >
               Detector proposal, no class
             </dt>
-            <dd class="font-mono text-danger">
+            <dd class="font-mono text-danger-text">
               {fmt(stats.unlabeled.by_proposal)}
             </dd>
           </div>
@@ -416,7 +416,7 @@
           <!-- V-1: the server says why the drain can't progress (a region
                dependency is down); shown verbatim. -->
           <p
-            class="mt-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
+            class="mt-3 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
             data-testid="region-stall-reason"
           >
             Stalled: {stats.in_progress.region_stall_reason}
@@ -451,11 +451,12 @@
                 {#if drainRate == null}
                   <span class="text-fg-3">…</span>
                 {:else if drainRate < 0}
-                  <span class="text-danger">+{formatRate(-drainRate)} (growing)</span>
+                  <span class="text-danger-text">+{formatRate(-drainRate)} (growing)</span
+                  >
                 {:else if drainRate === 0}
                   <span class="text-fg-3">0 (stalled)</span>
                 {:else}
-                  <span class="text-accent">{formatRate(drainRate)}</span>
+                  <span class="text-accent-text">{formatRate(drainRate)}</span>
                 {/if}
               </dd>
             </div>
@@ -466,7 +467,7 @@
             <div class="h-full w-1/3 animate-pulse rounded bg-accent"></div>
           </div>
         {:else}
-          <p class="mt-3 text-xs text-success">queue drained</p>
+          <p class="mt-3 text-xs text-success-text">queue drained</p>
         {/if}
         <p class="mt-3 text-xs text-fg-3">
           Matches the API's <code class="font-mono">ingest/region_drain</code> total. While

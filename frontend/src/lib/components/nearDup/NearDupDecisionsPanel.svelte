@@ -18,7 +18,11 @@
 <section class="surface flex flex-col gap-3 p-4" data-testid="near-dup-decisions">
   <h2 class="text-base font-semibold">Decisions</h2>
   {#if ctl.error}
-    <p class="text-sm text-danger" role="alert" data-testid="near-dup-decisions-error">
+    <p
+      class="text-sm text-danger-text"
+      role="alert"
+      data-testid="near-dup-decisions-error"
+    >
       {ctl.error}
     </p>
   {/if}

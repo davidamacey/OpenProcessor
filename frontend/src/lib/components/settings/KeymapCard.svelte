@@ -47,7 +47,7 @@
     </div>
     {#if !keymapStore.isDefault}
       <span
-        class="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-caption text-warn"
+        class="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-caption text-warn-text"
       >
         custom keys
       </span>
@@ -56,7 +56,7 @@
 
   {#if ctl.revisionConflictMessage}
     <div
-      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
+      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
     >
       {ctl.revisionConflictMessage} Shortcuts were changed elsewhere.
       <button class="ml-2 underline" onclick={() => void ctl.reloadAfterConflict()}>
@@ -67,7 +67,7 @@
 
   {#if ctl.conflictClasses && ctl.conflictClasses.length > 0}
     <div
-      class="mb-3 rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn"
+      class="mb-3 rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn-text"
       data-testid="class-conflict-dialog"
     >
       <p class="mb-1">These class hotkeys would collide:</p>

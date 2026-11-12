@@ -42,7 +42,7 @@
   {#if classesStore.loading && allClasses.length === 0}
     <div class="p-6 text-sm text-fg-3">Loading classes…</div>
   {:else if classesStore.error}
-    <div class="p-6 text-sm text-danger">API unavailable: {classesStore.error}</div>
+    <div class="p-6 text-sm text-danger-text">API unavailable: {classesStore.error}</div>
   {:else if allClasses.length === 0}
     <div class="p-6 text-sm text-fg-3">
       No classes yet. Add one, or create them from the detector below.

@@ -39,6 +39,6 @@
     {/each}
   </select>
   {#if fallbackReason}
-    <span class="text-warn" data-testid="sort-fallback">{fallbackReason}</span>
+    <span class="text-warn-text" data-testid="sort-fallback">{fallbackReason}</span>
   {/if}
 </label>

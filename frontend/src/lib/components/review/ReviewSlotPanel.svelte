@@ -87,14 +87,14 @@
          region_verified no longer distinguishes the two. -->
     {#if slotData?.lifecycle?.validated}
       <span
-        class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success"
+        class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
         title="A human confirmed/drew/rejected this region"
       >
         human validated
       </span>
     {:else if slotData?.lifecycle?.autoConfirmed}
       <span
-        class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent"
+        class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent-text"
         title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
       >
         auto-confirmed
@@ -105,7 +105,7 @@
          signal. -->
     {#if selectedSlotBox?.bboxCorrect === false}
       <span
-        class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger"
+        class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
         title="The verifier judged this box incorrect"
       >
         model: box wrong
@@ -121,7 +121,7 @@
     {/if}
     {#if slotData?.boxSet?.setComplete === false}
       <span
-        class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn"
+        class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
         title="The VLM reported visible regions that are missing from this list"
       >
         set incomplete
@@ -240,7 +240,7 @@
       {/if}
       {#if selectedSlotBox?.textDisagreement}
         <span
-          class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn"
+          class="rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
           title="vlm: {selectedSlotBox.textVlm ?? '∅'} · ocr: {selectedSlotBox.textOcr ??
             '∅'}"
         >
@@ -260,7 +260,7 @@
       {/if}
       {#if selectedSlotBox?.textVlmInvalid}
         <span
-          class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger"
+          class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
           title="Why the VLM's own reading wasn't used as text"
         >
           vlm invalid: {regionVocabularyStore.invalidReasonLabel(

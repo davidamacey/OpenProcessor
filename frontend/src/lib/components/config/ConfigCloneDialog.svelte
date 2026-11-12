@@ -82,7 +82,7 @@
     </label>
   {/if}
   {#if error}
-    <p class="text-danger" data-testid="clone-error">{error}</p>
+    <p class="text-danger-text" data-testid="clone-error">{error}</p>
   {/if}
   {#if report}
     <ConfigIssueList issues={[...report.errors, ...report.warnings]} showField />

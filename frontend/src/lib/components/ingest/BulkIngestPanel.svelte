@@ -26,13 +26,13 @@
 
   const STATUS_TONE: Record<BulkIngestStatus, string> = {
     queued: 'text-fg-2',
-    running: 'text-accent',
-    cancelling: 'text-warn',
-    completed: 'text-success',
-    completed_with_errors: 'text-warn',
-    failed: 'text-danger',
-    cancelled: 'text-warn',
-    interrupted: 'text-warn',
+    running: 'text-accent-text',
+    cancelling: 'text-warn-text',
+    completed: 'text-success-text',
+    completed_with_errors: 'text-warn-text',
+    failed: 'text-danger-text',
+    cancelled: 'text-warn-text',
+    interrupted: 'text-warn-text',
   };
 
   const run = $derived(controller.run);
@@ -47,7 +47,7 @@
 
 <div class="space-y-4" data-testid="bulk-ingest">
   {#if controller.configError}
-    <p class="text-xs text-danger">
+    <p class="text-xs text-danger-text">
       Could not load bulk ingest: {controller.configError}
     </p>
   {:else if !config}
@@ -170,7 +170,7 @@
     </form>
 
     {#if controller.previewError}
-      <p class="text-xs text-danger" data-testid="bulk-preview-error">
+      <p class="text-xs text-danger-text" data-testid="bulk-preview-error">
         {controller.previewError}
       </p>
     {/if}
@@ -179,12 +179,12 @@
     {/if}
 
     {#if controller.actionError}
-      <p class="text-xs text-danger" data-testid="bulk-action-error">
+      <p class="text-xs text-danger-text" data-testid="bulk-action-error">
         {controller.actionError}
       </p>
     {/if}
     {#if controller.loadError}
-      <p class="text-xs text-warn" data-testid="bulk-load-error">
+      <p class="text-xs text-warn-text" data-testid="bulk-load-error">
         Could not refresh: {controller.loadError}
       </p>
     {/if}
@@ -228,7 +228,7 @@
           {#if progress.skipped > 0}· {progress.skipped} already stored by this run{/if}
         </p>
         {#if progress.unreadable > 0}
-          <div class="text-xs text-warn" data-testid="bulk-unreadable">
+          <div class="text-xs text-warn-text" data-testid="bulk-unreadable">
             <p>{progress.unreadable} entries could not be read and were skipped.</p>
             <ul class="mt-1">
               {#each progress.unreadable_samples as path (path)}
@@ -242,8 +242,10 @@
             >ingested {progress.ingested}</span
           >
           <span class="chip">duplicate {progress.duplicates}</span>
-          <span class="chip {progress.failed > 0 ? 'border-danger-line text-danger' : ''}"
-            >failed {progress.failed}</span
+          <span
+            class="chip {progress.failed > 0
+              ? 'border-danger-line text-danger-text'
+              : ''}">failed {progress.failed}</span
           >
           <span class="chip">crops {progress.crops_indexed}</span>
           <span class="chip"
@@ -287,7 +289,7 @@
         </dl>
 
         {#if run.error}
-          <p class="text-xs text-danger" data-testid="bulk-run-error">{run.error}</p>
+          <p class="text-xs text-danger-text" data-testid="bulk-run-error">{run.error}</p>
         {/if}
 
         <div class="flex flex-wrap gap-2">
@@ -339,7 +341,7 @@
 
         {#if controller.failures && controller.failures.total > 0}
           <div class="space-y-1" data-testid="bulk-failures">
-            <p class="text-xs font-semibold text-danger">
+            <p class="text-xs font-semibold text-danger-text">
               {controller.failures.total} failed image{controller.failures.total === 1
                 ? ''
                 : 's'}
@@ -349,7 +351,7 @@
                 <li class="border-b border-line py-1 break-all">
                   <span class="font-mono">{f.path}</span>
                   <span class="text-fg-3"> [{f.error_kind}]</span>
-                  <span class="text-danger"> — {f.error}</span>
+                  <span class="text-danger-text"> — {f.error}</span>
                 </li>
               {/each}
             </ul>
@@ -391,7 +393,7 @@
               <span class={STATUS_TONE[r.status]}>{r.status.replaceAll('_', ' ')}</span>
               <span>{r.progress.ingested} ingested · {r.progress.failed} failed</span>
               <button
-                class="text-accent hover:underline"
+                class="text-accent-text hover:underline"
                 type="button"
                 onclick={() => controller.select(r)}>View</button
               >

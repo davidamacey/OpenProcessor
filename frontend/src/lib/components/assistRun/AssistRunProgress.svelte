@@ -60,7 +60,7 @@
     </p>
   {/if}
   {#if run.error}
-    <p class="text-danger" data-testid="assist-run-error">{run.error}</p>
+    <p class="text-danger-text" data-testid="assist-run-error">{run.error}</p>
   {/if}
   {#if result}
     <ul class="flex flex-col gap-0.5 text-fg-2" data-testid="assist-result">

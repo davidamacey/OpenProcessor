@@ -20,8 +20,8 @@
     {:else if preflight}
       <span
         class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {preflight.blocked
-          ? 'border-danger/40 bg-danger/10 text-danger'
-          : 'border-success/40 bg-success/10 text-success'}"
+          ? 'border-danger/40 bg-danger/10 text-danger-text'
+          : 'border-success/40 bg-success/10 text-success-text'}"
       >
         {preflight.blocked ? 'blocked' : 'ok'}
       </span>

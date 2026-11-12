@@ -104,7 +104,7 @@
         {/each}
       </fieldset>
       {#if errorText}
-        <p class="mb-3 text-xs text-danger" data-testid="clone-settings-error">
+        <p class="mb-3 text-xs text-danger-text" data-testid="clone-settings-error">
           {errorText}
         </p>
       {/if}

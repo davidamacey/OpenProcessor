@@ -59,13 +59,13 @@
           <dd class="flex flex-wrap items-center gap-1.5">
             {#if data.lifecycle.validated}
               <span
-                class="rounded border border-success/40 bg-success/15 px-1.5 py-0.5 text-caption text-success"
+                class="rounded border border-success/40 bg-success/15 px-1.5 py-0.5 text-caption text-success-text"
               >
                 human validated
               </span>
             {:else if data.lifecycle.autoConfirmed}
               <span
-                class="rounded border border-accent/40 bg-accent/15 px-1.5 py-0.5 text-caption text-accent"
+                class="rounded border border-accent/40 bg-accent/15 px-1.5 py-0.5 text-caption text-accent-text"
               >
                 auto-confirmed (unreviewed)
               </span>
@@ -84,7 +84,7 @@
           <dt class="text-fg-3">Box set</dt>
           <dd>
             <span
-              class="rounded border border-warn/40 bg-warn/15 px-1.5 py-0.5 text-caption text-warn"
+              class="rounded border border-warn/40 bg-warn/15 px-1.5 py-0.5 text-caption text-warn-text"
               title="The VLM reported visible regions that are missing from this list"
             >
               incomplete
@@ -127,7 +127,7 @@
                        from a rejection reason's kind. -->
                   {#if b.bboxCorrect === false}
                     <span
-                      class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger"
+                      class="rounded border border-danger/40 bg-danger/15 px-1 text-caption text-danger-text"
                     >
                       model: box wrong
                     </span>
@@ -143,10 +143,10 @@
                 {#if b.rejectionReason}
                   <div
                     class="text-caption {rejectionKind === 'model_verdict'
-                      ? 'text-danger'
+                      ? 'text-danger-text'
                       : rejectionKind === 'needs_human'
                         ? 'text-fg-2'
-                        : 'text-warn'}"
+                        : 'text-warn-text'}"
                   >
                     {rejectionKind === 'needs_human'
                       ? 'Needs review: '
@@ -170,7 +170,7 @@
                     </span>
                     {#if b.textDisagreement}
                       <span
-                        class="whitespace-nowrap rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn"
+                        class="whitespace-nowrap rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
                         title="The VLM and OCR readers disagree on this text"
                       >
                         readers disagree
@@ -209,7 +209,7 @@
                   </div>
                 {/if}
                 {#if b.textVlmInvalid}
-                  <div class="text-caption text-danger">
+                  <div class="text-caption text-danger-text">
                     VLM text rejected: {regionVocabularyStore.invalidReasonLabel(
                       b.textVlmInvalid,
                     )}
@@ -285,10 +285,10 @@
           </dt>
           <dd
             class={rejectionKind === 'model_verdict'
-              ? 'text-danger'
+              ? 'text-danger-text'
               : rejectionKind === 'needs_human'
                 ? 'text-fg-2'
-                : 'text-warn'}
+                : 'text-warn-text'}
           >
             {regionVocabularyStore.rejectionReasonLabel(data.lifecycle.rejectionReason)}
           </dd>

@@ -23,7 +23,7 @@
 {#if p.proposalsLoading}
   <div class="surface mt-4 p-4 text-xs text-fg-3">Loading proposals…</div>
 {:else if p.proposalsError}
-  <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-danger">
+  <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-danger-text">
     <span>Proposals unavailable: {p.proposalsError}</span>
     <button type="button" class="btn-sm" onclick={() => void p.loadProposals()}>
       retry
@@ -86,7 +86,7 @@
             <div class="text-caption text-fg-3">
               {term.count} crop(s)
               {#if term.flag}
-                · <span class="text-warn">{p.flagReason(term)}</span>
+                · <span class="text-warn-text">{p.flagReason(term)}</span>
               {/if}
             </div>
           </div>

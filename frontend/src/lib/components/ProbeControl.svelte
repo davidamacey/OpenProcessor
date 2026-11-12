@@ -204,7 +204,7 @@
     {:else}
       <button
         type="button"
-        class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-accent hover:border-accent hover:bg-accent/10"
+        class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-accent-text hover:border-accent hover:bg-accent/10"
         onclick={openConfirm}
         disabled={starting || !eligible}
         title={eligible
@@ -216,11 +216,12 @@
     {/if}
     {#if lastResult && !runningHere}
       {#if lastResult.status === 'failed'}
-        <span class="text-danger">Failed: {lastResult.error ?? 'unknown error'}</span>
+        <span class="text-danger-text">Failed: {lastResult.error ?? 'unknown error'}</span
+        >
       {:else if lastResult.status === 'cancelled'}
         <span class="text-fg-3">Cancelled.</span>
       {:else}
-        <span class="text-success">
+        <span class="text-success-text">
           Done{lastResult.updated_count != null
             ? ` — ${lastResult.updated_count.toLocaleString()} items updated`
             : ''}.

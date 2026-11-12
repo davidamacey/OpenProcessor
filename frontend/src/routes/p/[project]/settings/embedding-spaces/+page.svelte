@@ -59,7 +59,7 @@
       }}>Register a space</button
     >
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -70,7 +70,7 @@
   </p>
 
   {#if st.loadError && !st.spaces}
-    <p class="text-sm text-danger" data-testid="space-load-error">{st.loadError}</p>
+    <p class="text-sm text-danger-text" data-testid="space-load-error">{st.loadError}</p>
   {:else if !st.spaces}
     <p class="text-sm text-fg-3">Loading…</p>
   {:else}
@@ -100,7 +100,7 @@
   {#if st.models}
     <EmbeddingModelsTable models={st.models} />
   {:else if st.modelsError}
-    <p class="text-sm text-danger" data-testid="models-error">{st.modelsError}</p>
+    <p class="text-sm text-danger-text" data-testid="models-error">{st.modelsError}</p>
   {/if}
 </div>
 

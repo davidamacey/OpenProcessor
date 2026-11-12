@@ -68,7 +68,7 @@
   {#if scope}
     <button
       type="button"
-      class="chip border-accent/60 bg-accent/15 text-accent"
+      class="chip border-accent/60 bg-accent/15 text-accent-text"
       data-testid="scope-chip"
       title="Leave this {scope.kind}"
       onclick={() => ws.setScope(null)}
@@ -83,7 +83,7 @@
   {#if queue}
     <button
       type="button"
-      class="chip border-accent/60 bg-accent/15 text-accent"
+      class="chip border-accent/60 bg-accent/15 text-accent-text"
       data-testid="queue-chip"
       title="Leave the {queueLabel} queue"
       onclick={() => ws.setQueue(null)}
@@ -93,7 +93,7 @@
   {/if}
   {#if next && nextHref}
     <a
-      class="chip ml-auto border-warn/50 bg-warn/10 text-warn"
+      class="chip ml-auto border-warn/50 bg-warn/10 text-warn-text"
       href={resolve(nextHref)}
       title={next.detail}
       data-testid="next-step-chip"

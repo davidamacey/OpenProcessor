@@ -126,14 +126,14 @@
     >
     {#if current && current.status !== 'active'}
       <span
-        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
         data-testid="project-switcher-status"
         >{projectsStore.statusLabel(current.status)}</span
       >
     {/if}
     {#if paused}
       <span
-        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
         title={pausedTitle}
         data-testid="project-switcher-paused">paused</span
       >
@@ -214,7 +214,7 @@
             </span>
             {#if p.status !== 'active'}
               <span
-                class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn"
+                class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
                 >{projectsStore.statusLabel(p.status)}</span
               >
             {/if}

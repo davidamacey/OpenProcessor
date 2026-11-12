@@ -28,14 +28,14 @@
   const chip = (on: boolean): string =>
     `btn-sm border text-xs transition-colors ${
       on
-        ? 'border-accent/60 bg-accent/20 text-accent'
+        ? 'border-accent/60 bg-accent/20 text-accent-text'
         : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'
     }`;
 </script>
 
 {#if view.facetsError}
   <p
-    class="border-b border-line px-4 py-1.5 text-xs text-warn"
+    class="border-b border-line px-4 py-1.5 text-xs text-warn-text"
     role="alert"
     data-testid="cluster-facets-error"
   >

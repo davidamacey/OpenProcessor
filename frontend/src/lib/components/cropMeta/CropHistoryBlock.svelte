@@ -17,7 +17,7 @@
   {#if historyLoading}
     <p class="text-caption text-fg-3">Loading…</p>
   {:else if historyError}
-    <p class="text-caption text-danger">History unavailable: {historyError}</p>
+    <p class="text-caption text-danger-text">History unavailable: {historyError}</p>
   {:else if !historyEntries || historyEntries.length === 0}
     <p class="text-caption text-fg-3">No prior writes recorded.</p>
   {:else}

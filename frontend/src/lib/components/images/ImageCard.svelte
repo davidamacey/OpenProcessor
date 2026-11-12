@@ -84,9 +84,19 @@
         {#if missing}
           <SourceMissingBadge {missing} compact />
         {/if}
-        <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
       </span>
     </button>
+    <!-- The boxes sit over the button, not in it: their labels would otherwise be part of the
+         button's visible text and differ from its accessible name ("Select <file>"). -->
+    <span
+      class="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center"
+      style="aspect-ratio:4 / 3"
+      aria-hidden="true"
+    >
+      <span class="relative block" style={picture}>
+        <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+      </span>
+    </span>
     {#if selected}
       <span
         class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-xs text-white"

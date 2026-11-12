@@ -38,7 +38,9 @@
       {/if}
     </p>
     {#if error}
-      <p class="text-xs text-danger" data-testid="ingest-policy-card-error">{error}</p>
+      <p class="text-xs text-danger-text" data-testid="ingest-policy-card-error">
+        {error}
+      </p>
     {/if}
   </div>
   <span class="grow"></span>

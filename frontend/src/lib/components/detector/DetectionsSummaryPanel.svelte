@@ -38,7 +38,7 @@
   </div>
 
   {#if summaryState.error}
-    <p class="text-xs text-danger" data-testid="detections-error">
+    <p class="text-xs text-danger-text" data-testid="detections-error">
       {summaryState.error}
     </p>
   {:else if !s}

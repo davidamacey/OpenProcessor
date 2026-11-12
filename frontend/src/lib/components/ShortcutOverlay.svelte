@@ -67,7 +67,7 @@
         {#if keymapAvailability.available !== false}
           <a
             href={resolve(projectHref('/settings#keyboard'))}
-            class="text-caption text-accent hover:text-accent hover:underline"
+            class="text-caption text-accent-text hover:text-accent-text hover:underline"
             onclick={() => keyboardStore.closeOverlay()}
           >
             Edit shortcuts…
@@ -147,7 +147,7 @@
                 onblur={(e) => {
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value);
                 }}
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-xs uppercase text-accent focus:border-accent focus:outline-none disabled:opacity-50"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-xs uppercase text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
                 aria-label={`hotkey for ${cls.name}`}
               />
             </li>

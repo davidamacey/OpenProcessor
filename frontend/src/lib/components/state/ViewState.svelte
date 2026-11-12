@@ -41,7 +41,7 @@
     data-testid="view-state-{status}"
   >
     {#if message}
-      <p class={status === 'error' ? 'text-danger' : 'text-fg-2'}>{message}</p>
+      <p class={status === 'error' ? 'text-danger-text' : 'text-fg-2'}>{message}</p>
     {/if}
     {#if status === 'error' && onretry}
       <button type="button" class="btn btn-sm" onclick={onretry}>Retry</button>

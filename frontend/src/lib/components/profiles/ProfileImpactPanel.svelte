@@ -150,13 +150,15 @@
               <p class="text-xs text-fg-2" data-testid="rerun-job">
                 Job <code class="font-mono">{f.job.job_id}</code>:
                 {datasetsAvailability.statusLabel(f.job.status)}
-                {#if f.job.error}<span class="text-danger"> — {f.job.error}</span>{/if}
+                {#if f.job.error}<span class="text-danger-text">
+                    — {f.job.error}</span
+                  >{/if}
               </p>
             {/if}
           </div>
         {/if}
         {#if f.error && !confirming}
-          <p class="text-xs text-danger" data-testid="rerun-error">{f.error}</p>
+          <p class="text-xs text-danger-text" data-testid="rerun-error">{f.error}</p>
         {/if}
       {/if}
     </div>
@@ -173,6 +175,6 @@
   >
     <p>Sends the server's suggested re-run with the counts below.</p>
     <ReprocessCounts res={flow.dryRun} {scopeLabel} />
-    {#if flow.error}<p class="text-danger">{flow.error}</p>{/if}
+    {#if flow.error}<p class="text-danger-text">{flow.error}</p>{/if}
   </ConfirmDialog>
 {/if}

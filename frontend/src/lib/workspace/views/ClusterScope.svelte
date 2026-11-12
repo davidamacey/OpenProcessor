@@ -128,12 +128,12 @@
           >Cluster {displayNoText(view.cluster ?? {})}</span
         >
         {#if view.cluster?.is_unlabeled}
-          <span class="text-sm font-normal text-warn/80">unlabeled</span>
+          <span class="text-sm font-normal text-warn-text/80">unlabeled</span>
         {/if}
       {/if}
     </h1>
     {#if view.cardError}
-      <span class="text-xs text-warn" data-testid="cluster-card-error"
+      <span class="text-xs text-warn-text" data-testid="cluster-card-error"
         >Cluster details unavailable: {view.cardError}</span
       >
     {/if}
@@ -182,7 +182,7 @@
   <ClusterFacetBar {view} />
   {#if clusterAssist.loadError}
     <p
-      class="border-b border-line px-4 py-1.5 text-xs text-warn"
+      class="border-b border-line px-4 py-1.5 text-xs text-warn-text"
       data-testid="cluster-assist-error"
     >
       VLM proposals unavailable: {clusterAssist.loadError}

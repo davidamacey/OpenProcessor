@@ -115,7 +115,9 @@ describe('the patterns catch each spelling (negative controls)', () => {
     expect(PIXEL_TEXT.test('class="text-caption"')).toBe(false);
     expect(RAW_COLOUR.test('class="hover:bg-zinc-800"')).toBe(true);
     expect(RAW_COLOUR.test('class="border-t-red-500/40"')).toBe(true);
-    expect(RAW_COLOUR.test('class="bg-surface-2 text-danger border-line"')).toBe(false);
+    expect(RAW_COLOUR.test('class="bg-surface-2 text-danger-text border-line"')).toBe(
+      false,
+    );
     expect(RAW_COLOUR.test('class="bg-black/60 text-white"')).toBe(false);
   });
   it('comments are not scanned, URLs are kept', () => {

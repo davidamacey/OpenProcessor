@@ -139,9 +139,9 @@
               class="flex items-center gap-2 text-xs {ctl.job.status === 'failed'
                 ? 'text-fg-3'
                 : i < phaseIndex
-                  ? 'text-success'
+                  ? 'text-success-text'
                   : i === phaseIndex
-                    ? 'font-medium text-accent'
+                    ? 'font-medium text-accent-text'
                     : 'text-fg-3'}"
             >
               <Icon
@@ -163,7 +163,7 @@
         </ol>
         {#if ctl.failureText}
           <p
-            class="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger"
+            class="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger-text"
             data-testid="promote-failed"
             role="alert"
           >
@@ -171,7 +171,7 @@
           </p>
         {/if}
         {#if ctl.error}
-          <p class="mt-3 text-xs text-danger" role="alert">{ctl.error}</p>
+          <p class="mt-3 text-xs text-danger-text" role="alert">{ctl.error}</p>
         {/if}
       </div>
       <div class="flex items-center justify-end gap-2">
@@ -239,7 +239,7 @@
 
         {#if gate}
           <div
-            class="mb-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger"
+            class="mb-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger-text"
             data-testid="promote-gate"
           >
             <p class="font-medium">{gate.message}</p>
@@ -257,11 +257,11 @@
               </ul>
             {/if}
             {#if gate.override}
-              <p class="mt-1 text-danger/80">{gate.override}</p>
+              <p class="mt-1 text-danger-text/80">{gate.override}</p>
             {/if}
           </div>
           {#if gate.force_allowed}
-            <label class="mb-3 flex items-center gap-2 text-xs text-warn">
+            <label class="mb-3 flex items-center gap-2 text-xs text-warn-text">
               <input
                 type="checkbox"
                 bind:checked={force}
@@ -273,10 +273,10 @@
           {/if}
         {/if}
         {#if error}
-          <p class="mb-3 text-xs text-danger">{error}</p>
+          <p class="mb-3 text-xs text-danger-text">{error}</p>
         {/if}
         {#if ctl.error}
-          <p class="mb-3 text-xs text-danger" role="alert">{ctl.error}</p>
+          <p class="mb-3 text-xs text-danger-text" role="alert">{ctl.error}</p>
         {/if}
 
         <div class="flex items-center justify-end gap-2">

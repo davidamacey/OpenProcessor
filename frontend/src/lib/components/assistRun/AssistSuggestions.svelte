@@ -39,7 +39,7 @@
     <span class="text-caption uppercase tracking-wide text-fg-3">VLM suggests</span>
     {#if said}
       <span
-        class="rounded border border-dashed border-warn/50 px-1 text-warn"
+        class="rounded border border-dashed border-warn/50 px-1 text-warn-text"
         data-testid="assist-said"
       >
         VLM said: {said}{assist?.class_confidence ? ` (${assist.class_confidence})` : ''}
@@ -47,11 +47,11 @@
     {/if}
     {#each attributes as a (a.key)}
       <span
-        class="inline-flex items-center gap-1 rounded border border-dashed border-info/50 px-1 text-info"
+        class="inline-flex items-center gap-1 rounded border border-dashed border-info/50 px-1 text-info-text"
         data-testid="assist-chip"
         data-confidence={a.confidence}
       >
-        <span class="text-info/70">{a.key}:</span>
+        <span class="text-info-text/70">{a.key}:</span>
         <span>{a.value}</span>
         <span class="text-caption text-fg-3">{a.confidence}</span>
       </span>

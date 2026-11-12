@@ -15,8 +15,8 @@
   let { issues, showField = false }: Props = $props();
 
   const TONE: Record<string, string> = {
-    error: 'border-danger/40 bg-danger/10 text-danger',
-    warning: 'border-warn/40 bg-warn/10 text-warn',
+    error: 'border-danger/40 bg-danger/10 text-danger-text',
+    warning: 'border-warn/40 bg-warn/10 text-warn-text',
     info: 'border-line-strong bg-surface-2/60 text-fg-2',
   };
 </script>

@@ -120,13 +120,17 @@
     </p>
   {/if}
   {#if spaces.refusal}
-    <p class="text-danger" data-testid="space-refusal" data-code={spaces.refusal.code}>
+    <p
+      class="text-danger-text"
+      data-testid="space-refusal"
+      data-code={spaces.refusal.code}
+    >
       {spaces.refusal.message}
       <code class="ml-1 text-caption opacity-70">{spaces.refusal.code}</code>
     </p>
   {/if}
   {#if offerForce}
-    <label class="flex items-center gap-2 text-xs text-warn">
+    <label class="flex items-center gap-2 text-xs text-warn-text">
       <input type="checkbox" bind:checked={force} data-testid="promote-force" />
       Promote without an evaluation (waives only the missing evaluation)
     </label>

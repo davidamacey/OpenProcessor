@@ -58,7 +58,7 @@
       </select>
     </label>
     {#if actions.moveCandidatesError}
-      <p class="mb-3 text-xs text-danger" role="alert">
+      <p class="mb-3 text-xs text-danger-text" role="alert">
         Could not load the clusters: {actions.moveCandidatesError}
       </p>
     {/if}

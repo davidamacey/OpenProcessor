@@ -16,7 +16,7 @@
 {#if ed.revisions}
   <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Revisions">
     <h2 class="text-sm font-semibold">Revisions</h2>
-    {#if ed.revisionError}<p class="text-xs text-danger">{ed.revisionError}</p>{/if}
+    {#if ed.revisionError}<p class="text-xs text-danger-text">{ed.revisionError}</p>{/if}
     <ul class="space-y-1" data-testid="revisions">
       {#each ed.revisions as r (r.revision)}
         <li
@@ -28,7 +28,7 @@
           <span class="text-fg-3" title={r.saved_at}>{formatTimestamp(r.saved_at)}</span>
           {#if r.revision === ed.doc?.revision}<span class="text-fg-2">latest</span>{/if}
           {#if ed.doc?.active && r.revision === ed.doc.active_revision}<span
-              class="text-success">active</span
+              class="text-success-text">active</span
             >{/if}
           <span class="grow"></span>
           <button

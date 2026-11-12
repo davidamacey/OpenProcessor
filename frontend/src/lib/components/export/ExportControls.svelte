@@ -118,7 +118,7 @@
 
   {#if run.exportBlocked && run.blockingReasons.length > 0}
     <ul
-      class="mt-2 list-inside list-disc text-xs text-warn"
+      class="mt-2 list-inside list-disc text-xs text-warn-text"
       data-testid="export-blocking-reasons"
     >
       {#each run.blockingReasons as reason, i (i)}
@@ -139,14 +139,14 @@
         · <span class="font-mono text-fg-2">{run.exportState.export_dir}</span>
       {/if}
       {#if run.exportState.error}
-        · <span class="text-danger">{run.exportState.error}</span>
+        · <span class="text-danger-text">{run.exportState.error}</span>
       {/if}
     </div>
     {#if run.exportState.status === 'success'}
       <p class="mt-2 text-xs text-fg-2">
         Next: <a
           href={resolve(projectHref('/train'))}
-          class="text-accent underline hover:text-accent"
+          class="text-accent-text underline hover:text-accent-text"
           >train on this export from the Train cockpit</a
         >.
       </p>

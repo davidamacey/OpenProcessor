@@ -27,13 +27,13 @@ export function modelStatusPill(
     case 'ready':
       return {
         label: 'ready',
-        className: 'bg-success/20 text-success border-success/40',
+        className: 'bg-success/20 text-success-text border-success/40',
         title: null,
       };
     case 'not_ready':
       return {
         label: 'not ready',
-        className: 'bg-warn/20 text-warn border-warn/40',
+        className: 'bg-warn/20 text-warn-text border-warn/40',
         title: null,
       };
     case 'not_configured':
@@ -49,7 +49,7 @@ export function modelStatusPill(
     default:
       return {
         label: 'unavailable',
-        className: 'bg-danger/20 text-danger border-danger/40',
+        className: 'bg-danger/20 text-danger-text border-danger/40',
         title: null,
       };
   }

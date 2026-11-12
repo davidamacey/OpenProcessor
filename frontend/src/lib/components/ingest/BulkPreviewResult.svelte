@@ -47,7 +47,7 @@
   <p class="font-mono break-all text-fg-2">{preview.target}</p>
   {#if preview.partial && preview.stop_reason}
     <p
-      class="rounded border border-warn-line px-2 py-1 text-warn"
+      class="rounded border border-warn-line px-2 py-1 text-warn-text"
       data-testid="bulk-preview-partial"
     >
       Partial: the scan stopped at {STOP_TEXT[preview.stop_reason](config)}, so these are
@@ -86,7 +86,7 @@
     <p class="text-fg-3">Image sizes are not read for S3 objects.</p>
   {/if}
   {#if skipped.length > 0}
-    <ul class="text-warn" data-testid="bulk-preview-skipped">
+    <ul class="text-warn-text" data-testid="bulk-preview-skipped">
       {#each skipped as [n, label] (label)}
         <li>{n} {label}</li>
       {/each}

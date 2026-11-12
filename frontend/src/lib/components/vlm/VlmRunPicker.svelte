@@ -72,7 +72,7 @@
     </label>
     {#if needsAck}
       <div
-        class="flex basis-full flex-col gap-1 rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger"
+        class="flex basis-full flex-col gap-1 rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger-text"
         data-testid="vlm-run-ack"
       >
         {#if chosen?.warning}<p>{chosen.warning}</p>{/if}

@@ -81,7 +81,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Models</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -110,7 +110,7 @@
           {#if health.model}· model <span class="font-mono">{health.model}</span>{/if}
           {#if health.detail}· {health.detail}{/if}
           {#if health.last_error}
-            · <span class="text-danger">{health.last_error}</span>
+            · <span class="text-danger-text">{health.last_error}</span>
           {/if}
         {:else}
           No health read for this project yet.
@@ -129,7 +129,7 @@
         >
       </div>
       {#if models.loadError && !models.list}
-        <p class="text-sm text-danger" data-testid="vlm-load-error">
+        <p class="text-sm text-danger-text" data-testid="vlm-load-error">
           {models.loadError}
         </p>
       {:else if !models.list}
@@ -157,7 +157,7 @@
     <section id="local-model" class="surface flex flex-col gap-3 p-4">
       <h2 class="text-base font-semibold">Local model</h2>
       {#if models.catalogError && !models.catalog}
-        <p class="text-sm text-danger" data-testid="vlm-catalog-error">
+        <p class="text-sm text-danger-text" data-testid="vlm-catalog-error">
           {models.catalogError}
         </p>
       {:else if !models.catalog}
@@ -177,7 +177,7 @@
     <section id="model-choices" class="surface flex flex-col gap-3 p-4">
       <h2 class="text-base font-semibold">All model choices</h2>
       {#if models.modelChoicesError}
-        <p class="text-sm text-danger" data-testid="model-choices-error">
+        <p class="text-sm text-danger-text" data-testid="model-choices-error">
           {models.modelChoicesError}
         </p>
       {:else if !models.modelChoices}
@@ -237,7 +237,7 @@
       Deletes the stored endpoint and its revisions. A project that runs it blocks this.
     </p>
     {#if models.deleteError}
-      <p class="text-danger" data-testid="vlm-delete-error">{models.deleteError}</p>
+      <p class="text-danger-text" data-testid="vlm-delete-error">{models.deleteError}</p>
     {/if}
     {#if models.deleteProjects.length > 0}
       <p class="text-xs text-fg-2" data-testid="vlm-delete-projects">

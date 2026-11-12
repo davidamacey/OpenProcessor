@@ -304,7 +304,9 @@
   </div>
 
   {#if bannerRequired}
-    <div class="rounded border border-warn/50 bg-warn/10 px-3 py-1.5 text-xs text-warn">
+    <div
+      class="rounded border border-warn/50 bg-warn/10 px-3 py-1.5 text-xs text-warn-text"
+    >
       This projection is approximate — nearby points on screen are not guaranteed to share
       a cluster. Use it to spot rough neighborhoods, not to make final labeling decisions.
     </div>
@@ -318,7 +320,7 @@
       {#if !loaded}
         <p class="p-4 text-sm text-fg-3" role="status">Loading embedding projection…</p>
       {:else if loadError}
-        <p class="p-4 text-sm text-danger" role="alert">{loadError}</p>
+        <p class="p-4 text-sm text-danger-text" role="alert">{loadError}</p>
       {:else if !built}
         <div
           class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"

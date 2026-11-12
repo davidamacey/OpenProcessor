@@ -92,7 +92,7 @@
           >
             {#if cls.hotkey_letter}
               <kbd
-                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent"
+                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
                 >{cls.hotkey_letter}</kbd
               >
             {/if}
@@ -124,7 +124,7 @@
       {/if}
     </ul>
     {#if picker.error}
-      <p class="border-t border-line px-3 py-1.5 text-xs text-danger" role="alert">
+      <p class="border-t border-line px-3 py-1.5 text-xs text-danger-text" role="alert">
         {picker.error}
       </p>
     {/if}

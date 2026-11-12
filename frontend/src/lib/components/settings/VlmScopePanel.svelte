@@ -72,7 +72,7 @@
   {#if editor.loading}
     <p class="text-sm text-fg-3">Loading…</p>
   {:else if editor.loadError}
-    <p class="text-sm text-danger" data-testid="vlm-scope-load-error">
+    <p class="text-sm text-danger-text" data-testid="vlm-scope-load-error">
       {editor.loadError}
     </p>
   {:else}
@@ -201,7 +201,7 @@
 
     {#if editor.saveLines.length > 0}
       <div
-        class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+        class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
         data-testid="vlm-scope-save-error"
       >
         {#each editor.saveLines as line (line)}
@@ -231,7 +231,8 @@
         {editor.saving ? 'Saving…' : 'Save scope'}
       </button>
       {#if editor.saved}
-        <span class="text-xs text-success" data-testid="vlm-scope-saved">Saved.</span>
+        <span class="text-xs text-success-text" data-testid="vlm-scope-saved">Saved.</span
+        >
       {/if}
     </div>
   {/if}

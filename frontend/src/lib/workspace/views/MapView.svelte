@@ -115,7 +115,7 @@
     <p class="p-4 text-sm text-fg-3" role="status">Loading…</p>
   {:else if ctl.metaError}
     <div class="flex flex-col items-start gap-3 p-4 text-sm">
-      <p class="text-danger" role="alert" data-testid="map-error">{ctl.metaError}</p>
+      <p class="text-danger-text" role="alert" data-testid="map-error">{ctl.metaError}</p>
       <button type="button" class="btn" onclick={() => void ctl.loadMeta()}>Retry</button>
     </div>
   {:else if ctl.meta && !ctl.meta.available}
@@ -129,15 +129,15 @@
     </p>
   {:else if ctl.meta}
     {#if ctl.cellsError}
-      <p class="px-4 text-xs text-danger" role="alert">{ctl.cellsError}</p>
+      <p class="px-4 text-xs text-danger-text" role="alert">{ctl.cellsError}</p>
     {/if}
     {#if ctl.cells?.truncated}
-      <p class="px-4 text-xs text-warn" data-testid="map-truncated">
+      <p class="px-4 text-xs text-warn-text" data-testid="map-truncated">
         More cells match than fit on the map; zoom in to see them.
       </p>
     {/if}
     {#if ctl.cells?.join_truncated}
-      <p class="px-4 text-xs text-warn" data-testid="map-join-truncated">
+      <p class="px-4 text-xs text-warn-text" data-testid="map-join-truncated">
         The filter matches more photos than the map can use at once; narrow it to see all
         of them.
       </p>

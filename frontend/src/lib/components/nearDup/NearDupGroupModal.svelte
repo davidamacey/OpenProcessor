@@ -74,7 +74,7 @@
   {#if ctl.loading}
     <p class="text-sm text-fg-3">Loading the group…</p>
   {:else if ctl.error}
-    <p class="text-sm text-danger" role="alert" data-testid="near-dup-group-error">
+    <p class="text-sm text-danger-text" role="alert" data-testid="near-dup-group-error">
       {ctl.error}
     </p>
   {:else if ctl.detail}
@@ -84,7 +84,7 @@
     </p>
     {#if ctl.actionError}
       <p
-        class="mb-2 text-xs text-danger"
+        class="mb-2 text-xs text-danger-text"
         role="alert"
         data-testid="near-dup-action-error"
       >
@@ -103,7 +103,9 @@
             <span class="break-all font-mono text-fg-1">{m.member_id}</span>
             {#if m.class_name}<span>{m.class_name}</span>{/if}
             {#if m.in_holdout}
-              <span class="chip w-fit border-warn-line text-warn">In test holdout</span>
+              <span class="chip w-fit border-warn-line text-warn-text"
+                >In test holdout</span
+              >
             {/if}
             {#if m.is_representative}
               <span class="chip w-fit">Representative</span>
@@ -150,7 +152,7 @@
       {/each}
     </ul>
     {#if ctl.pinned > 0}
-      <p class="mt-3 text-xs text-warn" data-testid="near-dup-decided-note">
+      <p class="mt-3 text-xs text-warn-text" data-testid="near-dup-decided-note">
         {ctl.pinned} decision{ctl.pinned === 1 ? '' : 's'} saved; run the level again to apply
         {ctl.pinned === 1 ? 'it' : 'them'}.
       </p>

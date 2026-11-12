@@ -39,7 +39,7 @@
   const ITEM =
     'flex w-full items-center gap-2 px-3 py-1.5 text-left text-body hover:bg-surface-2 focus-visible:bg-surface-2';
   const toneClass = (item: MenuItem): string =>
-    item.tone === 'danger' ? 'text-danger' : 'text-fg-1';
+    item.tone === 'danger' ? 'text-danger-text' : 'text-fg-1';
 
   function choose(item: MenuItem): void {
     open = false;

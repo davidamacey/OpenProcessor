@@ -291,7 +291,7 @@
   <div class="rounded-md border border-line bg-surface-1 p-3">
     <span class="mb-2 block text-caption uppercase tracking-wide text-fg-3">GPUs</span>
     {#if gpuError}
-      <p class="text-caption text-danger">GPU options unavailable: {gpuError}</p>
+      <p class="text-caption text-danger-text">GPU options unavailable: {gpuError}</p>
     {:else if !gpuOptions}
       <p class="text-caption text-fg-3">Loading GPU options…</p>
     {:else if gpuOptions.unrestricted}
@@ -320,7 +320,7 @@
       </div>
     {/if}
     {#if gpuAdvisory}
-      <p class="mt-2 text-caption text-warn">{gpuAdvisory}</p>
+      <p class="mt-2 text-caption text-warn-text">{gpuAdvisory}</p>
     {/if}
   </div>
 
@@ -415,7 +415,7 @@
     <span class="grow"></span>
 
     {#if isBlocked}
-      <label class="flex items-center gap-1.5 text-xs text-warn">
+      <label class="flex items-center gap-1.5 text-xs text-warn-text">
         <input type="checkbox" bind:checked={force} data-testid="train-force" />
         Start anyway (bypass blocking checks)
       </label>

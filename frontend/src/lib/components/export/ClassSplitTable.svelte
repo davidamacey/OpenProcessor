@@ -28,7 +28,7 @@
         {@const missing = c.train === 0 || c.val === 0}
         <tr
           class="border-b border-line {missing
-            ? 'bg-danger/10 text-danger'
+            ? 'bg-danger/10 text-danger-text'
             : 'text-fg-2'}"
         >
           <td class="px-2 py-1">{c.class_name}</td>

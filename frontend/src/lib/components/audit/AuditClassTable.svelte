@@ -49,7 +49,7 @@
                 <span class="break-all">{row.name}</span>
                 {#if row.insufficient_sample}
                   <span
-                    class="ml-1 whitespace-nowrap rounded border border-warn/40 bg-warn/10 px-1 text-caption text-warn"
+                    class="ml-1 whitespace-nowrap rounded border border-warn/40 bg-warn/10 px-1 text-caption text-warn-text"
                     title="Fewer than {minPerClass} audited crops: not enough to trust this precision."
                     data-testid="insufficient-sample">insufficient sample</span
                   >

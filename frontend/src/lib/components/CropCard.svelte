@@ -435,7 +435,10 @@
         {crop.class_name ?? `class #${crop.class_id}`}
       </span>
     {:else}
-      <span class="min-w-0 grow truncate text-xs text-warn/90" data-testid="class-name">
+      <span
+        class="min-w-0 grow truncate text-xs text-warn-text/90"
+        data-testid="class-name"
+      >
         Unlabeled
       </span>
     {/if}
@@ -459,7 +462,7 @@
   />
 
   {#if crop.vlm_class_empty_reason}
-    <div class="border-t border-line bg-warn/5 px-2 py-1 text-caption text-warn">
+    <div class="border-t border-line bg-warn/5 px-2 py-1 text-caption text-warn-text">
       {vlmEmptyReasonText(crop.vlm_class_empty_reason)}
     </div>
   {:else if crop.vlm_raw_class && crop.vlm_raw_class !== crop.class_name}
@@ -473,15 +476,18 @@
 
   {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
     <div class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-xs">
-      <span class="grow truncate text-warn" title={crop.vlm_suggested_class_name ?? ''}>
+      <span
+        class="grow truncate text-warn-text"
+        title={crop.vlm_suggested_class_name ?? ''}
+      >
         VLM: {crop.vlm_suggested_class_name ?? '—'}
         {#if crop.vlm_confidence}
-          <span class="ml-1 text-warn/70">{crop.vlm_confidence}</span>
+          <span class="ml-1 text-warn-text/70">{crop.vlm_confidence}</span>
         {/if}
       </span>
       <button
         type="button"
-        class="rounded border border-success/40 bg-success/20 px-1 text-success hover:bg-success/30"
+        class="rounded border border-success/40 bg-success/20 px-1 text-success-text hover:bg-success/30"
         onclick={(e) => {
           e.stopPropagation();
           onacceptVlm?.(crop);
@@ -492,7 +498,7 @@
       </button>
       <button
         type="button"
-        class="rounded border border-danger/40 bg-danger/20 px-1 text-danger hover:bg-danger/30"
+        class="rounded border border-danger/40 bg-danger/20 px-1 text-danger-text hover:bg-danger/30"
         onclick={(e) => {
           e.stopPropagation();
           onrejectVlm?.(crop);
@@ -504,7 +510,7 @@
     </div>
   {:else if crop.vlm_suggested_class_name && !crop.class_validated}
     <div
-      class="border-t border-line bg-warn/5 px-2 py-1 text-xs text-warn"
+      class="border-t border-line bg-warn/5 px-2 py-1 text-xs text-warn-text"
       title="The VLM proposed a class that isn't in the registry yet"
     >
       VLM suggests new class: {crop.vlm_suggested_class_name}

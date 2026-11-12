@@ -153,7 +153,9 @@
   {#if box.loading}
     <span class="text-fg-3">searching…</span>
   {:else if box.error}
-    <span class="rounded border border-danger/50 bg-danger/10 px-1.5 py-0.5 text-danger">
+    <span
+      class="rounded border border-danger/50 bg-danger/10 px-1.5 py-0.5 text-danger-text"
+    >
       {box.error}
     </span>
   {:else if box.active}

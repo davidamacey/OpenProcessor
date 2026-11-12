@@ -49,7 +49,7 @@
 >
   <h2 class="text-sm font-semibold" tabindex="-1" bind:this={heading}>Ingest profiles</h2>
   {#if ctl.loadError}
-    <p class="text-xs text-danger" role="alert" data-testid="ingest-profiles-error">
+    <p class="text-xs text-danger-text" role="alert" data-testid="ingest-profiles-error">
       {ctl.loadError}
     </p>
   {:else if ctl.list === null}
@@ -82,7 +82,7 @@
           <span class="grow"></span>
           {#if p.active}
             <span
-              class="rounded border border-success/40 bg-success/10 px-2 py-0.5 text-success"
+              class="rounded border border-success/40 bg-success/10 px-2 py-0.5 text-success-text"
               data-testid="ingest-profile-active-chip">Active</span
             >
           {:else}
@@ -105,7 +105,7 @@
 
   {#if refusal}
     <div
-      class="space-y-2 rounded border border-danger/40 bg-danger/10 p-3 text-xs text-danger"
+      class="space-y-2 rounded border border-danger/40 bg-danger/10 p-3 text-xs text-danger-text"
       data-testid="ingest-profile-refusal"
       role="alert"
       tabindex="-1"
@@ -136,7 +136,7 @@
 
   {#if ctl.followUpError}
     <p
-      class="text-xs text-danger"
+      class="text-xs text-danger-text"
       role="alert"
       data-testid="ingest-profile-followup-error"
     >
@@ -148,7 +148,7 @@
   <div role="status" data-testid="ingest-profile-status">
     {#if !refusal && ctl.lastValidation && ctl.lastValidation.warnings.length > 0}
       <div class="space-y-1 text-xs" data-testid="ingest-profile-warnings">
-        <p class="text-warn">Activated, with warnings.</p>
+        <p class="text-warn-text">Activated, with warnings.</p>
         <ConfigIssueList issues={ctl.lastValidation.warnings} showField />
       </div>
     {/if}

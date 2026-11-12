@@ -42,7 +42,7 @@
     {#if role === 'foreign' && model.project}
       <div class="flex flex-wrap items-center gap-1.5">
         <span
-          class="rounded border border-info-line bg-info-soft px-1.5 py-0.5 text-info"
+          class="rounded border border-info-line bg-info-soft px-1.5 py-0.5 text-info-text"
           title="Promoted in project {model.project}"
           data-testid="model-project-chip">from {projectName(model.project)}</span
         >
@@ -76,7 +76,7 @@
         >
         {#if model.class_mapping.unmapped.length}
           <details class="mt-1" data-testid="model-unmapped">
-            <summary class="cursor-pointer text-warn"
+            <summary class="cursor-pointer text-warn-text"
               >{unmappedText(model.class_mapping)}</summary
             >
             <p class="mt-1 break-words text-fg-2" data-testid="model-unmapped-names">
@@ -97,7 +97,7 @@
           {#if mappingState?.status === 'loading'}
             <p class="mt-1 text-fg-3">Loading…</p>
           {:else if mappingState?.status === 'error'}
-            <p class="mt-1 text-danger" data-testid="model-mapping-error">
+            <p class="mt-1 text-danger-text" data-testid="model-mapping-error">
               {mappingState.message}
             </p>
           {:else if mappingState?.status === 'ok'}

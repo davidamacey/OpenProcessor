@@ -28,11 +28,11 @@
 >
   <h2 class="text-sm font-semibold text-fg-1">4. Preview</h2>
   <p
-    class="text-sm {preview.ok ? 'text-success' : 'text-danger'}"
+    class="text-sm {preview.ok ? 'text-success-text' : 'text-danger-text'}"
     data-testid="combine-preview-verdict"
   >
     {preview.ok ? 'No blocking problems.' : 'This combine cannot start yet.'}
-    {#if stale}<span class="ml-2 text-xs text-warn">Updating…</span>{/if}
+    {#if stale}<span class="ml-2 text-xs text-warn-text">Updating…</span>{/if}
   </p>
 
   <CombineIssueList issues={preview.errors} testid="combine-errors" />
@@ -74,11 +74,11 @@
     <p class="mb-1 text-fg-2">
       Target <span class="font-mono text-fg-1">{target.slug ?? '—'}</span>
       {#if target.slug_available === false}
-        <span class="ml-1 text-danger" data-testid="combine-slug-unavailable"
+        <span class="ml-1 text-danger-text" data-testid="combine-slug-unavailable"
           >slug not available</span
         >
       {:else if target.slug_available === true}
-        <span class="ml-1 text-success">slug available</span>
+        <span class="ml-1 text-success-text">slug available</span>
       {/if}
     </p>
     <p class="text-fg-2">

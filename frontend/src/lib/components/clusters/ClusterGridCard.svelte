@@ -93,7 +93,7 @@
             >{c.slotDisplayName ?? c.dominant_class_name}</span
           >
           <span
-            class="rounded px-1.5 py-0.5 text-caption font-medium bg-holdout/20 text-holdout"
+            class="rounded px-1.5 py-0.5 text-caption font-medium bg-holdout/20 text-holdout-text"
           >
             inventory
           </span>
@@ -148,7 +148,7 @@
             </span>
           {/if}
         {:else}
-          <span class="text-warn">Unlabeled {numberText}</span>
+          <span class="text-warn-text">Unlabeled {numberText}</span>
           <span class="text-fg-3">· needs label</span>
         {/if}
       </div>
@@ -171,7 +171,7 @@
           {/if}
           {#if c.needs_review_count}
             <span
-              class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-warn"
+              class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-warn-text"
               data-testid="cluster-needs-review"
               title={reviewCountsTitle(c.review_counts)}
               >{c.needs_review_count.toLocaleString()} to review</span
@@ -179,7 +179,7 @@
           {/if}
           {#each c.flags ?? [] as id (id)}
             <span
-              class="rounded border border-danger/30 bg-danger/10 px-1.5 py-0.5 text-danger"
+              class="rounded border border-danger/30 bg-danger/10 px-1.5 py-0.5 text-danger-text"
               data-testid="cluster-flag"
               title={flagById.get(id)?.description}>{flagById.get(id)?.label ?? id}</span
             >

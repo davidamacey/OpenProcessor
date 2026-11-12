@@ -27,7 +27,7 @@
       >{ed.activationChecking ? 'Checking…' : 'Check the draft for activation'}</button
     >
     {#if ed.activationCheckError}
-      <p class="text-xs text-danger">{ed.activationCheckError}</p>
+      <p class="text-xs text-danger-text">{ed.activationCheckError}</p>
     {/if}
     {#if ed.activationReport}
       {@const r = ed.activationReport}

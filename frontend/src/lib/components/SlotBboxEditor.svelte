@@ -147,7 +147,7 @@
       <button
         type="button"
         class="rounded border px-1.5 py-0.5 text-caption {i === multiBox.selectedIndex
-          ? 'border-info/60 bg-info/15 text-info'
+          ? 'border-info/60 bg-info/15 text-info-text'
           : 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'}"
         onclick={() => multiBox.select(i)}
       >
@@ -197,7 +197,7 @@
     </button>
     <button
       type="button"
-      class="rounded-md border border-accent/60 bg-accent/20 px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/30 disabled:opacity-50"
+      class="rounded-md border border-accent/60 bg-accent/20 px-3 py-1.5 text-sm font-medium text-accent-text hover:bg-accent/30 disabled:opacity-50"
       onclick={saveMultiBox}
       disabled={multiBox.busy}
     >

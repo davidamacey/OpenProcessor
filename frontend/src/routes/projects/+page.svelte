@@ -198,7 +198,7 @@
     </div>
 
     {#if admin.loadError}
-      <p class="mb-3 text-sm text-danger" data-testid="projects-load-error">
+      <p class="mb-3 text-sm text-danger-text" data-testid="projects-load-error">
         {admin.loadError}
       </p>
     {/if}
@@ -237,7 +237,7 @@
                 {/if}
                 {#if combineJobOf(p)}
                   <a
-                    class="mt-0.5 inline-block text-xs text-accent hover:underline"
+                    class="mt-0.5 inline-block text-xs text-accent-text hover:underline"
                     href={resolve('/projects/combine/[job_id]', {
                       job_id: encodeURIComponent(combineJobOf(p) ?? ''),
                     })}
@@ -249,14 +249,14 @@
                 <div class="flex flex-wrap items-center gap-1">
                   <span
                     class="rounded px-1.5 py-0.5 text-xs {p.status === 'active'
-                      ? 'bg-success-soft text-success'
-                      : 'bg-warn-soft text-warn'}"
+                      ? 'bg-success-soft text-success-text'
+                      : 'bg-warn-soft text-warn-text'}"
                     data-testid="project-status-{p.slug}"
                     >{admin.statusLabel(p.status)}</span
                   >
                   {#if p.paused}
                     <span
-                      class="rounded bg-warn-soft px-1.5 py-0.5 text-xs text-warn"
+                      class="rounded bg-warn-soft px-1.5 py-0.5 text-xs text-warn-text"
                       title="Pipeline paused: workers skip this project until it's resumed"
                       data-testid="project-paused-{p.slug}">paused</span
                     >
@@ -337,7 +337,7 @@
                   {#if p.deletable}
                     <button
                       type="button"
-                      class="btn btn-sm text-danger"
+                      class="btn btn-sm text-danger-text"
                       data-testid="project-delete-{p.slug}"
                       onclick={() => (deleting = p)}
                       >{combineJobOf(p) ? 'Undo combine' : 'Delete'}</button

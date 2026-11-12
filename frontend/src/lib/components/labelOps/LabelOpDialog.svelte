@@ -85,7 +85,11 @@
   {/if}
 
   {#if ctl.undoError}
-    <p class="mt-4 text-sm text-danger" role="alert" data-testid="label-op-undo-error">
+    <p
+      class="mt-4 text-sm text-danger-text"
+      role="alert"
+      data-testid="label-op-undo-error"
+    >
       {ctl.undoError}
     </p>
   {/if}
@@ -114,7 +118,7 @@
       </ul>
       {#if r.conflict_ids.length}
         <div class="mt-2 text-xs" data-testid="label-op-conflict-ids">
-          <p class="text-warn">Conflicting items:</p>
+          <p class="text-warn-text">Conflicting items:</p>
           <ul class="max-h-24 overflow-y-auto break-all font-mono text-fg-2">
             {#each r.conflict_ids as id (id)}
               <li>{id}</li>

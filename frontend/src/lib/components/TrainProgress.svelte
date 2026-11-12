@@ -35,18 +35,18 @@
     switch (s) {
       case 'running':
       case 'starting':
-        return 'bg-accent/20 text-accent border-accent/40';
+        return 'bg-accent/20 text-accent-text border-accent/40';
       case 'exporting':
-        return 'bg-holdout/20 text-holdout border-holdout/40';
+        return 'bg-holdout/20 text-holdout-text border-holdout/40';
       case 'finished':
-        return 'bg-success/20 text-success border-success/40';
+        return 'bg-success/20 text-success-text border-success/40';
       case 'failed':
-        return 'bg-danger/20 text-danger border-danger/40';
+        return 'bg-danger/20 text-danger-text border-danger/40';
       case 'cancelled':
       case 'skipped':
         return 'bg-surface-3 text-fg-2 border-line-strong';
       case 'lost':
-        return 'bg-warn/20 text-warn border-warn/40';
+        return 'bg-warn/20 text-warn-text border-warn/40';
       case 'queued':
       default:
         return 'bg-surface-2 text-fg-2 border-line-strong';
@@ -150,7 +150,7 @@
 
   {#if status.error}
     <p
-      class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger"
+      class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger-text"
       title={status.error}
     >
       {status.error}

@@ -28,7 +28,7 @@
   </p>
 {:else if datasetsAvailability.error}
   <div class="space-y-2 text-sm">
-    <p class="text-danger">
+    <p class="text-danger-text">
       Could not load the dataset formats: {datasetsAvailability.error}
     </p>
     <button

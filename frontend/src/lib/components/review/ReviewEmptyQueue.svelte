@@ -33,7 +33,7 @@
          control, not just "empty". -->
     <p class="mt-2 text-xs">
       <a
-        class="text-accent underline hover:text-accent"
+        class="text-accent-text underline hover:text-accent-text"
         href={resolve(projectHref(emptyMessage.link.href))}>{emptyMessage.link.text}</a
       >
     </p>

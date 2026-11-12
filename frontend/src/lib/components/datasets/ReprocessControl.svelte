@@ -195,13 +195,13 @@
               · {(f.job.images_done ?? 0).toLocaleString()} / {f.job.images_total.toLocaleString()}
               images{#if f.job.images_failed}, {f.job.images_failed.toLocaleString()} failed{/if}
             {/if}
-            {#if f.job.error}<span class="text-danger"> — {f.job.error}</span>{/if}
+            {#if f.job.error}<span class="text-danger-text"> — {f.job.error}</span>{/if}
           </p>
         {/if}
       </div>
     {/if}
     {#if f.error}
-      <p class="text-sm text-danger" data-testid="reprocess-error">{f.error}</p>
+      <p class="text-sm text-danger-text" data-testid="reprocess-error">{f.error}</p>
     {/if}
 
     <div class="flex justify-end gap-2">

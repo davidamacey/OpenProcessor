@@ -187,7 +187,7 @@
 
   {#if lackingSelected.length > 0}
     <div
-      class="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 text-xs text-warn"
+      class="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 text-xs text-warn-text"
       data-testid="lacking-data-row"
     >
       <span>
@@ -261,7 +261,7 @@
                   {/if}
                   {#if (cls.trainable_gap ?? 0) > 0}
                     <span
-                      class="font-mono text-caption text-warn"
+                      class="font-mono text-caption text-warn-text"
                       title="Short of the per-class minimum by {cls.trainable_gap} trainable crops (served trainable_gap)"
                       >needs {cls.trainable_gap}</span
                     >

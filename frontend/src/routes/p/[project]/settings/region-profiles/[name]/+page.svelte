@@ -88,7 +88,9 @@
     testid="profiles-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger" data-testid="profile-load-error">{ed.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="profile-load-error">
+        {ed.loadError}
+      </p>
     {:else if !ed.doc || !ed.schema}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -171,7 +173,7 @@
             </label>
           </div>
           {#if ed.vocabularyError}
-            <p class="text-xs text-danger" data-testid="vocabulary-error">
+            <p class="text-xs text-danger-text" data-testid="vocabulary-error">
               Could not load the model lists: {ed.vocabularyError}
             </p>
           {/if}
@@ -203,7 +205,7 @@
                         : 'Check segmenter prompt'}</button
                     >
                     {#if ed.promptCheckError}
-                      <p class="text-xs text-danger">{ed.promptCheckError}</p>
+                      <p class="text-xs text-danger-text">{ed.promptCheckError}</p>
                     {/if}
                     {#if ed.promptReport}
                       {@const r = ed.promptReport}

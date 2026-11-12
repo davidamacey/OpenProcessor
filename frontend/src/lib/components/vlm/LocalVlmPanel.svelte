@@ -79,7 +79,7 @@
 
     {#if local.restart_required}
       <div
-        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 p-3 text-sm text-warn"
+        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 p-3 text-sm text-warn-text"
         data-testid="local-vlm-restart"
       >
         <p>{local.reason}</p>
@@ -114,7 +114,7 @@
     {/if}
 
     {#if error && !switching && !cancelling}
-      <p class="text-sm text-danger" data-testid="local-vlm-error">{error}</p>
+      <p class="text-sm text-danger-text" data-testid="local-vlm-error">{error}</p>
     {/if}
 
     <div class="overflow-x-auto">
@@ -145,11 +145,11 @@
               <td class="py-1.5 pr-3">
                 <span class="text-fg-1">{e.choice.label}</span>
                 {#if e.serving}<span
-                    class="ml-1 rounded border border-success/40 bg-success/10 px-1 text-caption text-success"
+                    class="ml-1 rounded border border-success/40 bg-success/10 px-1 text-caption text-success-text"
                     data-testid="local-vlm-serving">serving</span
                   >{/if}
                 {#if e.desired}<span
-                    class="ml-1 rounded border border-warn/40 bg-warn/10 px-1 text-caption text-warn"
+                    class="ml-1 rounded border border-warn/40 bg-warn/10 px-1 text-caption text-warn-text"
                     data-testid="local-vlm-desired">requested</span
                   >{/if}
               </td>
@@ -158,7 +158,7 @@
                 {#if externalHref(e.license_url)}
                   <!-- eslint-disable svelte/no-navigation-without-resolve -- external license page, not a SvelteKit route -->
                   <a
-                    class="text-accent hover:underline"
+                    class="text-accent-text hover:underline"
                     href={externalHref(e.license_url)}
                     target="_blank"
                     rel="noreferrer noopener">{e.license}</a
@@ -166,7 +166,7 @@
                   <!-- eslint-enable svelte/no-navigation-without-resolve -->
                 {:else}
                   {e.license}
-                {/if}{#if e.gated}<span class="ml-1 text-warn">gated</span>{/if}
+                {/if}{#if e.gated}<span class="ml-1 text-warn-text">gated</span>{/if}
               </td>
               <td class="py-1.5 pr-3 font-mono"
                 >{e.params_b == null ? '—' : `${e.params_b}B`}{e.quantization
@@ -212,11 +212,11 @@
       This records a request. The server keeps serving the current model until it is
       restarted.
     </p>
-    {#if error}<p class="text-danger" data-testid="local-vlm-switch-error">
+    {#if error}<p class="text-danger-text" data-testid="local-vlm-switch-error">
         {error}
       </p>{/if}
     {#if errorCode === 'vlm_catalog_does_not_fit'}
-      <label class="flex items-center gap-2 text-xs text-warn">
+      <label class="flex items-center gap-2 text-xs text-warn-text">
         <input type="checkbox" bind:checked={force} data-testid="local-vlm-force" />
         Select anyway (the server says this does not fit the GPU)
       </label>
@@ -236,7 +236,7 @@
     <p class="text-xs text-fg-2">
       The server keeps serving its current model; the pending request is dropped.
     </p>
-    {#if error}<p class="text-danger" data-testid="local-vlm-cancel-error">
+    {#if error}<p class="text-danger-text" data-testid="local-vlm-cancel-error">
         {error}
       </p>{/if}
   </ConfirmDialog>

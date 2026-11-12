@@ -74,7 +74,7 @@
     />
 
     {#if wizard.previewError}
-      <p class="text-sm text-danger" data-testid="combine-preview-error">
+      <p class="text-sm text-danger-text" data-testid="combine-preview-error">
         {wizard.previewError}
       </p>
     {/if}
@@ -113,7 +113,7 @@
     <section class="space-y-2" data-testid="combine-step-start">
       {#if wizard.refusal}
         <div
-          class="space-y-1 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
+          class="space-y-1 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
           data-testid="combine-start-refusal"
           data-code={wizard.refusal.code ?? ''}
         >

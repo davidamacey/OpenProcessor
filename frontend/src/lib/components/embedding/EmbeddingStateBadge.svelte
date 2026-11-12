@@ -26,7 +26,7 @@
     class="shrink-0 rounded-sm border px-1 py-0.5 {compact
       ? 'text-caption'
       : 'text-xs'} {copy.warning
-      ? 'border-warn/40 bg-warn/15 text-warn'
+      ? 'border-warn/40 bg-warn/15 text-warn-text'
       : 'border-line-strong bg-surface-2 text-fg-2'}"
     title={`${space ? `${space}: ` : ''}${copy.label}. ${copy.tooltip}`}
     data-testid="embedding-state-badge"

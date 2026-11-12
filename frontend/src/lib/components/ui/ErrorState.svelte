@@ -40,7 +40,7 @@
   role="alert"
   data-testid="error-state"
 >
-  <div class="flex items-center gap-2 text-title font-semibold text-danger">
+  <div class="flex items-center gap-2 text-title font-semibold text-danger-text">
     <Icon name="triangle-alert" size={18} />
     {title}
   </div>

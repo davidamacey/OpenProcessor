@@ -101,12 +101,12 @@
       </label>
 
       {#if errorText}
-        <div class="mb-3 text-xs text-danger" data-testid="edit-project-error">
+        <div class="mb-3 text-xs text-danger-text" data-testid="edit-project-error">
           <p>{errorText}</p>
           {#if conflict}
             <button
               type="button"
-              class="mt-1 text-accent hover:underline"
+              class="mt-1 text-accent-text hover:underline"
               data-testid="edit-project-reload"
               onclick={() => void reload()}>Reload the latest version</button
             >

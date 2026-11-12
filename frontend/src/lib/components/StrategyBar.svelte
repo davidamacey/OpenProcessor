@@ -313,7 +313,7 @@
       type="button"
       class="btn-sm min-w-0 max-w-full overflow-hidden {bar.isDefault
         ? 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'
-        : 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'}"
+        : 'border-accent/60 bg-accent/15 text-accent-text hover:bg-accent/25'}"
       onclick={() => (expanded = true)}
       title="Sort / filter strategy"
       aria-label={[
@@ -334,7 +334,7 @@
              renders. -->
         <span
           data-testid="pinned-sort-fallback-chip"
-          class="inline-block max-w-[20rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn md:max-w-[32rem]"
+          class="inline-block max-w-[20rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn-text md:max-w-[32rem]"
           title={`The deployment's pinned default review-queue sort has no data yet, so this tab is using the backend's own fallback order instead. ${pinnedFallbackLabel}`}
         >
           {pinnedFallbackLabel}
@@ -353,7 +353,7 @@
              never push the bar past a narrow viewport. -->
         <span
           data-testid="sort-fallback-chip"
-          class="inline-block max-w-[16rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn md:max-w-[28rem]"
+          class="inline-block max-w-[16rem] truncate rounded border border-warn/60 bg-warn/15 px-1 align-middle text-caption text-warn-text md:max-w-[28rem]"
           title={`The requested sort couldn't be honored server-side — showing the fallback order instead. ${fallbackReason}`}
         >
           fallback: {fallbackReason}
@@ -361,7 +361,7 @@
       {/if}
       {#if currentIsBeta}
         <span
-          class="rounded border border-warn/60 bg-warn/15 px-1 text-caption uppercase tracking-wide text-warn"
+          class="rounded border border-warn/60 bg-warn/15 px-1 text-caption uppercase tracking-wide text-warn-text"
         >
           beta
         </span>
@@ -381,14 +381,14 @@
         </select>
       </label>
       {#if pinnedFallbackLabel}
-        <span data-testid="pinned-sort-fallback-chip" class="text-warn"
+        <span data-testid="pinned-sort-fallback-chip" class="text-warn-text"
           >{pinnedFallbackLabel}</span
         >
       {:else if appliedLabel}
         <span class="text-fg-3">applied: {appliedLabel}</span>
       {/if}
       {#if fallbackReason}
-        <span class="text-warn">fallback: {fallbackReason}</span>
+        <span class="text-warn-text">fallback: {fallbackReason}</span>
       {/if}
     {:else}
       <!-- No alternate sorts reported yet (backend not deployed, or
@@ -399,7 +399,7 @@
     {/if}
     {#if currentIsBeta}
       <span
-        class="rounded border border-warn/60 bg-warn/15 px-1.5 py-0.5 text-caption uppercase tracking-wide text-warn"
+        class="rounded border border-warn/60 bg-warn/15 px-1.5 py-0.5 text-caption uppercase tracking-wide text-warn-text"
         title="Experimental — not yet fully validated (OpenProcessor docs/research/curation_scores.md)"
       >
         beta
@@ -428,7 +428,7 @@
       <button
         type="button"
         class="btn-sm {bar.hideNearDuplicates
-          ? 'border-accent/60 bg-accent/15 text-accent'
+          ? 'border-accent/60 bg-accent/15 text-accent-text'
           : 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'}"
         onclick={() => (bar.hideNearDuplicates = !bar.hideNearDuplicates)}
       >

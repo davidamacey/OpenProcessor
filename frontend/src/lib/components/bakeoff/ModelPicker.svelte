@@ -108,7 +108,7 @@
           />
           <span class="font-mono text-fg-1">{t.display_name}</span>
           {#if t.model_family || t.model_size}
-            <span class="rounded bg-accent-soft px-1 text-caption text-accent"
+            <span class="rounded bg-accent-soft px-1 text-caption text-accent-text"
               >{t.model_family ?? ''}{t.model_size ?? ''}</span
             >
           {/if}
@@ -140,7 +140,7 @@
               {f.n_classes_mapped} classes mapped
               {#if hasOverlap(f.train_test_overlap)}
                 <span
-                  class="ml-1 rounded bg-danger-soft px-1 text-danger"
+                  class="ml-1 rounded bg-danger-soft px-1 text-danger-text"
                   data-testid="overlap-warning"
                   >overlap: {formatOverlap(f.train_test_overlap)}</span
                 >
@@ -236,7 +236,7 @@
         ></textarea></label
       >
     </div>
-    {#if customError}<p class="mt-1 text-danger">{customError}</p>{/if}
+    {#if customError}<p class="mt-1 text-danger-text">{customError}</p>{/if}
     <button type="button" class="btn mt-2" onclick={addCustom}>Add</button>
   </details>
 </div>

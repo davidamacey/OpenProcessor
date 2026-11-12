@@ -9,18 +9,18 @@ export function statePillClass(s: string): string {
   switch (s) {
     case 'running':
     case 'starting':
-      return 'bg-accent/20 text-accent border-accent/40';
+      return 'bg-accent/20 text-accent-text border-accent/40';
     case 'exporting':
-      return 'bg-holdout/20 text-holdout border-holdout/40';
+      return 'bg-holdout/20 text-holdout-text border-holdout/40';
     case 'finished':
-      return 'bg-success/20 text-success border-success/40';
+      return 'bg-success/20 text-success-text border-success/40';
     case 'failed':
-      return 'bg-danger/20 text-danger border-danger/40';
+      return 'bg-danger/20 text-danger-text border-danger/40';
     case 'cancelled':
     case 'skipped':
       return 'bg-surface-3 text-fg-2 border-line-strong';
     case 'lost':
-      return 'bg-warn/20 text-warn border-warn/40';
+      return 'bg-warn/20 text-warn-text border-warn/40';
     case 'queued':
     default:
       return 'bg-surface-2 text-fg-2 border-line-strong';
@@ -47,9 +47,9 @@ export function datasetLabel(d: ExportDataset): string {
 export function checkSeverityClass(s: PreflightCheck['severity']): string {
   switch (s) {
     case 'block':
-      return 'border-danger/40 bg-danger/10 text-danger';
+      return 'border-danger/40 bg-danger/10 text-danger-text';
     case 'warn':
-      return 'border-warn/40 bg-warn/10 text-warn';
+      return 'border-warn/40 bg-warn/10 text-warn-text';
     default:
       return 'border-line-strong bg-surface-0 text-fg-2';
   }

@@ -125,7 +125,7 @@
     testid="open-vocab-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger" data-testid="open-vocab-load-error">
+      <p class="text-sm text-danger-text" data-testid="open-vocab-load-error">
         {ed.loadError}
       </p>
     {:else if !ed.doc || !ed.schema || !by}

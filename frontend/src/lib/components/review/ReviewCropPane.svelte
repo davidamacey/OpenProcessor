@@ -209,7 +209,7 @@
         <button
           type="button"
           class="chip {i === multiBox.selectedIndex
-            ? 'border-info/60 bg-info/15 text-info'
+            ? 'border-info/60 bg-info/15 text-info-text'
             : 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'}"
           onclick={() => multiBox.select(i)}
         >
@@ -222,7 +222,7 @@
       {/if}
       {#if current && slotOf(current, activeSlot)?.boxSet?.setComplete === false}
         <span
-          class="chip border-warn/40 bg-warn/15 text-warn"
+          class="chip border-warn/40 bg-warn/15 text-warn-text"
           title="The VLM reported visible regions that are missing from this list"
           data-testid="set-incomplete"
         >

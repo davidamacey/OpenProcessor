@@ -108,7 +108,7 @@
     <div class="flex flex-wrap items-center gap-1 text-caption">
       {#each field.required_placeholders as p (p)}
         <span
-          class="rounded border border-info/50 bg-info/10 px-1.5 py-0.5 font-mono text-info"
+          class="rounded border border-info/50 bg-info/10 px-1.5 py-0.5 font-mono text-info-text"
           data-testid="placeholder-chip"
           data-required="true"
           title="required placeholder">{`{${p}}`} required</span
@@ -116,7 +116,7 @@
       {/each}
       {#each optionalPlaceholders as p (p)}
         <span
-          class="rounded border border-info/30 px-1.5 py-0.5 font-mono text-info"
+          class="rounded border border-info/30 px-1.5 py-0.5 font-mono text-info-text"
           data-testid="placeholder-chip"
           data-required="false"
           title="allowed placeholder">{`{${p}}`}</span
@@ -163,7 +163,7 @@
             >
           {/if}
           {#if dups.has(idx)}
-            <span class="text-caption text-warn">Duplicate, ignored</span>
+            <span class="text-caption text-warn-text">Duplicate, ignored</span>
           {/if}
         </div>
       {:else}
@@ -236,7 +236,7 @@
     ></textarea>
   {:else}
     <div data-testid="pack-unknown" class="space-y-1">
-      <p class="text-xs text-warn">
+      <p class="text-xs text-warn-text">
         Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
       </p>
       <pre

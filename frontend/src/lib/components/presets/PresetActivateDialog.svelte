@@ -71,11 +71,11 @@
   {/if}
   <p class="text-xs text-fg-2">{activationReach(kind)}</p>
   {#if unsaved}
-    <p class="text-xs text-warn" data-testid="activate-unsaved-note">
+    <p class="text-xs text-warn-text" data-testid="activate-unsaved-note">
       This activates the saved revision; your unsaved edits are not included.
     </p>
   {/if}
   {#if active.actionError}
-    <p class="text-danger" data-testid="activate-error">{active.actionError}</p>
+    <p class="text-danger-text" data-testid="activate-error">{active.actionError}</p>
   {/if}
 </ConfirmDialog>

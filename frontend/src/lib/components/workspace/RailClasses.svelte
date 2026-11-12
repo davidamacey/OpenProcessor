@@ -126,7 +126,7 @@
        fixed under the cursor. -->
   {#if dragActive}
     <div
-      class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-accent/40 bg-accent-fill/90 px-3 py-1.5 text-center text-caption font-medium text-accent shadow-lg backdrop-blur"
+      class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-accent/40 bg-accent-fill/90 px-3 py-1.5 text-center text-caption font-medium text-accent-text shadow-lg backdrop-blur"
     >
       {#if hoveredClass}
         Drop on <span class="font-semibold text-white">{hoveredClass.name}</span>
@@ -140,7 +140,7 @@
     {#if classesStore.loading && classesStore.classes.length === 0}
       <div class="p-4 text-sm text-fg-3">Loading classes...</div>
     {:else if classesStore.error}
-      <div class="p-4 text-sm text-danger">API unavailable</div>
+      <div class="p-4 text-sm text-danger-text">API unavailable</div>
     {:else if classes.length === 0}
       <div class="p-4 text-sm text-fg-3">No classes</div>
     {:else}
@@ -199,7 +199,7 @@
                     {#if cls.hotkey_letter}
                       <kbd
                         class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase
-                             text-accent"
+                             text-accent-text"
                         title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
                       >
                         {cls.hotkey_letter}

@@ -269,7 +269,7 @@
         </span>
         {#if box?.textDisagreement}
           <span
-            class="shrink-0 rounded border border-warn/40 bg-warn/15 px-1 text-caption font-sans text-warn"
+            class="shrink-0 rounded border border-warn/40 bg-warn/15 px-1 text-caption font-sans text-warn-text"
             title="vlm: {box.textVlm ?? '∅'} · ocr: {box.textOcr ?? '∅'}"
           >
             readers disagree
@@ -290,14 +290,14 @@
            longer distinguishes the two. -->
         {#if data.lifecycle?.validated}
           <span
-            class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success"
+            class="rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
             title="A human confirmed/drew/rejected this region"
           >
             human
           </span>
         {:else if data.lifecycle?.autoConfirmed}
           <span
-            class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent"
+            class="rounded border border-accent/40 bg-accent/15 px-1 text-caption text-accent-text"
             title="Auto-confirmed by the worker's policy — accepted but not yet reviewed by a human"
           >
             auto

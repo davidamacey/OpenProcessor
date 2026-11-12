@@ -57,7 +57,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Open-vocabulary sets</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -83,7 +83,7 @@
     />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger" data-testid="open-vocab-load-error">
+      <p class="text-sm text-danger-text" data-testid="open-vocab-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
@@ -125,19 +125,19 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent hover:underline"
+                    class="font-mono text-accent-text hover:underline"
                     href={resolve(editorPath(s.name))}>{s.name}</a
                   >
                   {#if s.active}
                     <span
-                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
+                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
                       data-testid="open-vocab-active-chip"
                       >active{s.active_revision != null
                         ? ` r${s.active_revision}`
                         : ''}</span
                     >
                     {#if s.revision != null && s.active_revision != null && s.revision !== s.active_revision}
-                      <span class="ml-1 block text-caption text-warn"
+                      <span class="ml-1 block text-caption text-warn-text"
                         >saved r{s.revision}, active r{s.active_revision}</span
                       >
                     {/if}
@@ -220,7 +220,10 @@
     <p class="text-xs text-fg-3">
       The set starts with the server's defaults; add targets in the editor.
     </p>
-    {#if list.createError}<p class="text-danger" data-testid="open-vocab-create-error">
+    {#if list.createError}<p
+        class="text-danger-text"
+        data-testid="open-vocab-create-error"
+      >
         {list.createError}
       </p>{/if}
   </ConfirmDialog>

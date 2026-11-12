@@ -48,14 +48,14 @@
   }
 
   function gapClass(gap: number): string {
-    if (gap <= 0) return 'bg-success/20 text-success border-success/40';
-    if (gap <= 200) return 'bg-warn/20 text-warn border-warn/40';
-    return 'bg-danger/20 text-danger border-danger/40';
+    if (gap <= 0) return 'bg-success/20 text-success-text border-success/40';
+    if (gap <= 200) return 'bg-warn/20 text-warn-text border-warn/40';
+    return 'bg-danger/20 text-danger-text border-danger/40';
   }
 
   function testBadge(deficient: boolean): string {
     return deficient
-      ? 'bg-danger/20 text-danger border-danger/40'
+      ? 'bg-danger/20 text-danger-text border-danger/40'
       : 'bg-surface-2 text-fg-2 border-line-strong';
   }
 
@@ -63,9 +63,9 @@
   // tier wasn't rendered anywhere on this page. Just a display of the
   // server's own value — no client-side threshold logic.
   function adequacyClass(adequacy: string | null): string {
-    if (adequacy === 'block') return 'bg-danger/20 text-danger border-danger/40';
-    if (adequacy === 'warn') return 'bg-warn/20 text-warn border-warn/40';
-    if (adequacy === 'ok') return 'bg-success/20 text-success border-success/40';
+    if (adequacy === 'block') return 'bg-danger/20 text-danger-text border-danger/40';
+    if (adequacy === 'warn') return 'bg-warn/20 text-warn-text border-warn/40';
+    if (adequacy === 'ok') return 'bg-success/20 text-success-text border-success/40';
     return 'bg-surface-2 text-fg-2 border-line-strong';
   }
 </script>
@@ -143,7 +143,7 @@
   {#if loading && rows.length === 0}
     <div class="p-6 text-sm text-fg-3">Loading dataset stats…</div>
   {:else if error}
-    <div class="p-6 text-sm text-danger">{error}</div>
+    <div class="p-6 text-sm text-danger-text">{error}</div>
   {:else if rows.length === 0}
     <div class="p-6 text-sm text-fg-3">
       No classes in this project yet. Add them on the Classes page.

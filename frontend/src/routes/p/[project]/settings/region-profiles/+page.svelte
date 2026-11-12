@@ -41,7 +41,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Region profiles</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -76,14 +76,16 @@
     </ConfigActivePanel>
 
     {#if list.impactError}
-      <p class="text-sm text-danger" data-testid="impact-error">{list.impactError}</p>
+      <p class="text-sm text-danger-text" data-testid="impact-error">
+        {list.impactError}
+      </p>
     {/if}
     {#if list.impact}
       <ProfileImpactPanel impact={list.impact} />
     {/if}
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger" data-testid="profiles-load-error">
+      <p class="text-sm text-danger-text" data-testid="profiles-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
@@ -113,7 +115,7 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent hover:underline"
+                    class="font-mono text-accent-text hover:underline"
                     href={resolve(
                       projectHref(
                         `/settings/region-profiles/${encodeURIComponent(p.name)}`,
@@ -122,7 +124,7 @@
                   >
                   {#if p.active}
                     <span
-                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
+                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
                       data-testid="profile-active-chip"
                       >active{p.active_revision != null
                         ? ` r${p.active_revision}`
@@ -130,7 +132,7 @@
                     >
                     {#if p.revision != null && p.active_revision != null && p.revision !== p.active_revision}
                       <span
-                        class="ml-1 block text-caption text-warn"
+                        class="ml-1 block text-caption text-warn-text"
                         data-testid="profile-saved-vs-active"
                         >saved r{p.revision}, active r{p.active_revision}</span
                       >
@@ -224,7 +226,7 @@
         </p>
         <div class="mt-3">
           {#if list.vocabularyError}
-            <p class="text-sm text-danger">{list.vocabularyError}</p>
+            <p class="text-sm text-danger-text">{list.vocabularyError}</p>
           {:else if list.vocabulary}
             <ProfileVocabularyPanel vocab={list.vocabulary} />
           {:else}

@@ -96,7 +96,7 @@
   aria-label={copy.title}
 >
   {#if ctl.loadError && !ctl.active}
-    <p class="text-danger">Could not read what is active: {ctl.loadError}</p>
+    <p class="text-danger-text">Could not read what is active: {ctl.loadError}</p>
   {:else if !ctl.active}
     <p class="text-fg-3">Loading what is active…</p>
   {:else}
@@ -108,7 +108,7 @@
           >{noneText(a.source)}</span
         >
       {:else}
-        <span class="font-mono font-medium text-success" data-testid="active-ref"
+        <span class="font-mono font-medium text-success-text" data-testid="active-ref"
           >{refText(a.active)}</span
         >
       {/if}
@@ -142,7 +142,7 @@
     </div>
     {#if a.stale}
       <p
-        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
         data-testid="active-stale"
       >
         The server could not refresh its config and is showing its last known state.
@@ -175,7 +175,7 @@
                 <td class="py-0.5">
                   {#if r.lagging}
                     <span
-                      class="rounded border border-warn/40 bg-warn/10 px-1.5 text-warn"
+                      class="rounded border border-warn/40 bg-warn/10 px-1.5 text-warn-text"
                       data-testid="applied-lagging">lagging</span
                     >
                   {/if}
@@ -187,7 +187,7 @@
       </div>
     {/if}
     {#if ctl.actionError && !confirming}
-      <p class="text-xs text-danger" data-testid="active-action-error">
+      <p class="text-xs text-danger-text" data-testid="active-action-error">
         {ctl.actionError}
       </p>
     {/if}
@@ -208,7 +208,7 @@
       <strong class="font-mono">{refText(ctl.active.previous)}</strong>
     </p>
     <p class="text-xs text-fg-2">{copy.rollbackBlurb}</p>
-    {#if ctl.actionError}<p class="text-danger" data-testid="rollback-error">
+    {#if ctl.actionError}<p class="text-danger-text" data-testid="rollback-error">
         {ctl.actionError}
       </p>{/if}
   </ConfirmDialog>
@@ -229,7 +229,7 @@
       <strong>{copy.noneText}</strong>
     </p>
     <p class="text-xs text-fg-2">{copy.deactivate.blurb}</p>
-    {#if ctl.actionError}<p class="text-danger" data-testid="deactivate-error">
+    {#if ctl.actionError}<p class="text-danger-text" data-testid="deactivate-error">
         {ctl.actionError}
       </p>{/if}
   </ConfirmDialog>

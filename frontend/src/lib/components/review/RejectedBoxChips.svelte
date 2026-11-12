@@ -25,8 +25,8 @@
       kind === 'needs_human'
         ? 'border-line-strong bg-surface-2/80 text-fg-2'
         : kind === 'model_verdict'
-          ? 'border-danger/40 bg-danger/15 text-danger'
-          : 'border-warn/40 bg-warn/15 text-warn'
+          ? 'border-danger/40 bg-danger/15 text-danger-text'
+          : 'border-warn/40 bg-warn/15 text-warn-text'
     }`}
   >
     {kind === 'needs_human' ? 'candidate · needs review' : 'rejected · confirm to accept'}

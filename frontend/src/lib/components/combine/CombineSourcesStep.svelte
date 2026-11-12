@@ -74,7 +74,7 @@
         >
         <button
           type="button"
-          class="btn btn-sm text-danger"
+          class="btn btn-sm text-danger-text"
           data-testid="combine-source-remove-{s.project}"
           onclick={() => wizard.removeSource(s.project)}>Remove</button
         >

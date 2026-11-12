@@ -102,7 +102,7 @@
       {#if !stickyBottom}
         <button
           type="button"
-          class="rounded border border-line-strong px-1.5 py-0.5 text-accent hover:bg-surface-1"
+          class="rounded border border-line-strong px-1.5 py-0.5 text-accent-text hover:bg-surface-1"
           onclick={() => {
             stickyBottom = true;
             scrollToBottom();
@@ -111,14 +111,14 @@
           jump to bottom
         </button>
       {:else if active}
-        <span class="font-mono text-success">tailing</span>
+        <span class="font-mono text-success-text">tailing</span>
       {:else}
         <span class="font-mono">paused</span>
       {/if}
     </div>
   </div>
   {#if error}
-    <p class="px-3 py-2 text-xs text-danger">log fetch failed: {error}</p>
+    <p class="px-3 py-2 text-xs text-danger-text">log fetch failed: {error}</p>
   {/if}
   <div
     bind:this={scroller}

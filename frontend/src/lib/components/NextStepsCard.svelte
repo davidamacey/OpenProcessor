@@ -34,7 +34,7 @@
         <Icon
           name={step.done ? 'circle-check' : 'circle'}
           size={14}
-          class={step.done ? 'text-success' : 'text-fg-3'}
+          class={step.done ? 'text-success-text' : 'text-fg-3'}
           label={step.done ? 'Done' : 'To do'}
         />
         <a

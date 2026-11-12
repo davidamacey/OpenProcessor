@@ -64,7 +64,7 @@
 
   {#if ctl.groupsError}
     <div class="flex flex-col gap-2 text-sm" data-testid="near-dup-groups-error">
-      <p class="text-danger" role="alert">{ctl.groupsError}</p>
+      <p class="text-danger-text" role="alert">{ctl.groupsError}</p>
       <button type="button" class="btn w-fit" onclick={() => void ctl.loadGroups()}
         >Retry</button
       >
@@ -95,7 +95,9 @@
               <span>Lowest edge cosine {cos(g.min_edge_cosine)}</span>
               <span>Lowest to representative {cos(g.min_cosine_to_rep)}</span>
               {#if g.has_holdout}
-                <span class="chip w-fit border-warn-line text-warn">In test holdout</span>
+                <span class="chip w-fit border-warn-line text-warn-text"
+                  >In test holdout</span
+                >
               {/if}
             </span>
           </button>

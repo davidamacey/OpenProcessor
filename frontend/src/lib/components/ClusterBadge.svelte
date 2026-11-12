@@ -37,7 +37,7 @@
   <button
     type="button"
     onclick={open}
-    class="pointer-events-auto block max-w-full truncate rounded border border-line-strong bg-surface-1/90 px-1.5 py-0.5 text-caption text-fg-1 hover:border-accent/60 hover:text-accent"
+    class="pointer-events-auto block max-w-full truncate rounded border border-line-strong bg-surface-1/90 px-1.5 py-0.5 text-caption text-fg-1 hover:border-accent/60 hover:text-accent-text"
     title="Open cluster {clusterUid}"
   >
     {numberText} · {dominantClassName}
@@ -46,7 +46,7 @@
   <button
     type="button"
     onclick={open}
-    class="pointer-events-auto block max-w-full truncate rounded border border-warn/50 bg-warn/10 px-1.5 py-0.5 text-caption text-warn hover:bg-warn/20"
+    class="pointer-events-auto block max-w-full truncate rounded border border-warn/50 bg-warn/10 px-1.5 py-0.5 text-caption text-warn-text hover:bg-warn/20"
     title="Open cluster {clusterUid} (unlabeled)"
   >
     Unlabeled {numberText}

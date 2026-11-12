@@ -163,7 +163,7 @@
               Resume the loop
             </button>
           {:else if control.resume_blocked_reason}
-            <span class="text-warn" data-testid="loop-resume-blocked"
+            <span class="text-warn-text" data-testid="loop-resume-blocked"
               >{BLOCKED_TEXT[control.resume_blocked_reason] ??
                 control.resume_blocked_reason}</span
             >
@@ -173,10 +173,10 @@
     </div>
 
     {#if loop.error}
-      <p class="text-danger" data-testid="loop-error">{loop.error}</p>
+      <p class="text-danger-text" data-testid="loop-error">{loop.error}</p>
     {/if}
     {#if ctl.actionError}
-      <p class="text-danger" role="alert" data-testid="loop-action-error">
+      <p class="text-danger-text" role="alert" data-testid="loop-action-error">
         {ctl.actionError}
       </p>
     {/if}

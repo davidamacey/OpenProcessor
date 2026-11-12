@@ -44,11 +44,22 @@ describe('text contrast on the surfaces', () => {
   });
 });
 
-describe('semantic text and the accent', () => {
+/** `base` at `alpha` over `under`: what a tinted (soft or hover) background renders as. */
+function over(base: Rgb, under: Rgb, alpha: number): Rgb {
+  return base.map((c, i) => c * alpha + under[i]! * (1 - alpha)) as Rgb;
+}
+
+describe('semantic text on plain and tinted backgrounds', () => {
+  // The -text variants carry text and icons; the base colours are borders, dots and fills.
   it.each(['accent', 'success', 'warn', 'danger', 'info', 'holdout'])(
-    '%s text reaches 4.5:1 on the card surface',
+    '%s-text reaches 4.5:1 on a card and on its own 25% tint over a popover',
     (name) => {
-      expect(contrast(token(name), token('surface-1'))).toBeGreaterThanOrEqual(4.5);
+      const text = token(`${name}-text`);
+      expect(contrast(text, token('surface-1'))).toBeGreaterThanOrEqual(4.5);
+      const tint = over(token(name), token('surface-3'), 0.25);
+      expect(contrast(text, tint), `${name}-text on its tint`).toBeGreaterThanOrEqual(
+        4.5,
+      );
     },
   );
 });

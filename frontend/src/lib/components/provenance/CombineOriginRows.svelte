@@ -19,7 +19,7 @@
     <span class="font-mono">{crop.origin_project}</span>
     {#if crop.combine_conflict}
       <span
-        class="ml-1 rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn"
+        class="ml-1 rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
         data-testid="combine-origin-conflict">Conflict between sources</span
       >
     {/if}

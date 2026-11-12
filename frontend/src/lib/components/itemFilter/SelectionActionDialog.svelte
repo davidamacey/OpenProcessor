@@ -160,7 +160,7 @@
     </div>
 
     {#if c.error}
-      <p class="text-danger" role="alert" data-testid="selection-error">{c.error}</p>
+      <p class="text-danger-text" role="alert" data-testid="selection-error">{c.error}</p>
     {/if}
   </ConfirmDialog>
 {/if}

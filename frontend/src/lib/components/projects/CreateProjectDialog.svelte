@@ -97,7 +97,7 @@
         />
         {#if slugHint}
           <span
-            class="mt-1 block text-caption text-warn"
+            class="mt-1 block text-caption text-warn-text"
             data-testid="create-project-slug-hint">{slugHint}</span
           >
         {:else if limits}
@@ -129,8 +129,8 @@
       {#if capacity && capacity.status !== 'ok'}
         <p
           class="mb-3 rounded border px-2 py-1.5 text-xs {blocked
-            ? 'border-danger-line bg-danger-soft text-danger'
-            : 'border-warn-line bg-warn-soft text-warn'}"
+            ? 'border-danger-line bg-danger-soft text-danger-text'
+            : 'border-warn-line bg-warn-soft text-warn-text'}"
           data-testid="create-project-capacity"
         >
           <span class="font-semibold"
@@ -141,7 +141,7 @@
       {/if}
 
       {#if errorText}
-        <p class="mb-3 text-xs text-danger" data-testid="create-project-error">
+        <p class="mb-3 text-xs text-danger-text" data-testid="create-project-error">
           {errorText}
         </p>
       {/if}

@@ -30,9 +30,9 @@
         <span class="font-semibold text-fg-1">{humanizeId(leg.leg)}</span>
         <span
           class="rounded border px-1.5 {leg.status === 'error'
-            ? 'border-danger/40 text-danger'
+            ? 'border-danger/40 text-danger-text'
             : leg.status === 'ok'
-              ? 'border-success/40 text-success'
+              ? 'border-success/40 text-success-text'
               : 'border-line-strong text-fg-2'}"
           data-testid="test-leg-status">{humanizeId(leg.status)}</span
         >

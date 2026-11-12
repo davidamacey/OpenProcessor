@@ -145,7 +145,7 @@
 
   {#if t.error}
     <p
-      class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger"
+      class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-danger-text"
       data-testid="ov-test-error"
     >
       {t.segmenterError ? `Segmenter error: ${t.error}` : t.error}
@@ -169,7 +169,7 @@
         <span class="font-mono text-fg-1">{Math.round(r.elapsed_ms)} ms</span>
       </p>
       <p
-        class="text-xs {r.gate.run ? 'text-fg-2' : 'text-warn'}"
+        class="text-xs {r.gate.run ? 'text-fg-2' : 'text-warn-text'}"
         data-testid="ov-test-gate"
       >
         {#if r.gate.run}

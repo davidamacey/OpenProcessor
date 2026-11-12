@@ -76,7 +76,7 @@
         data-testid="profile-test-crop-id"
       />
       {#if t.missingCropIds.length > 0}
-        <span class="text-danger" data-testid="test-missing-ids">
+        <span class="text-danger-text" data-testid="test-missing-ids">
           Not found:
           {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
             t.missingCropIds.length - 1
@@ -125,7 +125,7 @@
         <span class="font-mono" data-testid="test-profile-ref">{refText(r.profile)}</span>
       </p>
       {#if !r.testable}
-        <p class="text-warn" data-testid="test-not-testable">
+        <p class="text-warn-text" data-testid="test-not-testable">
           {r.reason ?? 'The server reports this item cannot be tested.'}
         </p>
       {/if}
@@ -177,14 +177,14 @@
           />
           <p class="text-xs" data-testid="test-parse-status">
             {#if v.parse_ok}
-              <span class="rounded border border-success/40 px-1.5 text-success"
+              <span class="rounded border border-success/40 px-1.5 text-success-text"
                 >parsed</span
               >
             {:else}
-              <span class="rounded border border-danger/40 px-1.5 text-danger"
+              <span class="rounded border border-danger/40 px-1.5 text-danger-text"
                 >not parsed</span
               >
-              {#if v.parse_error}<span class="ml-1 text-danger">{v.parse_error}</span
+              {#if v.parse_error}<span class="ml-1 text-danger-text">{v.parse_error}</span
                 >{/if}
             {/if}
           </p>

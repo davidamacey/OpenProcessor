@@ -42,7 +42,7 @@
     <section class="surface p-6 text-sm text-fg-3">Loading…</section>
   {:else if ctl.loadError}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-danger" role="alert" data-testid="label-ops-error">
+      <p class="text-danger-text" role="alert" data-testid="label-ops-error">
         {ctl.loadError}
       </p>
       <button type="button" class="btn w-fit" onclick={() => void ctl.load()}
@@ -59,7 +59,7 @@
       <p
         role="alert"
         data-testid="label-ops-older-error"
-        class="text-sm text-danger self-center"
+        class="text-sm text-danger-text self-center"
       >
         {ctl.olderError}
       </p>

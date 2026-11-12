@@ -40,10 +40,12 @@
     >
       {#if cls}
         <span class="text-fg-3">class-wide:</span>
-        <span class="text-success">{(cls.validated_count ?? 0).toLocaleString()}</span>
+        <span class="text-success-text"
+          >{(cls.validated_count ?? 0).toLocaleString()}</span
+        >
         <span class="text-fg-3">validated</span>
         <span class="mx-1 text-fg-3">·</span>
-        <span class="text-accent">{(cls.count ?? 0).toLocaleString()}</span>
+        <span class="text-accent-text">{(cls.count ?? 0).toLocaleString()}</span>
         <span class="text-fg-3">labeled</span>
         <span class="mx-1 text-fg-3">|</span>
       {/if}

@@ -29,7 +29,7 @@
         revision {ctl.status.profile.revision}
       </span>
     {:else if ctl.status}
-      <span class="text-xs text-warn">No active profile: nothing groups.</span>
+      <span class="text-xs text-warn-text">No active profile: nothing groups.</span>
     {/if}
   </header>
 
@@ -39,7 +39,7 @@
     </p>
   {/if}
   {#if ctl.runError}
-    <p class="text-xs text-danger" role="alert" data-testid="near-dup-run-error">
+    <p class="text-xs text-danger-text" role="alert" data-testid="near-dup-run-error">
       {ctl.runError}
     </p>
   {/if}
@@ -65,7 +65,7 @@
           </p>
         {/if}
         {#if lv.stale_reasons.length > 0}
-          <ul class="text-xs text-warn" data-testid="near-dup-stale-{lv.level}">
+          <ul class="text-xs text-warn-text" data-testid="near-dup-stale-{lv.level}">
             {#each lv.stale_reasons as reason (reason)}
               <li>
                 Stale: {staleReasonText(reason)}{reason === 'pending'
@@ -75,7 +75,7 @@
             {/each}
           </ul>
         {:else}
-          <p class="text-xs text-success">Up to date.</p>
+          <p class="text-xs text-success-text">Up to date.</p>
         {/if}
         <div class="mt-auto flex flex-wrap gap-2">
           {#if lv.pending_count > 0 && lv.current_run && pendingOnly(lv)}

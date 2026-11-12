@@ -93,7 +93,7 @@
     testid="packs-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger" data-testid="pack-load-error">{ed.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="pack-load-error">{ed.loadError}</p>
     {:else if !ed.doc || !ed.schema}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -111,7 +111,7 @@
               <summary class="cursor-pointer text-fg-2">Placeholders</summary>
               <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                 {#each ed.schema.placeholders as p (p.name)}
-                  <dt class="font-mono text-info">{`{${p.name}}`}</dt>
+                  <dt class="font-mono text-info-text">{`{${p.name}}`}</dt>
                   <dd class="text-fg-2">
                     {p.meaning}
                     {#if p.example}<span class="block font-mono text-fg-3"

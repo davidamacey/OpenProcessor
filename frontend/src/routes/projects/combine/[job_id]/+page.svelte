@@ -86,12 +86,12 @@
 
   <main class="mx-auto w-full max-w-4xl flex-1 space-y-4 p-4">
     {#if job.notFound}
-      <p class="text-sm text-danger" data-testid="combine-job-not-found">
+      <p class="text-sm text-danger-text" data-testid="combine-job-not-found">
         {job.notFound}
       </p>
     {:else if !served}
       {#if job.loadError}
-        <p class="text-sm text-danger" data-testid="combine-job-error">
+        <p class="text-sm text-danger-text" data-testid="combine-job-error">
           {job.loadError}
         </p>
       {:else}
@@ -102,10 +102,10 @@
         <div class="flex flex-wrap items-center gap-2">
           <span
             class="rounded px-1.5 py-0.5 text-xs {job.completed
-              ? 'bg-success-soft text-success'
+              ? 'bg-success-soft text-success-text'
               : job.failed
-                ? 'bg-danger-soft text-danger'
-                : 'bg-warn-soft text-warn'}"
+                ? 'bg-danger-soft text-danger-text'
+                : 'bg-warn-soft text-warn-text'}"
             data-testid="combine-job-status"
             data-status={served.status}>{combineLabel(served.status)}</span
           >
@@ -147,19 +147,19 @@
 
         {#if served.error}
           <p
-            class="rounded border border-danger-line bg-danger-soft px-2 py-1 text-xs text-danger"
+            class="rounded border border-danger-line bg-danger-soft px-2 py-1 text-xs text-danger-text"
             data-testid="combine-job-served-error"
           >
             {served.error}
           </p>
         {/if}
         {#if job.loadError}
-          <p class="text-xs text-danger" data-testid="combine-job-error">
+          <p class="text-xs text-danger-text" data-testid="combine-job-error">
             {job.loadError}
           </p>
         {/if}
         {#if job.actionError}
-          <p class="text-xs text-danger" data-testid="combine-job-action-error">
+          <p class="text-xs text-danger-text" data-testid="combine-job-action-error">
             {job.actionError}
           </p>
         {/if}
@@ -213,7 +213,7 @@
         {#if job.failed && targetProject}
           <button
             type="button"
-            class="btn text-danger"
+            class="btn text-danger-text"
             data-testid="combine-undo"
             onclick={() => (undoing = targetProject)}>Undo combine</button
           >
@@ -269,7 +269,7 @@
     {:else}
       <p>The job continues from where it stopped.</p>
     {/if}
-    {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+    {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
   </ConfirmDialog>
 {/if}
 
@@ -288,7 +288,7 @@
       >
       on {target}.
     </p>
-    {#if job.actionError}<p class="text-danger">{job.actionError}</p>{/if}
+    {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
   </ConfirmDialog>
 {/if}
 

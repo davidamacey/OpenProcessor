@@ -73,14 +73,14 @@
 
 {#if crop.class_excluded}
   <div
-    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-xs text-warn"
+    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-xs text-warn-text"
   >
     <span class="font-medium">Ignored</span>
     {#if crop.excluded_reason}
-      <span class="ml-1 text-warn/80">({crop.excluded_reason})</span>
+      <span class="ml-1 text-warn-text/80">({crop.excluded_reason})</span>
     {/if}
     {#if crop.excluded_at}
-      <span class="ml-1 font-mono text-warn/60" title={crop.excluded_at}
+      <span class="ml-1 font-mono text-warn-text/60" title={crop.excluded_at}
         >{formatTimestamp(crop.excluded_at)}</span
       >
     {/if}
@@ -111,7 +111,7 @@
       <ConfirmationChip source={crop.class_source} validated={crop.class_validated} />
       {#if crop.class_validated}
         <span
-          class="ml-1 rounded border border-success/40 bg-success/15 px-1 text-caption text-success"
+          class="ml-1 rounded border border-success/40 bg-success/15 px-1 text-caption text-success-text"
         >
           validated
         </span>
@@ -177,17 +177,17 @@
 
   {#if !embedded && crop.vlm_class_empty_reason}
     <dt class="text-fg-3">VLM empty reason</dt>
-    <dd class="text-warn" title={crop.vlm_class_empty_reason}>
+    <dd class="text-warn-text" title={crop.vlm_class_empty_reason}>
       {humanizeId(crop.vlm_class_empty_reason)}
     </dd>
   {/if}
 
   {#if crop.vlm_suggested_class_id != null}
     <dt class="text-fg-3">VLM proposed</dt>
-    <dd class="text-warn">
+    <dd class="text-warn-text">
       {crop.vlm_suggested_class_name ?? '—'}
       {#if crop.vlm_confidence}
-        <span class="ml-1 font-mono text-warn/70">{crop.vlm_confidence}</span>
+        <span class="ml-1 font-mono text-warn-text/70">{crop.vlm_confidence}</span>
       {/if}
     </dd>
   {/if}

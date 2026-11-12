@@ -59,13 +59,13 @@
             alt="The source crop"
             class="h-8 w-8 rounded-sm border border-line-strong object-cover"
           />
-          <span class="font-medium text-accent">{modes.similarTo}</span>
+          <span class="font-medium text-accent-text">{modes.similarTo}</span>
         {:else if modes.imageQueryName}
           result{modes.searchTotal === 1 ? '' : 's'} like the picture
-          <span class="font-medium text-accent">{modes.imageQueryName}</span>
+          <span class="font-medium text-accent-text">{modes.imageQueryName}</span>
         {:else}
           result{modes.searchTotal === 1 ? '' : 's'} for
-          <span class="font-medium text-accent">"{modes.searchQuery}"</span>
+          <span class="font-medium text-accent-text">"{modes.searchQuery}"</span>
           across the dataset
         {/if}
       </span>
@@ -83,7 +83,7 @@
       </button>
     </div>
     {#if modes.similarError}
-      <p class="text-sm text-warn" role="status" data-testid="similar-error">
+      <p class="text-sm text-warn-text" role="status" data-testid="similar-error">
         {modes.similarError}
       </p>
     {:else if modes.searchResults.length === 0}
@@ -104,7 +104,7 @@
           {#if modes.matchOf(crop.id)}
             {@const match = modes.matchOf(crop.id)}
             <span
-              class="rounded-sm border border-accent/40 bg-accent/10 px-1 py-0.5 font-mono text-caption text-accent"
+              class="rounded-sm border border-accent/40 bg-accent/10 px-1 py-0.5 font-mono text-caption text-accent-text"
               title={match?.stale
                 ? 'Matched region; its vector predates a move of the box'
                 : 'Matched region'}
@@ -135,7 +135,7 @@
       <span class="grow"></span>
       <button
         type="button"
-        class="btn-sm border border-success/50 bg-success/10 text-success hover:bg-success/20"
+        class="btn-sm border border-success/50 bg-success/10 text-success-text hover:bg-success/20"
         onclick={() => void modes.restoreIgnored()}
         disabled={modes.ignoredSel.size === 0}
       >
@@ -164,7 +164,7 @@
         {#snippet cornerBadge(crop)}
           {#if crop.excluded_reason}
             <span
-              class="rounded border border-warn/50 bg-warn/15 px-1 py-0.5 text-caption text-warn"
+              class="rounded border border-warn/50 bg-warn/15 px-1 py-0.5 text-caption text-warn-text"
             >
               {crop.excluded_reason}
             </span>
@@ -178,7 +178,7 @@
       <span class="text-fg-2">
         <strong class="text-fg-1">{modes.itemTextTotal.toLocaleString()}</strong>
         result{modes.itemTextTotal === 1 ? '' : 's'} for
-        <span class="font-medium text-accent">"{modes.itemTextQuery}"</span>
+        <span class="font-medium text-accent-text">"{modes.itemTextQuery}"</span>
       </span>
       <span class="grow"></span>
       <button
@@ -221,7 +221,7 @@
   {:else if list.clusterPager.loading && list.gridItems.length === 0}
     <p class="text-sm text-fg-3" role="status">Loading clusters…</p>
   {:else if list.clusterPager.error}
-    <div class="text-sm text-danger" role="alert" data-testid="clusters-error">
+    <div class="text-sm text-danger-text" role="alert" data-testid="clusters-error">
       <p>Could not load clusters: {list.clusterPager.error}</p>
       <button
         type="button"
@@ -257,7 +257,7 @@
   {:else}
     {#if list.truncated}
       <p
-        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
         role="status"
         data-testid="clusters-truncated"
       >

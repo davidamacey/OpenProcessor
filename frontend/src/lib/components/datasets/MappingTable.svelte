@@ -100,7 +100,7 @@
               </div>
               <button
                 type="button"
-                class="mt-0.5 text-caption text-accent hover:underline"
+                class="mt-0.5 text-caption text-accent-text hover:underline"
                 onclick={() => wizard.useSuggestion(row)}>Use suggestion</button
               >
             {:else}
@@ -153,9 +153,9 @@
           </td>
           <td class="px-2 py-1.5" data-testid="resolved">
             {#if resolvedText(row)}
-              <span class="text-success">{resolvedText(row)}</span>
+              <span class="text-success-text">{resolvedText(row)}</span>
             {:else if unmapped.has(row.dataset_class)}
-              <span class="text-warn">not mapped yet</span>
+              <span class="text-warn-text">not mapped yet</span>
             {:else}
               <span class="text-fg-3">—</span>
             {/if}

@@ -35,7 +35,7 @@
       </button>
     {:else}
       <span
-        class="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-xs text-success"
+        class="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-xs text-success-text"
       >
         frozen — {totalTestCrops.toLocaleString()} crops
       </span>
@@ -49,7 +49,7 @@
       </span>
       {#if deficientClassCount > 0}
         <span
-          class="rounded-md border border-danger/40 bg-danger/10 px-2 py-0.5 text-danger"
+          class="rounded-md border border-danger/40 bg-danger/10 px-2 py-0.5 text-danger-text"
         >
           {deficientClassCount} class{deficientClassCount === 1 ? '' : 'es'} below {holdout?.min_test_per_class ??
             '…'} test crops

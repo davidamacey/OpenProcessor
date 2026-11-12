@@ -8,12 +8,12 @@
 import type { ClassSourceRole } from '$lib/api_classes';
 
 const TONE = {
-  human: 'bg-success/20 text-success border-success/40',
-  vlm: 'bg-warn/20 text-warn border-warn/40',
-  cluster: 'bg-holdout/20 text-holdout border-holdout/40',
+  human: 'bg-success/20 text-success-text border-success/40',
+  vlm: 'bg-warn/20 text-warn-text border-warn/40',
+  cluster: 'bg-holdout/20 text-holdout-text border-holdout/40',
   proposal: 'bg-surface-3/40 text-fg-2 border-line-strong',
-  model: 'bg-accent/20 text-accent border-accent/40',
-  openVocab: 'bg-info/20 text-info border-info/40',
+  model: 'bg-accent/20 text-accent-text border-accent/40',
+  openVocab: 'bg-info/20 text-info-text border-info/40',
 } as const;
 
 /** The confirmation wording (#119): what a class label is worth as ground

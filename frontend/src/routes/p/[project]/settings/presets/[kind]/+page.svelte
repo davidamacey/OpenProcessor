@@ -62,7 +62,7 @@
       There is no such kind of preset.
     </p>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
@@ -75,7 +75,7 @@
       >
       <span class="grow"></span>
       <a
-        class="text-xs text-accent hover:underline"
+        class="text-xs text-accent-text hover:underline"
         href={resolve(projectHref('/settings'))}>Back to settings</a
       >
     </header>
@@ -84,7 +84,9 @@
     <PresetActiveSummary active={list.active} />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger" data-testid="preset-load-error">{list.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="preset-load-error">
+        {list.loadError}
+      </p>
     {:else if !list.list}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -125,7 +127,7 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent hover:underline"
+                    class="font-mono text-accent-text hover:underline"
                     href={resolve(projectHref(editorPath(d.name)))}>{d.name}</a
                   >
                   {#each list.active.entries.filter((e) => e.state === 'active' && e.name === d.name) as e (e.axis ?? 'deployment')}
@@ -133,12 +135,12 @@
                       class="mt-0.5 flex flex-col items-start gap-0.5 whitespace-nowrap"
                     >
                       <span
-                        class="rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
+                        class="rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
                         data-testid="preset-active-chip"
                         >active{axisLabel(e.axis) ? ` · ${axisLabel(e.axis)}` : ''} r{e.revision}</span
                       >
                       {#if e.revision !== d.revision}
-                        <span class="text-caption text-warn"
+                        <span class="text-caption text-warn-text"
                           >saved r{d.revision}, active r{e.revision}</span
                         >
                       {/if}

@@ -40,7 +40,7 @@
         <span class="font-mono text-fg-1">{d.name}</span>
         {#if d.is_current}
           <span
-            class="rounded bg-success-soft px-1 text-caption text-success"
+            class="rounded bg-success-soft px-1 text-caption text-success-text"
             data-testid="dataset-current">current</span
           >
         {/if}
@@ -49,7 +49,7 @@
         >
         {#if d.frozen_ok === false}
           <span
-            class="rounded bg-danger-soft px-1 text-caption text-danger"
+            class="rounded bg-danger-soft px-1 text-caption text-danger-text"
             title="The test split no longer matches its frozen lock file."
             >frozen check failed</span
           >
@@ -63,7 +63,7 @@
           · {formatCount(d.n_background_images)} background{/if}
       </span>
       {#if d.unlabeled_items_on_exported_images}
-        <span class="block text-caption text-warn/80">
+        <span class="block text-caption text-warn-text/80">
           {formatCount(d.unlabeled_items_on_exported_images)} unlabeled items on these images
           (a model detecting them is charged false positives)
         </span>

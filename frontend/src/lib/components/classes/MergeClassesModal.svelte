@@ -54,15 +54,15 @@
         <div class="mb-3 text-xs text-fg-3">Checking impact…</div>
       {:else if m.mergePreviewError}
         <div
-          class="mb-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+          class="mb-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
         >
           Preview failed: {m.mergePreviewError}
         </div>
       {:else if m.mergePreview}
         <div
           class="mb-3 rounded border px-3 py-2 text-xs {m.mergePreview.blocked
-            ? 'border-danger/40 bg-danger/10 text-danger'
-            : 'border-warn/40 bg-warn/10 text-warn'}"
+            ? 'border-danger/40 bg-danger/10 text-danger-text'
+            : 'border-warn/40 bg-warn/10 text-warn-text'}"
         >
           Will relabel <strong>{m.mergePreview.would_relabel}</strong> crops from
           <strong>{m.mergeSource.name}</strong> to <strong>{m.mergeTarget.name}</strong>

@@ -84,7 +84,7 @@
           data-testid="test-crop-ids"
         />
         {#if t.missingCropIds.length > 0}
-          <span class="text-danger" data-testid="test-missing-ids">
+          <span class="text-danger-text" data-testid="test-missing-ids">
             Not found:
             {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
               t.missingCropIds.length - 1
@@ -116,14 +116,15 @@
         <TestRefs pack={r.pack} vlm={r.vlm} latencyMs={r.latency_ms} />
         <p class="text-xs" data-testid="test-parse-status">
           {#if r.parse_ok}
-            <span class="rounded border border-success/40 px-1.5 text-success"
+            <span class="rounded border border-success/40 px-1.5 text-success-text"
               >parsed</span
             >
           {:else}
-            <span class="rounded border border-danger/40 px-1.5 text-danger"
+            <span class="rounded border border-danger/40 px-1.5 text-danger-text"
               >not parsed</span
             >
-            {#if r.parse_error}<span class="ml-1 text-danger">{r.parse_error}</span>{/if}
+            {#if r.parse_error}<span class="ml-1 text-danger-text">{r.parse_error}</span
+              >{/if}
           {/if}
         </p>
         {#if r.validation}
@@ -172,7 +173,7 @@
               {#if res.box_id}<code class="font-mono text-fg-2">{res.box_id}</code>{/if}
             </div>
             {#if res.skipped}
-              <p class="text-xs text-warn" data-testid="test-skipped">
+              <p class="text-xs text-warn-text" data-testid="test-skipped">
                 {res.skipped}
               </p>
             {:else if res.parsed != null}

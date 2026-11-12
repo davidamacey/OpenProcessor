@@ -52,7 +52,7 @@
       data-testid="preset-new-body"></textarea>
   </label>
   {#if 'error' in parsed}
-    <p class="text-xs text-warn" data-testid="preset-new-json-error">
+    <p class="text-xs text-warn-text" data-testid="preset-new-json-error">
       {parsed.error}
     </p>
   {/if}
@@ -61,6 +61,6 @@
     start from a document that exists, clone it from the list.
   </p>
   {#if list.createError}
-    <p class="text-danger" data-testid="preset-create-error">{list.createError}</p>
+    <p class="text-danger-text" data-testid="preset-create-error">{list.createError}</p>
   {/if}
 </ConfirmDialog>

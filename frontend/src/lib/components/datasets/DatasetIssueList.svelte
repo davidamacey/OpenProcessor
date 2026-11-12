@@ -18,12 +18,12 @@
     {
       id: 'error',
       title: 'Errors',
-      tone: 'border-danger-line bg-danger-soft text-danger',
+      tone: 'border-danger-line bg-danger-soft text-danger-text',
     },
     {
       id: 'warning',
       title: 'Warnings',
-      tone: 'border-warn-line bg-warn-soft text-warn',
+      tone: 'border-warn-line bg-warn-soft text-warn-text',
     },
     { id: 'info', title: 'Info', tone: 'border-line bg-surface-1/40 text-fg-2' },
   ] as const;
@@ -57,7 +57,8 @@
                   >{issue.count.toLocaleString()}</span
                 >
                 {#if issue.blocking}
-                  <span class="rounded bg-danger-soft px-1.5 text-caption text-danger"
+                  <span
+                    class="rounded bg-danger-soft px-1.5 text-caption text-danger-text"
                     >blocks the import{issue.bypassable ? ' (can be forced)' : ''}</span
                   >
                 {/if}

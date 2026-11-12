@@ -27,12 +27,12 @@
     For detections already stored; the policy changes only future ingests.
   </p>
   {#if editor.previewError}
-    <p class="text-xs text-danger" data-testid="policy-preview-error">
+    <p class="text-xs text-danger-text" data-testid="policy-preview-error">
       {editor.previewError}
     </p>
   {:else if p}
     {#if editor.previewStale}
-      <p class="text-xs text-warn" data-testid="policy-preview-stale">
+      <p class="text-xs text-warn-text" data-testid="policy-preview-stale">
         Recomputing for the edited policy; the figures below are for the previous one.
       </p>
     {/if}

@@ -14,8 +14,8 @@
   let { issues, testid = 'combine-issues' }: Props = $props();
 
   const TONE: Record<string, string> = {
-    error: 'border-danger/40 bg-danger/10 text-danger',
-    warning: 'border-warn/40 bg-warn/10 text-warn',
+    error: 'border-danger/40 bg-danger/10 text-danger-text',
+    warning: 'border-warn/40 bg-warn/10 text-warn-text',
   };
 </script>
 

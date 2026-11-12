@@ -26,7 +26,7 @@ describe('Segmented', () => {
       'false',
     ]);
     expect([...radios].map((r) => r.tabIndex)).toEqual([-1, 0, -1]);
-    expect(radios[1]!.className).toContain('text-accent');
+    expect(radios[1]!.className).toContain('text-accent-text');
   });
 
   it('a click chooses, and the arrow keys move over the enabled options only', () => {

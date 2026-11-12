@@ -132,7 +132,9 @@
         Results for {status.job_id}
       </p>
       {#if status.error}
-        <p class="rounded border border-danger/30 bg-danger/10 px-2 py-1.5 text-danger">
+        <p
+          class="rounded border border-danger/30 bg-danger/10 px-2 py-1.5 text-danger-text"
+        >
           {status.error}
         </p>
       {/if}
@@ -330,7 +332,7 @@
                 href={mlflowRunUrl}
                 target="_blank"
                 rel="noopener"
-                class="text-accent underline">{mlflowRunUrl}</a
+                class="text-accent-text underline">{mlflowRunUrl}</a
               >
               <!-- eslint-enable svelte/no-navigation-without-resolve -->
             {:else if mlflowRunId}
@@ -361,7 +363,7 @@
         {#if manifestLoading}
           <p class="text-fg-3">Loading manifest…</p>
         {:else if manifestError}
-          <p class="text-danger">Manifest fetch failed: {manifestError}</p>
+          <p class="text-danger-text">Manifest fetch failed: {manifestError}</p>
         {:else if !manifest}
           <p class="text-fg-3">—</p>
         {:else}

@@ -20,7 +20,7 @@
 <section class="surface flex min-w-0 flex-col gap-2 p-4 text-sm" aria-label="Fields">
   <h2 class="text-base font-semibold">Fields</h2>
   {#if error}
-    <p class="text-danger" data-testid="preset-schema-error">{error}</p>
+    <p class="text-danger-text" data-testid="preset-schema-error">{error}</p>
   {:else if !schema}
     <p class="text-fg-3">Loading…</p>
   {:else}
@@ -34,7 +34,7 @@
           <div class="flex flex-wrap items-baseline gap-x-2">
             <span class="font-mono text-xs break-all text-fg-1">{f.path}</span>
             <span class="text-xs text-fg-2">{f.type}</span>
-            {#if f.required}<span class="text-xs text-warn">required</span>{/if}
+            {#if f.required}<span class="text-xs text-warn-text">required</span>{/if}
           </div>
           {#if f.description}<p class="text-xs text-fg-2">{f.description}</p>{/if}
           {#if f.choices.length > 0}

@@ -38,12 +38,12 @@
   {#each selected as v (v)}
     <button
       type="button"
-      class="btn-sm border border-accent/50 bg-accent/15 text-accent hover:bg-accent/25"
+      class="btn-sm border border-accent/50 bg-accent/15 text-accent-text hover:bg-accent/25"
       aria-label="Remove {label} {v}"
       onclick={() => onchange(selected.filter((x) => x !== v))}
     >
       {v}
-      <Icon name="x" size={12} class="ml-1 text-accent" />
+      <Icon name="x" size={12} class="ml-1 text-accent-text" />
     </button>
   {/each}
 </div>

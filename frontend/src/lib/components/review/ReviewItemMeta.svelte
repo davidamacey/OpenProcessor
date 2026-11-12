@@ -72,10 +72,10 @@
     </dt>
     <dd
       class={reasonKind === 'model_verdict'
-        ? 'text-danger'
+        ? 'text-danger-text'
         : reasonKind === 'needs_human'
           ? 'text-fg-1'
-          : 'text-warn'}
+          : 'text-warn-text'}
     >
       {regionVocabularyStore.rejectionReasonLabel(currentSlotRejectionReason)}
     </dd>
@@ -114,7 +114,7 @@
     {#if current.vlm_raw_class}
       <span class="ml-1 text-caption text-fg-3">— VLM said: {current.vlm_raw_class}</span>
     {:else if current.vlm_class_empty_reason}
-      <span class="ml-1 text-caption text-warn"
+      <span class="ml-1 text-caption text-warn-text"
         >— {vlmEmptyReasonText(current.vlm_class_empty_reason)}</span
       >
     {/if}
@@ -133,7 +133,7 @@
         {current.proposed_class_name} <span class="text-caption">(hint only)</span>
       </dd>
     {:else}
-      <dd class="text-warn">{current.proposed_class_name}</dd>
+      <dd class="text-warn-text">{current.proposed_class_name}</dd>
     {/if}
   {/if}
 
@@ -166,7 +166,7 @@
       {#if opinion.showAccept}
         <button
           type="button"
-          class="rounded border border-accent/60 bg-accent/15 px-1.5 py-0.5 text-caption text-accent hover:bg-accent/25"
+          class="rounded border border-accent/60 bg-accent/15 px-1.5 py-0.5 text-caption text-accent-text hover:bg-accent/25"
           onclick={acceptModelClass}
         >
           Accept model's class
@@ -177,7 +177,7 @@
 
   {#if current.needs_new_class}
     <dt class="text-fg-3">Needs new class</dt>
-    <dd class="text-warn">
+    <dd class="text-warn-text">
       {current.needs_new_class_note || 'flagged — no matching class in the registry'}
     </dd>
   {/if}
@@ -243,7 +243,7 @@
     <dt class="text-fg-3">Proposal hint</dt>
     <dd>
       <span
-        class="rounded border border-info/40 bg-info/15 px-1.5 py-0.5 text-caption text-info"
+        class="rounded border border-info/40 bg-info/15 px-1.5 py-0.5 text-caption text-info-text"
         title="A general-purpose detector found a subject here that the primary classifier missed. Coarse class — pick the specific class below (a close variant may be near one-click)."
       >
         {current.proposal_name}

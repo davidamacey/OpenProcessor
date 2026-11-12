@@ -46,9 +46,9 @@ const TONE_BORDER_CLASS: Record<BoxStateTone, string> = {
 };
 
 const TONE_CHIP_CLASS: Record<BoxStateTone, string> = {
-  accepted: 'border-success/40 bg-success/15 text-success',
-  proposed: 'border-warn/40 bg-warn/15 text-warn',
-  rejected: 'border-danger/40 bg-danger/15 text-danger',
+  accepted: 'border-success/40 bg-success/15 text-success-text',
+  proposed: 'border-warn/40 bg-warn/15 text-warn-text',
+  rejected: 'border-danger/40 bg-danger/15 text-danger-text',
   neutral: 'border-line-strong/40 bg-surface-3/20 text-fg-2',
 };
 

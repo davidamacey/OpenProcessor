@@ -38,7 +38,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Prompt packs</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -56,7 +56,9 @@
     <PackActivePanel ctl={list.active} onrollback={() => list.rollback()} />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger" data-testid="packs-load-error">{list.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="packs-load-error">
+        {list.loadError}
+      </p>
     {:else if !list.list}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -78,14 +80,14 @@
               <tr class="border-t border-line" data-testid="pack-row" data-name={p.name}>
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent hover:underline"
+                    class="font-mono text-accent-text hover:underline"
                     href={resolve(
                       projectHref(`/settings/prompt-packs/${encodeURIComponent(p.name)}`),
                     )}>{p.name}</a
                   >
                   {#if p.active}
                     <span
-                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
+                      class="ml-1 rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
                       data-testid="pack-active-chip"
                       >active{p.active_revision != null
                         ? ` r${p.active_revision}`

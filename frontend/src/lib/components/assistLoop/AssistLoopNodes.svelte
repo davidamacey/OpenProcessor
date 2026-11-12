@@ -49,7 +49,7 @@
   </div>
 
   {#if ctl.nodesError}
-    <p class="text-danger" role="alert" data-testid="loop-nodes-error">
+    <p class="text-danger-text" role="alert" data-testid="loop-nodes-error">
       {ctl.nodesError}
     </p>
   {/if}
@@ -136,7 +136,7 @@
                   <p class="mb-1 text-fg-3">{n.reason}</p>
                 {/if}
                 {#if ctl.membersError}
-                  <p class="text-danger" role="alert">{ctl.membersError}</p>
+                  <p class="text-danger-text" role="alert">{ctl.membersError}</p>
                 {/if}
                 <ul class="flex flex-wrap gap-1" aria-label="Members of {n.path}">
                   {#each ctl.members.slice(0, THUMBS_SHOWN) as id (id)}

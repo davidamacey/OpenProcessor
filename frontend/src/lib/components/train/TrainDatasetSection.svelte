@@ -27,7 +27,7 @@
       <button
         type="button"
         class="rounded border px-2 py-0.5 {dataset.datasetKind === MULTI_CLASS
-          ? 'border-accent bg-accent-soft text-accent'
+          ? 'border-accent bg-accent-soft text-accent-text'
           : 'border-line-strong bg-surface-0 text-fg-2 hover:bg-surface-2'}"
         onclick={() => dataset.selectDatasetKind(MULTI_CLASS)}
       >
@@ -38,7 +38,7 @@
           type="button"
           class="rounded border px-2 py-0.5 {dataset.datasetKind ===
           dataset.datasetExportSpec?.datasetKind
-            ? 'border-accent bg-accent-soft text-accent'
+            ? 'border-accent bg-accent-soft text-accent-text'
             : 'border-line-strong bg-surface-0 text-fg-2 hover:bg-surface-2'}"
           onclick={() =>
             dataset.selectDatasetKind(dataset.datasetExportSpec!.datasetKind)}

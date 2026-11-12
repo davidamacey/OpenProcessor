@@ -46,7 +46,7 @@
       There is no such kind of preset.
     </p>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
@@ -58,7 +58,7 @@
         </span>
         {#each ed.active.entries.filter((e) => e.state === 'active' && e.name === name) as e (e.axis ?? 'deployment')}
           <span
-            class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success"
+            class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
             data-testid="preset-active-chip"
             >active{ed.active.axisLabel(e.axis)
               ? ` · ${ed.active.axisLabel(e.axis)}`
@@ -68,13 +68,15 @@
       {/if}
       <span class="grow"></span>
       <a
-        class="text-xs text-accent hover:underline"
+        class="text-xs text-accent-text hover:underline"
         href={resolve(projectHref(presetPath(kind)))}>All {kind.title.toLowerCase()}</a
       >
     </header>
 
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger" data-testid="preset-load-error">{ed.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="preset-load-error">
+        {ed.loadError}
+      </p>
     {:else if !ed.doc}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -93,7 +95,7 @@
               data-testid="preset-body"></textarea>
           </label>
           {#if ed.bodyError}
-            <p class="text-xs text-warn" data-testid="preset-body-error">
+            <p class="text-xs text-warn-text" data-testid="preset-body-error">
               {ed.bodyError}
             </p>
           {/if}

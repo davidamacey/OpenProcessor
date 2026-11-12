@@ -41,7 +41,7 @@
   aria-live="polite"
 >
   {#if error}
-    <p class="text-danger" data-testid="assist-plan-error" data-code={errorCode}>
+    <p class="text-danger-text" data-testid="assist-plan-error" data-code={errorCode}>
       {error}
     </p>
   {:else if !resolved}

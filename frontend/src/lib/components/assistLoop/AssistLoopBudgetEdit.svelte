@@ -82,7 +82,7 @@
     </label>
   </div>
   {#if ctl.actionError}
-    <p class="mt-3 text-xs text-danger" role="alert" data-testid="loop-budget-error">
+    <p class="mt-3 text-xs text-danger-text" role="alert" data-testid="loop-budget-error">
       {ctl.actionError}
     </p>
   {/if}

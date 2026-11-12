@@ -191,7 +191,7 @@
 
   {#if error}
     <div
-      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
     >
       Failed to load models: {error}
     </div>
@@ -237,7 +237,7 @@
             {#if m.kind === 'vlm' && m.active}
               <!-- Served: this registered endpoint is the project's active one. -->
               <span
-                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption uppercase tracking-wide text-success"
+                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption uppercase tracking-wide text-success-text"
                 data-testid="model-vlm-active"
                 title={m.active_in?.length
                   ? `Active in ${m.active_in.join(', ')}`
@@ -292,7 +292,7 @@
                 <dt class="text-caption uppercase tracking-wide text-fg-3">Failures</dt>
                 <dd
                   class="font-mono {m.inference_failed && m.inference_failed > 0
-                    ? 'text-danger'
+                    ? 'text-danger-text'
                     : 'text-fg-1'}"
                 >
                   {fmtCount(m.inference_failed)}
@@ -303,7 +303,7 @@
 
           {#if m.last_error}
             <p
-              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger"
+              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger-text"
               title={m.last_error}
             >
               {m.last_error}
@@ -319,7 +319,7 @@
           {#if m.kind === 'vlm' && vlmAvailability.available === true}
             <p class="mt-3 text-xs">
               <a
-                class="text-accent hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(projectHref('/settings/models'))}
                 data-testid="model-vlm-manage">Manage on Settings → Models</a
               >
@@ -340,8 +340,8 @@
                 class="rounded border px-2 py-1 text-xs transition {unloadButtonState(
                   m,
                 ) === 'force-required'
-                  ? 'border-danger-line bg-danger-soft text-danger hover:bg-danger-soft'
-                  : 'border-line-strong bg-surface-0 text-fg-2 hover:border-danger hover:text-danger'}"
+                  ? 'border-danger-line bg-danger-soft text-danger-text hover:bg-danger-soft'
+                  : 'border-line-strong bg-surface-0 text-fg-2 hover:border-danger hover:text-danger-text'}"
                 onclick={() => handleUnload(m)}
                 disabled={unloadingName === m.name}
                 title={unloadButtonState(m) === 'force-required'

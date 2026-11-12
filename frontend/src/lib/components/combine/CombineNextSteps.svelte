@@ -29,7 +29,7 @@
   >
 {/each}
 {#if steps.length > 0 && !ready}
-  <span class="text-xs text-warn" data-testid="combine-next-step-target-status"
+  <span class="text-xs text-warn-text" data-testid="combine-next-step-target-status"
     >Target project: {combineLabel(targetStatus)}</span
   >
 {/if}

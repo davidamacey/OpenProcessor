@@ -34,7 +34,7 @@
 
 {#if t.error}
   <div class="space-y-1" data-testid="test-error">
-    <p class="text-danger">{t.error}</p>
+    <p class="text-danger-text">{t.error}</p>
     {#if t.errorReport}
       <ConfigIssueList
         issues={[...t.errorReport.errors, ...t.errorReport.warnings]}

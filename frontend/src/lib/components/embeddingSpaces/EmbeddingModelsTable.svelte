@@ -37,7 +37,7 @@
           >
           <td class="py-1.5 pr-3 text-xs">{m.licence}</td>
           <td class="py-1.5 text-xs">
-            {#if m.available}yes{:else}<span class="text-warn"
+            {#if m.available}yes{:else}<span class="text-warn-text"
                 >no{m.unavailable_reason ? `: ${m.unavailable_reason}` : ''}</span
               >{/if}
           </td>

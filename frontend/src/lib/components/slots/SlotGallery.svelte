@@ -143,7 +143,7 @@
         >
           <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
-        <span class="font-medium text-danger">Suspected false positives</span>
+        <span class="font-medium text-danger-text">Suspected false positives</span>
         <label class="flex items-center gap-1 text-caption text-fg-2">
           ≤
           <input
@@ -158,7 +158,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-danger/50 bg-danger/20 text-danger hover:bg-danger/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
         >
           {gallery.clusterBusy ? 'Loading…' : 'Reload'}
@@ -176,7 +176,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-holdout/50 bg-holdout/20 text-holdout hover:bg-holdout/30 disabled:opacity-50"
+          class="btn-sm border border-holdout/50 bg-holdout/20 text-holdout-text hover:bg-holdout/30 disabled:opacity-50"
           onclick={gallery.runClustering}
           title="Group {label.plural} by visual similarity so outliers/false-positives surface"
         >
@@ -185,7 +185,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-danger/50 bg-danger/20 text-danger hover:bg-danger/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={gallery.loadSuspectedFp}
           title="List {label.singular} crops that look like known false positives (needs FP centroids built)"
         >
@@ -194,7 +194,7 @@
         <button
           type="button"
           disabled={gallery.clusterBusy}
-          class="btn-sm border border-warn/50 bg-warn/20 text-warn hover:bg-warn/30 disabled:opacity-50"
+          class="btn-sm border border-warn/50 bg-warn/20 text-warn-text hover:bg-warn/30 disabled:opacity-50"
           onclick={gallery.runBuildFpCentroids}
           title="Sub-type the false-positive boxes and (re)build their centroids"
         >
@@ -208,7 +208,7 @@
              clustering starts covering only part of the pool too. -->
         <button
           type="button"
-          class="btn-sm border border-accent/50 bg-accent/20 text-accent hover:bg-accent/30"
+          class="btn-sm border border-accent/50 bg-accent/20 text-accent-text hover:bg-accent/30"
           onclick={gallery.openAll}
           title="Browse every {label.singular}, including ones not in any cluster bucket yet"
         >
@@ -258,7 +258,7 @@
         {/if}
         {#if gallery.rowsTruncated}
           <span
-            class="text-warn"
+            class="text-warn-text"
             title="An item on this page matched more boxes than the index lists per item; the total still counts them."
             data-testid="rows-truncated">· some boxes not listed</span
           >
@@ -272,7 +272,7 @@
       <div
         class="flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs"
       >
-        <span class="font-medium text-accent">{gallery.sel.size} selected</span>
+        <span class="font-medium text-accent-text">{gallery.sel.size} selected</span>
         {#if gallery.selectedCluster != null}
           <!-- Triage from a cluster is per-box (batch_box_state), never
                the item-level batch_status, which would flip every sibling
@@ -283,7 +283,7 @@
         <button
           type="button"
           disabled={gallery.busy}
-          class="btn-sm border border-danger/50 bg-danger/20 text-danger hover:bg-danger/30 disabled:opacity-50"
+          class="btn-sm border border-danger/50 bg-danger/20 text-danger-text hover:bg-danger/30 disabled:opacity-50"
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState(
@@ -314,7 +314,7 @@
         <button
           type="button"
           disabled={gallery.busy}
-          class="btn-sm border border-success/50 bg-success/20 text-success hover:bg-success/30 disabled:opacity-50"
+          class="btn-sm border border-success/50 bg-success/20 text-success-text hover:bg-success/30 disabled:opacity-50"
           onclick={() =>
             gallery.selectedCluster != null
               ? gallery.applyBoxState([...gallery.sel.ids], gallery.confirmBoxState())
@@ -338,7 +338,7 @@
   <!-- /sticky header -->
 
   {#if gallery.pager.error}
-    <p class="text-sm text-danger">API unavailable: {gallery.pager.error}</p>
+    <p class="text-sm text-danger-text">API unavailable: {gallery.pager.error}</p>
   {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
     <!-- Region cluster cards. Click one to open its regions (with the
          bulk toolbar). False positives are a box state, not a cluster:

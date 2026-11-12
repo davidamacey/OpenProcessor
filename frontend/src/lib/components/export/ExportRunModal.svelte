@@ -33,7 +33,7 @@
       {/if}
       <p class="text-xs font-mono text-fg-2">{run.exportState?.message ?? '…'}</p>
     {:else if run.exportState?.status === 'success'}
-      <p class="mb-2 text-sm text-success">Export complete.</p>
+      <p class="mb-2 text-sm text-success-text">Export complete.</p>
       {#if run.exportState.export_dir}
         <p class="mb-3 break-all font-mono text-xs text-fg-2">
           {run.exportState.export_dir}
@@ -54,7 +54,7 @@
         </p>
       {/if}
       {#if run.exportState.images_dropped_not_fully_labeled}
-        <p class="mb-3 text-xs text-warn">
+        <p class="mb-3 text-xs text-warn-text">
           {formatCount(run.exportState.images_dropped_not_fully_labeled)} image(s) dropped —
           not fully labeled.
         </p>
@@ -69,8 +69,8 @@
         </button>
       </div>
     {:else if run.exportState?.status === 'failed'}
-      <p class="mb-2 text-sm text-danger">Export failed.</p>
-      <p class="font-mono text-xs text-danger">
+      <p class="mb-2 text-sm text-danger-text">Export failed.</p>
+      <p class="font-mono text-xs text-danger-text">
         {run.exportState.error ?? 'unknown error'}
       </p>
     {:else}

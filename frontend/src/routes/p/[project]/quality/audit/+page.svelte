@@ -43,7 +43,7 @@
     <section class="surface p-6 text-sm text-fg-3">Loading…</section>
   {:else if audit.loadError}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-danger" data-testid="audit-load-error">{audit.loadError}</p>
+      <p class="text-danger-text" data-testid="audit-load-error">{audit.loadError}</p>
       <button type="button" class="btn w-fit" onclick={() => void audit.load()}
         >Retry</button
       >

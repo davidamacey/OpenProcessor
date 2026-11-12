@@ -42,7 +42,7 @@
       <h2 class="text-base font-semibold">Clusters</h2>
       <p class="mt-0.5 text-xs text-fg-2" data-testid="cluster-run-serving">
         {#if ctl.loadError}
-          <span class="text-danger" role="alert">{ctl.loadError}</span>
+          <span class="text-danger-text" role="alert">{ctl.loadError}</span>
         {:else if ctl.serving}
           Serving {formatCount(ctl.serving.n_clusters)} clusters over
           {formatCount(ctl.serving.n_items)} items ({ctl.serving.method}, fitted
@@ -71,7 +71,7 @@
       class="mt-3 flex flex-wrap items-center gap-3 rounded border border-warn/40 bg-warn/10 p-2 text-xs"
       data-testid="cluster-run-pending"
     >
-      <span class="text-warn">
+      <span class="text-warn-text">
         A new partition is ready ({formatCount(ctl.pending.n_clusters)} clusters,
         {formatCount(ctl.pending.n_items)} items) but is not serving.
       </span>
@@ -92,7 +92,7 @@
     </p>
   {/if}
   {#if ctl.actionError}
-    <p class="mt-2 text-xs text-danger" role="alert" data-testid="cluster-run-error">
+    <p class="mt-2 text-xs text-danger-text" role="alert" data-testid="cluster-run-error">
       {ctl.actionError}
     </p>
   {/if}

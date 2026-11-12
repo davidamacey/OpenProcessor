@@ -109,7 +109,7 @@
     <section class="surface p-6 text-sm text-fg-3">Loading settings…</section>
   {:else if curationSettingsStore.error}
     <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-danger">{curationSettingsStore.error}</p>
+      <p class="text-danger-text">{curationSettingsStore.error}</p>
       <button type="button" class="btn w-fit" onclick={reload}>Retry</button>
     </section>
   {:else}
@@ -179,13 +179,13 @@
                 : null}
               {#if selectedWarning}
                 <span
-                  class="rounded border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-caption text-danger"
+                  class="rounded border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-caption text-danger-text"
                   data-testid="settings-option-warning">{selectedWarning}</span
                 >
               {/if}
               {#if selectedOpt && !coverageOf(selectedOpt)}
                 <span
-                  class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-caption text-warn"
+                  class="rounded border border-warn/40 bg-warn/10 px-1.5 py-0.5 text-caption text-warn-text"
                 >
                   0 coverage — pinning this sorts by tie-break only
                 </span>
@@ -223,20 +223,20 @@
               An endpoint that sends crops outside this deployment is acknowledged when it
               is activated.
               <a
-                class="text-accent hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(projectHref('/settings/models'))}>Settings → Models</a
               >
             </p>
           {/if}
           {#if saveErrors[spec.axis]}
             <p
-              class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger"
+              class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
               data-testid="settings-save-error"
             >
               {saveErrors[spec.axis]}
               {#if ackRefused[spec.axis]}
                 <a
-                  class="ml-1 text-accent hover:underline"
+                  class="ml-1 text-accent-text hover:underline"
                   href={resolve(projectHref('/settings/models'))}>Settings → Models</a
                 >
               {/if}
@@ -367,7 +367,7 @@
       </p>
     {:else if confirmSpec.irreversibleWarning}
       <div
-        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
       >
         {confirmSpec.irreversibleWarning}
       </div>

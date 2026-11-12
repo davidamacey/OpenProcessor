@@ -47,9 +47,9 @@
     <code class="text-fg-1">{jobId}</code>
     <span
       class="rounded px-1.5 py-0.5 text-xs {status?.state === 'error'
-        ? 'bg-danger-soft text-danger'
+        ? 'bg-danger-soft text-danger-text'
         : status?.state === 'done'
-          ? 'bg-success-soft text-success'
+          ? 'bg-success-soft text-success-text'
           : 'bg-surface-2 text-fg-2'}"
       data-testid="run-state">{status?.state ?? 'enqueued'}</span
     >
@@ -72,13 +72,13 @@
   {/if}
 
   {#if status?.error}
-    <p class="mt-3 text-xs text-danger" data-testid="run-job-error">
+    <p class="mt-3 text-xs text-danger-text" data-testid="run-job-error">
       Job failed: {status.error}
     </p>
   {/if}
   {#if status?.failed?.length}
     <div
-      class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
+      class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
     >
       <p class="mb-1 font-medium">
         {status.failed.length} failed piece{status.failed.length === 1 ? '' : 's'}
@@ -99,7 +99,7 @@
           : ''}
       </summary>
       {#if mine.warnings.length}
-        <ul class="mt-2 list-disc pl-5 text-warn">
+        <ul class="mt-2 list-disc pl-5 text-warn-text">
           {#each mine.warnings as w, i (i)}<li>{w}</li>{/each}
         </ul>
       {/if}
@@ -135,11 +135,11 @@
                         .join(', ')}
                     </div>
                   {/if}
-                  {#each cm.warnings as w, i (i)}<div class="text-warn">
+                  {#each cm.warnings as w, i (i)}<div class="text-warn-text">
                       {w}
                     </div>{/each}
                   {#if hasOverlap(overlap)}
-                    <div class="text-danger">overlap: {formatOverlap(overlap)}</div>
+                    <div class="text-danger-text">overlap: {formatOverlap(overlap)}</div>
                   {/if}
                 </td>
               </tr>

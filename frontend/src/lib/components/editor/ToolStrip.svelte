@@ -49,7 +49,7 @@
   const GROUP =
     'inline-flex flex-row gap-0.5 rounded-control border border-line bg-surface-1 p-0.5 shadow-e1 lg:flex-col';
   const BTN =
-    'flex size-9 items-center justify-center rounded-chip text-control text-fg-2 hover:bg-surface-2 hover:text-fg-1 disabled:opacity-40 disabled:hover:bg-transparent aria-pressed:bg-accent-soft aria-pressed:text-accent aria-pressed:shadow-[inset_0_0_0_1px_var(--color-accent-line)]';
+    'flex size-9 items-center justify-center rounded-chip text-control text-fg-2 hover:bg-surface-2 hover:text-fg-1 disabled:opacity-40 disabled:hover:bg-transparent aria-pressed:bg-accent-soft aria-pressed:text-accent-text aria-pressed:shadow-[inset_0_0_0_1px_var(--color-accent-line)]';
 
   function hint(id: string, text: string): string {
     const key = keymapStore.glyph(id);

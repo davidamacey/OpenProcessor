@@ -92,7 +92,7 @@
       </span>
       {#if activeHere}
         <span
-          class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success"
+          class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
           data-testid="vlm-active-here">active in this project</span
         >
       {/if}
@@ -107,7 +107,7 @@
     {/if}
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings/models'))}>All models</a
     >
   </header>
@@ -119,7 +119,7 @@
     testid="vlm-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger" data-testid="vlm-load-error">{ed.loadError}</p>
+      <p class="text-sm text-danger-text" data-testid="vlm-load-error">{ed.loadError}</p>
     {:else if !ed.doc || !ed.schema}
       <p class="text-sm text-fg-3">Loading…</p>
     {:else}
@@ -160,7 +160,7 @@
 
           {#if external}
             <div
-              class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+              class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
               data-testid="vlm-external-banner"
             >
               {shownDoc?.warning ?? 'This endpoint sends crops outside this deployment.'}
@@ -179,7 +179,7 @@
           </label>
 
           {#if ed.extrasError}
-            <p class="text-xs text-danger" data-testid="vlm-extras-error">
+            <p class="text-xs text-danger-text" data-testid="vlm-extras-error">
               Could not load the pickers' lists: {ed.extrasError}
             </p>
           {/if}
@@ -231,12 +231,12 @@
                     endpoint.
                   </p>
                   {#if ed.checks.testError}
-                    <p class="text-xs text-danger" data-testid="vlm-test-error">
+                    <p class="text-xs text-danger-text" data-testid="vlm-test-error">
                       {ed.checks.testError}
                     </p>
                   {/if}
                   {#if ed.probeError}
-                    <p class="text-xs text-danger" data-testid="vlm-probe-error">
+                    <p class="text-xs text-danger-text" data-testid="vlm-probe-error">
                       {ed.probeError}
                     </p>
                   {/if}

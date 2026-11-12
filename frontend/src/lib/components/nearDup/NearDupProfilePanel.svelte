@@ -27,7 +27,11 @@
     {#if ctl.loading && !ctl.draft}
       <p class="text-xs text-fg-3">Loading the profile…</p>
     {:else if ctl.loadError}
-      <p class="text-sm text-danger" role="alert" data-testid="near-dup-profile-error">
+      <p
+        class="text-sm text-danger-text"
+        role="alert"
+        data-testid="near-dup-profile-error"
+      >
         {ctl.loadError}
       </p>
     {:else if ctl.draft}
@@ -143,7 +147,7 @@
       </div>
       {#if ctl.saveError}
         <div
-          class="text-xs text-danger"
+          class="text-xs text-danger-text"
           role="alert"
           data-testid="near-dup-profile-refused"
         >
@@ -157,7 +161,7 @@
       {/if}
       {#if ctl.notice}
         <p
-          class="text-xs text-success"
+          class="text-xs text-success-text"
           role="status"
           data-testid="near-dup-profile-notice"
         >

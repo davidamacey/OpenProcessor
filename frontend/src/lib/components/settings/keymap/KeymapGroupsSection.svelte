@@ -47,15 +47,15 @@
               <td class="px-3 py-1.5 text-fg-2">
                 {contextLabel(action.context)}
                 {#if detached}
-                  <span class="ml-1 text-warn" data-testid={`detached-${action.id}`}>
+                  <span class="ml-1 text-warn-text" data-testid={`detached-${action.id}`}>
                     differs from the group
                   </span>
                 {/if}
                 {#if fieldIssues.errors.length > 0}
-                  <div class="text-danger">{fieldIssues.errors.join('; ')}</div>
+                  <div class="text-danger-text">{fieldIssues.errors.join('; ')}</div>
                 {/if}
                 {#if fieldIssues.warnings.length > 0}
-                  <div class="text-warn">{fieldIssues.warnings.join('; ')}</div>
+                  <div class="text-warn-text">{fieldIssues.warnings.join('; ')}</div>
                 {/if}
               </td>
               <td class="px-3 py-1.5">
@@ -69,7 +69,7 @@
                   {#snippet extra()}
                     {#if detached}
                       <button
-                        class="text-warn underline hover:text-warn"
+                        class="text-warn-text underline hover:text-warn-text"
                         onclick={() => ctl.resetMemberToGroup(action.id)}
                       >
                         reset to group

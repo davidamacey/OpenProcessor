@@ -29,7 +29,7 @@
 
 {#if count != null && count > 0}
   <span
-    class="inline-flex flex-wrap items-center gap-2 rounded border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs text-warn"
+    class="inline-flex flex-wrap items-center gap-2 rounded border border-warn/40 bg-warn/10 px-2 py-0.5 text-xs text-warn-text"
     data-testid="unembedded-banner"
   >
     {text}

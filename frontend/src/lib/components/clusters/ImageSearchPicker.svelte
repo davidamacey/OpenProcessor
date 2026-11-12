@@ -165,7 +165,7 @@
       <div class="mt-2 flex items-center gap-2">
         <button
           type="button"
-          class="btn-sm border border-accent/50 bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50"
+          class="btn-sm border border-accent/50 bg-accent/10 text-accent-text hover:bg-accent/20 disabled:opacity-50"
           disabled={!file || busy}
           data-testid="image-search-run"
           onclick={submit}

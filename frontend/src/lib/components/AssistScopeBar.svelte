@@ -118,7 +118,7 @@
       type="button"
       class="btn-sm {scope.isDefault
         ? 'border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2'
-        : 'border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'}"
+        : 'border-accent/60 bg-accent/15 text-accent-text hover:bg-accent/25'}"
       onclick={() => (expanded = true)}
       title="Limit this run's VLM labeling to one class (clustering still covers the whole pool), and pick its prompt pack and VLM endpoint"
       {disabled}

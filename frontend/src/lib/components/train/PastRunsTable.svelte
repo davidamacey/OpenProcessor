@@ -23,7 +23,9 @@
     <span class="font-mono text-xs text-fg-3">{ctl.runs.length} / {ctl.runsTotal}</span>
   </header>
   {#if ctl.runsError}
-    <p class="px-3 py-2 text-xs text-danger">Past runs fetch failed: {ctl.runsError}</p>
+    <p class="px-3 py-2 text-xs text-danger-text">
+      Past runs fetch failed: {ctl.runsError}
+    </p>
   {/if}
   <div class="max-h-[40rem] overflow-auto">
     {#if ctl.runsLoading && ctl.runs.length === 0}
@@ -103,7 +105,7 @@
                   {#if r.state === 'finished' || r.state === 'exporting'}
                     <button
                       type="button"
-                      class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-accent hover:border-accent hover:bg-accent/10"
+                      class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs text-accent-text hover:border-accent hover:bg-accent/10"
                       onclick={() => actions.openPromote(r)}
                       title="Promote to Triton"
                     >

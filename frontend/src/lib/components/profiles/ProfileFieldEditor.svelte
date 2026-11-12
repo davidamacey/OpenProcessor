@@ -122,7 +122,7 @@
     {#if rangeText}· {rangeText}{/if}
   </p>
   {#if applies === false}
-    <p class="text-caption text-warn/80" data-testid="field-not-applied">
+    <p class="text-caption text-warn-text/80" data-testid="field-not-applied">
       Not used by the saved revision ({field.applies_when} is off).
     </p>
   {/if}

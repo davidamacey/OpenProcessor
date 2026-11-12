@@ -145,7 +145,7 @@
   >
     <h3 class="mb-1 text-sm font-medium text-fg-1">Dry run</h3>
     {#if ctl.planError}
-      <p class="text-danger" data-testid="loop-plan-error">{ctl.planError}</p>
+      <p class="text-danger-text" data-testid="loop-plan-error">{ctl.planError}</p>
     {:else if plan}
       <dl class="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
         <div>
@@ -214,7 +214,7 @@
   </div>
 
   {#if ctl.actionError}
-    <p class="text-xs text-danger" role="alert" data-testid="loop-action-error">
+    <p class="text-xs text-danger-text" role="alert" data-testid="loop-action-error">
       {ctl.actionError}
     </p>
   {/if}

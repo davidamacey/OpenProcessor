@@ -23,7 +23,7 @@
 <div class="mt-4 border-t border-line pt-3" data-testid="region-stage-panel">
   <h3 class="mb-2 text-sm font-semibold text-fg-1">Region stage</h3>
   {#if stage.loadError && !stage.state}
-    <p class="text-xs text-danger" data-testid="region-stage-error">
+    <p class="text-xs text-danger-text" data-testid="region-stage-error">
       Region stage unavailable: {stage.loadError}
     </p>
   {:else if !stage.state}
@@ -33,8 +33,8 @@
     <div class="flex flex-wrap items-center gap-2 text-xs">
       <span
         class="rounded border px-1.5 py-0.5 {s.paused
-          ? 'border-warn/40 bg-warn/10 text-warn'
-          : 'border-success/40 bg-success/10 text-success'}"
+          ? 'border-warn/40 bg-warn/10 text-warn-text'
+          : 'border-success/40 bg-success/10 text-success-text'}"
         data-testid="region-stage-state">{s.paused ? 'paused' : 'running'}</span
       >
       {#if s.paused && s.paused_since}
@@ -53,7 +53,7 @@
       >
     </div>
     {#if s.pipeline_paused}
-      <p class="mt-2 text-xs text-warn" data-testid="region-stage-pipeline-paused">
+      <p class="mt-2 text-xs text-warn-text" data-testid="region-stage-pipeline-paused">
         This project's whole pipeline is paused, so the region stage is not running either
         way.
       </p>
@@ -107,7 +107,10 @@
     {:else}
       <p>Resume the region stage? Queued items are picked up again.</p>
     {/if}
-    {#if stage.actionError}<p class="text-danger" data-testid="region-stage-action-error">
+    {#if stage.actionError}<p
+        class="text-danger-text"
+        data-testid="region-stage-action-error"
+      >
         {stage.actionError}
       </p>{/if}
   </ConfirmDialog>

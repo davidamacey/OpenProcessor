@@ -101,7 +101,7 @@
   {#each chips as chip, i (`${chip.param}:${i}`)}
     <button
       type="button"
-      class="chip border-accent/60 bg-accent/15 text-accent"
+      class="chip border-accent/60 bg-accent/15 text-accent-text"
       data-testid="item-filter-chip"
       title="Remove this filter"
       onclick={() => {
@@ -128,7 +128,11 @@
   {/if}
 </div>
 {#if error}
-  <p class="mt-1 w-full text-xs text-danger" role="alert" data-testid="item-filter-error">
+  <p
+    class="mt-1 w-full text-xs text-danger-text"
+    role="alert"
+    data-testid="item-filter-error"
+  >
     {error}
   </p>
 {/if}

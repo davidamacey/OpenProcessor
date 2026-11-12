@@ -38,7 +38,7 @@
         >{Math.round(proposal.agreement * 100)}% of {proposal.answered} answers</span
       >
       {#if run.scope_now?.changed}
-        <span class="text-xs text-warn">scope changed since</span>
+        <span class="text-xs text-warn-text">scope changed since</span>
       {/if}
     </summary>
     {#if open}

@@ -59,7 +59,7 @@
 
     {#if run.scope_now?.changed}
       <p
-        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
         data-testid="proposal-stale"
       >
         The scope has changed since this run: {run.scope_now.overlap} of the
@@ -75,7 +75,7 @@
           >{proposal.class_name}</strong
         >
         {#if !proposal.in_registry}
-          <span class="text-xs text-warn">not in the class registry</span>
+          <span class="text-xs text-warn-text">not in the class registry</span>
         {/if}
       </p>
     {:else}
@@ -136,7 +136,8 @@
           <div class="flex flex-wrap items-center gap-1 text-xs">
             <span class="text-fg-2">{a.key} ({a.answered} answered):</span>
             {#each a.values as v (v.value)}
-              <span class="rounded border border-dashed border-info/50 px-1 text-info"
+              <span
+                class="rounded border border-dashed border-info/50 px-1 text-info-text"
                 >{v.value} {v.count}</span
               >
             {/each}
@@ -147,7 +148,7 @@
 
     {#if ctl.applied}
       <p
-        class="rounded border border-success/40 bg-success/10 px-2 py-1 text-xs text-success"
+        class="rounded border border-success/40 bg-success/10 px-2 py-1 text-xs text-success-text"
         data-testid="proposal-applied"
       >
         Labeled {ctl.applied.updated ?? 0} crops as {ctl.applied.class_name}; {ctl.applied
@@ -157,7 +158,7 @@
     {:else}
       {#if ctl.error}
         <p
-          class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger"
+          class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
           data-testid="proposal-error"
         >
           {ctl.error}

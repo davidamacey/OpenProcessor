@@ -153,7 +153,7 @@
 
   {#if !healthStore.ok}
     <div
-      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger"
+      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger-text"
     >
       <strong>API unavailable.</strong> Check that the OpenProcessor API is reachable from
       <code class="font-mono"
@@ -252,7 +252,7 @@
       <p class="mb-4 text-xs text-fg-2">Exporting… this may take a few minutes.</p>
     {/if}
     {#if exportError}
-      <p class="mb-4 text-xs text-danger">Export failed: {exportError}</p>
+      <p class="mb-4 text-xs text-danger-text">Export failed: {exportError}</p>
     {/if}
     {#if exportResult}
       <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">

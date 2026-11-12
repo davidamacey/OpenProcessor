@@ -124,7 +124,7 @@
       </label>
       <button
         type="button"
-        class="mb-3 text-caption text-accent hover:underline"
+        class="mb-3 text-caption text-accent-text hover:underline"
         onclick={() => (createNewGroup = !createNewGroup)}
         disabled={groups.length === 0}
       >
@@ -141,7 +141,7 @@
       </label>
 
       {#if errorText}
-        <p class="mb-3 text-xs text-danger">{errorText}</p>
+        <p class="mb-3 text-xs text-danger-text">{errorText}</p>
       {/if}
 
       <div class="flex items-center justify-end gap-2">

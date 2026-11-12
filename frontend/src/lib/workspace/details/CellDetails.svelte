@@ -23,7 +23,7 @@
   {#if !ctl || !cell}
     <p class="text-fg-3">Select a cell on the map to see its photos.</p>
   {:else if ctl.cellError}
-    <p class="text-danger" role="alert" data-testid="cell-error">{ctl.cellError}</p>
+    <p class="text-danger-text" role="alert" data-testid="cell-error">{ctl.cellError}</p>
   {:else if !ctl.summary || !ctl.cards}
     <p class="text-fg-3" role="status">Loading…</p>
   {:else}
@@ -34,7 +34,7 @@
       {#if ctl.cards.total > CELL_CARDS}· showing the first {CELL_CARDS}{/if}
     </p>
     {#if ctl.summary.join_truncated}
-      <p class="text-xs text-warn">
+      <p class="text-xs text-warn-text">
         The cell holds more photos than can be counted at once; zoom in to narrow it.
       </p>
     {/if}

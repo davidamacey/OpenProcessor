@@ -120,7 +120,7 @@
         <button
           type="button"
           class="btn-sm border text-xs transition-colors {filter.flag.includes(f.id)
-            ? 'border-danger/60 bg-danger/20 text-danger'
+            ? 'border-danger/60 bg-danger/20 text-danger-text'
             : 'border-line-strong bg-surface-1 text-fg-2 hover:border-danger/40'}"
           aria-pressed={filter.flag.includes(f.id)}
           title={f.description}

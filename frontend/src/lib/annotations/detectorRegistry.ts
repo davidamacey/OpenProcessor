@@ -20,30 +20,30 @@ import type { Palette } from './types';
 import type { RegionVocabularyRole } from '$lib/api_regions';
 
 export const PALETTES = {
-  blue: { border: 'border-accent/50', bg: 'bg-accent/10', text: 'text-accent' },
+  blue: { border: 'border-accent/50', bg: 'bg-accent/10', text: 'text-accent-text' },
   purple: {
     border: 'border-holdout/50',
     bg: 'bg-holdout/10',
-    text: 'text-holdout',
+    text: 'text-holdout-text',
   },
-  amber: { border: 'border-warn/50', bg: 'bg-warn/10', text: 'text-warn' },
+  amber: { border: 'border-warn/50', bg: 'bg-warn/10', text: 'text-warn-text' },
   emerald: {
     border: 'border-success/50',
     bg: 'bg-success/10',
-    text: 'text-success',
+    text: 'text-success-text',
   },
-  teal: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info' },
-  rose: { border: 'border-danger/50', bg: 'bg-danger/10', text: 'text-danger' },
-  sky: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info' },
+  teal: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info-text' },
+  rose: { border: 'border-danger/50', bg: 'bg-danger/10', text: 'text-danger-text' },
+  sky: { border: 'border-info/50', bg: 'bg-info/10', text: 'text-info-text' },
   indigo: {
     border: 'border-accent/50',
     bg: 'bg-accent/10',
-    text: 'text-accent',
+    text: 'text-accent-text',
   },
   orange: {
     border: 'border-warn/50',
     bg: 'bg-warn/10',
-    text: 'text-warn',
+    text: 'text-warn-text',
   },
   zinc: { border: 'border-line-strong', bg: 'bg-surface-2/60', text: 'text-fg-2' },
 } as const satisfies Record<string, Palette>;

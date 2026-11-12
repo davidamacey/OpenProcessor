@@ -56,7 +56,7 @@
 <div>
   <h3 class="mb-2 text-sm font-semibold text-fg-1">Ingest status</h3>
   {#if error}
-    <p class="text-xs text-danger">Ingest status unavailable: {error}</p>
+    <p class="text-xs text-danger-text">Ingest status unavailable: {error}</p>
   {:else if !status}
     <p class="text-xs text-fg-3">Loading…</p>
   {:else}

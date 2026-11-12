@@ -28,11 +28,11 @@
     </span>
     {#if d.active}
       <span
-        class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success"
+        class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
         >active{d.active_revision != null ? ` r${d.active_revision}` : ''}</span
       >
       {#if lineage && d.revision != null && d.active_revision != null && d.revision !== d.active_revision}
-        <span class="text-xs text-warn" data-testid="saved-vs-active"
+        <span class="text-xs text-warn-text" data-testid="saved-vs-active"
           >saved r{d.revision}, active r{d.active_revision}</span
         >
       {/if}
@@ -42,7 +42,8 @@
     {/if}
   {/if}
   <span class="grow"></span>
-  <a class="text-xs text-accent hover:underline" href={resolve(projectHref(listPath))}
-    >{listLabel}</a
+  <a
+    class="text-xs text-accent-text hover:underline"
+    href={resolve(projectHref(listPath))}>{listLabel}</a
   >
 </header>

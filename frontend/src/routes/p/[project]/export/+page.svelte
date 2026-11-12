@@ -108,7 +108,7 @@
 
   <!-- HDD source distribution -->
   {#if stats?.dataset_error}
-    <section class="surface border-warn/40 bg-warn/10 p-3 text-xs text-warn">
+    <section class="surface border-warn/40 bg-warn/10 p-3 text-xs text-warn-text">
       Dataset totals unavailable: {stats.dataset_error}
     </section>
   {:else if hddSources.length > 0}

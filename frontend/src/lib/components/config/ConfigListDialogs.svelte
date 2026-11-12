@@ -55,7 +55,7 @@
     oncancel={() => (flow.deleting = null)}
   >
     <p>{@render deleteNote(row)}</p>
-    {#if list.deleteError}<p class="text-danger" data-testid="delete-error">
+    {#if list.deleteError}<p class="text-danger-text" data-testid="delete-error">
         {list.deleteError}
       </p>{/if}
   </ConfirmDialog>

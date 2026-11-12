@@ -83,7 +83,11 @@
     </label>
   {/if}
   {#if spaces.refusal}
-    <p class="text-danger" data-testid="register-refusal" data-code={spaces.refusal.code}>
+    <p
+      class="text-danger-text"
+      data-testid="register-refusal"
+      data-code={spaces.refusal.code}
+    >
       {spaces.refusal.message}
     </p>
   {/if}

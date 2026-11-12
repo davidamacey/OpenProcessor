@@ -27,8 +27,8 @@
   <div class="flex flex-wrap items-center gap-2">
     <span
       class="rounded border px-1.5 py-0.5 {probe.ok
-        ? 'border-success/40 bg-success/10 text-success'
-        : 'border-danger/40 bg-danger/10 text-danger'}"
+        ? 'border-success/40 bg-success/10 text-success-text'
+        : 'border-danger/40 bg-danger/10 text-danger-text'}"
       data-testid="vlm-probe-ok">{probe.ok ? 'probe ok' : 'probe failed'}</span
     >
     <span class="text-fg-3" title={probe.probed_at}

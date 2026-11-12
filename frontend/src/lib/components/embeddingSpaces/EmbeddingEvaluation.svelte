@@ -18,7 +18,7 @@
 
 <div class="flex flex-col gap-2 text-sm" data-testid="space-evaluation">
   {#if error}
-    <p class="text-danger" data-testid="evaluation-error">{error}</p>
+    <p class="text-danger-text" data-testid="evaluation-error">{error}</p>
   {:else if !evaluation}
     <p class="text-fg-3">Loading…</p>
   {:else}
@@ -53,7 +53,7 @@
           >
           {#if e.counts_for_promote}
             <span
-              class="rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success"
+              class="rounded border border-success/40 bg-success/10 px-1.5 text-caption text-success-text"
               data-testid="evaluation-counts">counts for promote</span
             >
           {/if}

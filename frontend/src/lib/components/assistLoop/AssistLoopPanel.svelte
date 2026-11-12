@@ -61,7 +61,7 @@
     {#if open}
       <div id="loop-panel-body" class="mt-3 flex flex-col gap-5 pb-3">
         {#if ctl.loadError}
-          <p class="text-xs text-danger" role="alert" data-testid="loop-load-error">
+          <p class="text-xs text-danger-text" role="alert" data-testid="loop-load-error">
             {ctl.loadError}
           </p>
         {/if}

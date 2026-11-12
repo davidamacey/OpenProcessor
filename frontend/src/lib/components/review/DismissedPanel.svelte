@@ -41,7 +41,7 @@
       {#if dismissedLoading}
         <li class="px-3 py-2 text-fg-3">Loading…</li>
       {:else if dismissedError}
-        <li class="px-3 py-2 text-danger">
+        <li class="px-3 py-2 text-danger-text">
           Failed to load dismissed crops: {dismissedError}
         </li>
       {:else if dismissedItems.length === 0}
@@ -52,7 +52,7 @@
           <span class="truncate text-fg-2">{crop.class_name ?? crop.id}</span>
           <button
             type="button"
-            class="shrink-0 rounded border border-line-strong px-2 py-0.5 text-xs text-fg-2 hover:border-accent hover:text-accent"
+            class="shrink-0 rounded border border-line-strong px-2 py-0.5 text-xs text-fg-2 hover:border-accent hover:text-accent-text"
             onclick={() => undismiss(crop)}
           >
             Restore

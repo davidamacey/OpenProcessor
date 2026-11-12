@@ -29,10 +29,10 @@
                 <span class="ml-1 text-fg-3">(no region profile in this project)</span>
               {/if}
               {#if fieldIssues.errors.length > 0}
-                <div class="text-danger">{fieldIssues.errors.join('; ')}</div>
+                <div class="text-danger-text">{fieldIssues.errors.join('; ')}</div>
               {/if}
               {#if fieldIssues.warnings.length > 0}
-                <div class="text-warn">{fieldIssues.warnings.join('; ')}</div>
+                <div class="text-warn-text">{fieldIssues.warnings.join('; ')}</div>
               {/if}
             </td>
             <td class="px-3 py-1.5">

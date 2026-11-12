@@ -53,7 +53,7 @@
   {#if imageLoading}
     <p class="text-caption text-fg-3">Loading…</p>
   {:else if imageError}
-    <p class="text-caption text-danger">Source image unavailable: {imageError}</p>
+    <p class="text-caption text-danger-text">Source image unavailable: {imageError}</p>
   {:else if imageMeta}
     {#if contextRes && showImage}
       <div class="mb-2 h-40 w-full overflow-hidden rounded bg-surface-0">
@@ -66,7 +66,7 @@
       </div>
     {/if}
     <a
-      class="text-caption text-info underline hover:text-info"
+      class="text-caption text-info-text underline hover:text-info-text"
       data-testid="open-image"
       href={resolve(projectHref(`/images/${encodeURIComponent(imageMeta.image_id)}`))}
       >Open image</a

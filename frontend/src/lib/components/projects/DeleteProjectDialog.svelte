@@ -137,7 +137,7 @@
     {#if loadingReport}
       <p class="mb-3 text-xs text-fg-3">Checking what would be deleted…</p>
     {:else if dryRunError}
-      <p class="mb-3 text-xs text-danger" data-testid="delete-project-dry-run-error">
+      <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-dry-run-error">
         {dryRunError}
       </p>
       {#if canRetry}
@@ -170,12 +170,12 @@
           {/if}
         </ul>
         {#if report.running_jobs.length > 0}
-          <p class="mt-2 text-warn">{report.running_jobs.length} running job(s)</p>
+          <p class="mt-2 text-warn-text">{report.running_jobs.length} running job(s)</p>
         {/if}
       </div>
       {#if report.referenced_by.length > 0}
         <div
-          class="mb-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-xs text-warn"
+          class="mb-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-xs text-warn-text"
           data-testid="delete-project-references"
         >
           <p class="mb-1 font-semibold">Used by other projects:</p>
@@ -192,7 +192,7 @@
       {/if}
       {#if blocking.length > 0}
         <div
-          class="mb-3 rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-xs text-danger"
+          class="mb-3 rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-xs text-danger-text"
           data-testid="delete-project-blocking"
         >
           <p class="mb-1 font-semibold">Can't delete:</p>
@@ -226,7 +226,7 @@
         </label>
       {/if}
       {#if errorText}
-        <p class="mb-3 text-xs text-danger" data-testid="delete-project-error">
+        <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-error">
           {errorText}
         </p>
       {/if}
@@ -249,7 +249,7 @@
         >
         <button
           type="submit"
-          class="btn border-danger-line text-danger hover:border-danger"
+          class="btn border-danger-line text-danger-text hover:border-danger"
           data-testid="delete-project-submit"
           disabled={busy || !report || blocked || typed.trim() === ''}
         >

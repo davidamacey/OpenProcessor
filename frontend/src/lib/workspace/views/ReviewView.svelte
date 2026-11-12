@@ -111,7 +111,7 @@
            operator briefly sees and could act on the wrong item while the target is located. -->
       <p class="col-span-full text-sm text-fg-3">Locating crop…</p>
     {:else if queue.error}
-      <p class="col-span-full text-sm text-danger">API unavailable: {queue.error}</p>
+      <p class="col-span-full text-sm text-danger-text">API unavailable: {queue.error}</p>
     {:else if !current}
       <ReviewEmptyQueue
         emptyMessage={loader.emptyMessage}

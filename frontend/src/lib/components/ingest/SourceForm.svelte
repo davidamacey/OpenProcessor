@@ -60,7 +60,7 @@
   </div>
 
   {#if creating && list && !list.s3_configured}
-    <p class="text-xs text-warn" data-testid="s3-off">
+    <p class="text-xs text-warn-text" data-testid="s3-off">
       S3 is off on this deployment: the API's OP_S3_ALLOWED lists no bucket.
     </p>
   {/if}
@@ -194,7 +194,7 @@
   </details>
 
   {#if controller.actionError}
-    <p class="text-xs text-danger" data-testid="source-form-error">
+    <p class="text-xs text-danger-text" data-testid="source-form-error">
       {controller.actionError}
     </p>
   {/if}

@@ -5,13 +5,13 @@
   const kindClass = (k: 'info' | 'success' | 'warn' | 'error'): string => {
     switch (k) {
       case 'success':
-        return 'border-success/40 bg-success/10 text-success';
+        return 'border-success/40 bg-success/10 text-success-text';
       case 'warn':
-        return 'border-warn/40 bg-warn/10 text-warn';
+        return 'border-warn/40 bg-warn/10 text-warn-text';
       case 'error':
-        return 'border-danger/40 bg-danger/10 text-danger';
+        return 'border-danger/40 bg-danger/10 text-danger-text';
       default:
-        return 'border-accent/40 bg-accent/10 text-accent';
+        return 'border-accent/40 bg-accent/10 text-accent-text';
     }
   };
 </script>

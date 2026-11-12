@@ -292,7 +292,7 @@
       {/if}
 
       {#if ctl.startError}
-        <p class="text-xs text-danger" data-testid="assist-start-error">
+        <p class="text-xs text-danger-text" data-testid="assist-start-error">
           {ctl.startError}
         </p>
       {/if}

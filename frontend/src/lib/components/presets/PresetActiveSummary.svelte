@@ -18,7 +18,7 @@
 <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Active">
   <h2 class="text-base font-semibold">Active</h2>
   {#if active.loadError}
-    <p class="text-danger" data-testid="preset-active-error">{active.loadError}</p>
+    <p class="text-danger-text" data-testid="preset-active-error">{active.loadError}</p>
   {:else if active.entries.length === 0}
     <p class="text-fg-3">Loading…</p>
   {:else}

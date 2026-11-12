@@ -82,7 +82,7 @@
       </div>
 
       {#if controller.errorLines.length > 0}
-        <div class="space-y-1 text-danger" data-testid="seed-error">
+        <div class="space-y-1 text-danger-text" data-testid="seed-error">
           {#each controller.errorLines as line, i (i)}
             <p>{line}</p>
           {/each}
@@ -116,7 +116,7 @@
           {#if r.conflicts.length > 0}
             <ul class="list-disc pl-5" data-testid="seed-conflicts">
               {#each r.conflicts as c (c.class_id_in_detector)}
-                <li class="text-warn">
+                <li class="text-warn-text">
                   conflict on <span class="font-mono">{c.detector_label}</span> (detector
                   class
                   {c.class_id_in_detector}): {humanizeId(c.reason)}

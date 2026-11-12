@@ -76,7 +76,7 @@
       'sm'
         ? 'h-6 text-meta'
         : 'h-7 text-control'} {o.value === value
-        ? 'bg-accent-soft text-accent shadow-[inset_0_0_0_1px_var(--color-accent-line)]'
+        ? 'bg-accent-soft text-accent-text shadow-[inset_0_0_0_1px_var(--color-accent-line)]'
         : 'text-fg-2 hover:bg-surface-3 hover:text-fg-1'}"
       onclick={() => onchange(o.value)}
     >

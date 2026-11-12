@@ -38,7 +38,7 @@
     {#each importIds as id (id)}
       {#if linkable}
         <a
-          class="text-accent underline hover:text-accent"
+          class="text-accent-text underline hover:text-accent-text"
           href={resolve(projectHref(`/datasets/imports/${encodeURIComponent(id)}`))}
           >{id}</a
         >

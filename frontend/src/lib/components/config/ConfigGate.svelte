@@ -31,7 +31,7 @@
   <p class="text-sm text-fg-2" data-testid={testid}>{unavailableText}</p>
 {:else if store.error}
   <div class="space-y-2 text-sm">
-    <p class="text-danger">Could not load the {what}: {store.error}</p>
+    <p class="text-danger-text">Could not load the {what}: {store.error}</p>
     <button type="button" class="btn btn-sm" onclick={() => void store.retry()}
       >Retry</button
     >

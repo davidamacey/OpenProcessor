@@ -66,7 +66,7 @@
 
   {#if audit.startLines.length > 0}
     <div
-      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
       data-testid="audit-start-error"
     >
       {#each audit.startLines as line (line)}
@@ -83,7 +83,7 @@
         {#each s.strata as st (st.detector_class)}
           <li
             class="rounded border px-1.5 py-0.5 {st.short_of_floor
-              ? 'border-warn/40 bg-warn/10 text-warn'
+              ? 'border-warn/40 bg-warn/10 text-warn-text'
               : 'border-line-strong text-fg-2'}"
             title={st.short_of_floor
               ? `The budget left ${st.detector_class} fewer than ${s.min_per_class} crops although more exist.`

@@ -43,16 +43,19 @@
   <div class="flex flex-wrap gap-2 text-xs" data-testid="source-counts">
     <span class="chip">pending {source.counts.pending}</span>
     <span class="chip">ingested {source.counts.done}</span>
-    <span class="chip {source.counts.failed > 0 ? 'border-warn-line text-warn' : ''}"
+    <span class="chip {source.counts.failed > 0 ? 'border-warn-line text-warn-text' : ''}"
       >retrying {source.counts.failed}</span
     >
-    <span class="chip {source.counts.dead > 0 ? 'border-danger-line text-danger' : ''}"
+    <span
+      class="chip {source.counts.dead > 0 ? 'border-danger-line text-danger-text' : ''}"
       >gave up {source.counts.dead}</span
     >
   </div>
 
   {#if source.scan.active}
-    <p class="text-xs text-accent" data-testid="source-scan">{scanText(source.scan)}</p>
+    <p class="text-xs text-accent-text" data-testid="source-scan">
+      {scanText(source.scan)}
+    </p>
   {/if}
 
   <dl
@@ -68,7 +71,7 @@
           )}
         </dd>
         {#if source.watch.error}
-          <dd class="text-danger" data-testid="source-watch-error">
+          <dd class="text-danger-text" data-testid="source-watch-error">
             {source.watch.error}
             {#if source.watch.backoff_until}(retry after {formatWhen(
                 source.watch.backoff_until,
@@ -116,7 +119,7 @@
       >
       · {formatWhen(source.last_run.started_at)} · ingested {source.last_run.ingested} · duplicates
       {source.last_run.duplicates} · failed {source.last_run.failed}
-      {#if source.last_run.error}<span class="text-danger">
+      {#if source.last_run.error}<span class="text-danger-text">
           — {source.last_run.error}</span
         >{/if}
     </p>
@@ -129,7 +132,7 @@
 
   {#if source.errors && source.errors.length > 0}
     <details class="text-xs" data-testid="source-errors">
-      <summary class="cursor-pointer text-danger"
+      <summary class="cursor-pointer text-danger-text"
         >{source.errors.length} object{source.errors.length === 1 ? '' : 's'} with errors</summary
       >
       <ul class="mt-1 max-h-40 overflow-y-auto">
@@ -137,7 +140,7 @@
           <li class="border-b border-line py-1 break-all">
             <span class="font-mono">{e.key}</span>
             <span class="text-fg-3"> [{e.state}, {e.attempts} tries]</span>
-            <span class="text-danger"> — {e.error}</span>
+            <span class="text-danger-text"> — {e.error}</span>
           </li>
         {/each}
       </ul>
@@ -178,7 +181,7 @@
       Remove
     </button>
     {#if !source.can_run && source.blocked_message}
-      <span class="text-xs text-warn" data-testid="source-blocked"
+      <span class="text-xs text-warn-text" data-testid="source-blocked"
         >{source.blocked_message}</span
       >
     {/if}
@@ -197,7 +200,10 @@
       Remove {source.name}? Its triggers stop and its queue is forgotten. Images already
       ingested stay in the project.
     </p>
-    {#if controller.actionError}<p class="text-danger" data-testid="source-remove-error">
+    {#if controller.actionError}<p
+        class="text-danger-text"
+        data-testid="source-remove-error"
+      >
         {controller.actionError}
       </p>{/if}
   </ConfirmDialog>

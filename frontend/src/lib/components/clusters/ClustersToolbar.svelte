@@ -40,7 +40,7 @@
   {#if classFilter != null}
     <!-- C2 (visual audit 2026-09-24): name the class, not its id. -->
     <span
-      class="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent"
+      class="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent-text"
       title="class id {classFilter}"
       data-testid="class-filter-chip"
     >
@@ -96,7 +96,7 @@
         <button
           type="button"
           class="px-2 py-1 {modes.searchTarget === opt.id
-            ? 'bg-accent/20 text-accent'
+            ? 'bg-accent/20 text-accent-text'
             : 'bg-surface-1 text-fg-2 hover:bg-surface-2'}"
           aria-pressed={modes.searchTarget === opt.id}
           onclick={() => void modes.setSearchTarget(opt.id as 'item' | 'box')}
@@ -128,7 +128,7 @@
     </button>
   </form>
   {#if modes.itemTextError}
-    <span class="text-caption text-warn">{modes.itemTextError}</span>
+    <span class="text-caption text-warn-text">{modes.itemTextError}</span>
   {/if}
 
   <!-- Ignored bucket (G7) -->
@@ -139,7 +139,7 @@
       else void modes.loadIgnored();
     }}
     class="btn-sm border text-xs transition-colors {modes.ignoredModeActive
-      ? 'border-warn/60 bg-warn/20 text-warn'
+      ? 'border-warn/60 bg-warn/20 text-warn-text'
       : 'border-line-strong bg-surface-1 text-fg-2 hover:border-warn/40'}"
     title="Crops excluded from training + clustering"
   >
@@ -155,7 +155,7 @@
     type="button"
     onclick={() => (matchingModeActive ? exitMatchingMode() : enterMatchingMode())}
     class="btn-sm border text-xs transition-colors {matchingModeActive
-      ? 'border-accent/60 bg-accent/20 text-accent'
+      ? 'border-accent/60 bg-accent/20 text-accent-text'
       : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'}"
     data-testid="matching-mode-toggle"
     title="List every item the filter below matches, and act on all of them"

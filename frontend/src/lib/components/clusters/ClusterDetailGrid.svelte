@@ -38,7 +38,7 @@
     {#if live.liveNewCount > 0 && live.scrolledPastFirst20}
       <button
         type="button"
-        class="sticky top-2 z-10 mx-auto block animate-pulse rounded-full border border-accent/60 bg-accent/20 px-3 py-1 text-xs text-accent shadow-lg backdrop-blur hover:bg-accent/30"
+        class="sticky top-2 z-10 mx-auto block animate-pulse rounded-full border border-accent/60 bg-accent/20 px-3 py-1 text-xs text-accent-text shadow-lg backdrop-blur hover:bg-accent/30"
         onclick={live.refreshFromLive}
         title="Scroll to top and reload with the latest crops"
       >
@@ -53,7 +53,7 @@
           >{/if}
       </p>
     {:else if view.cropPager.error}
-      <p class="text-sm text-danger">API unavailable: {view.cropPager.error}</p>
+      <p class="text-sm text-danger-text">API unavailable: {view.cropPager.error}</p>
     {:else if view.filteredCrops.length === 0}
       <p class="text-sm text-fg-3">No crops in this cluster yet.</p>
     {:else}
@@ -132,7 +132,8 @@
       title="Loaded / reviewable members matching the current filters. Test-holdout and ignored crops are never listed, so this can be lower than the header's cluster size."
       >{listedText(view.pagerState)}</span
     >
-    {#if view.sel.size > 0}<span class="ml-2 text-accent">· {view.sel.size} selected</span
+    {#if view.sel.size > 0}<span class="ml-2 text-accent-text"
+        >· {view.sel.size} selected</span
       >{/if}
   </span>
   <span class="font-mono text-xs text-fg-2">

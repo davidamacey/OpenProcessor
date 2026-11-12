@@ -150,7 +150,7 @@
   {#if liveNewCount > 0}
     <button
       type="button"
-      class="shrink-0 animate-pulse rounded-full border border-accent/60 bg-accent/15 px-2.5 py-1 text-caption text-accent hover:bg-accent/25"
+      class="shrink-0 animate-pulse rounded-full border border-accent/60 bg-accent/15 px-2.5 py-1 text-caption text-accent-text hover:bg-accent/25"
       onclick={refreshFromLive}
       title="Reload the queue with the latest crops"
     >

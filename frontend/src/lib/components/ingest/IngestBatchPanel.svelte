@@ -115,7 +115,7 @@
       disabled={submitting}></textarea>
   </label>
   {#if overLimit}
-    <p class="text-xs text-danger">
+    <p class="text-xs text-danger-text">
       {paths.length} paths exceeds this backend's per-request limit of {config.batchMaxItems}
       — split into smaller batches.
     </p>
@@ -135,7 +135,7 @@
   </div>
 
   {#if submitError}
-    <p class="text-xs text-danger">{submitError}</p>
+    <p class="text-xs text-danger-text">{submitError}</p>
   {/if}
 
   {#if result}
@@ -154,7 +154,7 @@
       >
       {#if (result.summary.secondary_detector_failures ?? 0) > 0}
         <span
-          class="chip border-warn-line text-warn"
+          class="chip border-warn-line text-warn-text"
           data-testid="batch-secondary-failures"
           >secondary detector failed {result.summary.secondary_detector_failures}</span
         >
@@ -166,7 +166,7 @@
         {#each notEmbedded as r, i (i)}
           <li class="border-b border-line py-1 font-mono">
             {r.image_path}
-            <span class="text-warn">
+            <span class="text-warn-text">
               — embedded {r.n_embedded} / not embedded {r.n_not_embedded}{#if r.n_embed_failed > 0}
                 ({r.n_embed_failed} encoder failed){/if}</span
             >
@@ -181,7 +181,7 @@
         {#each secondaryFailures as r, i (i)}
           <li class="border-b border-line py-1 font-mono">
             {r.image_path}
-            <span class="text-warn">
+            <span class="text-warn-text">
               — secondary detector: {r.secondary_detector_error}</span
             >
           </li>
@@ -192,7 +192,7 @@
     {#if errorKindCounts.length > 0}
       <div class="flex flex-wrap gap-1 text-xs">
         <button
-          class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent' : ''}"
+          class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent-text' : ''}"
           type="button"
           onclick={() => (errorKindFilter = null)}
         >
@@ -200,7 +200,9 @@
         </button>
         {#each errorKindCounts as [kind, count] (kind)}
           <button
-            class="chip {errorKindFilter === kind ? 'bg-accent-soft text-accent' : ''}"
+            class="chip {errorKindFilter === kind
+              ? 'bg-accent-soft text-accent-text'
+              : ''}"
             type="button"
             onclick={() => (errorKindFilter = kind)}
           >
@@ -216,7 +218,7 @@
               <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}
             {#if r.error}
-              <span class="text-danger"> — {r.error}</span>
+              <span class="text-danger-text"> — {r.error}</span>
             {/if}
           </li>
         {/each}

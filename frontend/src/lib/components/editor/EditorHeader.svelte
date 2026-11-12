@@ -32,7 +32,7 @@
 >
   <a
     href={resolve(backHref)}
-    class="text-sm text-info hover:underline"
+    class="text-sm text-info-text hover:underline"
     data-testid="editor-back"
   >
     ‹ Workspace
@@ -48,7 +48,7 @@
   <span
     class="ml-auto text-xs {status === 'saved' || status === 'saving'
       ? 'text-fg-2'
-      : 'text-warn'}"
+      : 'text-warn-text'}"
     role="status"
     data-testid="save-state"
     data-status={status}
@@ -58,7 +58,7 @@
 </header>
 {#if message && (status === 'conflict' || status === 'failed')}
   <p
-    class="border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn"
+    class="border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn-text"
     role="alert"
     data-testid="save-message"
   >

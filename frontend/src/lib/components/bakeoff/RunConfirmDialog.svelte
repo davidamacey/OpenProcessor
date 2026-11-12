@@ -52,7 +52,7 @@
   </p>
   {#if error}
     <p
-      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger"
+      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
       data-testid="run-error"
     >
       {error}

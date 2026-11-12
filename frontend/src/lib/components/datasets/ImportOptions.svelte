@@ -189,7 +189,7 @@
   </details>
 
   {#if wizard.preview?.force_allowed}
-    <label class="flex items-center gap-2 text-warn" data-testid="force-toggle">
+    <label class="flex items-center gap-2 text-warn-text" data-testid="force-toggle">
       <input
         type="checkbox"
         checked={wizard.options.force === true}

@@ -24,11 +24,11 @@
 <div class="flex flex-wrap items-center gap-1">
   {#each keys as k (k)}
     <span
-      class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-accent"
+      class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-accent-text"
     >
       {formatShortcutKey(k)}
       <button
-        class="text-fg-3 hover:text-danger"
+        class="text-fg-3 hover:text-danger-text"
         aria-label={`remove ${k}`}
         onclick={() => onremove(k)}
       >
@@ -40,7 +40,7 @@
     <button
       data-capture
       use:focusOnMount
-      class="rounded border border-accent bg-accent-soft px-1.5 py-0.5 text-accent"
+      class="rounded border border-accent bg-accent-soft px-1.5 py-0.5 text-accent-text"
       onkeydown={ctl.onCaptureKeydown}
       onblur={ctl.cancelCapture}
     >

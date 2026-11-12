@@ -56,7 +56,7 @@
     <h1 class="text-2xl font-semibold tracking-tight">Ingest policy</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent hover:underline"
+      class="text-xs text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
@@ -66,7 +66,7 @@
   </p>
 
   {#if editor.loadError}
-    <p class="text-sm text-danger" data-testid="policy-load-error">
+    <p class="text-sm text-danger-text" data-testid="policy-load-error">
       {editor.loadError}
     </p>
   {:else if editor.loading}
@@ -83,7 +83,7 @@
 
     {#if editor.conflict}
       <div
-        class="space-y-2 rounded border border-warn-line bg-warn-soft p-3 text-sm text-warn"
+        class="space-y-2 rounded border border-warn-line bg-warn-soft p-3 text-sm text-warn-text"
         data-testid="policy-conflict"
       >
         <p>The policy changed since you opened it.</p>
@@ -106,7 +106,7 @@
         </div>
       </div>
     {:else if editor.saveLines.length > 0}
-      <div class="space-y-1 text-sm text-danger" data-testid="policy-save-error">
+      <div class="space-y-1 text-sm text-danger-text" data-testid="policy-save-error">
         {#each editor.saveLines as line, i (i)}
           <p>{line}</p>
         {/each}
@@ -115,7 +115,7 @@
 
     {#if editor.unknownNames.length > 0}
       <div
-        class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn"
+        class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
         data-testid="policy-unknown-names"
       >
         <p>These names are not in the detector's labels or the registry; saved anyway:</p>

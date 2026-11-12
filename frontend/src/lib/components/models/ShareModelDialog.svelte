@@ -82,7 +82,7 @@
     </p>
 
     {#if errorText}
-      <div class="mb-3 text-xs text-danger" data-testid="share-model-error">
+      <div class="mb-3 text-xs text-danger-text" data-testid="share-model-error">
         <p>{errorText}</p>
         {#if conflict}
           <p class="mt-1 text-fg-2" data-testid="share-model-reloaded">
@@ -96,14 +96,14 @@
             </p>
           {/if}
           {#if forceArmed}
-            <p class="mt-2 text-warn" data-testid="share-model-force-warning">
+            <p class="mt-2 text-warn-text" data-testid="share-model-force-warning">
               {inUse
                 ? forceUnshareText(inUse.map((u) => u.project))
                 : forceUnshareUnreadableText()}
             </p>
             <button
               type="button"
-              class="btn btn-sm mt-2 text-danger"
+              class="btn btn-sm mt-2 text-danger-text"
               data-testid="share-model-force-confirm"
               disabled={busy}
               onclick={() => void confirm(true)}>Confirm: unshare anyway</button
@@ -111,7 +111,7 @@
           {:else}
             <button
               type="button"
-              class="btn btn-sm mt-2 text-danger"
+              class="btn btn-sm mt-2 text-danger-text"
               data-testid="share-model-force"
               disabled={busy}
               onclick={() => (forceArmed = true)}>Unshare anyway</button

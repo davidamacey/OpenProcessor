@@ -71,7 +71,7 @@
       Embedding: {policy.embedding?.mode ?? 'all'}{#if detectFacts.length > 0}; detect
         filter: {detectFacts.join(', ')}{/if}.
       <a
-        class="text-accent hover:underline"
+        class="text-accent-text hover:underline"
         href={resolve(projectHref('/settings/ingest-policy'))}>Edit the ingest policy</a
       >
     </p>

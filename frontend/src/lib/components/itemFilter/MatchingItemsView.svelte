@@ -116,7 +116,7 @@
 {#if pager.loading && pager.items.length === 0}
   <p class="text-sm text-fg-3">Loading...</p>
 {:else if pager.error}
-  <p class="text-sm text-danger" role="alert" data-testid="matching-error">
+  <p class="text-sm text-danger-text" role="alert" data-testid="matching-error">
     {pager.error}
   </p>
 {:else if pager.items.length === 0}

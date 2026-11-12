@@ -82,7 +82,7 @@
           >
             <td class="py-1.5 pr-3">
               <a
-                class="font-mono text-accent hover:underline"
+                class="font-mono text-accent-text hover:underline"
                 href={resolve(
                   projectHref(`/settings/models/vlm/${encodeURIComponent(e.name)}`),
                 )}>{e.name}</a
@@ -106,7 +106,7 @@
               {label(list.labels.locality, e.locality)}
               {#if e.sends_images_externally}
                 <span
-                  class="mt-1 block rounded border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-caption text-danger"
+                  class="mt-1 block rounded border border-danger/40 bg-danger/10 px-1.5 py-0.5 text-caption text-danger-text"
                   data-testid="vlm-external-warning"
                   >{e.warning ?? 'Sends crops outside this deployment.'}</span
                 >
@@ -135,7 +135,7 @@
                 <span
                   class="mr-1 inline-block rounded border px-1 font-mono {slug ===
                   currentSlug
-                    ? 'border-success/40 bg-success/10 text-success'
+                    ? 'border-success/40 bg-success/10 text-success-text'
                     : 'border-line-strong text-fg-2'}"
                   >{slug}{slug === currentSlug ? ' (this project)' : ''}</span
                 >
@@ -187,7 +187,10 @@
                     >Probe result for <span class="font-mono">{e.name}</span></summary
                   >
                   {#if probeErrors[e.name]}
-                    <p class="mt-1 text-xs text-danger" data-testid="vlm-probe-error">
+                    <p
+                      class="mt-1 text-xs text-danger-text"
+                      data-testid="vlm-probe-error"
+                    >
                       {probeErrors[e.name]}
                     </p>
                   {:else if probes[e.name]}

@@ -53,7 +53,7 @@
      which collapse to the image's natural size under an auto-height parent. -->
 <div class="h-72 w-full max-w-xl" data-testid="test-preview-item">
   {#if error}
-    <p class="text-xs text-danger">Could not load the source image: {error}</p>
+    <p class="text-xs text-danger-text">Could not load the source image: {error}</p>
   {:else if context}
     <SourceImageOverlay
       imageId={context.image.image_id}

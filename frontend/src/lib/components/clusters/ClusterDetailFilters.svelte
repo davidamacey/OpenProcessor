@@ -101,7 +101,7 @@
   <button
     type="button"
     class="btn-sm {view.outliersFirst
-      ? 'border-warn/60 bg-warn/20 text-warn'
+      ? 'border-warn/60 bg-warn/20 text-warn-text'
       : 'border-line-strong bg-surface-2 text-fg-2 hover:bg-surface-3'}"
     onclick={() => (view.strategyBar.sort = view.outliersFirst ? 'default' : 'outliers')}
     title="Sort by distance from the cluster centroid (most atypical first) to spot mislabels/junk"

@@ -73,7 +73,7 @@
       {/if}
     </p>
     {#if errorText}
-      <p class="mb-3 text-xs text-danger" data-testid="pause-project-error">
+      <p class="mb-3 text-xs text-danger-text" data-testid="pause-project-error">
         {errorText}
       </p>
     {/if}
