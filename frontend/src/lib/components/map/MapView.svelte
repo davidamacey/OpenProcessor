@@ -19,6 +19,7 @@
   import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { viewQuery } from '$lib/map/viewport';
+  import type { AreaTools, LngLat } from '$lib/map/areaTools.svelte';
   import type { MapCellCollection, MapMeta, MapViewQuery } from '$lib/types_map';
 
   interface Props {
@@ -28,9 +29,11 @@
     onview: (view: MapViewQuery) => void;
     /** A cell was clicked; the host decides between listing its photos and zooming in. */
     oncell: (cell: { tile: string; count: number; zoom: number }) => boolean;
+    /** Shift+drag draws a rectangle and the lasso button a polygon; both end in the filter. */
+    area?: AreaTools;
   }
 
-  let { meta, cells, onview, oncell }: Props = $props();
+  let { meta, cells, onview, oncell, area }: Props = $props();
 
   /** What a GeoJSON source takes; the served cells are already a FeatureCollection. */
   type GeoData = Parameters<GeoJSONSource['setData']>[0];
@@ -40,6 +43,8 @@
   let ready = false;
   /** Set when MapLibre cannot get a WebGL2 context; the card then explains instead of drawing. */
   let noWebgl = $state(false);
+  /** The lasso button was pressed: the next drag draws instead of panning. */
+  let lassoArmed = $state(false);
   /** MapLibre's own words when the worker or style fails to load; the canvas stays blank then. */
   let loadError = $state<string | null>(null);
   const gpsNote = $derived(
@@ -73,6 +78,68 @@
         meta.max_zoom,
       ),
     );
+  }
+
+  /** The gesture in progress as a GeoJSON polygon for the `area` layer (empty when idle). */
+  function areaShape(): GeoData {
+    const pts = area?.points ?? [];
+    let ring: LngLat[] = [];
+    if (area?.mode === 'rectangle' && pts.length === 2) {
+      const [[w, s], [e, n]] = pts;
+      ring = [
+        [w, s],
+        [e, s],
+        [e, n],
+        [w, n],
+        [w, s],
+      ];
+    } else if (pts.length >= 2) ring = [...pts, pts[0]];
+    return {
+      type: 'FeatureCollection',
+      features: ring.length
+        ? [
+            {
+              type: 'Feature',
+              properties: {},
+              geometry: { type: 'Polygon', coordinates: [ring] },
+            },
+          ]
+        : [],
+    } as GeoData;
+  }
+
+  function pushArea(): void {
+    const source = map?.getSource('area') as GeoJSONSource | undefined;
+    if (ready && source) source.setData(areaShape());
+  }
+
+  /** Pointer gestures for the area tools; plain drags keep panning the map. */
+  function wireArea(m: MapLibreMap): void {
+    if (!area) return;
+    m.boxZoom.disable();
+    const at = (e: { lngLat: { lng: number; lat: number } }): LngLat => [
+      e.lngLat.lng,
+      e.lngLat.lat,
+    ];
+    m.on('mousedown', (e) => {
+      if (lassoArmed) {
+        m.dragPan.disable();
+        area.begin('lasso', at(e));
+      } else if (e.originalEvent.shiftKey) {
+        e.preventDefault();
+        m.dragPan.disable();
+        area.begin('rectangle', at(e));
+      }
+    });
+    m.on('mousemove', (e) => {
+      if (area.drawing) area.extend(at(e));
+    });
+    m.on('mouseup', () => {
+      if (!area.drawing) return;
+      area.finish();
+      lassoArmed = false;
+      m.dragPan.enable();
+    });
   }
 
   function push(): void {
@@ -116,6 +183,7 @@
       return;
     }
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+    wireArea(map);
 
     map.on('load', () => {
       if (!map) return;
@@ -158,6 +226,19 @@
           'circle-stroke-width': 1.5,
           'circle-stroke-color': '#0b0b0f',
         },
+      });
+      map.addSource('area', { type: 'geojson', data: areaShape() });
+      map.addLayer({
+        id: 'area-fill',
+        type: 'fill',
+        source: 'area',
+        paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.15 },
+      });
+      map.addLayer({
+        id: 'area-line',
+        type: 'line',
+        source: 'area',
+        paint: { 'line-color': '#38bdf8', 'line-width': 2 },
       });
       ready = true;
       push();
@@ -215,6 +296,11 @@
     void cells;
     push();
   });
+
+  $effect(() => {
+    void area?.points;
+    pushArea();
+  });
 </script>
 
 {#if noWebgl}
@@ -235,6 +321,15 @@
   >
     Map could not load: {loadError}
   </p>
+{/if}
+{#if area && !noWebgl}
+  <button
+    type="button"
+    class="btn-sm absolute right-2 top-24 z-10"
+    aria-pressed={lassoArmed}
+    data-testid="map-lasso"
+    onclick={() => (lassoArmed = !lassoArmed)}>Lasso</button
+  >
 {/if}
 <div
   bind:this={container}
