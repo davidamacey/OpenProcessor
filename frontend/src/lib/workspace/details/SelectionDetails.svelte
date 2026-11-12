@@ -1,5 +1,6 @@
 <script lang="ts">
   /** What the selection holds, as the server counts it. */
+  import ErrorState from '$components/ui/ErrorState.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
   let { ws }: { ws: WorkspaceController; id: string | null } = $props();
@@ -9,7 +10,14 @@
 
 <section class="space-y-2 text-sm" data-testid="selection-details">
   <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Selection</h2>
-  {#if s}
+  {#if ws.summary.failure}
+    <ErrorState
+      title="The selection could not be counted"
+      error={ws.summary.failure}
+      message={ws.summary.error ?? undefined}
+      onretry={() => ws.summary.retry()}
+    />
+  {:else if s}
     <p class="text-fg-1">{s.summary_text}</p>
     <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
       <dt class="text-fg-3">clusters</dt>

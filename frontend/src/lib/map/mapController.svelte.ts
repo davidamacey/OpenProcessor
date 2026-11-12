@@ -59,7 +59,8 @@ export class MapController {
   cell = $state<FocusedCell | null>(null);
   summary = $state<SelectionSummary | null>(null);
   cards = $state<ImagePage | null>(null);
-  cellError = $state<string | null>(null);
+  /** The failure of the last cell read, as thrown (it carries the request id); null when fine. */
+  cellFailure = $state<unknown>(null);
 
   #host: MapHost;
   #deps: MapDeps;
@@ -120,6 +121,11 @@ export class MapController {
     return this.#loadCell(cell);
   }
 
+  /** Reads the focused cell's summary and cards again after a failure. */
+  retryCell(): Promise<void> {
+    return this.cell ? this.#loadCell(this.cell) : Promise.resolve();
+  }
+
   /** A pin click: the single photo opens in the image details. */
   focusPin(imageId: string): void {
     this.clearLocal();
@@ -171,7 +177,7 @@ export class MapController {
     this.cell = cell;
     this.summary = null;
     this.cards = null;
-    this.cellError = null;
+    this.cellFailure = null;
     try {
       const [summary, cards] = await Promise.all([
         this.#deps.summary({ filter: this.cellBody(cell) }, abort.signal),
@@ -185,7 +191,7 @@ export class MapController {
       this.summary = summary;
       this.cards = cards;
     } catch (e) {
-      if (!abort.signal.aborted) this.cellError = apiErrorText(e);
+      if (!abort.signal.aborted) this.cellFailure = e;
     }
   }
 

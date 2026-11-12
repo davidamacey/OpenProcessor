@@ -366,7 +366,7 @@
 <div
   bind:this={container}
   class:hidden={noWebgl}
-  class="h-full min-h-[320px] w-full rounded border border-line"
+  class="min-h-[320px] w-full flex-1 rounded border border-line"
   data-testid="map-canvas"
   role="application"
   aria-label="Map of where the photos were taken"

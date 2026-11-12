@@ -44,4 +44,23 @@ describe('createSelectionSummary', () => {
     flushSync();
     expect(state.summary).toBeNull();
   });
+
+  it('keeps the thrown failure and asks again on retry', async () => {
+    vi.useFakeTimers();
+    const boom = new Error('boom');
+    vi.mocked(getSelectionSummary).mockRejectedValueOnce(boom).mockResolvedValue(SERVED);
+    let state!: ReturnType<typeof createSelectionSummary>;
+    cleanup = $effect.root(() => {
+      state = createSelectionSummary(() => ({ crop_ids: ['a'] }));
+    });
+    flushSync();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(state.failure).toBe(boom);
+    expect(state.summary).toBeNull();
+    state.retry();
+    flushSync();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(state.failure).toBeNull();
+    expect(state.summary?.summary_text).toBe(SERVED.summary_text);
+  });
 });

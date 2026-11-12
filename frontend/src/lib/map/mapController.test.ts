@@ -149,8 +149,21 @@ describe('MapController', () => {
       deps({ summary: vi.fn().mockRejectedValue(new Error('nope')) }),
     );
     await ctl.focusCell(CELL);
-    expect(ctl.cellError).toBe('nope');
+    expect((ctl.cellFailure as Error).message).toBe('nope');
     expect(ctl.summary).toBeNull();
+  });
+
+  it('retries the focused cell after a failure and clears the failure', async () => {
+    const summary = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('nope'))
+      .mockResolvedValue({ images: 3, summary_text: 'ok' });
+    const ctl = new MapController(host(), deps({ summary }));
+    await ctl.focusCell(CELL);
+    expect(ctl.cellFailure).not.toBeNull();
+    await ctl.retryCell();
+    expect(ctl.cellFailure).toBeNull();
+    expect(ctl.summary?.images).toBe(3);
   });
 
   it('show-in applies the cell bounds as the area filter and the view in one navigation', () => {
