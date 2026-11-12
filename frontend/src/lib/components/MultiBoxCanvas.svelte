@@ -20,6 +20,7 @@
   import { getThumbUrl } from '$lib/api_cropRead';
   import { reprocessVocabularyStore } from '$lib/stores/reprocessVocabulary.svelte';
   import type { BBoxNormLike } from '$lib/annotations/types';
+  import { boxFromPoints, moveBox, pointToNorm } from '$lib/annotations/boxGeometry';
   import { normalize as normalizeKey } from '$stores/keyboard.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
 
@@ -103,30 +104,9 @@
   }
   let drag = $state<DragState | null>(null);
 
-  function clamp01(x: number): number {
-    return Math.min(1, Math.max(0, x));
-  }
-
   function clientToNorm(e: PointerEvent): { x: number; y: number } {
     if (!canvasEl) return { x: 0, y: 0 };
-    const rect = canvasEl.getBoundingClientRect();
-    return {
-      x: clamp01((e.clientX - rect.left) / (rect.width || 1)),
-      y: clamp01((e.clientY - rect.top) / (rect.height || 1)),
-    };
-  }
-
-  function normalize(b: BBoxNormLike): BBoxNormLike {
-    const x1 = clamp01(b.cx - b.w / 2);
-    const y1 = clamp01(b.cy - b.h / 2);
-    const x2 = clamp01(b.cx + b.w / 2);
-    const y2 = clamp01(b.cy + b.h / 2);
-    return {
-      cx: (x1 + x2) / 2,
-      cy: (y1 + y2) / 2,
-      w: Math.max(0, x2 - x1),
-      h: Math.max(0, y2 - y1),
-    };
+    return pointToNorm(e.clientX, e.clientY, canvasEl.getBoundingClientRect());
   }
 
   const atBoxCap = $derived(maxBoxes != null && boxes.length >= maxBoxes);
@@ -154,28 +134,14 @@
     if (!drag) return;
     const p = clientToNorm(e);
     if (drag.mode === 'create') {
-      const x1 = Math.min(drag.startX, p.x);
-      const y1 = Math.min(drag.startY, p.y);
-      const x2 = Math.max(drag.startX, p.x);
-      const y2 = Math.max(drag.startY, p.y);
-      pendingCreate = normalize({
-        cx: (x1 + x2) / 2,
-        cy: (y1 + y2) / 2,
-        w: x2 - x1,
-        h: y2 - y1,
-      });
+      pendingCreate = boxFromPoints({ x: drag.startX, y: drag.startY }, p);
       return;
     }
     if (drag.mode === 'move' && drag.initial != null && selectedIndex != null) {
-      const dx = p.x - drag.startX;
-      const dy = p.y - drag.startY;
-      const moved = normalize({
-        cx: drag.initial.cx + dx,
-        cy: drag.initial.cy + dy,
-        w: drag.initial.w,
-        h: drag.initial.h,
-      });
-      onmove?.(selectedIndex, moved);
+      onmove?.(
+        selectedIndex,
+        moveBox(drag.initial, p.x - drag.startX, p.y - drag.startY),
+      );
     }
   }
 
