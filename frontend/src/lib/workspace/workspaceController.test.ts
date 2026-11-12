@@ -149,6 +149,16 @@ describe('WorkspaceController', () => {
     expect(c.itemQuery().cluster_uid).toEqual([id]);
   });
 
+  it('names a near-duplicate scope for the bulk bar', () => {
+    const c = make();
+    expect(c.inNearDupGroup).toBe(false);
+    c.setScope({ kind: 'near_dup', id: 'g1' });
+    const { href } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+    expect(c.inNearDupGroup).toBe(true);
+  });
+
   it('an unapplied draft does not change the query', () => {
     visit('?class_name=widget');
     const c = make();

@@ -106,6 +106,11 @@ export class WorkspaceController {
     return this.#url;
   }
 
+  /** True while the scope is one near-duplicate group (the bar offers its group-wide label). */
+  get inNearDupGroup(): boolean {
+    return this.#url.scope?.kind === 'near_dup';
+  }
+
   get view(): ViewId {
     return this.#url.view ?? nextStepsStore.defaultView ?? 'gallery';
   }

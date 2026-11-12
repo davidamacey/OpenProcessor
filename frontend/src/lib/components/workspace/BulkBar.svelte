@@ -173,7 +173,7 @@
   <button type="button" class="btn" onclick={() => void undoStore.undoLast()}>
     Undo
   </button>
-  {#if ws.url.scope?.kind === 'near_dup'}
+  {#if ws.inNearDupGroup}
     <button
       type="button"
       class="btn"
