@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 LOCATION_FIELD: Final = 'capture.location'
 JOIN_MAX_IMAGES: Final = 10_000
 
-NearDupFilter = Literal['member', 'representative', 'none']
+NearDupFilter = Literal['member', 'representative', 'none', 'collapsed']
 IMAGE_PREDICATE_FIELDS: Final = ('geo_bbox', 'geo_polygon', 'has_location', 'near_dup_group')
 
 
@@ -80,6 +80,16 @@ def near_dup_clauses(near_dup: NearDupFilter | None) -> list[dict[str, Any]]:
         return [representative]
     if near_dup == 'none':
         return [{'bool': {'must_not': [group]}}]
+    if near_dup == 'collapsed':
+        # One image per group (its representative) plus every image in no group.
+        return [
+            {
+                'bool': {
+                    'should': [representative, {'bool': {'must_not': [group]}}],
+                    'minimum_should_match': 1,
+                }
+            }
+        ]
     return []
 
 

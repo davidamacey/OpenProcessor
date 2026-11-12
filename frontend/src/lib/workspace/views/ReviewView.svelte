@@ -6,6 +6,7 @@
    * concern lives in a controller under `$lib/review` and renders through a component under
    * `$lib/components/review`. Enter on a grid card opens it here; Esc returns to the same card.
    */
+  import { pickerRecent } from '$lib/review/pickerRecent';
   import ClassPicker from '$components/ClassPicker.svelte';
   import DismissedPanel from '$lib/components/review/DismissedPanel.svelte';
   import Filmstrip from '$components/Filmstrip.svelte';
@@ -50,9 +51,12 @@
     },
   };
   const recent = $derived(
-    actions.currentHintIds
-      .map((id) => classesStore.byId(id)?.name)
-      .filter((n): n is string => !!n),
+    pickerRecent(
+      loader.current?.proposed_class_name,
+      actions.currentHintIds
+        .map((id) => classesStore.byId(id)?.name)
+        .filter((n): n is string => !!n),
+    ),
   );
   installReviewKeyboard({ tabs, loader, actions, picker, edit, slot });
 

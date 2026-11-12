@@ -60,6 +60,12 @@
   const isCurrentLabelVlmSourced = $derived(
     (classSourcesStore.roleFor(current?.label_source) ?? '').startsWith('vlm'),
   );
+  // The served name of the source; an id the catalog does not name is a machine id, not shown.
+  const sourceLabel = $derived.by(() => {
+    const id = current?.label_source;
+    const label = classSourcesStore.labelFor(id);
+    return id && label !== id ? label : '';
+  });
 </script>
 
 <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
@@ -100,8 +106,8 @@
     {:else}
       <span class="italic text-fg-3">{NO_CLASS_YET}</span>
     {/if}
-    {#if current.label_source}
-      <span class="ml-1 text-fg-3">({current.label_source})</span>
+    {#if sourceLabel}
+      <span class="ml-1 text-fg-3">({sourceLabel})</span>
     {/if}
     <ConfirmationChip source={current.class_source} validated={current.class_validated} />
     <DetectorClass crop={current} class="ml-1 text-caption text-fg-3" />

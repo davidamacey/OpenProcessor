@@ -7,6 +7,7 @@
   import { apiErrorText } from '$lib/api_errors';
   import { formatTimestamp } from '$lib/format/date';
   import { editorHref } from '$lib/editor/editorUrl';
+  import NearDupGroupModal from '$components/nearDup/NearDupGroupModal.svelte';
   import type { ImageDetailResponse } from '$lib/types_images';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
@@ -14,11 +15,13 @@
 
   let detail = $state<ImageDetailResponse | null>(null);
   let error = $state<string | null>(null);
+  let groupOpen = $state(false);
 
   $effect(() => {
     const imageId = id;
     detail = null;
     error = null;
+    groupOpen = false;
     if (!imageId) return;
     const ctrl = new AbortController();
     getImage(imageId, ctrl.signal)
@@ -36,7 +39,7 @@
     {@const image = detail.image}
     {@const counts = detail.counts}
     <section class="space-y-3 text-sm" data-testid="image-details">
-      <h2 class="truncate text-xs font-semibold tracking-wide text-fg-2 uppercase">
+      <h2 class="truncate text-title font-semibold text-fg-1" title={image.file_name}>
         {image.file_name}
       </h2>
       <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
@@ -84,10 +87,25 @@
         <button
           type="button"
           class="btn"
+          data-testid="lightbox-image"
+          onclick={() => void ws.openLightbox(image.image_id, image.file_name)}
+          >View full size</button
+        >
+        <button
+          type="button"
+          class="btn"
           data-testid="scope-image"
           onclick={() => ws.setScope({ kind: 'image', id: image.image_id })}
           >Show its items</button
         >
+        {#if image.near_dup}
+          <button
+            type="button"
+            class="btn"
+            data-testid="decide-near-dup"
+            onclick={() => (groupOpen = true)}>Keep or split this group</button
+          >
+        {/if}
         {#if image.near_dup?.is_representative}
           <button
             type="button"
@@ -100,5 +118,12 @@
         {/if}
       </div>
     </section>
+    {#if groupOpen && image.near_dup}
+      <NearDupGroupModal
+        level="image"
+        group={image.near_dup}
+        onclose={() => (groupOpen = false)}
+      />
+    {/if}
   {/if}
 </ViewState>

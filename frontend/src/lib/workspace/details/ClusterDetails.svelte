@@ -1,6 +1,7 @@
 <script lang="ts">
   /** The open cluster's served card: size, dominant class, label agreement and counts. */
-  import { displayNoText } from '$lib/clusters/clusterCardText';
+  import Button from '$components/ui/Button.svelte';
+  import { displayNameNote, displayNoText } from '$lib/clusters/clusterCardText';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { classesStore } from '$stores/classes.svelte';
 
@@ -21,10 +22,27 @@
       Cluster {displayNoText(card)}
       <span class="font-mono text-xs text-fg-3">{card.uid}</span>
     </p>
-    <p class="text-fg-2">
-      size {card.size.toLocaleString()} · dominant
-      <strong class="text-fg-1">{card.dominant_class_name ?? '—'}</strong>
+    <p class="text-fg-2" data-testid="cluster-details-name">
+      size {card.size.toLocaleString()} ·
+      {#if card.display_name_kind === 'none'}
+        <strong class="text-fg-1">not named yet</strong>
+      {:else}
+        <strong class="text-fg-1">{card.display_name}</strong>
+        {#if displayNameNote(card.display_name_kind)}
+          <span class="text-fg-3">({displayNameNote(card.display_name_kind)})</span>
+        {/if}
+      {/if}
     </p>
+    <!-- The main path: name the whole group in one action. The class picker belongs to the bulk
+         bar, the selection is "everything this cluster scope matches", and the server counts it. -->
+    <Button
+      icon="pencil"
+      data-testid="label-cluster"
+      onclick={() => {
+        ws.confirmSelectAllMatching();
+        ws.pickerOpen = true;
+      }}>Label all {card.size.toLocaleString()} in this cluster…</Button
+    >
     {#if card.label_agreement != null}
       <p class="font-mono text-xs text-fg-2" data-testid="cluster-agreement">
         agreement {(card.label_agreement * 100).toFixed(0)}%

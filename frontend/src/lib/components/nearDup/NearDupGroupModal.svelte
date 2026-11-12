@@ -19,10 +19,11 @@
     ondecided,
   }: {
     level: NearDupLevel;
-    group: NearDupGroupSummary;
+    /** The facts the title needs; a summary from the group list or an image's `near_dup`. */
+    group: Pick<NearDupGroupSummary, 'group_id' | 'purpose'> & { size: number | null };
     onclose: () => void;
     /** A decision was made or undone: the status gains pending rows. */
-    ondecided: () => void;
+    ondecided?: () => void;
   } = $props();
 
   // The modal is mounted per group (`{#key}` in the page), so level and group are fixed here.
@@ -39,12 +40,12 @@
   async function decide(memberId: string, kind: 'same' | 'different'): Promise<void> {
     if (!rep) return;
     await ctl.decide(rep.member_id, memberId, kind);
-    ondecided();
+    ondecided?.();
   }
 
   async function undo(id: string): Promise<void> {
     await ctl.undo(id);
-    ondecided();
+    ondecided?.();
   }
 </script>
 
@@ -56,7 +57,9 @@
 >
   <header class="mb-3 flex items-baseline gap-3">
     <h2 class="text-lg font-semibold">
-      {group.purpose === 'dedup' ? 'Duplicate group' : 'Leak group'}, {group.size} members
+      {group.purpose === 'dedup' ? 'Duplicate group' : 'Leak group'}{group.size == null
+        ? ''
+        : `, ${group.size} members`}
     </h2>
     <span class="grow"></span>
     <a

@@ -288,4 +288,27 @@ describe('SourceImageOverlay extraShapes (W5 test-on-crop candidates)', () => {
     expect(el.querySelector('[data-testid="overlay-extra-box"]')).toBeNull();
     expect(el.querySelector('[data-testid="overlay-extra-polygon"]')).toBeNull();
   });
+
+  it('keeps the hide-boxes and all-regions buttons off the picture', async () => {
+    vi.mocked(getImage).mockResolvedValue(ctx());
+    const el = await render({ imageId: 'img-1', selectedCropId: 'crop-1' });
+    const frame = el.querySelector('img')!.parentElement!;
+    const buttons = [...el.querySelectorAll('button')];
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const b of buttons) expect(frame.contains(b)).toBe(false);
+  });
+
+  it('clips the spotlight dim to the picture', async () => {
+    vi.mocked(getImage).mockResolvedValue(ctx());
+    const el = await render({
+      imageId: 'img-1',
+      selectedCropId: 'crop-1',
+      spotlight: true,
+    });
+    const layer = el.querySelector('[data-testid="overlay-layer"]')!;
+    expect(layer.className).toContain('overflow-hidden');
+    expect(el.querySelector('[data-testid="overlay-box"]')?.className).toContain(
+      'dim-outside',
+    );
+  });
 });

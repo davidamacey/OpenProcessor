@@ -12,7 +12,8 @@
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
   import { resolve } from '$app/paths';
-  import { getThumbUrl } from '$lib/api_cropRead';
+  import Segmented from '$components/ui/Segmented.svelte';
+  import { getPreviewUrl, type CropPreviewMode } from '$lib/api_cropRead';
   import { similarHref } from '$lib/projectPaths';
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
   import SourceMissingBadge from '$lib/components/SourceMissingBadge.svelte';
@@ -41,6 +42,16 @@
   let { current, tabs, loader, actions, picker, edit, slot }: Props = $props();
 
   let sourceMissing = $state<SourceMissing | null>(null);
+  /** The crop is shown with its surroundings by default; "Tight" is the box alone, enlarged. */
+  let previewMode = $state<CropPreviewMode>('context');
+  const PREVIEW_MODES = [
+    {
+      value: 'context',
+      label: 'Context',
+      title: 'The box with its surroundings, outlined',
+    },
+    { value: 'tight', label: 'Tight', title: 'The box alone, enlarged' },
+  ];
   $effect(() => {
     void current.id;
     sourceMissing = null;
@@ -85,15 +96,16 @@
   </div>
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
-  <div class="flex min-h-0 flex-1 items-start justify-center bg-surface-0">
+  <div class="flex min-h-0 flex-1 items-start justify-center bg-surface-2">
     <!-- Boxes/labels are drawn client-side from
          GET {API_PREFIX}/images/{image_id} over the clean pixels. -->
     {#if current.image_id}
       <SourceImageOverlay
         imageId={current.image_id}
         selectedCropId={current.id}
-        maxDim={1280}
+        maxDim={1600}
         align="start"
+        spotlight
       />
     {:else}
       <p class="text-xs text-fg-3">No source image is recorded for this item.</p>
@@ -105,6 +117,16 @@
 <div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
   <div class="mb-2 flex items-center gap-2 px-1 text-xs text-fg-2">
     <span>crop</span>
+    <Segmented
+      label="Crop view"
+      size="sm"
+      options={PREVIEW_MODES}
+      value={previewMode}
+      onchange={(v) => {
+        previewMode = v as CropPreviewMode;
+        sourceMissing = null;
+      }}
+    />
     <span class="grow"></span>
     <span class="font-mono">{current.id.slice(0, 12)}…</span>
   </div>
@@ -178,7 +200,7 @@
            w-full` still applies as the pre-p9 fallback. -->
       {#if !sourceMissing}
         <img
-          src={getThumbUrl(current.id, 384)}
+          src={getPreviewUrl(current.id, previewMode)}
           alt="crop"
           loading="lazy"
           decoding="async"

@@ -84,4 +84,17 @@ describe('createImageGalleryController', () => {
     });
     expect(mocked.mock.calls[0]![1]).toBeNull();
   });
+
+  it('sends the served near-duplicate filter and reloads on it', async () => {
+    mocked.mockResolvedValue(imagePage([imageCard({ image_id: 'a' })]));
+    const g = make();
+    const before = g.queryKey;
+    g.nearDup = 'representative';
+    expect(g.queryKey).not.toBe(before);
+    await g.loadFirst();
+    expect(mocked.mock.calls[0]![0]).toMatchObject({ near_dup: 'representative' });
+    g.nearDup = null;
+    await g.loadFirst();
+    expect(mocked.mock.calls[1]![0]).not.toHaveProperty('near_dup');
+  });
 });

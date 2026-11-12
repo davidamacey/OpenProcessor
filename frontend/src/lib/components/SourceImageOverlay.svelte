@@ -64,6 +64,8 @@
     /** Extra shapes in the source-image frame (test-on-crop candidates):
      *  boxes and mask outlines, `dimmed` ones drawn faint. */
     extraShapes?: OverlayShape[];
+    /** The selected box is the subject: highlighted, everything else dimmed and unlabelled. */
+    spotlight?: boolean;
   }
 
   let {
@@ -75,6 +77,7 @@
     align = 'center',
     context: providedContext = null,
     extraShapes = [],
+    spotlight = false,
   }: Props = $props();
 
   let fetchedContext = $state<ImageDetailResponse | null>(null);
@@ -128,12 +131,7 @@
   }
 </script>
 
-<div
-  class="relative flex h-full w-full justify-center {align === 'start'
-    ? 'items-start'
-    : 'items-center'} {className}"
-  data-align={align}
->
+<div class="relative flex h-full w-full flex-col {className}" data-align={align}>
   {#if loading && !context}
     <p class="text-xs text-fg-3">Loading…</p>
   {:else if error}
@@ -143,91 +141,108 @@
       <SourceMissingBadge missing={sourceMissing} />
     </div>
   {:else}
-    <div
-      class="relative max-h-full max-w-full"
-      style={aspectRatio ? `aspect-ratio: ${aspectRatio};` : ''}
-    >
-      <img
-        src={getImageFileUrl(imageId, maxDim)}
-        alt="source"
-        loading="eager"
-        decoding="async"
-        class="block h-full max-h-full w-full max-w-full object-contain"
-        onload={(e) => {
-          const el = e.currentTarget as HTMLImageElement;
-          naturalW = el.naturalWidth || naturalW;
-          naturalH = el.naturalHeight || naturalH;
-        }}
-        onerror={(e) => {
-          void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
-            (m) => (sourceMissing = m),
-          );
-        }}
-      />
-      {#if showBoxes && context}
-        <div class="pointer-events-none absolute inset-0" data-testid="overlay-layer">
-          <BoxLayer boxes={context.boxes} {selectedCropId} {onselect} {allRegions} />
-          {#each extraShapes as s (s.key)}
-            {#if s.kind === 'box'}
-              {@const [x1, y1, x2, y2] = s.box}
-              <div
-                class="absolute border-2 border-info {s.dimmed
-                  ? 'border-dashed opacity-40'
-                  : 'z-10'}"
-                style="left:{pct(x1)}; top:{pct(y1)}; width:{pct(x2 - x1)}; height:{pct(
-                  y2 - y1,
-                )};"
-                data-testid="overlay-extra-box"
-                data-dimmed={s.dimmed}
-                title={s.title}
-              >
-                <span
-                  class="absolute -top-4 left-0 rounded-sm bg-surface-0/90 px-1 py-0.5 text-caption leading-none whitespace-nowrap text-fg-1"
-                  >{s.label}</span
-                >
-              </div>
-            {:else}
-              <svg
-                class="absolute inset-0 h-full w-full {s.dimmed ? 'opacity-40' : ''}"
-                viewBox="0 0 1 1"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <polygon
-                  points={s.points.map((q) => `${q[0]},${q[1]}`).join(' ')}
-                  fill="rgba(56, 189, 248, 0.15)"
-                  stroke="rgb(56, 189, 248)"
-                  stroke-width="2"
-                  stroke-dasharray={s.dimmed ? '4 3' : undefined}
-                  vector-effect="non-scaling-stroke"
-                  data-testid="overlay-extra-polygon"
-                  data-dimmed={s.dimmed}
-                >
-                  <title>{s.title}</title>
-                </polygon>
-              </svg>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-      <div class="pointer-events-auto absolute top-1 right-1 z-20 flex gap-1">
+    <div class="flex shrink-0 justify-end gap-1 pb-1">
+      <button
+        type="button"
+        class="rounded border border-line-strong bg-surface-0/80 px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2 hover:bg-surface-1"
+        onclick={() => (showBoxes = !showBoxes)}
+      >
+        {showBoxes ? 'hide boxes' : 'show boxes'}
+      </button>
+      {#if showBoxes}
         <button
           type="button"
           class="rounded border border-line-strong bg-surface-0/80 px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2 hover:bg-surface-1"
-          onclick={() => (showBoxes = !showBoxes)}
+          aria-pressed={allRegions}
+          data-testid="overlay-all-regions"
+          onclick={() => (allRegions = !allRegions)}
         >
-          {showBoxes ? 'hide boxes' : 'show boxes'}
+          All regions
         </button>
-        {#if showBoxes}
-          <button
-            type="button"
-            class="rounded border border-line-strong bg-surface-0/80 px-1.5 py-0.5 text-caption whitespace-nowrap text-fg-2 hover:bg-surface-1"
-            aria-pressed={allRegions}
-            data-testid="overlay-all-regions"
-            onclick={() => (allRegions = !allRegions)}
+      {/if}
+    </div>
+    <div
+      class="flex min-h-0 flex-1 justify-center {align === 'start'
+        ? 'items-start'
+        : 'items-center'}"
+    >
+      <div
+        class="relative max-h-full max-w-full"
+        style={aspectRatio ? `aspect-ratio: ${aspectRatio};` : ''}
+      >
+        <img
+          src={getImageFileUrl(imageId, maxDim)}
+          alt="source"
+          loading="eager"
+          decoding="async"
+          class="block h-full max-h-full w-full max-w-full object-contain"
+          onload={(e) => {
+            const el = e.currentTarget as HTMLImageElement;
+            naturalW = el.naturalWidth || naturalW;
+            naturalH = el.naturalHeight || naturalH;
+          }}
+          onerror={(e) => {
+            void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+              (m) => (sourceMissing = m),
+            );
+          }}
+        />
+        {#if showBoxes && context}
+          <div
+            class="pointer-events-none absolute inset-0 {spotlight
+              ? 'overflow-hidden'
+              : ''}"
+            data-testid="overlay-layer"
           >
-            All regions
-          </button>
+            <BoxLayer
+              boxes={context.boxes}
+              {selectedCropId}
+              {onselect}
+              {allRegions}
+              {spotlight}
+            />
+            {#each extraShapes as s (s.key)}
+              {#if s.kind === 'box'}
+                {@const [x1, y1, x2, y2] = s.box}
+                <div
+                  class="absolute border-2 border-info {s.dimmed
+                    ? 'border-dashed opacity-40'
+                    : 'z-10'}"
+                  style="left:{pct(x1)}; top:{pct(y1)}; width:{pct(x2 - x1)}; height:{pct(
+                    y2 - y1,
+                  )};"
+                  data-testid="overlay-extra-box"
+                  data-dimmed={s.dimmed}
+                  title={s.title}
+                >
+                  <span
+                    class="absolute -top-4 left-0 rounded-sm bg-surface-0/90 px-1 py-0.5 text-caption leading-none whitespace-nowrap text-fg-1"
+                    >{s.label}</span
+                  >
+                </div>
+              {:else}
+                <svg
+                  class="absolute inset-0 h-full w-full {s.dimmed ? 'opacity-40' : ''}"
+                  viewBox="0 0 1 1"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <polygon
+                    points={s.points.map((q) => `${q[0]},${q[1]}`).join(' ')}
+                    fill="rgba(56, 189, 248, 0.15)"
+                    stroke="rgb(56, 189, 248)"
+                    stroke-width="2"
+                    stroke-dasharray={s.dimmed ? '4 3' : undefined}
+                    vector-effect="non-scaling-stroke"
+                    data-testid="overlay-extra-polygon"
+                    data-dimmed={s.dimmed}
+                  >
+                    <title>{s.title}</title>
+                  </polygon>
+                </svg>
+              {/if}
+            {/each}
+          </div>
         {/if}
       </div>
     </div>

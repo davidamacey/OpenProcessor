@@ -125,4 +125,40 @@ describe('BoxLayer', () => {
     expect(el.textContent).toContain('cat');
     expect(el.textContent).toContain('dog');
   });
+
+  describe('spotlight', () => {
+    const boxes = [
+      box({ crop_id: 'sel', label: 'cat' }),
+      box({ crop_id: 'other', label: 'dog', tone: 'machine' }),
+      box({ crop_id: 'prop', label: 'bus', label_kind: 'detector', tone: 'unlabeled' }),
+    ];
+    const at = (el: HTMLElement, id: string) =>
+      el.querySelector<HTMLElement>(`[data-crop-id="${id}"]`)!;
+
+    it('draws the selected box 3 px in the highlight with the outside dimmed', () => {
+      const el = render({ boxes, selectedCropId: 'sel', spotlight: true });
+      const sel = at(el, 'sel');
+      expect(sel.className).toContain('border-hl');
+      expect(sel.className).toContain('border-3');
+      expect(sel.className).toContain('dim-outside');
+    });
+
+    it('draws the others 1 px at 40% without labels, a detector proposal in the detector tone', () => {
+      const el = render({ boxes, selectedCropId: 'sel', spotlight: true });
+      const other = at(el, 'other');
+      expect(other.className).toContain('border ');
+      expect(other.className).not.toContain('border-2');
+      expect(other.className).toContain('opacity-40');
+      expect(at(el, 'prop').className).toContain('border-tone-detector');
+      expect(el.textContent).not.toContain('dog');
+      expect(el.textContent).not.toContain('bus');
+    });
+
+    it('does not dim or restyle without the flag', () => {
+      const el = render({ boxes, selectedCropId: 'sel' });
+      expect(at(el, 'sel').className).not.toContain('dim-outside');
+      expect(at(el, 'other').className).toContain('border-2');
+      expect(el.textContent).toContain('dog');
+    });
+  });
 });

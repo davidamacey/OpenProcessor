@@ -119,6 +119,27 @@ def _save_centroid(vector: tuple[float, float, float], trained_at: str = 'T1') -
 # ---------------------------------------------------------------------------
 
 
+def test_cluster_cards_serve_the_display_name_the_item_clusters_do() -> None:
+    docs = {
+        'a1': _item('a1', [(_box('b1', cluster_uid='named'), A)], class_name='dog'),
+        'a2': _item('a2', [(_box('b1', cluster_uid='named'), A)], class_name='dog'),
+        'd1': _item('d1', [(_box('b1', cluster_uid='guess'), B)], detector_class_name='bus'),
+        'n1': _item('n1', [(_box('b1', cluster_uid='bare'), (0.0, 0.0, 1.0))]),
+    }
+    client = _client(QueryFakeOpenSearch({ITEMS: docs}))
+
+    cards = {
+        c['cluster_uid']: c for c in client.get(f'{PREFIX}/regions/clusters').json()['clusters']
+    }
+
+    assert (cards['named']['display_name'], cards['named']['display_name_kind']) == ('dog', 'class')
+    assert (cards['guess']['display_name'], cards['guess']['display_name_kind']) == (
+        'bus',
+        'detector',
+    )
+    assert (cards['bare']['display_name'], cards['bare']['display_name_kind']) == ('', 'none')
+
+
 def test_cluster_cards_are_the_serving_clusters_largest_first() -> None:
     docs = {
         **{f'g{i}': _item(f'g{i}', [(_box('b1', cluster_uid='big'), A)]) for i in range(5)},

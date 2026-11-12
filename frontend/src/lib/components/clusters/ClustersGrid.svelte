@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmptyState from '$components/ui/EmptyState.svelte';
   import Icon from '$components/ui/Icon.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -117,8 +118,10 @@
             <ClusterBadge
               clusterUid={crop.cluster.uid}
               displayNo={crop.cluster.display_no ?? null}
-              dominantClassName={modes.clusterMetaMap.get(crop.cluster.uid)
-                ?.dominant_class_name ?? null}
+              displayName={modes.clusterMetaMap.get(crop.cluster.uid)?.display_name ??
+                null}
+              displayNameKind={modes.clusterMetaMap.get(crop.cluster.uid)
+                ?.display_name_kind ?? 'none'}
             />
           {/if}
         {/snippet}
@@ -244,14 +247,21 @@
         </button>
       </div>
     {:else}
-      <div class="space-y-3" data-testid="clusters-empty">
-        <p class="text-sm text-fg-2" data-testid="clusters-empty-message">
-          {list.emptyMessage ?? 'No clusters to show.'}
-        </p>
-        {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
-          <ClusterRunPanel onserving={() => void list.loadFirst()} />
-        {/if}
-        <EmptyNextSteps />
+      <div data-testid="clusters-empty">
+        <EmptyState
+          icon="layers-2"
+          title="No clusters yet"
+          description={list.emptyMessage ?? 'No clusters to show.'}
+        >
+          {#snippet action()}
+            <!-- One way forward: the run panel when a run is what is missing, else the served loop. -->
+            {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
+              <ClusterRunPanel onserving={() => void list.loadFirst()} />
+            {:else}
+              <EmptyNextSteps />
+            {/if}
+          {/snippet}
+        </EmptyState>
       </div>
     {/if}
   {:else}

@@ -115,7 +115,7 @@ class Stub:
             projects_response(api_prefix),
         )
         self.on('GET', r'/health$', {'status': 'ok', 'region_profile': REGION_PROFILE})
-        self.on('GET', r'(thumbnail|region_thumbnail|/source)(/|$|\?)', self._image)
+        self.on('GET', r'(thumbnail|region_thumbnail|preview|/source)(/|$|\?)', self._image)
         # `/review`'s source panel (SourceImageOverlay.svelte) fetches
         # `/images/{id}` and then the clean `/images/{id}/file` on every
         # visit — same "every test needs this" rationale as the four

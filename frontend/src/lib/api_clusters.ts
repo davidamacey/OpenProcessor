@@ -5,7 +5,14 @@ import { getCrops } from '$lib/api_cropRead';
 import type { CursorPage, SortOption } from '$lib/types_cursor';
 import { apiFetch, qs, scoped } from '$lib/api';
 import { apiErrorText } from '$lib/api_errors';
-import type { Cluster, ClusterFilter, Crop, CropFilter, HiddenCounts } from '$lib/types';
+import type {
+  Cluster,
+  ClusterFilter,
+  ClusterNameKind,
+  Crop,
+  CropFilter,
+  HiddenCounts,
+} from '$lib/types';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   ClusterActivationAccepted,
@@ -29,6 +36,9 @@ type RawCluster = {
   labelled_count: number;
   dominant_class_name: string | null;
   dominant_count: number;
+  display_name: string;
+  display_name_kind: ClusterNameKind;
+  near_dup_group_count: number;
   /** The top class's share of the LABELLED members. */
   label_agreement: number | null;
   /** Share of this cluster's members that have any label at all. */
@@ -84,6 +94,9 @@ function _rawClusterToCluster(c: RawCluster): Cluster {
     size: c.size,
     validated_count: c.validated_count,
     dominant_class_name: c.dominant_class_name,
+    display_name: c.display_name,
+    display_name_kind: c.display_name_kind,
+    near_dup_group_count: c.near_dup_group_count,
     // The subtitle's "dominant share" is the served label-based share
     // (largest class among labelled members).
     dominant_pct: label_agreement,

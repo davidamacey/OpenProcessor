@@ -8,6 +8,7 @@ receives, so the page can only show the order it was sent.
 
 from __future__ import annotations
 
+import re
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import cluster_card, cluster_list, fill
@@ -178,7 +179,7 @@ def test_filters_reach_the_server_survive_a_reload_and_clear(stub, page, app_url
     expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
         3, timeout=ACTION_TIMEOUT_MS
     )
-    assert 'flag=' not in page.url
+    expect(page).not_to_have_url(re.compile('flag='), timeout=ACTION_TIMEOUT_MS)
 
 
 def test_a_filter_with_no_match_shows_the_empty_state_and_clears(stub, page, app_url):

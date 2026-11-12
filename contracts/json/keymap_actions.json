@@ -346,6 +346,17 @@
     {
       "context": "workspace",
       "default": [
+        "l"
+      ],
+      "description": "In an open cluster: label the selected items, or the whole cluster when none are selected, then go to the next cluster.",
+      "group": null,
+      "id": "workspace.label_cluster",
+      "label": "Label this cluster",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
         "\\"
       ],
       "description": "Toggle the details panel.",
@@ -363,6 +374,17 @@
       "group": null,
       "id": "workspace.open_editor",
       "label": "Open in the image editor",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "shift+space"
+      ],
+      "description": "Open the focused image or the focused item's image in the lightbox.",
+      "group": null,
+      "id": "workspace.lightbox",
+      "label": "Open the image full size",
       "modifiable": true
     },
     {

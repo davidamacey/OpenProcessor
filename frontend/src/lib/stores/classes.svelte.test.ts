@@ -77,4 +77,13 @@ describe('classesStore.refresh — thresholds + reservedHotkeys', () => {
     expect(classesStore.reservedHotkeys).toEqual(['b', 'd']);
     expect(classesStore.classes).toHaveLength(1);
   });
+
+  it('keeps empty thresholds when the response has none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(ok({ classes: [], reserved_hotkeys: [] })),
+    );
+    await classesStore.refresh();
+    expect(classesStore.thresholds.warn_below).toBe(0);
+  });
 });

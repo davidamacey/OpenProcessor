@@ -1,14 +1,21 @@
 <script lang="ts">
   import type { SourceMissing } from '$lib/sourceMissing';
 
-  let { missing, compact = false }: { missing: SourceMissing; compact?: boolean } =
-    $props();
+  /** `interactive` is a strip along the bottom that takes the pointer (its tooltip works); the
+   *  default covers the picture and ignores the pointer so the card under it stays clickable. */
+  let {
+    missing,
+    compact = false,
+    interactive = false,
+  }: { missing: SourceMissing; compact?: boolean; interactive?: boolean } = $props();
 </script>
 
 <div
   role="status"
   title={missing.message}
-  class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5 bg-surface-1/80 p-1 text-center text-fg-1"
+  class="absolute flex flex-col items-center justify-center gap-0.5 bg-surface-1/80 p-1 text-center text-fg-1 {interactive
+    ? 'inset-x-1 bottom-1 rounded'
+    : 'pointer-events-none inset-0'}"
 >
   <span class={compact ? 'text-caption font-semibold' : 'text-sm font-semibold'}>
     {missing.root_mounted ? 'Image file missing' : 'Source not mounted'}

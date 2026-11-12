@@ -131,10 +131,29 @@ describe('ImageCard', () => {
       await vi.advanceTimersByTimeAsync(0);
       flushSync();
       expect(spy).toHaveBeenCalledOnce();
-      expect(el.querySelector('[role="status"]')?.textContent).toContain('photos');
+      const badge = el.querySelector('[role="status"]')!;
+      expect(badge.textContent).toContain('photos');
+      // Hover (its tooltip) must reach the badge: nothing around it ignores the pointer.
+      expect(badge.closest('.pointer-events-none')).toBeNull();
     } finally {
       spy.mockRestore();
       vi.useRealTimers();
     }
+  });
+
+  it('draws no box labels on the thumbnail, only a title for hover', () => {
+    const el = render({ card: imageCard({ boxes: [imageBox({ label: 'dog' })] }) });
+    const box = el.querySelector('[data-testid="overlay-box"]') as HTMLElement;
+    expect(box.getAttribute('title')).toBe('dog');
+    expect(box.textContent?.trim()).toBe('');
+  });
+
+  it('has a full-size control only when the grid gives one, and it does not select the card', () => {
+    const onlightbox = vi.fn();
+    const onclick = vi.fn();
+    const el = render({ card: imageCard(), onlightbox, onclick });
+    (el.querySelector('[data-testid="image-card-lightbox"]') as HTMLElement).click();
+    expect(onlightbox).toHaveBeenCalledOnce();
+    expect(onclick).not.toHaveBeenCalled();
   });
 });

@@ -61,7 +61,7 @@ export interface ImageDetailResponse {
   items_truncated: boolean;
 }
 export type LabelState = 'has_unlabeled' | 'all_labeled' | 'no_items';
-export type NearDupFilter = 'member' | 'representative' | 'none';
+export type NearDupFilter = 'member' | 'representative' | 'none' | 'collapsed';
 
 /** The image-only list parameters (`ImageViewQuery`), on top of the shared item filter. */
 export interface ImageViewParams {

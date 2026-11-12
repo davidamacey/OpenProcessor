@@ -79,7 +79,7 @@
   }
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col" data-testid="map-view">
+<div class="flex h-full min-h-0 flex-1 flex-col" data-testid="map-view">
   <h1 class="sr-only">Map</h1>
   {#if ctl.meta?.available}
     <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-xs text-fg-2">
@@ -142,7 +142,41 @@
         of them.
       </p>
     {/if}
-    <div class="relative min-h-[420px] flex-1 p-4 pt-2">
+    {#if ctl.cells?.features.length}
+      <!-- The canvas is a pointing device; this is the same cells for the keyboard and screen readers. -->
+      <details class="px-4 pb-1 text-xs text-fg-2" data-testid="map-cell-list">
+        <summary class="cursor-pointer">
+          Cells in view ({ctl.cells.features.length.toLocaleString()})
+        </summary>
+        <ul class="mt-1 flex max-h-40 flex-wrap gap-1 overflow-auto">
+          {#each ctl.cells.features as f (f.properties.tile)}
+            {@const p = f.properties}
+            <li>
+              <button
+                type="button"
+                class="btn-sm"
+                data-testid="map-cell-item"
+                onclick={() => {
+                  showDetails();
+                  if (p.image_id) ctl.focusPin(p.image_id);
+                  else
+                    void ctl.focusCell({
+                      tile: p.tile,
+                      count: p.count,
+                      bounds: p.bounds,
+                    });
+                }}
+              >
+                {p.count.toLocaleString()} photo{p.count === 1 ? '' : 's'} at {f.geometry.coordinates[1]!.toFixed(
+                  2,
+                )}, {f.geometry.coordinates[0]!.toFixed(2)}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
+    <div class="relative flex min-h-[420px] flex-1 flex-col p-4 pt-2">
       <MapCanvas
         meta={ctl.meta}
         cells={ctl.cells}

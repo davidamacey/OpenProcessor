@@ -248,6 +248,15 @@ function mapSearchPage(
 
 // -- image URL helpers (no fetch — used directly in <img src=...>) -------
 
+export type CropPreviewMode = 'tight' | 'context';
+
+/** The box alone (`tight`) or with its surroundings and the box outlined (`context`), enlarged by
+ *  the server so a small box is legible (`GET /crops/{id}/preview`). */
+export function getPreviewUrl(cropId: string, mode: CropPreviewMode): string {
+  const params = mode === 'tight' ? 'pad=0' : 'pad=0.6&outline=true';
+  return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/preview?${params}`;
+}
+
 /**
  * URL for a crop thumbnail. Defaults to 160px — small enough to load
  * fast for fast grid scanning of thousands of crops, large enough that

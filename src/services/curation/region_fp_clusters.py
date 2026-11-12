@@ -16,7 +16,12 @@ from src.config.project_context import project_api_base
 from src.services.curation.clustering.pool_snapshot import GOOD_BOX_STATES
 from src.services.curation.clustering.region_box_rows import box_state_clause
 from src.services.curation.region_rows import rows_for_pairs
-from src.services.curation.wire import box_thumbnail_url
+from src.services.curation.wire import box_thumbnail_url, display_name_of
+
+
+def _top_key(agg: Any) -> str | None:
+    buckets = (agg or {}).get('buckets') or []
+    return str(buckets[0]['key']) if buckets else None
 
 
 async def region_cluster_cards(
@@ -74,7 +79,13 @@ async def region_cluster_cards(
                                     'items': {
                                         'reverse_nested': {},
                                         'aggs': {
-                                            'validated': {'filter': {'term': {F.validated: True}}}
+                                            'validated': {'filter': {'term': {F.validated: True}}},
+                                            'top_class': {
+                                                'terms': {'field': 'class_name', 'size': 1}
+                                            },
+                                            'top_detector': {
+                                                'terms': {'field': 'detector_class_name', 'size': 1}
+                                            },
                                         },
                                     },
                                 },
@@ -99,11 +110,20 @@ async def region_cluster_cards(
         ]
         rep_pairs.extend((crop_id, box_id, {}) for crop_id, box_id in reps)
         items = b.get('items') or {}
+        named = display_name_of(
+            {
+                'class_name': _top_key(items.get('top_class')),
+                'detector_class_name': _top_key(items.get('top_detector')),
+            },
+            '',
+        )
         clusters.append(
             {
                 'cluster_uid': str(b['key']),
                 'size': int(items.get('doc_count', 0)),
                 'box_count': int(b['doc_count']),
+                'display_name': named['display_name'],
+                'display_name_kind': named['display_name_kind'],
                 'validated_count': int((items.get('validated') or {}).get('doc_count', 0)),
                 'representative_crop_ids': [crop_id for crop_id, _box_id in reps],
                 'representative_box_ids': [box_id for _crop_id, box_id in reps],

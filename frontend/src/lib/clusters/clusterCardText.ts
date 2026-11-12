@@ -3,12 +3,17 @@
  * them: `label_agreement` (mapped onto `Cluster.dominant_pct`) is the dominant
  * class's share of the LABELLED members.
  */
-import type { Cluster } from '$lib/types';
+import type { Cluster, ClusterNameKind } from '$lib/types';
 import type { ValidationState } from '$lib/types_clusterList';
 
 /** "#7", or "" when the serving partition gave the cluster no number. */
 export function displayNoText(c: { display_no?: number | null }): string {
   return c.display_no == null ? '' : `#${c.display_no}`;
+}
+
+/** What a cluster's name is, in plain words, when it is not a class name; null when it is. */
+export function displayNameNote(kind: ClusterNameKind): string | null {
+  return kind === 'detector' ? 'from the detector' : null;
 }
 
 function pct(v: number): string {

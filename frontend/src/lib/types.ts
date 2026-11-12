@@ -227,6 +227,8 @@ export interface Crop extends ItemProvenanceFields {
   updated_at: string;
 }
 
+export type ClusterNameKind = 'class' | 'detector' | 'none';
+
 export interface Cluster {
   /** The cluster's identity in the serving partition (`cluster_uid`). */
   uid: string;
@@ -244,6 +246,13 @@ export interface Cluster {
   /** class_validated=true count. */
   validated_count: number;
   dominant_class_name: string | null;
+  /** The one name a page shows for the cluster (served): its dominant class, else the
+   *  detector's most common class, else empty. */
+  display_name: string;
+  /** Where `display_name` came from (served). */
+  display_name_kind: ClusterNameKind;
+  /** How many near-duplicate groups the members belong to (served); 0 when none. */
+  near_dup_group_count: number;
   /** Served `label_agreement` — the dominant class's share of the
    *  LABELLED members. */
   dominant_pct: number | null;

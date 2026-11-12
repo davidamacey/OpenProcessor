@@ -9,6 +9,7 @@
  * `itemQuery()` and `itemBody()` are the only places that combine the
  * filter, the queue and the scope: views call them and never build a filter.
  */
+import { untrack } from 'svelte';
 import { MediaQuery, SvelteURLSearchParams } from 'svelte/reactivity';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -18,6 +19,7 @@ import { getCrop } from '$lib/api_cropRead';
 import { projectHref } from '$lib/projectPaths';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nextStepsStore } from '$stores/nextSteps.svelte';
+import { focusFitsView } from './detailsViews';
 import { buildItemQuery } from './itemQuery';
 import {
   createSelectionSummary,
@@ -68,6 +70,9 @@ export class WorkspaceController {
   matching = $state<{ total: number; hidden: HiddenCounts | null } | null>(null);
   /** The class picker the bulk bar owns; `workspace.class_picker` opens it. */
   pickerOpen = $state(false);
+  /** Set when the whole open cluster is being labelled by key: once the label lands the host
+   *  moves on to the next cluster. Cleared when the flow ends without a write. */
+  labelThenNext = $state(false);
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
@@ -78,6 +83,8 @@ export class WorkspaceController {
   /** The item Review stands on, kept here as well as in the URL so a quick `Esc` right after a
    *  confirm still returns to it, before the URL write has landed. */
   #reviewFocus: string | null = null;
+  /** The focus the last view switch set aside because the new view cannot show it. */
+  #parkedFocus: FocusRef | null = null;
   /** The open cluster's served card, set by the cluster scope for the details panel. */
   scopeCard = $state<Cluster | null>(null);
 
@@ -94,6 +101,17 @@ export class WorkspaceController {
       this.summary = createSelectionSummary(() => this.itemSelection());
       $effect(() => {
         this.filter.fromUrl(page.url.searchParams);
+      });
+      let kind: SelectionKind | null = null;
+      $effect(() => {
+        const next = this.selectionKind;
+        if (
+          kind !== null &&
+          next !== kind &&
+          untrack(() => this.selection.kind) !== 'matching'
+        )
+          untrack(() => this.clearSelection());
+        kind = next;
       });
       $effect(() => {
         const served = nextStepsStore.defaultView;
@@ -180,8 +198,17 @@ export class WorkspaceController {
     });
   }
 
+  /** Switches view. A focus the new view cannot show is parked, not left to render the wrong
+   *  details; a parked one comes back in the first view that can show it. */
   setView(view: ViewId): void {
-    this.#write({ view }, false);
+    const candidate = this.#url.focus ?? this.#parkedFocus;
+    if (!candidate || focusFitsView(candidate.kind, view)) {
+      this.#parkedFocus = null;
+      this.#write({ view, focus: candidate }, false);
+      return;
+    }
+    this.#parkedFocus = candidate;
+    this.#write({ view, focus: null }, false);
   }
 
   /** Another queue opens in its own order: the Review sort belongs to the queue it was picked in. */
@@ -193,13 +220,46 @@ export class WorkspaceController {
     this.#write({ scope }, false);
   }
 
+  /** The focused image's id, or the focused item's image. */
+  async #focusedImageId(): Promise<string | null> {
+    const focus = this.#url.focus;
+    if (focus?.kind !== 'image' && focus?.kind !== 'item') return null;
+    return focus.kind === 'image'
+      ? focus.id
+      : ((await getCrop(focus.id)).image_id ?? null);
+  }
+
   /** Opens the focused image, or the focused item's image, in the editor with this query. */
   async openEditor(): Promise<void> {
-    const focus = this.#url.focus;
-    if (focus?.kind !== 'image' && focus?.kind !== 'item') return;
-    const imageId =
-      focus.kind === 'image' ? focus.id : (await getCrop(focus.id)).image_id;
+    const imageId = await this.#focusedImageId();
     if (imageId) void goto(resolve(editorHref(imageId, page.url.search)));
+  }
+
+  /** The image the lightbox shows, and the name it is labelled with; null when closed. */
+  lightbox = $state<{ imageId: string; label: string } | null>(null);
+
+  /** Opens the lightbox on `imageId`, else on the focused image (or the focused item's image). */
+  async openLightbox(imageId?: string, label = 'Image'): Promise<void> {
+    const id = imageId ?? (await this.#focusedImageId());
+    if (id) this.lightbox = { imageId: id, label };
+  }
+
+  closeLightbox(): void {
+    this.lightbox = null;
+  }
+
+  /** The neighbouring image in the view's loaded page, or null at the ends or in a view that
+   *  does not list images. */
+  lightboxNeighbour(step: -1 | 1): string | null {
+    if (!this.lightbox || this.#page?.kind !== 'images') return null;
+    const ids = this.#page.ids();
+    const at = ids.indexOf(this.lightbox.imageId);
+    return at < 0 ? null : (ids[at + step] ?? null);
+  }
+
+  stepLightbox(step: -1 | 1): void {
+    const next = this.lightboxNeighbour(step);
+    if (next) this.lightbox = { imageId: next, label: 'Image' };
   }
 
   /** Opens a cluster in place; the filter and the view stay. */
@@ -235,8 +295,9 @@ export class WorkspaceController {
   closeReview(): void {
     const focus: FocusRef | null = this.#reviewFocus
       ? { kind: 'item', id: this.#reviewFocus }
-      : this.#url.focus;
+      : (this.#url.focus ?? this.#parkedFocus);
     this.#reviewFocus = null;
+    this.#parkedFocus = null;
     this.#write({ view: this.#reviewOrigin, focus }, false);
   }
 
@@ -337,6 +398,29 @@ export class WorkspaceController {
 
   confirmSelectAllMatching(): void {
     this.select({ kind: 'matching' });
+  }
+
+  /** The label-cluster key: label the selection when there is one, else everything the open
+   *  cluster matches, through the bulk bar's class picker (type to search or create) and the
+   *  server's dry run. Only a whole-cluster label moves on to the next cluster. */
+  startLabelCluster(): void {
+    const whole = this.selection.kind === 'none';
+    if (whole) this.confirmSelectAllMatching();
+    this.labelThenNext = whole;
+    this.pickerOpen = true;
+  }
+
+  /** What a bulk action acts on, in words, for the dialog that confirms it. */
+  get actingOn(): string {
+    const sel = this.selection;
+    if (sel.kind === 'items') return `the ${sel.cropIds.length} selected items`;
+    if (sel.kind === 'images') return `the ${sel.imageIds.length} selected images`;
+    if (sel.kind === 'clusters') return `the ${sel.clusterUids.length} selected clusters`;
+    if (sel.kind === 'matching')
+      return this.#url.scope?.kind === 'cluster'
+        ? 'every item in this cluster'
+        : 'every item matching the filter';
+    return 'nothing';
   }
 
   toggleRail(): void {

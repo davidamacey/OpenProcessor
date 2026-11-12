@@ -1,53 +1,52 @@
 /**
- * `<ClusterBadge>` is a small presentational component (no
- * `@testing-library/svelte` in this repo — see StrategyBar.test.ts's
- * header comment for why every component test here is a static source
- * scan rather than a mount harness). This asserts the two contractual
- * behaviors the global-search feature (docs: /clusters search-mode plan)
- * depends on:
- *  - the amber "Unlabeled #N" fallback when there's no dominant class
- *  - navigation to the cluster scope in the Workspace on click, via `goto`, not a raw <a>
- *    (so it composes inside the absolutely-positioned overlay without a
- *    full page reload)
+ * `<ClusterBadge>` names a cluster with the server's `display_name`: a class name as it is, the
+ * detector's guess marked as such, and an amber "Unlabeled" when no name was served. A click opens
+ * the cluster in the Workspace via `goto` and never also selects the crop under the badge.
  */
+import { describe, expect, it, vi } from 'vitest';
+import { mountUi } from '$lib/test/mountUi';
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+const nav = vi.hoisted(() => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: nav.goto }));
+vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+import ClusterBadge from './ClusterBadge.svelte';
 
-function read(rel: string): string {
-  return readFileSync(path.resolve(here, rel), 'utf-8');
+function badge(props: Record<string, unknown>): HTMLButtonElement {
+  return mountUi(ClusterBadge, {
+    clusterUid: 'u-1',
+    displayNo: 7,
+    ...props,
+  }).querySelector('button')!;
 }
 
-describe('ClusterBadge.svelte', () => {
-  const src = read('./ClusterBadge.svelte');
-
-  it('renders an amber "Unlabeled #N" variant when dominantClassName is null', () => {
-    expect(src).toMatch(/Unlabeled \{numberText\}/);
-    expect(src).toMatch(/amber/);
+describe('ClusterBadge', () => {
+  it('shows the number and the served class name', () => {
+    expect(
+      badge({ displayName: 'dog', displayNameKind: 'class' }).textContent?.trim(),
+    ).toBe('#7 · dog');
   });
 
-  it('renders "{short uid} · {dominant_class_name}" in the labeled case', () => {
-    expect(src).toMatch(/\{numberText\} · \{dominantClassName\}/);
+  it("marks the detector's name as the detector's", () => {
+    const text = badge({ displayName: 'bus', displayNameKind: 'detector' }).textContent;
+    expect(text).toContain('bus');
+    expect(text).toContain('(detector)');
   });
 
-  it('shows the served display_no, not the uid, and keeps the uid in the title', () => {
-    expect(src).toMatch(/displayNoText\(\{ display_no: displayNo \}\)/);
-    expect(src).not.toMatch(/slice\(0, 8\)/);
-    expect(src).toMatch(/title="Open cluster \{clusterUid\}"/);
+  it('is an amber "Unlabeled" when no name was served, with the uid in the title', () => {
+    const b = badge({ displayName: null, displayNameKind: 'none' });
+    expect(b.textContent?.trim()).toBe('Unlabeled #7');
+    expect(b.className).toContain('warn');
+    expect(b.title).toContain('u-1');
   });
 
-  it('navigates via goto, not a raw anchor tag', () => {
-    expect(src).toMatch(
-      /goto\(resolve\(projectHref\(`\/workspace\$\{clusterScopeSearch\(clusterUid\)\}`\)\)\)/,
-    );
-    expect(src).not.toMatch(/<a\s/);
-  });
-
-  it('stops click propagation so the badge click never also selects/opens the underlying crop card', () => {
-    expect(src).toMatch(/stopPropagation/);
+  it('opens the cluster scope with goto and stops the click', () => {
+    const b = badge({ displayName: 'dog', displayNameKind: 'class' });
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const stop = vi.spyOn(ev, 'stopPropagation');
+    b.dispatchEvent(ev);
+    expect(nav.goto).toHaveBeenCalledOnce();
+    expect(String(nav.goto.mock.calls[0]![0])).toContain('u-1');
+    expect(stop).toHaveBeenCalled();
   });
 });

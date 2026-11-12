@@ -5,25 +5,32 @@
   /**
    * Cluster-origin badge for a search-result crop (global search on
    * `/clusters`, see `CropResultGrid.svelte`). Renders "{#N} ·
-   * {dominant_class_name}" with the number the serving partition gave the
+   * {display_name}" with the number the serving partition gave the
    * cluster (blank when it served none; the uid stays in the title), or an amber "Unlabeled"
-   * variant when the cluster has no dominant class yet.
+   * variant when the server served no name.
    *
    * Clicking opens the cluster in the Workspace. Purely presentational
-   * otherwise — the caller supplies `dominant_class_name` (batched from
+   * otherwise — the caller supplies the served `display_name` (batched from
    * `getClusters()`, never recomputed client-side per this repo's
    * CLAUDE.md).
    */
+  import type { ClusterNameKind } from '$lib/types';
   import { goto } from '$app/navigation';
-  import { displayNoText } from '$lib/clusters/clusterCardText';
+  import { displayNameNote, displayNoText } from '$lib/clusters/clusterCardText';
 
   interface Props {
     clusterUid: string;
-    dominantClassName?: string | null;
+    displayName?: string | null;
+    displayNameKind?: ClusterNameKind;
     displayNo?: number | null;
   }
 
-  let { clusterUid, dominantClassName = null, displayNo = null }: Props = $props();
+  let {
+    clusterUid,
+    displayName = null,
+    displayNameKind = 'none',
+    displayNo = null,
+  }: Props = $props();
 
   const numberText = $derived(displayNoText({ display_no: displayNo }));
 
@@ -33,14 +40,14 @@
   }
 </script>
 
-{#if dominantClassName}
+{#if displayName && displayNameKind !== 'none'}
   <button
     type="button"
     onclick={open}
     class="pointer-events-auto block max-w-full truncate rounded border border-line-strong bg-surface-1/90 px-1.5 py-0.5 text-caption text-fg-1 hover:border-accent/60 hover:text-accent-text"
     title="Open cluster {clusterUid}"
   >
-    {numberText} · {dominantClassName}
+    {numberText} · {displayName}{displayNameNote(displayNameKind) ? ' (detector)' : ''}
   </button>
 {:else}
   <button

@@ -62,6 +62,13 @@ describe('CropCard selection control', () => {
     );
   });
 
+  it('shows a check mark, not only a colour, on a selected card', () => {
+    const mark = (el: HTMLElement) =>
+      el.querySelector('[data-testid="crop-selected-mark"]');
+    expect(mark(render({ selected: true }))).not.toBeNull();
+    expect(mark(render({ selected: false }))).toBeNull();
+  });
+
   it('clicking the select button selects with the event', () => {
     const onclick = vi.fn();
     const el = render({ onclick });

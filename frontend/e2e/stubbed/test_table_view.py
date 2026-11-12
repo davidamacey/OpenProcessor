@@ -137,7 +137,9 @@ def test_column_choice_is_in_the_url_and_the_request(stub, page, app_url):
     page.get_by_label('Image', exact=True).check()
     expect(page.get_by_role('columnheader', name='Image')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert seen[-1]['columns'] == 'thumbnail,class_name,detector_confidence,image_name'
-    assert re.search(r'columns=thumbnail(,|%2C)class_name', page.url)
+    expect(page).to_have_url(
+        re.compile(r'columns=thumbnail(,|%2C)class_name'), timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_space_and_shift_arrows_select_rows_for_the_bulk_bar(stub, page, app_url):

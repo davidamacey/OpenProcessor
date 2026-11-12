@@ -267,6 +267,14 @@
     {#if sourceMissing}
       <SourceMissingBadge missing={sourceMissing} compact />
     {/if}
+    {#if selected}
+      <!-- Selection is not carried by colour alone. -->
+      <span
+        class="pointer-events-none absolute top-1/2 left-1 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-accent-fill text-white"
+        data-testid="crop-selected-mark"
+        aria-hidden="true"><Icon name="check" size={14} /></span
+      >
+    {/if}
 
     {#if noSlot}
       <span

@@ -9,9 +9,10 @@ import ImageDetails from './details/ImageDetails.svelte';
 import ItemDetails from './details/ItemDetails.svelte';
 import ReviewItemDetails from './details/ReviewItemDetails.svelte';
 import SelectionDetails from './details/SelectionDetails.svelte';
+import type { DetailsKind } from './detailsViews';
 import type { WorkspaceController } from './workspaceController.svelte';
 
-export type DetailsKind = 'item' | 'review' | 'image' | 'cluster' | 'cell' | 'selection';
+export type { DetailsKind };
 
 export const DETAILS: Record<
   DetailsKind,

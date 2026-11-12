@@ -98,7 +98,7 @@ def test_empty_clusters_page_says_a_built_partition_waits_and_activates_it(stub,
     stub.on('GET', r'/jobs/job-act$', job('job-act', 'completed'))
 
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
-    message = page.get_by_test_id('clusters-empty-message')
+    message = page.get_by_test_id('clusters-empty')
     expect(message).to_contain_text('not serving yet', timeout=ACTION_TIMEOUT_MS)
     expect(message).not_to_contain_text('auto-label pipeline')
     pending = page.get_by_test_id('cluster-run-pending')
@@ -119,7 +119,9 @@ def test_empty_clusters_page_with_no_partition_points_at_clustering(stub, page, 
         ),
     )
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
-    expect(page.get_by_test_id('clusters-empty-message')).to_contain_text(
+    expect(page.get_by_test_id('clusters-empty')).to_contain_text(
         'No clustering run', timeout=ACTION_TIMEOUT_MS
     )
     expect(page.get_by_test_id('cluster-run-start')).to_be_visible()
+    # One way forward, not the run panel and the served loop together.
+    expect(page.get_by_test_id('empty-next-steps')).to_have_count(0)

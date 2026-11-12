@@ -27,7 +27,7 @@
 
 <aside
   class="{ws.railOpen
-    ? 'fixed inset-y-0 left-0 z-30 w-72 max-w-full'
+    ? 'fixed inset-y-0 left-0 z-50 w-72 max-w-full'
     : 'hidden'} flex-col border-r border-line bg-surface-0 lg:static lg:z-auto lg:flex lg:w-64 lg:shrink-0"
   aria-label="Queues and classes"
   data-testid="workspace-rail"

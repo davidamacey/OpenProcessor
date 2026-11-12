@@ -163,7 +163,7 @@ def test_class_letter_then_enter_labels_a_pure_cluster(stub, page, app_url):
     assert label_calls[-1]['class_id'] == 1
 
 
-def test_filter_queue_and_selection_survive_a_view_switch(stub, page, app_url):
+def test_filter_survives_a_view_switch_and_a_selection_of_another_kind_clears(stub, page, app_url):
     serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=detections&class_name=widget')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
@@ -177,10 +177,12 @@ def test_filter_queue_and_selection_survive_a_view_switch(stub, page, app_url):
     expect(page).to_have_url(re.compile('view=clusters'))
     assert 'class_name=widget' in page.url
     expect(page.get_by_test_id('item-filter-chip').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    # Clusters select clusters, not detections: the selection does not follow the view.
     page.get_by_test_id('view-tab-detections').click()
     expect(page.get_by_test_id('bulk-summary')).to_have_text(
-        '3 detections in 3 images', timeout=ACTION_TIMEOUT_MS
+        'Nothing selected', timeout=ACTION_TIMEOUT_MS
     )
+    expect(page).to_have_url(re.compile('class_name=widget'))
 
 
 def test_comma_and_period_step_between_clusters(stub, page, app_url):

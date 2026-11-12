@@ -12,6 +12,10 @@ const DEBOUNCE_MS = 150;
 export interface SelectionSummaryState {
   readonly summary: SelectionSummary | null;
   readonly error: string | null;
+  /** The failure as thrown (it carries the request id), for an error panel. */
+  readonly failure: unknown;
+  /** Asks again after a failure. */
+  retry(): void;
   readonly loading: boolean;
 }
 
@@ -20,13 +24,17 @@ export function createSelectionSummary(
 ): SelectionSummaryState {
   let summary = $state<SelectionSummary | null>(null);
   let error = $state<string | null>(null);
+  let failure = $state<unknown>(null);
+  let attempt = $state(0);
   let loading = $state(false);
 
   $effect(() => {
     const sel = selection();
+    void attempt;
     if (!sel) {
       summary = null;
       error = null;
+      failure = null;
       loading = false;
       return;
     }
@@ -37,11 +45,13 @@ export function createSelectionSummary(
         .then((res) => {
           summary = res;
           error = null;
+          failure = null;
         })
         .catch((e: unknown) => {
           if (ctrl.signal.aborted) return;
           summary = null;
           error = apiErrorText(e);
+          failure = e;
         })
         .finally(() => {
           if (!ctrl.signal.aborted) loading = false;
@@ -62,6 +72,12 @@ export function createSelectionSummary(
     },
     get loading() {
       return loading;
+    },
+    get failure() {
+      return failure;
+    },
+    retry() {
+      attempt += 1;
     },
   };
 }

@@ -4,6 +4,8 @@
    * with the cell's bounds as `geo_bbox`) and its first image cards (`GET /images`). One request
    * pair per focused cell; the cards link to the image details.
    */
+  import ErrorState from '$components/ui/ErrorState.svelte';
+  import { apiErrorText } from '$lib/api_errors';
   import { activeMap } from '$lib/map/activeMap.svelte';
   import { CELL_CARDS } from '$lib/map/mapController.svelte';
   import { VIEWS } from '$lib/workspace/viewRegistry';
@@ -22,8 +24,13 @@
   <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Map cell</h2>
   {#if !ctl || !cell}
     <p class="text-fg-3">Select a cell on the map to see its photos.</p>
-  {:else if ctl.cellError}
-    <p class="text-danger-text" role="alert" data-testid="cell-error">{ctl.cellError}</p>
+  {:else if ctl.cellFailure}
+    <ErrorState
+      title="This cell could not be read"
+      error={ctl.cellFailure}
+      message={apiErrorText(ctl.cellFailure)}
+      onretry={() => void ctl.retryCell()}
+    />
   {:else if !ctl.summary || !ctl.cards}
     <p class="text-fg-3" role="status">Loading…</p>
   {:else}
