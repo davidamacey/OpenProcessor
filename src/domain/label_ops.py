@@ -14,14 +14,20 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
 from src.domain.history import op_write_undone
-from src.domain.ingest_class_sources import HUMAN_CLASS_SOURCE, PROPAGATED_CLASS_SOURCE
+from src.domain.ingest_class_sources import (
+    DETECTOR_CLASS_SOURCE,
+    HUMAN_CLASS_SOURCE,
+    PROPAGATED_CLASS_SOURCE,
+)
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-LabelOpKind = Literal['label', 'move', 'assist_loop_propagate', 'assist_loop_review']
+LabelOpKind = Literal[
+    'label', 'move', 'assist_loop_propagate', 'assist_loop_review', 'adopt_detector'
+]
 
 LABEL_OP_ID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 """A label operation id is the lowercase uuid of its ``label_operations`` row; matched with
@@ -56,6 +62,12 @@ def label_fingerprint(*, op_id: str, writer: str, at: str, class_name: str) -> O
 def propagated_fingerprint(*, op_id: str, writer: str, at: str, class_name: str) -> OpFingerprint:
     """A class the assist loop propagated: a machine label, so never validated."""
     return OpFingerprint(op_id, writer, at, class_name, PROPAGATED_CLASS_SOURCE, False, None)
+
+
+def detector_fingerprint(*, op_id: str, writer: str, at: str) -> OpFingerprint:
+    """The detector's own class adopted for items that had none: a machine label, never
+    validated, and a different class on every item, so no class name is compared."""
+    return OpFingerprint(op_id, writer, at, None, DETECTOR_CLASS_SOURCE, False, None)
 
 
 def move_fingerprint(*, op_id: str, writer: str, at: str, cluster_uid: str) -> OpFingerprint:
@@ -155,6 +167,7 @@ __all__ = [
     'OpFingerprint',
     'UndoOutcome',
     'current_query',
+    'detector_fingerprint',
     'label_fingerprint',
     'move_fingerprint',
     'undo_outcome',

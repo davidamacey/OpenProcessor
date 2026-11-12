@@ -429,6 +429,92 @@
         "title": "ActiveRegionProfileSummary",
         "type": "object"
       },
+      "AdoptDetectorRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "AdoptDetectorRequest",
+        "type": "object"
+      },
+      "AdoptDetectorResponse": {
+        "description": "``POST /label_ops/adopt_detector``: what adoption would do (a dry run) or did.\n\nThe counts are by detector name. A real run adds the registry classes the detector's labels\nneed, then queues the recorded operation (``op_id`` and ``job_id``, both null when no item was\nleft to label).",
+        "properties": {
+          "blocked": {
+            "description": "Detector names of a deprecated class or the region class: skipped.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked",
+            "type": "array"
+          },
+          "blocked_items": {
+            "description": "Items left without a class because of `blocked`.",
+            "title": "Blocked Items",
+            "type": "integer"
+          },
+          "classes_to_create": {
+            "description": "Detector names the registry lacks (a dry run) or that were added (a real run).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Classes To Create",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "items": {
+            "description": "Items that have a detector class but no class of their own.",
+            "title": "Items",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id"
+          },
+          "op_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id"
+          },
+          "remaining": {
+            "description": "Items beyond this operation (one writes at most 20,000): adopt again.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "items",
+          "classes_to_create",
+          "blocked",
+          "blocked_items",
+          "remaining"
+        ],
+        "title": "AdoptDetectorResponse",
+        "type": "object"
+      },
       "ApiErrorResponse": {
         "description": "The body of every error :func:`api_error` raises.",
         "properties": {
@@ -19475,7 +19561,8 @@
               "label",
               "move",
               "assist_loop_propagate",
-              "assist_loop_review"
+              "assist_loop_review",
+              "adopt_detector"
             ],
             "title": "Kind",
             "type": "string"
@@ -59740,6 +59827,72 @@
           }
         },
         "summary": "Get Label Ops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/label_ops/adopt_detector": {
+      "post": {
+        "description": "Give the items the detector named but nobody classed that class, as an undoable operation.\n\nEach item with a detector label and no class gets the registry class of that name as a\nmachine label (`class_source` `detector`, never validated); the registry classes the\ndetector's labels need are added first, so every label the detector produced is in the\nregistry. A person's, an import's or a validated class, a test-holdout item and an excluded\none are never written, and a detector name that matches a deprecated class or the region class\nis skipped and reported. The operation shows in `GET /label_ops` and is undone like a bulk\nlabel. `dry_run` (the default) counts and writes nothing; send `{\"dry_run\": false}` to run it\n(202 with the operation and its job). One operation writes at most 20,000 items: `remaining`\nsays how many are left, adopt again for them.",
+        "operationId": "adopt_detector_curation_projects__project__label_ops_adopt_detector_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdoptDetectorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptDetectorResponse"
+                }
+              }
+            },
+            "description": "A dry run, or nothing to label."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptDetectorResponse"
+                }
+              }
+            },
+            "description": "The operation is queued as a job."
+          },
+          "409": {
+            "description": "project_read_only."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Detector",
         "tags": [
           "Curation"
         ]

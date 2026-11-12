@@ -88,7 +88,38 @@ class CropUndoBatchResponse(BaseModel):
     not_found: list[str]
 
 
+class AdoptDetectorRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    dry_run: bool = True  # writing needs an explicit false
+
+
+class AdoptDetectorResponse(BaseModel):
+    """``POST /label_ops/adopt_detector``: what adoption would do (a dry run) or did.
+
+    The counts are by detector name. A real run adds the registry classes the detector's labels
+    need, then queues the recorded operation (``op_id`` and ``job_id``, both null when no item was
+    left to label)."""
+
+    dry_run: bool
+    items: int = Field(description='Items that have a detector class but no class of their own.')
+    classes_to_create: list[str] = Field(
+        description='Detector names the registry lacks (a dry run) or that were added (a real run).'
+    )
+    blocked: list[str] = Field(
+        description='Detector names of a deprecated class or the region class: skipped.'
+    )
+    blocked_items: int = Field(description='Items left without a class because of `blocked`.')
+    remaining: int = Field(
+        description='Items beyond this operation (one writes at most 20,000): adopt again.'
+    )
+    op_id: str | None = Field(default=None, description='The recorded operation (undo it by id).')
+    job_id: str | None = Field(default=None, description='The queued job; poll GET /jobs/{job_id}.')
+
+
 __all__ = [
+    'AdoptDetectorRequest',
+    'AdoptDetectorResponse',
     'CropUndoBatchResponse',
     'LabelOp',
     'LabelOpList',

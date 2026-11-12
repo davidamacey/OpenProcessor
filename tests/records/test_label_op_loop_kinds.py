@@ -59,5 +59,5 @@ async def test_the_existing_kinds_still_work_and_an_unknown_kind_is_refused(pg_e
         with pytest.raises(ValueError, match='unknown label operation kind'):
             await create_label_operation(session, project, kind='bogus', created_by='a', params={})
     assert set(LABEL_OPERATION_KINDS) == {
-        'label', 'move', 'assist_loop_propagate', 'assist_loop_review',
+        'label', 'move', 'assist_loop_propagate', 'assist_loop_review', 'adopt_detector',
     }  # fmt: skip

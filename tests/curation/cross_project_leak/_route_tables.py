@@ -345,6 +345,7 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
             ('POST', '/vlm/label_batch'),
             ('POST', '/crops/move'),
             ('PUT', '/crops/batch_label'),
+            ('POST', '/label_ops/adopt_detector'),
             ('POST', '/probe/run'),
             ('POST', '/probe/cancel'),
             ('POST', '/clusters/runs'),
