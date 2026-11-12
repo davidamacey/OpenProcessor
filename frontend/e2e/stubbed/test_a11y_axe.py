@@ -22,7 +22,10 @@ from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_gallery_view import serve as serve_gallery
+from test_label_confirmation import _stub_audit
 from test_label_ops import serve as serve_label_ops
+from test_near_duplicates import _serve as serve_near_dups
+from test_next_steps import FRESH, serve_next_steps
 from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
@@ -232,6 +235,24 @@ PAGES = [
     ('review-source-missing', '/p/default/review', serve_review_pane, '[role="status"]'),
     ('classes', '/p/default/classes', serve_classes, 'main'),
     ('settings', '/p/default/settings', serve_settings, 'main'),
+    (
+        'quality-audit',
+        '/p/default/quality/audit',
+        _stub_audit,
+        '[data-testid="audit-start"]',
+    ),
+    (
+        'quality-near-duplicates',
+        '/p/default/quality/near-duplicates',
+        serve_near_dups,
+        '[data-testid="near-dup-status"]',
+    ),
+    (
+        'dashboard-next-steps',
+        '/p/default/dashboard',
+        lambda stub: serve_next_steps(stub, FRESH),
+        '[data-testid="next-steps"]',
+    ),
     (
         'quality-history',
         '/p/default/quality/history',

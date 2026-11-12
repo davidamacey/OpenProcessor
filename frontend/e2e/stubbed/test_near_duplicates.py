@@ -439,3 +439,15 @@ def test_page_fits_a_430px_phone(stub, page, app_url):
     dialog_box = page.get_by_role('dialog').bounding_box()
     assert dialog_box is not None and dialog_box['x'] >= 0
     assert dialog_box['x'] + dialog_box['width'] <= 430 + 0.5
+
+
+def test_a_group_opens_in_the_workspace(stub, page, app_url):
+    _serve(stub)
+    page.goto(f'{app_url}{URL}')
+    page.get_by_test_id('near-dup-group').first.click(timeout=ACTION_TIMEOUT_MS)
+    link = page.get_by_test_id('near-dup-open-workspace')
+    expect(link).to_have_attribute(
+        'href',
+        f'/p/default/workspace?view=gallery&scope=near_dup%3A{GROUP["group_id"]}',
+        timeout=ACTION_TIMEOUT_MS,
+    )
