@@ -51,6 +51,15 @@ describe('TrainForm force', () => {
     expect(target.querySelector('[data-testid="train-force"]')).toBeNull();
   });
 
+  it('starts without force while the preflight is clear', () => {
+    const onStart = vi.fn();
+    render({ preflight: { blocked: false, checks: [] }, onStart });
+    expect(startButton().disabled).toBe(false);
+    startButton().click();
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStart.mock.calls[0][1]).toBe(false);
+  });
+
   it('keeps Start disabled when blocked until the bypass is ticked, then sends force', () => {
     const onStart = vi.fn();
     render({ preflight: BLOCKED, onStart });
