@@ -19,7 +19,6 @@ Today's hits live in ``baselines/process_ids.txt`` (``path<TAB>hits<TAB>reason``
 
 from __future__ import annotations
 
-import argparse
 import ast
 import io
 import re
@@ -162,29 +161,21 @@ def scan(repo_root: Path, files: list[str] | None = None) -> tuple[dict[str, int
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', type=Path, default=BASELINE_PATH)
-    parser.add_argument('--tighten', action='store_true', help='Lower baseline values, drop stale.')
-    parser.add_argument('--root', type=Path, default=REPO_ROOT)
-    args = parser.parse_args(argv)
-
-    found, broken = scan(args.root)
-    baseline = _baseline.load(args.baseline)
-    errors = [f'{rel}: cannot be read, so its comments are unchecked' for rel in broken]
-    errors += _baseline.compare(found, baseline, unit='hit(s)')
-    if args.tighten:
-        changed = _baseline.tighten(args.baseline, found, baseline)
-        sys.stderr.write(f'tightened {changed} baseline line(s)\n')
-        errors = [e for e in errors if 'new violation' in e or 'grew past' in e or 'read' in e]
-    if errors:
-        sys.stderr.write(
-            'ERROR: work-package ids or history names found. Say why in plain words, link a '
-            'public issue (#NNN), and name files by what they test.\n'
+    return int(
+        _baseline.run_scan_ratchet(
+            argv,
+            doc=__doc__,
+            baseline_path=BASELINE_PATH,
+            repo_root=REPO_ROOT,
+            scan=scan,
+            unit='hit(s)',
+            unreadable='cannot be read, so its comments are unchecked',
+            failure=(
+                'work-package ids or history names found. Say why in plain words, link a '
+                'public issue (#NNN), and name files by what they test.'
+            ),
         )
-        for e in errors:
-            sys.stderr.write(f'  {e}\n')
-        return 1
-    return 0
+    )
 
 
 if __name__ == '__main__':

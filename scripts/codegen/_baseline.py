@@ -15,12 +15,15 @@ two cases; it never adds a line and never raises a value.
 
 from __future__ import annotations
 
+import argparse
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True)
@@ -94,3 +97,39 @@ def tighten(path: Path, current: dict[str, int], baseline: dict[str, Entry]) -> 
         lines.append(line)
     path.write_text('\n'.join(lines) + '\n' if lines else '', encoding='utf-8')
     return changed
+
+
+def run_scan_ratchet(
+    argv: list[str] | None,
+    *,
+    doc: str | None,
+    baseline_path: Path,
+    repo_root: Path,
+    scan: Callable[[Path], tuple[dict[str, int], list[str]]],
+    unit: str,
+    unreadable: str,
+    failure: str,
+) -> int:
+    """The shared ``main`` of the scan-and-compare ratchets: ``scan(root)`` returns
+    ``(found, unreadable files)``; ``unreadable`` is the per-file message suffix; those errors
+    stay under ``--tighten``."""
+    parser = argparse.ArgumentParser(description=doc)
+    parser.add_argument('--baseline', type=Path, default=baseline_path)
+    parser.add_argument('--tighten', action='store_true', help='Lower baseline values, drop stale.')
+    parser.add_argument('--root', type=Path, default=repo_root)
+    args = parser.parse_args(argv)
+
+    found, broken = scan(args.root)
+    baseline = load(args.baseline)
+    errors = [f'{rel}: {unreadable}' for rel in broken]
+    errors += compare(found, baseline, unit=unit)
+    if args.tighten:
+        changed = tighten(args.baseline, found, baseline)
+        sys.stderr.write(f'tightened {changed} baseline line(s)\n')
+        errors = [e for e in errors if 'new violation' in e or 'grew past' in e or unreadable in e]
+    if errors:
+        sys.stderr.write(f'ERROR: {failure}\n')
+        for e in errors:
+            sys.stderr.write(f'  {e}\n')
+        return 1
+    return 0

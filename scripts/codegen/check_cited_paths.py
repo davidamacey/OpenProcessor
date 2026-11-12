@@ -15,7 +15,6 @@ and can only shrink (see ``_baseline.py``).
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 import tokenize
@@ -66,29 +65,21 @@ def scan(repo_root: Path) -> tuple[dict[str, int], list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--baseline', type=Path, default=BASELINE_PATH)
-    parser.add_argument('--tighten', action='store_true', help='Lower baseline values, drop stale.')
-    parser.add_argument('--root', type=Path, default=REPO_ROOT)
-    args = parser.parse_args(argv)
-
-    found, broken = scan(args.root)
-    baseline = _baseline.load(args.baseline)
-    errors = [f'{rel}: cannot be read, so its comments are unchecked' for rel in broken]
-    errors += _baseline.compare(found, baseline, unit='missing citation(s)')
-    if args.tighten:
-        changed = _baseline.tighten(args.baseline, found, baseline)
-        sys.stderr.write(f'tightened {changed} baseline line(s)\n')
-        errors = [e for e in errors if 'new violation' in e or 'grew past' in e or 'read' in e]
-    if errors:
-        sys.stderr.write(
-            'ERROR: a comment cites a file that is not in the tree. Cite the file that exists, '
-            'or say what the comment needs to say in words.\n'
+    return int(
+        _baseline.run_scan_ratchet(
+            argv,
+            doc=__doc__,
+            baseline_path=BASELINE_PATH,
+            repo_root=REPO_ROOT,
+            scan=scan,
+            unit='missing citation(s)',
+            unreadable='cannot be read, so its comments are unchecked',
+            failure=(
+                'a comment cites a file that is not in the tree. Cite the file that exists, '
+                'or say what the comment needs to say in words.'
+            ),
         )
-        for e in errors:
-            sys.stderr.write(f'  {e}\n')
-        return 1
-    return 0
+    )
 
 
 if __name__ == '__main__':
