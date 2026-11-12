@@ -23,7 +23,7 @@ afterEach(() => {
 describe('projectHref', () => {
   it('builds on the active project', () => {
     projectsStore.current = testProject({ slug: 'alpha' });
-    expect(projectHref('/review?tab=all')).toBe('/p/alpha/review?tab=all');
+    expect(projectHref('/classes?x=1')).toBe('/p/alpha/classes?x=1');
     expect(projectHref('/workspace?view=clusters')).toBe(
       '/p/alpha/workspace?view=clusters',
     );
@@ -36,7 +36,7 @@ describe('projectHref', () => {
 
   it('fails closed with no active project', () => {
     projectsStore.current = null;
-    expect(() => projectHref('/review')).toThrow(ProjectNotSelectedError);
+    expect(() => projectHref('/classes')).toThrow(ProjectNotSelectedError);
   });
 });
 
@@ -44,18 +44,26 @@ describe('switchProjectHref', () => {
   const url = (s: string) => new URL(s, 'http://x');
 
   it('keeps the section and ordinary query params', () => {
-    expect(switchProjectHref(url('/p/alpha/review?tab=regions'), 'beta')).toBe(
-      '/p/beta/review?tab=regions',
+    expect(switchProjectHref(url('/p/alpha/workspace?view=detections'), 'beta')).toBe(
+      '/p/beta/workspace?view=detections',
     );
   });
 
   it("drops ids that don't carry across projects", () => {
     expect(
-      switchProjectHref(url('/p/alpha/review?tab=all&crop_id=c1&preset=x'), 'beta'),
-    ).toBe('/p/beta/review?tab=all&preset=x');
+      switchProjectHref(url('/p/alpha/workspace?view=review&crop_id=c1&sort=x'), 'beta'),
+    ).toBe('/p/beta/workspace?view=review&sort=x');
     expect(
       switchProjectHref(url('/p/alpha/workspace?view=clusters&class=7'), 'beta'),
     ).toBe('/p/beta/workspace?view=clusters');
+    expect(
+      switchProjectHref(
+        url(
+          '/p/alpha/workspace?view=review&queue=to_label&focus=item:c1&scope=cluster:u1',
+        ),
+        'beta',
+      ),
+    ).toBe('/p/beta/workspace?view=review&queue=to_label');
   });
 
   it('lands on the default section outside a project', () => {
@@ -71,8 +79,8 @@ describe('legacyRedirectTarget', () => {
   });
 
   it('moves a bare section path under the default project, query kept', () => {
-    expect(legacyRedirectTarget('/review', '?tab=regions&crop_id=c1', 'default')).toBe(
-      '/p/default/review?tab=regions&crop_id=c1',
+    expect(legacyRedirectTarget('/classes', '?x=1&crop_id=c1', 'default')).toBe(
+      '/p/default/classes?x=1&crop_id=c1',
     );
     expect(legacyRedirectTarget('/workspace', '?view=clusters', 'default')).toBe(
       '/p/default/workspace?view=clusters',
@@ -89,7 +97,7 @@ describe('sectionOf', () => {
   it('reads the section under /p/<slug>/', () => {
     expect(sectionOf('/p/alpha/workspace')).toBe('workspace');
     expect(sectionOf('/p/alpha')).toBeNull();
-    expect(sectionOf('/review')).toBeNull();
+    expect(sectionOf('/workspace')).toBeNull();
     expect(sectionOf('/p/alpha/unknown')).toBeNull();
   });
 });

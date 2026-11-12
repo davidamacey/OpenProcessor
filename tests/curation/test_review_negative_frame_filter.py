@@ -62,7 +62,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def _ids(client: TestClient, **params: Any) -> set[str]:
-    r = client.get(f'{BASE}/all', params=params)
+    r = client.get(f'{BASE}/check_machine', params=params)
     assert r.status_code == 200, r.text
     return {i['crop_id'] for i in r.json()['items']}
 
@@ -75,10 +75,10 @@ def test_the_filter_selects_in_both_directions(client: TestClient) -> None:
 
 def test_the_locate_route_honours_the_same_filter(client: TestClient) -> None:
     hit = client.get(
-        f'{BASE}/all/locate', params={'crop_id': 'on_negative', 'on_negative_frame': True}
+        f'{BASE}/check_machine/locate', params={'crop_id': 'on_negative', 'on_negative_frame': True}
     )
     miss = client.get(
-        f'{BASE}/all/locate', params={'crop_id': 'elsewhere', 'on_negative_frame': True}
+        f'{BASE}/check_machine/locate', params={'crop_id': 'elsewhere', 'on_negative_frame': True}
     )
 
     assert hit.json()['in_queue'] is True

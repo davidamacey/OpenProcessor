@@ -115,6 +115,28 @@ describe('WorkspaceController', () => {
     expect(c.itemBody().review_tab).toBe('to_label');
   });
 
+  it('another queue starts in its own order: the Review sort is dropped, a Detections sort stays', () => {
+    visit(
+      '?view=review&queue=to_label&sort_review=atypicality&sort_detections=class_name%3Aasc',
+    );
+    const c = make();
+    c.setQueue('check_machine');
+    const params = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(params.get('queue')).toBe('check_machine');
+    expect(params.has('sort_review')).toBe(false);
+    expect(params.get('sort_detections')).toBe('class_name:asc');
+  });
+
+  it('two URL writes in one tick both land (the second starts from the first)', () => {
+    visit('?view=review&queue=to_label');
+    const c = make();
+    c.patchUrl((p) => p.set('q', 'red widget'));
+    c.setReviewFocus('crop-7');
+    const params = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(params.get('q')).toBe('red widget');
+    expect(params.get('focus')).toBe('item:crop-7');
+  });
+
   it('cluster scope adds the cluster to the filter', () => {
     const id = '0c6f5a0e-1111-4222-8333-444455556666';
     const c = make();
@@ -204,5 +226,40 @@ describe('WorkspaceController', () => {
     expect(href).not.toContain('mode=');
     expect(href).not.toContain('open_vocab_set');
     expect(href).not.toContain('source_prompt');
+  });
+
+  it('open review keeps the focus and returns to it', () => {
+    visit('?view=detections&class_name=widget&focus=item%3Aa3');
+    const c = make();
+
+    c.openReview('a3');
+    const opened = lastGoto();
+    expect(opened.href).toContain('view=review');
+    expect(opened.href).toContain('focus=item%3Aa3');
+    expect(opened.href).toContain('class_name=widget');
+    expect(opened.opts).toMatchObject({ replace: false, reset: false });
+
+    // Review walks on to the next unhandled item and records it as the focus.
+    visit(opened.href.slice(opened.href.indexOf('?')));
+    flushSync();
+    c.setReviewFocus('a4');
+    expect(lastGoto().opts).toMatchObject({ replace: true });
+    expect(c.view).toBe('review');
+
+    // `Esc` before that URL write has landed still returns to the card Review stopped on.
+    c.closeReview();
+    const back = lastGoto();
+    expect(back.href).toContain('view=detections');
+    expect(back.href).toContain('focus=item%3Aa4');
+    expect(back.href).toContain('class_name=widget');
+  });
+
+  it('closing a Review that was deep-linked returns to the Detections grid', () => {
+    visit('?view=review&queue=to_label&focus=item%3Ab1');
+    const c = make();
+    c.closeReview();
+    expect(lastGoto().href).toContain('view=detections');
+    expect(lastGoto().href).toContain('queue=to_label');
+    expect(lastGoto().href).toContain('focus=item%3Ab1');
   });
 });

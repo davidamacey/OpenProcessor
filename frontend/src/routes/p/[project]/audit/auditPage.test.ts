@@ -1,10 +1,9 @@
 /**
  * /audit mounted against stubbed served data (#119): the report tables, the
- * confusion matrix, the queue, and the empty and failed states.
+ * confusion matrix, the link to the queue, and the empty and failed states.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { makeItem } from '$lib/test/makeItem';
 import AuditPage from './+page.svelte';
 
 let target: HTMLDivElement;
@@ -58,26 +57,12 @@ const REPORT = {
   outcomes: { agree: 44, detector_wrong: 5, vlm_wrong: 2, both_wrong: 1 },
 };
 
-function stub(over: { report?: () => Response; queue?: () => Response } = {}) {
+function stub(over: { report?: () => Response } = {}) {
   vi.stubGlobal(
     'fetch',
     vi.fn().mockImplementation((url: string) => {
       if (url.includes('/audit/report'))
         return Promise.resolve((over.report ?? (() => json(REPORT)))());
-      if (url.includes('/audit/queue')) {
-        return Promise.resolve(
-          (
-            over.queue ??
-            (() =>
-              json({
-                items: [makeItem({ crop_id: 'q1', detector_class_name: 'widget_b' })],
-                total: 31,
-                page: 1,
-                page_size: 30,
-              }))
-          )(),
-        );
-      }
       return Promise.resolve(json({}));
     }),
   );
@@ -110,7 +95,7 @@ afterEach(() => {
 });
 
 describe('/audit', () => {
-  it('shows the served counts, both precision tables, the matrix and the queue', async () => {
+  it('shows the served counts, both precision tables, the matrix and the link to the queue', async () => {
     stub();
     await mountPage();
     expect(q('[data-testid="audit-audited"]')?.textContent).toBe('52');
@@ -130,7 +115,9 @@ describe('/audit', () => {
         '[data-testid="confusion-cell"]',
       ),
     ).toHaveLength(4);
-    expect(q('[data-testid="audit-queue-total"]')?.textContent).toContain('31');
+    expect(q('[data-testid="audit-open-queue"]')?.getAttribute('href')).toContain(
+      '/workspace?view=review&queue=audit',
+    );
   });
 
   it('marks the class with too few audited crops as an insufficient sample', async () => {

@@ -29,7 +29,6 @@ const NOT_ON_BAR = [
   'detector_class_name',
   'detector_conf_max',
   'detector_conf_min',
-  'import_id',
   'item_text',
   'label_source',
   'label_validated',

@@ -218,9 +218,9 @@ describe('sort axis blurb (m10, 2026-09-24 interactive pass)', () => {
     expect(sortSpec.blurb).not.toMatch(/REPLACES/i);
   });
 
-  it('states the actual precedence: only tabs with no tuned default of their own use it', () => {
+  it('states the actual precedence: only a queue with no tuned default of its own uses it', () => {
     const sortSpec = axisSpec('sort')!;
-    expect(sortSpec.blurb).toMatch(/no tuned default of their own/i);
+    expect(sortSpec.blurb).toMatch(/no tuned default of its own/i);
   });
 });
 

@@ -315,11 +315,6 @@
           aria-current={navCurrent('workspace')}>Workspace</a
         >
         <a
-          href={resolve(projectHref('/review'))}
-          class={navLinkClass('review')}
-          aria-current={navCurrent('review')}>Review</a
-        >
-        <a
           href={resolve(projectHref('/audit'))}
           class={navLinkClass('audit')}
           aria-current={navCurrent('audit')}>Audit</a
@@ -398,7 +393,7 @@
     {/if}
 
     <!-- Keyed on the project too: SvelteKit reuses a page instance across
-       a `/p/a/review` -> `/p/b/review` param change, so without the slug
+       a `/p/a/workspace` -> `/p/b/workspace` param change, so without the slug
        in the key the previous project's page-local state (queue, cursor,
        selection) would survive a switch. -->
     {#key `${active.slug}:${regionProfileStore.seedVersion}`}

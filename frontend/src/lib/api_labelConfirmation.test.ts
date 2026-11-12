@@ -5,13 +5,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX, setScopedPrefix } from '$lib/api';
 import {
-  getAuditQueue,
   getAuditReport,
   getVlmPolicy,
   putVlmPolicy,
   startAudit,
 } from '$lib/api_labelConfirmation';
-import { makeItem } from '$lib/test/makeItem';
 
 const PROJECT = `${API_PREFIX}/projects/alpha`;
 
@@ -86,21 +84,5 @@ describe('audit', () => {
     last = capture({});
     await getAuditReport(25);
     expect(last().url).toBe(`${PROJECT}/audit/report?min_per_class=25`);
-  });
-
-  it('reads the queue page and maps each item like any crop', async () => {
-    setScopedPrefix(PROJECT);
-    const last = capture({
-      items: [makeItem({ crop_id: 'q1', detector_class_name: 'widget_h' })],
-      total: 41,
-      next_cursor: 'c2',
-      limit: 30,
-    });
-    const page = await getAuditQueue('c1', 30, 'batch-9');
-    expect(last().url).toBe(`${PROJECT}/audit/queue?cursor=c1&limit=30&batch_id=batch-9`);
-    expect(page.total).toBe(41);
-    expect(page.next_cursor).toBe('c2');
-    expect(page.items[0]?.id).toBe('q1');
-    expect(page.items[0]?.detector_class_name).toBe('widget_h');
   });
 });

@@ -3,13 +3,17 @@
    * Detections: every item the filter, queue and scope match, as a flat grid
    * of crops. The list, its total and what it hides are the server's.
    */
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
+  import { locateCrop } from '$lib/api_cropRead';
   import CropResultGrid from '$components/CropResultGrid.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
   import ViewState from '$components/state/ViewState.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
-  import { createMatchingItems } from '$lib/itemFilter/matchingItems.svelte';
+  import {
+    createMatchingItems,
+    MATCHING_PAGE_SIZE,
+  } from '$lib/itemFilter/matchingItems.svelte';
   import { createSelection } from '$lib/selection.svelte';
   import { NO_SELECTION } from '$lib/workspace/selection';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -36,10 +40,39 @@
     };
   });
 
+  // Coming back from Review lands on the card Review stopped on: one locate request finds it, and
+  // the grid loads from there when it sits deeper than the first page.
+  let focusRestored = false;
+  async function load(): Promise<void> {
+    const focus = ws.url.focus?.kind === 'item' ? ws.url.focus.id : null;
+    const restore = focus !== null && !focusRestored;
+    focusRestored = true;
+    if (restore) {
+      try {
+        const at = await locateCrop(focus, ws.itemQuery());
+        if (at.in_view && at.index !== null && at.index >= MATCHING_PAGE_SIZE) {
+          await pager.loadAt(at.cursor_before, at.index);
+        } else {
+          await pager.loadFirst();
+        }
+      } catch {
+        await pager.loadFirst();
+      }
+      await tick();
+      const card = document.querySelector<HTMLElement>(
+        `[data-crop-id="${CSS.escape(focus)}"]`,
+      );
+      card?.scrollIntoView({ block: 'center' });
+      card?.focus();
+      return;
+    }
+    await pager.loadFirst();
+  }
+
   const queryKey = $derived(JSON.stringify(ws.itemQuery()));
   $effect(() => {
     void queryKey;
-    untrack(() => void pager.loadFirst());
+    untrack(() => void load());
   });
 
   const status = $derived(

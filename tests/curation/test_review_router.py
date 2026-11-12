@@ -1,9 +1,7 @@
 """Tests for ``GET /curation/review/{tab}`` Phase 3 additions: the
 ``sort``/``min_mistakenness``/``hide_near_duplicates``
 query params, the additive ``sort_applied``/``sort_fallback_reason``
-response fields, and the golden-body regression guard for all 9 tabs with
-``?sort`` absent (see ``test_review_disagreements.py`` for the
-model_disagreements-specific tab tests this file doesn't duplicate).
+response fields, and the default sort clause of every queue with ``?sort`` absent.
 """
 
 from __future__ import annotations
@@ -21,63 +19,32 @@ from src.services.curation.review_request import TIEBREAK
 pytestmark = pytest.mark.usefixtures('reference_region_profile')
 
 
-ALL_TABS = (
-    'all',
-    'mismatches',
-    'vlm_low_conf',
-    'outliers',
-    'uncertainty',
-    'model_disagreements',
-    'regions',
-    'primary_low_conf',
-    'classifier_blind_spots',
-)
+ALL_TABS = ('to_label', 'check_machine', 'disagreements', 'audit', 'regions')
 
-LEGACY_SORT_CLAUSE = {
-    'all': [{'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}],
-    'mismatches': [{'updated_at': {'order': 'desc'}}],
-    'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
-    'outliers': [
-        {'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
+_DESC = {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}
+DEFAULT_SORT_CLAUSE = {
+    'to_label': [{'detector_confidence': {**_DESC, 'unmapped_type': 'float'}}],
+    'check_machine': [
+        {'confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'float'}}
     ],
-    'uncertainty': [
-        {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
-    ],
-    'model_disagreements': [
+    'disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
+    'audit': [],
     'regions': [
         # Sorts on the flat `region_max_score` (every
         # box writer maintains it), not the unwritten legacy
         # `region_score`/`region_candidate_score` scalars.
-        {'region_max_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-    ],
-    'primary_low_conf': [
-        {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {
-            'confidence': {
-                'order': 'asc',
-                'missing': '_last',
-                'unmapped_type': 'double',
-            }
-        },
-    ],
-    'classifier_blind_spots': [
-        {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
+        {'region_max_score': _DESC},
     ],
 }
 
 EXPECTED_DEFAULT_SORT_ID = {
-    'all': 'atypicality',
-    'mismatches': 'recent',
-    'vlm_low_conf': 'recent',
-    'outliers': 'atypicality',
-    'uncertainty': 'uncertainty_entropy',
-    'model_disagreements': 'disagreement_entropy_asc',
+    'to_label': 'detector_confidence:desc',
+    'check_machine': 'confidence:asc',
+    'disagreements': 'disagreement_entropy_asc',
+    'audit': 'crop_id:asc',
     'regions': 'region_score',
-    'primary_low_conf': 'primary_low_conf_default',
-    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
 
 
@@ -108,16 +75,14 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 @pytest.mark.parametrize('tab', ALL_TABS)
-def test_sort_absent_is_byte_identical_to_legacy_clause(tab: str, app_client: TestClient) -> None:
-    """The golden-body regression guard at the router level: every tab's
-    OpenSearch request body carries the exact legacy sort clause when
-    ?sort is omitted, and the response's pre-existing keys are unaffected
-    by the Phase 3 envelope additions."""
+def test_sort_absent_serves_the_queue_default_clause(tab: str, app_client: TestClient) -> None:
+    """Every queue's OpenSearch request body carries its default sort clause when ?sort is
+    omitted, and the response envelope keeps its keys."""
     r = app_client.get(f'/curation/projects/default/review/{tab}')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    # The legacy clause, then the crop_id tiebreak every queue ends in.
-    assert body['sort'] == [*LEGACY_SORT_CLAUSE[tab], TIEBREAK]
+    # The default clause, then the crop_id tiebreak every queue ends in.
+    assert body['sort'] == [*DEFAULT_SORT_CLAUSE[tab], TIEBREAK]
 
     out = r.json()
     # Pre-existing envelope keys, unchanged in shape/value.
@@ -135,15 +100,15 @@ def test_sort_default_literal_matches_absent(tab: str, app_client: TestClient) -
     r = app_client.get(f'/curation/projects/default/review/{tab}?sort=default')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    # The legacy clause, then the crop_id tiebreak every queue ends in.
-    assert body['sort'] == [*LEGACY_SORT_CLAUSE[tab], TIEBREAK]
+    # The default clause, then the crop_id tiebreak every queue ends in.
+    assert body['sort'] == [*DEFAULT_SORT_CLAUSE[tab], TIEBREAK]
     assert r.json()['sort_applied'] == EXPECTED_DEFAULT_SORT_ID[tab]
 
 
 def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> None:
-    """mismatches' legacy default is 'recent'; explicitly asking for
+    """check_machine's default is 'confidence:asc'; explicitly asking for
     'atypicality' should apply cluster_score asc instead."""
-    r = app_client.get('/curation/projects/default/review/mismatches?sort=atypicality')
+    r = app_client.get('/curation/projects/default/review/check_machine?sort=atypicality')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
@@ -154,19 +119,19 @@ def test_explicit_stable_sort_overrides_tab_default(app_client: TestClient) -> N
 
 
 def test_unknown_sort_returns_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all?sort=not-a-real-sort')
+    r = app_client.get('/curation/projects/default/review/to_label?sort=not-a-real-sort')
     assert r.status_code == 400
     assert 'unknown review sort' in r.json()['detail']
 
 
 def test_shadow_sort_returns_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all?sort=uniqueness')
+    r = app_client.get('/curation/projects/default/review/to_label?sort=uniqueness')
     assert r.status_code == 400
     assert 'not selectable' in r.json()['detail']
 
 
 def test_disabled_sort_returns_400_when_scores_disabled(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all?sort=mistakenness')
+    r = app_client.get('/curation/projects/default/review/to_label?sort=mistakenness')
     assert r.status_code == 400
     assert 'not selectable' in r.json()['detail']
 
@@ -176,7 +141,7 @@ def test_mistakenness_sort_selectable_when_promoted(
 ) -> None:
     monkeypatch.setenv('OP_SCORES_ENABLED', '1')
     monkeypatch.setenv('OP_SCORES_SHADOW', '1')
-    r = app_client.get('/curation/projects/default/review/all?sort=mistakenness')
+    r = app_client.get('/curation/projects/default/review/to_label?sort=mistakenness')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     assert body['sort'] == [
@@ -187,7 +152,7 @@ def test_mistakenness_sort_selectable_when_promoted(
 
 
 def test_min_mistakenness_filter_is_null_safe(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all?min_mistakenness=0.5')
+    r = app_client.get('/curation/projects/default/review/to_label?min_mistakenness=0.5')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -203,7 +168,7 @@ def test_min_mistakenness_filter_is_null_safe(app_client: TestClient) -> None:
 
 
 def test_min_mistakenness_absent_does_not_add_filter(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all')
+    r = app_client.get('/curation/projects/default/review/to_label')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -211,7 +176,7 @@ def test_min_mistakenness_absent_does_not_add_filter(app_client: TestClient) -> 
 
 
 def test_hide_near_duplicates_filter_is_null_safe(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all?hide_near_duplicates=true')
+    r = app_client.get('/curation/projects/default/review/to_label?hide_near_duplicates=true')
     assert r.status_code == 200, r.text
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -227,7 +192,7 @@ def test_hide_near_duplicates_filter_is_null_safe(app_client: TestClient) -> Non
 
 
 def test_hide_near_duplicates_false_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/all')
+    r = app_client.get('/curation/projects/default/review/to_label')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must = body['query']['bool']['must']
@@ -272,7 +237,7 @@ def test_response_item_whitelist_includes_new_score_fields(
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake_os
     client = TestClient(app)
 
-    r = client.get('/curation/projects/default/review/all')
+    r = client.get('/curation/projects/default/review/to_label')
     assert r.status_code == 200, r.text
     item = r.json()['items'][0]
     assert item['mistakenness_score'] == 0.87
@@ -285,7 +250,7 @@ def test_response_item_whitelist_includes_new_score_fields(
 def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) -> None:
     """Hard constraint: test_holdout=true filtering must be unaffected by
     any Phase 3 addition."""
-    r = app_client.get('/curation/projects/default/review/all?sort=recent')
+    r = app_client.get('/curation/projects/default/review/to_label?sort=recent')
     assert r.status_code == 200
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool']['must_not']

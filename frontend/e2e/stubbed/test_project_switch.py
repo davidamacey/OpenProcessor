@@ -1,7 +1,7 @@
 """Two projects: switching in the top bar moves every request to the
 other project's served prefix and resets the undo stack.
 
-Flow: on `/p/default/review`, Enter labels an item (one undo entry on
+Flow: on `/p/default/workspace?view=review`, Enter labels an item (one undo entry on
 `default`), then the switcher opens `beta`. From that click on, no request
 touches `default`'s prefix — the review queue, the class registry and the
 health read all come from `beta` — and Z finds nothing to undo instead of
@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 from fixtures.wire import make_item, project, projects_response
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import expect_handled, wait_for_paint
 
 
@@ -102,7 +102,7 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     # when it answers, which on a loaded runner can trail the send. Wait for
     # that answer here so it is not counted as a post-switch request below.
     with expect_handled(page, lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/events'):
-        page.goto(f'{app_url}/p/default/review')
+        page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('project-switcher-current').inner_text() == 'Default'
 
@@ -129,12 +129,12 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     page.get_by_test_id('project-switcher-trigger').click()
     page.get_by_test_id('project-switcher-menu').wait_for(timeout=ACTION_TIMEOUT_MS)
     with (
-        page.expect_request(lambda r: _path(r.url) == f'{BETA_PREFIX}/review/all'),
+        page.expect_request(lambda r: _path(r.url) == f'{BETA_PREFIX}/review/to_label'),
         page.expect_request(lambda r: _path(r.url) == f'{BETA_PREFIX}/classes'),
         page.expect_request(lambda r: _path(r.url) == f'{BETA_PREFIX}/health'),
     ):
         page.get_by_test_id('project-option-beta').click()
-    page.wait_for_url(re.compile(r'/p/beta/review$'), timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_url(re.compile(r'/p/beta/workspace\?.*view=review'), timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('project-switcher-current').inner_text() == 'Beta project'
 
@@ -153,7 +153,7 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
 
     # Browser back is a switch too: the previous project's page comes back
     # on its own prefix.
-    with page.expect_request(lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/review/all'):
+    with page.expect_request(lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/review/to_label'):
         page.go_back()
-    page.wait_for_url(re.compile(r'/p/default/review$'), timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_url(re.compile(r'/p/default/workspace\?.*view=review'), timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('project-switcher-current').inner_text() == 'Default'

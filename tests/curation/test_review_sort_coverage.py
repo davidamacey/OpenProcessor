@@ -1,9 +1,9 @@
 """Review sorts whose backing field no item carries.
 
-A tab's default (or the deployment-pinned) sort on a field with 0%
+A queue's default (or the deployment-pinned) sort on a field with 0%
 coverage orders nothing: every item is "missing" and the queue falls back
 to crop_id order silently. The review queue must instead fall back to the
-tab's next sensible sort and say so (``sort_fallback_reason``), and
+queue's next sensible sort and say so (``sort_fallback_reason``), and
 ``PUT /settings`` must refuse to pin such a sort as the deployment default.
 """
 
@@ -24,8 +24,7 @@ from src.services.curation.review_sorts import REVIEW_SORTS
 
 
 def test_classifier_blind_spots_default_label_has_no_stale_coco_name() -> None:
-    """R4: the tab is 'Classifier blind spots' now; its default sort's
-    served label must not still say 'COCO'."""
+    """The sort is 'Largest classifier blind spot'; its served label must not still say 'COCO'."""
     label = REVIEW_SORTS['classifier_blind_spots_default'].label
     assert 'coco' not in label.lower()
     assert 'classifier' in label.lower()
@@ -71,12 +70,14 @@ class _CoverageOpenSearch:
 async def test_zero_coverage_tab_default_falls_back_with_reason() -> None:
     from src.services.curation import review_sorts
 
-    os_ = _CoverageOpenSearch({'cluster_score': 5})
-    clause, applied, reason = await review_sorts.build_sort(None, tab='uncertainty', opensearch=os_)
-    assert applied == 'atypicality'
-    assert clause == review_sorts.get_review_sorts()['atypicality'].clause
+    os_ = _CoverageOpenSearch({'vlm_confidence': 5})
+    clause, applied, reason = await review_sorts.build_sort(
+        None, tab='disagreements', opensearch=os_
+    )
+    assert applied == 'detector_disagreement_default'
+    assert clause == review_sorts.get_review_sorts()['detector_disagreement_default'].clause
     assert reason is not None
-    assert 'Uncertainty (probe entropy)' in reason
+    assert 'Model disagreement (most confident first)' in reason
 
 
 @pytest.mark.asyncio
@@ -84,7 +85,7 @@ async def test_fallback_chain_ends_at_recent() -> None:
     from src.services.curation import review_sorts
 
     os_ = _CoverageOpenSearch({})
-    for tab in ('all', 'outliers', 'uncertainty', 'model_disagreements', 'regions'):
+    for tab in ('to_label', 'check_machine', 'disagreements', 'regions'):
         _clause, applied, reason = await review_sorts.build_sort(None, tab=tab, opensearch=os_)
         assert applied == 'recent', tab
         assert reason, tab
@@ -96,9 +97,9 @@ async def test_covered_default_is_kept() -> None:
 
     os_ = _CoverageOpenSearch({'probe_pred_entropy': 1})
     _clause, applied, reason = await review_sorts.build_sort(
-        None, tab='uncertainty', opensearch=os_
+        None, tab='disagreements', opensearch=os_
     )
-    assert applied == 'uncertainty_entropy'
+    assert applied == 'disagreement_entropy_asc'
     assert reason is None
 
 
@@ -112,9 +113,9 @@ async def test_unknown_coverage_never_triggers_a_fallback() -> None:
             raise OpenSearchException('down')
 
     _clause, applied, reason = await review_sorts.build_sort(
-        None, tab='uncertainty', opensearch=_Broken()
+        None, tab='disagreements', opensearch=_Broken()
     )
-    assert applied == 'uncertainty_entropy'
+    assert applied == 'disagreement_entropy_asc'
     assert reason is None
 
 
@@ -139,7 +140,7 @@ async def test_explicit_sort_is_honored_even_at_zero_coverage() -> None:
     from src.services.curation import review_sorts
 
     _clause, applied, reason = await review_sorts.build_sort(
-        'uncertainty_entropy', tab='all', opensearch=_CoverageOpenSearch({})
+        'uncertainty_entropy', tab='to_label', opensearch=_CoverageOpenSearch({})
     )
     assert applied == 'uncertainty_entropy'
     assert reason is None
@@ -162,20 +163,20 @@ def review_client(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_review_route_reports_the_fallback(review_client: TestClient) -> None:
-    r = review_client.get('/curation/projects/default/review/uncertainty')
+    r = review_client.get('/curation/projects/default/review/disagreements')
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body['sort_applied'] == 'atypicality'
+    assert body['sort_applied'] == 'recent'
     assert body['sort_fallback_reason'] == (
-        "Sorted by Atypicality (outlier-first). 'Uncertainty (probe entropy)' needs a probe run."
+        "Sorted by Recently updated. 'Model disagreement (most confident first)' needs a probe run."
     )
 
     r = review_client.get(
-        '/curation/projects/default/review/uncertainty/locate', params={'crop_id': 'a'}
+        '/curation/projects/default/review/disagreements/locate', params={'crop_id': 'a'}
     )
     assert r.status_code == 200, r.text
-    assert r.json()['sort_applied'] == 'atypicality'
-    assert r.json()['sort_fallback_reason'].startswith('Sorted by Atypicality')
+    assert r.json()['sort_applied'] == 'recent'
+    assert r.json()['sort_fallback_reason'].startswith('Sorted by Recently updated')
 
 
 class _SettingsWithCoverage:

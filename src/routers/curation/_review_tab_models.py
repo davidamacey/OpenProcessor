@@ -25,7 +25,7 @@ class ReviewFilterOption(BaseModel):
 
 
 class ReviewFilterSpec(BaseModel):
-    param: str = Field(description='Query parameter on GET /review/{tab} and its locate route.')
+    param: str = Field(description='Query parameter on GET /review/{queue} and its locate route.')
     kind: ReviewFilterKind
     label: str
     options: list[ReviewFilterOption] = Field(
@@ -50,6 +50,8 @@ class ReviewFilterSpec(BaseModel):
 
 
 class ReviewTab(BaseModel):
+    """One queue. A queue that cannot fill is not listed; its reason is a next step."""
+
     id: str
     label: str
     description: str
@@ -60,13 +62,7 @@ class ReviewTab(BaseModel):
     filter_specs: list[ReviewFilterSpec] = Field(
         description='Self-describing spec for each honoured filter with a fixed value set.'
     )
-    available: bool = Field(description='False when the project cannot fill this tab yet.')
-    unavailable_reason: str | None = Field(
-        description='What to do to make the tab fill; null when available.'
-    )
-    count: int = Field(
-        description='Items the tab matches with its default filters; 0 when unavailable.'
-    )
+    count: int = Field(description='Items the queue matches under the filter the request carried.')
 
 
 class ReviewEmptyState(BaseModel):

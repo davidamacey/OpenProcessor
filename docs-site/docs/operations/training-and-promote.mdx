@@ -254,8 +254,9 @@ detector contract, so don't point `OP_INGEST_PRIMARY_DETECTOR_MODEL` or
 
 `POST /curation/projects/{project}/probe/run` runs the active-learning probe over the item
 pool and stores its prediction, confidence and entropy per item. The
-`model_disagreements` review queue then shows items where the model and
-the human label disagree, and `uncertainty` sorts by entropy. A
+`disagreements` review queue then includes items where the model and
+the human label disagree (`review_tab=model_disagreements` lists just those),
+and `uncertainty` sorts by entropy. A
 disagreement is offered as a one-click fix only when the probe's
 confidence is at least `OP_PROBE_ACTIONABLE_MIN_CONFIDENCE` (default
 `0.5`). Those corrections feed the next export.

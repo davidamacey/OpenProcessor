@@ -1591,45 +1591,6 @@
         "title": "AuditGateClass",
         "type": "object"
       },
-      "AuditQueueResponse": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ItemDoc"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "next_cursor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Pass as `cursor` for the next page; null on the last page.",
-            "title": "Next Cursor"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "total",
-          "next_cursor",
-          "limit",
-          "items"
-        ],
-        "title": "AuditQueueResponse",
-        "type": "object"
-      },
       "AuditReport": {
         "properties": {
           "audited": {
@@ -7588,7 +7549,8 @@
               "detector_error",
               "audit_no_candidates",
               "audit_required",
-              "audit_precision_low"
+              "audit_precision_low",
+              "not_a_queue"
             ],
             "title": "Error",
             "type": "string"
@@ -34015,7 +33977,7 @@
             "type": "array"
           },
           "param": {
-            "description": "Query parameter on GET /review/{tab} and its locate route.",
+            "description": "Query parameter on GET /review/{queue} and its locate route.",
             "title": "Param",
             "type": "string"
           }
@@ -35394,6 +35356,14 @@
             "description": "Set when the default sort's field has no coverage and sort_applied is its fallback.",
             "title": "Sort Fallback Reason"
           },
+          "sort_options": {
+            "description": "The sorts this queue can be read in, as `{id, label}`; any id is a valid `sort`. A sort whose field no item carries is not listed.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -35405,6 +35375,7 @@
           "limit",
           "items",
           "sort_applied",
+          "sort_options",
           "sort_fallback_reason",
           "empty_reason",
           "hidden"
@@ -35413,14 +35384,10 @@
         "type": "object"
       },
       "ReviewTab": {
+        "description": "One queue. A queue that cannot fill is not listed; its reason is a next step.",
         "properties": {
-          "available": {
-            "description": "False when the project cannot fill this tab yet.",
-            "title": "Available",
-            "type": "boolean"
-          },
           "count": {
-            "description": "Items the tab matches with its default filters; 0 when unavailable.",
+            "description": "Items the queue matches under the filter the request carried.",
             "title": "Count",
             "type": "integer"
           },
@@ -35457,18 +35424,6 @@
           "label": {
             "title": "Label",
             "type": "string"
-          },
-          "unavailable_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "What to do to make the tab fill; null when available.",
-            "title": "Unavailable Reason"
           }
         },
         "required": [
@@ -35478,8 +35433,6 @@
           "filters",
           "filter_defaults",
           "filter_specs",
-          "available",
-          "unavailable_reason",
           "count"
         ],
         "title": "ReviewTab",
@@ -42943,7 +42896,8 @@
               "near_dups",
               "export",
               "train",
-              "review_disagreements"
+              "review_disagreements",
+              "audit"
             ],
             "title": "Id",
             "type": "string"
@@ -42966,7 +42920,7 @@
             "title": "Query"
           },
           "section": {
-            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, `export` or `train`.",
+            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, `export`, `train` or `audit`.",
             "title": "Section",
             "type": "string"
           }
@@ -45601,97 +45555,6 @@
         ]
       }
     },
-    "/curation/projects/{project}/audit/queue": {
-      "get": {
-        "description": "Drawn crops still waiting for a human label, in a stable order.",
-        "operationId": "audit_queue_curation_projects__project__audit_queue_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "project",
-            "required": true,
-            "schema": {
-              "title": "Project",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Only this batch.",
-            "in": "query",
-            "name": "batch_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Only this batch.",
-              "title": "Batch Id"
-            }
-          },
-          {
-            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
-              "title": "Cursor"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuditQueueResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Audit Queue",
-        "tags": [
-          "Curation"
-        ]
-      }
-    },
     "/curation/projects/{project}/audit/report": {
       "get": {
         "description": "Per-class precision of the detector and the VLM with Wilson 95% intervals, the\nconfusion matrix and the outcome counts. A class with fewer than ``min_per_class``\naudited crops is flagged ``insufficient_sample``.",
@@ -47815,7 +47678,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -47828,7 +47691,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -47912,6 +47775,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -48866,7 +48747,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -48879,7 +48760,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -48963,6 +48844,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -49185,24 +49084,6 @@
                 }
               ],
               "title": "Label Validated"
-            }
-          },
-          {
-            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-            "in": "query",
-            "name": "import_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-              "title": "Import Id"
             }
           },
           {
@@ -50175,7 +50056,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -50188,7 +50069,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -50272,6 +50153,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -50494,24 +50393,6 @@
                 }
               ],
               "title": "Label Validated"
-            }
-          },
-          {
-            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-            "in": "query",
-            "name": "import_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-              "title": "Import Id"
             }
           },
           {
@@ -53148,7 +53029,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -53161,7 +53042,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -53245,6 +53126,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -54784,7 +54683,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -54797,7 +54696,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -54881,6 +54780,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -55456,7 +55373,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -55469,7 +55386,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -55553,6 +55470,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -59303,7 +59238,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -59316,7 +59251,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -59400,6 +59335,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -62565,7 +62518,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -62578,7 +62531,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -62662,6 +62615,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -65344,7 +65315,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -65357,7 +65328,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -65441,6 +65412,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -66608,7 +66597,7 @@
     },
     "/curation/projects/{project}/review/tabs": {
       "get": {
-        "description": "Every review tab's ``id``/``label``/``description`` plus\n``filters`` (the query parameters it honours)\n``filter_defaults`` (values it applies when one is omitted) and\n``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a\nfilter works everywhere. Must be registered before ``GET /review/{tab}``\nso it isn't shadowed as ``tab='tabs'``.\n\nAlso carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\ntab's zero-result state (the same reasons ``GET /review/{tab}``'s own\n``empty_reason`` uses) without a per-tab round trip.",
+        "description": "The review queues in order: ``id``, ``label``, ``description``, the ``filters`` each honours,\ntheir ``filter_defaults`` and self-describing ``filter_specs``, and ``count``, the items the\nqueue holds under the filter the request carries (the same filter ``GET /review/{queue}``\ntakes). A queue that cannot fill is not listed: the audit queue exists only while a drawn\nsample is pending, the region queue only while a region profile is active, and\n``GET /next_steps`` says what to do. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.\n\nAlso carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\nqueue's zero-result state (the same reasons ``GET /review/{queue}``'s own\n``empty_reason`` uses) without a per-queue round trip.",
         "operationId": "review_tabs_curation_projects__project__review_tabs_get",
         "parameters": [
           {
@@ -66618,6 +66607,650 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Regions tab only: case-insensitive substring search on any box text.",
+            "in": "query",
+            "name": "text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only: case-insensitive substring search on any box text.",
+              "title": "Text"
+            }
+          },
+          {
+            "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "exact",
+                    "fuzzy",
+                    "fragment"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+              "title": "Region Text Match"
+            }
+          },
+          {
+            "description": "Clarity floor (null-safe).",
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Clarity floor (null-safe).",
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "description": "Mistakenness floor (null-safe).",
+            "in": "query",
+            "name": "min_mistakenness",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Mistakenness floor (null-safe).",
+              "title": "Min Mistakenness"
+            }
+          },
+          {
+            "description": "Hide non-representative near-duplicates.",
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Hide non-representative near-duplicates.",
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only items with this ingest source tag.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items with this ingest source tag.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
+            "in": "query",
+            "name": "region_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "all",
+              "description": "Regions tab only (ignored elsewhere). One of 'all' (default: accepted-but-unvalidated boxes plus a verifier-rejected candidate that still has a box), 'detected', 'verify_rejected'. See GET /review/tabs filter_specs (param region_status).",
+              "title": "Region Status"
+            }
+          },
+          {
+            "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+            "in": "query",
+            "name": "combine_conflict",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Only items a project combine flagged: sources disagreed on the box and the first-listed source's label was kept (combine_conflict).",
+              "title": "Combine Conflict",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
+            "in": "query",
+            "name": "on_negative_frame",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
+              "title": "On Negative Frame"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import",
+                      "drawn"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+            "in": "query",
+            "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+              "title": "Cluster Uid"
+            }
+          },
+          {
+            "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_polygon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Polygon"
+            }
+          },
+          {
+            "description": "true = items on images with a served position; false = without one.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items on images with a served position; false = without one.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "Items in this near-duplicate group (or on images in it).",
+            "in": "query",
+            "name": "near_dup_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items in this near-duplicate group (or on images in it).",
+              "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+            "in": "query",
+            "name": "image_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
             }
           }
         ],
@@ -66708,26 +67341,26 @@
     },
     "/curation/projects/{project}/review/{tab}": {
       "get": {
-        "description": "Human review queue for the labeler ``/review`` page.\n\nEach tab maps to a deterministic OpenSearch query against the\nconfigured items index plus a ``reason`` string the labeler renders to\nexplain why the crop landed in this queue. Items already validated by\na human are excluded from every tab — except ``model_disagreements``,\nwhere validated crops are exactly the input set, and ``regions``,\nwhich reviews the region annotation independently of the item's\nclass validation. Order: the applied sort (``sort_applied``), then\n``crop_id``.",
+        "description": "One review queue: a deterministic OpenSearch query against the items index plus a ``reason``\nstring that explains why the crop landed in it. Items a human already validated are excluded\nfrom every queue, except the model-disagreement source of ``disagreements`` (validated crops\nare exactly its input) and ``regions``, which reviews the region annotation independently of\nthe item's class validation. Order: the applied sort (``sort_applied``), then ``crop_id``. A\ntab id that is not a queue answers 404 ``not_a_queue``.",
         "operationId": "review_queue_curation_projects__project__review__tab__get",
         "parameters": [
-          {
-            "description": "One of: all | mismatches | vlm_low_conf | detector_disagreements | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals | imported",
-            "in": "path",
-            "name": "tab",
-            "required": true,
-            "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | detector_disagreements | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals | imported",
-              "title": "Tab",
-              "type": "string"
-            }
-          },
           {
             "in": "path",
             "name": "project",
             "required": true,
             "schema": {
               "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One of: to_label | check_machine | disagreements | new_class_proposals | audit | regions",
+            "in": "path",
+            "name": "tab",
+            "required": true,
+            "schema": {
+              "description": "One of: to_label | check_machine | disagreements | new_class_proposals | audit | regions",
+              "title": "Tab",
               "type": "string"
             }
           },
@@ -66930,42 +67563,6 @@
             }
           },
           {
-            "description": "Imported tab only: items labeled by this dataset import.",
-            "in": "query",
-            "name": "import_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Imported tab only: items labeled by this dataset import.",
-              "title": "Import Id"
-            }
-          },
-          {
-            "description": "Imported tab only: the split the import filed the frame under (GET /review/tabs filter_specs, param dataset_split).",
-            "in": "query",
-            "name": "dataset_split",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Imported tab only: the split the import filed the frame under (GET /review/tabs filter_specs, param dataset_split).",
-              "title": "Dataset Split"
-            }
-          },
-          {
             "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
             "in": "query",
             "name": "on_negative_frame",
@@ -67186,7 +67783,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -67199,7 +67796,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -67283,6 +67880,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -67453,6 +68068,16 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -67476,22 +68101,22 @@
         "operationId": "review_locate_curation_projects__project__review__tab__locate_get",
         "parameters": [
           {
-            "description": "One of: all | mismatches | vlm_low_conf | detector_disagreements | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals | imported",
-            "in": "path",
-            "name": "tab",
-            "required": true,
-            "schema": {
-              "description": "One of: all | mismatches | vlm_low_conf | detector_disagreements | outliers | uncertainty | model_disagreements | regions | primary_low_conf | classifier_blind_spots | new_class_proposals | imported",
-              "title": "Tab",
-              "type": "string"
-            }
-          },
-          {
             "in": "path",
             "name": "project",
             "required": true,
             "schema": {
               "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "One of: to_label | check_machine | disagreements | new_class_proposals | audit | regions",
+            "in": "path",
+            "name": "tab",
+            "required": true,
+            "schema": {
+              "description": "One of: to_label | check_machine | disagreements | new_class_proposals | audit | regions",
+              "title": "Tab",
               "type": "string"
             }
           },
@@ -67675,42 +68300,6 @@
             }
           },
           {
-            "description": "Imported tab only: items labeled by this dataset import.",
-            "in": "query",
-            "name": "import_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Imported tab only: items labeled by this dataset import.",
-              "title": "Import Id"
-            }
-          },
-          {
-            "description": "Imported tab only: the split the import filed the frame under (GET /review/tabs filter_specs, param dataset_split).",
-            "in": "query",
-            "name": "dataset_split",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Imported tab only: the split the import filed the frame under (GET /review/tabs filter_specs, param dataset_split).",
-              "title": "Dataset Split"
-            }
-          },
-          {
             "description": "true = only items on an imported reviewed-negative frame; false = hide them (GET /review/tabs filter_specs, param on_negative_frame).",
             "in": "query",
             "name": "on_negative_frame",
@@ -67931,7 +68520,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -67944,7 +68533,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -68028,6 +68617,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -68197,6 +68804,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "content": {
@@ -68818,7 +69435,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -68831,7 +69448,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -68915,6 +69532,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -69593,7 +70228,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -69606,7 +70241,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -69690,6 +70325,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -70310,7 +70963,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -70323,7 +70976,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -70407,6 +71060,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -71201,7 +71872,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -71214,7 +71885,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -71298,6 +71969,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -71702,7 +72391,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -71715,7 +72404,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -71799,6 +72488,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {
@@ -72267,7 +72974,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -72280,7 +72987,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -72364,6 +73071,24 @@
               ],
               "description": "pending, validated, dismissed or excluded; repeatable.",
               "title": "Review Status"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
             }
           },
           {

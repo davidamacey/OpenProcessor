@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import cluster_card, cluster_list
 from fixtures.wire import make_item, review_tab, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 CLASSES = [
@@ -69,7 +69,7 @@ def test_review_class_and_origin_reach_the_queue_by_name_and_persist_in_the_url(
         'GET',
         r'/review/tabs(\?|$)',
         review_tabs(
-            review_tab('all', 'All', filters=['class_name', 'origin', 'source']),
+            review_tab('to_label', 'To label', filters=['class_name', 'origin', 'source']),
         ),
     )
     review_requests: list = []
@@ -81,17 +81,17 @@ def test_review_class_and_origin_reach_the_queue_by_name_and_persist_in_the_url(
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _common(stub)
 
-    page.goto(f'{app_url}/p/default/review?tab=all')
+    page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     with page.expect_request(
-        lambda r: '/review/all' in r.url and 'class_name=gadget' in r.url,
+        lambda r: '/review/to_label' in r.url and 'class_name=gadget' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.get_by_test_id('served-filter-class_name').locator('select').select_option('gadget')
     page.get_by_test_id('item-filter-more').locator('summary').click()
     with page.expect_request(
-        lambda r: '/review/all' in r.url and 'origin=sam3' in r.url,
+        lambda r: '/review/to_label' in r.url and 'origin=sam3' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ) as sent:
         page.get_by_test_id('served-filter-origin').get_by_role('button', name='Sam3').click()
@@ -114,8 +114,8 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
         r'/review/tabs(\?|$)',
         review_tabs(
             review_tab(
-                'all',
-                'All',
+                'to_label',
+                'To label',
                 filters=['class_name', 'min_things'],
                 filter_specs=[
                     {
@@ -153,7 +153,7 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _common(stub)
 
-    page.goto(f'{app_url}/p/default/review?tab=all')
+    page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     field = page.get_by_test_id('served-filter-min_things')
     field.wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -162,13 +162,13 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
     assert number.get_attribute('max') == '9'
     assert field.get_attribute('title') == 'Served help'
     with page.expect_request(
-        lambda r: '/review/all' in r.url and 'min_things=3' in r.url,
+        lambda r: '/review/to_label' in r.url and 'min_things=3' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
         number.fill('3')
         number.blur()
     with page.expect_request(
-        lambda r: '/review/all' in r.url and 'flagged=true' in r.url,
+        lambda r: '/review/to_label' in r.url and 'flagged=true' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.get_by_test_id('served-filter-flagged').locator('select').select_option('true')

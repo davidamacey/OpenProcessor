@@ -67,7 +67,7 @@ def test_the_shared_filter_applies_to_every_list_route(api_client: Any) -> None:
     assert all(c['class_name'] == name for c in crops.json()['crops'] if c.get('class_name'))
     for path in ('/stats/classes', '/stats/dataset', '/clusters', '/detections/summary'):
         assert api_client.get(path, params=params).status_code == 200, path
-    assert api_client.get('/review/all', params=params).status_code == 200
+    assert api_client.get('/review/to_label', params=params).status_code == 200
     bad = api_client.get('/crops', params={'conf_min': 0.9, 'conf_max': 0.1})
     assert bad.status_code == 400
 

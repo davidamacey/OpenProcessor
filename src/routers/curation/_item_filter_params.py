@@ -106,8 +106,10 @@ def item_filter_query(
         str | None,
         Query(
             description=(
-                'Only items this review tab would show (a `GET /review/tabs` id such as '
-                '`outliers` or `detector_disagreements`; `regions` is not accepted).'
+                'Only items this review queue or filter preset would show: a queue id from '
+                '`GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, '
+                '`new_class_proposals`, `audit`) or an older preset such as `outliers` or '
+                '`detector_disagreements`; `regions` is not accepted.'
             )
         ),
     ] = None,
@@ -126,6 +128,10 @@ def item_filter_query(
     review_status: Annotated[
         list[ReviewStatus] | None,
         Query(description='pending, validated, dismissed or excluded; repeatable.'),
+    ] = None,
+    import_id: Annotated[
+        str | None,
+        Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
     ] = None,
     taken_from: TakenDate = None,
     taken_to: TakenDate = None,
@@ -185,6 +191,7 @@ def item_filter_query(
         origin=origin or [],
         embedding_state=embedding_state or [],
         review_status=review_status or [],
+        import_id=import_id,
         taken_from=taken_from,
         taken_to=taken_to,
         image_ids=image_id or [],

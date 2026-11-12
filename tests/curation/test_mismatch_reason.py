@@ -67,7 +67,7 @@ def test_mismatch_reasons_per_item(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), reg, monkeypatch)
     items = client.get(
-        '/curation/projects/default/review/mismatches', params={'page_size': 50}
+        '/curation/projects/default/review/disagreements', params={'limit': 50}
     ).json()['items']
     reasons = {i['crop_id']: i['reason'] for i in items}
     assert 'did not match' not in reasons['named']

@@ -4,43 +4,11 @@
  */
 import type { BulkLabelConflict, Crop, WriteFailure } from '$lib/types';
 
-// 'outliers' was retired from the UI in the 2026-09 tab consolidation
-// (3 live rows, functionally identical to the `atypicality` sort already
-// offered via the strategy bar) — its backend {API_PREFIX}/review/outliers query
-// is untouched, but nothing in the frontend calls it anymore, so the
-// literal is gone from this union too. 'mismatches' / 'vlm_low_conf' /
-// 'primary_low_conf' are no longer top-level UI tabs but still real
-// values here — they're driven by the All-tab preset chips instead (see
-// $lib/reviewTabs.ts's resolveEffectiveTab).
-// A queue-capable slot's tab id is the structural `slot:${SlotKey}`
-// template (SlotReviewTab), not a hand-maintained literal per slot. The
-// slot's own `urlId` is the bookmark value (see `$lib/reviewTabs.ts`'s
-// `tabFromUrlId`), not an internal id.
+// A queue-capable slot's tab id is the structural `slot:${SlotKey}` template (SlotReviewTab), not a
+// hand-maintained literal per slot. Every other tab id is a served queue id (`GET /review/tabs`).
 export type SlotReviewTab = `slot:${string}`;
 
-export type CoreReviewTab =
-  | 'all'
-  | 'mismatches'
-  | 'vlm_low_conf'
-  | 'uncertainty'
-  | 'model_disagreements'
-  | 'primary_low_conf'
-  | 'classifier_blind_spots'
-  // New-class-proposal queue: crops the VLM
-  // couldn't match to any registered class (`class_source:
-  // 'vlm_new_class_pending'`). Backed by the same `{API_PREFIX}/review/{tab}`
-  // shape as every other core tab; `/classes`'s Proposals section reads
-  // the separate `.../summary` aggregate instead (see api.ts).
-  | 'new_class_proposals'
-  // Labels written by a dataset import (`GET {prefix}/review/imported`);
-  // only offered when `GET /review/tabs` serves an `imported` entry.
-  | 'imported'
-  // Machine labels whose class differs from the detector's own answer
-  // (label confirmation, #119); only offered when `GET /review/tabs`
-  // serves a `detector_disagreements` entry.
-  | 'detector_disagreements';
-
-export type ReviewTab = CoreReviewTab | SlotReviewTab;
+export type ReviewTab = string;
 
 export interface ReviewItem extends Crop {
   /** m2 (2026-09-24 interactive pass): null after an undo re-insert when

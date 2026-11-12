@@ -25,7 +25,7 @@ from src.services.curation.class_sources import (
     class_confidence,
     class_source_catalog,
 )
-from src.services.curation.review_tabs import TAB_LABELS
+from src.services.curation.review_tabs import QUEUE_LABELS
 from src.services.curation.wire import serialize_item
 
 
@@ -76,12 +76,16 @@ def _docs() -> dict[str, dict[str, Any]]:
     }
 
 
-def test_vlm_low_conf_selects_on_the_vlm_confidence_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vlm_low_conf_filter_selects_on_the_vlm_confidence_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     docs = {k: {'crop_id': k, **v} for k, v in _docs().items()}
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
-    r = client.get('/curation/projects/default/review/vlm_low_conf', params={'page_size': 50})
+    r = client.get(
+        '/curation/projects/default/crops', params={'review_tab': 'vlm_low_conf', 'limit': 50}
+    )
     assert r.status_code == 200, r.text
-    assert {i['crop_id'] for i in r.json()['items']} == {
+    assert {i['crop_id'] for i in r.json()['crops']} == {
         'vlm_low_detector_high',
         'vlm_medium',
         'vlm_new_pending_low',
@@ -122,8 +126,8 @@ def test_unknown_vlm_category_is_null_not_a_guess() -> None:
     assert class_confidence({'class_source': 'vlm', 'vlm_confidence': 'certain'}) == (None, None)
 
 
-def test_tab_description_names_the_vlm_confidence() -> None:
-    assert 'VLM' in TAB_LABELS['vlm_low_conf'][1]
+def test_queue_description_names_the_vlm() -> None:
+    assert 'VLM' in QUEUE_LABELS['disagreements'][1]
 
 
 def test_classifier_source_recognition_matches_the_profile_names(

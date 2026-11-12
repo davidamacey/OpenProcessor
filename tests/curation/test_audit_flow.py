@@ -24,6 +24,7 @@ from src.services.curation.holdout import build_cohort_query
 
 ITEMS = base_curation_config().items_index
 BASE = '/curation/projects/default/audit'
+REVIEW = '/curation/projects/default/review'
 
 
 def _doc(crop_id: str, detector: str | None, label: str | None, **kw: Any) -> dict[str, Any]:
@@ -166,12 +167,12 @@ def test_start_skips_a_crop_that_became_human_validated_after_the_scan(
     assert fake.docs(ITEMS)['bus0']['class_source'] == 'human'
 
 
-def test_queue_lists_the_sampled_crops_still_waiting_for_a_human(
+def test_the_audit_queue_lists_the_sampled_crops_still_waiting_for_a_human(
     client: TestClient, fake: QueryFakeOpenSearch
 ) -> None:
-    batch = _start(client).json()['batch_id']
+    _start(client)
     ids = sorted(_sampled(fake))
-    waiting = client.get(f'{BASE}/queue', params={'limit': 100}).json()
+    waiting = client.get(f'{REVIEW}/audit', params={'limit': 100}).json()
     assert {i['crop_id'] for i in waiting['items']} == set(ids)
     assert waiting['total'] == 5
     fake.docs(ITEMS)[ids[0]].update(
@@ -180,9 +181,14 @@ def test_queue_lists_the_sampled_crops_still_waiting_for_a_human(
             ItemLabel.human(class_id=1, class_name='car', label_source='human', writer='test'),
         )
     )
-    after = client.get(f'{BASE}/queue', params={'batch_id': batch}).json()
+    after = client.get(f'{REVIEW}/audit', params={'limit': 100}).json()
     assert ids[0] not in {i['crop_id'] for i in after['items']}
     assert after['total'] == 4
+
+
+def test_the_audit_queue_route_is_gone(client: TestClient) -> None:
+    # The sample is read from the `audit` review queue; GET /audit/queue was removed.
+    assert client.get(f'{BASE}/queue').status_code == 404
 
 
 def _label(fake: QueryFakeOpenSearch, crop_id: str, name: str) -> None:

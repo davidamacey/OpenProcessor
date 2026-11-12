@@ -169,7 +169,7 @@ def test_locate_reports_not_in_queue_and_not_found(monkeypatch: pytest.MonkeyPat
 def test_queue_sort_ends_in_crop_id_tiebreak(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
     fake.search = AsyncMock(return_value={'hits': {'total': {'value': 0}, 'hits': []}})
-    _client(fake, monkeypatch).get('/curation/projects/default/review/all')
+    _client(fake, monkeypatch).get('/curation/projects/default/review/to_label')
     assert fake.search.call_args.kwargs['body']['sort'][-1] == {'crop_id': {'order': 'asc'}}
 
 
@@ -211,7 +211,7 @@ def test_review_filters_class_source_and_confidence(monkeypatch: pytest.MonkeyPa
     }
     client = _client(QueryFakeOpenSearch({ITEMS: docs}), monkeypatch)
     r = client.get(
-        '/curation/projects/default/review/mismatches',
+        '/curation/projects/default/review/check_machine',
         params={
             'class_id': 1,
             'class_name': 'car',

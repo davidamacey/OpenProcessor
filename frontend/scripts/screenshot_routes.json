@@ -15,12 +15,12 @@
     "wait_for": "main"
   },
   {
-    "route": "/review?tab=all",
+    "route": "/workspace?view=review&queue=to_label",
     "name": "review",
     "wait_for": "main"
   },
   {
-    "route": "/review?tab=regions",
+    "route": "/workspace?view=review&queue=regions",
     "name": "review-regions",
     "wait_for": "main"
   },

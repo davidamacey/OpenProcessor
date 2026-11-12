@@ -84,10 +84,10 @@ def test_a_no_vector_reason_filters_on_the_primary_state_field(
     assert '"embedding_state"' not in query
 
 
-def test_the_review_all_tab_asks_for_the_primary_vector(
+def test_the_all_review_tab_asks_for_the_primary_vector(
     client: TestClient, fake_os: _RecordingOS
 ) -> None:
-    r = client.get(f'{P}/review/all')
+    r = client.get(f'{P}/crops', params={'review_tab': 'all'})
     assert r.status_code == 200, r.text
     query = _last_query(fake_os)
     assert VECTOR in query

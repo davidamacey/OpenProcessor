@@ -13,8 +13,9 @@ from __future__ import annotations
 import re
 
 from fixtures.contract import item_cluster
-from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from fixtures.wire import REGION_CLASS, REGION_PROFILE, make_item, review_tab, review_tabs
+from harness.constants import ACTION_TIMEOUT_MS, review_url
+from playwright.sync_api import expect
 from test_labeling_flow import CLASSES as ITEM_CLASSES, register_base
 
 
@@ -24,8 +25,7 @@ ROUTES = [
     '/p/default/workspace?view=clusters',
     f'/p/default/workspace?view=clusters&class_name={REGION_CLASS}',
     '/p/default/workspace?view=clusters&scope=cluster:1',
-    '/p/default/review',
-    '/p/default/review?tab=regions',
+    '/p/default/workspace?view=detections',
     '/p/default/classes',
     '/p/default/export',
     '/p/default/models',
@@ -34,13 +34,8 @@ ROUTES = [
     '/p/default/settings',
 ]
 
-CORE_TABS = [
-    'All',
-    'Uncertainty',
-    'Model Disagreements',
-    'Classifier Blind Spots',
-    'New Class Proposals',
-]
+# The queues the stack serves without a region profile.
+CORE_QUEUES = ['to_label', 'check_machine', 'disagreements']
 
 # Any request to one of these is a region route (409 without a profile).
 REGION_ROUTE = re.compile(r'/curation/(regions(/|$)|crops/[^/]+/region|ingest/region_drain)')
@@ -57,15 +52,14 @@ REGION_CLASS_ROW = {
     'deprecated': False,
 }
 
-_TAB_COUNT = re.compile(r'\s+[\d,]+$')
 
-
-def tab_labels(page) -> list[str]:
-    page.get_by_role('button', name=re.compile(r'^All(\s+[\d,]+)?$')).wait_for(
-        timeout=ACTION_TIMEOUT_MS
+def rail_queues(page) -> list[str]:
+    rail = page.get_by_test_id('workspace-rail')
+    rail.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.locator('[data-testid^="queue-"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    return rail.locator('[data-testid^="queue-"]').evaluate_all(
+        'els => els.map(e => e.getAttribute("data-testid").slice("queue-".length))'
     )
-    texts = page.get_by_test_id('review-tabs').locator('button').all_inner_texts()
-    return [_TAB_COUNT.sub('', t.strip()) for t in texts]
 
 
 def register_no_profile(stub) -> None:
@@ -73,7 +67,7 @@ def register_no_profile(stub) -> None:
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': [*ITEM_CLASSES, REGION_CLASS_ROW]})
     stub.on('GET', r'/health$', {'status': 'ok', 'region_profile': None})
     # The backend omits the region tab without a profile.
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs())
+    stub.on('GET', r'/review/tabs(\?|$)', review_tabs(*(review_tab(q, q) for q in CORE_QUEUES)))
     stub.on('GET', r'/settings(\?|$)', {'settings': {}, 'defaults': {}})
     stub.on('GET', r'/scores/coverage(\?|$)', {'coverage': {}})
     stub.on('GET', r'/scores/status(\?|$)', {'status': 'idle'})
@@ -122,13 +116,9 @@ def test_every_route_mounts_without_region_calls(stub, page, app_url):
 def test_region_surfaces_absent(stub, page, app_url):
     register_no_profile(stub)
 
-    # /review: exactly the core tabs; a ?tab=regions bookmark opens All.
-    page.goto(f'{app_url}/p/default/review?tab=regions')
-    assert tab_labels(page) == CORE_TABS
-    # ...and says why, instead of switching to All silently.
-    notice = page.get_by_test_id('tab-unavailable')
-    notice.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert 'no region profile' in notice.inner_text()
+    # The rail lists exactly the core queues.
+    page.goto(review_url(app_url, 'to_label'))
+    assert rail_queues(page) == CORE_QUEUES
 
     # /dashboard: no region detections panel.
     page.goto(f'{app_url}/p/default/dashboard')
@@ -162,15 +152,21 @@ def test_region_surfaces_absent(stub, page, app_url):
     assert not [c for c in stub.console_errors if c.startswith('pageerror')]
 
 
-def test_served_display_name_labels_the_region_tab(stub, page, app_url):
+def test_served_display_name_labels_the_region_queue(stub, page, app_url):
     register_base(stub)
-    # No served label for the region tab: the label must come from the
-    # profile's display_name alone.
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs())
+    # The region queue's label is served: the profile's display name.
+    stub.on(
+        'GET',
+        r'/review/tabs(\?|$)',
+        review_tabs(
+            *(review_tab(q, q) for q in CORE_QUEUES),
+            review_tab('regions', REGION_PROFILE['display_name']),
+        ),
+    )
     stub.on('GET', r'/regions/statuses(\?|$)', {'statuses': []})
-    page.goto(f'{app_url}/p/default/review')
-    labels = tab_labels(page)
-    assert labels == [*CORE_TABS, REGION_PROFILE['display_name']], labels
+    page.goto(review_url(app_url, 'to_label'))
+    assert rail_queues(page) == [*CORE_QUEUES, 'regions']
+    expect(page.get_by_test_id('queue-regions')).to_contain_text(REGION_PROFILE['display_name'])
     # With a profile, the root layout loads the region vocabularies.
     paths = [p for (_m, p) in stub.handled]
     assert any(p.endswith('/regions/vocabulary') for p in paths), paths

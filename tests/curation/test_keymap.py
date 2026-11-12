@@ -48,7 +48,8 @@ def test_registry_covers_every_action_id_cropwright_references() -> None:
 def test_active_set_transitive_closure() -> None:
     registry = load_registry()
     active = registry.active_set('review.queue')
-    assert active == {'review.queue', 'review', 'global'}
+    # Review is a Workspace view: the Workspace keys are live in it.
+    assert active == {'review.queue', 'review', 'workspace', 'global'}
     assert 'box_edit' not in active
 
 

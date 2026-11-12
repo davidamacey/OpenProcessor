@@ -8,6 +8,7 @@ import GalleryView from './views/GalleryView.svelte';
 import DetectionsView from './views/DetectionsView.svelte';
 import TableView from './views/TableView.svelte';
 import MapView from './views/MapView.svelte';
+import ReviewView from './views/ReviewView.svelte';
 import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
 import { page } from '$app/state';
 import type { WorkspaceController } from './workspaceController.svelte';
@@ -19,7 +20,7 @@ export interface ViewEntry {
   label: string;
   component: Component<{ ws: WorkspaceController }>;
   /** The keymap context the view's keys are registered under. */
-  keyContext: 'cluster' | 'table' | 'map';
+  keyContext: 'cluster' | 'table' | 'map' | 'review';
   /** Absent means always available; the Map view needs a project that serves a map. */
   available?: (ws: WorkspaceController) => boolean;
 }
@@ -34,6 +35,7 @@ export const VIEWS: readonly ViewEntry[] = [
     keyContext: 'cluster',
   },
   { id: 'table', label: 'Table', component: TableView, keyContext: 'table' },
+  { id: 'review', label: 'Review', component: ReviewView, keyContext: 'review' },
   {
     id: 'map',
     label: 'Map',

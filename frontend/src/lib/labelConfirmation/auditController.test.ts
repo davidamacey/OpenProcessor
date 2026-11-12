@@ -12,7 +12,6 @@ const REPORT: AuditReport = {
   confusion: {},
   outcomes: { agree: 9, detector_wrong: 3 },
 };
-const QUEUE = { items: [], total: 40, next_cursor: 'c2', limit: 30 };
 const STARTED: AuditStartResponse = {
   batch_id: 'b1',
   min_per_class: 30,
@@ -26,7 +25,6 @@ const STARTED: AuditStartResponse = {
 function make(over: Partial<AuditDeps> = {}) {
   const deps: AuditDeps = {
     report: vi.fn().mockResolvedValue(REPORT),
-    queue: vi.fn().mockResolvedValue(QUEUE),
     start: vi.fn().mockResolvedValue(STARTED),
     ...over,
   };
@@ -34,13 +32,11 @@ function make(over: Partial<AuditDeps> = {}) {
 }
 
 describe('AuditController', () => {
-  it('loads the served report and the first queue page', async () => {
-    const { audit, deps } = make();
+  it('loads the served report', async () => {
+    const { audit } = make();
     await audit.load();
     expect(audit.report).toEqual(REPORT);
-    expect(audit.queue?.total).toBe(40);
     expect(audit.loading).toBe(false);
-    expect(deps.queue).toHaveBeenCalledWith(null, 30, null, undefined);
   });
 
   it('shows the served error when a read fails', async () => {
@@ -78,25 +74,5 @@ describe('AuditController', () => {
     expect(audit.started).toBeNull();
     expect(audit.report).toEqual(REPORT);
     expect(audit.starting).toBe(false);
-  });
-
-  it('pages the queue forward and back by the served cursors', async () => {
-    const queue = vi
-      .fn()
-      .mockResolvedValueOnce(QUEUE)
-      .mockResolvedValueOnce({ ...QUEUE, next_cursor: null })
-      .mockResolvedValueOnce(QUEUE);
-    const { audit } = make({ queue });
-    await audit.load();
-    expect(audit.hasPrevious).toBe(false);
-    await audit.next();
-    expect(queue).toHaveBeenLastCalledWith('c2', 30, null);
-    expect(audit.hasPrevious).toBe(true);
-    expect(audit.queue?.next_cursor).toBeNull();
-    await audit.next();
-    expect(queue).toHaveBeenCalledTimes(2);
-    await audit.previous();
-    expect(queue).toHaveBeenLastCalledWith(null, 30, null);
-    expect(audit.hasPrevious).toBe(false);
   });
 });

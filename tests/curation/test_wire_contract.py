@@ -150,7 +150,7 @@ def _endpoint_items(client: TestClient) -> dict[str, dict[str, Any]]:
     r = client.get(f'{prefix}/crops/crop-1')
     assert r.status_code == 200, r.text
     out['crop'] = r.json()
-    r = client.get(f'{prefix}/review/all')
+    r = client.get(f'{prefix}/review/to_label')
     assert r.status_code == 200, r.text
     out['review'] = r.json()['items'][0]
     r = client.get(f'{prefix}/regions')
@@ -265,7 +265,7 @@ def _review_item(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[str,
     mount_curation_routers(app, curation_router)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     with TestClient(app) as client:
-        r = client.get(f'{_common.config.api_prefix}/projects/default/review/all')
+        r = client.get(f'{_common.config.api_prefix}/projects/default/review/to_label')
     assert r.status_code == 200, r.text
     return r.json()['items'][0]
 

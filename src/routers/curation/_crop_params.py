@@ -31,7 +31,6 @@ class CropBrowse:
     label_source: str | None = None
     class_source: str | None = None
     label_validated: bool | None = None
-    import_id: str | None = None
     dataset_split: str | None = None
     on_negative_frame: bool | None = None
     proposed_by_import: bool | None = None
@@ -65,10 +64,6 @@ def crop_browse(
     label_source: str | None = None,
     class_source: str | None = None,
     label_validated: bool | None = None,
-    import_id: Annotated[
-        str | None,
-        Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
-    ] = None,
     dataset_split: Annotated[
         str | None,
         UnsetIfEmpty,
@@ -158,7 +153,6 @@ def crop_browse(
         label_source=label_source,
         class_source=class_source,
         label_validated=label_validated,
-        import_id=import_id,
         dataset_split=dataset_split,
         on_negative_frame=on_negative_frame,
         proposed_by_import=proposed_by_import,
@@ -208,7 +202,6 @@ async def resolve_listing(opensearch: Any, item_filter: ItemFilter, p: CropBrows
                 'label_source': p.label_source,
                 'class_source': p.class_source,
                 'label_validated': p.label_validated,
-                'import_id': p.import_id,
                 'dataset_split': p.dataset_split,
                 'on_negative_frame': p.on_negative_frame,
                 'proposed_by_import': p.proposed_by_import,

@@ -1,16 +1,11 @@
 /**
  * The audit components (#119) mounted against served report data: the
- * insufficient-sample state, the confusion matrix, the start form and the
- * queue list.
+ * insufficient-sample state, the confusion matrix and the start form.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { AuditController } from '$lib/labelConfirmation/auditController.svelte';
-import { classSourcesStore } from '$stores/classSources.svelte';
-import { makeItem } from '$lib/test/makeItem';
-import { mapRawCrop } from '$lib/api_cropMap';
 import AuditClassTable from './AuditClassTable.svelte';
-import AuditQueueList from './AuditQueueList.svelte';
 import AuditStartForm from './AuditStartForm.svelte';
 import ConfusionMatrix from './ConfusionMatrix.svelte';
 
@@ -142,9 +137,6 @@ describe('AuditStartForm', () => {
         confusion: {},
         outcomes: {},
       }),
-      queue: vi
-        .fn()
-        .mockResolvedValue({ items: [], total: 0, next_cursor: null, limit: 30 }),
       start,
     });
 
@@ -201,87 +193,5 @@ describe('AuditStartForm', () => {
         el.querySelector('[data-testid="audit-start-error"]')?.textContent,
       ).toContain('no crop is eligible');
     });
-  });
-});
-
-describe('AuditQueueList', () => {
-  const noPaging = { hasPrevious: false, onprevious: () => {}, onnext: () => {} };
-  const queue = (n: number, total = n) => ({
-    items: Array.from({ length: n }, (_, i) =>
-      mapRawCrop(
-        makeItem({
-          crop_id: `q${i}`,
-          class_name: 'widget_a',
-          class_source: 'vlm',
-          detector_class_name: 'widget_b',
-          detector_confidence: 0.61,
-          audit_sample: false,
-        }),
-      ),
-    ),
-    total,
-    next_cursor: null as string | null,
-    limit: 30,
-  });
-
-  it('lists each drawn crop with its class, the detector class and a Review link', () => {
-    classSourcesStore.list = [
-      { id: 'vlm', label: 'VLM', role: 'vlm', short_label: 'VLM' },
-    ] as never;
-    const el = render(AuditQueueList, { queue: queue(2), ...noPaging });
-    const rows = [...el.querySelectorAll('[data-testid="audit-queue-item"]')];
-    expect(rows).toHaveLength(2);
-    expect(rows[0]!.textContent).toContain('widget_a');
-    expect(
-      rows[0]!.querySelector('[data-testid="audit-queue-detector"]')?.textContent,
-    ).toContain('widget_b');
-    const href = rows[0]!
-      .querySelector('[data-testid="audit-queue-open"]')!
-      .getAttribute('href')!;
-    expect(href).toContain('/review?tab=all&crop_id=q0');
-  });
-
-  it('shows the machine label the crop carried when it was drawn', () => {
-    const q = queue(1);
-    q.items[0] = {
-      ...q.items[0]!,
-      audit_sample: true,
-      audit_label_name: 'widget_c',
-      audit_label_source: 'vlm',
-      audit_outcome: null,
-    };
-    const el = render(AuditQueueList, { queue: q, ...noPaging });
-    const badge = el.querySelector('[data-testid="audit-queue-drawn"]');
-    expect(badge?.textContent).toContain('widget_c');
-  });
-
-  it('shows no audit badge on a crop that was never drawn', () => {
-    const el = render(AuditQueueList, { queue: queue(1), ...noPaging });
-    expect(el.querySelector('[data-testid="audit-queue-drawn"]')).toBeNull();
-  });
-
-  it('offers Next only while the server has a next cursor, and Previous only after Next', () => {
-    const onnext = vi.fn();
-    const more = { ...queue(30, 65), next_cursor: 'c2' };
-    const el = render(AuditQueueList, { queue: more, ...noPaging, onnext });
-    const button = (label: string) =>
-      [...el.querySelectorAll('button')].find((b) => b.textContent === label)!;
-    expect(button('Previous').disabled).toBe(true);
-    button('Next').click();
-    expect(onnext).toHaveBeenCalledTimes(1);
-    const last = render(AuditQueueList, {
-      queue: queue(30, 65),
-      ...noPaging,
-      hasPrevious: true,
-    });
-    const lastButton = (label: string) =>
-      [...last.querySelectorAll('button')].find((b) => b.textContent === label)!;
-    expect(lastButton('Next').disabled).toBe(true);
-    expect(lastButton('Previous').disabled).toBe(false);
-  });
-
-  it('says nothing is waiting when the queue is empty', () => {
-    const el = render(AuditQueueList, { queue: queue(0), ...noPaging });
-    expect(el.textContent).toContain('Nothing is waiting');
   });
 });

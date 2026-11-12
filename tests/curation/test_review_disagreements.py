@@ -1,14 +1,14 @@
-"""Tests for the model_disagreements review tab (Phase 5).
+"""Tests for the model-disagreement source of the ``disagreements`` review queue (Phase 5).
 
 We mount the curation router on a minimal FastAPI app and stub OpenSearch
 with an AsyncMock. The tests verify:
 
-* GET /curation/review/model_disagreements builds the right OpenSearch body
-  (label_validated=true, probe_pred_class exists, painless script for
-  inequality, override of must_not).
+* GET /curation/review/disagreements builds the right OpenSearch body: the model source
+  keeps validated items (class_validated=true, probe_pred_class exists, painless script for
+  inequality) while the other two sources keep the unvalidated rule.
 * Probe fields surface in the response items (probe_pred_class,
   probe_pred_entropy).
-* Unknown tab returns 400 mentioning the new option.
+* A tab id that is not a queue answers 404 not_a_queue.
 """
 
 from __future__ import annotations
@@ -74,46 +74,40 @@ def app_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return client
 
 
-def test_disagreements_query_includes_class_validated_and_probe_exists(
-    app_client: TestClient,
-) -> None:
-    """model_disagreements filters on class_validated=True (the class-side
-    flag) rather than the legacy conflated label_validated.
-    """
-    r = app_client.get('/curation/projects/default/review/model_disagreements')
-    assert r.status_code == 200, r.text
+URL = '/curation/projects/default/review'
 
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must = body['query']['bool']['must']
-    must_strs = [str(m) for m in must]
+
+def _sources(client: TestClient, path: str = 'disagreements', query: str = '') -> list[Any]:
+    """The sub-queries of the queue's union, one per source."""
+    r = client.get(f'{URL}/{path}{query}')
+    assert r.status_code == 200, r.text
+    body = client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
+    return body['query']['bool']['must'][0]['bool']['should']
+
+
+def _model_source(client: TestClient, query: str = '') -> dict[str, Any]:
+    return next(
+        src['bool'] for src in _sources(client, query=query) if 'probe_pred_class' in str(src)
+    )
+
+
+def test_model_source_includes_class_validated_and_probe_exists(app_client: TestClient) -> None:
+    """The model source filters on class_validated=True (the class-side flag) rather than the
+    legacy conflated label_validated."""
+    must_strs = [str(m) for m in _model_source(app_client)['must']]
     assert any("'class_validated': True" in s for s in must_strs)
     assert any("'probe_pred_class'" in s and 'exists' in s for s in must_strs)
     # Painless script enforces inequality.
     assert any('probe_pred_class' in s and 'painless' in s for s in must_strs)
 
 
-def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> None:
-    """Regression guard: ``probe_pred_class``
-    and ``class_name`` are mapped ``keyword`` *directly* on the live
-    index — there is no ``.keyword`` sub-field to fall back on (a `text`
-    mapping was assumed at one point; that assumption is what caused the
-    original ``illegal_argument_exception: Fielddata is disabled on text
-    fields`` failure). The fix was to use the bare field name against
-    ``doc[...]`` directly, NOT to append ``.keyword`` (there's nothing
-    there). This was invisible to the mocked-OpenSearch tests above (they
-    only assert on the outgoing query body, never execute the script)
-    because ``probe_pred_class`` had zero real coverage until the
-    probe backfill landed — the ``exists`` clause matched nothing, so the script
-    never actually ran. Confirmed live against triton-opensearch pre-fix
-    (400 script_exception) and post-fix (real rows) before landing this
-    guard.
+def test_model_source_script_uses_keyword_fields(app_client: TestClient) -> None:
+    """Regression guard: ``probe_pred_class`` and ``class_name`` are mapped ``keyword`` *directly*
+    on the live index, so there is no ``.keyword`` sub-field to fall back on (a `text` mapping was
+    assumed once and caused ``illegal_argument_exception: Fielddata is disabled on text fields``).
+    The mocked-OpenSearch tests only assert on the outgoing body; the script itself ran live.
     """
-    r = app_client.get('/curation/projects/default/review/model_disagreements')
-    assert r.status_code == 200, r.text
-
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must = body['query']['bool']['must']
-    script_clause = next(m for m in must if 'script' in m)
+    script_clause = next(m for m in _model_source(app_client)['must'] if 'script' in m)
     source = script_clause['script']['script']['source']
     # A non-existent ``.keyword`` sub-field must NOT appear (that was the bug).
     assert "doc['probe_pred_class.keyword']" not in source
@@ -122,39 +116,26 @@ def test_disagreements_script_uses_keyword_subfields(app_client: TestClient) -> 
     assert "doc['class_name']" in source
 
 
-def test_disagreements_overrides_default_must_not(app_client: TestClient) -> None:
-    """The default must_not excludes class_validated=true; this tab inverts it.
-
-    Review tabs filter on class_validated (class side)
-    or region_validated (regions tab); model_disagreements wants validated
-    class rows so it drops the must_not.
-    """
-    r = app_client.get('/curation/projects/default/review/model_disagreements')
-    assert r.status_code == 200
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must_not = body['query']['bool'].get('must_not', [])
-    # No filter excluding class_validated=true (we want validated rows).
-    assert not any(m == {'term': {'class_validated': True}} for m in must_not)
+def test_only_the_model_source_keeps_validated_items(app_client: TestClient) -> None:
+    """The default must_not excludes class_validated=true; the model source inverts it and the
+    other sources keep it."""
+    for src in _sources(app_client):
+        excludes_validated = {'term': {'class_validated': True}} in src['bool']['must_not']
+        assert excludes_validated is ('probe_pred_class' not in str(src))
 
 
-def test_disagreements_excludes_test_holdout_by_default(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/model_disagreements')
-    assert r.status_code == 200
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must_not = body['query']['bool'].get('must_not', [])
-    assert {'term': {'test_holdout': True}} in must_not
+def test_every_source_excludes_test_holdout_by_default(app_client: TestClient) -> None:
+    for src in _sources(app_client):
+        assert {'term': {'test_holdout': True}} in src['bool']['must_not']
 
 
-def test_disagreements_include_test_param_drops_filter(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/model_disagreements?include_test=true')
-    assert r.status_code == 200
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must_not = body['query']['bool'].get('must_not', [])
-    assert {'term': {'test_holdout': True}} not in must_not
+def test_include_test_drops_the_holdout_filter(app_client: TestClient) -> None:
+    for src in _sources(app_client, query='?include_test=true'):
+        assert {'term': {'test_holdout': True}} not in src['bool']['must_not']
 
 
-def test_disagreements_response_surfaces_probe_fields(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/model_disagreements')
+def test_response_surfaces_probe_fields(app_client: TestClient) -> None:
+    r = app_client.get(f'{URL}/disagreements')
     assert r.status_code == 200
     out = r.json()
     assert out['total'] == 1
@@ -165,30 +146,17 @@ def test_disagreements_response_surfaces_probe_fields(app_client: TestClient) ->
     assert item['reason'] == 'new model disagrees with the validated label'
 
 
-def test_unknown_tab_lists_disagreements_in_400(app_client: TestClient) -> None:
-    r = app_client.get('/curation/projects/default/review/totally-not-a-tab')
-    assert r.status_code == 400
-    assert 'model_disagreements' in r.json()['detail']
+def test_a_tab_that_is_not_a_queue_answers_404(app_client: TestClient) -> None:
+    r = app_client.get(f'{URL}/totally-not-a-tab')
+    assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'not_a_queue'
+    assert 'disagreements' in r.json()['detail']['message']
 
 
-def test_existing_tabs_still_exclude_validated(app_client: TestClient) -> None:
-    """Smoke check: refactoring didn't break the standard tabs' must_not list.
-
-    Review tabs filter on class_validated (the class-
-    side flag — the common case for the labeler /clusters view).
-    """
-    r = app_client.get('/curation/projects/default/review/all')
-    assert r.status_code == 200
-    body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
-    must_not = body['query']['bool']['must_not']
-    assert {'term': {'class_validated': True}} in must_not
-
-
-def _disagreement_query_fixture() -> dict[str, Any]:
-    """Helper: build a representative search response a test could swap in."""
-    return {
-        'hits': {
-            'total': {'value': 0},
-            'hits': [],
-        }
-    }
+def test_other_queues_still_exclude_validated(app_client: TestClient) -> None:
+    """Smoke check: the standard queues keep the class_validated exclusion."""
+    for queue in ('to_label', 'check_machine'):
+        r = app_client.get(f'{URL}/{queue}')
+        assert r.status_code == 200
+        body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
+        assert {'term': {'class_validated': True}} in body['query']['bool']['must_not']

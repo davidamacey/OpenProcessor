@@ -1,7 +1,8 @@
-"""The ``imported`` review tab: validated labels a dataset import wrote.
+"""The ``imported`` review_tab filter value: validated labels a dataset import wrote.
 
-Every other tab excludes validated items; this one is exactly them (spot
-checks). Run through the real route over the query-evaluating item fake.
+It is not a review queue (every queue excludes validated items), so it filters ``GET /crops`` as
+``review_tab=imported`` for spot checks. Run through the real route over the query-evaluating
+item fake.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
-from src.services.curation import review_tabs
 
 
 class _Client(TestClient):
@@ -25,7 +25,7 @@ class _Client(TestClient):
 
 
 ITEMS = base_curation_config().items_index
-BASE = '/curation/projects/default/review'
+BASE = '/curation/projects/default'
 
 
 def _item(crop_id: str, **over: Any) -> dict[str, Any]:
@@ -53,7 +53,7 @@ SEEDED = {
     'suggestion': _item('suggestion', class_validated=False),
     'dismissed': _item('dismissed', review_dismissed_at='2026-10-01T00:00:00+00:00'),
     'excluded': _item('excluded', class_excluded=True),
-    # An unvalidated item the `all` tab does list (to tell an ignored filter from a honoured one):
+    # An unvalidated item a queue lists (to tell an ignored filter from a honoured one):
     'queued': _item(
         'queued', class_source='vlm_unmatched', class_validated=False, import_ids=['other']
     ),
@@ -83,20 +83,20 @@ async def _noop(*_a: Any, **_k: Any) -> None:
 
 
 def _ids(client: _Client, **params: Any) -> set[str]:
-    r = client.get(f'{BASE}/imported', params=params)
+    r = client.get(f'{BASE}/crops', params={'review_tab': 'imported', **params})
     assert r.status_code == 200, r.text
-    return {i['crop_id'] for i in r.json()['items']}
+    return {c['crop_id'] for c in r.json()['crops']}
 
 
-def test_the_tab_lists_only_validated_imported_labels(client: _Client) -> None:
+def test_the_filter_lists_only_validated_imported_labels(client: _Client) -> None:
     assert _ids(client) == {'a', 'b'}  # not human, suggestion, dismissed, excluded, queued
 
 
-def test_include_test_adds_the_frozen_split(client: _Client) -> None:
-    assert _ids(client, include_test=True) == {'a', 'b', 'holdout'}
+def test_the_frozen_split_stays_out(client: _Client) -> None:
+    assert 'holdout' not in _ids(client)
 
 
-def test_filters_by_import_split_and_class(client: _Client) -> None:
+def test_narrows_by_import_split_and_class(client: _Client) -> None:
     assert _ids(client, import_id='imp1') == {'a'}
     assert _ids(client, import_id='imp2') == {'b'}
     assert _ids(client, dataset_split='val') == {'b'}
@@ -104,34 +104,13 @@ def test_filters_by_import_split_and_class(client: _Client) -> None:
     assert _ids(client, import_id='imp1', dataset_split='val') == set()
 
 
-def test_the_import_filters_belong_to_this_tab_only(client: _Client) -> None:
-    """Another tab ignores ``import_id`` (accepted, not honoured), as every
-    tab-specific filter is."""
-    assert client.get(f'{BASE}/all').json()['total'] == 1
-    assert client.get(f'{BASE}/all', params={'import_id': 'imp1'}).json()['total'] == 1
+def test_it_is_not_served_as_a_queue(client: _Client) -> None:
+    ids = {t['id'] for t in client.get(f'{BASE}/review/tabs').json()['tabs']}
+    assert 'imported' not in ids
+    assert client.get(f'{BASE}/review/imported').status_code == 404
 
 
-def test_the_catalog_serves_the_tab_with_its_filters_and_split_options(client: _Client) -> None:
-    tabs = {t['id']: t for t in client.get(f'{BASE}/tabs').json()['tabs']}
-    tab = tabs['imported']
-    assert {'import_id', 'dataset_split', 'class_name'} <= set(tab['filters'])
-    assert 'class_id' not in tab['filters']
-    assert tab['label'] == 'Imported labels'
-    split_spec = next(s for s in tab['filter_specs'] if s['param'] == 'dataset_split')
-    assert [o['value'] for o in split_spec['options']] == ['', 'train', 'val', 'test']
-    assert 'import_id' not in tabs['all']['filters']
-    assert review_tabs.tab_filters('imported') == tuple(tab['filters'])
-
-
-def test_empty_reason_tells_the_operator_what_to_do(client: _Client) -> None:
-    mismatch = client.get(f'{BASE}/imported', params={'import_id': 'nope'}).json()
-    assert mismatch['total'] == 0
-    assert mismatch['empty_reason'] == 'no imported labels match these filters'
+def test_the_empty_state_flag_follows_the_imported_labels(client: _Client) -> None:
+    assert client.get(f'{BASE}/review/tabs').json()['empty_state']['has_imported_labels'] is True
     client.fake.store[ITEMS].clear()
-    bare = client.get(f'{BASE}/imported').json()
-    assert bare['empty_reason'] == 'no imported labels: import a dataset first'
-    assert client.get(f'{BASE}/tabs').json()['empty_state']['has_imported_labels'] is False
-
-
-def test_the_empty_state_flag_turns_on_with_an_imported_label(client: _Client) -> None:
-    assert client.get(f'{BASE}/tabs').json()['empty_state']['has_imported_labels'] is True
+    assert client.get(f'{BASE}/review/tabs').json()['empty_state']['has_imported_labels'] is False

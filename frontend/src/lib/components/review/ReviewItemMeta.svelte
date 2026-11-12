@@ -22,6 +22,7 @@
     activeSlot: SlotSpec | null;
     isMultiBoxSlot: boolean;
     opinion: ReviewItemActions['opinion'];
+    /** Match score of each text-search result, by item id. */
     searchScores: Map<string, number>;
     acceptModelClass: () => Promise<void>;
   }
@@ -266,7 +267,7 @@
     </dd>
   {/if}
 
-  {#if current.mistakenness_score != null || (current && searchScores.has(current.id))}
+  {#if current.mistakenness_score != null || searchScores.has(current.id)}
     <dt class="text-zinc-500">Scores</dt>
     <dd class="flex flex-wrap items-center gap-1.5">
       {#if current.mistakenness_score != null}
@@ -278,7 +279,7 @@
           size="sm"
         />
       {/if}
-      {#if current && searchScores.has(current.id)}
+      {#if searchScores.has(current.id)}
         <ScoreChip label="match" value={searchScores.get(current.id) ?? 0} size="sm" />
       {/if}
     </dd>

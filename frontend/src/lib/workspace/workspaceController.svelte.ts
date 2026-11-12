@@ -20,7 +20,7 @@ import {
   createSelectionSummary,
   type SelectionSummaryState,
 } from './selectionSummary.svelte';
-import type { Cluster, HiddenCounts } from '$lib/types';
+import type { Cluster, Crop, HiddenCounts } from '$lib/types';
 import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
@@ -60,6 +60,12 @@ export class WorkspaceController {
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
   summary!: SelectionSummaryState;
+  /** The grid Review was opened from; `closeReview` returns to it. A Review that was
+   *  deep-linked has no origin and returns to the Detections grid. */
+  #reviewOrigin = $state<ViewId>('detections');
+  /** The item Review stands on, kept here as well as in the URL so a quick `Esc` right after a
+   *  confirm still returns to it, before the URL write has landed. */
+  #reviewFocus: string | null = null;
   /** The open cluster's served card, set by the cluster scope for the details panel. */
   scopeCard = $state<Cluster | null>(null);
 
@@ -97,8 +103,16 @@ export class WorkspaceController {
     return selectionKindFor(this.view, this.#url.rows);
   }
 
+  /** The query a write started from last, until the navigation it asked for has landed: a second
+   *  write in the same tick starts from it, not from the URL that has not changed yet. */
+  #pending: string | null = null;
+
+  #base(): SvelteURLSearchParams {
+    return new SvelteURLSearchParams(this.#pending ?? page.url.search);
+  }
+
   #write(next: Partial<WorkspaceUrlState>, replace: boolean): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     writeWorkspaceUrl(params, next);
     this.#go(params, replace);
   }
@@ -110,7 +124,7 @@ export class WorkspaceController {
 
   /** Rewrites the keys a view owns, leaving every other key as it is. */
   patchUrl(mutate: (params: URLSearchParams) => void, replace = true): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     mutate(params);
     this.#go(params, replace);
   }
@@ -138,9 +152,14 @@ export class WorkspaceController {
 
   #go(params: URLSearchParams, replace: boolean): void {
     const search = params.toString();
-    void goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
-      replace,
-      reset: false,
+    this.#pending = search;
+    void Promise.resolve(
+      goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
+        replace,
+        reset: false,
+      }),
+    ).finally(() => {
+      if (this.#pending === search) this.#pending = null;
     });
   }
 
@@ -148,8 +167,9 @@ export class WorkspaceController {
     this.#write({ view }, false);
   }
 
+  /** Another queue opens in its own order: the Review sort belongs to the queue it was picked in. */
   setQueue(id: string | null): void {
-    this.#write({ queue: id }, false);
+    this.#write({ queue: id, sort: { review: '' } }, false);
   }
 
   setScope(scope: ScopeRef | null): void {
@@ -159,6 +179,39 @@ export class WorkspaceController {
   /** Opens a cluster in place; the filter and the view stay. */
   openCluster(uid: string | null): void {
     this.setScope(uid ? { kind: 'cluster', id: uid } : null);
+  }
+
+  /** Opens Review at one item, over the same filter, queue and scope; the item stays focused. */
+  openReview(cropId: string): void {
+    if (this.view !== 'review') this.#reviewOrigin = this.view;
+    this.#reviewFocus = cropId;
+    this.#write({ view: 'review', focus: { kind: 'item', id: cropId } }, false);
+  }
+
+  /** Review moved on to another item: the focus follows it (a replace, not a history entry). */
+  setReviewFocus(cropId: string): void {
+    this.#reviewFocus = cropId;
+    this.setFocus({ kind: 'item', id: cropId });
+  }
+
+  #adoptReviewItem: ((crop: Crop) => void) | null = null;
+
+  /** The Review view's way to take a crop the details panel re-read (after a Reprocess). */
+  setReviewAdopt(adopt: ((crop: Crop) => void) | null): void {
+    this.#adoptReviewItem = adopt;
+  }
+
+  adoptReviewItem(crop: Crop): void {
+    this.#adoptReviewItem?.(crop);
+  }
+
+  /** Leaves Review for the grid it was opened from, focused on the item Review stopped on. */
+  closeReview(): void {
+    const focus: FocusRef | null = this.#reviewFocus
+      ? { kind: 'item', id: this.#reviewFocus }
+      : this.#url.focus;
+    this.#reviewFocus = null;
+    this.#write({ view: this.#reviewOrigin, focus }, false);
   }
 
   setFocus(focus: FocusRef | null): void {
@@ -175,14 +228,14 @@ export class WorkspaceController {
 
   /** Writes the draft to the URL (and `view`, in the same navigation); the filter keys are the draft's own. */
   applyFilter(view?: ViewId): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     this.filter.toUrl(params);
     if (view) writeWorkspaceUrl(params, { view });
     this.#go(params, false);
   }
 
   removeChip(param: string, value?: string): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     const state = new ItemFilterState();
     state.fromUrl(params);
     const chip = state

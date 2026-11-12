@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fixtures.contract import box_view, image_detail
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO, review_url
 from harness.screens import save_screens
 from playwright.sync_api import expect
 
@@ -91,7 +91,7 @@ def test_review_source_panel_draws_the_served_boxes(stub, page, app_url):
     # <img> element actually loads.
     stub.on('GET', r'/images/[^/]+/file(\?|$)', (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
 
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -103,7 +103,8 @@ def test_review_source_panel_draws_the_served_boxes(stub, page, app_url):
     assert titles == ['widget_a', 'widget_b (served)', 'Tag 3'], titles
     save_screens(page, 'workflow_2c', 'review-source-boxes')
     assert image_calls, 'the source panel must hit GET .../images/{image_id}'
-    assert all(c.endswith('/images/img-shared') for c in image_calls), image_calls
+    # The Workspace details panel reads the focused item's own image as well.
+    assert any(c.endswith('/images/img-shared') for c in image_calls), image_calls
 
     toggle = panel.get_by_role('button', name='hide boxes')
     toggle.first.click()

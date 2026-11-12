@@ -12,11 +12,11 @@ reports precision per class.
 
 Everything on the page is served by the backend. Cropwright does not count,
 average or judge anything. The audit routes are `POST /curation/projects/{project}/audit/start`,
-`GET /curation/projects/{project}/audit/queue` and `GET /curation/projects/{project}/audit/report`;
+`GET /curation/projects/{project}/audit/report`; the drawn crops are the `audit` queue of Review (`GET /curation/projects/{project}/review/{tab}` with `audit`);
 how the sample is drawn and what the report means is in the
 [curation workflow](../../operations/curation-workflow.mdx#5-label-vlm-suggestions-and-review-queues).
 
-<Screenshot name="cropwright/audit-1600.png" alt="Accuracy audit page with the draw-sample form, detector and VLM precision tables, the confusion matrix and the queue of crops waiting for a label" caption="Accuracy audit: draw a sample, label it, read the precision tables" />
+<Screenshot name="cropwright/audit-1600.png" alt="Accuracy audit page with the draw-sample form, detector and VLM precision tables, the confusion matrix and the link to the audit queue" caption="Accuracy audit: draw a sample, label it, read the precision tables" />
 
 ## 1. Draw a sample
 
@@ -39,9 +39,10 @@ form shows its message.
 
 ## 2. Label the sampled crops
 
-The **queue** at the bottom of the page lists the drawn crops that still wait for
-a human label. Each row links to [Review](./review.md) on that crop. Confirm or
-change the class there. Your label is what measures the detector and the VLM,
+**Label the sample in Review** at the bottom of the page opens the **Audit sample**
+queue of [Review](./review.md), the drawn crops that still wait for a human label.
+The queue exists only while a sample is pending. Confirm or change the class
+there. Your label is what measures the detector and the VLM,
 and automated writers never overwrite it afterwards.
 
 ## 3. Read the report

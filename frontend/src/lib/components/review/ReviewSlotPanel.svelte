@@ -71,6 +71,7 @@
   <span class="text-zinc-500">{slotLabels.statusLabel}</span>
   <span class="flex items-center gap-1.5">
     <select
+      aria-label={slotLabels.statusLabel}
       bind:value={edit.editedSlotStatus}
       onchange={() => void commitSlotStatus()}
       class="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"

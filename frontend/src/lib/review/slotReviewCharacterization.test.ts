@@ -32,7 +32,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { registeredSlots, resetDeploymentSlots } from '$lib/annotations/registeredSlots';
 import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { reservedHotkeyLetters } from '$lib/classHotkey';
-import { REVIEW_TABS, tabFromUrlId } from '$lib/reviewTabs';
+import { REVIEW_TABS, tabForQueue } from '$lib/reviewTabs';
 import { classesStore } from '$lib/stores/classes.svelte';
 import { reviewSource } from '$lib/testing/reviewPageSources';
 
@@ -42,14 +42,14 @@ const editSrc = reviewSource('lib/review/reviewSlotEditController.svelte.ts');
 const slotActionsSrc = reviewSource('lib/review/reviewSlotActions.svelte.ts');
 // The /clusters page and the modules it was split into.
 const clustersPageSrc = [
-  '../../../../lib/workspace/views/ClusterListView.svelte',
-  '../../../../lib/clusters/clusterListController.svelte.ts',
-  '../../../../lib/clusters/clusterSearchModes.svelte.ts',
-  '../../../../lib/clusters/slotInventory.svelte.ts',
-  '../../../../lib/components/clusters/ClustersToolbar.svelte',
-  '../../../../lib/components/clusters/ClustersGrid.svelte',
-  '../../../../lib/components/clusters/ClusterGridCard.svelte',
-  '../../../../lib/components/clusters/ClustersStatusBar.svelte',
+  '../workspace/views/ClusterListView.svelte',
+  '../clusters/clusterListController.svelte.ts',
+  '../clusters/clusterSearchModes.svelte.ts',
+  '../clusters/slotInventory.svelte.ts',
+  '../components/clusters/ClustersToolbar.svelte',
+  '../components/clusters/ClustersGrid.svelte',
+  '../components/clusters/ClusterGridCard.svelte',
+  '../components/clusters/ClustersStatusBar.svelte',
 ]
   .map((rel) => readFileSync(path.resolve(here, rel), 'utf-8'))
   .join('\n');
@@ -151,7 +151,7 @@ describe('T1-adjacent: frozen-viewport effect uses untrack for the seed read', (
   });
 });
 
-describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bookmark contract', () => {
+describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, its queue maps back to a slot tab', () => {
   it('each queue slot tab is slot:<key> internally, with its own urlId preserved', async () => {
     // REVIEW_TABS is a live binding: read it after the profile is installed.
     const slots = installedQueueSlots();
@@ -162,7 +162,7 @@ describe('T7 (adapted, P2.8b): a slot tab id is slot-derived, urlId keeps the bo
       expect(ids).not.toContain(urlId);
       const tab = REVIEW_TABS.find((t: { id: string }) => t.id === `slot:${slot.key}`);
       expect(tab?.urlId).toBe(urlId);
-      expect(tabFromUrlId(urlId)).toBe(`slot:${slot.key}`);
+      expect(tabForQueue(slot.capabilities.queue!.endpointId)).toMatch(/^slot:/);
     }
   });
 });

@@ -8,7 +8,6 @@
   import MultiBoxCanvas from '$lib/components/MultiBoxCanvas.svelte';
   import SourceImageOverlay from '$lib/components/SourceImageOverlay.svelte';
   import ReviewClassButtons from '$lib/components/review/ReviewClassButtons.svelte';
-  import ReviewContextPanel from '$lib/components/review/ReviewContextPanel.svelte';
   import ReviewItemMeta from '$lib/components/review/ReviewItemMeta.svelte';
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
@@ -19,7 +18,6 @@
   import SourceMissingBadge from '$lib/components/SourceMissingBadge.svelte';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { toCanvasBoxes } from '$lib/annotations/multiBox';
-  import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
   import { kg } from '$lib/review/reviewKeys';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
@@ -34,22 +32,13 @@
     tabs: ReviewTabsController;
     loader: ReviewQueueLoader;
     actions: ReviewItemActions;
-    picker: ReviewClassPicker;
+    /** Opens the shared class picker for this item. */
+    picker: { openPicker: () => void };
     edit: ReviewSlotEditController;
     slot: ReviewSlotActions;
-    detailsOpen: boolean;
   }
 
-  let {
-    current,
-    tabs,
-    loader,
-    actions,
-    picker,
-    edit,
-    slot,
-    detailsOpen = $bindable(),
-  }: Props = $props();
+  let { current, tabs, loader, actions, picker, edit, slot }: Props = $props();
 
   let sourceMissing = $state<SourceMissing | null>(null);
   $effect(() => {
@@ -59,7 +48,6 @@
 
   const tab = $derived(tabs.tab);
   const activeSlot = $derived(tabs.activeSlot);
-  const queue = $derived(loader.queue);
   const multiBox = $derived(edit.multiBox);
   const isMultiBoxSlot = $derived(edit.isMultiBoxSlot);
   const editMode = $derived(edit.editMode);
@@ -318,7 +306,5 @@
         openPicker={picker.openPicker}
       />
     {/if}
-
-    <ReviewContextPanel {current} {queue} bind:detailsOpen />
   </div>
 </div>

@@ -101,8 +101,13 @@
   }
 
   function open(row: TableRow): void {
-    ws.setFocus({ kind: ctl.rowsKind === 'images' ? 'image' : 'item', id: rowKey(row) });
-    ws.setView('review');
+    if (ctl.rowsKind === 'images') {
+      ws.setFocus({ kind: 'image', id: rowKey(row) });
+      ws.setView('review');
+    } else {
+      // Review opens on this item, and Esc returns to this table.
+      ws.openReview(rowKey(row));
+    }
   }
 
   function move(by: 1 | -1, extend: boolean): void {

@@ -147,6 +147,7 @@ describe('resolving a context', () => {
       'review.region',
       'review',
       'global',
+      'workspace',
     ]);
     expect(keymapStore.actionFor('review.region', 'z')).toBe('review.undo');
     expect(keymapStore.actionFor('review.region', '`')).toBe('global.shortcuts_overlay');

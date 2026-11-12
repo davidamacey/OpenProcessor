@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 def _unclassed() -> dict:
@@ -38,7 +38,7 @@ def test_review_names_an_unclassed_item_by_its_served_name(stub, page, app_url):
         r'/review/(?!tabs)',
         (200, {'items': [_unclassed()], 'total': 1, 'next_cursor': None, 'limit': 30}),
     )
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     row = page.get_by_test_id('current-label')
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
     text = row.inner_text()

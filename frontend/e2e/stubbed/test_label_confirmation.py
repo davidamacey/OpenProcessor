@@ -4,11 +4,10 @@ class is kept beside it.
 
   1. VLM scope panel on /settings: load, gated knobs, save with the revision,
      409 conflict.
-  2. The `detector_disagreements` review tab: served-only (absent unless
-     `GET /review/tabs` serves it), label and description as served, and the
-     item shows the detector class and the "VLM suggestion" wording.
+  2. The `disagreements` review queue: the item shows the detector class and the
+     "VLM suggestion" wording.
   3. /audit: draw a sample, the served report, an insufficient-sample class,
-     the confusion matrix, the queue, a refused draw.
+     the confusion matrix, the link to the audit queue, a refused draw.
   4. /export warns that only validated crops are exported.
   5. /dashboard says a label is not ground truth.
 """
@@ -18,7 +17,7 @@ from __future__ import annotations
 import json
 
 from fixtures.wire import labeled_stats, make_item, review_tab, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from playwright.sync_api import expect
 
 
@@ -163,54 +162,31 @@ def _stub_review(stub, tabs):
     )
 
 
-def test_detector_disagreements_tab_is_served_only(stub, page, app_url):
-    _stub_review(stub, review_tabs(review_tab('all', 'All')))
-    page.goto(f'{app_url}/p/default/review?tab=all')
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_role('tab', name='Detector disagreements')).to_have_count(0)
-    expect(page.get_by_text('Detector Disagreements')).to_have_count(0)
-
-
-def test_detector_disagreements_tab_shows_served_label_and_item_wording(stub, page, app_url):
+def test_disagreements_queue_shows_detector_class_and_item_wording(stub, page, app_url):
     _stub_review(
         stub,
         review_tabs(
-            review_tab('all', 'All'),
-            review_tab(
-                'detector_disagreements',
-                'Detector disagreements',
-                description="VLM labels that differ from the detector's class, hardest first.",
-            ),
+            review_tab('to_label', 'To label'),
+            review_tab('disagreements', 'Disagreements'),
         ),
     )
     seen = []
     stub.on(
         'GET',
-        r'/review/detector_disagreements(\?|$)',
+        r'/review/disagreements(\?|$)',
         lambda req, _m: (
             seen.append(req.url)
             or {'items': [_disagreement_item()], 'total': 1, 'next_cursor': None, 'limit': 30}
         ),
     )
-    page.goto(f'{app_url}/p/default/review?tab=detector_disagreements')
+    page.goto(review_url(app_url, 'disagreements'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    tab = page.get_by_text('Detector disagreements', exact=True).first
-    expect(tab).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert seen, 'the tab must call GET /review/detector_disagreements'
+    assert seen, 'the queue must call GET /review/disagreements'
     # The item panel: detector class beside the VLM label, VLM wording.
     expect(page.get_by_test_id('detector-class').first).to_contain_text(
         'widget_h 72%', timeout=ACTION_TIMEOUT_MS
     )
     expect(page.get_by_test_id('confirmation-chip').first).to_have_text('VLM suggestion')
-
-
-def test_deep_link_to_an_unserved_detector_tab_falls_back_to_all(stub, page, app_url):
-    _stub_review(stub, review_tabs(review_tab('all', 'All')))
-    page.goto(f'{app_url}/p/default/review?tab=detector_disagreements')
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_text('There is no "detector_disagreements" review tab')).to_be_visible(
-        timeout=ACTION_TIMEOUT_MS
-    )
 
 
 # -- 3. audit ----------------------------------------------------------------
@@ -262,14 +238,9 @@ def _stub_audit(stub):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/class_sources(\?|$)', CLASS_SOURCES)
     stub.on('GET', r'/audit/report(\?|$)', REPORT)
-    stub.on(
-        'GET',
-        r'/audit/queue(\?|$)',
-        {'items': [_disagreement_item()], 'total': 31, 'next_cursor': None, 'limit': 30},
-    )
 
 
-def test_audit_page_renders_the_served_report_and_queue(stub, page, app_url):
+def test_audit_page_renders_the_served_report_and_links_the_queue(stub, page, app_url):
     _stub_audit(stub)
     page.goto(f'{app_url}/p/default/audit')
     expect(page.get_by_test_id('audit-audited')).to_have_text('52', timeout=ACTION_TIMEOUT_MS)
@@ -279,9 +250,8 @@ def test_audit_page_renders_the_served_report_and_queue(stub, page, app_url):
     expect(rows.nth(0)).to_contain_text('95.0%')
     expect(rows.nth(1).get_by_test_id('insufficient-sample')).to_be_visible()
     expect(page.get_by_test_id('confusion-cell')).to_have_count(4)
-    expect(page.get_by_test_id('audit-queue-item')).to_have_count(1)
-    open_link = page.get_by_test_id('audit-queue-open').first
-    assert '/review?tab=all&crop_id=crop-d1' in open_link.get_attribute('href')
+    open_link = page.get_by_test_id('audit-open-queue')
+    assert 'view=review&queue=audit' in open_link.get_attribute('href')
 
 
 def test_audit_draw_sends_only_the_typed_values_and_shows_the_strata(stub, page, app_url):

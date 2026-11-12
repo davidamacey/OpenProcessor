@@ -13,18 +13,28 @@ import pytest
 
 from curation.query_fakes import matches
 from src.services.curation.review_queries import build_tab_query
-from src.services.curation.review_tabs import KNOWN_TABS
+from src.services.curation.review_tab_clauses import SIMPLE_TABS
 
 
 _CLASS_EXCLUDED_CLAUSE = {'term': {'class_excluded': True}}
 
 
-@pytest.mark.parametrize('tab', KNOWN_TABS)
+def _guarded(must: list, must_not: list) -> bool:
+    """The clause is in ``must_not``, or every source of a union in ``must`` carries it."""
+    if _CLASS_EXCLUDED_CLAUSE in must_not:
+        return True
+    sources = [s for clause in must for s in clause.get('bool', {}).get('should', [])]
+    return bool(sources) and all(
+        _guarded(s['bool'].get('must', []), s['bool'].get('must_not', [])) for s in sources
+    )
+
+
+@pytest.mark.parametrize('tab', [*SIMPLE_TABS, 'regions'])
 def test_every_tab_excludes_class_excluded_items(tab: str) -> None:
-    _must, must_not, _reason = build_tab_query(
+    must, must_not, _reason = build_tab_query(
         tab, vector_field='pe_embedding', include_test=False, text=None, max_rank=None
     )
-    assert _CLASS_EXCLUDED_CLAUSE in must_not, (
+    assert _guarded(must, must_not), (
         f'tab {tab!r} must_not is missing the class_excluded guard: {must_not}'
     )
 

@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 
 from curation._vlm_test_support import empty_registry_reads
 from src.config.region_source import CANDIDATE_SOURCES
-from src.services.curation.review_tabs import KNOWN_TABS
+from src.services.curation.review_tabs import QUEUES
 
 
 @pytest.fixture
@@ -176,12 +176,13 @@ def test_review_tabs_has_a_label_for_every_known_tab(client: TestClient) -> None
     assert resp.status_code == 200, resp.text
     body = resp.json()
     served_ids = {t['id'] for t in body['tabs']}
-    assert served_ids == set(KNOWN_TABS) - {'regions'}
+    # The audit queue is listed only while a drawn sample is pending.
+    assert served_ids == set(QUEUES) - {'regions', 'audit'}
     for tab in body['tabs']:
         assert tab['label']
         assert tab['description']
     by_id = {t['id']: t for t in body['tabs']}
-    assert by_id['classifier_blind_spots']['label'] == 'Classifier blind spots'
+    assert by_id['to_label']['label'] == 'To label'
 
 
 def test_review_tabs_omits_regions_tab_without_a_profile(client: TestClient) -> None:
@@ -196,7 +197,7 @@ def test_review_tabs_includes_regions_tab_with_a_profile(client: TestClient) -> 
     resp = client.get('/curation/projects/default/review/tabs')
     assert resp.status_code == 200, resp.text
     served_ids = {t['id'] for t in resp.json()['tabs']}
-    assert served_ids == set(KNOWN_TABS)
+    assert served_ids == set(QUEUES) - {'audit'}
 
 
 def test_review_tabs_regions_label_uses_the_active_profiles_display_name(

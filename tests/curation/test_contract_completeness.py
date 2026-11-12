@@ -38,7 +38,7 @@ def _query_params(path: str) -> set[str]:
 # --- review tabs: one spec per served filter ---------------------------------
 
 
-@pytest.mark.parametrize('tab', review_tabs.KNOWN_TABS)
+@pytest.mark.parametrize('tab', review_tabs.QUEUES)
 def test_every_filter_a_tab_serves_has_a_spec(tab: str) -> None:
     filters = set(review_tabs.tab_filters(tab))
     assert filters <= set(FILTER_SPECS)

@@ -1,4 +1,6 @@
-"""Review tab clauses: what each ``GET /curation/review/{tab}`` tab matches.
+"""Review tab clauses: what each queue (``GET /curation/review/{queue}``) and each ``review_tab``
+filter value matches. The queues are ``to_label``, ``check_machine``, ``disagreements``,
+``new_class_proposals``, ``audit`` and ``regions``; the rest of ``SIMPLE_TABS`` are filter values.
 
 One builder per tab returns ``(must, must_not, reason)`` before the shared
 subject-size limit that
@@ -15,6 +17,7 @@ from src.config.region_fields import get_region_fields
 from src.config.region_state import RegionStatus
 from src.config.vlm_class_attempt import VLM_CLASS_EMPTY_REASON_FIELD
 from src.core.exceptions import RequestRejectedError
+from src.domain.audit_math import AUDIT_SAMPLE
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import (
     LABEL_IMPORT_CLASS_SOURCE,
@@ -43,6 +46,14 @@ DETECTOR_DISAGREES_SCRIPT = (
     "doc.containsKey('detector_class_name') && doc['detector_class_name'].size() > 0 && "
     "doc.containsKey('class_name') && doc['class_name'].size() > 0 && "
     "!doc['detector_class_name'].value.equals(doc['class_name'].value)"
+)
+
+
+# Both fields are mapped `keyword` directly on the live index: no `.keyword` subfield exists.
+MODEL_DISAGREES_SCRIPT = (
+    "doc.containsKey('probe_pred_class') && doc['probe_pred_class'].size() > 0 && "
+    "doc.containsKey('class_name') && doc['class_name'].size() > 0 && "
+    "!doc['probe_pred_class'].value.equals(doc['class_name'].value)"
 )
 
 
@@ -342,25 +353,7 @@ def _model_disagreements_tab(include_test: bool) -> _TabQuery:
         # the script never ran against a real document. Confirmed live
         # against triton-opensearch (script_exception /
         # illegal_argument_exception before this fix).
-        {
-            'script': {
-                'script': {
-                    # Both fields are mapped `keyword` directly on the
-                    # live index — no `.keyword` subfield exists (see
-                    # the clusters router's top_class agg for the full story
-                    # on why this repo's code assumed one).
-                    'source': (
-                        "doc.containsKey('probe_pred_class') && "
-                        "doc['probe_pred_class'].size() > 0 && "
-                        "doc.containsKey('class_name') && "
-                        "doc['class_name'].size() > 0 && "
-                        "!doc['probe_pred_class'].value.equals("
-                        "doc['class_name'].value)"
-                    ),
-                    'lang': 'painless',
-                }
-            }
-        },
+        {'script': {'script': {'source': MODEL_DISAGREES_SCRIPT, 'lang': 'painless'}}},
     ]
     # Override the default must_not — we WANT validated crops here.
     must_not: _Clauses = [{'term': {'class_excluded': True}}, *_holdout_guard(include_test)]
@@ -462,6 +455,43 @@ def _imported_tab(include_test: bool) -> _TabQuery:
     return must, must_not, 'imported label: spot check'
 
 
+def _to_label_tab(include_test: bool) -> _TabQuery:
+    # Nothing has named the item yet: the queue a person works first. Sorted by the detector's
+    # confidence (review_sorts), so the clearest detections come up first.
+    must_not = [*_default_must_not(include_test), {'exists': {'field': 'class_id'}}]
+    return [], must_not, 'no class yet'
+
+
+def _check_machine_tab(include_test: bool) -> _TabQuery:
+    # A class a machine set and no person confirmed. ``is_human_marker`` (occ_locks) is "the
+    # source contains 'human'"; the wildcard is the same rule as a query.
+    must: _Clauses = [{'exists': {'field': 'class_id'}}]
+    must_not = [
+        *_default_must_not(include_test),
+        {'wildcard': {'class_source': {'value': '*human*'}}},
+    ]
+    return must, must_not, 'a machine set this class: confirm or fix it'
+
+
+def _disagreements_tab(include_test: bool) -> _TabQuery:
+    # Each source keeps its own must_not: the model-disagreement source wants validated items,
+    # the other two want unvalidated ones.
+    sources = (_mismatches_tab, _detector_disagreements_tab, _model_disagreements_tab)
+    should: _Clauses = []
+    for build in sources:
+        must, must_not, _reason = build(include_test)
+        should.append({'bool': {'must': must, 'must_not': must_not}})
+    must = [{'bool': {'should': should, 'minimum_should_match': 1}}]
+    return must, [], 'the labels disagree: a person decides'
+
+
+def _audit_tab(include_test: bool) -> _TabQuery:
+    # Drawn for the accuracy audit and not yet labelled by a person; ``audit.pending_query`` is
+    # the same set without the queue's exclusions.
+    must: _Clauses = [{'term': {AUDIT_SAMPLE: True}}]
+    return must, _default_must_not(include_test), 'drawn for the accuracy audit: label it'
+
+
 # Every tab but ``regions`` (which also reads ``text`` and ``region_status``); only ``all`` reads
 # the vector field.
 def _alone(build: Callable[[bool], _TabQuery]) -> TabBuilder:
@@ -485,4 +515,8 @@ SIMPLE_TABS: dict[str, TabBuilder] = {
     'classifier_blind_spots': _alone(_classifier_blind_spots_tab),
     'new_class_proposals': _alone(_new_class_proposals_tab),
     'imported': _alone(_imported_tab),
+    'to_label': _alone(_to_label_tab),
+    'check_machine': _alone(_check_machine_tab),
+    'disagreements': _alone(_disagreements_tab),
+    'audit': _alone(_audit_tab),
 }

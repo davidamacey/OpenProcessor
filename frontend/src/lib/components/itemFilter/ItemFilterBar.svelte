@@ -62,6 +62,7 @@
     'geo_bbox',
     'geo_polygon',
     'has_location',
+    'import_id',
   ]);
   const chips = $derived(
     filter.chips().filter((c) => CHIP_PARAMS.has(c.param) && visible(c.param)),

@@ -72,7 +72,7 @@ button. An import's page (`/p/<project>/datasets/imports/<id>`) shows:
 - the class mapping the job actually used;
 - the error, if the job failed;
 - **Next steps** the backend suggests, each behind a confirmation;
-- **Review imported labels**, which opens the [Imported tab](./review.md#imported-labels).
+- **Review imported labels**, which opens the import's items in the [Workspace](./workspace.md)'s Detections view, narrowed to that import (an **Import** chip in the filter row removes it).
 
 The page follows the job on the backend's own polling cadence and wakes
 immediately when the backend announces progress. **Cancel**, **Resume** and

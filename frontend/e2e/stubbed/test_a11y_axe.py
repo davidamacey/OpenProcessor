@@ -143,6 +143,9 @@ def open_class_picker(page) -> None:
     page.get_by_test_id('assign-selected').click()
 
 
+REVIEW_PATH = '/p/default/workspace?view=review&queue=to_label'
+REVIEW_REGION_PATH = '/p/default/workspace?view=review&queue=regions'
+
 # (id, path, stub setup, selector that proves the data loaded[, step that opens a panel])
 PAGES = [
     ('projects', '/projects', serve_projects_page, '[data-testid="project-row-widgets-a"]'),
@@ -229,8 +232,14 @@ PAGES = [
         '[data-testid="detections-view"] img',
         open_class_picker,
     ),
-    ('review', '/p/default/review', serve_review, 'main'),
-    ('review-similar', '/p/default/review', serve_review_similar, '[data-testid="review-similar"]'),
+    ('workspace-review', REVIEW_PATH, serve_review, '[data-testid="queue-counter"]'),
+    ('workspace-review-region', REVIEW_REGION_PATH, serve_review, '[data-testid="queue-counter"]'),
+    (
+        'workspace-review-similar',
+        REVIEW_PATH,
+        serve_review_similar,
+        '[data-testid="review-similar"]',
+    ),
     (
         'clusters-similar',
         '/p/default/workspace?view=clusters&similar_to=crop-0',
@@ -249,7 +258,7 @@ PAGES = [
         serve_cluster_grid,
         '[role="status"]',
     ),
-    ('review-source-missing', '/p/default/review', serve_review_pane, '[role="status"]'),
+    ('review-source-missing', REVIEW_PATH, serve_review_pane, '[role="status"]'),
     ('classes', '/p/default/classes', serve_classes, 'main'),
     ('settings', '/p/default/settings', serve_settings, 'main'),
     ('label-ops', '/p/default/label-ops', serve_label_ops, '[data-testid="label-op-row"]'),

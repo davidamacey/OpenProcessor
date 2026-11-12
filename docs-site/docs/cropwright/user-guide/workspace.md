@@ -25,6 +25,8 @@ you switch view, and Back returns to the previous view and filter.
   dominant class it is.
 - **Detections.** Every item the filter, queue and scope match, as a flat
   grid with the total and what the filter hides.
+- **Review.** One item at a time on a queue, keyboard-first. `Enter` on a
+  grid card opens it at that card and `Esc` returns. See [Review](./review.md).
 
 The view bar lists the views; under 768 px it is a menu. The first visit
 opens the view the server suggests for the project's state, and the

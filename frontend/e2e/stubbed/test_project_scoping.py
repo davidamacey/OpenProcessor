@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 
 from fixtures.wire import project, projects_response
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 API_PREFIX = '/curation'
@@ -46,14 +46,14 @@ def _path(url: str) -> str:
 
 def test_review_mount_hits_exactly_the_global_or_scoped_prefix(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', CLASSES)
-    stub.on('GET', r'/review/all(\?|$)', EMPTY_QUEUE)
+    stub.on('GET', r'/review/to_label(\?|$)', EMPTY_QUEUE)
 
     with (
-        page.expect_request(lambda r: _path(r.url) == f'{DEFAULT_PROJECT_PREFIX}/review/all'),
+        page.expect_request(lambda r: _path(r.url) == f'{DEFAULT_PROJECT_PREFIX}/review/to_label'),
         page.expect_request(lambda r: _path(r.url) == f'{DEFAULT_PROJECT_PREFIX}/classes'),
         page.expect_request(lambda r: _path(r.url) == f'{API_PREFIX}/health'),
     ):
-        page.goto(f'{app_url}/p/default/review')
+        page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-empty').wait_for(timeout=ACTION_TIMEOUT_MS)
 
     paths = [p for _, p in stub.handled]
@@ -71,7 +71,7 @@ def test_review_mount_hits_exactly_the_global_or_scoped_prefix(stub, page, app_u
 
 def test_root_and_legacy_paths_redirect_under_the_served_default(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', CLASSES)
-    stub.on('GET', r'/review/uncertainty(\?|$)', EMPTY_QUEUE)
+    stub.on('GET', r'/review/disagreements(\?|$)', EMPTY_QUEUE)
     # The served default is NOT hardcoded: this deployment's is "main".
     stub.on(
         'GET',
@@ -82,8 +82,11 @@ def test_root_and_legacy_paths_redirect_under_the_served_default(stub, page, app
         },
     )
 
-    page.goto(f'{app_url}/review?tab=uncertainty')
-    page.wait_for_url(re.compile(r'/p/main/review\?tab=uncertainty$'), timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/workspace?view=review&queue=disagreements')
+    page.wait_for_url(
+        re.compile(r'/p/main/workspace\?view=review&queue=disagreements$'),
+        timeout=ACTION_TIMEOUT_MS,
+    )
     page.get_by_test_id('queue-empty').wait_for(timeout=ACTION_TIMEOUT_MS)
 
     page.goto(f'{app_url}/')
@@ -108,7 +111,7 @@ def test_unknown_and_unavailable_slugs_show_a_way_out(stub, page, app_url):
         (404, {'detail': {'error': 'project_not_found', 'message': "no project named 'ghost'"}}),
     )
 
-    page.goto(f'{app_url}/p/ghost/review')
+    page.goto(f'{app_url}/p/ghost/workspace')
     gone = page.get_by_test_id('project-unavailable')
     gone.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert 'Project not found' in gone.inner_text()

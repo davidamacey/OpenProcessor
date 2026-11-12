@@ -66,10 +66,10 @@ describe('/ and the legacy bare paths', () => {
 
   it('a bare section path keeps its sub-path and query', async () => {
     const r = await outcome(() =>
-      call(legacyLoad, { url: new URL('http://x/review?tab=regions&crop_id=c1') }),
+      call(legacyLoad, { url: new URL('http://x/classes?tab=regions&crop_id=c1') }),
     );
     expect(r).toEqual({
-      location: '/p/default/review?tab=regions&crop_id=c1',
+      location: '/p/default/classes?tab=regions&crop_id=c1',
       status: 307,
     });
     const nested = await outcome(() =>
@@ -78,8 +78,8 @@ describe('/ and the legacy bare paths', () => {
     expect(nested.location).toBe('/p/default/workspace?view=clusters');
   });
 
-  it('the retired /clusters paths are the 404', async () => {
-    for (const path of ['/clusters', '/clusters/12']) {
+  it('the retired /clusters and /review paths are the 404', async () => {
+    for (const path of ['/clusters', '/clusters/12', '/review', '/review?tab=all']) {
       const r = await outcome(() =>
         call(legacyLoad, { url: new URL(`http://x${path}`) }),
       );
@@ -98,7 +98,7 @@ describe('/ and the legacy bare paths', () => {
       (await outcome(() => call(rootLoad, { url: new URL('http://x/') }))).location,
     ).toBe('/projects');
     expect(
-      (await outcome(() => call(legacyLoad, { url: new URL('http://x/review') })))
+      (await outcome(() => call(legacyLoad, { url: new URL('http://x/classes') })))
         .location,
     ).toBe('/projects');
   });

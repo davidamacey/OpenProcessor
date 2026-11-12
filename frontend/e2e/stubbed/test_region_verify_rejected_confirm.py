@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import expect_handled, wait_for_paint
 from playwright.sync_api import expect
 
@@ -126,7 +126,7 @@ def test_enter_confirms_only_proposed_boxes_and_leaves_rejected_untouched(stub, 
 
     stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
@@ -179,7 +179,7 @@ def test_per_box_accept_and_reject_keys_patch_immediately_without_removing_from_
 
     stub.on('PATCH', r'/crops/([^/]+)/regions/([^/]+)$', region_patch)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
     counter = page.get_by_test_id('queue-counter').first
@@ -248,7 +248,7 @@ def test_keys_pressed_while_a_box_write_is_in_flight_are_applied_in_order(stub, 
 
     stub.on('PATCH', r'/crops/([^/]+)/regions/([^/]+)$', region_patch)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
     expect(page.get_by_test_id('queue-counter').first).to_have_text(
@@ -289,7 +289,7 @@ def test_added_box_and_untouched_sibling_are_both_sent_in_one_confirm_write(stub
 
     stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     canvas = page.get_by_test_id('multibox-canvas').first
     canvas.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
@@ -369,7 +369,7 @@ def test_z_undo_after_a_multibox_confirm_calls_the_single_region_undo_route(stub
 
     stub.on('POST', r'/crops/([^/]+)/region/undo$', region_undo)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 
@@ -420,7 +420,7 @@ def test_on_screen_confirm_button_uses_the_multibox_write_too(stub, page, app_ur
 
     stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
 

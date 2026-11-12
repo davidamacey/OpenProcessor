@@ -46,11 +46,6 @@ REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
 REGION_STATUS_FILTER_VALUES: frozenset[str] = frozenset(
     o['value'] for o in REGION_STATUS_FILTER_OPTIONS
 )
-DATASET_SPLIT_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
-    {'value': 'train', 'label': 'Train'},
-    {'value': 'val', 'label': 'Validation'},
-    {'value': 'test', 'label': 'Test'},
-)
 ON_NEGATIVE_FRAME_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': 'true', 'label': 'Only items on a reviewed-negative frame'},
     {'value': 'false', 'label': 'Hide items on a reviewed-negative frame'},
@@ -189,13 +184,10 @@ FILTER_SPECS: dict[str, dict[str, Any]] = {
             description='How the box text search matches; unset is a case-insensitive substring.',
         ),
         _spec('region_status', 'enum', 'Status', options=REGION_STATUS_FILTER_OPTIONS),
-        _spec('import_id', 'text', 'Dataset import'),
-        _spec('dataset_split', 'enum', 'Split', options=DATASET_SPLIT_FILTER_OPTIONS),
     )
 }
 
 __all__ = [
-    'DATASET_SPLIT_FILTER_OPTIONS',
     'EMBEDDING_STATE_LABELS',
     'FILTER_SPECS',
     'HAS_REJECTED_BOX',

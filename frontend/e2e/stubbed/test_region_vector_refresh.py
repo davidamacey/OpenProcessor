@@ -7,7 +7,7 @@ one shows nothing; the next item clears it.
 from __future__ import annotations
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_box, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 
 
@@ -64,7 +64,7 @@ def open_region_review(stub, page, app_url, vector_refresh) -> list[dict]:
         return (200, body)
 
     stub.on('PATCH', r'/crops/([^/]+)/regions/([^/]+)$', patch_box)
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)

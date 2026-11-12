@@ -158,4 +158,18 @@ describe('ItemFilterState', () => {
     chips[0].clear();
     expect(s.isEmpty).toBe(true);
   });
+
+  it('import_id narrows to one dataset import: URL, query, body and a removable chip', () => {
+    const s = new ItemFilterState();
+    s.fromUrl(new URLSearchParams('import_id=imp_1'));
+    expect(s.toQuery()).toEqual({ import_id: 'imp_1' });
+    expect(s.toBody()).toEqual({ import_id: 'imp_1' });
+    const params = new URLSearchParams();
+    s.toUrl(params);
+    expect(params.get('import_id')).toBe('imp_1');
+    const chip = s.chips().find((c) => c.param === 'import_id')!;
+    expect(chip.label).toBe('Import: imp_1');
+    chip.clear();
+    expect(s.isEmpty).toBe(true);
+  });
 });

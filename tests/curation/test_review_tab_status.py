@@ -1,4 +1,4 @@
-"""``GET /review/tabs`` serves, per tab, whether it can fill, why not, and how many items it holds."""
+"""``GET /review/tabs`` lists the queues that can fill, each with the items it holds under the filter."""
 
 from __future__ import annotations
 
@@ -9,36 +9,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.routers.curation import _raw_opensearch_dep, router as curation_router
 from src.services.curation import review_tab_status as rts
+from src.services.curation.review_filters import ReviewFilters
 
 
-_NO_PROBE = {
-    'has_probe_predictions': False,
-    'has_item_scores': True,
-    'has_imported_labels': False,
-    'has_unembedded_items': False,
-    'suggested_reprocess': None,
-}
-
-
-def test_probe_tabs_are_unavailable_without_probe_predictions() -> None:
-    for tab in ('uncertainty', 'model_disagreements'):
-        reason = rts.unavailable_reason(tab, _NO_PROBE)
-        assert reason is not None
-        assert 'probe' in reason.lower()
-    assert (
-        rts.unavailable_reason('uncertainty', {**_NO_PROBE, 'has_probe_predictions': True}) is None
-    )
-
-
-def test_imported_tab_needs_imported_labels() -> None:
-    assert 'import' in (rts.unavailable_reason('imported', _NO_PROBE) or '').lower()
-    assert rts.unavailable_reason('imported', {**_NO_PROBE, 'has_imported_labels': True}) is None
-
-
-def test_ordinary_tabs_are_available() -> None:
-    assert rts.unavailable_reason('all', _NO_PROBE) is None
-    assert rts.unavailable_reason('mismatches', _NO_PROBE) is None
+def test_the_audit_queue_is_absent_without_a_pending_sample() -> None:
+    assert rts.absent_queues(has_pending_audit=True) == {}
+    absent = rts.absent_queues(has_pending_audit=False)
+    assert list(absent) == ['audit']
+    assert 'audit sample' in absent['audit'].lower()
 
 
 @pytest.mark.asyncio
@@ -52,8 +32,8 @@ async def test_counts_come_from_one_msearch_with_exact_totals() -> None:
             ]
         }
     )
-    counts = await rts.tab_counts(fake, ['all', 'mismatches'])
-    assert counts == {'all': 12, 'mismatches': 3}
+    counts = await rts.tab_counts(fake, ['to_label', 'check_machine'], ReviewFilters())
+    assert counts == {'to_label': 12, 'check_machine': 3}
     fake.msearch.assert_awaited_once()
     payload = fake.msearch.await_args.kwargs['body']
     assert len(payload) == 4
@@ -66,13 +46,11 @@ async def test_a_failed_msearch_entry_fails_the_call() -> None:
     fake = AsyncMock()
     fake.msearch = AsyncMock(return_value={'responses': [{'error': {'type': 'boom'}}]})
     with pytest.raises(RuntimeError):
-        await rts.tab_counts(fake, ['all'])
+        await rts.tab_counts(fake, ['to_label'], ReviewFilters())
 
 
 def _client(fake: Any) -> TestClient:
     from _curation_app import mount_curation_routers
-
-    from src.routers.curation import _raw_opensearch_dep, router as curation_router
 
     app = FastAPI()
     mount_curation_routers(app, curation_router)
@@ -80,7 +58,7 @@ def _client(fake: Any) -> TestClient:
     return TestClient(app)
 
 
-def test_route_serves_available_reason_and_count_per_tab() -> None:
+def test_route_serves_a_count_per_listed_queue() -> None:
     fake = AsyncMock()
     fake.count = AsyncMock(return_value={'count': 0})
 
@@ -92,9 +70,7 @@ def test_route_serves_available_reason_and_count_per_tab() -> None:
         t['id']: t
         for t in _client(fake).get('/curation/projects/default/review/tabs').json()['tabs']
     }
-    assert tabs['uncertainty']['available'] is False
-    assert 'probe' in tabs['uncertainty']['unavailable_reason'].lower()
-    assert tabs['uncertainty']['count'] == 0
-    assert tabs['all']['available'] is True
-    assert tabs['all']['unavailable_reason'] is None
-    assert tabs['all']['count'] == 5
+    # No audit sample is pending (every count is 0), so that queue is not listed.
+    assert 'audit' not in tabs
+    assert {t['count'] for t in tabs.values()} == {5}
+    assert {'available', 'unavailable_reason'}.isdisjoint(tabs['to_label'])

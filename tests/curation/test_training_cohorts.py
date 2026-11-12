@@ -64,7 +64,11 @@ def test_core_cohorts_carry_backend_cutoffs(client: TestClient) -> None:
     assert low['endpoint'] == '/crops'
     assert low['params'] == {'class_id': 4, 'classifier_conf_lt': LOW_CONFIDENCE_MAX}
     assert cohorts['validated']['params'] == {'class_id': 4, 'label_validated': True}
-    assert cohorts['model_disagreements']['endpoint'] == '/review/model_disagreements'
+    assert cohorts['model_disagreements']['endpoint'] == '/crops'
+    assert cohorts['model_disagreements']['params'] == {
+        'class_id': 4,
+        'review_tab': 'model_disagreements',
+    }
 
 
 def test_low_confidence_cutoff_is_the_review_band() -> None:

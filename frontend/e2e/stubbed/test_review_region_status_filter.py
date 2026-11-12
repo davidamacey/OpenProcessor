@@ -21,7 +21,7 @@ from __future__ import annotations
 import time
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from playwright.sync_api import expect
 
 
@@ -45,6 +45,7 @@ REVIEW_TABS = {
             'id': 'regions',
             'label': REGION_TAB_LABEL,
             'description': '',
+            'count': 0,
             'filters': ['text', 'region_status'],
             'filter_defaults': {'region_status': 'all'},
             'filter_specs': [
@@ -192,7 +193,7 @@ def test_region_status_filter_forwards_the_param_and_needs_human_reason_never_re
 
     stub.on('GET', r'/review/regions(\?|$)', review_handler)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -252,7 +253,7 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
 
     stub.on('GET', r'/review/regions(\?|$)', review_handler)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}&region_status=verify_rejected')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID, region_status='verify_rejected'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     # The URL-seeded filter reaches the queue only once /review/tabs lands

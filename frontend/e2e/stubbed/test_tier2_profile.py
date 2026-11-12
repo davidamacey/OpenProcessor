@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, review_tab, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from playwright.sync_api import expect
 
 
@@ -80,6 +80,23 @@ EMPTY_QUEUE = {
 }
 
 
+TEXT_SPEC = {
+    'param': 'text',
+    'kind': 'text',
+    'label': 'Box text contains',
+    'options': [],
+    'min': None,
+    'max': None,
+    'description': '',
+    'default': None,
+    'allows_unset': True,
+}
+
+
+def served_queues(*extra):
+    return review_tabs(review_tab('to_label', 'To label'), *extra)
+
+
 def register_curation(stub):
     review_calls: list[str] = []
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
@@ -90,8 +107,7 @@ def register_curation(stub):
         return (200, EMPTY_QUEUE)
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
-    # Keep the served region-tab label harness/stub.py defaults to.
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs(review_tab('regions', REGION_TAB_LABEL)))
+    stub.on('GET', r'/review/tabs(\?|$)', served_queues(review_tab('regions', REGION_TAB_LABEL)))
     return review_calls
 
 
@@ -111,24 +127,21 @@ def register_profile_route(page, *, status: int, body: str | None, content_type:
     page.route('**/annotation-profiles.json', handler)
 
 
-_TAB_COUNT = re.compile(r'\s+[\d,]+$')
+_QUEUE_COUNT = re.compile(r'\s+[\d,]+$')
 
 
 def tab_labels(page) -> list[str]:
-    # The active tab carries a count badge once its queue loads ("All 0"),
-    # so match the tab with or without it and strip counts from the labels.
-    page.get_by_role('button', name=re.compile(r'^All(\s+[\d,]+)?$')).wait_for(
-        timeout=ACTION_TIMEOUT_MS
-    )
-    texts = page.locator('div.border-b.border-zinc-800 button').all_inner_texts()
-    return [_TAB_COUNT.sub('', t.strip()) for t in texts]
+    """The rail's queue labels, counts stripped."""
+    page.get_by_test_id('queue-to_label').wait_for(timeout=ACTION_TIMEOUT_MS)
+    texts = page.locator('[data-testid="workspace-rail"] [data-testid^="queue-"]').all_inner_texts()
+    return [_QUEUE_COUNT.sub('', t.strip()) for t in texts]
 
 
 def test_tier2_profile_absent(stub, page, app_url):
     register_curation(stub)
     register_profile_route(page, status=200, body=None, content_type='text/html')
 
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     labels = tab_labels(page)
     assert 'Pallet labels' not in labels, f"no 'Pallet labels' tab expected: {labels}"
     assert REGION_TAB_LABEL in labels, f'the region tab should still be present: {labels}'
@@ -142,19 +155,23 @@ def test_tier2_profile_absent(stub, page, app_url):
 def test_tier2_profile_served(stub, page, app_url):
     review_calls = register_curation(stub)
     stub.on('GET', r'/health$', {'status': 'ok', 'region_profile': PALLET_REGION_PROFILE})
-    # No served label: the tab label comes from the tier-2 entry.
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs())
+    # The served region queue is labelled by the profile's display name.
+    stub.on(
+        'GET',
+        r'/review/tabs(\?|$)',
+        served_queues(review_tab('regions', 'Pallet labels', filter_specs=[TEXT_SPEC])),
+    )
     register_profile_route(
         page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type='application/json'
     )
 
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     labels = tab_labels(page)
     assert 'Pallet labels' in labels, f"'Pallet labels' tab should be present: {labels}"
     assert REGION_TAB_LABEL not in labels, f'the example replaces the served slot: {labels}'
     assert labels.count('Pallet labels') == 1, labels
 
-    pallet_tab = page.get_by_role('button', name='Pallet labels')
+    pallet_tab = page.get_by_test_id('queue-regions')
     assert pallet_tab.count() > 0
     review_calls.clear()
     with page.expect_response(
@@ -181,7 +198,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
         page, status=200, body=json.dumps(MALFORMED_PROFILE), content_type='application/json'
     )
 
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     labels = tab_labels(page)
     assert REGION_TAB_LABEL in labels, (
         f'the page should still render the core tabs + the region tab: {labels}'
@@ -190,7 +207,7 @@ def test_tier2_profile_malformed(stub, page, app_url):
         f"no 'Pallet labels' tab from a malformed document: {labels}"
     )
 
-    region_tab = page.get_by_role('button', name=REGION_TAB_LABEL)
+    region_tab = page.get_by_test_id('queue-regions')
     assert region_tab.count() > 0, 'the region tab should still be clickable'
     region_tab.first.click()
 
@@ -210,7 +227,7 @@ def _assert_dropped(stub, page, app_url, *, expect_region_tab: bool, reason: str
     register_profile_route(
         page, status=200, body=json.dumps(EXAMPLE_PROFILE), content_type='application/json'
     )
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     labels = tab_labels(page)
     assert 'Pallet labels' not in labels, f'the example must be dropped: {labels}'
     assert (REGION_TAB_LABEL in labels) is expect_region_tab, labels
@@ -230,7 +247,7 @@ def test_tier2_region_slot_dropped_under_another_served_profile(stub, page, app_
 def test_tier2_region_slot_dropped_without_a_region_profile(stub, page, app_url):
     register_curation(stub)
     stub.on('GET', r'/health$', {'status': 'ok', 'region_profile': None})
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs())
+    stub.on('GET', r'/review/tabs(\?|$)', served_queues())
     _assert_dropped(stub, page, app_url, expect_region_tab=False, reason='no region profile')
     paths = [p for (_m, p) in stub.handled]
     assert not [p for p in paths if '/regions' in p], paths

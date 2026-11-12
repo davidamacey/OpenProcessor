@@ -21,7 +21,7 @@ domain, a model vendor or a frontend.
 - [Items and the item wire format](#items-and-the-item-wire-format)
 - [Crops: browse, label, undo](#crops-browse-label-undo)
 - [Regions: multi-box edits and queues](#regions-multi-box-edits-and-queues)
-- [Review tabs](#review-tabs)
+- [Review queues](#review-queues)
 - [Classes](#classes)
 - [Clusters](#clusters)
 - [VLM labeling and the auto-label pipeline](#vlm-labeling-and-the-auto-label-pipeline)
@@ -89,7 +89,7 @@ every save is a new revision number, numbers are never reused, and
 ### Paging and ordering
 
 - `GET /crops`, `GET /review/{tab}`, `GET /regions`, `GET /regions/training_candidates`,
-  `GET /classes/{class_id}/crops` and `GET /audit/queue` page with `cursor` and `limit`. A page
+  `GET /classes/{class_id}/crops` page with `cursor` and `limit`. A page
   carries `total`, `limit` and `next_cursor` (`null` on the last page). Pass `next_cursor` back
   as `cursor` to read the next page, as deep as the list goes. A cursor belongs to the sort that
   served it: another sort refuses it with `400 cursor_invalid`. The `outliers` and `diverse`
@@ -1266,11 +1266,21 @@ validated count. `trainable` is validated minus test-holdout minus excluded;
 `POST /train/preflight` and `GET /test_holdout/stats`
 (`min_test_per_class` and per-class `deficient`).
 
-## Review tabs
+## Review queues
 
-`GET /review/tabs` serves the tab catalog:
-`{tabs: [{id, label, description, filters, filter_defaults, filter_specs}], empty_state}`.
-`filters` is the list of query parameters a tab honors (a parameter that is
+`GET /review/tabs` serves the queues, in order: `to_label` (no class yet), `check_machine` (a
+machine class nobody confirmed), `disagreements` (the VLM answer matched no class, the VLM and the
+detector name different classes, or the new model disagrees with a validated label),
+`new_class_proposals`, `audit` (only while a drawn audit sample is pending) and `regions` (only
+while a region profile is active). A queue that cannot fill is not listed; `GET /next_steps` says
+what to do. The route takes the same filter as `GET /review/{queue}`, and `count` is the queue's
+items under that filter. The other tab ids (`all`, `mismatches`, `vlm_low_conf`,
+`detector_disagreements`, `outliers`, `uncertainty`, `model_disagreements`, `primary_low_conf`,
+`classifier_blind_spots`, `imported`) are `review_tab` filter values on every list route and are
+`404 not_a_queue` as `/review/{tab}` paths.
+
+`{tabs: [{id, label, description, filters, filter_defaults, filter_specs, count}], empty_state}`.
+`filters` is the list of query parameters a queue honors (a parameter that is
 not listed is accepted and ignored). `filter_defaults` is the value applied
 when a parameter is omitted. `filter_specs` self-describes EVERY filter in
 `filters` (`{param, kind, label, options: [{value, label}], min, max,
@@ -1283,14 +1293,13 @@ detector labels of `GET /ingest/config`), `bool`, `number` / `integer`
 has_item_scores, has_imported_labels, has_unembedded_items,
 suggested_reprocess}`: `suggested_reprocess` is the dry-run embed
 `ReprocessRequest` exactly when `has_unembedded_items`, so an empty queue
-can offer the embed action. The `regions` tab is offered only
-while a region profile is active.
+can offer the embed action.
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/review/tabs` | `ReviewTabsResponse` |
-| GET | `/review/{tab}` | `ReviewQueuePage`: `items[]` (item plus `reason`), `total`, `limit`, `next_cursor`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
-| GET | `/review/{tab}/locate` | `ReviewLocateResponse`: where one item sits in a tab. `crop_id` required. Same filters and `sort` as the queue |
+| GET | `/review/{queue}` | `ReviewQueuePage` (`404 not_a_queue` for any other id): `items[]` (item plus `reason`), `total`, `limit`, `next_cursor`, `sort_applied`, `sort_fallback_reason`, `empty_reason` |
+| GET | `/review/{queue}/locate` | `ReviewLocateResponse`: where one item sits in a queue. `crop_id` required. Same filters and `sort` as the queue |
 | GET | `/review/new_class_proposals/summary` | `size`, `samples`. Counts and terms behind the `new_class_proposals` tab |
 | POST | `/review/new_class_proposals/resolve` | bulk-resolve every item proposing one name. `dry_run` query |
 | GET | `/review/raw_label_clusters` | `size`, `samples_per_cluster`. Groups of unmatched raw VLM answers |
@@ -1941,7 +1950,7 @@ schemas are in `contracts/openapi/curation.json`.
 | Object-store ingest | `POST /ingest/objects`, `POST /ingest/objects/presign` | The S3-compatible sibling of `/ingest/upload`: the request carries references and the API fetches the bytes. Which buckets and prefixes may be read is `OP_S3_ALLOWED` (empty means off). Credentials never travel in a request. |
 | Ingest sources | `/ingest/sources`, `/ingest/sources/{source_id}`, `.../run`, `.../retry-dead`, `.../events` | A registered folder or bucket prefix with watch, schedule or webhook triggers, drained by the one bulk runner. `events` receives S3 event notifications (`409 webhook_disabled` when the source takes none). [Ingest sources](../../docs-site/docs/guides/ingest-sources.mdx) |
 | Region stage | `GET /region_stage`, `POST /region_stage/pause`, `POST /region_stage/resume` | Pause or resume the region stage for this project only (idempotent, loses nothing). `409` until a region profile is active. |
-| Accuracy audit | `POST /audit/start`, `GET /audit/queue`, `GET /audit/report` | Draws a stratified sample of machine-labelled crops for a human to label through the normal label routes, then reports how often the detector and the VLM agreed with those labels. `409 audit_no_candidates` when nothing is eligible. |
+| Accuracy audit | `POST /audit/start`, `GET /audit/report` | Draws a stratified sample of machine-labelled crops for a human to label in the `audit` review queue through the normal label routes, then reports how often the detector and the VLM agreed with those labels. `409 audit_no_candidates` when nothing is eligible. |
 | Class seeding | `POST /classes/seed_from_detector` | Creates registry classes from the ingest detector's vocabulary; `422 unknown_detector_names`, `503 detector_unavailable`. |
 | Detections | `GET /detections/summary` | Stored detections per detector label, each with its embedding breakdown, over the shared item filter. |
 | VLM scope policy | `GET/PUT /vlm/policy` | Which crops the VLM stage takes (scope `all` when none was written). `PUT` takes `expected_revision` (`409 revision_conflict`); it applies at the worker's next poll and the next `auto_label` run, and stored labels are untouched. |

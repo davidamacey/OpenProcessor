@@ -157,6 +157,21 @@ export function writeWorkspaceUrl(
   }
 }
 
+/** The query string that opens Review on a served queue, at one item, with any extra queue-only
+ *  filter (`combine_conflict=true`). No queue walks the Detections order. */
+export function reviewSearch(
+  opts: { queue?: string | null; cropId?: string; extra?: Record<string, string> } = {},
+): string {
+  const params = new URLSearchParams();
+  writeWorkspaceUrl(params, {
+    view: 'review',
+    queue: opts.queue ?? null,
+    focus: opts.cropId ? { kind: 'item', id: opts.cropId } : null,
+  });
+  for (const [key, value] of Object.entries(opts.extra ?? {})) params.set(key, value);
+  return `?${params.toString()}`;
+}
+
 /** The query string that opens one cluster in the Clusters view. */
 export function clusterScopeSearch(uid: string): string {
   const params = new URLSearchParams();

@@ -12,9 +12,9 @@ import {
   type RegionBrowseItem,
   type TrainingCohortMode,
 } from '$lib/api_regions';
-import { getReviewQueue } from '$lib/api_review';
 import { getTrainingCohorts, type ServedTrainingCohort } from '$lib/api_train';
 import { projectHref } from '$lib/projectPaths';
+import { reviewSearch } from '$lib/workspace/workspaceUrl';
 import { classesStore } from '$stores/classes.svelte';
 import { slotRegistry } from '$lib/annotations/registeredSlots';
 import type { SlotSpec } from '$lib/annotations/types';
@@ -190,8 +190,8 @@ export function createTrainCohortsController() {
       return { total: res.total, items: res.items };
     }
     if (kind === 'crops') {
-      // `GET /crops` and `/review/{tab}` take the class by NAME (v0.4.0);
-      // only `/regions/training_candidates` still takes `class_id`.
+      // `GET /crops` takes the class by NAME (v0.4.0); only
+      // `/regions/training_candidates` still takes `class_id`.
       const res = await getCrops({
         class_name: [className],
         label_validated:
@@ -202,13 +202,8 @@ export function createTrainCohortsController() {
           typeof params.classifier_conf_lt === 'number'
             ? params.classifier_conf_lt
             : undefined,
+        review_tab: typeof params.review_tab === 'string' ? params.review_tab : undefined,
         limit: pageSize,
-      });
-      return { total: res.total, items: res.items };
-    }
-    if (kind === 'model_disagreements') {
-      const res = await getReviewQueue('model_disagreements', null, pageSize, {
-        class_name: [className],
       });
       return { total: res.total, items: res.items };
     }
@@ -297,8 +292,8 @@ export function createTrainCohortsController() {
     return regionSlots.length === 1 ? regionSlots[0] : undefined;
   }
 
-  /** Click target from `reviewTarget` (§9.3 step 7): the owning slot's
-   *  queue tab, else the All tab. */
+  /** Click target from `reviewTarget` (§9.3 step 7): Review at the item, on the owning slot's
+   *  queue, else on the Detections order. */
   function openCohortItem(
     group: CohortGroup,
     cohort: CohortSpec,
@@ -307,17 +302,11 @@ export function createTrainCohortsController() {
     const cropId = 'crop_id' in item ? item.crop_id : item.id;
     if (cohort.reviewTarget === 'slotQueue') {
       const slot = slotRegistry.forClass(group.classId, classesById)[0];
-      const urlId = slot?.capabilities.queue?.urlId ?? 'all';
-      void goto(
-        resolve(
-          projectHref(`/review?tab=${urlId}&crop_id=${encodeURIComponent(cropId)}`),
-        ),
-      );
+      const queue = slot?.capabilities.queue?.endpointId ?? null;
+      void goto(resolve(projectHref(`/workspace${reviewSearch({ queue, cropId })}`)));
       return;
     }
-    void goto(
-      resolve(projectHref(`/review?tab=all&crop_id=${encodeURIComponent(cropId)}`)),
-    );
+    void goto(resolve(projectHref(`/workspace${reviewSearch({ cropId })}`)));
   }
 
   return {

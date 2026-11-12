@@ -9,6 +9,21 @@ ROOT = Path(__file__).resolve().parents[2]
 
 API_PREFIX = '/curation'
 
+
+def review_url(
+    app_url: str, queue: str | None = None, crop_id: str | None = None, **query: str
+) -> str:
+    """The Workspace URL that opens the Review view: on a served queue (none walks the Detections
+    order), at one item, with any queue-only filter (`region_status='verify_rejected'`)."""
+    parts = ['view=review']
+    if queue:
+        parts.append(f'queue={queue}')
+    if crop_id:
+        parts.append(f'focus=item:{crop_id}')
+    parts.extend(f'{k}={v}' for k, v in query.items())
+    return f'{app_url}/p/default/workspace?' + '&'.join(parts)
+
+
 # Single, documented action-timeout budget for the whole stubbed suite.
 #
 # Every explicit `.wait_for(timeout=...)`/`.click(timeout=...)` call used to

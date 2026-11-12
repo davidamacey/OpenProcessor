@@ -301,9 +301,9 @@ See [Keymaps](../guides/keymaps.mdx).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/review/tabs` | The tab catalog with each tab's label, filters, defaults and empty-state hints |
-| GET | `/review/{tab}` | One queue. Tabs: `all`, `mismatches`, `vlm_low_conf`, `detector_disagreements`, `outliers`, `uncertainty`, `model_disagreements`, `regions`, `primary_low_conf`, `classifier_blind_spots`, `new_class_proposals`, `imported` |
-| GET | `/review/{tab}/locate` | Position of one item within a queue |
+| GET | `/review/tabs` | The queues in order, each with its label, filters, defaults and `count` under the filter you send; a queue that cannot fill (no pending audit sample, no region profile) is not listed |
+| GET | `/review/{queue}` | One queue: `to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit` or `regions`. Any other id is `404 not_a_queue`; use it as `review_tab` on a list route instead |
+| GET | `/review/{queue}/locate` | Position of one item within a queue |
 | GET | `/review/new_class_proposals/summary` | VLM-proposed class names, grouped |
 | POST | `/review/new_class_proposals/resolve` | Accept or reject a proposed name for every item that proposes it |
 | GET | `/review/raw_label_clusters` | Raw VLM answers that matched no class, clustered |
@@ -311,7 +311,6 @@ See [Keymaps](../guides/keymaps.mdx).
 | POST | `/test_holdout/freeze` | Freeze a per-class test split before exporting |
 | GET | `/test_holdout/stats` | Per-class test counts |
 | POST | `/audit/start` | Draw a stratified accuracy-audit sample of machine-labelled crops (`min_per_class`, `sample_size`); `409 audit_no_candidates` when none are eligible |
-| GET | `/audit/queue` | Drawn crops still waiting for a human label (`batch_id`, `cursor`, `limit`) |
 | GET | `/audit/report` | Detector and VLM precision per class with Wilson 95% intervals, the confusion matrix and `insufficient_sample` flags (`min_per_class`) |
 | POST | `/probe/run` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
 | GET | `/probe/status` | Probe status. `/probe/cancel` stops it |

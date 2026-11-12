@@ -248,6 +248,7 @@
       type="button"
       class="block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-400"
       aria-pressed={selected}
+      data-crop-id={crop.id}
       aria-label="Select crop {crop.id}"
       onclick={(e) => onclick?.(crop, e)}
     >

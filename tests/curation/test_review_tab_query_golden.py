@@ -1,7 +1,7 @@
 """Golden pin of every review-tab query body.
 
-``build_tab_query`` is the one definition of what each ``/review/{tab}`` queue
-matches; ``review_tab_catalog`` is what the frontend renders from. This test
+``build_tab_query`` is the one definition of what each queue (``/review/{queue}``) and each
+``review_tab`` filter value matches; ``review_tab_catalog`` is what the frontend renders from. This test
 dumps the full ``(must, must_not, reason)`` result (or the rejection raised) for
 every tab x ``include_test`` x ``text`` x ``max_rank`` x ``region_status``
 combination, plus the tab catalog with and without an active region profile,
@@ -26,7 +26,8 @@ from unittest import mock
 
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.review_queries import build_tab_query
-from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
+from src.services.curation.review_tab_clauses import SIMPLE_TABS
+from src.services.curation.review_tabs import review_tab_catalog
 
 
 if TYPE_CHECKING:
@@ -74,7 +75,7 @@ def dump_cases() -> dict[str, str]:
         reads_text = {'text': True, 'no_text': False, 'none': None}[profile_state]
         with _region_profile(reads_text):
             for tab, include_test, text, max_rank, status in itertools.product(
-                (*KNOWN_TABS, 'not_a_tab'),
+                (*SIMPLE_TABS, 'regions', 'not_a_tab'),
                 (True, False),
                 (None, 'AB*?c'),
                 (None, 1, 5),

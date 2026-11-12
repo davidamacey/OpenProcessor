@@ -40,7 +40,7 @@ def test_queue_reads_past_ten_thousand(client: TestClient) -> None:
         params: dict[str, Any] = {'limit': 200, 'sort': 'recent'}
         if cursor:
             params['cursor'] = cursor
-        r = client.get(f'{BASE}/review/all', params=params)
+        r = client.get(f'{BASE}/review/to_label', params=params)
         assert r.status_code == 200, r.text
         page = r.json()
         assert 'page' not in page
@@ -55,9 +55,9 @@ def test_queue_reads_past_ten_thousand(client: TestClient) -> None:
 
 
 def test_cursor_of_another_sort_is_refused(client: TestClient) -> None:
-    first = client.get(f'{BASE}/review/all', params={'limit': 5, 'sort': 'recent'}).json()
+    first = client.get(f'{BASE}/review/to_label', params={'limit': 5, 'sort': 'recent'}).json()
     r = client.get(
-        f'{BASE}/review/all',
+        f'{BASE}/review/to_label',
         params={'cursor': first['next_cursor'], 'sort': 'atypicality'},
     )
     assert r.status_code == 400

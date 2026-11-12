@@ -6,13 +6,13 @@ review panel's Reason row stays a label/value row at 800px.
 from __future__ import annotations
 
 from fixtures.wire import make_item, review_tab, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
 
 
 TABS = review_tabs(
     {
-        **review_tab('all', 'All', filters=['class_id', 'source']),
+        **review_tab('to_label', 'To label', filters=['class_id', 'source']),
         'filter_specs': [
             {
                 'param': 'on_negative_frame',
@@ -54,8 +54,8 @@ def _setup(stub):
 def test_negative_frames_select_shows_the_served_any_option_by_default(stub, page, app_url):
     _setup(stub)
     queue_urls: list[str] = []
-    page.on('request', lambda r: queue_urls.append(r.url) if '/review/all' in r.url else None)
-    page.goto(f'{app_url}/p/default/review?tab=all')
+    page.on('request', lambda r: queue_urls.append(r.url) if '/review/to_label' in r.url else None)
+    page.goto(review_url(app_url, 'to_label'))
     select = page.locator('label:has-text("Negative frames") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.locator('dt:text-is("Reason")').wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -67,7 +67,7 @@ def test_reason_row_is_a_label_value_row_at_800px(stub, page, app_url):
     _setup(stub)
     for width in (1600, 800):
         page.set_viewport_size({'width': width, 'height': 1000})
-        page.goto(f'{app_url}/p/default/review?tab=all')
+        page.goto(review_url(app_url, 'to_label'))
         dt = page.locator('dt:text-is("Reason")')
         dt.wait_for(timeout=ACTION_TIMEOUT_MS)
         dd = page.locator('dt:text-is("Reason") + dd')

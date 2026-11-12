@@ -93,7 +93,7 @@
   >
   {#if parsed.tag}
     <span
-      class="max-w-[140px] min-w-0 shrink truncate text-[9px] uppercase tracking-wide opacity-80"
+      class="max-w-[140px] min-w-0 shrink truncate text-[9px] uppercase tracking-wide"
     >
       {parsed.tag}
     </span>

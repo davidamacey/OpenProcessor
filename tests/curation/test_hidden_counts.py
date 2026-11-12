@@ -101,5 +101,5 @@ def test_crops_and_review_pages_serve_what_they_hide(monkeypatch: pytest.MonkeyP
     assert crops['hidden'] == {'test_holdout': 25, 'excluded': 4}
     shown = client.get('/curation/projects/default/crops', params={'include_test': True}).json()
     assert shown['hidden'] == {'test_holdout': 0, 'excluded': 4}
-    review = client.get('/curation/projects/default/review/all').json()
+    review = client.get('/curation/projects/default/review/to_label').json()
     assert review['hidden'] == {'test_holdout': 25, 'excluded': 4}

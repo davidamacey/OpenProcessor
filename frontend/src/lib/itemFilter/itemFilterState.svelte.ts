@@ -1,6 +1,6 @@
 /**
  * The operator's shared item-filter choices (OpenProcessor v0.4.0): one
- * state object read by /review, /clusters (grid and "Matching items") and
+ * state object read by the Workspace (every view, Review included) and
  * /export. It only holds what the operator picked and spells it in the two
  * wire forms (query parameters for list/stats routes, the `ItemFilter` body
  * for `selection` / `export/yolo item_filter`); the server decides what a
@@ -69,6 +69,8 @@ export class ItemFilterState {
   reviewStatus = $state<ReviewStatus[]>([]);
   openVocabSet = $state<string | null>(null);
   sourcePrompt = $state<string | null>(null);
+  /** One dataset import: the items it labeled or proposed. */
+  importId = $state<string | null>(null);
   /** Capture days, `YYYY-MM-DD`, inclusive; `''` = unset. */
   takenFrom = $state('');
   takenTo = $state('');
@@ -111,6 +113,7 @@ export class ItemFilterState {
     put('review_status', [...this.reviewStatus], this.reviewStatus.length > 0);
     put('open_vocab_set', this.openVocabSet, !!this.openVocabSet);
     put('source_prompt', this.sourcePrompt, !!this.sourcePrompt);
+    put('import_id', this.importId, !!this.importId);
     put('taken_from', this.takenFrom, !!this.takenFrom);
     put('taken_to', this.takenTo, !!this.takenTo);
     put('cluster_uid', [...this.clusterUids], this.clusterUids.length > 0);
@@ -142,11 +145,18 @@ export class ItemFilterState {
     if (this.origin.length > 0) b.origin = [...this.origin];
     if (this.embeddingState.length > 0) b.embedding_state = [...this.embeddingState];
     if (this.reviewStatus.length > 0) b.review_status = [...this.reviewStatus];
-    if (this.openVocabSet) b.open_vocab_set = this.openVocabSet;
-    if (this.sourcePrompt) b.source_prompt = this.sourcePrompt;
     if (this.takenFrom) b.taken_from = this.takenFrom;
     if (this.takenTo) b.taken_to = this.takenTo;
-    return { ...b, ...this.areaBody() };
+    return { ...b, ...this.textBody(), ...this.areaBody() };
+  }
+
+  /** The open-vocabulary, prompt and import keys of the body. */
+  private textBody(): ItemFilter {
+    const b: ItemFilter = {};
+    if (this.openVocabSet) b.open_vocab_set = this.openVocabSet;
+    if (this.sourcePrompt) b.source_prompt = this.sourcePrompt;
+    if (this.importId) b.import_id = this.importId;
+    return b;
   }
 
   /** The cluster, area, location, group and image keys of the body. */
@@ -186,6 +196,7 @@ export class ItemFilterState {
     this.reviewStatus = pick(params.getAll('review_status'), REVIEW_STATUSES);
     this.openVocabSet = params.get('open_vocab_set') || null;
     this.sourcePrompt = params.get('source_prompt') || null;
+    this.importId = params.get('import_id') || null;
     this.takenFrom = params.get('taken_from') ?? '';
     this.takenTo = params.get('taken_to') ?? '';
     this.clusterUids = params
@@ -235,17 +246,18 @@ export class ItemFilterState {
         return this.embeddingState;
       case 'review_status':
         return this.reviewStatus;
-      case 'open_vocab_set':
-        return this.openVocabSet ?? '';
-      case 'source_prompt':
-        return this.sourcePrompt ?? '';
       case 'taken_from':
         return this.takenFrom;
       case 'taken_to':
         return this.takenTo;
       default:
-        return this.textMatchValue(param);
+        return this.textValue(param) ?? this.textMatchValue(param);
     }
+  }
+
+  private textValue(param: string): string | undefined {
+    const field = TEXT_FIELDS[param];
+    return field ? (this[field] ?? '') : undefined;
   }
 
   private textMatchValue(param: string): string | undefined {
@@ -299,12 +311,6 @@ export class ItemFilterState {
       case 'review_status':
         this.reviewStatus = pick(list, REVIEW_STATUSES);
         break;
-      case 'open_vocab_set':
-        this.openVocabSet = str || null;
-        break;
-      case 'source_prompt':
-        this.sourcePrompt = str || null;
-        break;
       case 'taken_from':
         this.takenFrom = str;
         break;
@@ -312,8 +318,14 @@ export class ItemFilterState {
         this.takenTo = str;
         break;
       default:
+        this.setText(param, str);
         this.setTextMatch(param, list);
     }
+  }
+
+  private setText(param: string, str: string): void {
+    const field = TEXT_FIELDS[param];
+    if (field) this[field] = str || null;
   }
 
   clear(): void {
@@ -329,6 +341,7 @@ export class ItemFilterState {
     this.reviewStatus = [];
     this.openVocabSet = null;
     this.sourcePrompt = null;
+    this.importId = null;
     this.takenFrom = '';
     this.takenTo = '';
     this.clusterUids = [];
@@ -418,6 +431,13 @@ export class ItemFilterState {
         clear: () => (this.sourcePrompt = null),
       });
     }
+    if (this.importId) {
+      out.push({
+        param: 'import_id',
+        label: `Import: ${this.importId}`,
+        clear: () => (this.importId = null),
+      });
+    }
     if (this.takenFrom || this.takenTo) {
       out.push({
         param: 'taken_from',
@@ -480,6 +500,13 @@ export class ItemFilterState {
   }
 }
 
+/** The free-text filters: the query parameter and the field that holds it. */
+const TEXT_FIELDS: Record<string, 'openVocabSet' | 'sourcePrompt' | 'importId'> = {
+  open_vocab_set: 'openVocabSet',
+  source_prompt: 'sourcePrompt',
+  import_id: 'importId',
+};
+
 export const URL_KEYS = [
   'class_name',
   'exclude_class_name',
@@ -493,6 +520,7 @@ export const URL_KEYS = [
   'review_status',
   'open_vocab_set',
   'source_prompt',
+  'import_id',
   'taken_from',
   'taken_to',
   'cluster_uid',

@@ -173,12 +173,20 @@ def verdict_query() -> dict[str, Any]:
     }
 
 
-def pending_query(batch_id: str | None = None) -> dict[str, Any]:
-    """Drawn crops still waiting for a human, optionally of one batch."""
-    filters: list[dict[str, Any]] = [{'term': {AUDIT_SAMPLE: True}}]
-    if batch_id:
-        filters.append({'term': {AUDIT_BATCH: batch_id}})
-    return {'bool': {'filter': filters, 'must_not': [{'term': {'class_validated': True}}]}}
+def pending_query() -> dict[str, Any]:
+    """Drawn crops still waiting for a human."""
+    return {
+        'bool': {
+            'filter': [{'term': {AUDIT_SAMPLE: True}}],
+            'must_not': [{'term': {'class_validated': True}}],
+        }
+    }
+
+
+async def has_pending_sample(opensearch: Any) -> bool:
+    """Whether any drawn crop still waits for a human (the audit queue exists only then)."""
+    resp = await opensearch.count(index=items_index(), body={'query': pending_query()})
+    return int(resp.get('count', 0)) > 0
 
 
 async def load_report(

@@ -63,9 +63,8 @@ a manual capture or a small extension that drives the clicks read-only.
 | `import-wizard` | `/datasets/import` | state | A previewed import with the class-mapping table |
 | `import-job` | `/datasets/imports/<id>` | state | A job with progress, report and the Undo dry run |
 | `reprocess-dialog` | an item's Details | state | Scopes and the locked-and-skipped counts |
-| `review-imported` | `/review?tab=imported&import_id=<id>` | state | Imported tab with an import chip |
-| `review-regions-multibox` | `/review?tab=regions` | state | One item with several boxes in different states |
-| `box-editor` | `/review?tab=regions` (edit mode) | state | A selected box, Add box and the "N / max" counter |
+| `review-regions-multibox` | `/workspace?view=review&queue=regions` | state | One item with several boxes in different states |
+| `box-editor` | `/workspace?view=review&queue=regions` (edit mode) | state | A selected box, Add box and the "N / max" counter |
 | `prompt-pack-editor` | `/settings/prompt-packs/<name>` | state | Grouped fields with a validation issue |
 | `prompt-pack-test` | same, Test on a crop | state | Prompt, raw reply and parsed answer |
 | `region-profile-editor` | `/settings/region-profiles/<name>` | state | Typed fields and model pickers |

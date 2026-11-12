@@ -24,7 +24,7 @@ import json
 
 from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
@@ -273,14 +273,14 @@ def test_keymap_absent_when_404(stub, page, app_url):
         dismiss_calls.append(match.string)
         return (200, review_item(0))
 
-    stub.on('GET', r'/review/all(\?|$)', review_handler)
+    stub.on('GET', r'/review/to_label(\?|$)', review_handler)
     stub.on(
         'POST',
         r'/crops/[^/]+/review_dismiss$',
         dismiss_handler,
     )
 
-    page.goto(f'{app_url}/p/default/review', wait_until='domcontentloaded')
+    page.goto(review_url(app_url, 'to_label'), wait_until='domcontentloaded')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     # The hint strip renders from the same registrations the key handler
     # uses, so once it shows the discard hint the key is live.
@@ -371,10 +371,10 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
         dismiss_calls.append(match.string)
         return (200, review_item(0))
 
-    stub.on('GET', r'/review/all(\?|$)', review_handler)
+    stub.on('GET', r'/review/to_label(\?|$)', review_handler)
     stub.on('POST', r'/crops/[^/]+/review_dismiss$', dismiss_handler)
 
-    page.goto(f'{app_url}/p/default/review', wait_until='domcontentloaded')
+    page.goto(review_url(app_url, 'to_label'), wait_until='domcontentloaded')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     # The hint strip's own key glyph proves the rebound keymap has loaded
     # before either key is tested below.
@@ -495,10 +495,10 @@ def test_keymap_per_context_override(stub, page, app_url):
         dismiss_calls.append(match.string)
         return (200, review_item(0))
 
-    stub.on('GET', r'/review/all(\?|$)', review_handler)
+    stub.on('GET', r'/review/to_label(\?|$)', review_handler)
     stub.on('POST', r'/crops/[^/]+/review_dismiss$', dismiss_handler)
 
-    page.goto(f'{app_url}/review', wait_until='domcontentloaded')
+    page.goto(review_url(app_url, 'to_label'), wait_until='domcontentloaded')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     with page.expect_response(
         lambda r: r.request.method == 'POST' and '/review_dismiss' in r.url,

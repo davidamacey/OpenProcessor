@@ -143,6 +143,7 @@ describe('class identity is by name on the list routes', () => {
       origin: ['sam3'],
       embedding_state: ['failed'],
       review_status: ['pending'],
+      import_id: 'imp_1',
       taken_from: '2024-03-05',
       taken_to: '2024-03-06',
       image_id: ['i1'],

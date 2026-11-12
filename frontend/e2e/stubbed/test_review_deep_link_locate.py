@@ -1,4 +1,4 @@
-"""DQ-M7: `/review?crop_id=`
+"""DQ-M7: `/workspace?view=review&focus=item:<id>`
 deep link at a deep page used to page 1..loc.page sequentially via
 `queue.loadMore()` — 103 requests / 5.7s to reach rank 3000 (page 101) —
 and for that whole window rendered page 1's item #1 with its keybindings
@@ -7,10 +7,10 @@ live, so a keypress acted on the wrong crop.
 Fixed by `queue.loadAt(loc.cursor_before, loc.index)` (one request, src/lib/pager.svelte.ts)
 and a new `awaitingDeepLink` state that keeps the tab-action keybindings
 unregistered and renders a "Locating crop…" placeholder instead of item #1
-until the target page lands (src/routes/review/+page.svelte).
+until the target page lands (src/lib/workspace/views/ReviewView.svelte).
 
 This test proves both halves against a real page mount:
-  1. only ONE `/review/all` page request is made before the located page's
+  1. only ONE `/review/to_label` page request is made before the located page's
      request (page 1's own load, made before the deep link — never every
      page from 2..101);
   2. the page shows "Locating crop…" (not item #1) while the deep link
@@ -39,8 +39,9 @@ import threading
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO, review_url
 from harness.waits import wait_for_paint
+from playwright.sync_api import expect
 
 
 CLASSES = [
@@ -124,7 +125,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             )
         return (200, {'items': [review_item(0)], 'total': 3010, 'next_cursor': None, 'limit': 30})
 
-    stub.on('GET', r'/review/all(\?|$)', review_handler)
+    stub.on('GET', r'/review/to_label(\?|$)', review_handler)
 
     def locate_handler(_request, _match):
         # Held open until the test explicitly releases it, simulating the
@@ -146,7 +147,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             },
         )
 
-    stub.on('GET', r'/review/all/locate(\?|$)', locate_handler)
+    stub.on('GET', r'/review/to_label/locate(\?|$)', locate_handler)
 
     def label_handler(request, match):
         label_calls.append(match.string)
@@ -156,7 +157,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     stub.on('PUT', r'/crops/([^/]+)/label$', label_handler)
 
-    page.goto(f'{app_url}/p/default/review?tab=all&crop_id=crop-target')
+    page.goto(review_url(app_url, 'to_label', 'crop-target'))
 
     # This is the one page.* call proven to complete BEFORE a held-open
     # route handler can block the driver's dispatch loop for later
@@ -188,10 +189,8 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     wait_until_requested(page, review_page_requests, AFTER_LOCATED)
     assert review_page_requests == [None, LOCATE_CURSOR, AFTER_LOCATED], review_page_requests
 
-    # Rows remain after the located one, so the footer must not claim everything is loaded.
-    footer = page.locator('text=/\\(loaded \\d+\\)/').first.inner_text()
-    assert footer == '(loaded 7)', footer
-    assert page.get_by_text('all loaded').count() == 0
+    # Rows remain after the located one: the filmstrip shows them after the located item.
+    expect(page.get_by_test_id('filmstrip-item').nth(1)).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     # F8 D6: the counter shows the served queue position (index 3000 ->
     # #3001), not the cursor's index within the one loaded page.

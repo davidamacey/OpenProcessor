@@ -7,7 +7,11 @@
   import type { Crop } from '$lib/types';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
-  let { id }: { ws: WorkspaceController; id: string | null } = $props();
+  let {
+    ws,
+    id,
+    embedded = false,
+  }: { ws: WorkspaceController; id: string | null; embedded?: boolean } = $props();
 
   let crop = $state<Crop | null>(null);
   let error = $state<string | null>(null);
@@ -30,6 +34,13 @@
 
 <ViewState {status} message={error ?? 'Pick a detection to see its details.'}>
   {#if crop}
-    <CropMetaPanel {crop} onreprocessed={(c) => (crop = c)} />
+    <CropMetaPanel
+      {crop}
+      {embedded}
+      onreprocessed={(c) => {
+        crop = c;
+        ws.adoptReviewItem(c);
+      }}
+    />
   {/if}
 </ViewState>

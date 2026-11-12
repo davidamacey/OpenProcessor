@@ -65,9 +65,7 @@ def state_import_job_actions(page, ctx: Ctx) -> None:
 
 def state_region_profile_testable(page, ctx: Ctx) -> None:
     life = _life()
-    first = api_get(ctx.base, f'/curation/projects/{life}/review/regions?page_size=1')['items'][0][
-        'id'
-    ]
+    first = api_get(ctx.base, f'/curation/projects/{life}/review/regions?limit=1')['items'][0]['id']
     page.goto(
         f'{ctx.base}/p/{life}/settings/region-profiles/wheels',
         wait_until='domcontentloaded',
@@ -193,7 +191,7 @@ def state_open_vocab_editor(page, ctx: Ctx) -> None:
 
 def state_open_vocab_test(page, ctx: Ctx) -> None:
     life = _life()
-    items = api_get(ctx.base, f'/curation/projects/{life}/review/regions?page_size=100')['items']
+    items = api_get(ctx.base, f'/curation/projects/{life}/review/regions?limit=100')['items']
     car = max(  # the car crop with the most wheel boxes: a part is surely visible in it
         items, key=lambda it: len(it['region_boxes'])
     )['id']

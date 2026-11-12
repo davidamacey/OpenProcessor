@@ -12,7 +12,7 @@ state changes. So Enter on an untouched `proposed` box sends exactly one
 from __future__ import annotations
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 
 
@@ -123,7 +123,7 @@ def test_region_confirm_unchanged_box_sends_state_only_no_bbox_norm(stub, page, 
 
     stub.on('PATCH', r'/crops/([^/]+)/region_meta$', region_meta)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('multibox-canvas').first.wait_for(timeout=ACTION_TIMEOUT_MS)

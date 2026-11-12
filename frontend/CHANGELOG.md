@@ -10,12 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
+- Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
+- Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.
+- Review offers the server's sort options for the open queue (the shared Sort menu, `sort_review` in the address); a queue opens in its own order.
+- Review is a Workspace view. `Enter` on a Detections card opens it at that item and `Esc` returns to the same card; the rail lists the served queues (To label, Check machine labels, Disagreements, New class proposals, Audit sample and the region queue) with their counts under the filter.
 - Workspace page (`/workspace`) with Clusters and Detections views, a served queues and classes rail, a details panel, a bulk bar that states the served selection summary and dry-runs every action, and a class picker with inline create. The filter, queue, open cluster and selection stay when you switch view; Back restores the previous view.
 - Ignore reasons are the served list (`GET /exclude_reasons`).
 
 ### Removed
 
 - `/map`: the Map is a Workspace view (`/workspace?view=map`) with area filters; its crop side panel is the cell details.
+- `/review`: Review is a Workspace view (`/workspace?view=review&queue=<queue>`); the top-bar Review link, the Review tab bar, the strategy row, the diverse overlay, the semantic search box on Review, its own filter bar and its own class picker are gone (Review uses the Workspace filter and class picker).
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
 - Gallery view of whole images with served boxes and counts; crop dialog siblings open their crop.
 
@@ -30,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Near-duplicates: the selected level and purpose toggles are visibly selected, and a level never built offers "Build" instead of "Full rebuild".
 - Matching items and the review queue say how many test-holdout and ignored items they leave out.
-- Review tab strip shows each tab's served item count, and a tab the project cannot fill yet (Uncertainty without a probe, Imported without imports) reads "needs setup" with the server's reason as its tooltip; the old "empty when last loaded" dimming is gone.
 - Class sidebar and Classes table show each class's item count (`sample_count`) instead of a per-class cluster size the API does not serve (it read 0 for every class); the table column is "Items".
 - Clusters page with no cluster: shows the server's reason and, when a built partition waits or none was served, the cluster run panel with its Activate button in place; the page reloads once a partition serves. The run message no longer says to review the partition first.
 - Dashboard "Labeled by source" shows the served total and rows (imported labels included) and the served box coverage; the browser no longer sums or divides them.
