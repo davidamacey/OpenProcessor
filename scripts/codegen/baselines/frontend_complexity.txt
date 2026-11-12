@@ -1,11 +1,3 @@
-frontend/src/lib/annotations/config/parseSlotAppearance.ts::parseText	32	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotCohorts.ts::parseCohortQuery	26	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotConfig.ts::parseSlotConfig	35	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotLifecycle.ts::parseLifecycle	23	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotLifecycle.ts::parseStates	24	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotQueue.ts::parseKeymap	20	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotQueue.ts::parseQueue	19	baseline at introduction; decompose to shrink
-frontend/src/lib/annotations/config/parseSlotRegion.ts::parseSubBox	21	baseline at introduction; decompose to shrink
 frontend/src/lib/annotations/datasetExport.ts::datasetExportForSlot	23	baseline at introduction; decompose to shrink
 frontend/src/lib/annotations/deploymentProfiles.ts::fetchDeploymentProfiles	16	baseline at introduction; decompose to shrink
 frontend/src/lib/annotations/readSlot.test.ts::<anonymous>	22	baseline at introduction; decompose to shrink

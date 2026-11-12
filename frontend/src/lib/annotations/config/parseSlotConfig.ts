@@ -243,95 +243,97 @@ function defaultParseContext(): Required<ParseContext> {
   };
 }
 
-export function parseSlotConfig(raw: unknown, ctxIn: ParseContext = {}): SlotParseResult {
+function resolveContext(ctxIn: ParseContext): Required<ParseContext> {
   const seeded = defaultParseContext();
-  const ctx: Required<ParseContext> = {
+  return {
     claimedCombos: ctxIn.claimedCombos ?? seeded.claimedCombos,
     takenUrlIds: ctxIn.takenUrlIds ?? seeded.takenUrlIds,
     takenEndpointIds: ctxIn.takenEndpointIds ?? seeded.takenEndpointIds,
     takenKeys: ctxIn.takenKeys ?? seeded.takenKeys,
   };
-  const errors: string[] = [];
-  if (!isPlainObject(raw)) {
-    errors.push('slot spec is not a valid object — skipped');
-    return { errors };
-  }
-  // Only a SHALLOW forbidden-key check at the top level: each recognized
-  // sub-field (bind/label/capabilities/extras/endpoints/stats) below runs
-  // its own full recursive `hasForbiddenKey`, which both catches pollution
-  // in the field that actually carries it AND reports it with a message
-  // naming that field. A deep top-level scan here would instead reject
-  // for "slot spec is not a valid object" regardless of which field was
-  // actually poisoned — true but useless to an operator debugging their
-  // JSON. Any forbidden key nested under a field this parser doesn't read
-  // at all is inert: it is never copied into the output `SlotSpec`.
-  if (Object.keys(raw).some((k) => FORBIDDEN_KEYS.has(k))) {
-    errors.push('slot spec has a forbidden top-level key — skipped');
-    return { errors };
-  }
-  if (!isIdentifier(raw.key)) {
-    errors.push('slot spec has an invalid `key` — skipped');
-    return { errors };
-  }
-  const key = raw.key;
+}
 
-  if (ctx.takenKeys?.has(key)) {
+/** Parse every capability; null means the slot is rejected (error already pushed). */
+function parseCapabilities(
+  raw: unknown,
+  key: string,
+  errors: string[],
+  ctx: Required<ParseContext>,
+): SlotSpec['capabilities'] | null {
+  if (!isPlainObject(raw) || hasForbiddenKey(raw)) {
+    errors.push(`slot "${key}": capabilities must be an object — skipped`);
+    return null;
+  }
+  for (const k of Object.keys(raw)) {
+    if (!CAPABILITY_KEYS.has(k)) {
+      errors.push(`slot "${key}": capabilities has an unknown key "${k}" — ignored`);
+    }
+  }
+  const parsers: [keyof SlotSpec['capabilities'], () => unknown][] = [
+    ['subBox', () => parseSubBox(raw.subBox, key, errors)],
+    ['text', () => parseText(raw.text, key, errors)],
+    ['provenance', () => parseProvenance(raw.provenance, key, errors)],
+    ['lifecycle', () => parseLifecycle(raw.lifecycle, key, errors)],
+    ['queue', () => parseQueue(raw.queue, key, errors, ctx)],
+    ['trainingCohorts', () => parseTrainingCohorts(raw.trainingCohorts, key, errors)],
+  ];
+  const caps: Record<string, unknown> = {};
+  for (const [name, parse] of parsers) {
+    const parsed = parse();
+    if (parsed === null) return null;
+    if (parsed !== undefined) caps[name] = parsed;
+  }
+  return caps as SlotSpec['capabilities'];
+}
+
+/** Slot key, or an error message when the top level is unusable. */
+function topLevelProblem(raw: unknown): string | null {
+  if (!isPlainObject(raw)) return 'slot spec is not a valid object — skipped';
+  // Only a SHALLOW forbidden-key check at the top level: each recognized
+  // sub-field below runs its own full recursive `hasForbiddenKey`, which
+  // reports pollution under the field that actually carries it. Keys under
+  // fields this parser never reads are inert: never copied to the output.
+  if (Object.keys(raw).some((k) => FORBIDDEN_KEYS.has(k))) {
+    return 'slot spec has a forbidden top-level key — skipped';
+  }
+  if (!isIdentifier(raw.key)) return 'slot spec has an invalid `key` — skipped';
+  return null;
+}
+
+export function parseSlotConfig(raw: unknown, ctxIn: ParseContext = {}): SlotParseResult {
+  const ctx = resolveContext(ctxIn);
+  const errors: string[] = [];
+  const problem = topLevelProblem(raw);
+  if (problem) {
+    errors.push(problem);
+    return { errors };
+  }
+  const rec = raw as Record<string, unknown>;
+  const key = rec.key as string;
+
+  if (ctx.takenKeys.has(key)) {
     errors.push(
       `slot "${key}": overrides a built-in slot key — ignored (merge-by-replace)`,
     );
   }
 
-  const bind = parseBind(raw.bind, key, errors);
+  const bind = parseBind(rec.bind, key, errors);
   if (!bind) return { errors };
-
-  const label = parseLabel(raw.label, key, errors);
+  const label = parseLabel(rec.label, key, errors);
   if (!label) return { errors };
-
-  if (!isPlainObject(raw.capabilities) || hasForbiddenKey(raw.capabilities)) {
-    errors.push(`slot "${key}": capabilities must be an object — skipped`);
-    return { errors };
-  }
-  const capsRaw = raw.capabilities;
-  for (const k of Object.keys(capsRaw)) {
-    if (!CAPABILITY_KEYS.has(k)) {
-      errors.push(`slot "${key}": capabilities has an unknown key "${k}" — ignored`);
-    }
-  }
-
-  const subBox = parseSubBox(capsRaw.subBox, key, errors);
-  if (subBox === null) return { errors };
-  const text = parseText(capsRaw.text, key, errors);
-  if (text === null) return { errors };
-  const provenance = parseProvenance(capsRaw.provenance, key, errors);
-  if (provenance === null) return { errors };
-  const lifecycle = parseLifecycle(capsRaw.lifecycle, key, errors);
-  if (lifecycle === null) return { errors };
-  const queue = parseQueue(capsRaw.queue, key, errors, ctx);
-  if (queue === null) return { errors };
-  const trainingCohorts = parseTrainingCohorts(capsRaw.trainingCohorts, key, errors);
-  if (trainingCohorts === null) return { errors };
-
-  const endpoints = parseEndpoints(raw.endpoints, key, errors);
+  const capabilities = parseCapabilities(rec.capabilities, key, errors, ctx);
+  if (capabilities === null) return { errors };
+  const endpoints = parseEndpoints(rec.endpoints, key, errors);
   if (endpoints === null) return { errors };
-
-  const stats = parseStats(raw.stats, key, errors);
+  const stats = parseStats(rec.stats, key, errors);
   if (stats === null) return { errors };
-
-  const extras = parseExtras(raw.extras, key, errors);
+  const extras = parseExtras(rec.extras, key, errors);
   if (extras === null) return { errors };
 
-  const slot: SlotSpec = { key, bind, label, capabilities: {}, endpoints };
-  if (subBox !== undefined) slot.capabilities.subBox = subBox;
-  if (text !== undefined) slot.capabilities.text = text;
-  if (provenance !== undefined) slot.capabilities.provenance = provenance;
-  if (lifecycle !== undefined) slot.capabilities.lifecycle = lifecycle;
-  if (queue !== undefined) slot.capabilities.queue = queue;
-  if (trainingCohorts !== undefined) slot.capabilities.trainingCohorts = trainingCohorts;
+  const slot: SlotSpec = { key, bind, label, capabilities, endpoints };
   if (stats !== undefined) slot.stats = stats;
   if (extras !== undefined) slot.extras = extras;
-
-  ctx.takenKeys?.add(key);
-
+  ctx.takenKeys.add(key);
   return { slot, errors };
 }
 
