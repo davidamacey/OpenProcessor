@@ -146,6 +146,11 @@ describe('class identity is by name on the list routes', () => {
       taken_from: '2024-03-05',
       taken_to: '2024-03-06',
       image_id: ['i1'],
+      cluster_uid: ['c1', 'c2'],
+      geo_bbox: '7,46,9,48',
+      geo_polygon: '7,46;9,46;8,48',
+      has_location: true,
+      near_dup_group: 'g1',
     } satisfies Required<Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>>;
     const f = stub({ items: [], total: 0 });
     await getClusters(every);

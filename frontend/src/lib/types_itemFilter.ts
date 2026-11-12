@@ -9,6 +9,7 @@
  * `src/lib/contract/itemFilterContract.test.ts`. The backend serves no
  * vocabulary for these enums, so the const arrays are the contract's.
  */
+import type { GeoBox } from '$lib/types_map';
 
 /** `ItemDoc.embedding_state`. */
 export const EMBEDDING_STATES = [
@@ -55,6 +56,14 @@ export interface ItemFilterQuery {
   taken_to?: string | null;
   /** Only items on these images (at most 200). */
   image_id?: string[];
+  /** Items in these clusters (OR; at most 200). */
+  cluster_uid?: string[];
+  /** `west,south,east,north` in degrees; west > east crosses the antimeridian. */
+  geo_bbox?: string;
+  /** `lon,lat;lon,lat;...`, 3 to 64 vertices. */
+  geo_polygon?: string;
+  has_location?: boolean;
+  near_dup_group?: string;
 }
 
 /** `ItemFilter` (request body schema). */
@@ -63,7 +72,11 @@ export interface ItemFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_uid?: string | null;
+  cluster_uids?: string[];
+  geo_bbox?: GeoBox | null;
+  geo_polygon?: [number, number][] | null;
+  has_location?: boolean | null;
+  near_dup_group?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

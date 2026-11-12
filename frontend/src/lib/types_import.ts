@@ -11,6 +11,7 @@ import type {
   ReviewStatus,
   SelectionSample,
 } from '$lib/types_itemFilter';
+import type { GeoBox } from '$lib/types_map';
 
 /** `LabeledChoice`: a served vocabulary entry (`value` is the wire id). */
 export interface LabeledChoice {
@@ -434,7 +435,11 @@ export interface ReprocessFilter {
   class_names?: string[];
   class_source?: string | null;
   classifier_conf_lt?: number | null;
-  cluster_uid?: string | null;
+  cluster_uids?: string[];
+  geo_bbox?: GeoBox | null;
+  geo_polygon?: [number, number][] | null;
+  has_location?: boolean | null;
+  near_dup_group?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

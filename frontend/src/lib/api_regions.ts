@@ -84,7 +84,7 @@ export interface RegionsPage {
 
 export interface RegionsQuery extends Omit<
   ItemFilterQuery,
-  'open_vocab_set' | 'source_prompt'
+  'open_vocab_set' | 'source_prompt' | 'cluster_uid'
 > {
   page?: number;
   page_size?: number;

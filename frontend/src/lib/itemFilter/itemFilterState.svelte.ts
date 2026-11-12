@@ -7,6 +7,7 @@
  * filter matches, how many items that is and which values are valid.
  */
 import { humanizeId } from '$lib/humanizeId';
+import type { GeoBox } from '$lib/types_map';
 import {
   EMBEDDING_STATES,
   ITEM_ORIGINS,
@@ -30,6 +31,25 @@ export interface ItemFilterChip {
   clear(): void;
 }
 
+const formatBox = (b: GeoBox): string => `${b.west},${b.south},${b.east},${b.north}`;
+const formatRing = (ring: [number, number][]): string =>
+  ring.map(([lon, lat]) => `${lon},${lat}`).join(';');
+
+/** Reads back what `formatBox` writes; anything else is dropped (the server refuses it anyway). */
+function parseBox(raw: string | null): GeoBox | null {
+  const parts = (raw ?? '').split(',').map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
+  const [west, south, east, north] = parts;
+  return { west, south, east, north };
+}
+
+function parseRing(raw: string | null): [number, number][] | null {
+  if (!raw) return null;
+  const ring = raw.split(';').map((v) => v.split(',').map(Number));
+  if (ring.some((p) => p.length !== 2 || p.some((n) => !Number.isFinite(n)))) return null;
+  return ring.map(([lon, lat]) => [lon, lat]);
+}
+
 function pick<T extends string>(values: string[], allowed: readonly T[]): T[] {
   return values.filter((v): v is T => (allowed as readonly string[]).includes(v));
 }
@@ -50,24 +70,18 @@ export class ItemFilterState {
   /** Capture days, `YYYY-MM-DD`, inclusive; `''` = unset. */
   takenFrom = $state('');
   takenTo = $state('');
+  /** Clusters of the served partition (OR). */
+  clusterUids = $state<string[]>([]);
+  /** An area on the map: a box or a ring, as drawn; the server snaps it to the location policy. */
+  geoBbox = $state<GeoBox | null>(null);
+  geoPolygon = $state<[number, number][] | null>(null);
+  hasLocation = $state<boolean | null>(null);
+  /** Set by a scope (a near-duplicate group, one image), not by a bar control. */
+  nearDupGroup = $state<string | null>(null);
+  imageIds = $state<string[]>([]);
 
   get isEmpty(): boolean {
-    return (
-      this.classNames.length === 0 &&
-      this.excludeClassNames.length === 0 &&
-      this.confMin == null &&
-      this.confMax == null &&
-      this.minArea == null &&
-      this.maxArea == null &&
-      this.maxRank == null &&
-      this.origin.length === 0 &&
-      this.embeddingState.length === 0 &&
-      this.reviewStatus.length === 0 &&
-      !this.openVocabSet &&
-      !this.sourcePrompt &&
-      !this.takenFrom &&
-      !this.takenTo
-    );
+    return Object.keys(this.toBody()).length === 0;
   }
 
   /** Query-parameter form. `allowed` lets a route (or a review tab's served
@@ -95,6 +109,16 @@ export class ItemFilterState {
     put('source_prompt', this.sourcePrompt, !!this.sourcePrompt);
     put('taken_from', this.takenFrom, !!this.takenFrom);
     put('taken_to', this.takenTo, !!this.takenTo);
+    put('cluster_uid', [...this.clusterUids], this.clusterUids.length > 0);
+    put('geo_bbox', this.geoBbox && formatBox(this.geoBbox), this.geoBbox != null);
+    put(
+      'geo_polygon',
+      this.geoPolygon && formatRing(this.geoPolygon),
+      this.geoPolygon != null,
+    );
+    put('has_location', this.hasLocation, this.hasLocation != null);
+    put('near_dup_group', this.nearDupGroup, this.nearDupGroup != null);
+    put('image_id', [...this.imageIds], this.imageIds.length > 0);
     return q as ItemFilterQuery;
   }
 
@@ -117,6 +141,18 @@ export class ItemFilterState {
     if (this.sourcePrompt) b.source_prompt = this.sourcePrompt;
     if (this.takenFrom) b.taken_from = this.takenFrom;
     if (this.takenTo) b.taken_to = this.takenTo;
+    return { ...b, ...this.areaBody() };
+  }
+
+  /** The cluster, area, location, group and image keys of the body. */
+  private areaBody(): ItemFilter {
+    const b: ItemFilter = {};
+    if (this.clusterUids.length > 0) b.cluster_uids = [...this.clusterUids];
+    if (this.geoBbox) b.geo_bbox = { ...this.geoBbox };
+    if (this.geoPolygon) b.geo_polygon = this.geoPolygon.map(([lon, lat]) => [lon, lat]);
+    if (this.hasLocation != null) b.has_location = this.hasLocation;
+    if (this.nearDupGroup) b.near_dup_group = this.nearDupGroup;
+    if (this.imageIds.length > 0) b.image_ids = [...this.imageIds];
     return b;
   }
 
@@ -146,6 +182,13 @@ export class ItemFilterState {
     this.sourcePrompt = params.get('source_prompt') || null;
     this.takenFrom = params.get('taken_from') ?? '';
     this.takenTo = params.get('taken_to') ?? '';
+    this.clusterUids = params
+      .getAll('cluster_uid')
+      .filter((v, i, all) => all.indexOf(v) === i);
+    this.geoBbox = parseBox(params.get('geo_bbox'));
+    this.geoPolygon = parseRing(params.get('geo_polygon'));
+    const located = params.get('has_location');
+    this.hasLocation = located === 'true' ? true : located === 'false' ? false : null;
   }
 
   /** Writes the state into `params`, deleting the keys that are now empty. */
@@ -268,6 +311,12 @@ export class ItemFilterState {
     this.sourcePrompt = null;
     this.takenFrom = '';
     this.takenTo = '';
+    this.clusterUids = [];
+    this.geoBbox = null;
+    this.geoPolygon = null;
+    this.hasLocation = null;
+    this.nearDupGroup = null;
+    this.imageIds = [];
   }
 
   /** One removable chip per active value. */
@@ -358,11 +407,59 @@ export class ItemFilterState {
         },
       });
     }
+    return [...out, ...this.scopeChips()];
+  }
+
+  /** Chips for the cluster, area, location and scope values. */
+  private scopeChips(): ItemFilterChip[] {
+    const out: ItemFilterChip[] = [];
+    for (const uid of this.clusterUids) {
+      out.push({
+        param: 'cluster_uid',
+        label: `Cluster ${uid.slice(0, 8)}`,
+        clear: () => (this.clusterUids = this.clusterUids.filter((u) => u !== uid)),
+      });
+    }
+    if (this.geoBbox) {
+      out.push({
+        param: 'geo_bbox',
+        label: 'Area: box',
+        clear: () => (this.geoBbox = null),
+      });
+    }
+    if (this.geoPolygon) {
+      out.push({
+        param: 'geo_polygon',
+        label: 'Area: drawn shape',
+        clear: () => (this.geoPolygon = null),
+      });
+    }
+    if (this.hasLocation != null) {
+      out.push({
+        param: 'has_location',
+        label: this.hasLocation ? 'With a location' : 'Without a location',
+        clear: () => (this.hasLocation = null),
+      });
+    }
+    if (this.nearDupGroup) {
+      out.push({
+        param: 'near_dup_group',
+        label: 'Near-duplicate group',
+        clear: () => (this.nearDupGroup = null),
+      });
+    }
+    if (this.imageIds.length > 0) {
+      out.push({
+        param: 'image_id',
+        label: `${this.imageIds.length} image${this.imageIds.length === 1 ? '' : 's'}`,
+        clear: () => (this.imageIds = []),
+      });
+    }
     return out;
   }
 }
 
-const URL_KEYS = [
+export const URL_KEYS = [
   'class_name',
   'exclude_class_name',
   'conf_min',
@@ -377,4 +474,8 @@ const URL_KEYS = [
   'source_prompt',
   'taken_from',
   'taken_to',
+  'cluster_uid',
+  'geo_bbox',
+  'geo_polygon',
+  'has_location',
 ] as const;

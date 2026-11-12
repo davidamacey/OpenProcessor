@@ -70,7 +70,7 @@ describe('getCrops: include_excluded / item_text params', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await getCrops({
-      cluster_uid: 'uid-1',
+      cluster_uid: ['uid-1'],
       include_excluded: true,
       item_text: 'ABC',
     });
