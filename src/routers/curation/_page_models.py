@@ -24,8 +24,10 @@ class ReviewQueuePage(BaseModel):
     """``GET /review/{tab}``."""
 
     total: int
-    page: int
-    page_size: int
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page; null on the last page.'
+    )
+    limit: int
     items: list[ReviewItemDoc]
     sort_applied: str
     sort_fallback_reason: str | None = Field(
@@ -46,14 +48,19 @@ class ReviewQueuePage(BaseModel):
 
 class ReviewLocateResponse(BaseModel):
     """``GET /review/{tab}/locate``: where an item sits in the queue the same
-    filters and sort would serve. ``rank`` is 0-based; ``page`` is 1-based."""
+    filters and sort would serve."""
 
     crop_id: str
     in_queue: bool
-    rank: int | None
-    page: int | None
-    page_size: int
-    total: int | None
+    index: int | None = Field(description='0-based position in the queue; null when not in it.')
+    total: int = Field(description='Items in the queue.')
+    cursor_before: str | None = Field(
+        description='Pass as `cursor` to `GET /review/{tab}` for the page that starts at this '
+        'item; null for the first row and when not in the queue.'
+    )
+    cursor_after: str | None = Field(
+        description='Pass as `cursor` for the page right after this item; null when not in the queue.'
+    )
     reason: Literal['not_found', 'filtered_out', 'region_profile_off'] | None = Field(
         description='Why it is not in the queue; null when in_queue.'
     )

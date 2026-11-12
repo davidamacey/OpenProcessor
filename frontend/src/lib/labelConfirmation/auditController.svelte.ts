@@ -8,12 +8,9 @@
  * counts, averages or decides whether a class is trustworthy.
  */
 import { detectorErrorLines } from '$lib/api_detector';
-import {
-  getAuditQueue,
-  getAuditReport,
-  startAudit,
-  type AuditQueuePage,
-} from '$lib/api_labelConfirmation';
+import { getAuditQueue, getAuditReport, startAudit } from '$lib/api_labelConfirmation';
+import type { Crop } from '$lib/types';
+import type { CursorPage } from '$lib/types_cursor';
 import type {
   AuditReport,
   AuditStartRequest,
@@ -23,11 +20,11 @@ import type {
 export interface AuditDeps {
   report: (minPerClass?: number | null, signal?: AbortSignal) => Promise<AuditReport>;
   queue: (
-    page?: number,
-    pageSize?: number,
+    cursor?: string | null,
+    limit?: number,
     batchId?: string | null,
     signal?: AbortSignal,
-  ) => Promise<AuditQueuePage>;
+  ) => Promise<CursorPage<Crop>>;
   start: (req: AuditStartRequest, signal?: AbortSignal) => Promise<AuditStartResponse>;
 }
 
@@ -43,8 +40,11 @@ export class AuditController {
   loading = $state(true);
   loadError = $state<string | null>(null);
   report = $state<AuditReport | null>(null);
-  queue = $state<AuditQueuePage | null>(null);
-  queuePage = $state(1);
+  queue = $state<CursorPage<Crop> | null>(null);
+  /** The cursors of the pages before the one shown, nearest last. */
+  #before = $state<(string | null)[]>([]);
+  #cursor = $state<string | null>(null);
+  hasPrevious = $derived(this.#before.length > 0);
   /** Operator inputs; an empty one is not sent, so the server default applies. */
   sampleSize = $state<number | null>(null);
   minPerClass = $state<number | null>(null);
@@ -66,7 +66,7 @@ export class AuditController {
     try {
       const [report, queue] = await Promise.all([
         this.#deps.report(this.minPerClass, signal),
-        this.#deps.queue(this.queuePage, AUDIT_PAGE_SIZE, null, signal),
+        this.#deps.queue(this.#cursor, AUDIT_PAGE_SIZE, null, signal),
       ]);
       this.report = report;
       this.queue = queue;
@@ -78,12 +78,32 @@ export class AuditController {
     }
   }
 
-  async goToPage(page: number): Promise<void> {
-    this.queuePage = page;
+  async next(): Promise<void> {
+    const target = this.queue?.next_cursor;
+    if (!target) return;
+    const shown = this.#cursor;
+    if (await this.#show(target)) {
+      this.#before = [...this.#before, shown];
+      this.#cursor = target;
+    }
+  }
+
+  async previous(): Promise<void> {
+    const cursor = this.#before.at(-1);
+    if (cursor === undefined) return;
+    if (await this.#show(cursor)) {
+      this.#before = this.#before.slice(0, -1);
+      this.#cursor = cursor;
+    }
+  }
+
+  async #show(cursor: string | null): Promise<boolean> {
     try {
-      this.queue = await this.#deps.queue(page, AUDIT_PAGE_SIZE, null);
+      this.queue = await this.#deps.queue(cursor, AUDIT_PAGE_SIZE, null);
+      return true;
     } catch (e) {
       this.loadError = detectorErrorLines(e).join(' ');
+      return false;
     }
   }
 
@@ -102,7 +122,8 @@ export class AuditController {
     } finally {
       this.starting = false;
     }
-    this.queuePage = 1;
+    this.#before = [];
+    this.#cursor = null;
     await this.load();
     return true;
   }

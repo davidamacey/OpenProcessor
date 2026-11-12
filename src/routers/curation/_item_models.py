@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 # Runtime import: pydantic resolves the annotation from module globals.
 from src.domain.embedding_state import EmbeddingState
-from src.schemas.curation.views import HiddenCounts
+from src.schemas.curation.views import HiddenCounts, SortOption
 from src.services.curation.reprocess_models import ReprocessRequest
 
 
@@ -299,11 +299,44 @@ class ItemDoc(BaseModel):
     capture: ItemCapture | None = None
 
 
+class CropLocate(BaseModel):
+    """``GET /crops/locate``: where a crop sits in the list the same filters and sort would serve."""
+
+    crop_id: str
+    in_view: bool
+    index: int | None = Field(description='0-based position in the list; null when not in it.')
+    total: int = Field(description='Items in the list.')
+    cursor_before: str | None = Field(
+        description='Pass as `cursor` to `GET /crops` for the page that starts at this crop; '
+        'null for the first row and when not in the list.'
+    )
+    cursor_after: str | None = Field(
+        description='Pass as `cursor` for the page right after this crop; null when not in the list.'
+    )
+    reason: Literal['not_found', 'filtered_out'] | None = Field(
+        description='Why it is not in the list; null when in_view.'
+    )
+    reason_message: str | None = Field(description='The served sentence for `reason`.')
+
+
 class CropsPageResponse(BaseModel):
     total: int
-    page: int
-    page_size: int
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page; null on the last page, and for the computed '
+        'orders `outliers` and `diverse`, which serve one bounded page.'
+    )
+    limit: int
     crops: list[ItemDoc]
+    sort_applied: str = Field(
+        description="The applied sort id, the computed `order` when one ranked the page, or 'ids' for an id lookup."
+    )
+    sort_options: list[SortOption] = Field(
+        description='Every sort id `sort` takes, with its label.'
+    )
+    empty_reason: Literal['no_items', 'no_match'] | None = Field(
+        description='Why a zero-result list is empty; null when it has items.'
+    )
+    empty_message: str | None = Field(description='The served sentence for `empty_reason`.')
     # Only set for a pool-scale overlay ordering (order='outliers' /
     # 'diverse') — the operator-facing "from N crops in scope" caption
     # needs to know it's looking at a ranked overlay rather than the
@@ -330,6 +363,7 @@ class CropsPageResponse(BaseModel):
 __all__ = [
     'AssistAttributeWire',
     'AssistBoxWire',
+    'CropLocate',
     'CropsPageResponse',
     'ItemAssistWire',
     'ItemDoc',

@@ -9,15 +9,16 @@
   import { projectHref } from '$lib/projectPaths';
   import { percentText } from '$lib/labelConfirmation';
   import { classSourcesStore } from '$stores/classSources.svelte';
-  import type { AuditQueuePage } from '$lib/api_labelConfirmation';
+  import type { Crop } from '$lib/types';
+  import type { CursorPage } from '$lib/types_cursor';
 
   interface Props {
-    queue: AuditQueuePage;
-    ongoto: (page: number) => void;
+    queue: CursorPage<Crop>;
+    hasPrevious: boolean;
+    onprevious: () => void;
+    onnext: () => void;
   }
-  let { queue, ongoto }: Props = $props();
-
-  const lastPage = $derived(Math.max(1, Math.ceil(queue.total / queue.pageSize)));
+  let { queue, hasPrevious, onprevious, onnext }: Props = $props();
 </script>
 
 <section class="surface flex flex-col gap-3 p-4" data-testid="audit-queue">
@@ -79,20 +80,13 @@
         </li>
       {/each}
     </ul>
-    {#if lastPage > 1}
+    {#if hasPrevious || queue.next_cursor}
       <div class="flex items-center gap-2 text-xs text-zinc-400">
-        <button
-          type="button"
-          class="btn"
-          disabled={queue.page <= 1}
-          onclick={() => ongoto(queue.page - 1)}>Previous</button
+        <button type="button" class="btn" disabled={!hasPrevious} onclick={onprevious}
+          >Previous</button
         >
-        <span>Page {queue.page} of {lastPage}</span>
-        <button
-          type="button"
-          class="btn"
-          disabled={queue.page >= lastPage}
-          onclick={() => ongoto(queue.page + 1)}>Next</button
+        <button type="button" class="btn" disabled={!queue.next_cursor} onclick={onnext}
+          >Next</button
         >
       </div>
     {/if}

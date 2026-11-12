@@ -29,7 +29,7 @@ def _setup(stub, page, app_url) -> None:
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 2, 'page': 1, 'page_size': 48, 'crops': [item(0), item(1)]},
+        {'total': 2, 'next_cursor': None, 'limit': 48, 'crops': [item(0), item(1)]},
     )
     page.goto(f'{app_url}/p/default/clusters?class_name=widget&mode=matching')
     page.get_by_test_id('matching-total').wait_for(timeout=ACTION_TIMEOUT_MS)

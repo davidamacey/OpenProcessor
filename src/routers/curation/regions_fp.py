@@ -29,7 +29,7 @@ from src.core.db_session import DbSessionDep
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
-from src.routers.curation._region_row_models import RegionRowPage
+from src.routers.curation._region_row_models import RegionFpPage
 from src.routers.curation._region_status_models import RegionClusterList
 from src.routers.curation.regions import region_source_excludes
 from src.schemas.curation.region_fp import RegionFpCentroidsStarted
@@ -131,7 +131,7 @@ async def build_fp_centroids_endpoint(
 @router.get(
     '/regions/suspected_false_positives',
     response_model=None,
-    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionRowPage}},
+    responses={**REGION_PROFILE_RESPONSES, 200: {'model': RegionFpPage}},
 )
 async def suspected_false_positives(
     opensearch: OpenSearchDep,

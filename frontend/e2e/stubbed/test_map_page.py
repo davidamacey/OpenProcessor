@@ -12,14 +12,13 @@ Waits are real (`expect_request` / visible elements), never a sleep.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import fill
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, TRANSPARENT_GIF
+from harness.screens import shot
 from harness.waits import wait_for_paint
 
 
@@ -73,7 +72,7 @@ def _serve_map(stub, page, app_url: str, meta: dict[str, Any]) -> dict[str, list
     def crops(request, _m):
         seen['crops'].append(request.url)
         rows = [make_item(crop_id=f'crop-{i}', image_id=i) for i in IMAGE_IDS]
-        return (200, {'total': len(rows), 'page': 1, 'page_size': 48, 'crops': rows})
+        return (200, {'total': len(rows), 'next_cursor': None, 'limit': 48, 'crops': rows})
 
     def tile(route, request):
         seen['tiles'].append(request.url)
@@ -86,13 +85,6 @@ def _serve_map(stub, page, app_url: str, meta: dict[str, Any]) -> dict[str, list
     stub.on('GET', r'/crops(\?|$)', crops)
     page.route('**/__tiles/**', tile)
     return seen
-
-
-def _shot(page, name: str) -> None:
-    out = os.environ.get('MAP_SHOTS')
-    if out:
-        Path(out).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f'{out}/{name}.png', full_page=True)
 
 
 def test_cells_render_and_a_click_lists_the_cells_photos(stub, page, app_url):
@@ -126,7 +118,7 @@ def test_cells_render_and_a_click_lists_the_cells_photos(stub, page, app_url):
     crops_query = parse_qs(urlparse(seen['crops'][-1]).query)
     assert crops_query['image_id'] == IMAGE_IDS
     assert seen['tiles'], 'the basemap was requested from the served template'
-    _shot(page, 'map_cell_open')
+    shot(page, 'map_cell_open', env_var='MAP_SHOTS')
 
 
 def test_a_project_without_a_gps_position_says_so(stub, page, app_url):
@@ -137,7 +129,7 @@ def test_a_project_without_a_gps_position_says_so(stub, page, app_url):
     note.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert 'GPS position' in note.inner_text()
     assert page.get_by_test_id('map-canvas').count() == 0
-    _shot(page, 'map_no_gps')
+    shot(page, 'map_no_gps', env_var='MAP_SHOTS')
 
 
 def test_the_drop_policy_says_locations_are_not_stored(stub, page, app_url):
@@ -149,7 +141,7 @@ def test_the_drop_policy_says_locations_are_not_stored(stub, page, app_url):
     assert 'does not store where photos were taken' in note.inner_text()
     assert page.get_by_test_id('map-canvas').count() == 0
     assert seen['cells'] == []
-    _shot(page, 'map_drop')
+    shot(page, 'map_drop', env_var='MAP_SHOTS')
 
 
 def test_the_map_fits_a_430px_screen(stub, page, app_url):
@@ -162,7 +154,7 @@ def test_the_map_fits_a_430px_screen(stub, page, app_url):
     wait_for_paint(page)
     overflow = page.evaluate('() => document.documentElement.scrollWidth - window.innerWidth')
     assert overflow <= 0
-    _shot(page, 'map_430')
+    shot(page, 'map_430', env_var='MAP_SHOTS')
 
 
 def test_without_webgl2_the_card_says_so_and_the_page_keeps_working(stub, page, app_url):
@@ -185,7 +177,7 @@ def test_without_webgl2_the_card_says_so_and_the_page_keeps_working(stub, page, 
     assert page.get_by_role('heading', name='Something went wrong').count() == 0
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, errors[:3]
-    _shot(page, 'map_no_webgl')
+    shot(page, 'map_no_webgl', env_var='MAP_SHOTS')
     page.set_viewport_size({'width': 430, 'height': 900})
     wait_for_paint(page)
-    _shot(page, 'map_no_webgl_430')
+    shot(page, 'map_no_webgl_430', env_var='MAP_SHOTS')

@@ -280,12 +280,12 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
       const fetchMock = vi
         .fn()
         .mockResolvedValue(
-          jsonResponse({ total: 42, page: 1, page_size: 30, items: [] }),
+          jsonResponse({ total: 42, next_cursor: null, limit: 30, items: [] }),
         );
       vi.stubGlobal('fetch', fetchMock);
 
       const effectiveTab = resolveEffectiveTab('all', presetId);
-      const res = await getReviewQueue(effectiveTab, 1, 30, {});
+      const res = await getReviewQueue(effectiveTab, null, 30, {});
 
       const url = fetchMock.mock.calls[0]?.[0] as string;
       expect(url).toContain(`${API_PREFIX}/review/${presetId}`);
@@ -298,12 +298,12 @@ describe('preset chip -> real queue fetch (regression: chip must not become a no
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        jsonResponse({ total: 56797, page: 1, page_size: 30, items: [] }),
+        jsonResponse({ total: 56797, next_cursor: null, limit: 30, items: [] }),
       );
     vi.stubGlobal('fetch', fetchMock);
 
     const effectiveTab = resolveEffectiveTab('all', null);
-    const res = await getReviewQueue(effectiveTab, 1, 30, {});
+    const res = await getReviewQueue(effectiveTab, null, 30, {});
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain(`${API_PREFIX}/review/all`);

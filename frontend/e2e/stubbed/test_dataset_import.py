@@ -513,7 +513,7 @@ def serve_cluster(stub: Any) -> None:
         )
         for i in range(3)
     ]
-    stub.on('GET', r'/crops(\?|$)', {'total': 3, 'page': 1, 'page_size': 60, 'crops': crops})
+    stub.on('GET', r'/crops(\?|$)', {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': crops})
 
 
 def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 from pydantic import BaseModel, Field
 
 
@@ -14,3 +16,10 @@ class HiddenCounts(BaseModel):
     excluded: int = Field(
         description='Items matching the filter that are ignored (0 when included).'
     )
+
+
+class SortOption(TypedDict):
+    """One order a list serves: ``id`` is what the ``sort`` parameter takes, ``label`` is for people."""
+
+    id: str
+    label: str

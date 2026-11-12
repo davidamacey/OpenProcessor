@@ -112,6 +112,7 @@ def test_the_routes_that_gained_fields_are_typed() -> None:
         'GET /search/text',
         'GET /stats/dataset',
         'GET /review/{tab}',
+        'GET /crops/locate',
         'GET /review/{tab}/locate',
         'PUT /crops/batch_label',
         'POST /crops/move',

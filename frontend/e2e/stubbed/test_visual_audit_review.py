@@ -140,8 +140,8 @@ def _stub_review(
             body = {
                 'items': [],
                 'total': 0,
-                'page': 1,
-                'page_size': 30,
+                'next_cursor': None,
+                'limit': 30,
                 'sort_applied': 'atypicality',
                 'sort_fallback_reason': "no item has 'probe_pred_entropy' yet",
             }
@@ -149,7 +149,7 @@ def _stub_review(
                 body['empty_reason'] = empty_reason
             return (200, body)
         items = [review_item(i) for i in range(3)]
-        return (200, {'items': items, 'total': 3, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 3, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     tabs = dict(TABS)
@@ -399,7 +399,7 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
     stub.on(
         'GET',
         r'/review/regions(\?|$)',
-        {'items': [item], 'total': 1, 'page': 1, 'page_size': 30},
+        {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30},
     )
     page.set_viewport_size({'width': 1600, 'height': 1000})
     page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')

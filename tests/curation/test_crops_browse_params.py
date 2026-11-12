@@ -24,7 +24,7 @@ class _RecordingOS:
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         json.dumps(body)  # a FieldInfo leaking into the query would blow up here
         self.bodies.append(body)
-        hits = [{'_id': k, '_source': v} for k, v in self.docs.items()]
+        hits = [{'_id': k, '_source': v, 'sort': [k]} for k, v in self.docs.items()]
         return {'hits': {'total': {'value': len(hits)}, 'hits': hits[: body.get('size', 10)]}}
 
     async def mget(self, *, index: str, body: dict[str, Any], **_: Any) -> dict[str, Any]:
@@ -63,11 +63,14 @@ P = f'{_common.config.api_prefix}/projects/default'
 
 
 def test_limit_sets_the_page_size(client: TestClient, fake_os: _RecordingOS) -> None:
-    r = client.get(f'{P}/crops', params={'limit': 2, 'page_size': 50})
+    r = client.get(f'{P}/crops', params={'limit': 2})
     assert r.status_code == 200, r.text
-    assert fake_os.bodies[-1]['size'] == 2
-    assert r.json()['page_size'] == 2
-    assert len(r.json()['crops']) == 2
+    # One row more than the page, to learn whether a next page exists.
+    assert fake_os.bodies[-1]['size'] == 3
+    body = r.json()
+    assert body['limit'] == 2
+    assert len(body['crops']) == 2
+    assert body['next_cursor']
 
 
 def test_limit_is_bounded(client: TestClient) -> None:
@@ -137,7 +140,7 @@ def test_class_crops_passes_real_defaults(client: TestClient, fake_os: _Recordin
     r = client.get(f'{P}/classes/3/crops')
     assert r.status_code == 200, r.text
     body = fake_os.bodies[-1]
-    assert body['size'] == 50
+    assert body['size'] == 51
     filt = body['query']['bool']['filter']
     assert not any('range' in clause for clause in filt)
     assert not any(
@@ -170,18 +173,6 @@ def test_diverse_order_honors_k(
 
     r = client.get(f'{P}/crops', params={'order': 'diverse'})
     assert r.json()['total'] == 6
-
-
-def test_page_too_deep_is_422(client: TestClient) -> None:
-    """from+size past the 10000 result-window ceiling must 422
-    explicitly rather than let OpenSearch 500 past index.max_result_window."""
-    r = client.get(f'{P}/crops', params={'page': 400, 'page_size': 30})
-    assert r.status_code == 422, r.text
-
-
-def test_page_within_window_is_fine(client: TestClient) -> None:
-    r = client.get(f'{P}/crops', params={'page': 300, 'page_size': 30})
-    assert r.status_code == 200, r.text
 
 
 def test_crops_serve_the_clusters_display_no(

@@ -285,6 +285,7 @@ def test_the_cursor_pages_without_repeats_or_gaps(monkeypatch: pytest.MonkeyPatc
     first = client.get(f'{BASE}/images', params={'limit': 1}).json()['next_cursor']
     mismatched = client.get(f'{BASE}/images', params={'cursor': first, 'sort': 'indexed_at:asc'})
     assert mismatched.status_code == 400
+    assert mismatched.json()['detail']['error'] == 'cursor_invalid'
 
 
 def test_empty_reasons(monkeypatch: pytest.MonkeyPatch) -> None:

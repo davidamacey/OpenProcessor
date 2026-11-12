@@ -29,3 +29,10 @@ ACTION_TIMEOUT_MS = 45000
 TRANSPARENT_GIF = bytes.fromhex(
     '47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b'
 )
+
+# A 640x480 picture with an intrinsic size, so a source image lays out like a real photo; the
+# stub's default 1x1 GIF collapses the overlay wrapper to a few pixels.
+PLACEHOLDER_PHOTO = (
+    b'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480">'
+    b'<rect width="640" height="480" fill="#3f3f46"/></svg>'
+)

@@ -37,7 +37,7 @@ GLOBAL_EXACT_PATHS = {
 }
 
 CLASSES = {'classes': [], 'thresholds': {}, 'reserved_hotkeys': []}
-EMPTY_QUEUE = {'items': [], 'total': 0, 'page': 1, 'page_size': 50}
+EMPTY_QUEUE = {'items': [], 'total': 0, 'next_cursor': None, 'limit': 50}
 
 
 def _path(url: str) -> str:

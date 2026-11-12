@@ -145,7 +145,7 @@ export function createSlotGalleryWrites(s: SlotGalleryWriteState) {
           `${state.replace('_', ' ')}: ${res.updated} box(es)${skipped > 0 ? `, ${skipped} skipped (no box id)` : ''}`,
         );
       }
-      await pager.loadPage(pager.firstPage);
+      await pager.reload();
     } catch (err) {
       toastStore.error(`Bulk box triage failed: ${apiErrorText(err)}`);
     } finally {
@@ -220,7 +220,7 @@ export function createSlotGalleryWrites(s: SlotGalleryWriteState) {
    */
   async function adoptReprocessed(items: Crop[]): Promise<void> {
     mergeUndoneItems(items);
-    await pager.loadPage(pager.firstPage);
+    await pager.reload();
   }
 
   async function undoLastAction(): Promise<void> {

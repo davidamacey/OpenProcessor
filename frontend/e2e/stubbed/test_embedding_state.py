@@ -16,17 +16,15 @@ from __future__ import annotations
 
 import copy
 import re
-from pathlib import Path
 from typing import Any
 
 from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
 from fixtures.wire import labeled_stats, make_item
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import shot
 from playwright.sync_api import expect
 from test_dataset_import import FORMATS
 
-
-SHOTS = Path(__file__).resolve().parents[2] / 'artifacts_local' / 'v040-ui' / 'detector'
 
 CLASSES = [
     {
@@ -119,14 +117,6 @@ DATASET_STATS = {
 }
 
 
-def _shots(page, name: str) -> None:
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    for width in (1600, 800):
-        page.set_viewport_size({'width': width, 'height': 1000})
-        page.screenshot(path=str(SHOTS / f'{name}-{width}.png'), full_page=True)
-    page.set_viewport_size({'width': 1280, 'height': 720})
-
-
 def _crop(i: int, state: str | None) -> dict:
     return make_item(
         crop_id=f'crop-{i}',
@@ -152,8 +142,8 @@ def test_failed_badge_on_a_card(stub, page, app_url):
         stub,
         {
             'total': 2,
-            'page': 1,
-            'page_size': 60,
+            'next_cursor': None,
+            'limit': 60,
             'crops': [_crop(0, 'failed'), _crop(1, 'embedded')],
         },
     )
@@ -166,7 +156,7 @@ def test_failed_badge_on_a_card(stub, page, app_url):
         'title', re.compile('^pe_core: No vector: encoder failed')
     )
     expect(badges.first).to_have_attribute('data-space', 'pe_core')
-    _shots(page, 'failed-badge')
+    shot(page, 'failed-badge', widths=(1600, 800))
 
 
 def test_unembedded_banner_on_an_ordered_cluster_view(stub, page, app_url):
@@ -187,7 +177,7 @@ def test_unembedded_banner_on_an_ordered_cluster_view(stub, page, app_url):
     banner.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(banner).to_contain_text('1 items in scope have no vector and are not ranked')
     expect(banner.get_by_test_id('reprocess-open')).to_have_text('Embed them')
-    _shots(page, 'unembedded-banner')
+    shot(page, 'unembedded-banner', widths=(1600, 800))
 
 
 def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url):
@@ -196,7 +186,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     stub.on('GET', r'/detections/summary(\?|$)', copy.deepcopy(SUMMARY))
     stub.on('GET', r'/stats/dataset(\?|$)', copy.deepcopy(DATASET_STATS))
     stub.on('GET', r'/datasets/formats(\?|$)', copy.deepcopy(FORMATS))
@@ -232,7 +222,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     expect(page.get_by_test_id('detections-total')).to_contain_text('120 detections')
     expect(summary).to_contain_text('No vector: encoder failed 5')
     expect(page.get_by_test_id('detections-truncated')).to_be_visible()
-    _shots(page, 'dashboard-summary')
+    shot(page, 'dashboard-summary', widths=(1600, 800))
 
     page.get_by_test_id('reprocess-open').click()
     dialog = page.get_by_role('dialog', name='Reprocess')
@@ -242,7 +232,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     expect(detail).to_contain_text('To embed', timeout=ACTION_TIMEOUT_MS)
     expect(detail).to_contain_text('Estimated cost')
     expect(detail).to_contain_text('no')
-    _shots(page, 'reprocess-detail')
+    shot(page, 'reprocess-detail', widths=(1600, 800))
     assert reprocess_bodies == [SUGGESTED], 'the served request is sent as served'
 
 
@@ -283,7 +273,7 @@ def test_reprocess_embed_options_and_served_detail(stub, page, app_url):
 
     options.get_by_label('Only items without a vector').check()
     options.get_by_label('Frame').check()
-    _shots(page, 'reprocess-embed-options')
+    shot(page, 'reprocess-embed-options', widths=(1600, 800))
     dialog.get_by_role('button', name='Check what would run').click()
     page.wait_for_function('true')
     expect(dialog.get_by_test_id('reprocess-dry-run')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -295,7 +285,7 @@ def test_failed_auto_label_job_shows_its_error_and_stage(stub, page, app_url):
     stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     failed = {
         **IDLE_JOB,
         'job_id': 'j1',
@@ -316,4 +306,4 @@ def test_failed_auto_label_job_shows_its_error_and_stage(stub, page, app_url):
     row = page.get_by_test_id('last-run-stages').locator('tr[data-stage-status=error]')
     expect(row).to_contain_text('embedding items without a vector')
     expect(row).to_contain_text('encoder down')
-    _shots(page, 'failed-auto-label')
+    shot(page, 'failed-auto-label', widths=(1600, 800))

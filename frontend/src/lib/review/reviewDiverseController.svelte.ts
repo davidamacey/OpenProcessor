@@ -196,21 +196,28 @@ export function createReviewDiverseController(opts: ReviewDiverseOptions) {
    * label if either exists, otherwise opens the class picker.
    */
   async function fetchDiversePage(
-    page: number,
-  ): Promise<{ items: ReviewItem[]; total: number } | null> {
+    cursor: string | null,
+  ): Promise<{ items: ReviewItem[]; total: number; next_cursor: string | null } | null> {
     let selection = diverseSelection;
     if (!selection) {
       selection = await runDiverseSelection();
-      if (!selection) return { items: [], total: 0 };
+      if (!selection) return { items: [], total: 0, next_cursor: null };
     }
-    const start = (page - 1) * pageSize;
+    // The selection is one job result held here, not a server list: its cursor is the
+    // offset of the next slice of that result, private to this closure.
+    const start = cursor === null ? 0 : Number(cursor);
     const ids = selection.crop_ids.slice(start, start + pageSize);
     const crops = await getCropsByIds(ids);
     const items: ReviewItem[] = crops.map((crop) => ({
       ...crop,
       reason: 'diverse selection (k-center-greedy)',
     }));
-    return { items, total: selection.crop_ids.length };
+    const end = start + pageSize;
+    return {
+      items,
+      total: selection.crop_ids.length,
+      next_cursor: end < selection.crop_ids.length ? String(end) : null,
+    };
   }
 
   onMount(() => stopDiversePolling);

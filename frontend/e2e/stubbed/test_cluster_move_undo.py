@@ -64,7 +64,7 @@ def test_move_then_undo_follows_the_job_and_undoes_by_op_id(stub, page, app_url)
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 2, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(2)]},
+        {'total': 2, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(2)]},
     )
     stub_label_op(stub, r'/crops/move$', 'op-move-1', calls=move_calls)
     stub_label_op_undo(stub, 'op-move-1', calls=undo_calls)

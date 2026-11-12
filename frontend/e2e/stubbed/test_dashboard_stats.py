@@ -49,7 +49,7 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
     # D2 (visual audit 2026-09-24): the dashboard balance chart reads the
     # served per-class test holdout.
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
 
     snapshot = {'state': {}, 'stats': {'error': 'stats unavailable (503)'}}
     sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'
@@ -103,7 +103,7 @@ def test_dashboard_labeled_breakdown_shows_the_served_rows_with_imports(stub, pa
     stub.on('GET', r'/stats/dataset(\?|$)', stats)
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
-    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'page': 1, 'page_size': 30, 'crops': []})
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
     snapshot = {'state': {}, 'stats': stats}
     sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'
     stub.on('GET', r'/pipeline/events', (200, sse_body, 'text/event-stream'))

@@ -142,11 +142,11 @@ Box routes return one row per matching box, with `region_box_id`; filters apply 
 | `GET /regions/suspected_false_positives` | Boxes ranked by distance to a false-positive sub-centroid |
 | `GET /regions/training_candidates` | `mode`: `detector_blind_spots`, `low_conf_correct`, `disagreement`, `human_corrected`, `false_positives` |
 
-A page has `items`, `page`, `page_size`, `total` (items), `total_rows` (rows) and
+A page has `items`, `limit`, `next_cursor`, `total` (items), `total_rows` (rows) and
 `rows_truncated` (an item matched more boxes than the index returns).
 
 ```bash
-curl -s "$API/curation/projects/cars/regions?box_state=accepted&min_score=0.5&page_size=50"
+curl -s "$API/curation/projects/cars/regions?box_state=accepted&min_score=0.5&limit=50"
 ```
 
 A clustering run rebuilds false-positive sub-centroids, flips tight matches to

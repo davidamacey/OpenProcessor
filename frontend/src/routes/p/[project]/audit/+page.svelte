@@ -89,7 +89,12 @@
     <ConfusionMatrix confusion={r.confusion} />
 
     {#if audit.queue}
-      <AuditQueueList queue={audit.queue} ongoto={(p) => void audit.goToPage(p)} />
+      <AuditQueueList
+        queue={audit.queue}
+        hasPrevious={audit.hasPrevious}
+        onprevious={() => void audit.previous()}
+        onnext={() => void audit.next()}
+      />
     {/if}
   {/if}
 </div>

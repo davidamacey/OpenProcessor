@@ -103,7 +103,7 @@ def test_region_text_input_reaches_the_queue_with_the_status_filter(stub, page, 
         ids = [cid for cid, plate in PLATES.items() if not wanted or wanted in plate]
         return (
             200,
-            {'items': [_item(c) for c in ids], 'total': len(ids), 'page': 1, 'page_size': 30},
+            {'items': [_item(c) for c in ids], 'total': len(ids), 'next_cursor': None, 'limit': 30},
         )
 
     stub.on('GET', r'/review/regions(\?|$)', regions)

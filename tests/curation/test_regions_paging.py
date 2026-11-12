@@ -49,30 +49,6 @@ def _fake() -> QueryFakeOpenSearch:
     )
 
 
-def test_list_regions_page_too_deep_is_422() -> None:
-    fake = _fake()
-    client = _client(fake)
-    resp = client.get('/curation/projects/default/regions', params={'page': 400, 'page_size': 30})
-    assert resp.status_code == 422, resp.text
-
-
-def test_list_regions_page_within_window_is_fine() -> None:
-    fake = _fake()
-    client = _client(fake)
-    resp = client.get('/curation/projects/default/regions', params={'page': 300, 'page_size': 30})
-    assert resp.status_code == 200, resp.text
-
-
-def test_training_candidates_page_too_deep_is_422() -> None:
-    fake = _fake()
-    client = _client(fake)
-    resp = client.get(
-        '/curation/projects/default/regions/training_candidates',
-        params={'mode': 'human_corrected', 'page': 400, 'page_size': 30},
-    )
-    assert resp.status_code == 422, resp.text
-
-
 def test_list_regions_request_body_carries_crop_id_tiebreaker() -> None:
     """Direct assertion on the actual request body sent to OpenSearch."""
     from unittest.mock import AsyncMock
@@ -132,7 +108,7 @@ def test_list_regions_default_filter_matches_accepted_box_only() -> None:
         }
     )
     client = _client(fake)
-    resp = client.get('/curation/projects/default/regions', params={'page_size': 50})
+    resp = client.get('/curation/projects/default/regions', params={'limit': 50})
     assert resp.status_code == 200, resp.text
     assert {i['crop_id'] for i in resp.json()['items']} == {'has-accepted'}
 
@@ -168,7 +144,7 @@ def test_list_regions_detector_filter_matches_the_per_box_detector() -> None:
     )
     client = _client(fake)
     resp = client.get(
-        '/curation/projects/default/regions', params={'page_size': 50, 'detector': 'det_a'}
+        '/curation/projects/default/regions', params={'limit': 50, 'detector': 'det_a'}
     )
     assert resp.status_code == 200, resp.text
     assert {i['crop_id'] for i in resp.json()['items']} == {'by-det-a'}
@@ -204,7 +180,7 @@ def test_training_candidates_false_positives_matches_the_kept_fp_box() -> None:
     client = _client(fake)
     resp = client.get(
         '/curation/projects/default/regions/training_candidates',
-        params={'mode': 'false_positives', 'page_size': 50},
+        params={'mode': 'false_positives', 'limit': 50},
     )
     assert resp.status_code == 200, resp.text
     assert {i['crop_id'] for i in resp.json()['items']} == {'fp-item'}
@@ -275,7 +251,43 @@ def test_low_conf_correct_excludes_a_verifier_rejected_primary_box() -> None:
     client = _client(fake)
     resp = client.get(
         '/curation/projects/default/regions/training_candidates',
-        params={'mode': 'low_conf_correct', 'page_size': 50},
+        params={'mode': 'low_conf_correct', 'limit': 50},
     )
     assert resp.status_code == 200, resp.text
     assert {i['crop_id'] for i in resp.json()['items']} == {'accepted-low-conf'}
+
+
+def _three_items() -> QueryFakeOpenSearch:
+    box = {'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}
+    return QueryFakeOpenSearch(
+        {ITEMS: {c: {'crop_id': c, F.boxes: [box]} for c in ('r1', 'r2', 'r3')}}
+    )
+
+
+def test_list_regions_pages_by_cursor() -> None:
+    client = _client(_three_items())
+    first = client.get('/curation/projects/default/regions', params={'limit': 2}).json()
+    assert [i['crop_id'] for i in first['items']] == ['r1', 'r2']
+    assert first['next_cursor']
+    assert 'page' not in first
+    second = client.get(
+        '/curation/projects/default/regions',
+        params={'limit': 2, 'cursor': first['next_cursor']},
+    ).json()
+    assert [i['crop_id'] for i in second['items']] == ['r3']
+    assert second['next_cursor'] is None
+    assert first['total'] == 3
+
+
+def test_a_regions_cursor_of_another_sort_is_refused() -> None:
+    client = _client(_three_items())
+    first = client.get('/curation/projects/default/regions', params={'limit': 2}).json()
+    resp = client.get(
+        '/curation/projects/default/regions',
+        params={
+            'cursor': first['next_cursor'],
+            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()['detail']['error'] == 'cursor_invalid'

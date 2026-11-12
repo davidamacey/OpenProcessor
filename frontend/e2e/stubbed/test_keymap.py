@@ -267,7 +267,7 @@ def test_keymap_absent_when_404(stub, page, app_url):
     dismiss_calls: list[str] = []
 
     def review_handler(_request, _match):
-        return (200, {'items': [review_item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [review_item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     def dismiss_handler(request, match):
         dismiss_calls.append(match.string)
@@ -365,7 +365,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     dismiss_calls: list[str] = []
 
     def review_handler(_request, _match):
-        return (200, {'items': [review_item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [review_item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     def dismiss_handler(request, match):
         dismiss_calls.append(match.string)
@@ -489,7 +489,7 @@ def test_keymap_per_context_override(stub, page, app_url):
     dismiss_calls: list[str] = []
 
     def review_handler(_request, _match):
-        return (200, {'items': [review_item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [review_item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     def dismiss_handler(request, match):
         dismiss_calls.append(match.string)
@@ -518,7 +518,12 @@ def test_keymap_per_context_override(stub, page, app_url):
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [cluster_crop(i) for i in range(3)]},
+        {
+            'total': 3,
+            'next_cursor': None,
+            'limit': 60,
+            'crops': [cluster_crop(i) for i in range(3)],
+        },
     )
     stub.on('POST', r'/crops/([^/]+)/discard$', discard_handler)
     stub.on(

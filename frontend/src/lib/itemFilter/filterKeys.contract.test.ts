@@ -9,8 +9,7 @@ import { URL_KEYS } from './itemFilterState.svelte';
 
 const NOT_ON_BAR = [
   // paging, ordering and lookups
-  'page',
-  'page_size',
+  'cursor',
   'limit',
   'sort',
   'order',

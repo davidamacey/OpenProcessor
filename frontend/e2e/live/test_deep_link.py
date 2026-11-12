@@ -24,7 +24,7 @@ def test_deep_link_lands_on_the_requested_crop(
     require_region_profile: dict[str, Any],
 ) -> None:
     rejected = api_get(
-        live_url, live_project, '/review/regions?region_status=verify_rejected&page_size=1'
+        live_url, live_project, '/review/regions?region_status=verify_rejected&limit=1'
     )
     items = rejected.get('items', [])
     if not items:

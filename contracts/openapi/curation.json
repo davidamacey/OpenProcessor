@@ -1600,13 +1600,21 @@
             "title": "Items",
             "type": "array"
           },
-          "page": {
-            "title": "Page",
+          "limit": {
+            "title": "Limit",
             "type": "integer"
           },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page.",
+            "title": "Next Cursor"
           },
           "total": {
             "title": "Total",
@@ -1615,8 +1623,8 @@
         },
         "required": [
           "total",
-          "page",
-          "page_size",
+          "next_cursor",
+          "limit",
           "items"
         ],
         "title": "AuditQueueResponse",
@@ -5825,7 +5833,7 @@
           },
           "sort_options": {
             "items": {
-              "$ref": "#/components/schemas/ClusterSortOption"
+              "$ref": "#/components/schemas/SortOption"
             },
             "title": "Sort Options",
             "type": "array"
@@ -6220,24 +6228,6 @@
           "target"
         ],
         "title": "ClusterRunRequest",
-        "type": "object"
-      },
-      "ClusterSortOption": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "label": {
-            "title": "Label",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "ClusterSortOption",
         "type": "object"
       },
       "ClusterStats": {
@@ -7415,6 +7405,7 @@
               "read_only",
               "name_conflict",
               "invalid_transition",
+              "cursor_invalid",
               "export_outside_project",
               "empty_val_split",
               "model_not_found",
@@ -8251,6 +8242,100 @@
         "title": "CropLabelRequest",
         "type": "object"
       },
+      "CropLocate": {
+        "description": "``GET /crops/locate``: where a crop sits in the list the same filters and sort would serve.",
+        "properties": {
+          "crop_id": {
+            "title": "Crop Id",
+            "type": "string"
+          },
+          "cursor_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the page right after this crop; null when not in the list.",
+            "title": "Cursor After"
+          },
+          "cursor_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` to `GET /crops` for the page that starts at this crop; null for the first row and when not in the list.",
+            "title": "Cursor Before"
+          },
+          "in_view": {
+            "title": "In View",
+            "type": "boolean"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "0-based position in the list; null when not in it.",
+            "title": "Index"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_found",
+                  "filtered_out"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is not in the list; null when in_view.",
+            "title": "Reason"
+          },
+          "reason_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served sentence for `reason`.",
+            "title": "Reason Message"
+          },
+          "total": {
+            "description": "Items in the list.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "crop_id",
+          "in_view",
+          "index",
+          "total",
+          "cursor_before",
+          "cursor_after",
+          "reason",
+          "reason_message"
+        ],
+        "title": "CropLocate",
+        "type": "object"
+      },
       "CropMoveRequest": {
         "properties": {
           "cluster_uid": {
@@ -8426,6 +8511,34 @@
             "title": "Crops",
             "type": "array"
           },
+          "empty_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served sentence for `empty_reason`.",
+            "title": "Empty Message"
+          },
+          "empty_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_items",
+                  "no_match"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a zero-result list is empty; null when it has items.",
+            "title": "Empty Reason"
+          },
           "hidden": {
             "anyOf": [
               {
@@ -8442,6 +8555,10 @@
             "description": "The area, location or group predicates matched more images than the join could use, so the page may be incomplete.",
             "title": "Join Truncated",
             "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
           },
           "method": {
             "anyOf": [
@@ -8476,13 +8593,30 @@
             ],
             "title": "N Unembedded"
           },
-          "page": {
-            "title": "Page",
-            "type": "integer"
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page, and for the computed orders `outliers` and `diverse`, which serve one bounded page.",
+            "title": "Next Cursor"
           },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
+          "sort_applied": {
+            "description": "The applied sort id, the computed `order` when one ranked the page, or 'ids' for an id lookup.",
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "description": "Every sort id `sort` takes, with its label.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
           },
           "suggested_reprocess": {
             "anyOf": [
@@ -8512,9 +8646,13 @@
         },
         "required": [
           "total",
-          "page",
-          "page_size",
-          "crops"
+          "next_cursor",
+          "limit",
+          "crops",
+          "sort_applied",
+          "sort_options",
+          "empty_reason",
+          "empty_message"
         ],
         "title": "CropsPageResponse",
         "type": "object"
@@ -27769,6 +27907,52 @@
         "title": "RegionFpCentroidsStarted",
         "type": "object"
       },
+      "RegionFpPage": {
+        "description": "``GET /regions/suspected_false_positives``: rows scored in Python, paged by number.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegionRow"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "description": "Rows per page.",
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "rows_truncated": {
+            "default": false,
+            "description": "True when an item on this page matched more boxes than the index reports per item (index.max_inner_result_window), so some of its rows are missing; total_rows still counts them.",
+            "title": "Rows Truncated",
+            "type": "boolean"
+          },
+          "total": {
+            "description": "Items matching. suspected_false_positives pages rows directly, so there total == total_rows.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_rows": {
+            "description": "Rows matching (boxes when the request selects boxes).",
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "total_rows",
+          "page",
+          "page_size"
+        ],
+        "title": "RegionFpPage",
+        "type": "object"
+      },
       "RegionItemWriteResponse": {
         "description": "``PUT /crops/{crop_id}/regions``.",
         "properties": {
@@ -30284,7 +30468,7 @@
         "type": "object"
       },
       "RegionRowPage": {
-        "description": "``GET /regions``, ``/regions/training_candidates`` and\n``/regions/suspected_false_positives``.",
+        "description": "``GET /regions`` and ``/regions/training_candidates``.",
         "properties": {
           "items": {
             "items": {
@@ -30293,14 +30477,22 @@
             "title": "Items",
             "type": "array"
           },
-          "page": {
-            "title": "Page",
+          "limit": {
+            "description": "Items per page.",
+            "title": "Limit",
             "type": "integer"
           },
-          "page_size": {
-            "description": "Items per page (suspected_false_positives: rows).",
-            "title": "Page Size",
-            "type": "integer"
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page of items; null on the last page.",
+            "title": "Next Cursor"
           },
           "rows_truncated": {
             "default": false,
@@ -30309,7 +30501,7 @@
             "type": "boolean"
           },
           "total": {
-            "description": "Items matching (page math: hasMore = page * page_size < total). suspected_false_positives pages rows directly, so there total == total_rows.",
+            "description": "Items matching. suspected_false_positives pages rows directly, so there total == total_rows.",
             "title": "Total",
             "type": "integer"
           },
@@ -30323,8 +30515,8 @@
           "items",
           "total",
           "total_rows",
-          "page",
-          "page_size"
+          "next_cursor",
+          "limit"
         ],
         "title": "RegionRowPage",
         "type": "object"
@@ -34474,17 +34666,41 @@
         "type": "object"
       },
       "ReviewLocateResponse": {
-        "description": "``GET /review/{tab}/locate``: where an item sits in the queue the same\nfilters and sort would serve. ``rank`` is 0-based; ``page`` is 1-based.",
+        "description": "``GET /review/{tab}/locate``: where an item sits in the queue the same\nfilters and sort would serve.",
         "properties": {
           "crop_id": {
             "title": "Crop Id",
             "type": "string"
           },
+          "cursor_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the page right after this item; null when not in the queue.",
+            "title": "Cursor After"
+          },
+          "cursor_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` to `GET /review/{tab}` for the page that starts at this item; null for the first row and when not in the queue.",
+            "title": "Cursor Before"
+          },
           "in_queue": {
             "title": "In Queue",
             "type": "boolean"
           },
-          "page": {
+          "index": {
             "anyOf": [
               {
                 "type": "integer"
@@ -34493,22 +34709,8 @@
                 "type": "null"
               }
             ],
-            "title": "Page"
-          },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
-          },
-          "rank": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rank"
+            "description": "0-based position in the queue; null when not in it.",
+            "title": "Index"
           },
           "reason": {
             "anyOf": [
@@ -34543,24 +34745,18 @@
             "title": "Sort Fallback Reason"
           },
           "total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
+            "description": "Items in the queue.",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "crop_id",
           "in_queue",
-          "rank",
-          "page",
-          "page_size",
+          "index",
           "total",
+          "cursor_before",
+          "cursor_after",
           "reason",
           "sort_applied",
           "sort_fallback_reason"
@@ -34600,13 +34796,21 @@
             "title": "Join Truncated",
             "type": "boolean"
           },
-          "page": {
-            "title": "Page",
+          "limit": {
+            "title": "Limit",
             "type": "integer"
           },
-          "page_size": {
-            "title": "Page Size",
-            "type": "integer"
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page.",
+            "title": "Next Cursor"
           },
           "sort_applied": {
             "title": "Sort Applied",
@@ -34631,8 +34835,8 @@
         },
         "required": [
           "total",
-          "page",
-          "page_size",
+          "next_cursor",
+          "limit",
           "items",
           "sort_applied",
           "sort_fallback_reason",
@@ -37130,6 +37334,7 @@
         "type": "object"
       },
       "SortOption": {
+        "description": "One order a list serves: ``id`` is what the ``sort`` parameter takes, ``label`` is for people.",
         "properties": {
           "id": {
             "title": "Id",
@@ -44374,25 +44579,32 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 30,
               "maximum": 200,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
             }
           }
@@ -45458,25 +45670,32 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 50,
               "maximum": 500,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
             }
           },
@@ -47328,7 +47547,7 @@
     },
     "/curation/projects/{project}/crops": {
       "get": {
-        "description": "Paginated crop browse with the standard filter set.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops a classifier scored below the value (``confidence``) OR that have no classifier\nprediction at all (blind spots).",
+        "description": "Cursor-paged crop browse with the standard filter set.\n\n``next_cursor`` resumes the same sort; the page is as deep as the list. The computed orders\n``order=outliers`` and ``order=diverse`` rank the matched pool in memory and serve one bounded\npage of at most ``limit`` items with ``next_cursor: null``; ``order=core_first`` pages by cursor.\n\n``test_holdout=true`` rows are filtered out unless ``include_test``.\n``class_excluded=true`` (human-ignored) rows are filtered out unless\n``include_excluded`` — set it to review the ignore bucket.\n\nPrimary-subject filters (all default off → no behavior change):\n``max_rank`` keeps only crops whose ``crop_rank_in_image <= max_rank``\n(e.g. 1 = largest only, 2 = largest + 2nd). ``min_blur_ratio`` keeps crops\nat or above a clarity threshold (the labeler slider); crops with no blur\nscore are NOT dropped. ``classifier_conf_lt`` mines the \"model wasn't sure\" pool —\ncrops a classifier scored below the value (``confidence``) OR that have no classifier\nprediction at all (blind spots).",
         "operationId": "list_crops_curation_projects__project__crops_get",
         "parameters": [
           {
@@ -47341,272 +47560,33 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 50,
               "maximum": 500,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "description": "Alias for page_size; wins when both set.",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 500,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Alias for page_size; wins when both set.",
-              "title": "Limit"
-            }
-          },
-          {
-            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: updated_at, created_at, confidence, crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.",
-              "title": "Sort"
-            }
-          },
-          {
-            "in": "query",
-            "name": "label_source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Label Source"
-            }
-          },
-          {
-            "in": "query",
-            "name": "class_source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Class Source"
-            }
-          },
-          {
-            "in": "query",
-            "name": "label_validated",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Label Validated"
-            }
-          },
-          {
-            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-            "in": "query",
-            "name": "import_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
-              "title": "Import Id"
-            }
-          },
-          {
-            "description": "The split a dataset import filed the frame under.",
-            "in": "query",
-            "name": "dataset_split",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The split a dataset import filed the frame under.",
-              "title": "Dataset Split"
-            }
-          },
-          {
-            "description": "true = machine items on an imported reviewed-negative frame.",
-            "in": "query",
-            "name": "on_negative_frame",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "true = machine items on an imported reviewed-negative frame.",
-              "title": "On Negative Frame"
-            }
-          },
-          {
-            "description": "true = items an import created from the detector; false = the rest.",
-            "in": "query",
-            "name": "proposed_by_import",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "true = items an import created from the detector; false = the rest.",
-              "title": "Proposed By Import"
-            }
-          },
-          {
-            "description": "Ingest source tag (wire `source`).",
-            "in": "query",
-            "name": "source",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Ingest source tag (wire `source`).",
-              "title": "Source"
-            }
-          },
-          {
-            "description": "Items the full-image pass wrote for this prompt set.",
-            "in": "query",
-            "name": "open_vocab_set",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Items the full-image pass wrote for this prompt set.",
-              "title": "Open Vocab Set"
-            }
-          },
-          {
-            "description": "Items the full-image pass found with this exact prompt.",
-            "in": "query",
-            "name": "source_prompt",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Items the full-image pass found with this exact prompt.",
-              "title": "Source Prompt"
-            }
-          },
-          {
-            "in": "query",
-            "name": "needs_new_class",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Needs New Class"
-            }
-          },
-          {
-            "description": "true = only items hidden from review.",
-            "in": "query",
-            "name": "review_dismissed",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "true = only items hidden from review.",
-              "title": "Review Dismissed"
             }
           },
           {
@@ -47625,166 +47605,6 @@
               ],
               "description": "Comma-separated crop ids (max 500): return exactly these items in this order, missing ids dropped. Every other filter is ignored.",
               "title": "Ids"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Test",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_excluded",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Excluded",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "classifier_conf_lt",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Classifier Conf Lt"
-            }
-          },
-          {
-            "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
-            "in": "query",
-            "name": "item_text",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 200,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
-              "title": "Item Text"
-            }
-          },
-          {
-            "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
-            "in": "query",
-            "name": "region_text",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 200,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
-              "title": "Region Text"
-            }
-          },
-          {
-            "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
-            "in": "query",
-            "name": "region_text_match",
-            "required": false,
-            "schema": {
-              "default": "exact",
-              "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
-              "enum": [
-                "exact",
-                "fuzzy",
-                "fragment"
-              ],
-              "title": "Region Text Match",
-              "type": "string"
-            }
-          },
-          {
-            "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
-            "in": "query",
-            "name": "same_text_as",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
-              "title": "Same Text As"
-            }
-          },
-          {
-            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
-            "in": "query",
-            "name": "order",
-            "required": false,
-            "schema": {
-              "default": "default",
-              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
-              "title": "Order",
-              "type": "string"
-            }
-          },
-          {
-            "description": "order=diverse only: rank just the first k picks.",
-            "in": "query",
-            "name": "k",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 10000,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "order=diverse only: rank just the first k picks.",
-              "title": "K"
             }
           },
           {
@@ -48243,6 +48063,392 @@
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
             }
+          },
+          {
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "class_source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Class Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_validated",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label Validated"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
+            }
+          },
+          {
+            "description": "The split a dataset import filed the frame under.",
+            "in": "query",
+            "name": "dataset_split",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The split a dataset import filed the frame under.",
+              "title": "Dataset Split"
+            }
+          },
+          {
+            "description": "true = machine items on an imported reviewed-negative frame.",
+            "in": "query",
+            "name": "on_negative_frame",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = machine items on an imported reviewed-negative frame.",
+              "title": "On Negative Frame"
+            }
+          },
+          {
+            "description": "true = items an import created from the detector; false = the rest.",
+            "in": "query",
+            "name": "proposed_by_import",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items an import created from the detector; false = the rest.",
+              "title": "Proposed By Import"
+            }
+          },
+          {
+            "description": "Ingest source tag (wire `source`).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag (wire `source`).",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Items the full-image pass wrote for this prompt set.",
+            "in": "query",
+            "name": "open_vocab_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass wrote for this prompt set.",
+              "title": "Open Vocab Set"
+            }
+          },
+          {
+            "description": "Items the full-image pass found with this exact prompt.",
+            "in": "query",
+            "name": "source_prompt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass found with this exact prompt.",
+              "title": "Source Prompt"
+            }
+          },
+          {
+            "in": "query",
+            "name": "needs_new_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs New Class"
+            }
+          },
+          {
+            "description": "true = only items hidden from review.",
+            "in": "query",
+            "name": "review_dismissed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = only items hidden from review.",
+              "title": "Review Dismissed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_excluded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Excluded",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "classifier_conf_lt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Classifier Conf Lt"
+            }
+          },
+          {
+            "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+            "in": "query",
+            "name": "item_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+              "title": "Item Text"
+            }
+          },
+          {
+            "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+            "in": "query",
+            "name": "region_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+              "title": "Region Text"
+            }
+          },
+          {
+            "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "default": "exact",
+              "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+              "enum": [
+                "exact",
+                "fuzzy",
+                "fragment"
+              ],
+              "title": "Region Text Match",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+            "in": "query",
+            "name": "same_text_as",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+              "title": "Same Text As"
+            }
+          },
+          {
+            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+              "title": "Order",
+              "type": "string"
+            }
+          },
+          {
+            "description": "order=diverse only: rank just the first k picks.",
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "order=diverse only: rank just the first k picks.",
+              "title": "K"
+            }
           }
         ],
         "responses": {
@@ -48679,6 +48885,903 @@
           }
         },
         "summary": "Undo Crop Labels",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/locate": {
+      "get": {
+        "description": "Where ``crop_id`` sits in the list ``GET /crops`` serves for the same filters and sort.\n\n``index`` is the 0-based position; ``cursor_before`` starts a page at the crop (null for the\nfirst row) and ``cursor_after`` resumes right after it, so a deep link loads one page whatever\nthe depth. Not in the list: ``index`` and the cursors are null and ``reason`` is\n``not_found`` (no such crop) or ``filtered_out``. The computed orders have no stable position\nand answer 400.",
+        "operationId": "locate_crop_curation_projects__project__crops_locate_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The crop to find.",
+            "in": "query",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "description": "The crop to find.",
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+            "in": "query",
+            "name": "class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Class by NAME, repeatable (OR): matches an item's class name or the detector's own label; case, spaces and hyphens are normalized ('traffic light' = 'traffic_light').",
+              "title": "Class Name"
+            }
+          },
+          {
+            "description": "Hide these class names (same matching).",
+            "in": "query",
+            "name": "exclude_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Hide these class names (same matching).",
+              "title": "Exclude Class Name"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, lower bound.",
+            "in": "query",
+            "name": "conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, lower bound.",
+              "title": "Conf Min"
+            }
+          },
+          {
+            "description": "Inclusive confidence band, upper bound.",
+            "in": "query",
+            "name": "conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive confidence band, upper bound.",
+              "title": "Conf Max"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, lower bound.",
+            "in": "query",
+            "name": "min_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, lower bound.",
+              "title": "Min Area"
+            }
+          },
+          {
+            "description": "Box area as a fraction of its image, upper bound.",
+            "in": "query",
+            "name": "max_area",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Box area as a fraction of its image, upper bound.",
+              "title": "Max Area"
+            }
+          },
+          {
+            "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+            "in": "query",
+            "name": "max_rank",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The N largest boxes per image (crop_rank_in_image <= N).",
+              "title": "Max Rank"
+            }
+          },
+          {
+            "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+            "in": "query",
+            "name": "detector_class_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The detector's own class by NAME, repeatable (OR); same normalization as `class_name`.",
+              "title": "Detector Class Name"
+            }
+          },
+          {
+            "description": "Detector confidence, inclusive lower bound.",
+            "in": "query",
+            "name": "detector_conf_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, inclusive lower bound.",
+              "title": "Detector Conf Min"
+            }
+          },
+          {
+            "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+            "in": "query",
+            "name": "detector_conf_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Detector confidence, EXCLUSIVE upper bound (so adjacent histogram bins never overlap).",
+              "title": "Detector Conf Max"
+            }
+          },
+          {
+            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "in": "query",
+            "name": "review_tab",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "title": "Review Tab"
+            }
+          },
+          {
+            "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+            "in": "query",
+            "name": "origin",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "detector",
+                      "sam3",
+                      "human",
+                      "import"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How the item came to exist, repeatable (OR): detector, sam3, human or import.",
+              "title": "Origin"
+            }
+          },
+          {
+            "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+            "in": "query",
+            "name": "embedding_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "embedded",
+                      "not_selected",
+                      "deferred",
+                      "failed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "embedded (has a vector), not_selected, deferred or failed; repeatable.",
+              "title": "Embedding State"
+            }
+          },
+          {
+            "description": "pending, validated, dismissed or excluded; repeatable.",
+            "in": "query",
+            "name": "review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "pending",
+                      "validated",
+                      "dismissed",
+                      "excluded"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "pending, validated, dismissed or excluded; repeatable.",
+              "title": "Review Status"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken From"
+            }
+          },
+          {
+            "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+            "in": "query",
+            "name": "taken_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
+              "title": "Taken To"
+            }
+          },
+          {
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+            "in": "query",
+            "name": "cluster_uid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
+              "title": "Cluster Uid"
+            }
+          },
+          {
+            "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_bbox",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this area: west,south,east,north in degrees (west > east crosses the antimeridian). Rounded outward under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Bbox"
+            }
+          },
+          {
+            "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+            "in": "query",
+            "name": "geo_polygon",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on images inside this ring: lon,lat;lon,lat;... with 3 to 64 vertices (closed for you). Rounded to the coarse grid under a coarse location policy; matches nothing under `drop`.",
+              "title": "Geo Polygon"
+            }
+          },
+          {
+            "description": "true = items on images with a served position; false = without one.",
+            "in": "query",
+            "name": "has_location",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items on images with a served position; false = without one.",
+              "title": "Has Location"
+            }
+          },
+          {
+            "description": "Items in this near-duplicate group (or on images in it).",
+            "in": "query",
+            "name": "near_dup_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items in this near-duplicate group (or on images in it).",
+              "title": "Near Dup Group"
+            }
+          },
+          {
+            "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+            "in": "query",
+            "name": "image_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
+              "title": "Image Id"
+            }
+          },
+          {
+            "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "'<field>[:asc|desc]', default 'updated_at:desc'. The response's `sort_options` lists every id with its label. Ignored by order=outliers|diverse.",
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "class_source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Class Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "label_validated",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Label Validated"
+            }
+          },
+          {
+            "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+            "in": "query",
+            "name": "import_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items a dataset import labeled (`import_ids`) or proposed.",
+              "title": "Import Id"
+            }
+          },
+          {
+            "description": "The split a dataset import filed the frame under.",
+            "in": "query",
+            "name": "dataset_split",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The split a dataset import filed the frame under.",
+              "title": "Dataset Split"
+            }
+          },
+          {
+            "description": "true = machine items on an imported reviewed-negative frame.",
+            "in": "query",
+            "name": "on_negative_frame",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = machine items on an imported reviewed-negative frame.",
+              "title": "On Negative Frame"
+            }
+          },
+          {
+            "description": "true = items an import created from the detector; false = the rest.",
+            "in": "query",
+            "name": "proposed_by_import",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = items an import created from the detector; false = the rest.",
+              "title": "Proposed By Import"
+            }
+          },
+          {
+            "description": "Ingest source tag (wire `source`).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ingest source tag (wire `source`).",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Items the full-image pass wrote for this prompt set.",
+            "in": "query",
+            "name": "open_vocab_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass wrote for this prompt set.",
+              "title": "Open Vocab Set"
+            }
+          },
+          {
+            "description": "Items the full-image pass found with this exact prompt.",
+            "in": "query",
+            "name": "source_prompt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Items the full-image pass found with this exact prompt.",
+              "title": "Source Prompt"
+            }
+          },
+          {
+            "in": "query",
+            "name": "needs_new_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Needs New Class"
+            }
+          },
+          {
+            "description": "true = only items hidden from review.",
+            "in": "query",
+            "name": "review_dismissed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "true = only items hidden from review.",
+              "title": "Review Dismissed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_excluded",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Excluded",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "classifier_conf_lt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Classifier Conf Lt"
+            }
+          },
+          {
+            "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+            "in": "query",
+            "name": "item_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text read on the item crop: every word must be a case-insensitive prefix of a stored item text token.",
+              "title": "Item Text"
+            }
+          },
+          {
+            "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+            "in": "query",
+            "name": "region_text",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Plate text on a box: the item has a box whose folded text matches this (letters and digits only, confusables folded), as `region_text_match` says.",
+              "title": "Region Text"
+            }
+          },
+          {
+            "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "default": "exact",
+              "description": "How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.",
+              "enum": [
+                "exact",
+                "fuzzy",
+                "fragment"
+              ],
+              "title": "Region Text Match",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+            "in": "query",
+            "name": "same_text_as",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. Exclusive with `region_text`.",
+              "title": "Same Text As"
+            }
+          },
+          {
+            "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "default",
+              "description": "'outliers' ranks a cluster's members farthest-from-centroid first; 'core_first' best-scored-first by the partition's cluster_score (both need cluster_uid). 'diverse' ranks the matched pool by k-center-greedy coverage (gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized order value when the flag is off).",
+              "title": "Order",
+              "type": "string"
+            }
+          },
+          {
+            "description": "order=diverse only: rank just the first k picks.",
+            "in": "query",
+            "name": "k",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 10000,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "order=diverse only: rank just the first k picks.",
+              "title": "K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CropLocate"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Locate Crop",
         "tags": [
           "Curation"
         ]
@@ -62266,7 +63369,7 @@
     },
     "/curation/projects/{project}/regions": {
       "get": {
-        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``cluster_uid``,\n``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``page`` / ``page_size`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
+        "description": "Browse region rows filtered by provenance/score/text.\n\nRows (:class:`RegionRowPage`): the box filters (``detector``,\n``min_score``, ``max_score``, ``text``, ``cluster_uid``,\n``box_state``) all select the SAME box, and\neach matching box is its own row (``region_box_id``). The item filters\n(``status``, ``verified`` and the shared item\nfilter: ``class_name``, ``conf_min``/``conf_max``, ``min_area``/``max_area``,\n``max_rank``, ``origin``, ``embedding_state``, ``review_status``)\nselect items. ``cursor`` / ``limit`` page items; ``total`` counts\nitems, ``total_rows`` rows.",
         "operationId": "list_regions_curation_projects__project__regions_get",
         "parameters": [
           {
@@ -62279,25 +63382,32 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 50,
               "maximum": 200,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
             }
           },
@@ -63351,7 +64461,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RegionRowPage"
+                  "$ref": "#/components/schemas/RegionFpPage"
                 }
               }
             },
@@ -63410,25 +64520,32 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 50,
-              "maximum": 500,
+              "maximum": 200,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
             }
           },
@@ -64068,25 +65185,32 @@
             }
           },
           {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "required": false,
             "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
             }
           },
           {
             "in": "query",
-            "name": "page_size",
+            "name": "limit",
             "required": false,
             "schema": {
               "default": 30,
               "maximum": 200,
               "minimum": 1,
-              "title": "Page Size",
+              "title": "Limit",
               "type": "integer"
             }
           },
@@ -64800,7 +65924,7 @@
     },
     "/curation/projects/{project}/review/{tab}/locate": {
       "get": {
-        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, rank, page, page_size, total, reason,\nsort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of\n``page_size`` holding it. Out of the queue: ``rank``/``page`` null and\n``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the\nitems sorting before it, so any depth costs the same.",
+        "description": "Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve\nfor the same filters and sort.\n\n``{crop_id, in_queue, index, total, cursor_before, cursor_after, reason,\nsort_applied, sort_fallback_reason}``: ``index`` is the 0-based position. ``cursor_before``\nstarts a page at the item (null for the first row), ``cursor_after`` resumes right after\nit. Out of the queue: ``index`` and the cursors null and ``reason`` ``not_found`` (no such\nitem) or ``filtered_out``. Counts the items sorting before it, so any depth costs the same.",
         "operationId": "review_locate_curation_projects__project__review__tab__locate_get",
         "parameters": [
           {
@@ -64832,18 +65956,6 @@
               "description": "The item to find.",
               "title": "Crop Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
             }
           },
           {

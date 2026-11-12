@@ -20,7 +20,7 @@ def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, pa
     stub.on(
         'GET',
         r'/review/(?!tabs)',
-        lambda _r, _m: (200, {'items': [], 'total': 0, 'page': 1, 'page_size': 30}),
+        lambda _r, _m: (200, {'items': [], 'total': 0, 'next_cursor': None, 'limit': 30}),
     )
     calls = {'n': 0}
 

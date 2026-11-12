@@ -29,14 +29,14 @@ describe('getCluster order param', () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.startsWith(`${API_PREFIX}/crops`)) {
         return Promise.resolve(
-          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+          jsonResponse({ total: 0, next_cursor: null, limit: 60, crops: [] }),
         );
       }
       return Promise.resolve(jsonResponse({ items: [] }));
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await getCluster('cluster-uid-42', 1, 60, undefined, { order: 'mistakenness' });
+    await getCluster('cluster-uid-42', null, 60, undefined, { order: 'mistakenness' });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -55,8 +55,8 @@ describe('getCluster order param', () => {
         url.startsWith(`${API_PREFIX}/crops`)
           ? jsonResponse({
               total: 0,
-              page: 1,
-              page_size: 60,
+              next_cursor: null,
+              limit: 60,
               crops: [],
               n_unembedded: 9,
               suggested_reprocess: request,
@@ -66,21 +66,28 @@ describe('getCluster order param', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getCluster('cluster-uid-42', 1, 60, undefined, {
+    const res = await getCluster('cluster-uid-42', null, 60, undefined, {
       order: 'outliers',
     });
     expect(res.crops.n_unembedded).toBe(9);
     expect(res.crops.suggested_reprocess).toEqual(request);
 
-    const plain = await getCluster('cluster-uid-42', 1, 60, undefined, {});
+    const plain = await getCluster('cluster-uid-42', null, 60, undefined, {});
     fetchMock.mockImplementation((url: string) =>
       Promise.resolve(
         url.startsWith(`${API_PREFIX}/crops`)
-          ? jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] })
+          ? jsonResponse({
+              total: 0,
+              next_cursor: null,
+              limit: 60,
+              crops: [],
+              n_unembedded: null,
+              suggested_reprocess: null,
+            })
           : jsonResponse({ items: [] }),
       ),
     );
-    const none = await getCluster('cluster-uid-42', 1, 60, undefined, {});
+    const none = await getCluster('cluster-uid-42', null, 60, undefined, {});
     expect(none.crops.n_unembedded).toBeNull();
     expect(none.crops.suggested_reprocess).toBeNull();
     expect(plain).toBeDefined();
@@ -90,14 +97,14 @@ describe('getCluster order param', () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.startsWith(`${API_PREFIX}/crops`)) {
         return Promise.resolve(
-          jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] }),
+          jsonResponse({ total: 0, next_cursor: null, limit: 60, crops: [] }),
         );
       }
       return Promise.resolve(jsonResponse({ items: [] }));
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await getCluster('cluster-uid-42', 1, 60, undefined, { order: null });
+    await getCluster('cluster-uid-42', null, 60, undefined, { order: null });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -127,7 +134,7 @@ describe('getCluster card lookup failure', () => {
           Promise.resolve(
             url.startsWith(`${API_PREFIX}/crops`)
               ? new Response(
-                  JSON.stringify({ total: 3, page: 1, page_size: 60, crops: [] }),
+                  JSON.stringify({ total: 3, next_cursor: null, limit: 60, crops: [] }),
                   { status: 200, headers: { 'content-type': 'application/json' } },
                 )
               : clustersResponse(),
@@ -183,9 +190,9 @@ describe('getCluster k param', () => {
   }
 
   it('forwards k to {API_PREFIX}/crops when set alongside order=diverse', async () => {
-    const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+    const fetchMock = stubCrops({ total: 0, next_cursor: null, limit: 60, crops: [] });
 
-    await getCluster('cluster-uid-42', 1, 60, undefined, { order: 'diverse', k: 120 });
+    await getCluster('cluster-uid-42', null, 60, undefined, { order: 'diverse', k: 120 });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -195,9 +202,9 @@ describe('getCluster k param', () => {
   });
 
   it('omits k entirely when null/undefined (qs() drops it, no ?k= at all)', async () => {
-    const fetchMock = stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+    const fetchMock = stubCrops({ total: 0, next_cursor: null, limit: 60, crops: [] });
 
-    await getCluster('cluster-uid-42', 1, 60, undefined, { order: null, k: null });
+    await getCluster('cluster-uid-42', null, 60, undefined, { order: null, k: null });
 
     const cropsUrl = fetchMock.mock.calls
       .map((c) => c[0] as string)
@@ -205,7 +212,7 @@ describe('getCluster k param', () => {
     expect(cropsUrl).not.toContain('k=');
 
     fetchMock.mockClear();
-    await getCluster('cluster-uid-42', 1, 60, undefined, {});
+    await getCluster('cluster-uid-42', null, 60, undefined, {});
     const cropsUrl2 = fetchMock.mock.calls
       .map((c) => c[0] as string)
       .find((u) => u.startsWith(`${API_PREFIX}/crops`));
@@ -215,15 +222,15 @@ describe('getCluster k param', () => {
   it('surfaces order_method/order_version/n_pool when the server sends them', async () => {
     stubCrops({
       total: 500,
-      page: 1,
-      page_size: 60,
+      next_cursor: null,
+      limit: 60,
       crops: [],
       method: 'kcenter_greedy',
       version: '1',
       n_pool: 4832,
     });
 
-    const res = await getCluster('cluster-uid-42', 1, 60, undefined, {
+    const res = await getCluster('cluster-uid-42', null, 60, undefined, {
       order: 'diverse',
       k: 60,
     });
@@ -233,10 +240,18 @@ describe('getCluster k param', () => {
     expect(res.crops.n_pool).toBe(4832);
   });
 
-  it('defaults order_method/order_version/n_pool to null when the server omits them', async () => {
-    stubCrops({ total: 0, page: 1, page_size: 60, crops: [] });
+  it('reads order_method/order_version/n_pool as null when the server serves none', async () => {
+    stubCrops({
+      total: 0,
+      next_cursor: null,
+      limit: 60,
+      crops: [],
+      method: null,
+      version: null,
+      n_pool: null,
+    });
 
-    const res = await getCluster('cluster-uid-42', 1, 60, undefined, { order: null });
+    const res = await getCluster('cluster-uid-42', null, 60, undefined, { order: null });
 
     expect(res.crops.order_method).toBeNull();
     expect(res.crops.order_version).toBeNull();
@@ -264,7 +279,7 @@ describe('getCluster cluster_uid param', () => {
       .mockImplementation((url: string) =>
         Promise.resolve(
           url.startsWith(`${API_PREFIX}/crops`)
-            ? jsonResponse({ total: 0, page: 1, page_size: 60, crops: [] })
+            ? jsonResponse({ total: 0, next_cursor: null, limit: 60, crops: [] })
             : jsonResponse({ items: [] }),
         ),
       );

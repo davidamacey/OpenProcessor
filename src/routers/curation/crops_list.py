@@ -8,86 +8,33 @@ from fastapi import HTTPException, Query
 
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import OpenSearchDep, guard_page_depth, router
+from src.routers.curation._common import OpenSearchDep, is_not_found, router
+from src.routers.curation._crop_params import CropBrowseQuery, resolve_listing
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._item_filter_params import ItemFilterQuery
-from src.routers.curation._item_models import CropsPageResponse, ItemDoc
-from src.routers.curation._review_params import UnsetIfEmpty
+from src.routers.curation._item_models import CropLocate, CropsPageResponse, ItemDoc
 from src.services.curation.capture_wire import image_capture
 from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_browse import crops_page
-from src.services.curation.crop_listing import (
-    MAX_IDS,
-    build_crop_list_query,
-    crop_list_body,
-    crops_by_ids,
-)
+from src.services.curation.crop_listing import MAX_IDS, crop_list_body, crops_by_ids
 from src.services.curation.crop_orders import ordered_crops_page
-from src.services.curation.diverse_limits import DIVERSE_BROWSE_MAX_K
 from src.services.curation.hidden_counts import hidden_counts
-from src.services.curation.image_join import join_truncated, resolve_filter_join
-from src.services.curation.region_text_search import TextMatch, same_text_key
+from src.services.curation.image_join import join_truncated
+from src.services.curation.list_cursor import CursorError, split_page, with_tiebreak
+from src.services.curation.list_locate import locate_item
 from src.services.curation.wire import item_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import (
-    item_state_fields,
-    item_write_fields,
-    vector_source_excludes,
-)
+from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
 async def list_crops(
     opensearch: OpenSearchDep,
     item_filter: ItemFilterQuery,
+    browse: CropBrowseQuery,
     # Annotated defaults (not `= Query(...)`) so direct Python callers such
     # as GET /classes/{id}/crops get real values, not FieldInfo objects.
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=500)] = 50,
-    limit: Annotated[
-        int | None, Query(ge=1, le=500, description='Alias for page_size; wins when both set.')
-    ] = None,
-    sort: Annotated[
-        str | None,
-        Query(
-            description=(
-                "'<field>[:asc|desc]', default 'updated_at:desc'. Fields: "
-                'updated_at, created_at, confidence, '
-                'crop_rank_in_image, crop_area_norm, blur_lap_ratio, cluster_score, '
-                'mistakenness_score, uniqueness_score. Ignored by order=outliers|diverse.'
-            )
-        ),
-    ] = None,
-    label_source: str | None = None,
-    class_source: str | None = None,
-    label_validated: bool | None = None,
-    import_id: Annotated[
-        str | None,
-        Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
-    ] = None,
-    dataset_split: Annotated[
-        str | None,
-        UnsetIfEmpty,
-        Query(description='The split a dataset import filed the frame under.'),
-    ] = None,
-    on_negative_frame: Annotated[
-        bool | None,
-        UnsetIfEmpty,
-        Query(description='true = machine items on an imported reviewed-negative frame.'),
-    ] = None,
-    proposed_by_import: Annotated[
-        bool | None,
-        Query(description='true = items an import created from the detector; false = the rest.'),
-    ] = None,
-    source: Annotated[str | None, Query(description='Ingest source tag (wire `source`).')] = None,
-    open_vocab_set: Annotated[
-        str | None, Query(description='Items the full-image pass wrote for this prompt set.')
-    ] = None,
-    source_prompt: Annotated[
-        str | None, Query(description='Items the full-image pass found with this exact prompt.')
-    ] = None,
-    needs_new_class: bool | None = None,
-    review_dismissed: Annotated[
-        bool | None, Query(description='true = only items hidden from review.')
-    ] = None,
+    cursor: CursorQ = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
     ids: Annotated[
         str | None,
         Query(
@@ -97,66 +44,12 @@ async def list_crops(
             )
         ),
     ] = None,
-    include_test: bool = False,
-    include_excluded: bool = False,
-    min_blur_ratio: Annotated[float | None, Query(ge=0.0)] = None,
-    classifier_conf_lt: Annotated[float | None, Query(ge=0.0, le=1.0)] = None,
-    item_text: Annotated[
-        str | None,
-        Query(
-            max_length=200,
-            description=(
-                'Text read on the item crop: every word must be a case-insensitive '
-                'prefix of a stored item text token.'
-            ),
-        ),
-    ] = None,
-    region_text: Annotated[
-        str | None,
-        Query(
-            max_length=200,
-            description=(
-                'Plate text on a box: the item has a box whose folded text matches this '
-                '(letters and digits only, confusables folded), as `region_text_match` says.'
-            ),
-        ),
-    ] = None,
-    region_text_match: Annotated[
-        TextMatch,
-        Query(description='How `region_text` matches: `exact`, `fuzzy` (one edit) or `fragment`.'),
-    ] = 'exact',
-    same_text_as: Annotated[
-        str | None,
-        Query(
-            description=(
-                "`<item_id>:<box_id>`: items with a box whose folded text equals that box's. "
-                'Exclusive with `region_text`.'
-            ),
-        ),
-    ] = None,
-    order: Annotated[
-        str,
-        Query(
-            description=(
-                "'outliers' ranks a cluster's members farthest-from-centroid first; "
-                "'core_first' best-scored-first by the partition's cluster_score "
-                '(both need cluster_uid). '
-                "'diverse' ranks the matched pool by k-center-greedy coverage "
-                '(gated on OP_SELECT_DIVERSE_ENABLED; behaves like an unrecognized '
-                'order value when the flag is off).'
-            )
-        ),
-    ] = 'default',
-    k: Annotated[
-        int | None,
-        Query(
-            ge=1,
-            le=DIVERSE_BROWSE_MAX_K,
-            description='order=diverse only: rank just the first k picks.',
-        ),
-    ] = None,
 ) -> dict[str, Any]:
-    """Paginated crop browse with the standard filter set.
+    """Cursor-paged crop browse with the standard filter set.
+
+    ``next_cursor`` resumes the same sort; the page is as deep as the list. The computed orders
+    ``order=outliers`` and ``order=diverse`` rank the matched pool in memory and serve one bounded
+    page of at most ``limit`` items with ``next_cursor: null``; ``order=core_first`` pages by cursor.
 
     ``test_holdout=true`` rows are filtered out unless ``include_test``.
     ``class_excluded=true`` (human-ignored) rows are filtered out unless
@@ -175,96 +68,59 @@ async def list_crops(
         if len(wanted) > MAX_IDS:
             raise HTTPException(status_code=400, detail=f'at most {MAX_IDS} ids per request')
         found = await crops_by_ids(opensearch, wanted)
-        return crops_page(total=len(found), page=1, page_size=len(wanted), crops=found)
-    if limit is not None:
-        page_size = limit
-    guard_page_depth(page, page_size)
-    embedding = await item_write_fields()
-    join = await resolve_filter_join(opensearch, item_filter)
-    if same_text_as is not None:
-        if region_text is not None:
-            raise HTTPException(
-                status_code=400, detail='same_text_as and region_text are exclusive'
-            )
-        try:
-            region_text = await same_text_key(opensearch, same_text_as)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except LookupError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        region_text_match = 'exact'
-    try:
-        listing = build_crop_list_query(
-            embedding=embedding,
-            sort=sort,
-            item_filter_params=item_filter.model_dump(exclude_defaults=True),
-            route_params={
-                'label_source': label_source,
-                'class_source': class_source,
-                'label_validated': label_validated,
-                'import_id': import_id,
-                'dataset_split': dataset_split,
-                'on_negative_frame': on_negative_frame,
-                'proposed_by_import': proposed_by_import,
-                'source': source,
-                'needs_new_class': needs_new_class,
-                'review_dismissed': review_dismissed,
-                'min_blur_ratio': min_blur_ratio,
-                'classifier_conf_lt': classifier_conf_lt,
-                'item_text': item_text,
-                'region_text': region_text,
-                'region_text_match': region_text_match,
-                'open_vocab_set': open_vocab_set,
-                'source_prompt': source_prompt,
-            },
-            include_test=include_test,
-            include_excluded=include_excluded,
-            image_join=join,
+        return crops_page(
+            total=len(found), next_cursor=None, limit=len(wanted), crops=found, sort_applied='ids'
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    body = crop_list_body(
-        listing,
-        page=page,
-        page_size=page_size,
-        vector_excludes=await vector_source_excludes(),
-    )
+    listing = await resolve_listing(opensearch, item_filter, browse)
+    narrowed = not listing.item_filter.is_empty()
     try:
         hidden = await hidden_counts(
             opensearch,
             listing.filter_clauses,
-            include_test=include_test,
-            include_excluded=include_excluded or 'excluded' in listing.item_filter.review_status,
+            include_test=browse.include_test,
+            include_excluded=browse.include_excluded
+            or 'excluded' in listing.item_filter.review_status,
+        )
+        if browse.order != 'default':
+            # Computed orders (outliers / core_first / diverse) rank the matched pool; None
+            # falls through to the plain sort below.
+            n_pool = int(
+                (await opensearch.count(index=items_index(), body={'query': listing.query_clause}))[
+                    'count'
+                ]
+            )
+            ordered = await ordered_crops_page(
+                opensearch,
+                index=items_index(),
+                order=browse.order,
+                query_clause=listing.query_clause,
+                cluster_uid=str(item_filter.cluster_uids[0])
+                if len(item_filter.cluster_uids) == 1
+                else None,
+                item_filter=listing.item_filter,
+                cursor=cursor,
+                limit=limit,
+                k=browse.k,
+                n_pool=n_pool,
+                fetch_items=crops_by_ids,
+            )
+            if ordered is not None:
+                await attach_item_display_nos(ordered['crops'])
+                ordered['hidden'] = hidden
+                ordered['join_truncated'] = join_truncated(listing.image_join)
+                return ordered
+        body = crop_list_body(
+            listing, cursor=cursor, limit=limit, vector_excludes=await vector_source_excludes()
         )
         resp = await opensearch.search(index=items_index(), body=body)
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    total = (resp.get('hits') or {}).get('total', {}).get('value', 0)
-    # Computed orders (outliers / core_first / diverse) rank the matched
-    # pool; None falls through to the plain sort above.
-    ordered = await ordered_crops_page(
-        opensearch,
-        index=items_index(),
-        order=order,
-        query_clause=listing.query_clause,
-        cluster_uid=str(item_filter.cluster_uids[0])
-        if len(item_filter.cluster_uids) == 1
-        else None,
-        item_filter=listing.item_filter,
-        page=page,
-        page_size=page_size,
-        k=k,
-        n_pool=int(total),
-        fetch_items=crops_by_ids,
+    total = int((resp.get('hits') or {}).get('total', {}).get('value', 0))
+    hits, next_cursor = split_page(
+        (resp.get('hits') or {}).get('hits') or [], sort_id=listing.sort_id, limit=limit
     )
-    if ordered is not None:
-        await attach_item_display_nos(ordered['crops'])
-        ordered['hidden'] = hidden
-        ordered['join_truncated'] = join_truncated(join)
-        return ordered
-
-    hits = (resp.get('hits') or {}).get('hits') or []
     state_fields = await item_state_fields()
     crops = [
         serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
@@ -272,13 +128,78 @@ async def list_crops(
     ]
     await attach_item_display_nos(crops)
     return crops_page(
-        total=int(total),
-        page=page,
-        page_size=page_size,
+        total=total,
+        next_cursor=next_cursor,
+        limit=limit,
         crops=crops,
+        sort_applied=listing.sort_id,
+        narrowed=narrowed,
         hidden=hidden,
-        join_truncated=join_truncated(join),
+        join_truncated=join_truncated(listing.image_join),
     )
+
+
+@router.get('/crops/locate', response_model=None, responses={200: {'model': CropLocate}})
+async def locate_crop(
+    opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
+    browse: CropBrowseQuery,
+    crop_id: Annotated[str, Query(description='The crop to find.')],
+) -> dict[str, Any]:
+    """Where ``crop_id`` sits in the list ``GET /crops`` serves for the same filters and sort.
+
+    ``index`` is the 0-based position; ``cursor_before`` starts a page at the crop (null for the
+    first row) and ``cursor_after`` resumes right after it, so a deep link loads one page whatever
+    the depth. Not in the list: ``index`` and the cursors are null and ``reason`` is
+    ``not_found`` (no such crop) or ``filtered_out``. The computed orders have no stable position
+    and answer 400.
+    """
+    if browse.order != 'default':
+        raise HTTPException(
+            status_code=400, detail=f'cannot locate a crop under order={browse.order}'
+        )
+    listing = await resolve_listing(opensearch, item_filter, browse)
+    out: dict[str, Any] = {
+        'crop_id': crop_id,
+        'in_view': False,
+        'index': None,
+        'total': 0,
+        'cursor_before': None,
+        'cursor_after': None,
+        'reason': None,
+        'reason_message': None,
+    }
+    try:
+        out['total'] = int(
+            (await opensearch.count(index=items_index(), body={'query': listing.query_clause}))[
+                'count'
+            ]
+        )
+        try:
+            doc = await opensearch.get(index=items_index(), id=crop_id)
+        except Exception as exc:
+            if not is_not_found(exc):
+                raise
+            doc = {'found': False}
+        if not doc.get('found', True):
+            reason, message = 'not_found', 'No such crop.'
+        else:
+            where = await locate_item(
+                opensearch,
+                index=items_index(),
+                query=listing.query_clause,
+                sort=with_tiebreak(listing.sort_clause, 'crop_id'),
+                sort_id=listing.sort_id,
+                source={**(doc.get('_source') or {}), 'crop_id': crop_id},
+            )
+            if where is not None:
+                return {**out, 'in_view': True, **where.as_wire()}
+            reason, message = 'filtered_out', 'The crop is not in the current filtered view.'
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise server_error(503, 'opensearch unavailable', exc) from exc
+    return {**out, 'reason': reason, 'reason_message': message}
 
 
 @router.get('/crops/{crop_id}', response_model=None, responses={200: {'model': ItemDoc}})

@@ -98,7 +98,7 @@ def _setup(stub, items_provider):
         r'/review/(?!tabs)',
         lambda _r, _m: (
             200,
-            {'items': [items_provider()], 'total': 1, 'page': 1, 'page_size': 30},
+            {'items': [items_provider()], 'total': 1, 'next_cursor': None, 'limit': 30},
         ),
     )
 

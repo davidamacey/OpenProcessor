@@ -22,7 +22,8 @@ from src.routers.curation._audit_models import (
     AuditStartRequest,
     AuditStartResponse,
 )
-from src.routers.curation._common import OpenSearchDep, guard_page_depth, router
+from src.routers.curation._common import OpenSearchDep, router
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation.audit import (
     DEFAULT_MIN_PER_CLASS,
@@ -30,6 +31,7 @@ from src.services.curation.audit import (
     pending_query,
     start_audit,
 )
+from src.services.curation.list_cursor import CursorError, page_body, split_page
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
@@ -60,32 +62,38 @@ async def audit_start(body: AuditStartRequest, opensearch: OpenSearchDep) -> dic
 async def audit_queue(
     opensearch: OpenSearchDep,
     batch_id: str | None = Query(None, description='Only this batch.'),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=200),
+    cursor: CursorQ = None,
+    limit: int = Query(30, ge=1, le=200),
 ) -> dict[str, Any]:
     """Drawn crops still waiting for a human label, in a stable order."""
-    guard_page_depth(page, page_size)
     excludes = await vector_source_excludes()
     try:
-        resp = await opensearch.search(
-            index=items_index(),
-            body={
-                'from': (page - 1) * page_size,
-                'size': page_size,
+        body = page_body(
+            {
                 'query': pending_query(batch_id),
-                'sort': [{'crop_id': 'asc'}],
                 'track_total_hits': True,
                 '_source': {'excludes': item_list_source_excludes(excludes)},
             },
+            sort=[],
+            tiebreak='crop_id',
+            cursor=cursor,
+            sort_id='crop_id:asc',
+            limit=limit,
         )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
+    try:
+        resp = await opensearch.search(index=items_index(), body=body)
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    hits = (resp.get('hits') or {}).get('hits') or []
+    hits, next_cursor = split_page(
+        (resp.get('hits') or {}).get('hits') or [], sort_id='crop_id:asc', limit=limit
+    )
     state_fields = await item_state_fields()
     return {
         'total': int(((resp.get('hits') or {}).get('total') or {}).get('value', 0)),
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
         'items': [
             serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
             for h in hits

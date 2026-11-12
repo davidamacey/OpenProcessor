@@ -50,6 +50,7 @@ SLUG_QUERIES: dict[tuple[str, str], Callable[[str], dict[str, dict[str, str]]]] 
     ('GET', '/near_duplicates/groups'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/near_duplicates/groups/{group_id}'): lambda _slug: {'params': {'level': 'image'}},
     ('GET', '/review/{tab}/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
+    ('GET', '/crops/locate'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
     ('GET', '/search/similar'): lambda slug: {'params': {'crop_id': f'{slug}-item-0001'}},
     ('GET', '/search/text'): lambda _slug: {'params': {'q': 'truck'}},
     ('GET', '/regions/training_candidates'): lambda _slug: {'params': {'mode': 'human_corrected'}},

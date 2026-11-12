@@ -123,7 +123,7 @@ def ingested_crop_id(
     assert upload.json()['summary']['crops_indexed'] > 0, upload.json()
 
     def first_crop() -> str | None:
-        page = api.get(f'{prefix}/crops?page_size=5').json()
+        page = api.get(f'{prefix}/crops?limit=5').json()
         return page['crops'][0]['crop_id'] if page['crops'] else None
 
     return _poll('the ingested crop to be listed', first_crop)

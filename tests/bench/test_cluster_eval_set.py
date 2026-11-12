@@ -118,10 +118,18 @@ def test_cmd_build_pages_through_the_api_read_only(tmp_path: Path) -> None:
     seen: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((request.method, request.url.params.get('page', '')))
-        page = int(request.url.params['page'])
-        chunk = crops[(page - 1) * ces.PAGE_SIZE : page * ces.PAGE_SIZE]
-        return httpx.Response(200, json={'total': len(crops), 'crops': chunk})
+        seen.append((request.method, request.url.params.get('cursor', '')))
+        start = int(request.url.params.get('cursor', 0))
+        chunk = crops[start : start + ces.PAGE_SIZE]
+        more = start + ces.PAGE_SIZE < len(crops)
+        return httpx.Response(
+            200,
+            json={
+                'total': len(crops),
+                'crops': chunk,
+                'next_cursor': str(start + ces.PAGE_SIZE) if more else None,
+            },
+        )
 
     args = ces.build_parser().parse_args(
         [
@@ -137,7 +145,7 @@ def test_cmd_build_pages_through_the_api_read_only(tmp_path: Path) -> None:
         ]
     )
     assert ces.cmd_build(args, transport=httpx.MockTransport(handler)) == 0
-    assert seen == [('GET', '1'), ('GET', '2')]
+    assert seen == [('GET', ''), ('GET', str(ces.PAGE_SIZE))]
     lines = (tmp_path / 'o' / 'labels.jsonl').read_text().splitlines()
     assert len(lines) == ces.PAGE_SIZE + 3
     manifest = json.loads((tmp_path / 'o' / 'manifest.json').read_text())
@@ -212,7 +220,7 @@ def test_eval_manifest_supplies_rare_classes_and_is_recorded(tmp_path: Path) -> 
     ]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={'total': 2, 'crops': crops})
+        return httpx.Response(200, json={'total': 2, 'crops': crops, 'next_cursor': None})
 
     args = ces.build_parser().parse_args(
         [

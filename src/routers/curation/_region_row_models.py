@@ -44,14 +44,11 @@ class RegionRow(ItemDoc):
     )
 
 
-class RegionRowPage(BaseModel):
-    """``GET /regions``, ``/regions/training_candidates`` and
-    ``/regions/suspected_false_positives``."""
-
+class RegionRowBase(BaseModel):
     items: list[RegionRow]
     total: int = Field(
-        description='Items matching (page math: hasMore = page * page_size < total). '
-        'suspected_false_positives pages rows directly, so there total == total_rows.'
+        description='Items matching. suspected_false_positives pages rows directly, so there '
+        'total == total_rows.'
     )
     total_rows: int = Field(description='Rows matching (boxes when the request selects boxes).')
     rows_truncated: bool = Field(
@@ -60,5 +57,19 @@ class RegionRowPage(BaseModel):
         'index reports per item (index.max_inner_result_window), so some of its '
         'rows are missing; total_rows still counts them.',
     )
+
+
+class RegionRowPage(RegionRowBase):
+    """``GET /regions`` and ``/regions/training_candidates``."""
+
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page of items; null on the last page.'
+    )
+    limit: int = Field(description='Items per page.')
+
+
+class RegionFpPage(RegionRowBase):
+    """``GET /regions/suspected_false_positives``: rows scored in Python, paged by number."""
+
     page: int
-    page_size: int = Field(description='Items per page (suspected_false_positives: rows).')
+    page_size: int = Field(description='Rows per page.')

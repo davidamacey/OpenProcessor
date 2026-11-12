@@ -23,12 +23,6 @@ export type ClusterSortId = (typeof CLUSTER_SORT_IDS)[number];
 export const VALIDATION_STATES = ['none', 'partial', 'complete'] as const;
 export type ValidationState = (typeof VALIDATION_STATES)[number];
 
-/** `ClusterSortOption`. */
-export interface ClusterSortOption {
-  id: string;
-  label: string;
-}
-
 /** `ClusterFlag`: one entry of the served flag vocabulary. */
 export interface ClusterFlag {
   id: string;

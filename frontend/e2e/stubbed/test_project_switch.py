@@ -78,7 +78,12 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
         r'/review/(?!tabs)',
         lambda *_: (
             200,
-            {'items': [review_item(i) for i in range(3)], 'total': 3, 'page': 1, 'page_size': 30},
+            {
+                'items': [review_item(i) for i in range(3)],
+                'total': 3,
+                'next_cursor': None,
+                'limit': 30,
+            },
         ),
     )
 

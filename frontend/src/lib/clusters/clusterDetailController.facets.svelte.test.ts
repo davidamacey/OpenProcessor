@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.mocked(getCluster).mockResolvedValue({
     cluster: { uid: 'uid-7' } as never,
     cardError: null,
-    crops: { items: [], total: 0, page: 1, page_size: 60 },
+    crops: { items: [], total: 0, next_cursor: null, limit: 60 },
   });
   vi.mocked(getClusterFacets).mockResolvedValue(FACETS);
 });

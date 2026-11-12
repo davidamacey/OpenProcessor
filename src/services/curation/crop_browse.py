@@ -3,9 +3,13 @@ confidence band. Kept out of the router so it stays a thin HTTP layer."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.domain.embedding_state import embedded_clause
+
+
+if TYPE_CHECKING:
+    from src.schemas.curation.views import SortOption
 
 
 # Sortable item fields -> the ``unmapped_type`` OpenSearch needs when a
@@ -21,17 +25,55 @@ CROP_SORT_FIELDS: dict[str, str] = {
     'cluster_score': 'float',
     'mistakenness_score': 'float',
     'uniqueness_score': 'float',
+    'class_name': 'keyword',
+    'detector_class_name': 'keyword',
+    'validated': 'boolean',
+}
+
+# A sort id that names a stored field under another name.
+_STORED_FIELD = {'validated': 'class_validated'}
+
+# What each direction of each sort id means, as the user reads it.
+CROP_SORT_LABELS: dict[str, dict[str, str]] = {
+    'updated_at': {'asc': 'Least recently updated', 'desc': 'Recently updated'},
+    'created_at': {'asc': 'Oldest first', 'desc': 'Newest first'},
+    'confidence': {'asc': 'Confidence (low first)', 'desc': 'Confidence (high first)'},
+    'detector_confidence': {
+        'asc': 'Detector confidence (low first)',
+        'desc': 'Detector confidence (high first)',
+    },
+    'crop_rank_in_image': {
+        'asc': 'Largest in its image first',
+        'desc': 'Smallest in its image first',
+    },
+    'crop_area_norm': {'asc': 'Smallest box first', 'desc': 'Largest box first'},
+    'blur_lap_ratio': {'asc': 'Blurriest first', 'desc': 'Sharpest first'},
+    'cluster_score': {'asc': 'Cluster fit (worst first)', 'desc': 'Cluster fit (best first)'},
+    'mistakenness_score': {
+        'asc': 'Mistakenness (low first)',
+        'desc': 'Mistakenness (high first)',
+    },
+    'uniqueness_score': {'asc': 'Uniqueness (low first)', 'desc': 'Uniqueness (high first)'},
+    'class_name': {'asc': 'Class (A to Z)', 'desc': 'Class (Z to A)'},
+    'detector_class_name': {'asc': 'Detector class (A to Z)', 'desc': 'Detector class (Z to A)'},
+    'validated': {'asc': 'Not validated first', 'desc': 'Validated first'},
 }
 
 DEFAULT_CROP_SORT = 'updated_at:desc'
 
+CROP_SORT_OPTIONS: list[SortOption] = [
+    {'id': f'{field}:{direction}', 'label': label}
+    for field, labels in CROP_SORT_LABELS.items()
+    for direction, label in labels.items()
+]
 
-def parse_crop_sort(sort: str | None) -> list[dict[str, Any]]:
-    """``'<field>[:asc|desc]'`` -> an OpenSearch sort clause.
+
+def parse_crop_sort(sort: str | None) -> tuple[str, list[dict[str, Any]]]:
+    """``'<field>[:asc|desc]'`` -> the canonical sort id and its OpenSearch sort clause.
 
     Raises ``ValueError`` (the router maps it to 400) for an unknown field
     or direction, listing the valid choices. Missing values sort last in
-    either direction.
+    either direction. The clause has no tiebreak: the paging helper appends ``crop_id``.
     """
     spec = (sort or DEFAULT_CROP_SORT).strip()
     field, _, direction = spec.partition(':')
@@ -43,20 +85,14 @@ def parse_crop_sort(sort: str | None) -> list[dict[str, Any]]:
     if direction not in ('asc', 'desc'):
         msg = f"unknown sort direction {direction!r}; use 'asc' or 'desc'"
         raise ValueError(msg)
-    return [
-        {
-            field: {
-                'order': direction,
-                'missing': '_last',
-                'unmapped_type': CROP_SORT_FIELDS[field],
-            }
-        },
-        # Stable tiebreaker. crop_id is a mapped keyword field equal to
-        # _id -- sort on it directly rather than _id (which uses fielddata,
-        # disabled on these indexes) so ties on the primary sort key don't
-        # produce duplicate/skipped rows across pages.
-        {'crop_id': {'order': 'asc'}},
-    ]
+    clause = {
+        _STORED_FIELD.get(field, field): {
+            'order': direction,
+            'missing': '_last',
+            'unmapped_type': CROP_SORT_FIELDS[field],
+        }
+    }
+    return f'{field}:{direction}', [clause]
 
 
 def confidence_band(conf_min: float | None, conf_max: float | None) -> dict[str, Any] | None:
@@ -105,12 +141,28 @@ def classifier_low_confidence_clause(lt: float) -> dict[str, Any]:
     }
 
 
+EMPTY_MESSAGES: dict[str, str] = {
+    'no_items': 'No detections yet. Ingest images to create some.',
+    'no_match': 'No detections match this filter.',
+}
+
+
+def empty_state(total: int, *, narrowed: bool) -> tuple[str | None, str | None]:
+    """``(empty_reason, empty_message)`` for a list that matched ``total`` items."""
+    if total:
+        return None, None
+    reason = 'no_match' if narrowed else 'no_items'
+    return reason, EMPTY_MESSAGES[reason]
+
+
 def crops_page(
     *,
     total: int,
-    page: int,
-    page_size: int,
+    next_cursor: str | None,
+    limit: int,
     crops: list[dict[str, Any]],
+    sort_applied: str,
+    narrowed: bool = False,
     method: str | None = None,
     version: str | None = None,
     n_pool: int | None = None,
@@ -120,11 +172,16 @@ def crops_page(
     join_truncated: bool = False,
 ) -> dict[str, Any]:
     """``CropsPageResponse``-shaped envelope around serialized items."""
+    reason, message = empty_state(total, narrowed=narrowed)
     return {
         'total': total,
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
         'crops': crops,
+        'sort_applied': sort_applied,
+        'sort_options': CROP_SORT_OPTIONS,
+        'empty_reason': reason,
+        'empty_message': message,
         'method': method,
         'version': version,
         'n_pool': n_pool,
@@ -159,6 +216,8 @@ async def embedding_pool_query_and_count(
 
 __all__ = [
     'CROP_SORT_FIELDS',
+    'CROP_SORT_LABELS',
+    'CROP_SORT_OPTIONS',
     'DEFAULT_CROP_SORT',
     'confidence_band',
     'crops_page',

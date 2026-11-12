@@ -1,7 +1,7 @@
 /**
  * v0.4.0 response passthrough: `GET /crops` serves `n_unembedded` and
  * `GET /search/text` serves `unembedded_in_scope`; both are copied
- * verbatim onto the `PaginatedResponse`, and a missing one reads `null`
+ * verbatim onto the page, and a missing one reads `null`
  * (never a client 0).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -25,12 +25,12 @@ afterEach(() => {
 
 describe('unembedded counts', () => {
   it('getCrops copies the served n_unembedded', async () => {
-    serve({ crops: [], total: 0, page: 1, page_size: 50, n_unembedded: 7 });
+    serve({ crops: [], total: 0, next_cursor: null, limit: 50, n_unembedded: 7 });
     expect((await getCrops()).n_unembedded).toBe(7);
   });
 
   it('getCrops reads a missing n_unembedded as null', async () => {
-    serve({ crops: [], total: 0, page: 1, page_size: 50 });
+    serve({ crops: [], total: 0, next_cursor: null, limit: 50 });
     expect((await getCrops()).n_unembedded).toBeNull();
   });
 

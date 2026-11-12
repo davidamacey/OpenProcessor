@@ -5,11 +5,9 @@ review panel's Reason row stays a label/value row at 800px.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from fixtures.wire import make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import shot
 
 
 TABS = review_tabs(
@@ -44,20 +42,13 @@ def _setup(stub):
     stub.on(
         'GET',
         r'/review/(?!tabs)',
-        (200, {'items': [item], 'total': 1, 'page': 1, 'page_size': 30}),
+        (200, {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30}),
     )
     stub.on(
         'GET',
         r'/images/[^/]+/file$',
         (200, {'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480}, 'items': [item]}),
     )
-
-
-def _shot(page, name):
-    out = os.environ.get('UI_POLISH_SHOTS')
-    if out:
-        Path(out).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f'{out}/{name}.png', full_page=True)
 
 
 def test_negative_frames_select_shows_the_served_any_option_by_default(stub, page, app_url):
@@ -86,4 +77,4 @@ def test_reason_row_is_a_label_value_row_at_800px(stub, page, app_url):
         # column must start right after the widest label, not at the half-way point.
         assert b['x'] - a['x'] < 160, (width, a, b)
         assert abs(b['y'] - a['y']) < 6, (width, a, b)
-        _shot(page, f'review-{width}')
+        shot(page, f'review-{width}', env_var='UI_POLISH_SHOTS')

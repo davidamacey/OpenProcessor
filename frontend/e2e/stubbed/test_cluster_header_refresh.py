@@ -87,7 +87,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 2, 'page': 1, 'page_size': 60, 'crops': [crop(0), crop(1)]},
+        {'total': 2, 'next_cursor': None, 'limit': 60, 'crops': [crop(0), crop(1)]},
     )
 
     stub_label_op(stub, r'/crops/batch_label$', 'op-label-1', method='PUT')
@@ -166,7 +166,7 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 1, 'page': 1, 'page_size': 60, 'crops': [crop(0)]},
+        {'total': 1, 'next_cursor': None, 'limit': 60, 'crops': [crop(0)]},
     )
     page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
     expect(page.get_by_test_id('cluster-card-error')).to_contain_text(

@@ -76,7 +76,7 @@ def test_review_class_and_origin_reach_the_queue_by_name_and_persist_in_the_url(
 
     def review_handler(request, _match):
         review_requests.append(request)
-        return (200, {'items': [item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _common(stub)
@@ -148,7 +148,7 @@ def test_review_generic_served_specs_render_by_kind(stub, page, app_url):
 
     def review_handler(request, _match):
         requests.append(request)
-        return (200, {'items': [item(0)], 'total': 1, 'page': 1, 'page_size': 30})
+        return (200, {'items': [item(0)], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _common(stub)
@@ -184,7 +184,7 @@ def test_clusters_grid_and_matching_mode_send_the_filter(stub, page, app_url):
 
     def crops_handler(request, _match):
         crop_requests.append(request)
-        return (200, {'total': 1, 'page': 1, 'page_size': 48, 'crops': [item(0)]})
+        return (200, {'total': 1, 'next_cursor': None, 'limit': 48, 'crops': [item(0)]})
 
     stub.on('GET', r'/clusters(\?|$)', clusters_handler)
     stub.on('GET', r'/crops(\?|$)', crops_handler)
@@ -231,7 +231,7 @@ def test_open_vocab_link_opens_matching_mode_with_removable_chips(stub, page, ap
 
     def crops_handler(request, _match):
         crop_requests.append(request)
-        return (200, {'total': 1, 'page': 1, 'page_size': 48, 'crops': [item(0)]})
+        return (200, {'total': 1, 'next_cursor': None, 'limit': 48, 'crops': [item(0)]})
 
     stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
     stub.on('GET', r'/crops(\?|$)', crops_handler)

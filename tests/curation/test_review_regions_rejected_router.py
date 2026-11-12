@@ -209,9 +209,9 @@ def test_rejected_items_sort_by_max_score_not_arbitrary_tie(
     ).json()
     assert lo['in_queue']
     assert hi['in_queue']
-    # Higher candidate score sorts strictly before ('rank' is the count of
+    # Higher candidate score sorts strictly before ('index' is the count of
     # items sorting before it) the lower one.
-    assert hi['rank'] < lo['rank']
+    assert hi['index'] < lo['index']
 
 
 if __name__ == '__main__':

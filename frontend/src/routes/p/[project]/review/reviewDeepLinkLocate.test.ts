@@ -4,7 +4,8 @@
  * 3000) and rendered item #1 with its keybindings live for the ~4s that
  * took, so a keypress during that window acted on the wrong crop. It now
  * asks the backend where the crop sits (`locateInReviewQueue`), fetches only
- * the located page (`queue.loadPage(loc.page)`, see src/lib/pager.svelte.ts),
+ * the page that starts at the located item (`queue.loadAt(loc.cursor_before, loc.index)`, see
+ * src/lib/pager.svelte.ts),
  * and gates the tab-action keybinding effect (plus the rendered item) on an
  * `awaitingDeepLink` state so nothing is live or shown until the target
  * lands.
@@ -28,19 +29,18 @@ function fn(name: string): string {
 }
 
 describe('/review?crop_id= deep link calls locateInReviewQueue, not a paging scan', () => {
-  it('jumpToPendingCrop calls locateInReviewQueue with the effective tab, page size and current filters', () => {
+  it('jumpToPendingCrop calls locateInReviewQueue with the effective tab and current filters', () => {
     const fn = loaderSrc.match(/async function jumpToPendingCrop\([\s\S]*?\n {2}\}/)?.[0];
     expect(fn).not.toBeUndefined();
     expect(fn).toMatch(
-      /await locateInReviewQueue\(\s*endpointForTab\(effectiveTab\),\s*cropId,\s*pageSize,\s*_filter\(\),\s*\)/,
+      /await locateInReviewQueue\(\s*endpointForTab\(effectiveTab\),\s*cropId,\s*_filter\(\),\s*\)/,
     );
-    // Fetches only the located page via queue.loadPage(loc.page) — the
-    // original while-loop here paged 1..loc.page one request per page
-    // (103 requests / 5.7s at rank 3000/page 101, with item #1's
-    // keybindings live the whole time), which was a regression this test
-    // used to pin as the intended behavior. That paging loop is the bug this guards against.
-    expect(fn).toMatch(/await queue\.loadPage\(loc\.page\)/);
-    expect(fn).not.toMatch(/while \(queue\.loadedPages < loc\.page/);
+    // Fetches only the page that starts at the located item. The original
+    // while-loop paged 1..loc.page one request per page (103 requests / 5.7s
+    // at rank 3000, with item #1's keybindings live the whole time); that
+    // paging loop is the bug this guards against.
+    expect(fn).toMatch(/await queue\.loadAt\(loc\.cursor_before, loc\.index\)/);
+    expect(fn).not.toMatch(/await queue\.loadMore\(\)/);
   });
 
   it('never references the deleted DEEP_LINK_MAX_ITEMS paging-scan constant', () => {
@@ -51,9 +51,8 @@ describe('/review?crop_id= deep link calls locateInReviewQueue, not a paging sca
 describe('jumpToPendingCrop fetches only the located page', () => {
   const body = fn('jumpToPendingCrop');
 
-  it('calls queue.loadPage(loc.page), not a loadMore() paging loop', () => {
-    expect(body).toMatch(/queue\.loadPage\(loc\.page\)/);
-    expect(body).not.toMatch(/while\s*\(\s*queue\.loadedPages\s*<\s*loc\.page/);
+  it('calls queue.loadAt(loc.cursor_before, loc.index), not a loadMore() paging loop', () => {
+    expect(body).toMatch(/queue\.loadAt\(loc\.cursor_before, loc\.index\)/);
     expect(body).not.toMatch(/await queue\.loadMore\(\)/);
   });
 

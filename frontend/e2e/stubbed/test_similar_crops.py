@@ -39,7 +39,7 @@ def serve_similar(stub, methods: dict = SEMANTIC_ON, similar=None) -> list[str]:
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [crop(i) for i in range(3)]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [crop(i) for i in range(3)]},
     )
     stub.on('GET', r'/methods(\?|$)', methods)
 
@@ -50,8 +50,8 @@ def serve_similar(stub, methods: dict = SEMANTIC_ON, similar=None) -> list[str]:
         return {
             'items': [neighbour(1, 0.91), neighbour(2, 0.84)],
             'total': 2,
-            'page': 1,
-            'page_size': 200,
+            'next_cursor': None,
+            'limit': 200,
             'unembedded_in_scope': 0,
         }
 

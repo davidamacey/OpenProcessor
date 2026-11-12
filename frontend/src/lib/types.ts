@@ -10,7 +10,6 @@
 import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { SlotData, SlotKey } from '$lib/annotations/types';
 import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
-import type { ReprocessRequest } from '$lib/types_import';
 import type { ItemAssist } from '$lib/types_assist';
 import type {
   ClusterListFilter,
@@ -309,55 +308,16 @@ export interface HiddenCounts {
   excluded: number;
 }
 
+/** A page of a search result (`GET /search/*`), numbered. */
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   page: number;
   page_size: number;
-  /** Search routes: the space key searched, and the extra keys fused in by
-   *  reciprocal rank fusion. */
+  /** The space key searched, and the extra keys fused in by reciprocal rank fusion. */
   space?: string;
   fuse?: string[];
-  /** Set by `{API_PREFIX}/review/{tab}` when the requested `?sort=` couldn't be
-   *  honored (e.g. the field isn't backfilled yet) and the server fell
-   *  back to the default ordering. Rendered as an inline note, never a
-   *  toast — this isn't an error, just a degraded request. Absent on
-   *  every other endpoint and on a request that didn't ask for a sort. */
-  sort_fallback_reason?: string | null;
-  /** The sort id `{API_PREFIX}/review/{tab}` actually used — the tab's own
-   *  default when no `?sort=` was sent, or the requested id when it was
-   *  honored. Shown in the StrategyBar summary chip so the operator can
-   *  see what's actually ordering the queue, not just what they last
-   *  picked. Absent on endpoints that don't
-   *  report it. */
-  sort_applied?: string | null;
-  /** Set by `{API_PREFIX}/review/{tab}` when `total === 0` — the server's
-   *  own explanation for why this queue is empty right now (e.g. "no
-   *  probe predictions — run a probe"), distinct from and more direct
-   *  than `sort_fallback_reason` (OpenProcessor #36 item 9). Absent when
-   *  the queue isn't empty. */
-  empty_reason?: string | null;
-  /** Provenance for a pool-scale overlay ordering (curation-strategy plan
-   *  Phase 4 — currently only `{API_PREFIX}/crops?order=diverse`): which
-   *  overlay/version produced this selection, and how large the pool it
-   *  drew from was. `n_pool` lets the UI note when diverse selection is
-   *  sampling a much larger cohort than what's on screen, rather than
-   *  silently truncating. All three are optional/tolerant — absent on
-   *  every other order value and on any backend that hasn't shipped this
-   *  yet (Phase 0/3 backend, or `OP_SELECT_DIVERSE_ENABLED` off). */
-  order_method?: string | null;
-  order_version?: string | null;
-  n_pool?: number | null;
-  /** v0.4.0 `GET {API_PREFIX}/crops`: matching items with no vector (null
-   *  when the route did not compute it). Absent on every other endpoint. */
-  n_unembedded?: number | null;
-  /** What this page hides (`GET /crops`, `GET /review/{tab}`): the test holdout and ignored items. */
-  hidden?: HiddenCounts | null;
-  /** v0.4.0 ordered `GET /crops` views: the request that would embed the
-   *  unembedded items, sent only when `n_unembedded` is > 0. */
-  suggested_reprocess?: ReprocessRequest | null;
-  /** v0.4.0 `GET {API_PREFIX}/search/text`: items in the search scope a
-   *  semantic search cannot reach because they have no vector. */
+  /** Items in the search scope a semantic search cannot reach because they have no vector. */
   unembedded_in_scope?: number | null;
 }
 
@@ -373,8 +333,18 @@ export interface CropFilter extends ItemFilterQuery {
   /** `GET {API_PREFIX}/crops?source=`: filter by ingest source tag. */
   source?: string;
   sort?: string;
+  /** The detector's own class (repeatable), a confidence band (`detector_conf_min`
+   *  inclusive, `detector_conf_max` exclusive) and a review tab id. */
+  detector_class_name?: string[];
+  detector_conf_min?: number | null;
+  detector_conf_max?: number | null;
+  review_tab?: string | null;
+  /** `GET /crops` computed order: `outliers`, `core_first` or `diverse`. */
+  order?: string;
+  /** `order=diverse` only: rank just the first k picks. */
+  k?: number;
   limit?: number;
-  page?: number;
+  cursor?: string;
   // -- Primary-subject filters -------------------------------------------
   /** Clarity slider: keep crops with blur_lap_ratio >= this (null-safe). */
   min_blur_ratio?: number | null;

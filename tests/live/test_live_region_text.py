@@ -123,7 +123,7 @@ def test_region_text_filters_find_the_items_the_worker_read(
     every = {i['crop_id'] for i in read_items}
 
     def found(**params: Any) -> set[str]:
-        resp = api.get(f'{project.prefix}/crops', params={'page_size': 100, **params})
+        resp = api.get(f'{project.prefix}/crops', params={'limit': 100, **params})
         assert resp.status_code == 200, resp.text
         return {c['crop_id'] for c in resp.json()['crops']}
 

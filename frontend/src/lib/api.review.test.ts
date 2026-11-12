@@ -34,10 +34,12 @@ describe('getReviewQueue', () => {
   it('forwards sort/min_mistakenness/hide_near_duplicates from an arbitrary filter object', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+      .mockResolvedValue(
+        jsonResponse({ total: 0, next_cursor: null, limit: 30, items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    await getReviewQueue('all', 1, 30, {
+    await getReviewQueue('all', null, 30, {
       sort: 'mistakenness',
       min_mistakenness: 0.5,
       hide_near_duplicates: true,
@@ -52,10 +54,12 @@ describe('getReviewQueue', () => {
   it('omits strategy params entirely when the filter object is empty (qs() drops nothing extra)', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+      .mockResolvedValue(
+        jsonResponse({ total: 0, next_cursor: null, limit: 30, items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
-    await getReviewQueue('all', 1, 30, {});
+    await getReviewQueue('all', null, 30, {});
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).not.toContain('sort=');
@@ -67,25 +71,29 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 0,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [],
         sort_fallback_reason: 'mistakenness not backfilled for this pool',
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, { sort: 'mistakenness' });
+    const res = await getReviewQueue('all', null, 30, { sort: 'mistakenness' });
     expect(res.sort_fallback_reason).toBe('mistakenness not backfilled for this pool');
   });
 
-  it('defaults sort_fallback_reason to null when the server omits it', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('passes the served sort_fallback_reason through unchanged', async () => {
+    const served = {
+      total: 0,
+      next_cursor: null,
+      limit: 30,
+      items: [],
+      sort_fallback_reason: null,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(served)));
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     expect(res.sort_fallback_reason).toBeNull();
   });
 
@@ -93,8 +101,8 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [
           {
             crop_id: 'c1',
@@ -109,7 +117,7 @@ describe('getReviewQueue', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     expect(res.items[0]?.mistakenness_score).toBe(0.87);
     expect(res.items[0]?.mistakenness_method).toBe('mistakenness');
     expect(res.items[0]?.mistakenness_version).toBe('v1');
@@ -122,8 +130,8 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 2,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [
           {
             crop_id: 'c1',
@@ -142,7 +150,7 @@ describe('getReviewQueue', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('mismatches', 1, 30, {});
+    const res = await getReviewQueue('mismatches', null, 30, {});
     expect(res.items[0]?.reason).toBe("VLM said 'widget_e', no registry match");
     expect(res.items[1]?.reason).toBe("VLM said 'wagon-ish', low confidence");
     expect(res.items[0]?.reason).not.toBe(res.items[1]?.reason);
@@ -155,8 +163,8 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [
           {
             crop_id: 'c1',
@@ -172,7 +180,7 @@ describe('getReviewQueue', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('mismatches', 1, 30, {});
+    const res = await getReviewQueue('mismatches', null, 30, {});
     expect(res.items[0]?.class_confidence).toBe(0.7);
     expect(res.items[0]?.class_confidence_source).toBe('vlm');
     expect(res.items[0]?.vlm_raw_class).toBe('widget_e');
@@ -182,14 +190,14 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     expect(res.items[0]?.mistakenness_score).toBeNull();
   });
 
@@ -201,8 +209,8 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [
           {
             crop_id: 'c1',
@@ -221,7 +229,7 @@ describe('getReviewQueue', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     const item = res.items[0];
     expect(item?.proposed_class_id).toBe(12);
     expect(item?.proposed_class_name).toBe('widget_b');
@@ -236,14 +244,14 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     const item = res.items[0];
     expect(item?.proposed_class_id).toBeNull();
     expect(item?.probe_pred_class_id).toBeNull();
@@ -255,26 +263,30 @@ describe('getReviewQueue', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 0,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [],
         sort_applied: 'atypicality_default',
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getReviewQueue('all', 1, 30, {});
+    const res = await getReviewQueue('all', null, 30, {});
     expect(res.sort_applied).toBe('atypicality_default');
   });
 
-  it('defaults sort_applied to null when the server omits it', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
-    vi.stubGlobal('fetch', fetchMock);
+  it('passes the served sort_applied through unchanged', async () => {
+    const served = {
+      total: 0,
+      next_cursor: null,
+      limit: 30,
+      items: [],
+      sort_applied: 'recent',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(served)));
 
-    const res = await getReviewQueue('all', 1, 30, {});
-    expect(res.sort_applied).toBeNull();
+    const res = await getReviewQueue('all', null, 30, {});
+    expect(res.sort_applied).toBe('recent');
   });
 });
 
@@ -293,60 +305,49 @@ describe('locateInReviewQueue', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sends crop_id/page_size/filters and parses an in-queue result', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        crop_id: 'c1',
-        in_queue: true,
-        rank: 41,
-        page: 2,
-        page_size: 30,
-        total: 109,
-        reason: null,
-        sort_applied: 'atypicality',
-      }),
-    );
+  it('sends crop_id and the filters and passes the served position and cursors through', async () => {
+    const served = {
+      crop_id: 'c1',
+      in_queue: true,
+      index: 41,
+      total: 109,
+      cursor_before: 'before',
+      cursor_after: 'after',
+      reason: null,
+      sort_applied: 'atypicality',
+      sort_fallback_reason: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(served));
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await locateInReviewQueue('all', 'c1', 30, { class_id: 5 });
+    const res = await locateInReviewQueue('all', 'c1', { class_id: 5 });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain('/review/all/locate');
     expect(url).toContain('crop_id=c1');
-    expect(url).toContain('page_size=30');
     expect(url).toContain('class_id=5');
-    expect(res).toEqual({
-      crop_id: 'c1',
-      in_queue: true,
-      rank: 41,
-      page: 2,
-      page_size: 30,
-      total: 109,
-      reason: null,
-      sort_applied: 'atypicality',
-      sort_fallback_reason: null,
-    });
+    expect(url).not.toContain('page');
+    expect(res).toEqual(served);
   });
 
-  it('parses a not-in-queue result with a reason and null page/rank', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        crop_id: 'c1',
-        in_queue: false,
-        rank: null,
-        page: null,
-        page_size: 30,
-        total: 0,
-        reason: 'filtered_out',
-        sort_applied: 'uncertainty_entropy',
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  it('passes a not-in-queue result through with its reason and no cursors', async () => {
+    const served = {
+      crop_id: 'c1',
+      in_queue: false,
+      index: null,
+      total: 0,
+      cursor_before: null,
+      cursor_after: null,
+      reason: 'filtered_out',
+      sort_applied: 'uncertainty_entropy',
+      sort_fallback_reason: null,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(served)));
 
-    const res = await locateInReviewQueue('uncertainty', 'c1', 30);
+    const res = await locateInReviewQueue('uncertainty', 'c1');
     expect(res.in_queue).toBe(false);
-    expect(res.page).toBeNull();
-    expect(res.rank).toBeNull();
+    expect(res.index).toBeNull();
+    expect(res.cursor_before).toBeNull();
     expect(res.reason).toBe('filtered_out');
   });
 });
@@ -489,7 +490,9 @@ describe('searchCrops', () => {
   it('sends q/page/page_size and hits GET {API_PREFIX}/search/text', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+      .mockResolvedValue(
+        jsonResponse({ total: 0, next_cursor: null, limit: 30, items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await searchCrops('red widget_a', 1, 30);
@@ -504,7 +507,9 @@ describe('searchCrops', () => {
   it('forwards extra filter params (e.g. cluster_id, review tab filters) unchanged', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+      .mockResolvedValue(
+        jsonResponse({ total: 0, next_cursor: null, limit: 30, items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     await searchCrops('blue truck', 1, 30, { cluster_id: 42, max_rank: 1 });
@@ -518,8 +523,8 @@ describe('searchCrops', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [
           {
             crop_id: 'c1',
@@ -540,8 +545,8 @@ describe('searchCrops', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         total: 1,
-        page: 1,
-        page_size: 30,
+        next_cursor: null,
+        limit: 30,
         items: [{ crop_id: 'c1', image_path: '/x/y.jpg', bbox_norm: [0, 0, 1, 1] }],
       }),
     );
@@ -554,7 +559,9 @@ describe('searchCrops', () => {
   it('returns an empty result set on a zero-hit response (empty-state input)', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse({ total: 0, page: 1, page_size: 30, items: [] }));
+      .mockResolvedValue(
+        jsonResponse({ total: 0, next_cursor: null, limit: 30, items: [] }),
+      );
     vi.stubGlobal('fetch', fetchMock);
 
     const res = await searchCrops('zzzznonexistentqueryzzzz', 1, 30);

@@ -15,13 +15,8 @@ from fastapi import Depends, HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
-from src.routers.curation._common import (
-    OpenSearchDep,
-    get_class_registry,
-    guard_page_depth,
-    is_not_found,
-    router,
-)
+from src.routers.curation._common import OpenSearchDep, get_class_registry, is_not_found, router
+from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueuePage
 from src.routers.curation._review_params import (
@@ -44,13 +39,10 @@ from src.services.curation import review_empty_reason, review_reasons
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import item_filter_clauses
+from src.services.curation.list_cursor import CursorError, page_body, split_page
+from src.services.curation.list_locate import UnlocatableSortError, locate_item
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
-from src.services.curation.review_request import (
-    ReviewFilters,
-    UnlocatableSortError,
-    before_query,
-    build_review_request,
-)
+from src.services.curation.review_request import ReviewFilters, build_review_request
 from src.services.curation.review_tab_status import tab_counts, unavailable_reason
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
@@ -164,8 +156,8 @@ async def review_queue(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     opensearch: OpenSearchDep,
     filters: ReviewFiltersDep,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=200)] = 30,
+    cursor: CursorQ = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 30,
     sort: SortQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
@@ -179,12 +171,11 @@ async def review_queue(
     class validation. Order: the applied sort (``sort_applied``), then
     ``crop_id``.
     """
-    guard_page_depth(page, page_size)
     if review_empty_reason.region_queue_is_off(tab):
         return {
             'total': 0,
-            'page': page,
-            'page_size': page_size,
+            'next_cursor': None,
+            'limit': limit,
             'items': [],
             'sort_applied': sort or 'default',
             'sort_fallback_reason': None,
@@ -195,17 +186,24 @@ async def review_queue(
         }
     req = await _request(tab, filters, sort, opensearch)
     excludes = await vector_source_excludes()
-    body = {
-        'from': (page - 1) * page_size,
-        'size': page_size,
-        'query': req.query,
-        'sort': req.sort,
-        # Exact totals: the default 10k cap makes large queues look smaller.
-        'track_total_hits': True,
-        # Never ship the 1024-d embedding vectors or class_id_history to
-        # the review grid (history is undo-only).
-        '_source': {'excludes': item_list_source_excludes(excludes)},
-    }
+    try:
+        body = page_body(
+            {
+                'query': req.query,
+                # Exact totals: the default 10k cap makes large queues look smaller.
+                'track_total_hits': True,
+                # Never ship the 1024-d embedding vectors or class_id_history to
+                # the review grid (history is undo-only).
+                '_source': {'excludes': item_list_source_excludes(excludes)},
+            },
+            sort=req.sort,
+            tiebreak='crop_id',
+            cursor=cursor,
+            sort_id=req.sort_applied,
+            limit=limit,
+        )
+    except CursorError as exc:
+        raise cursor_refused(exc) from exc
     hidden = await _hidden(opensearch, filters, req.image_join)
     try:
         resp = await opensearch.search(index=items_index(), body=body)
@@ -214,7 +212,9 @@ async def review_queue(
 
     total_obj = (resp.get('hits') or {}).get('total') or {}
     total = int(total_obj.get('value', 0))
-    hits = (resp.get('hits') or {}).get('hits') or []
+    hits, next_cursor = split_page(
+        (resp.get('hits') or {}).get('hits') or [], sort_id=req.sort_applied, limit=limit
+    )
     registry_names: frozenset[str] = frozenset()
     if tab == 'mismatches':
         from src.services.curation.new_class_terms import normalize_term
@@ -248,8 +248,8 @@ async def review_queue(
     )
     return {
         'total': int(total),
-        'page': page,
-        'page_size': page_size,
+        'next_cursor': next_cursor,
+        'limit': limit,
         'items': items,
         'sort_applied': req.sort_applied,
         # Set when the default sort's field has 0% coverage and
@@ -269,50 +269,31 @@ async def review_locate(
     crop_id: Annotated[str, Query(description='The item to find.')],
     opensearch: OpenSearchDep,
     filters: ReviewFiltersDep,
-    page_size: Annotated[int, Query(ge=1, le=200)] = 30,
     sort: SortQ = None,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
 
-    ``{crop_id, in_queue, rank, page, page_size, total, reason,
-    sort_applied, sort_fallback_reason}``: ``rank`` is 0-based, ``page`` the 1-based page of
-    ``page_size`` holding it. Out of the queue: ``rank``/``page`` null and
-    ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
-    items sorting before it, so any depth costs the same.
+    ``{crop_id, in_queue, index, total, cursor_before, cursor_after, reason,
+    sort_applied, sort_fallback_reason}``: ``index`` is the 0-based position. ``cursor_before``
+    starts a page at the item (null for the first row), ``cursor_after`` resumes right after
+    it. Out of the queue: ``index`` and the cursors null and ``reason`` ``not_found`` (no such
+    item) or ``filtered_out``. Counts the items sorting before it, so any depth costs the same.
     """
     req = await _request(tab, filters, sort, opensearch)
-    if review_empty_reason.region_queue_is_off(tab):
-        return {
-            'crop_id': crop_id,
-            'in_queue': False,
-            'rank': None,
-            'page': None,
-            'page_size': page_size,
-            'total': 0,
-            'reason': 'region_profile_off',
-            'sort_applied': req.sort_applied,
-            'sort_fallback_reason': req.sort_fallback_reason,
-        }
     out: dict[str, Any] = {
         'crop_id': crop_id,
         'in_queue': False,
-        'rank': None,
-        'page': None,
-        'page_size': page_size,
-        'total': None,
+        'index': None,
+        'total': 0,
+        'cursor_before': None,
+        'cursor_after': None,
         'reason': None,
         'sort_applied': req.sort_applied,
         'sort_fallback_reason': req.sort_fallback_reason,
     }
-
-    async def _count(query: dict[str, Any]) -> int:
-        try:
-            resp = await opensearch.count(index=items_index(), body={'query': query})
-        except Exception as exc:
-            raise server_error(503, 'opensearch unavailable', exc) from exc
-        return int(resp.get('count', 0))
-
+    if review_empty_reason.region_queue_is_off(tab):
+        return {**out, 'reason': 'region_profile_off'}
     try:
         doc = await opensearch.get(index=items_index(), id=crop_id)
     except Exception as exc:
@@ -322,13 +303,22 @@ async def review_locate(
     if not doc.get('found', True):
         return {**out, 'reason': 'not_found'}
     source_doc = {**(doc.get('_source') or {}), 'crop_id': crop_id}
-    out['total'] = await _count(req.query)
-    member = {'bool': {'filter': [req.query, {'term': {'crop_id': crop_id}}]}}
-    if not await _count(member):
-        return {**out, 'reason': 'filtered_out'}
     try:
-        before = before_query(req.sort, source_doc)
+        where = await locate_item(
+            opensearch,
+            index=items_index(),
+            query=req.query,
+            sort=req.sort,
+            sort_id=req.sort_applied,
+            source=source_doc,
+        )
     except UnlocatableSortError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    rank = await _count({'bool': {'filter': [req.query, before]}})
-    return {**out, 'in_queue': True, 'rank': rank, 'page': rank // page_size + 1}
+    except Exception as exc:
+        raise server_error(503, 'opensearch unavailable', exc) from exc
+    if where is None:
+        total = int(
+            (await opensearch.count(index=items_index(), body={'query': req.query}))['count']
+        )
+        return {**out, 'total': total, 'reason': 'filtered_out'}
+    return {**out, 'in_queue': True, **where.as_wire()}

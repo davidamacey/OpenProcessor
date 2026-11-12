@@ -82,7 +82,7 @@ def text_items(api_client: Any, opensearch: Any) -> dict[str, str]:
 
 
 def _found(api_client: Any, **params: Any) -> set[str]:
-    resp = api_client.get('/crops', params={'page_size': 100, **params})
+    resp = api_client.get('/crops', params={'limit': 100, **params})
     assert resp.status_code == 200, resp.text
     return {item['crop_id'] for item in resp.json()['crops']}
 

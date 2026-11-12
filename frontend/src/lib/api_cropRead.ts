@@ -9,34 +9,35 @@ import type {
   ImageDetailResponse,
   CropFilter,
   CropHistoryResponse,
-  HiddenCounts,
   PaginatedResponse,
 } from '$lib/types';
+import type { CursorPage } from '$lib/types_cursor';
 import type { SearchCrop } from '$lib/types_review';
-import type { ReprocessRequest } from '$lib/types_import';
 
 export async function getCrops(
   filter: CropFilter = {},
+  cursor: string | null = null,
   signal?: AbortSignal,
-): Promise<PaginatedResponse<Crop>> {
-  type Raw = {
-    total: number;
-    page: number;
-    page_size: number;
+): Promise<CursorPage<Crop>> {
+  type Raw = Omit<CursorPage<Crop>, 'items' | 'order_method' | 'order_version'> & {
     crops: RawCrop[];
-    n_unembedded?: number | null;
-    hidden?: HiddenCounts | null;
-    suggested_reprocess?: ReprocessRequest | null;
+    // A computed order serves the method and version that ranked the page.
+    method?: string | null;
+    version?: string | null;
   };
-  const raw = await apiFetch<Raw>(`${scoped()}/crops${qs({ ...filter })}`, {}, signal);
+  const { crops, method, version, ...page } = await apiFetch<Raw>(
+    `${scoped()}/crops${qs({ ...filter, cursor: cursor ?? undefined })}`,
+    {},
+    signal,
+  );
   return {
-    items: raw.crops.map(mapRawCrop),
-    total: raw.total,
-    page: raw.page,
-    page_size: raw.page_size,
-    n_unembedded: raw.n_unembedded ?? null,
-    hidden: raw.hidden ?? null,
-    suggested_reprocess: raw.suggested_reprocess ?? null,
+    ...page,
+    items: crops.map(mapRawCrop),
+    order_method: method ?? null,
+    order_version: version ?? null,
+    n_unembedded: page.n_unembedded ?? null,
+    hidden: page.hidden ?? null,
+    suggested_reprocess: page.suggested_reprocess ?? null,
   };
 }
 

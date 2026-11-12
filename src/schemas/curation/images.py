@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.schemas.curation.views import HiddenCounts
+from src.schemas.curation.views import HiddenCounts, SortOption
 
 
 BoxTone = Literal['validated', 'machine', 'unlabeled', 'holdout', 'rejected']
@@ -49,11 +49,6 @@ class ImageNearDup(BaseModel):
     purpose: Literal['dedup', 'leak']
     size: int | None = None
     is_representative: bool | None = None
-
-
-class SortOption(BaseModel):
-    id: str
-    label: str
 
 
 class ImageCard(BaseModel):

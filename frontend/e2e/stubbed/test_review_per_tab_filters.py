@@ -69,7 +69,7 @@ def _stub_common(stub):
 def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, page, app_url):
     def review_handler(_request, _match):
         items = [review_item(i) for i in range(2)]
-        return (200, {'items': items, 'total': 2, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 2, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _stub_common(stub)
@@ -97,7 +97,7 @@ def test_review_filter_bar_hides_controls_the_active_tab_does_not_serve(stub, pa
 def test_review_subject_toggle_label_reflects_served_max_rank_default(stub, page, app_url):
     def review_handler(_request, _match):
         items = [review_item(i) for i in range(2)]
-        return (200, {'items': items, 'total': 2, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 2, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     _stub_common(stub)

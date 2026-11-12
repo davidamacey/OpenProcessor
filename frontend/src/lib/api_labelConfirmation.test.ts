@@ -93,15 +93,13 @@ describe('audit', () => {
     const last = capture({
       items: [makeItem({ crop_id: 'q1', detector_class_name: 'widget_h' })],
       total: 41,
-      page: 2,
-      page_size: 30,
+      next_cursor: 'c2',
+      limit: 30,
     });
-    const page = await getAuditQueue(2, 30, 'batch-9');
-    expect(last().url).toBe(
-      `${PROJECT}/audit/queue?page=2&page_size=30&batch_id=batch-9`,
-    );
+    const page = await getAuditQueue('c1', 30, 'batch-9');
+    expect(last().url).toBe(`${PROJECT}/audit/queue?cursor=c1&limit=30&batch_id=batch-9`);
     expect(page.total).toBe(41);
-    expect(page.pageSize).toBe(30);
+    expect(page.next_cursor).toBe('c2');
     expect(page.items[0]?.id).toBe('q1');
     expect(page.items[0]?.detector_class_name).toBe('widget_h');
   });

@@ -9,15 +9,13 @@ detector.
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import shot
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 from test_ingest_policy import DETECTOR, POLICY, _ingest_config
 
-
-SHOTS = Path(__file__).resolve().parents[2] / 'artifacts_local' / 'v040-ui' / 'detector'
 
 CLASSES = [
     {
@@ -58,14 +56,6 @@ def _stubs(stub, detector):
     stub.on('GET', r'/ingest/config(\?|$)', config)
 
 
-def _shots(page, name: str) -> None:
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    for width in (1600, 800):
-        page.set_viewport_size({'width': width, 'height': 1000})
-        page.screenshot(path=str(SHOTS / f'{name}-{width}.png'), full_page=True)
-    page.set_viewport_size({'width': 1280, 'height': 720})
-
-
 def test_dry_run_then_create_behind_a_confirm(stub, page, app_url):
     _stubs(stub, DETECTOR)
     seeds: list[dict] = []
@@ -92,7 +82,7 @@ def test_dry_run_then_create_behind_a_confirm(stub, page, app_url):
     expect(created).to_contain_text('tag label')
     expect(page.get_by_test_id('seed-skipped')).to_contain_text('Exists')
     expect(page.get_by_test_id('seed-conflicts')).to_contain_text('Unnamed label')
-    _shots(page, 'seed-dry-run')
+    shot(page, 'seed-dry-run', widths=(1600, 800))
 
     assert seeds == [{'dry_run': True}], 'the preview is a dry run with no names'
 

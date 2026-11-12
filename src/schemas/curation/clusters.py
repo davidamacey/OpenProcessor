@@ -12,6 +12,8 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import Field
 
+from src.schemas.curation.views import SortOption
+
 
 class ClusterRepresentative(TypedDict):
     crop_id: str
@@ -61,11 +63,6 @@ class ClusterCard(TypedDict):
     flags: Annotated[list[str], Field(description='Quality flag codes, see flag_vocabulary.')]
 
 
-class ClusterSortOption(TypedDict):
-    id: str
-    label: str
-
-
 class ClusterFlag(TypedDict):
     id: str
     label: str
@@ -86,7 +83,7 @@ class ClusterListResponse(TypedDict):
     representatives_offset: int
     representatives_limit: int
     sort: Annotated[str, Field(description='The sort applied.')]
-    sort_options: list[ClusterSortOption]
+    sort_options: list[SortOption]
     flag_vocabulary: list[ClusterFlag]
     truncated: Annotated[
         bool,

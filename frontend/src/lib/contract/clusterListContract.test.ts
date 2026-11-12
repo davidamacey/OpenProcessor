@@ -4,6 +4,7 @@
  * carry exactly the schema's properties, and every card filter the list
  * sends is a declared query parameter of `GET /clusters`.
  */
+import type { SortOption } from '$lib/types_cursor';
 import { describe, expect, it } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
 import {
@@ -12,7 +13,6 @@ import {
   type ClusterFacets,
   type ClusterFlag,
   type ClusterListFilter,
-  type ClusterSortOption,
   type ConfidenceBin,
   type FacetCount,
 } from '$lib/types_clusterList';
@@ -70,8 +70,8 @@ describe('cluster list contract', () => {
     expect(keys<keyof ClusterFlag>({ id: true, label: true, description: true })).toEqual(
       propsOf('ClusterFlag'),
     );
-    expect(keys<keyof ClusterSortOption>({ id: true, label: true })).toEqual(
-      propsOf('ClusterSortOption'),
+    expect(keys<keyof SortOption>({ id: true, label: true })).toEqual(
+      propsOf('SortOption'),
     );
     expect(keys<keyof FacetCount>({ value: true, count: true })).toEqual(
       propsOf('FacetCount'),

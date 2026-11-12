@@ -88,15 +88,15 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
   // Queue pager. One fetchPage closure means the tab + filter set can't
   // drift between page 1 and the pages the cursor pulls in behind it.
   const queue = createPager<ReviewItem>({
-    fetchPage: async (page) => {
-      if (diverseMode) return diverse.fetchDiversePage(page);
+    fetchPage: async (cursor) => {
+      if (diverseMode) return diverse.fetchDiversePage(cursor);
       // effectiveTab is an internal id (slot:${key} for a slot tab,
       // per P2.8b) — the backend still expects the endpointId
       // (e.g. 'regions'), so this resolves through endpointForTab()
       // rather than forwarding the internal id directly.
       const res = await getReviewQueue(
         endpointForTab(effectiveTab) as ReviewTab,
-        page,
+        cursor,
         pageSize,
         _filter(),
       );
@@ -206,7 +206,7 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
   // frozen on slow connections. Lazy paging keeps first-paint snappy.
   // F8 D6: the served queue position, not the index within the loaded
   // buffer (a deep link loads only the located page).
-  const currentPosition = $derived(queuePosition(queue.firstPage, pageSize, cursor));
+  const currentPosition = $derived(queuePosition(queue.firstIndex, cursor));
 
   const loadFirst = () => queue.loadFirst();
   const loadMore = () => queue.loadMore();
@@ -236,10 +236,9 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       const loc = await locateInReviewQueue(
         endpointForTab(effectiveTab),
         cropId,
-        pageSize,
         _filter(),
       );
-      if (!loc.in_queue || loc.page == null) {
+      if (!loc.in_queue || loc.index == null) {
         toastStore.info(locateMissMessage(loc.reason));
         return;
       }
@@ -249,14 +248,15 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       // sort than what the bar shows.
       sortApplied = loc.sort_applied ?? sortApplied;
       sortFallbackReason = loc.sort_fallback_reason ?? sortFallbackReason;
-      // DQ-M7: fetch ONLY the located page — no more paging 1..loc.page
-      // one request per page (103 requests / 5.7s at rank 3000, page 101).
-      // The initial page-1 load that seeded `queue` (from the tab/filter
-      // effect) gets replaced wholesale here rather than ever being shown.
-      await queue.loadPage(loc.page);
+      // Fetch ONLY the page that starts at the located item: one request
+      // however deep it sits. The first-page load that seeded `queue` (from
+      // the tab/filter effect) is replaced wholesale here rather than ever
+      // being shown.
+      await queue.loadAt(loc.cursor_before, loc.index);
       const idx = queue.items.findIndex((i) => i.id === cropId);
-      cursor =
-        idx >= 0 ? idx : Math.max(0, Math.min(loc.rank ?? 0, queue.items.length - 1));
+      cursor = Math.max(0, idx);
+      // The located page may end soon after the item; fetch the rows after it now.
+      maybePrefetch();
     } catch (e) {
       toastStore.error(`Locate failed: ${apiErrorText(e)}`);
     } finally {
@@ -275,7 +275,7 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     ) {
       return;
     }
-    if (queue.loadedPages === 0) return; // first page not in yet
+    if (!queue.loaded) return; // first page not in yet
     void jumpToPendingCrop();
   });
 

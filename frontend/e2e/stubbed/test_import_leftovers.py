@@ -100,7 +100,7 @@ def serve_review(stub: Any, tabs: dict[str, Any]) -> list[dict[str, list[str]]]:
         u = urlparse(request.url)
         seen.append({'path': [u.path], **parse_qs(u.query)})
         items = [review_item(i) for i in range(2)]
-        return (200, {'items': items, 'total': 2, 'page': 1, 'page_size': 30})
+        return (200, {'items': items, 'total': 2, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
     return seen
@@ -201,7 +201,7 @@ def serve_locked_cluster(stub: Any, locked_ids: set[str]) -> None:
         )
         for i in range(3)
     ]
-    stub.on('GET', r'/crops(\?|$)', {'total': 3, 'page': 1, 'page_size': 60, 'crops': crops})
+    stub.on('GET', r'/crops(\?|$)', {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': crops})
 
 
 def test_lock_badge_only_on_a_locked_label(stub, page, app_url):
@@ -316,7 +316,7 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
     stub.on(
         'GET',
         r'/crops(\?|$)',
-        {'total': 3, 'page': 1, 'page_size': 60, 'crops': [imported, *others]},
+        {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [imported, *others]},
     )
 
     page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')

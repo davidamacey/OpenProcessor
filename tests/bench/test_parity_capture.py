@@ -129,12 +129,15 @@ class FakeStack:
             wanted = q['ids'].split(',')
             rows = [dict(r, vlm_proposed_class_name='cat') for r in rows if r['id'] in wanted]
             return httpx.Response(200, json={'total': len(rows), 'crops': rows})
-        if 'conf_min' in q:
-            low, high = float(q['conf_min']), float(q['conf_max'])
-            rows = [r for r in rows if low <= r['confidence'] <= high]
-        size, page = int(q.get('page_size', 50)), int(q.get('page', 1))
+        size, start = int(q.get('limit', 50)), int(q.get('cursor', 0))
+        more = start + size < len(rows)
         return httpx.Response(
-            200, json={'total': len(rows), 'crops': rows[(page - 1) * size : page * size]}
+            200,
+            json={
+                'total': len(rows),
+                'crops': rows[start : start + size],
+                'next_cursor': str(start + size) if more else None,
+            },
         )
 
 
@@ -142,7 +145,7 @@ def _client(stack: FakeStack) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(stack.handler))
 
 
-def test_fetch_items_pages_through_a_single_band() -> None:
+def test_fetch_items_follows_next_cursor_to_the_end() -> None:
     stack = FakeStack()
     for n in range(5):
         stack._ingest(stack.names[n])
@@ -151,20 +154,19 @@ def test_fetch_items_pages_through_a_single_band() -> None:
     assert len(items) == 10
 
 
-def test_fetch_items_splits_bands_when_the_window_is_exceeded() -> None:
+def test_fetch_items_aborts_when_the_paging_misses_rows() -> None:
     stack = FakeStack()
     for n in range(5):
         stack._ingest(stack.names[n])
-    with _client(stack) as client:
-        items = cap.fetch_items(client, f'{API}/p', window=6, page_size=4)
-    assert sorted(i['id'] for i in items) == sorted(stack.items)
+    served = stack._crops
 
+    def short(request: httpx.Request) -> httpx.Response:
+        resp = served(request)
+        if request.url.params.get('limit') == '1':
+            return httpx.Response(200, json={**resp.json(), 'total': 11})
+        return resp
 
-def test_fetch_items_aborts_when_the_union_misses_rows() -> None:
-    stack = FakeStack()
-    for n in range(5):
-        stack._ingest(stack.names[n])
-    stack.items['ghost'] = {**stack.items['img0_0'], 'id': 'ghost', 'confidence': 1.7}
+    stack._crops = short  # type: ignore[method-assign]
     with _client(stack) as client, pytest.raises(ps.CaptureError, match='reports'):
         cap.fetch_items(client, f'{API}/p')
 

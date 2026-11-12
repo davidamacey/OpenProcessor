@@ -6,12 +6,11 @@ Set LABEL_OPS_SHOTS=<dir> to also save full-page screenshots (1440 and 430 px).
 from __future__ import annotations
 
 import json
-import os
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import fill, job, label_op_accepted, undo_response
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.screens import shot
 from playwright.sync_api import expect
 
 
@@ -143,13 +142,6 @@ def serve(stub, ops=None, queries=None):
     return bodies
 
 
-def _shot(page, name):
-    out = os.environ.get('LABEL_OPS_SHOTS')
-    if out:
-        Path(out).mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=f'{out}/{name}.png', full_page=True)
-
-
 def _open_history(page, app_url):
     page.goto(f'{app_url}/p/default/label-ops')
     expect(page.get_by_test_id('label-op-row')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
@@ -167,7 +159,7 @@ def test_history_list_dry_run_then_confirm(stub, page, app_url):
     ):
         page.set_viewport_size(size)
         _open_history(page, app_url)
-        _shot(page, f'history-{tag}')
+        shot(page, f'history-{tag}', env_var='LABEL_OPS_SHOTS')
 
         page.get_by_role(
             'button', name='Details for Label to widget_a at 2026-10-30 10:00:00 UTC'
@@ -186,7 +178,7 @@ def test_history_list_dry_run_then_confirm(stub, page, app_url):
         expect(page.get_by_test_id('label-op-conflict-ids')).to_contain_text('crop-conflict-1')
         assert bodies
         assert all(b['dry_run'] is True for b in bodies)
-        _shot(page, f'dry-run-{tag}')
+        shot(page, f'dry-run-{tag}', env_var='LABEL_OPS_SHOTS')
 
         if tag == '430':
             break
@@ -278,7 +270,7 @@ def test_load_older_pages_to_the_end(stub, page, app_url):
         expect(rows).to_have_count(20, timeout=ACTION_TIMEOUT_MS)
         expect(page.get_by_test_id('label-ops-end')).to_have_count(0)
         page.get_by_test_id('label-ops-older').scroll_into_view_if_needed()
-        _shot(page, f'older-before-{tag}')
+        shot(page, f'older-before-{tag}', env_var='LABEL_OPS_SHOTS')
 
         page.get_by_test_id('label-ops-older').click()
         expect(rows).to_have_count(25, timeout=ACTION_TIMEOUT_MS)
@@ -291,7 +283,7 @@ def test_load_older_pages_to_the_end(stub, page, app_url):
         assert box is not None
         assert box['x'] >= 0
         assert box['x'] + box['width'] <= size['width']
-        _shot(page, f'older-{tag}')
+        shot(page, f'older-{tag}', env_var='LABEL_OPS_SHOTS')
 
 
 def test_load_older_failure_is_shown_and_retries(stub, page, app_url):

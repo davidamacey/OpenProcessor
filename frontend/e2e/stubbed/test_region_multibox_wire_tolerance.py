@@ -121,7 +121,7 @@ def test_review_region_tab_tolerates_a_served_region_boxes_list(stub, page, app_
     def review_handler(_request, _match):
         return (
             200,
-            {'items': [multibox_item()], 'total': 1, 'page': 1, 'page_size': 30},
+            {'items': [multibox_item()], 'total': 1, 'next_cursor': None, 'limit': 30},
         )
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)

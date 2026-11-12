@@ -95,7 +95,12 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
         r'/review/(?!tabs)',
         lambda _r, _m: (
             200,
-            {'items': [tag_item(i) for i in range(1, 4)], 'total': 3, 'page': 1, 'page_size': 30},
+            {
+                'items': [tag_item(i) for i in range(1, 4)],
+                'total': 3,
+                'next_cursor': None,
+                'limit': 30,
+            },
         ),
     )
 

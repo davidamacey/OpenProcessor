@@ -79,6 +79,7 @@ describe('SlotGallery per-box rows', () => {
         items: [row('c1', 'b1', '/t/b1')],
         total: 2,
         total_rows: 2,
+        next_cursor: 'c2',
       } as never)
       .mockResolvedValueOnce({
         items: [row('c1', 'b2', '/t/b2')],

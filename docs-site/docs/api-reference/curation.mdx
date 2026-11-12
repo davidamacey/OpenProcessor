@@ -211,6 +211,7 @@ and warns. A live combine marks its sources and target `project_busy`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/crops` | Browse and filter items, including `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import`. `n_unembedded` is returned only for `order=diverse` or `core_first` (null otherwise; use `GET /stats/dataset` `embedding` to watch an embed drain) |
+| GET | `/crops/locate` | Where one item sits in the list `GET /crops` would serve for the same query (`crop_id` required): `index`, `total` and the cursors that load a page starting at it or right after it |
 | GET | `/crops/{crop_id}` | One item |
 | GET | `/crops/{crop_id}/thumbnail` | Item crop thumbnail |
 | GET | `/crops/{crop_id}/region_thumbnail` | One region box's crop; `box_id` is required |
@@ -311,7 +312,7 @@ See [Keymaps](../guides/keymaps.mdx).
 | POST | `/test_holdout/freeze` | Freeze a per-class test split before exporting |
 | GET | `/test_holdout/stats` | Per-class test counts |
 | POST | `/audit/start` | Draw a stratified accuracy-audit sample of machine-labelled crops (`min_per_class`, `sample_size`); `409 audit_no_candidates` when none are eligible |
-| GET | `/audit/queue` | Drawn crops still waiting for a human label (`batch_id`, `page`, `page_size`) |
+| GET | `/audit/queue` | Drawn crops still waiting for a human label (`batch_id`, `cursor`, `limit`) |
 | GET | `/audit/report` | Detector and VLM precision per class with Wilson 95% intervals, the confusion matrix and `insufficient_sample` flags (`min_per_class`) |
 | POST | `/probe/run` | Active-learning probe predictions (feeds `model_disagreements` and `uncertainty`) |
 | GET | `/probe/status` | Probe status. `/probe/cancel` stops it |

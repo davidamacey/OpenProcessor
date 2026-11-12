@@ -293,7 +293,7 @@ def test_rejection_reason_label_renders_for_a_live_item(
         pytest.skip('backend serves no rejection_reasons vocabulary right now')
 
     rejected = api_get(
-        live_url, live_project, '/review/regions?region_status=verify_rejected&page_size=50'
+        live_url, live_project, '/review/regions?region_status=verify_rejected&limit=50'
     )
     items = rejected.get('items', [])
     if not items:

@@ -6,8 +6,9 @@ through the caller's ``fetch_items``. ``None`` means "fall back to the
 request's plain ``sort``" (pool too large, no embeddings, feature off).
 
 ``core_first`` is the cluster view's cut-line order: members the partition scored best against
-their cluster first (a native ``cluster_score`` sort of the cluster's members, one page of
-documents). ``outliers`` computes the member-mean centroid live from the matched members.
+their cluster first (a native ``cluster_score`` sort of the cluster's members, paged by cursor like
+any sort). ``outliers`` and ``diverse`` rank the matched pool in memory, so they serve one bounded
+page of at most ``limit`` items and no cursor.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.services.curation.crop_browse import crops_page, embedding_pool_query_and_count
 from src.services.curation.detections_summary import suggested_embed_request
+from src.services.curation.list_cursor import page_body, split_page
 from src.services.embedding_spaces.readers import item_vector_field
 
 
@@ -37,11 +39,6 @@ def _embed_suggestion(item_filter: ItemFilter, n_unembedded: int) -> dict[str, A
     return None if request is None else request.model_dump(mode='json')
 
 
-def _page(ids: list[str], page: int, page_size: int) -> list[str]:
-    start = (page - 1) * page_size
-    return ids[start : start + page_size]
-
-
 async def ordered_crops_page(
     opensearch: Any,
     *,
@@ -50,8 +47,8 @@ async def ordered_crops_page(
     query_clause: dict[str, Any],
     cluster_uid: str | None,
     item_filter: ItemFilter,
-    page: int,
-    page_size: int,
+    cursor: str | None,
+    limit: int,
     k: int | None,
     n_pool: int,
     fetch_items: Callable[[Any, list[str]], Awaitable[list[dict[str, Any]]]],
@@ -66,25 +63,24 @@ async def ordered_crops_page(
             opensearch, index, query_clause, vector_field
         )
         if order == 'core_first':
-            resp = await opensearch.search(
-                index=index,
-                body={
-                    'query': pool_query,
-                    'from': (page - 1) * page_size,
-                    'size': page_size,
-                    '_source': False,
-                    'sort': [
-                        {'cluster_score': {'order': 'desc', 'missing': '_last'}},
-                        {'crop_id': {'order': 'asc'}},
-                    ],
-                },
+            body = page_body(
+                {'query': pool_query, '_source': False},
+                sort=[{'cluster_score': {'order': 'desc', 'missing': '_last'}}],
+                tiebreak='crop_id',
+                cursor=cursor,
+                sort_id=order,
+                limit=limit,
             )
-            ids = [h['_id'] for h in (resp.get('hits') or {}).get('hits') or []]
+            resp = await opensearch.search(index=index, body=body)
+            hits, next_cursor = split_page(
+                (resp.get('hits') or {}).get('hits') or [], sort_id=order, limit=limit
+            )
             return crops_page(
                 total=pool_count,
-                page=page,
-                page_size=page_size,
-                crops=await fetch_items(opensearch, ids),
+                next_cursor=next_cursor,
+                limit=limit,
+                crops=await fetch_items(opensearch, [h['_id'] for h in hits]),
+                sort_applied=order,
                 method=order,
                 n_pool=n_pool,
                 n_unembedded=max(0, n_pool - pool_count),
@@ -96,12 +92,13 @@ async def ordered_crops_page(
         if distances is None:
             return None
         ranked = sorted(distances, key=lambda i: (-distances[i], i))
-        items = await fetch_items(opensearch, _page(ranked, page, page_size))
+        items = await fetch_items(opensearch, ranked[:limit])
         return crops_page(
             total=len(ranked),
-            page=page,
-            page_size=page_size,
+            next_cursor=None,
+            limit=limit,
             crops=items,
+            sort_applied=order,
             method=order,
             n_pool=n_pool,
             n_unembedded=max(0, n_pool - pool_count),
@@ -125,12 +122,13 @@ async def ordered_crops_page(
         )
         if diverse_ids is None:
             return None
-        items = await fetch_items(opensearch, _page(diverse_ids, page, page_size))
+        items = await fetch_items(opensearch, diverse_ids[:limit])
         return crops_page(
             total=len(diverse_ids),
-            page=page,
-            page_size=page_size,
+            next_cursor=None,
+            limit=limit,
             crops=items,
+            sort_applied=order,
             method='diverse',
             n_pool=n_pool,
             n_unembedded=max(0, n_pool - pool_count),

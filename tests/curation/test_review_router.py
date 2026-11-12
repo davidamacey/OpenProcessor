@@ -122,8 +122,8 @@ def test_sort_absent_is_byte_identical_to_legacy_clause(tab: str, app_client: Te
     out = r.json()
     # Pre-existing envelope keys, unchanged in shape/value.
     assert out['total'] == 0
-    assert out['page'] == 1
-    assert out['page_size'] == 30
+    assert out['next_cursor'] is None
+    assert out['limit'] == 30
     assert out['items'] == []
     # Additive-only Phase 3 keys.
     assert out['sort_applied'] == EXPECTED_DEFAULT_SORT_ID[tab]
@@ -290,23 +290,3 @@ def test_test_holdout_filter_unchanged_by_sort_params(app_client: TestClient) ->
     body = app_client.fake_os.search.call_args.kwargs['body']  # type: ignore[attr-defined]
     must_not = body['query']['bool']['must_not']
     assert {'term': {'test_holdout': True}} in must_not
-
-
-def test_review_page_too_deep_is_422(app_client: TestClient) -> None:
-    """from+size past the 10000 result-window ceiling must 422
-    explicitly rather than let OpenSearch 500 past index.max_result_window."""
-    r = app_client.get(
-        '/curation/projects/default/review/all', params={'page': 400, 'page_size': 30}
-    )
-    assert r.status_code == 422, r.text
-
-
-def test_review_page_within_window_is_fine(app_client: TestClient) -> None:
-    r = app_client.get(
-        '/curation/projects/default/review/all', params={'page': 300, 'page_size': 30}
-    )
-    assert r.status_code == 200, r.text
-
-
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])

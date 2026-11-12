@@ -171,7 +171,7 @@ def test_queue_lists_the_sampled_crops_still_waiting_for_a_human(
 ) -> None:
     batch = _start(client).json()['batch_id']
     ids = sorted(_sampled(fake))
-    waiting = client.get(f'{BASE}/queue', params={'page_size': 100}).json()
+    waiting = client.get(f'{BASE}/queue', params={'limit': 100}).json()
     assert {i['crop_id'] for i in waiting['items']} == set(ids)
     assert waiting['total'] == 5
     fake.docs(ITEMS)[ids[0]].update(

@@ -69,9 +69,9 @@ export function createSlotGalleryController(slot: SlotSpec) {
   let totalRows = $state<number | null>(null);
   let rowsTruncated = $state<boolean>(false);
   const pager = createPager<RegionBrowseItem>({
-    fetchPage: async (page) => {
+    fetchPage: async (cursor) => {
       if (!browsePath) throw new Error(`slot "${slot.key}" declares no browse path`);
-      const res = await getRegions(browsePath, browseQuery(page));
+      const res = await getRegions(browsePath, browseQuery(cursor));
       totalRows = res.total_rows ?? null;
       rowsTruncated = res.rows_truncated ?? false;
       return res;
@@ -126,10 +126,10 @@ export function createSlotGalleryController(slot: SlotSpec) {
   // rows are about.
   let boxStateFilter = $state<string>('');
 
-  function browseQuery(page: number): import('$lib/api_regions').RegionsQuery {
+  function browseQuery(cursor: string | null): import('$lib/api_regions').RegionsQuery {
     return {
-      page,
-      page_size: GALLERY_PAGE_SIZE,
+      cursor: cursor ?? undefined,
+      limit: GALLERY_PAGE_SIZE,
       detector: detectorFilter || undefined,
       verified: verifiedOnly || undefined,
       min_score: minScore > 0 ? minScore : undefined,

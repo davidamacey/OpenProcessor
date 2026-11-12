@@ -48,8 +48,10 @@ class AuditStartResponse(BaseModel):
 
 class AuditQueueResponse(BaseModel):
     total: int
-    page: int
-    page_size: int
+    next_cursor: str | None = Field(
+        description='Pass as `cursor` for the next page; null on the last page.'
+    )
+    limit: int
     items: list[ItemDoc]
 
 

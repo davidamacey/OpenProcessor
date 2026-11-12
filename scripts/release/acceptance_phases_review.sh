@@ -96,7 +96,7 @@ check_cluster_facets() {
 # state of the items a label operation must NOT touch: validated or holdout crops
 # outside the chosen ones (one page of /crops; compared before and after)
 guard_snapshot() { # guard_snapshot CHOSEN_IDS_JSON
-    api GET "${PROJECT_API}/crops?page_size=500"; expect 200
+    api GET "${PROJECT_API}/crops?limit=500"; expect 200
     jq -cS --argjson ex "$1" '[.crops[]?
         | select((.test_holdout // false) or (.label_validated // false))
         | select(.crop_id as $c | ($ex | index($c)) == null)
@@ -119,7 +119,7 @@ ph_label_ops() {
     api GET "${PROJECT_API}/classes"; expect 200
     target="$(jqb '[.classes[]? | (.class_id // .id)] | .[0] // empty')"
     [[ -n "$target" ]] || fail "project has no classes to label into"
-    api GET "${PROJECT_API}/crops?label_validated=false&page_size=500"; expect 200
+    api GET "${PROJECT_API}/crops?label_validated=false&limit=500"; expect 200
     ids="$(jq -c --argjson t "$target" --argjson n "$LABEL_OPS_CROPS" \
         '[.crops[]? | select((.test_holdout // false) | not) | select(.class_id != $t) | .crop_id] | .[0:$n]' "$BODY")"
     n="$(jq 'length' <<< "$ids")"

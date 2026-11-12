@@ -36,7 +36,7 @@ def test_review_names_an_unclassed_item_by_its_served_name(stub, page, app_url):
     stub.on(
         'GET',
         r'/review/(?!tabs)',
-        (200, {'items': [_unclassed()], 'total': 1, 'page': 1, 'page_size': 30}),
+        (200, {'items': [_unclassed()], 'total': 1, 'next_cursor': None, 'limit': 30}),
     )
     page.goto(f'{app_url}/p/default/review')
     row = page.get_by_test_id('current-label')
