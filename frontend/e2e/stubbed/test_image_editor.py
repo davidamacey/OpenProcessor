@@ -85,7 +85,7 @@ def test_a_new_class_is_created_with_the_served_suggestion(stub, page, app_url):
     expect(page.get_by_role('option', name='Create "traffic_light"')).to_be_visible(
         timeout=ACTION_TIMEOUT_MS
     )
-    box.press('Enter')
+    page.keyboard.press('Enter')
     expect(page.get_by_test_id('object-list').locator('li[data-crop-id]')).to_have_count(
         3, timeout=ACTION_TIMEOUT_MS
     )

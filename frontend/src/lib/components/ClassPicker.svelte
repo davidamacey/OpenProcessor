@@ -35,6 +35,13 @@
     queueMicrotask(() => input?.focus());
   });
 
+  // Clicking the create row moves focus to it and the busy row is disabled, so after a refused
+  // name the cursor goes back to the input, where the served suggestion can be accepted.
+  async function createFromRow(): Promise<void> {
+    await picker.create();
+    input?.focus();
+  }
+
   const listId = 'class-picker-list';
   const rowCount = $derived(picker.results.length + (picker.createName ? 1 : 0));
 </script>
@@ -107,7 +114,7 @@
             picker.index
               ? 'bg-blue-500/20 text-white'
               : 'text-zinc-200 hover:bg-zinc-800'}"
-            onclick={() => void picker.create()}
+            onclick={() => void createFromRow()}
             onmouseenter={() => (picker.index = i)}
             data-testid="class-picker-create"
           >
