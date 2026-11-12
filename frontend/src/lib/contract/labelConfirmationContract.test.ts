@@ -9,7 +9,6 @@ import itemWire from '$contracts/json/item_wire.json';
 import type * as T from '$lib/types_labelConfirmation';
 import { VLM_SCOPES } from '$lib/types_labelConfirmation';
 import { RAW_CROP_KEYS } from '$lib/api_cropMap';
-import { CORE_REVIEW_TABS } from '$lib/reviewTabs';
 
 type Schema = {
   properties?: Record<string, { enum?: string[] }>;
@@ -149,11 +148,9 @@ describe('the item wire carries the detector class (#119)', () => {
   });
 });
 
-describe('the detector_disagreements review tab (#119)', () => {
-  it('is a tab id the review route documents, and the frontend knows it', () => {
-    const route = doc.paths['/curation/projects/{project}/review/{tab}'];
-    const text = JSON.stringify(route);
-    expect(text).toContain('detector_disagreements');
-    expect(CORE_REVIEW_TABS.map((t) => t.endpointId)).toContain('detector_disagreements');
+describe('the detector_disagreements review preset (#119)', () => {
+  it('is a review_tab filter value the crops route documents', () => {
+    const route = doc.paths['/curation/projects/{project}/crops'];
+    expect(JSON.stringify(route)).toContain('detector_disagreements');
   });
 });

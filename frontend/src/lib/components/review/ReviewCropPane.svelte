@@ -19,7 +19,6 @@
   import SourceMissingBadge from '$lib/components/SourceMissingBadge.svelte';
   import { slotOf } from '$lib/annotations/cropSlots';
   import { toCanvasBoxes } from '$lib/annotations/multiBox';
-  import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
   import { kg } from '$lib/review/reviewKeys';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
@@ -34,7 +33,8 @@
     tabs: ReviewTabsController;
     loader: ReviewQueueLoader;
     actions: ReviewItemActions;
-    picker: ReviewClassPicker;
+    /** Opens the shared class picker for this item. */
+    picker: { openPicker: () => void };
     edit: ReviewSlotEditController;
     slot: ReviewSlotActions;
     detailsOpen: boolean;
@@ -269,7 +269,6 @@
       {activeSlot}
       {isMultiBoxSlot}
       opinion={actions.opinion}
-      searchScores={loader.searchScores}
       acceptModelClass={actions.acceptModelClass}
     />
 

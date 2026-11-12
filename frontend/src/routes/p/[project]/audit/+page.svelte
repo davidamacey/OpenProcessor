@@ -12,6 +12,7 @@
   import AuditClassTable from '$lib/components/audit/AuditClassTable.svelte';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
+  import { reviewSearch } from '$lib/workspace/workspaceUrl';
   import AuditStartForm from '$lib/components/audit/AuditStartForm.svelte';
   import ConfusionMatrix from '$lib/components/audit/ConfusionMatrix.svelte';
 
@@ -93,7 +94,7 @@
       {#if r.pending > 0}
         <a
           class="btn"
-          href={resolve(projectHref('/workspace?view=review&queue=audit'))}
+          href={resolve(projectHref(`/workspace${reviewSearch({ queue: 'audit' })}`))}
           data-testid="audit-open-queue">Label the sample in Review</a
         >
         <span class="text-zinc-400">{r.pending.toLocaleString()} crops are waiting.</span>

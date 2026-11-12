@@ -10,6 +10,7 @@
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
+  import { reviewSearch } from '$lib/workspace/workspaceUrl';
   import { createCombineJob } from '$lib/combine/combineJobController.svelte';
   import { combineLabel, reportCell } from '$lib/combine/combineText';
   import { formatTimestamp } from '$lib/format/date';
@@ -199,7 +200,12 @@
           <a
             data-sveltekit-preload-data="tap"
             class="btn"
-            href={resolve(projectHref('/review?tab=all&combine_conflict=true', target))}
+            href={resolve(
+              projectHref(
+                `/workspace${reviewSearch({ queue: 'check_machine', extra: { combine_conflict: 'true' } })}`,
+                target,
+              ),
+            )}
             data-testid="combine-review-conflicts">Review flagged conflicts</a
           >
           <CombineNextSteps

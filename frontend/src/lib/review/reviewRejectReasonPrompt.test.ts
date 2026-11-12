@@ -40,7 +40,7 @@ describe('the reject-reason prompt is real DOM, not a native window.prompt()', (
     expect(slice).toMatch(/onclick=\{cancelRejectReasonPrompt\}/);
     expect(slice).toMatch(/bind:value=\{rejectReasonPromptValue\}/);
     // The page hands the prompt the slot controller's own state and resolvers.
-    const routeSrc = reviewSource('routes/p/[project]/review/+page.svelte');
+    const routeSrc = reviewSource('lib/workspace/views/ReviewView.svelte');
     expect(routeSrc).toMatch(/rejectReasonPromptOpen=\{slot\.rejectReasonPromptOpen\}/);
     expect(routeSrc).toMatch(
       /bind:rejectReasonPromptValue=\{slot\.rejectReasonPromptValue\}/,

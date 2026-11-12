@@ -19,7 +19,7 @@ import { widgetTagSlot } from '$lib/test/fixtures/regionSlot';
 import { resetDeploymentSlots } from './registeredSlots';
 import { installedQueueSlots } from '$lib/test/fixtures/installedQueueSlots';
 import { aircraftTailNumberSlot } from '$lib/test/fixtures/aircraftTailNumberSlot';
-import { buildReviewTabs, isSlotTab, slotTabId, tabFromUrlId } from '../reviewTabs';
+import { buildReviewTabs, isSlotTab, slotTabId, tabForQueue } from '../reviewTabs';
 import { buildSlotKeymap } from '../review/slotKeymap';
 import {
   humanWritableStates,
@@ -42,12 +42,10 @@ describe('P3.6: registering a second capable slot works with zero production cod
     expect(secondSlotTabs).toHaveLength(2);
   });
 
-  it("tabFromUrlId keeps resolving every registered slot's bookmark urlId (bookmark contract)", () => {
-    // tabFromUrlId reads the real REVIEW_TABS (registeredSlots-backed),
-    // not secondSlotTabs — the bookmark contract must hold regardless of
-    // what a hypothetical second slot registers.
+  it('tabForQueue maps the queue a registered slot reads back to a slot tab', () => {
+    // It reads the real REVIEW_TABS (registeredSlots-backed), not secondSlotTabs.
     for (const s of installedQueueSlots()) {
-      expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
+      expect(isSlotTab(tabForQueue(s.capabilities.queue!.endpointId))).toBe(true);
     }
   });
 

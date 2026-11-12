@@ -161,9 +161,9 @@ describe('cohortEndpointKind (structural dispatch, not path === literal)', () =>
     );
   });
 
-  it('recognizes /crops and /review/model_disagreements regardless of base', () => {
+  it('recognizes /crops regardless of base; the model_disagreements cohort rides on it', () => {
     expect(cohortEndpointKind('/crops')).toBe('crops');
-    expect(cohortEndpointKind('/review/model_disagreements')).toBe('model_disagreements');
+    expect(cohortEndpointKind('/review/model_disagreements')).toBeNull();
   });
 
   it('fails closed (null) for an unrecognized endpoint shape', () => {

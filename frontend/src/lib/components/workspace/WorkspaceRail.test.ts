@@ -14,7 +14,7 @@ import WorkspaceRail from './WorkspaceRail.svelte';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
 import { classesStore } from '$stores/classes.svelte';
 import type { RegistryClass } from '$lib/types_classes';
-import type { ReviewTabVocabularyEntry } from '$lib/api_review';
+import { getReviewTabs, type ReviewTabVocabularyEntry } from '$lib/api_review';
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
@@ -28,17 +28,24 @@ function tab(id: string, label: string, count: number): ReviewTabVocabularyEntry
     filters: [],
     filter_defaults: {},
     filter_specs: [],
-    available: true,
-    unavailable_reason: null,
     count,
   };
 }
 
+const TABS = [tab('to_label', 'To label', 1234), tab('all', 'All', 5)];
+const EMPTY_STATE = {
+  has_probe_predictions: false,
+  has_item_scores: false,
+  has_imported_labels: false,
+  has_unembedded_items: false,
+  suggested_reprocess: null,
+};
+
 beforeEach(() => {
-  reviewTabsVocabularyStore.list = [
-    tab('to_label', 'To label', 1234),
-    tab('all', 'All', 5),
-  ];
+  reviewTabsVocabularyStore.resetForProjectChange();
+  vi.mocked(getReviewTabs).mockReset();
+  vi.mocked(getReviewTabs).mockResolvedValue({ tabs: TABS, empty_state: EMPTY_STATE });
+  reviewTabsVocabularyStore.list = TABS;
   reviewTabsVocabularyStore.loaded = true;
   classesStore.classes = [
     { id: 2, name: 'gadget', count: 7, deprecated: false },
@@ -47,7 +54,8 @@ beforeEach(() => {
   target = document.createElement('div');
   document.body.appendChild(target);
   const ws = {
-    url: { queue: null },
+    url: { queue: 'to_label' },
+    itemQuery: () => ({ class_name: ['car'], review_tab: 'to_label' }),
     railOpen: true,
     filter: { classNames: [] },
     setQueue: vi.fn(),
@@ -66,6 +74,10 @@ afterEach(() => {
 });
 
 describe('WorkspaceRail', () => {
+  it('asks for the counts under the filter, not under the queue it shows', () => {
+    expect(vi.mocked(getReviewTabs)).toHaveBeenCalledWith({ class_name: ['car'] });
+  });
+
   it('queue counts are the served count', () => {
     const counts = [...target.querySelectorAll('[data-testid^="queue-"]')].map((b) =>
       b.textContent?.replace(/\s+/g, ' ').trim(),

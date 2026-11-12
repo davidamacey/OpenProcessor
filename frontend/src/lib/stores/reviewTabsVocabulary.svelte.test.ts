@@ -16,9 +16,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 function resetStore(): void {
-  reviewTabsVocabularyStore.list = [];
-  reviewTabsVocabularyStore.loaded = false;
-  reviewTabsVocabularyStore.emptyState = null;
+  reviewTabsVocabularyStore.resetForProjectChange();
 }
 
 beforeEach(() => {
@@ -38,8 +36,6 @@ function tab(id: string, label: string, over: Record<string, unknown> = {}) {
     filters: [],
     filter_defaults: {},
     filter_specs: [],
-    available: true,
-    unavailable_reason: null,
     count: 0,
     ...over,
   };
@@ -276,29 +272,69 @@ describe('reviewTabsVocabularyStore.filterSpecsFor', () => {
   });
 });
 
-describe('reviewTabsVocabularyStore served tab status', () => {
-  it('serves each tab count and why an unavailable tab cannot fill', async () => {
+describe('reviewTabsVocabularyStore served queue counts', () => {
+  it('serves each queue count', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse(200, {
+          tabs: [tab('to_label', 'To label', { count: 502 })],
+          empty_state: EMPTY_STATE,
+        }),
+      ),
+    );
+    await reviewTabsVocabularyStore.init();
+    expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(502);
+    expect(reviewTabsVocabularyStore.countFor('unknown_tab')).toBeNull();
+  });
+
+  it('counts under the filter it is loaded with, and reloads only when the filter changes', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(200, {
           tabs: [
-            tab('all', 'All', { count: 502 }),
-            tab('uncertainty', 'Uncertainty', {
-              available: false,
-              unavailable_reason: 'No probe predictions yet.',
+            tab('to_label', 'To label', {
+              count: url.includes('class_name=car') ? 3 : 9,
             }),
           ],
           empty_state: EMPTY_STATE,
         }),
       ),
     );
-    await reviewTabsVocabularyStore.init();
-    expect(reviewTabsVocabularyStore.countFor('all')).toBe(502);
-    expect(reviewTabsVocabularyStore.unavailableReasonFor('all')).toBeNull();
-    expect(reviewTabsVocabularyStore.unavailableReasonFor('uncertainty')).toBe(
-      'No probe predictions yet.',
+    vi.stubGlobal('fetch', fetchMock);
+    await reviewTabsVocabularyStore.load({});
+    await reviewTabsVocabularyStore.load({});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(9);
+
+    await reviewTabsVocabularyStore.load({ class_name: ['car'] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('class_name=car');
+    expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(3);
+  });
+
+  it('a slower earlier answer never replaces a later one', async () => {
+    let release: (r: Response) => void = () => {};
+    const slow = new Promise<Response>((resolve) => (release = resolve));
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(slow)
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          tabs: [tab('to_label', 'To label', { count: 3 })],
+          empty_state: EMPTY_STATE,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const first = reviewTabsVocabularyStore.load({});
+    await reviewTabsVocabularyStore.load({ class_name: ['car'] });
+    release(
+      jsonResponse(200, {
+        tabs: [tab('to_label', 'To label', { count: 9 })],
+        empty_state: EMPTY_STATE,
+      }),
     );
-    expect(reviewTabsVocabularyStore.countFor('unknown_tab')).toBeNull();
+    await first;
+    expect(reviewTabsVocabularyStore.countFor('to_label')).toBe(3);
   });
 });

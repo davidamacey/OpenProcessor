@@ -25,7 +25,6 @@ function render(overrides: Partial<ReviewItem>): HTMLElement {
       activeSlot: null,
       isMultiBoxSlot: false,
       opinion: { kind: 'none', showAccept: false },
-      searchScores: new Map(),
       acceptModelClass: async () => {},
     },
   } as never);

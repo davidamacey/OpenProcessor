@@ -1,5 +1,5 @@
 <!--
-  The /review empty-queue state: why the queue is empty, from the served tab
+  The Review view empty-queue state: why the queue is empty, from the served tab
   description, empty reason and sort-fallback reason, with the served next
   step when there is one.
 -->

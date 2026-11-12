@@ -72,11 +72,7 @@ export interface ReviewTabVocabularyEntry {
   filter_defaults: Record<string, unknown>;
   /** Self-describing enum filters this tab honours (empty for none). */
   filter_specs: ReviewFilterSpec[];
-  /** False when the project cannot fill this tab yet. */
-  available: boolean;
-  /** What to do to make the tab fill; null when available. */
-  unavailable_reason: string | null;
-  /** Items the tab matches with its default filters; 0 when unavailable. */
+  /** Items the queue holds under the filter the request carried. */
   count: number;
 }
 
@@ -102,12 +98,14 @@ export interface ReviewTabsResponse {
   empty_state: ReviewEmptyState;
 }
 
-/** Every review tab's served vocabulary, in served order, plus the
- *  deployment-wide `empty_state`. The frontend keeps its own tab
- *  structure/ids (`reviewTabs.ts`) and only overlays the served
- *  label/description/filters on top. */
-export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse> {
-  return apiFetch<ReviewTabsResponse>(`${scoped()}/review/tabs`, {}, signal);
+/** The review queues in served order, each with its `count` under `filter` (the Workspace filter,
+ *  as query parameters), plus the deployment-wide `empty_state`. A queue that cannot fill is not
+ *  listed. */
+export function getReviewTabs(
+  filter: Record<string, unknown> = {},
+  signal?: AbortSignal,
+): Promise<ReviewTabsResponse> {
+  return apiFetch<ReviewTabsResponse>(`${scoped()}/review/tabs${qs(filter)}`, {}, signal);
 }
 
 export async function getReviewQueue(

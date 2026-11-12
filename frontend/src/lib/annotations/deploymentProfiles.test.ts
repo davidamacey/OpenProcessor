@@ -21,7 +21,7 @@ import {
   resetDeploymentSlots,
   builtinSlots,
 } from './registeredSlots';
-import { REVIEW_TABS, tabFromUrlId, endpointForTab } from '../reviewTabs';
+import { REVIEW_TABS, endpointForTab } from '../reviewTabs';
 import { LIMITS } from './config/allowLists';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -140,14 +140,9 @@ describe('loadDeploymentProfiles — propagation and memoization', () => {
     ]);
     expect(slotRegistry.byKey('pallet_label')).toBeDefined();
     expect(REVIEW_TABS.map((t) => t.id)).toContain('slot:pallet_label');
-    // The 7 core tabs (incl. imported and detector_disagreements) + one per built-in queue slot + the newly installed
-    // pallet_label slot tab.
+    // One tab per built-in queue slot + the newly installed pallet_label slot tab.
     const builtinQueues = builtinSlots.filter((s) => s.capabilities.queue);
-    expect(REVIEW_TABS).toHaveLength(7 + builtinQueues.length + 1);
-    expect(tabFromUrlId('pallet_labels')).toBe('slot:pallet_label');
-    for (const s of builtinQueues) {
-      expect(tabFromUrlId(s.capabilities.queue!.urlId)).toBe(`slot:${s.key}`);
-    }
+    expect(REVIEW_TABS).toHaveLength(builtinQueues.length + 1);
     expect(endpointForTab('slot:pallet_label')).toBe('regions');
   });
 

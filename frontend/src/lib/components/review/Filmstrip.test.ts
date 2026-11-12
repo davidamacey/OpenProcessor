@@ -71,4 +71,14 @@ describe('Filmstrip', () => {
     render({ index: null, total: null });
     expect(target.querySelector('[data-testid="filmstrip-position"]')).toBeNull();
   });
+
+  it('leaves an empty tile, not a broken image, for a thumbnail the server cannot serve', () => {
+    render();
+    const imgs = target.querySelectorAll('img');
+    expect(imgs).toHaveLength(3);
+    imgs[1]!.dispatchEvent(new Event('error'));
+    flushSync();
+    expect(target.querySelectorAll('img')).toHaveLength(2);
+    expect(target.querySelectorAll('[data-testid="filmstrip-item"]')).toHaveLength(3);
+  });
 });

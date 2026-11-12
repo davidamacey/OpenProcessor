@@ -1,15 +1,13 @@
 /**
- * `/review` keyboard wiring: the `review` keyboard scope, the per-class
- * hotkey dispatch, and the tab-action keymap (queue actions on a core tab,
- * the slot keymap and per-box keys on a slot tab, the bbox canvas forward in
- * edit mode).
- *
- * Moved verbatim out of `review/+page.svelte`.
+ * The Review view's keyboard wiring: the per-class hotkey dispatch and the queue-action keymap
+ * (queue actions on a plain queue, the slot keymap and per-box keys on a slot queue, the bbox
+ * canvas forward in edit mode). The `review` scope itself is set by the Workspace page from the
+ * view's `keyContext`; it includes the `workspace` keys, so view switching, Esc and the details
+ * toggle work here too.
  */
 
 import { buildSlotKeymap } from '$lib/review/slotKeymap';
 import { isSlotSuppressedTab } from '$lib/review/slotTabGuard';
-import type { ReviewClassPicker } from '$lib/review/reviewClassPicker.svelte';
 import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
 import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
 import type { ReviewSlotActions } from '$lib/review/reviewSlotActions.svelte';
@@ -25,7 +23,8 @@ export interface ReviewKeyboardOptions {
   tabs: ReviewTabsController;
   loader: ReviewQueueLoader;
   actions: ReviewItemActions;
-  picker: ReviewClassPicker;
+  /** Opens the shared class picker for the current item. */
+  picker: { openPicker: () => void };
   edit: ReviewSlotEditController;
   slot: ReviewSlotActions;
 }
@@ -45,10 +44,6 @@ export function installReviewKeyboard(opts: ReviewKeyboardOptions): void {
   const canConfirm = $derived(opts.actions.canConfirm);
   const editMode = $derived(edit.editMode);
   const isMultiBoxSlot = $derived(edit.isMultiBoxSlot);
-
-  $effect(() => {
-    keyboardStore.setScope('review');
-  });
 
   // Per-class hotkeys defined on /classes are routed here through the
   // layout-level global keydown listener via dropOnClassStore. Pressing

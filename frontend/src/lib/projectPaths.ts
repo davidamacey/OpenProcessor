@@ -18,7 +18,6 @@ const PROJECT_SECTIONS = [
   'datasets',
   'workspace',
   'images',
-  'review',
   'classes',
   'export',
   'audit',
@@ -38,7 +37,7 @@ export const SECTION_LABELS: Partial<Record<ProjectSection, string>> = {
 };
 
 /** A path inside a project: a known section, plus any sub-path, query
- *  or hash (`/review?tab=all`, `/workspace?view=clusters`, `/settings#keyboard`). */
+ *  or hash (`/workspace?view=review&queue=to_label`, `/workspace?view=clusters`, `/settings#keyboard`). */
 export type ProjectSubPath = `/${ProjectSection}${string}`;
 
 /** The section a project lands on when none is named. */
@@ -68,15 +67,16 @@ export function similarHref(cropId: string, slug?: string): string {
 }
 
 /** Query params that name something inside ONE project (a crop, a
- *  class id) and so never carry over to another project. */
-const PROJECT_LOCAL_PARAMS = ['crop_id', 'class'];
+ *  class id, the Workspace's focused item, open cluster or similarity anchor) and so never
+ *  carry over to another project. */
+const PROJECT_LOCAL_PARAMS = ['crop_id', 'class', 'focus', 'scope', 'similar_to'];
 
 /**
  * Where the switcher goes: the same section under `toSlug`. Anything
  * that names an object inside the old project is dropped — the
- * `crop_id`/`class` query params —
+ * `crop_id`/`class`/`focus`/`scope`/`similar_to` query params —
  * because ids don't carry across projects. Every other query param
- * (e.g. `tab`) is kept. Outside `/p/...` it lands on the default
+ * (e.g. `view`, `queue`) is kept. Outside `/p/...` it lands on the default
  * section.
  */
 export function switchProjectHref(
@@ -93,8 +93,8 @@ export function switchProjectHref(
 }
 
 /**
- * The redirect for `/` and the legacy bare paths (`/review?tab=x`,
- * `/review`, ...): the same path under `/p/<defaultSlug>`, query
+ * The redirect for `/` and the legacy bare paths (`/classes?x=1`,
+ * `/export`, ...): the same path under `/p/<defaultSlug>`, query
  * string kept. `/` goes to the default section. `null` when the first
  * segment isn't a project section (the caller answers 404).
  */

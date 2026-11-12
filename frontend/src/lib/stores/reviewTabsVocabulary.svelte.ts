@@ -1,19 +1,11 @@
 /**
- * ReviewTabsVocabularyStore — served review-tab labels/descriptions
- * (`GET {API_PREFIX}/review/tabs`), loaded once.
+ * ReviewTabsVocabularyStore — the served review queues (`GET {API_PREFIX}/review/tabs`): their
+ * label, description, honoured filters and, under the filter the rail loaded them with, their
+ * count. Keyed by each queue's id, which is also the `GET {API_PREFIX}/review/{id}` segment (a
+ * slot reads the queue named by its `QueueCapability.endpointId`, e.g. `'regions'`).
  *
- * The frontend keeps owning its own tab *structure* and ids
- * (`reviewTabs.ts`'s `REVIEW_TABS`/`REVIEW_PRESETS`) — this store only
- * overlays the served `label`/`description` on top, keyed by each served
- * entry's `id`, which for every tab this deployment renders equals the
- * `endpointId`/preset id already used to call `GET {API_PREFIX}/review/{id}`
- * (core tabs and presets: `id === endpointId`; slot tabs: keyed by the
- * slot's `QueueCapability.endpointId`, e.g. `'regions'` for
- * a region slot's tab).
- *
- * On failure (or before `init()` resolves) the map is empty and every
- * caller falls back to the tab's own static `label`/no tooltip — a failed
- * read never breaks `/review`'s tab bar.
+ * On failure (or before the first load resolves) the list is empty and every caller falls back to
+ * its own static label — a failed read never breaks the rail.
  */
 
 import {
@@ -33,29 +25,42 @@ class ReviewTabsVocabularyStore {
   #byId = $derived(new Map(this.list.map((t) => [t.id, t])));
   #inflight: Promise<void> | null = null;
   #gen = 0;
+  /** The filter the list was (or is being) loaded under. */
+  #key: string | null = null;
+  #seq = 0;
 
+  /** Loads the vocabulary once, under no filter. */
   async init(): Promise<void> {
-    if (this.loaded) return;
-    if (this.#inflight) return this.#inflight;
+    return this.load();
+  }
+
+  /** Loads the queues with their counts under `filter`; the same filter again is a no-op. Only the
+   *  latest request lands, and a load started for the previous project never does. */
+  async load(filter: Record<string, unknown> = {}): Promise<void> {
+    const key = JSON.stringify(filter);
+    if (key === this.#key) return this.#inflight ?? undefined;
+    this.#key = key;
     const gen = this.#gen;
-    this.#inflight = (async () => {
+    const seq = ++this.#seq;
+    const current = (): boolean => gen === this.#gen && seq === this.#seq;
+    const run = (async () => {
       try {
-        const res = await getReviewTabs();
-        // A load started for the previous project never lands.
-        if (gen !== this.#gen) return;
+        const res = await getReviewTabs(filter);
+        if (!current()) return;
         this.list = res.tabs;
         this.emptyState = res.empty_state;
       } catch {
-        if (gen !== this.#gen) return;
+        if (!current()) return;
         this.list = [];
       } finally {
-        if (gen === this.#gen) {
+        if (current()) {
           this.loaded = true;
           this.#inflight = null;
         }
       }
     })();
-    return this.#inflight;
+    this.#inflight = run;
+    return run;
   }
 
   /** Whether the served vocabulary has an entry for this endpoint id. */
@@ -72,11 +77,6 @@ class ReviewTabsVocabularyStore {
   /** Served item count of a tab; `null` when the served list has no entry for it. */
   countFor(endpointId: string): number | null {
     return this.#byId.get(endpointId)?.count ?? null;
-  }
-
-  /** Why the tab cannot fill in this project yet; `null` when it can (or is unknown). */
-  unavailableReasonFor(endpointId: string): string | null {
-    return this.#byId.get(endpointId)?.unavailable_reason ?? null;
   }
 
   /** Served description, for use as a tooltip; `null` when empty or unknown. */
@@ -117,6 +117,7 @@ class ReviewTabsVocabularyStore {
   resetForProjectChange(): void {
     this.#gen += 1;
     this.#inflight = null;
+    this.#key = null;
     this.list = [];
     this.emptyState = null;
     this.loaded = false;

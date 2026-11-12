@@ -5,16 +5,24 @@
    * drawer under `lg`.
    */
   import RailClasses from './RailClasses.svelte';
+  import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
 
   let { ws }: { ws: WorkspaceController } = $props();
 
+  // The counts follow the filter and the scope, not the queue (a queue's count under itself would
+  // always be its own).
+  const countQuery = $derived.by(() => {
+    const { review_tab: _queue, ...rest } = ws.itemQuery(withoutOpenVocab);
+    return rest;
+  });
   $effect(() => {
-    void reviewTabsVocabularyStore.init();
+    void reviewTabsVocabularyStore.load(countQuery);
   });
 
-  const queues = $derived(reviewTabsVocabularyStore.list.filter((t) => t.available));
+  // A queue that cannot fill is not served, so there is no row for it.
+  const queues = $derived(reviewTabsVocabularyStore.list);
 </script>
 
 <aside

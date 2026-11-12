@@ -22,18 +22,11 @@
     activeSlot: SlotSpec | null;
     isMultiBoxSlot: boolean;
     opinion: ReviewItemActions['opinion'];
-    searchScores: Map<string, number>;
     acceptModelClass: () => Promise<void>;
   }
 
-  let {
-    current,
-    activeSlot,
-    isMultiBoxSlot,
-    opinion,
-    searchScores,
-    acceptModelClass,
-  }: Props = $props();
+  let { current, activeSlot, isMultiBoxSlot, opinion, acceptModelClass }: Props =
+    $props();
 
   // The authoritative, kind-styled
   // explanation for the "Reason" row — the generic per-item `reason`
@@ -266,7 +259,7 @@
     </dd>
   {/if}
 
-  {#if current.mistakenness_score != null || (current && searchScores.has(current.id))}
+  {#if current.mistakenness_score != null}
     <dt class="text-zinc-500">Scores</dt>
     <dd class="flex flex-wrap items-center gap-1.5">
       {#if current.mistakenness_score != null}
@@ -277,9 +270,6 @@
           version={current.mistakenness_version}
           size="sm"
         />
-      {/if}
-      {#if current && searchScores.has(current.id)}
-        <ScoreChip label="match" value={searchScores.get(current.id) ?? 0} size="sm" />
       {/if}
     </dd>
   {/if}

@@ -10,7 +10,9 @@ import { flushSync, mount, unmount } from 'svelte';
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...a: unknown[]) => goto(...a) }));
 vi.mock('$app/state', () => ({
-  page: { url: new URL('http://x/p/default/review?tab=regions&crop_id=c9') },
+  page: {
+    url: new URL('http://x/p/default/workspace?view=review&queue=regions&focus=item:c9'),
+  },
 }));
 
 const served = vi.hoisted(() => ({ all: [] as unknown[], calls: [] as unknown[] }));
@@ -153,7 +155,7 @@ describe('ProjectSwitcher', () => {
       .querySelector<HTMLButtonElement>('[data-testid="project-option-alpha"]')!
       .click();
     flushSync();
-    expect(goto).toHaveBeenCalledWith('/p/alpha/review?tab=regions');
+    expect(goto).toHaveBeenCalledWith('/p/alpha/workspace?view=review&queue=regions');
     expect(target.querySelector('[data-testid="project-switcher-menu"]')).toBeNull();
   });
 
@@ -222,7 +224,7 @@ describe('ProjectSwitcher', () => {
     key('Home');
     key('ArrowDown');
     key('Enter');
-    expect(goto).toHaveBeenCalledWith('/p/alpha/review?tab=regions');
+    expect(goto).toHaveBeenCalledWith('/p/alpha/workspace?view=review&queue=regions');
   });
 
   it('shows "custom keys" only for a served non-default keymap', () => {

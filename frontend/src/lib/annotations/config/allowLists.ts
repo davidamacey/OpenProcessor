@@ -69,10 +69,9 @@ export const KEY_COMBO_VOCABULARY: ReadonlySet<string> = new Set([
 /**
  * Combos a DEPLOYMENT slot may never claim (contract §5.5).
  *
- * `n` (skip) and `z` (undo last) are registered by `/review`
- * unconditionally, INCLUDING while a slot tab is active — see
- * `src/routes/review/+page.svelte:1165-1166`, outside the
- * `if (activeSlot)` branch. Claiming one registers a second handler for
+ * `n` (skip) and `z` (undo last) are registered by the Review view
+ * unconditionally, INCLUDING while a slot queue is active (see
+ * `reviewKeyboard.svelte.ts`, outside the `activeSlot` branch). Claiming one registers a second handler for
  * the same key.
  *
  * `enter` and `arrowright` are emitted unconditionally by

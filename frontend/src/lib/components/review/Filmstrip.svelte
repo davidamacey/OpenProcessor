@@ -18,6 +18,10 @@
 
   let { items, focusedId, index, total, onSelect }: Props = $props();
 
+  // A thumbnail the server cannot serve (the source file is gone) leaves an empty tile, not a
+  // broken-image icon.
+  let failed = $state<Record<string, boolean>>({});
+
   const position = $derived(
     index !== null && total !== null ? `${index + 1} of ${total}` : null,
   );
@@ -45,12 +49,15 @@
           data-testid="filmstrip-item"
           onclick={() => onSelect(item.id)}
         >
-          <img
-            src={getThumbUrl(item.id, 112)}
-            alt=""
-            class="h-full w-full object-cover"
-            loading="lazy"
-          />
+          {#if !failed[item.id]}
+            <img
+              src={getThumbUrl(item.id, 112)}
+              alt=""
+              class="h-full w-full object-cover"
+              loading="lazy"
+              onerror={() => (failed[item.id] = true)}
+            />
+          {/if}
         </button>
       </li>
     {/each}

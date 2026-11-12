@@ -1,6 +1,6 @@
 /**
  * The operator's shared item-filter choices (OpenProcessor v0.4.0): one
- * state object read by /review, /clusters (grid and "Matching items") and
+ * state object read by the Workspace (every view, Review included) and
  * /export. It only holds what the operator picked and spells it in the two
  * wire forms (query parameters for list/stats routes, the `ItemFilter` body
  * for `selection` / `export/yolo item_filter`); the server decides what a

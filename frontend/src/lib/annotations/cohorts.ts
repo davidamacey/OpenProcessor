@@ -98,8 +98,7 @@ export interface TrainingCohortsCapability {
  * registered slot at all still has something to train on. Rides
  * entirely on `GET {API_PREFIX}/crops` (already accepts `class_id`,
  * `label_validated`, `classifier_conf_lt`, and has a real response model) plus
- * the review surface's `model_disagreements` cohort, already
- * class-filterable. **Zero backend change.**
+ * the `model_disagreements` review_tab filter value on the same route.
  */
 export const CORE_COHORTS: CohortSpec[] = [
   {
@@ -144,8 +143,8 @@ export const CORE_COHORTS: CohortSpec[] = [
     description: 'Validated crops where the promoted model disagrees with the human',
     query: {
       kind: 'endpoint',
-      path: '/review/model_disagreements',
-      params: { class_id: '{classId}' },
+      path: '/crops',
+      params: { class_id: '{classId}', review_tab: 'model_disagreements' },
     },
     rowKind: 'crop',
     reviewTarget: 'all',
@@ -279,7 +278,7 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
 }
 
 /**
- * The three tier-1 endpoint shapes `/train`'s `runCohortQuery` knows how
+ * The tier-1 endpoint shapes `/train`'s `runCohortQuery` knows how
  * to answer today (§9.1's mode table + §9.2.2's CORE_COHORTS), keyed by
  * a compiled query's final path segment rather than the whole path.
  *
@@ -290,12 +289,11 @@ function compiled(spec: CohortSpec, ctx: CohortContext): CohortSpec {
  * returning `{total: 0, items: []}` — the dispatch cares only what kind
  * of endpoint a path names.
  */
-export type CohortEndpointKind = 'training_candidates' | 'crops' | 'model_disagreements';
+export type CohortEndpointKind = 'training_candidates' | 'crops';
 
 export function cohortEndpointKind(path: string): CohortEndpointKind | null {
   const segment = path.split('/').filter(Boolean).pop();
   if (segment === 'training_candidates') return 'training_candidates';
-  if (segment === 'model_disagreements') return 'model_disagreements';
   if (segment === 'crops') return 'crops';
   return null;
 }

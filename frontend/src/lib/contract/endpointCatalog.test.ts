@@ -483,6 +483,7 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_cropRead.ts GET /crops/locate',
   'lib/api_review.ts GET /review/*',
   'lib/api_review.ts GET /review/*/locate',
+  'lib/api_review.ts GET /review/tabs',
   'lib/api_cropRead.ts GET /search/similar',
   'lib/api_cropRead.ts POST /search/image',
   'lib/api_cropRead.ts GET /search/text',
