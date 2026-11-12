@@ -40,6 +40,7 @@ const SCANNED_FILES = [
   'lib/api_clusters.ts',
   'lib/api_cropRead.ts',
   'lib/api_cropWrites.ts',
+  'lib/api_images.ts',
   'lib/api_datasetImport.ts',
   'lib/api_export.ts',
   'lib/api_ingest.ts',
@@ -477,6 +478,7 @@ const TRACK_WRAPPER_FILES = new Set<string>([
 const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_clusters.ts GET /clusters',
   'lib/api_cropRead.ts GET /crops',
+  'lib/api_images.ts GET /images',
   'lib/api_review.ts GET /review/*',
   'lib/api_review.ts GET /review/*/locate',
   'lib/api_cropRead.ts GET /search/similar',

@@ -3,7 +3,8 @@
  * (`GET /images/{id}`), and the image-only list parameters. Pinned to the vendored OpenAPI by
  * `contract/imagesContract.test.ts`.
  */
-import type { BoxTone, Crop } from '$lib/types';
+import type { BoxTone, Crop, HiddenCounts } from '$lib/types';
+import type { SortOption } from '$lib/types_cursor';
 
 export interface ImageBox {
   crop_id: string;
@@ -58,4 +59,50 @@ export interface ImageDetailResponse {
   items: Crop[];
   boxes: ImageBox[];
   items_truncated: boolean;
+}
+export type LabelState = 'has_unlabeled' | 'all_labeled' | 'no_items';
+export type NearDupFilter = 'member' | 'representative' | 'none';
+
+/** The image-only list parameters (`ImageViewQuery`), on top of the shared item filter. */
+export interface ImageViewParams {
+  source?: string | null;
+  in_holdout?: boolean | null;
+  near_dup?: NearDupFilter | null;
+  label_state?: LabelState | null;
+  /** One of the served `sort_options` ids; omitted, the server's default applies. */
+  sort?: string | null;
+  include_test?: boolean;
+}
+
+/** One card of `GET /images`: the facts, the served counts and the boxes to draw. */
+export interface ImageCardWire {
+  image_id: string;
+  file_name: string;
+  thumbnail_url: string;
+  width: number | null;
+  height: number | null;
+  source: string;
+  indexed_at: string | null;
+  taken_at: string | null;
+  has_location: boolean;
+  counts: ImageCounts;
+  near_dup: ImageNearDup | null;
+  boxes: ImageBox[];
+  boxes_truncated: boolean;
+}
+
+export type ImageEmptyReason = 'no_images' | 'no_match';
+
+/** `GET {prefix}/images`: one cursored page of the project's images. */
+export interface ImagePage {
+  items: ImageCardWire[];
+  next_cursor: string | null;
+  total: number;
+  limit: number;
+  join_truncated: boolean;
+  sort_applied: string;
+  sort_options: SortOption[];
+  hidden: HiddenCounts;
+  empty_reason: ImageEmptyReason | null;
+  empty_message: string | null;
 }
