@@ -39,7 +39,7 @@ import threading
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO
 from harness.waits import wait_for_paint
 
 
@@ -83,17 +83,8 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on(
-        'GET',
-        r'/images/[^/]+/file$',
-        lambda req, m: (
-            200,
-            {
-                'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480},
-                'items': [review_item(0)],
-            },
-        ),
-    )
+    for route in (r'/images/[^/]+/file(\?|$)', r'/crops/[^/]+/thumbnail(\?|$)'):
+        stub.on('GET', route, lambda _req, _m: (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
 
     def review_handler(request, _match):
         qparams = parse_qs(urlparse(request.url).query)
