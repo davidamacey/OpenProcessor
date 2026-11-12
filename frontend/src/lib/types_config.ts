@@ -94,6 +94,19 @@ export interface ActivateResponse extends ActiveConfigResponse {
   validation: ValidationReport;
 }
 
+/** What the shared editor reads of any config document. A resource that
+ *  serves no `source`, `read_only` or `validation` (the research presets)
+ *  leaves them out: every document is then a stored, editable one. */
+export interface ConfigDocCore<B> {
+  name: string;
+  revision: number | null;
+  description: string | null;
+  body: B;
+  source?: ConfigSource;
+  read_only?: boolean;
+  validation?: ValidationReport | null;
+}
+
 /** The fields every config doc (`GET /{resource}/{name}`) carries. */
 export interface ConfigDocBase<B> {
   name: string;
@@ -162,6 +175,8 @@ export interface ConfigErrorDetail {
   current_revision?: number | null;
   report?: ValidationReport | null;
   current?: ActiveRef | null;
+  /** 422 `validation_failed` of a save: one served line per refused field. */
+  reasons?: string[] | null;
   axis?: string | null;
   valid_ids?: string[] | null;
   // VLM / combine / test-on-crop refusals (contract f582aa05): each present only on the

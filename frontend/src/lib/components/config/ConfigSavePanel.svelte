@@ -7,12 +7,13 @@
    * writes a new revision and never changes what is active.
    */
   import type { Snippet } from 'svelte';
-  import type { ConfigEditorView } from '$lib/config/configEditor.svelte';
+  import type { ConfigSaveView } from '$lib/config/configEditor.svelte';
   import type { ValidationReport } from '$lib/types_config';
 
   interface Props {
-    ed: ConfigEditorView;
-    /** The report on screen (a viewed revision's, else the live one). */
+    ed: ConfigSaveView;
+    /** The report on screen (a viewed revision's, else the live one). Null
+     *  for a resource that validates only on Save: no counts are shown. */
     report: ValidationReport | null;
     /** "pack" / "profile". */
     noun: string;
@@ -32,16 +33,18 @@
 </script>
 
 <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Save">
-  <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="report-counts">
-    <span class={counts.errors > 0 ? 'text-red-300' : 'text-zinc-400'}
-      >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
-    >
-    <span class={counts.warnings > 0 ? 'text-amber-300' : 'text-zinc-400'}
-      >{counts.warnings} warning{counts.warnings === 1 ? '' : 's'}</span
-    >
-    <span class="text-zinc-400">{counts.info} note{counts.info === 1 ? '' : 's'}</span>
-    {#if ed.validating}<span class="text-zinc-500">checking…</span>{/if}
-  </div>
+  {#if report || ed.validating}
+    <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="report-counts">
+      <span class={counts.errors > 0 ? 'text-red-300' : 'text-zinc-400'}
+        >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
+      >
+      <span class={counts.warnings > 0 ? 'text-amber-300' : 'text-zinc-400'}
+        >{counts.warnings} warning{counts.warnings === 1 ? '' : 's'}</span
+      >
+      <span class="text-zinc-400">{counts.info} note{counts.info === 1 ? '' : 's'}</span>
+      {#if ed.validating}<span class="text-zinc-500">checking…</span>{/if}
+    </div>
+  {/if}
   {#if ed.validateError}
     <p class="text-xs text-red-300">Could not check the draft: {ed.validateError}</p>
   {/if}
@@ -68,6 +71,11 @@
   {/if}
   {#if ed.saveError}
     <p class="text-xs text-red-300" data-testid="save-error">{ed.saveError}</p>
+    {#if ed.saveReasons.length > 0}
+      <ul class="list-disc pl-5 text-xs text-red-300" data-testid="save-reasons">
+        {#each ed.saveReasons as r (r)}<li class="font-mono">{r}</li>{/each}
+      </ul>
+    {/if}
   {/if}
   {#if ed.conflict}
     <div
