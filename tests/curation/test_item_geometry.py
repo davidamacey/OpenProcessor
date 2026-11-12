@@ -327,3 +327,12 @@ def test_undo_by_an_editor_holding_a_stale_revision_conflicts(world: Any) -> Non
     assert (detail['error'], detail['current_geometry_revision']) == ('geometry_conflict', 2)
     assert detail['item']['bbox_norm'] == FAR
     assert world.docs(ITEMS)['it-1']['bbox_norm'] == FAR
+
+
+def test_moving_a_human_deleted_box_keeps_the_detector_anchor(world: Any) -> None:
+    """A re-detect matches the detector's own box; without the anchor it would re-create it."""
+    world.docs(ITEMS)['it-1'].update(
+        {'class_excluded': True, 'excluded_by': 'human', 'excluded_reason': 'not_an_object'}
+    )
+    assert _patch(_client(world, FakePE()), MOVED, 0).status_code == 200
+    assert world.docs(ITEMS)['it-1']['detector_bbox_norm'] == ORIGINAL

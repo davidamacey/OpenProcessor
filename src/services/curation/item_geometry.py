@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import NotFoundError
 
 from src.clients.occ import occ_skip_on_conflict_bulk, occ_update_one
-from src.clients.occ_locks import has_human_geometry
 from src.config import get_curation_config, get_region_fields
 from src.core.exceptions import RequestRejectedError
 from src.domain.item_geometry import (
@@ -146,7 +145,9 @@ def geometry_edit_merger(
             'updated_at': now,
             **resets,
         }
-        if not has_human_geometry(current) and not current.get('detector_bbox_norm'):
+        if current.get('geometry_source') != GEOMETRY_SOURCE_HUMAN and not current.get(
+            'detector_bbox_norm'
+        ):
             # The machine's own box, kept on the first move so a re-detect cannot re-create it.
             update['detector_bbox_norm'] = current.get('bbox_norm')
         if drop & outside:
