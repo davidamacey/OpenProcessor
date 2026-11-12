@@ -262,54 +262,6 @@ export const PRESET_SCHEMAS = {
           title: 'Params',
           type: 'object',
         },
-        pool: {
-          additionalProperties: {
-            anyOf: [
-              {
-                type: 'number',
-              },
-              {
-                type: 'integer',
-              },
-              {
-                type: 'string',
-              },
-              {
-                type: 'boolean',
-              },
-              {
-                type: 'null',
-              },
-            ],
-          },
-          description: 'Stored with the profile; the fit does not read it yet.',
-          title: 'Pool',
-          type: 'object',
-        },
-        assign: {
-          additionalProperties: {
-            anyOf: [
-              {
-                type: 'number',
-              },
-              {
-                type: 'integer',
-              },
-              {
-                type: 'string',
-              },
-              {
-                type: 'boolean',
-              },
-              {
-                type: 'null',
-              },
-            ],
-          },
-          description: 'Stored with the profile; the fit does not read it yet.',
-          title: 'Assign',
-          type: 'object',
-        },
         refresh: {
           $ref: '#/$defs/ClusterRefreshRule',
           description: 'When a new run starts.',

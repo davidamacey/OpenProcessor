@@ -47,6 +47,13 @@ def test_the_cluster_schema_carries_enums_required_fields_and_strictness(
     assert schema['additionalProperties'] is False
 
 
+def test_the_cluster_schema_has_no_stored_but_unread_pool_or_assign_fields(
+    client: TestClient,
+) -> None:
+    props = client.get(PATHS['cluster_profile']).json()['json_schema']['properties']
+    assert not {'pool', 'assign'} & set(props)
+
+
 def _bare_fields(schema: dict, node: dict, path: str = '') -> list[str]:
     """Paths of the properties with no description, on the field or on the model it points at."""
 
