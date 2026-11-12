@@ -39,6 +39,7 @@ beforeEach(() => {
   mocks.getImage.mockResolvedValue({
     image: { width: 800, height: 600 },
     items: [],
+    boxes: [],
   });
   mocks.testOpenVocab.mockResolvedValue(testResponseFixture());
 });

@@ -86,6 +86,7 @@ function serve(response: () => Response) {
               bbox_norm: [0.1, 0.1, 0.5, 0.5],
             },
           ],
+          boxes: [],
         });
       }
       return json({}, 404);
