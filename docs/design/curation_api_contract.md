@@ -1003,7 +1003,7 @@ applies to automated writers.
 | POST | `/crops/{crop_id}/region/undo` | | the restored item | `404`, `409` nothing to undo |
 | POST | `/crops/region/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
 | POST | `/crops/{crop_id}/vlm_dismiss/undo` | | the restored item | `409` no dismissal to undo |
-| POST | `/crops/{crop_id}/geometry/undo` | | `GeometryWritten` | `404`, `409 nothing_to_undo`. An undo of an undo is not restorable |
+| POST | `/crops/{crop_id}/geometry/undo` | `{expected_geometry_revision}` | `GeometryWritten` | `404`, `409 geometry_conflict` (the item moved since the editor looked; carries the current item), `409 nothing_to_undo`, `409 regions_changed` (the edit dropped region boxes and a region write came since). An undo of an undo is not restorable; undoing a move that dropped region boxes puts them back |
 
 ### Annotation writes: draw, move, delete
 

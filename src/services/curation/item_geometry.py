@@ -157,11 +157,17 @@ def geometry_edit_merger(
     return _merge
 
 
-def geometry_undo_merger(resets: dict[str, Any]) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def geometry_undo_merger(
+    resets: dict[str, Any], *, expected_revision: int
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """The OCC merger of an undo: the geometry before the newest un-undone edit, the revision
-    moved forward (an undo is a change a stale editor must see), the vector cleared."""
+    moved forward (an undo is a change a stale editor must see), the vector cleared. The revision
+    is checked on the document written, so a move that landed after the editor looked is a
+    :class:`GeometryConflictError`, never undone unseen."""
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        if int(current.get('geometry_revision') or 0) != expected_revision:
+            raise GeometryConflictError(current)
         entry = find_edit_undo(current.get(EDIT_HISTORY_FIELD), EditKind.GEOMETRY)
         before = (entry or {}).get('state', {}).get(REGION_REVISION_BEFORE)
         if before is not None and int(current.get(get_region_fields().revision) or 0) != before + 1:
@@ -286,21 +292,26 @@ async def edit_geometry(
 
 
 async def undo_geometry(
-    opensearch: AsyncOpenSearch, pe: Any | None, crop_id: str
+    opensearch: AsyncOpenSearch, pe: Any | None, crop_id: str, *, expected_revision: int
 ) -> GeometryResult:
-    """Put back the geometry before the newest un-undone edit. Raises
-    :class:`NoGeometryToUndoError` or a 404 :class:`~src.core.exceptions.RequestRejectedError`."""
+    """Put back the geometry before the newest un-undone edit, if the item is still at
+    ``expected_revision``. Raises a 404, 409 ``geometry_conflict``, ``nothing_to_undo`` or
+    ``regions_changed`` :class:`~src.core.exceptions.RequestRejectedError`."""
     try:
         update = await occ_update_one(
             opensearch,
             doc_id=crop_id,
-            merger=geometry_undo_merger(await item_vector_resets()),
+            merger=geometry_undo_merger(
+                await item_vector_resets(), expected_revision=expected_revision
+            ),
             vector_excludes=await vector_source_excludes(),
             refresh='wait_for',
             writer_id=GEOMETRY_UNDO_WRITER,
         )
     except NotFoundError as exc:
         raise _not_found(crop_id) from exc
+    except GeometryConflictError as exc:
+        raise await _conflict(crop_id, exc.current) from exc
     except RegionsChangedError as exc:
         raise RequestRejectedError(
             409,

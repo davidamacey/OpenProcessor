@@ -13258,6 +13258,23 @@
         "title": "GeometryPatchRequest",
         "type": "object"
       },
+      "GeometryUndoRequest": {
+        "additionalProperties": false,
+        "description": "Undo the newest box edit the editor has seen.",
+        "properties": {
+          "expected_geometry_revision": {
+            "description": "The `geometry_revision` the editor holds; a newer one is a 409.",
+            "minimum": 0.0,
+            "title": "Expected Geometry Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_geometry_revision"
+        ],
+        "title": "GeometryUndoRequest",
+        "type": "object"
+      },
       "GeometryWritten": {
         "properties": {
           "embedding_message": {
@@ -50577,7 +50594,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/geometry/undo": {
       "post": {
-        "description": "Put the box back to what it was before the newest edit that is not already undone.\n`409 nothing_to_undo` when none is left; an undo of an undo is not restorable.",
+        "description": "Put the box back to what it was before the newest edit that is not already undone.\n`expected_geometry_revision` is the revision the editor holds; a newer one is\n`409 geometry_conflict` carrying the current item, so nobody's move is undone unseen.\n`409 nothing_to_undo` when none is left; an undo of an undo is not restorable. `409\nregions_changed` when the edit dropped region boxes and a region write came since.",
         "operationId": "undo_crop_geometry_curation_projects__project__crops__crop_id__geometry_undo_post",
         "parameters": [
           {
@@ -50599,6 +50616,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeometryUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

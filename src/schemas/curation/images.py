@@ -149,3 +149,13 @@ class GeometryPatchRequest(BaseModel):
         default_factory=list,
         description='Region boxes that fall outside the new box and may be deleted with it.',
     )
+
+
+class GeometryUndoRequest(BaseModel):
+    """Undo the newest box edit the editor has seen."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    expected_geometry_revision: int = Field(
+        ge=0, description='The `geometry_revision` the editor holds; a newer one is a 409.'
+    )

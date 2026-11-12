@@ -87,7 +87,10 @@ def test_undo_restores_the_geometry(
 ) -> None:
     crop_id = drawn['item']['crop_id']
     before = _source(opensearch, crop_id)
-    resp = api_client.post(f'/crops/{crop_id}/geometry/undo')
+    resp = api_client.post(
+        f'/crops/{crop_id}/geometry/undo',
+        json={'expected_geometry_revision': before['geometry_revision']},
+    )
     assert resp.status_code == 200, resp.text
     after = _source(opensearch, crop_id)
     assert after['bbox_norm'] != before['bbox_norm']

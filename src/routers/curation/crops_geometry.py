@@ -10,7 +10,7 @@ from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_write_models import GeometryWritten
 from src.routers.curation.search import _get_pe_encoder
 from src.schemas.curation.config_common import ApiErrorResponse
-from src.schemas.curation.images import GeometryPatchRequest
+from src.schemas.curation.images import GeometryPatchRequest, GeometryUndoRequest
 from src.services.curation.image_detail import image_boxes_and_counts
 from src.services.curation.item_geometry import GeometryResult, edit_geometry, undo_geometry
 from src.services.curation.wire import serialize_item
@@ -68,9 +68,17 @@ async def patch_geometry(
     tags=['Crops'],
 )
 async def undo_crop_geometry(
-    crop_id: str, request: Request, opensearch: OpenSearchDep
+    crop_id: str, payload: GeometryUndoRequest, request: Request, opensearch: OpenSearchDep
 ) -> dict[str, Any]:
     """Put the box back to what it was before the newest edit that is not already undone.
-    `409 nothing_to_undo` when none is left; an undo of an undo is not restorable."""
-    result = await undo_geometry(opensearch, _get_pe_encoder(request), crop_id)
+    `expected_geometry_revision` is the revision the editor holds; a newer one is
+    `409 geometry_conflict` carrying the current item, so nobody's move is undone unseen.
+    `409 nothing_to_undo` when none is left; an undo of an undo is not restorable. `409
+    regions_changed` when the edit dropped region boxes and a region write came since."""
+    result = await undo_geometry(
+        opensearch,
+        _get_pe_encoder(request),
+        crop_id,
+        expected_revision=payload.expected_geometry_revision,
+    )
     return await _written(opensearch, crop_id, result)

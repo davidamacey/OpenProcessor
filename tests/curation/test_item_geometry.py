@@ -243,21 +243,21 @@ def test_unknown_item_is_404(world: Any) -> None:
     assert resp.status_code == 404
 
 
-def _undo(client: TestClient) -> Any:
-    return client.post(f'{BASE}/crops/it-1/geometry/undo')
+def _undo(client: TestClient, rev: int) -> Any:
+    return client.post(f'{BASE}/crops/it-1/geometry/undo', json={'expected_geometry_revision': rev})
 
 
 def test_undo_restores_the_previous_geometry(world: Any) -> None:
     client = _client(world, FakePE())
     _patch(client, MOVED, 0)
     _patch(client, FAR, 1)
-    back = _undo(client)
+    back = _undo(client, 2)
     assert back.status_code == 200, back.text
     doc = world.docs(ITEMS)['it-1']
     assert doc['bbox_norm'] == MOVED
     assert doc['geometry_revision'] == 3  # an undo is a change a stale editor must see
     assert doc['pe_embedding'] == [0.0, 0.0, 1.0]  # re-embedded for the restored box
-    assert _undo(client).status_code == 200
+    assert _undo(client, 3).status_code == 200
     first = world.docs(ITEMS)['it-1']
     assert first['bbox_norm'] == ORIGINAL
     assert first.get('geometry_source') is None  # the machine box again
@@ -265,17 +265,17 @@ def test_undo_restores_the_previous_geometry(world: Any) -> None:
 
 def test_undo_with_nothing_left_is_409(world: Any) -> None:
     client = _client(world, FakePE())
-    assert _undo(client).status_code == 409
-    assert _undo(client).json()['detail']['error'] == 'nothing_to_undo'
+    assert _undo(client, 0).status_code == 409
+    assert _undo(client, 0).json()['detail']['error'] == 'nothing_to_undo'
     _patch(client, MOVED, 0)
-    assert _undo(client).status_code == 200
-    assert _undo(client).status_code == 409  # an undo of an undo is not restorable
+    assert _undo(client, 1).status_code == 200
+    assert _undo(client, 2).status_code == 409  # an undo of an undo is not restorable
 
 
 def test_a_stale_editor_after_an_undo_conflicts(world: Any) -> None:
     client = _client(world, FakePE())
     _patch(client, MOVED, 0)
-    _undo(client)
+    _undo(client, 1)
     assert _patch(client, FAR, 1).status_code == 409
 
 
@@ -290,7 +290,7 @@ def test_undo_puts_back_the_region_boxes_a_move_dropped(world: Any) -> None:
     client = _client(world, FakePE())
     shrink = [0.1, 0.1, 0.35, 0.35]
     assert _patch(client, shrink, 0, drop_region_box_ids=['b2']).status_code == 200
-    assert _undo(client).status_code == 200
+    assert _undo(client, 1).status_code == 200
     stored = world.docs(ITEMS)['it-1']
     assert stored['bbox_norm'] == ORIGINAL
     assert [b['box_id'] for b in stored[F.boxes]] == ['b1', 'b2']
@@ -302,7 +302,7 @@ def test_undo_of_a_move_that_dropped_nothing_leaves_later_region_edits(world: An
     client = _client(world, FakePE())
     assert _patch(client, [0.05, 0.05, 0.6, 0.6], 0).status_code == 200
     world.docs(ITEMS)['it-1'][F.boxes] = [box('b1', state='rejected', bbox=(0.15, 0.15, 0.3, 0.3))]
-    assert _undo(client).status_code == 200
+    assert _undo(client, 1).status_code == 200
     assert [b['state'] for b in world.docs(ITEMS)['it-1'][F.boxes]] == ['rejected']
 
 
@@ -311,6 +311,19 @@ def test_undo_after_a_region_edit_that_followed_a_drop_is_refused(world: Any) ->
     client = _client(world, FakePE())
     assert _patch(client, [0.1, 0.1, 0.35, 0.35], 0, drop_region_box_ids=['b2']).status_code == 200
     world.docs(ITEMS)['it-1'][F.revision] = int(world.docs(ITEMS)['it-1'][F.revision]) + 1
-    resp = _undo(client)
+    resp = _undo(client, 1)
     assert (resp.status_code, resp.json()['detail']['error']) == (409, 'regions_changed')
     assert world.docs(ITEMS)['it-1']['bbox_norm'] == [0.1, 0.1, 0.35, 0.35]
+
+
+def test_undo_by_an_editor_holding_a_stale_revision_conflicts(world: Any) -> None:
+    """A and B both hold revision 0; B moves; A's undo must not undo B's move."""
+    client = _client(world, FakePE())
+    _patch(client, MOVED, 0)  # an earlier edit A saw and may undo
+    _patch(client, FAR, 1)  # B's move, revision 2
+    resp = _undo(client, 1)
+    assert resp.status_code == 409
+    detail = resp.json()['detail']
+    assert (detail['error'], detail['current_geometry_revision']) == ('geometry_conflict', 2)
+    assert detail['item']['bbox_norm'] == FAR
+    assert world.docs(ITEMS)['it-1']['bbox_norm'] == FAR
