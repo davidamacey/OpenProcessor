@@ -28,6 +28,9 @@ makes the shortcuts below customizable per project rather than fixed.
 | Key | Action |
 | --- | --- |
 | `[` / `]` | Previous / next view |
+| `,` / `.` | Previous / next cluster (in an open cluster) |
+| `/` | Open the class picker for the selection |
+| `Space` | Select or deselect the focused card |
 | `\` | Show or hide the details panel |
 | `Esc` | Clear the selection, then leave the open cluster, then close the panel |
 | `Shift+Enter` | Confirm selected to the chosen class + advance |

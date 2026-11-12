@@ -11,7 +11,7 @@ batches. One page holds the **filter row**, the **view bar**, the **rail**
 bar**. The filter, the queue, the open cluster and the selection stay when
 you switch view, and Back returns to the previous view and filter.
 
-<Screenshot name="cropwright/clusters-1600.png" alt="The Workspace, Clusters view" caption="Clusters view with the rail and the filter row" />
+<Screenshot name="cropwright/workspace-clusters-1600.png" alt="The Workspace, Clusters view" caption="Clusters view with the rail and the filter row" />
 
 ## Views
 
