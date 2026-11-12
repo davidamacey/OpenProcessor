@@ -218,26 +218,59 @@ def test_the_sweep_counts_images_that_were_never_counted(
     assert _drain(fake, image_counts_dirty).swept == 0
 
 
-def test_a_refused_count_write_leaves_the_images_marked(
+def _refusing(fake: QueryFakeOpenSearch, monkeypatch: Any, refused: set[str]) -> None:
+    """Make the images index refuse the count write of every id in ``refused`` (HTTP 400)."""
+    real = fake.bulk
+
+    async def bulk(*, body: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
+        ids = [action['update']['_id'] for action in body[::2]]
+        ok = [i for i in ids if i not in refused]
+        good = await real(body=[part for i in ok for part in body[2 * ids.index(i) :][:2]], **kw)
+        by_id = dict(zip(ok, good['items'], strict=True))
+        refusal = {'update': {'status': 400, 'error': {'type': 'x'}}}
+        items = [by_id.get(i, refusal) for i in ids]
+        return {'errors': True, 'items': items}
+
+    monkeypatch.setattr(fake, 'bulk', bulk)
+
+
+def test_a_refused_count_write_requeues_its_image_and_does_not_wedge_the_drain(
     image_counts_dirty: dict[str, set[str]], monkeypatch: Any
 ) -> None:
     fake = _world()
+    _refusing(fake, monkeypatch, {'img-a'})
+    image_counts_dirty[DIRTY] = {'img-a', 'img-b'}
+    report = _drain(fake, image_counts_dirty)
+    docs = fake.docs(IMAGES)
+    # The accepted image was counted and left the set; the refused one went back to the dirty
+    # set, so no claimed set is left for the next tick to resume forever.
+    assert 'counts' in docs['img-b']
+    assert 'counts' not in docs['img-a']
+    assert image_counts_dirty == {DIRTY: {'img-a'}}
+    assert (report.recounted, report.refused) == (1, 1)
+    # The sweep still ran in the same pass (it counts the never-counted images).
+    assert 'counts' in docs['img-c']
+    assert report.swept == 2  # img-c and img-d; img-a is refused there too
+
+    # A write lands while the refusal persists: the next pass claims it, so nothing piles up.
+    image_counts_dirty[DIRTY] |= {'img-c'}
+    second = _drain(fake, image_counts_dirty)
+    assert second.recounted == 1
+    assert image_counts_dirty == {DIRTY: {'img-a'}}
+
+
+def test_a_refused_image_is_counted_once_the_index_accepts_it_again(
+    image_counts_dirty: dict[str, set[str]], monkeypatch: Any
+) -> None:
+    fake = _world()
+    real_bulk = fake.bulk
+    _refusing(fake, monkeypatch, {'img-a'})
     image_counts_dirty[DIRTY] = {'img-a'}
-
-    async def refuse(*, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
-        return {
-            'errors': True,
-            'items': [{'update': {'_id': 'img-a', 'status': 400, 'error': {'type': 'bad'}}}],
-        }
-
-    monkeypatch.setattr(fake, 'bulk', refuse)
-    try:
-        _drain(fake, image_counts_dirty)
-    except refresh.CountsWriteError:
-        pass
-    else:
-        raise AssertionError('the drain hid a refused write')
-    assert image_counts_dirty == {'op:image_counts:claimed:default': {'img-a'}}
+    _drain(fake, image_counts_dirty)
+    monkeypatch.setattr(fake, 'bulk', real_bulk)
+    _drain(fake, image_counts_dirty)
+    assert fake.docs(IMAGES)['img-a']['counts']['items'] == 2
+    assert image_counts_dirty == {}
 
 
 def test_the_sweep_size_is_a_setting_and_zero_turns_the_sweep_off(

@@ -144,3 +144,13 @@ class DirtyImages:
     async def done(self, image_ids: list[str]) -> None:
         if image_ids:
             await self._client.srem(claimed_key(), *image_ids)
+
+    async def requeue(self, image_ids: list[str]) -> None:
+        """Move ``image_ids`` from the claimed set back to the dirty set (a retry on a later claim).
+
+        Added to the dirty set first, so a failure between the two calls duplicates a mark and
+        never loses one.
+        """
+        if image_ids:
+            await self._client.sadd(dirty_key(), *image_ids)
+            await self._client.srem(claimed_key(), *image_ids)
