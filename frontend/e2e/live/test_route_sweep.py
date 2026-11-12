@@ -96,6 +96,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/ingest', 'h1:has-text("Ingest")'),
     ('/workspace?view=clusters', 'h1:has-text("Clusters")'),
     ('/workspace?view=clusters&class_name={region_class}', 'h1:has-text("Clusters")'),
+    ('/workspace?view=gallery', '[data-testid="gallery-view"]'),
     ('/workspace?view=detections', '[data-testid="detections-view"]'),
     ('/review?tab=all', '[data-testid="queue-counter"]'),
     ('/review?tab=uncertainty', '[data-testid="queue-counter"]'),

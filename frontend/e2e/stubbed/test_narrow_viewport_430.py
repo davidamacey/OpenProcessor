@@ -9,7 +9,14 @@ the page makes must be stubbed (the `stub` fixture asserts it at teardown).
 from __future__ import annotations
 
 import pytest
-from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_cluster
+from fixtures.contract import (
+    auto_label_job,
+    cluster_card,
+    cluster_list,
+    image_card,
+    image_page,
+    item_cluster,
+)
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item, project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
 from harness.waits import wait_for_paint
@@ -52,6 +59,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/ingest', 'h1'),
     ('/workspace?view=clusters', 'h1'),
     ('/workspace?view=clusters&scope=cluster:cl-fixture-0064', "[data-testid='class-name']"),
+    ('/workspace?view=gallery', "[data-testid='gallery-view']"),
     ('/workspace?view=detections', "[data-testid='detections-view']"),
     ('/review?tab=all', "[data-testid='queue-counter']"),
     ('/review?tab=uncertainty', "[data-testid='queue-counter']"),
@@ -157,6 +165,7 @@ def _stub_common(stub) -> None:
     stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
     stub.on('GET', r'/regions/clusters(\?|$)', {'clusters': [], 'count': 0})
     stub.on('GET', r'/regions(\?|$)', {'items': [], 'total': 0})
+    stub.on('GET', r'/images(\?|$)', image_page(image_card('img-0'), image_card('img-1')))
     stub.on(
         'GET',
         r'/crops(\?|$)',
