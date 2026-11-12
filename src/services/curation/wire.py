@@ -17,7 +17,7 @@ See ``docs/design/curation_api_contract.md``.
 from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.region_fields import RegionFields, get_region_fields
@@ -28,6 +28,7 @@ from src.domain.region_boxes import region_box_display_name
 from src.services.curation.assist.item_wire import assist_to_wire
 from src.services.curation.capture_wire import item_capture_to_wire
 from src.services.curation.class_sources import (
+    VLM_SUGGESTION_FIELDS,
     class_confidence,
     vlm_suggestion,
     vlm_suggestion_dismissed,
@@ -163,6 +164,16 @@ def _proposed_class(
         'proposed_class_id': src.get('class_id'),
         'proposed_class_name': src.get('vlm_raw_class') or src.get('class_name') or '',
     }
+
+
+DISPLAY_NAME_FIELDS: Final = (
+    *VLM_SUGGESTION_FIELDS,
+    'vlm_raw_class',
+    'proposal_name',
+    'detector_class_name',
+)
+"""The stored fields :func:`item_display_name` reads: a query that fetches items only to name
+them (a card's boxes) asks for these."""
 
 
 def display_name_of(src: dict[str, Any], proposed_name: str) -> dict[str, str]:
@@ -546,6 +557,7 @@ def region_event_payload(
 
 __all__ = [
     'DEFAULT_SLOT_LABEL',
+    'DISPLAY_NAME_FIELDS',
     'ITEM_WIRE_KEYS',
     'REGION_ROW_EXTRA_KEYS',
     'REGION_WIRE_ATTRS',

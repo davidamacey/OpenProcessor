@@ -256,7 +256,12 @@ def _top_hit(doc: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     hit: dict[str, Any] = {'_id': doc_id}
     if spec.get('docvalue_fields'):
         hit['fields'] = {f: _values(visible, f) for f in spec['docvalue_fields']}
-    if spec.get('_source', True) is not False:
+    source = spec.get('_source', True)
+    if source is not False:
+        includes = source.get('includes') if isinstance(source, dict) else None
+        if includes is not None:
+            # OpenSearch returns only the listed fields of the stored document.
+            visible = {k: v for k, v in visible.items() if k in includes}
         hit['_source'] = copy.deepcopy(visible)
     return hit
 

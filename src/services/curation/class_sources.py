@@ -15,7 +15,7 @@ It also derives the VLM class suggestion carried on every wire item
 
 from __future__ import annotations
 
-from typing import Any, Literal, get_args
+from typing import Any, Final, Literal, get_args
 
 from src.domain.ingest_class_sources import (
     CLUSTER_MAJORITY_CLASS_SOURCE,
@@ -161,6 +161,18 @@ def class_source_catalog() -> list[dict[str, str]]:
     return out
 
 
+VLM_SUGGESTION_FIELDS: Final = (
+    'class_id',
+    'class_name',
+    'class_source',
+    'class_validated',
+    'vlm_proposed_class',
+    'vlm_dismissed_class_id',
+    'vlm_dismissed_class_name',
+)
+"""The stored fields :func:`vlm_suggestion` and :func:`vlm_suggestion_dismissed` read."""
+
+
 def _raw_vlm_suggestion(src: dict[str, Any]) -> tuple[int | None, str | None]:
     if src.get('class_validated'):
         return None, None
@@ -265,6 +277,7 @@ __all__ = [
     'VLM_NEW_CLASS_PENDING_CLASS_SOURCE',
     'VLM_RECLASSIFIED_CLASS_SOURCE',
     'VLM_SUGGESTION_CLASS_SOURCES',
+    'VLM_SUGGESTION_FIELDS',
     'VLM_UNMATCHED_CLASS_SOURCE',
     'HumanLabelSource',
     'class_confidence',

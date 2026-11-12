@@ -13,10 +13,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.clients.occ_locks import lock_includes
 from src.config.curation_accessors import items_index
 from src.schemas.curation.images import BoxView, ImageCounts
-from src.services.curation.image_boxes import boxes_of
+from src.services.curation.image_boxes import box_source_fields, boxes_of
 
 
 #: Items drawn on one card; the card says when there were more.
@@ -43,17 +42,7 @@ def _bucket_aggs(include_test: bool, box_limit: int) -> dict[str, Any]:
             'top_hits': {
                 'size': box_limit,
                 'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-                '_source': {
-                    'includes': [
-                        'crop_id',
-                        'bbox_norm',
-                        'class_id',
-                        'class_name',
-                        'class_validated',
-                        'geometry_revision',
-                        *lock_includes(),
-                    ]
-                },
+                '_source': {'includes': box_source_fields()},
             }
         }
     shown = {'match_all': {}} if include_test else {'bool': {'must_not': _HOLDOUT}}
