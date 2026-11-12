@@ -26,6 +26,10 @@
   let { ws, onapplied, extra }: Props = $props();
 
   const actions = createSelectionActionController(() => ws.itemSelection() ?? {});
+  // The open near-duplicate group as a whole: the filter carries `near_dup_group`, so the label
+  // reaches every member the server counts, not only the ones loaded.
+  const group = createSelectionActionController(() => ({ filter: ws.itemBody() }));
+  let groupPickerOpen = $state(false);
   let reasonsOpen = $state(false);
 
   const hasSelection = $derived(ws.selection.kind !== 'none');
@@ -51,6 +55,12 @@
     ws.pickerOpen = false;
     actions.classId = cls.id;
     void actions.open('label');
+  }
+
+  function labelGroup(cls: { id: number }): void {
+    groupPickerOpen = false;
+    group.classId = cls.id;
+    void group.open('label');
   }
 
   function ignore(reason: string): void {
@@ -163,6 +173,16 @@
   <button type="button" class="btn" onclick={() => void undoStore.undoLast()}>
     Undo
   </button>
+  {#if ws.url.scope?.kind === 'near_dup'}
+    <button
+      type="button"
+      class="btn"
+      data-testid="label-whole-group"
+      onclick={() => (groupPickerOpen = true)}
+    >
+      Label whole duplicate group…
+    </button>
+  {/if}
   <DiverseSample {ws} />
   {@render extra?.()}
 </div>
@@ -173,4 +193,11 @@
   onpick={assign}
   onclose={() => (ws.pickerOpen = false)}
 />
+<ClassPicker
+  open={groupPickerOpen}
+  mode="assign"
+  onpick={labelGroup}
+  onclose={() => (groupPickerOpen = false)}
+/>
 <SelectionActionDialog controller={actions} {onapplied} />
+<SelectionActionDialog controller={group} {onapplied} />

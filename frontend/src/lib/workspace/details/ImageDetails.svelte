@@ -88,6 +88,16 @@
           onclick={() => ws.setScope({ kind: 'image', id: image.image_id })}
           >Show its items</button
         >
+        {#if image.near_dup?.is_representative}
+          <button
+            type="button"
+            class="btn"
+            data-testid="scope-near-dup"
+            onclick={() =>
+              ws.setScope({ kind: 'near_dup', id: image.near_dup?.group_id ?? '' })}
+            >Show its duplicate group</button
+          >
+        {/if}
       </div>
     </section>
   {/if}
