@@ -124,9 +124,8 @@ function parseSelectJobStatus(raw: unknown): SelectJobStatus {
   };
 }
 
-/** Poll the singleton diverse-selection job. Caller decides polling
- *  cadence/cleanup (see `/review`'s `+page.svelte` — mirrors the
- *  `bakeoff` page's setInterval/clearInterval pattern). */
+/** Poll the singleton diverse-selection job. The caller decides the polling cadence and
+ *  cleanup (see `createDiverseSample` in `$lib/workspace/diverseSample.svelte`). */
 export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobStatus> {
   const raw = await apiFetch<unknown>(`${scoped()}/select/status`, {}, signal);
   return parseSelectJobStatus(raw);
