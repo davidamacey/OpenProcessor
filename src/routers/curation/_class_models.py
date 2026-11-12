@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.services.curation.class_sources import HumanLabelSource
+from src.services.curation.detector_vocabulary import DETECTOR_CLASS_GROUP
 
 
 class ClassEntry(BaseModel):
@@ -143,7 +144,7 @@ class SeedFromDetectorRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     names: list[str] | None = None
-    group: str = 'detector'
+    group: str = DETECTOR_CLASS_GROUP
     dry_run: bool = True
 
 

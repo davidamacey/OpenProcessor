@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING
 
 from src.config.ingest_profiles import model_class_name
 from src.core.logging import get_logger
+from src.services.classes.registry import get_class_registry
+from src.services.classes.resolve import ensure_class_by_name
+from src.services.curation.detector_vocabulary import DETECTOR_CLASS_GROUP, detector_class_notes
 from src.utils.class_names import normalize_class_name
 
 
@@ -38,3 +41,14 @@ def registry_class_for(
             model_index=model_index,
         )
     return found
+
+
+async def ensure_detector_class(name: str, label: str) -> tuple[int, str]:
+    """``(class_id, class_name)`` of the bound project's active class called ``name`` (the
+    detector label ``label`` in registry-name form), created under the ``detector`` group when
+    the registry lacks it. The same create ``POST /classes/seed_from_detector`` makes, one name at
+    a time: append-only, idempotent, a concurrent writer of the same name yields the same id."""
+    resolved = await ensure_class_by_name(
+        get_class_registry(), name, group=DETECTOR_CLASS_GROUP, notes=detector_class_notes(label)
+    )
+    return resolved.class_id, resolved.class_name

@@ -26,7 +26,7 @@
   const RESOLUTION_HELP: Record<ClassResolution, string> = {
     proposal: 'The detector label is kept as a proposal; no class is assigned.',
     by_name:
-      'Sets the class when a registry class has the detector label’s name. It is a machine label.',
+      'Gives the box the class named like the detector label, adding it to the registry when it is missing. It is a machine label, reviewable and still clustered.',
   };
 
   function num(v: string): number | null {
@@ -192,7 +192,7 @@
         <select
           class="input w-48"
           data-testid="policy-class-resolution"
-          value={detect.class_resolution ?? 'proposal'}
+          value={detect.class_resolution ?? 'by_name'}
           onchange={(e) => setDetect({ class_resolution: e.currentTarget.value })}
         >
           {#each CLASS_RESOLUTIONS as r (r)}
@@ -200,7 +200,7 @@
           {/each}
         </select>
         <span class="text-zinc-500"
-          >{RESOLUTION_HELP[detect.class_resolution ?? 'proposal']}</span
+          >{RESOLUTION_HELP[detect.class_resolution ?? 'by_name']}</span
         >
       </label>
     </div>

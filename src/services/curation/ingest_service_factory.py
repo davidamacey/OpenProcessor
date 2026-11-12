@@ -6,6 +6,7 @@ from typing import Any
 
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.capture_read import read_capture
+from src.services.curation.detector_class_map import ensure_detector_class
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_detector import (
     IngestProfileUnresolvedError,
@@ -52,4 +53,5 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
         policy=policy,
         capture_reader=read_capture,
         location_policy=get_location_policy,
+        class_ensurer=ensure_detector_class,
     )
