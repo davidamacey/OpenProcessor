@@ -28,6 +28,10 @@ export type ItemOrigin = (typeof ITEM_ORIGINS)[number];
 export const REVIEW_STATUSES = ['pending', 'validated', 'dismissed', 'excluded'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+/** `ItemFilter.region_text_match`: how a box-text search matches. */
+export const TEXT_MATCHES = ['exact', 'fuzzy', 'fragment'] as const;
+export type TextMatch = (typeof TEXT_MATCHES)[number];
+
 /** `ItemSelection.sample` / `ReprocessTargets.sample`. */
 export const SELECTION_SAMPLES = ['random', 'largest'] as const;
 export type SelectionSample = (typeof SELECTION_SAMPLES)[number];
@@ -64,6 +68,7 @@ export interface ItemFilterQuery {
   geo_polygon?: string;
   has_location?: boolean;
   near_dup_group?: string;
+  region_text_match?: TextMatch;
 }
 
 /** `ItemFilter` (request body schema). */
@@ -102,7 +107,7 @@ export interface ItemFilter {
   region_gate_skipped?: boolean | null;
   /** The item has a box whose folded text matches this (at most 200 characters). */
   region_text?: string | null;
-  region_text_match?: 'exact' | 'fuzzy' | 'fragment';
+  region_text_match?: TextMatch;
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
   review_tab?: string | null;

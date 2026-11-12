@@ -12,11 +12,13 @@ import {
   EMBEDDING_STATES,
   ITEM_ORIGINS,
   REVIEW_STATUSES,
+  TEXT_MATCHES,
   type EmbeddingState,
   type ItemFilter,
   type ItemFilterQuery,
   type ItemOrigin,
   type ReviewStatus,
+  type TextMatch,
 } from '$lib/types_itemFilter';
 
 /** `GET /clusters`, `/regions`, `/search/text`, `/review/{tab}` and
@@ -79,6 +81,8 @@ export class ItemFilterState {
   /** Set by a scope (a near-duplicate group, one image), not by a bar control. */
   nearDupGroup = $state<string | null>(null);
   imageIds = $state<string[]>([]);
+  /** How the box text search matches; null = the server default. */
+  regionTextMatch = $state<TextMatch | null>(null);
 
   get isEmpty(): boolean {
     return Object.keys(this.toBody()).length === 0;
@@ -119,6 +123,7 @@ export class ItemFilterState {
     put('has_location', this.hasLocation, this.hasLocation != null);
     put('near_dup_group', this.nearDupGroup, this.nearDupGroup != null);
     put('image_id', [...this.imageIds], this.imageIds.length > 0);
+    put('region_text_match', this.regionTextMatch, this.regionTextMatch != null);
     return q as ItemFilterQuery;
   }
 
@@ -153,6 +158,7 @@ export class ItemFilterState {
     if (this.hasLocation != null) b.has_location = this.hasLocation;
     if (this.nearDupGroup) b.near_dup_group = this.nearDupGroup;
     if (this.imageIds.length > 0) b.image_ids = [...this.imageIds];
+    if (this.regionTextMatch) b.region_text_match = this.regionTextMatch;
     return b;
   }
 
@@ -189,6 +195,8 @@ export class ItemFilterState {
     this.geoPolygon = parseRing(params.get('geo_polygon'));
     const located = params.get('has_location');
     this.hasLocation = located === 'true' ? true : located === 'false' ? false : null;
+    this.regionTextMatch =
+      pick(params.getAll('region_text_match'), TEXT_MATCHES)[0] ?? null;
   }
 
   /** Writes the state into `params`, deleting the keys that are now empty. */
@@ -236,7 +244,17 @@ export class ItemFilterState {
       case 'taken_to':
         return this.takenTo;
       default:
-        return undefined;
+        return this.textMatchValue(param);
+    }
+  }
+
+  private textMatchValue(param: string): string | undefined {
+    return param === 'region_text_match' ? (this.regionTextMatch ?? '') : undefined;
+  }
+
+  private setTextMatch(param: string, list: string[]): void {
+    if (param === 'region_text_match') {
+      this.regionTextMatch = pick(list, TEXT_MATCHES)[0] ?? null;
     }
   }
 
@@ -293,6 +311,8 @@ export class ItemFilterState {
       case 'taken_to':
         this.takenTo = str;
         break;
+      default:
+        this.setTextMatch(param, list);
     }
   }
 
@@ -317,6 +337,7 @@ export class ItemFilterState {
     this.hasLocation = null;
     this.nearDupGroup = null;
     this.imageIds = [];
+    this.regionTextMatch = null;
   }
 
   /** One removable chip per active value. */
@@ -478,4 +499,5 @@ export const URL_KEYS = [
   'geo_bbox',
   'geo_polygon',
   'has_location',
+  'region_text_match',
 ] as const;

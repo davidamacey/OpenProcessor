@@ -8,6 +8,8 @@ from typing import Annotated
 from fastapi import Query
 from pydantic import BeforeValidator
 
+from src.services.curation.region_text_search import TextMatch
+
 
 def empty_as_unset(value: object) -> object:
     """The ``Any`` option an enum/bool filter spec serves is ``""``: it means unset."""
@@ -21,6 +23,17 @@ IncludeTest = Annotated[bool, Query()]
 TextQ = Annotated[
     str | None,
     Query(description='Regions tab only: case-insensitive substring search on any box text.'),
+]
+RegionTextMatchQ = Annotated[
+    TextMatch | None,
+    UnsetIfEmpty,
+    Query(
+        description=(
+            'Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the '
+            'folded box text; unset is a case-insensitive substring '
+            '(GET /review/tabs filter_specs, param region_text_match).'
+        )
+    ),
 ]
 BlurQ = Annotated[float | None, Query(ge=0.0, description='Clarity floor (null-safe).')]
 MistakeQ = Annotated[float | None, Query(ge=0.0, description='Mistakenness floor (null-safe).')]

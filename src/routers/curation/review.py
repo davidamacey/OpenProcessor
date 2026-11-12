@@ -8,9 +8,9 @@ in ``review_proposals.py`` and the raw-label aggregations in
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
-from fastapi import HTTPException, Path as PathParam, Query
+from fastapi import Depends, HTTPException, Path as PathParam, Query
 
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
@@ -34,6 +34,7 @@ from src.routers.curation._review_params import (
     NearDupQ,
     OnNegativeFrameQ,
     RegionStatusQ,
+    RegionTextMatchQ,
     SortQ,
     SourceQ,
     TextQ,
@@ -60,30 +61,28 @@ from src.services.embedding_spaces.readers import (
 )
 
 
-if TYPE_CHECKING:
-    from src.services.curation.item_filter import ItemFilter
-
-
 _TAB_DESCRIPTION = 'One of: ' + ' | '.join(KNOWN_TABS)
 
 
-def _filters(
-    include_test: bool,
-    text: str | None,
-    item_filter: ItemFilter,
-    min_blur_ratio: float | None,
-    min_mistakenness: float | None,
-    hide_near_duplicates: bool,
-    source: str | None,
-    region_status: str | None,
-    combine_conflict: bool,
-    import_id: str | None,
-    dataset_split: str | None,
-    on_negative_frame: bool | None,
+def _review_filters(
+    item_filter: ItemFilterQuery,
+    include_test: IncludeTest = False,
+    text: TextQ = None,
+    region_text_match: RegionTextMatchQ = None,
+    min_blur_ratio: BlurQ = None,
+    min_mistakenness: MistakeQ = None,
+    hide_near_duplicates: NearDupQ = False,
+    source: SourceQ = None,
+    region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
+    combine_conflict: CombineConflictQ = False,
+    import_id: ImportIdQ = None,
+    dataset_split: DatasetSplitQ = None,
+    on_negative_frame: OnNegativeFrameQ = None,
 ) -> ReviewFilters:
     return ReviewFilters(
         include_test=include_test,
         text=text,
+        region_text_match=region_text_match,
         max_rank=item_filter.max_rank,
         min_blur_ratio=min_blur_ratio,
         min_mistakenness=min_mistakenness,
@@ -96,6 +95,9 @@ def _filters(
         dataset_split=dataset_split,
         on_negative_frame=on_negative_frame,
     )
+
+
+ReviewFiltersDep = Annotated[ReviewFilters, Depends(_review_filters)]
 
 
 async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearch: Any) -> Any:
@@ -161,21 +163,10 @@ async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
 async def review_queue(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     opensearch: OpenSearchDep,
-    item_filter: ItemFilterQuery,
+    filters: ReviewFiltersDep,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 30,
-    include_test: IncludeTest = False,
-    text: TextQ = None,
-    min_blur_ratio: BlurQ = None,
-    min_mistakenness: MistakeQ = None,
-    hide_near_duplicates: NearDupQ = False,
-    source: SourceQ = None,
     sort: SortQ = None,
-    region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
-    combine_conflict: CombineConflictQ = False,
-    import_id: ImportIdQ = None,
-    dataset_split: DatasetSplitQ = None,
-    on_negative_frame: OnNegativeFrameQ = None,
 ) -> dict[str, Any]:
     """Human review queue for the labeler ``/review`` page.
 
@@ -202,20 +193,6 @@ async def review_queue(
             'hidden': {'test_holdout': 0, 'excluded': 0},
             'join_truncated': False,
         }
-    filters = _filters(
-        include_test,
-        text,
-        item_filter,
-        min_blur_ratio,
-        min_mistakenness,
-        hide_near_duplicates,
-        source,
-        region_status,
-        combine_conflict,
-        import_id,
-        dataset_split,
-        on_negative_frame,
-    )
     req = await _request(tab, filters, sort, opensearch)
     excludes = await vector_source_excludes()
     body = {
@@ -291,20 +268,9 @@ async def review_locate(
     tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
     crop_id: Annotated[str, Query(description='The item to find.')],
     opensearch: OpenSearchDep,
-    item_filter: ItemFilterQuery,
+    filters: ReviewFiltersDep,
     page_size: Annotated[int, Query(ge=1, le=200)] = 30,
-    include_test: IncludeTest = False,
-    text: TextQ = None,
-    min_blur_ratio: BlurQ = None,
-    min_mistakenness: MistakeQ = None,
-    hide_near_duplicates: NearDupQ = False,
-    source: SourceQ = None,
     sort: SortQ = None,
-    region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
-    combine_conflict: CombineConflictQ = False,
-    import_id: ImportIdQ = None,
-    dataset_split: DatasetSplitQ = None,
-    on_negative_frame: OnNegativeFrameQ = None,
 ) -> dict[str, Any]:
     """Where ``crop_id`` sits in the queue ``GET /review/{tab}`` would serve
     for the same filters and sort.
@@ -315,20 +281,6 @@ async def review_locate(
     ``reason`` ``not_found`` (no such item) or ``filtered_out``. Counts the
     items sorting before it, so any depth costs the same.
     """
-    filters = _filters(
-        include_test,
-        text,
-        item_filter,
-        min_blur_ratio,
-        min_mistakenness,
-        hide_near_duplicates,
-        source,
-        region_status,
-        combine_conflict,
-        import_id,
-        dataset_split,
-        on_negative_frame,
-    )
     req = await _request(tab, filters, sort, opensearch)
     if review_empty_reason.region_queue_is_off(tab):
         return {

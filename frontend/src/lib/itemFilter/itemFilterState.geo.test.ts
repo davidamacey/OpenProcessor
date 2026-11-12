@@ -106,3 +106,26 @@ describe('ItemFilterState area, location and cluster keys', () => {
     expect(s.isEmpty).toBe(true);
   });
 });
+
+describe('ItemFilterState region text match', () => {
+  it('region text match round-trips and reaches the query', () => {
+    const s = new ItemFilterState();
+    s.setValue('region_text_match', 'fuzzy');
+    expect(s.valueOf('region_text_match')).toBe('fuzzy');
+    expect(s.toQuery().region_text_match).toBe('fuzzy');
+    expect(s.toBody().region_text_match).toBe('fuzzy');
+
+    const params = new URLSearchParams();
+    s.toUrl(params);
+    expect(params.get('region_text_match')).toBe('fuzzy');
+    const back = new ItemFilterState();
+    back.fromUrl(params);
+    expect(back.regionTextMatch).toBe('fuzzy');
+
+    s.setValue('region_text_match', 'bogus');
+    expect(s.regionTextMatch).toBeNull();
+    s.setValue('region_text_match', 'exact');
+    s.clear();
+    expect(s.regionTextMatch).toBeNull();
+  });
+});

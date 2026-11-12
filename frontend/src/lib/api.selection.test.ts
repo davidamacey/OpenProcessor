@@ -151,7 +151,9 @@ describe('class identity is by name on the list routes', () => {
       geo_polygon: '7,46;9,46;8,48',
       has_location: true,
       near_dup_group: 'g1',
-    } satisfies Required<Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt'>>;
+    } satisfies Required<
+      Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt' | 'region_text_match'>
+    >;
     const f = stub({ items: [], total: 0 });
     await getClusters(every);
     const url = new URL(String(f.mock.calls[0][0]), 'http://x');

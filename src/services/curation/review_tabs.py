@@ -95,7 +95,7 @@ COMMON_FILTERS: tuple[str, ...] = (
 )
 # Tab-only filters, on top of COMMON_FILTERS.
 TAB_EXTRA_FILTERS: dict[str, tuple[str, ...]] = {
-    'regions': ('text', 'region_status'),
+    'regions': ('text', 'region_text_match', 'region_status'),
     'imported': ('import_id', 'dataset_split'),
 }
 # A filter value a tab applies when the client omits it (the two
@@ -113,7 +113,7 @@ def tab_filters(tab: str) -> tuple[str, ...]:
     tab's ``text`` filter only exists on a text-reading region profile."""
     extra = TAB_EXTRA_FILTERS.get(tab, ())
     if 'text' in extra and not _region_text_enabled():
-        extra = tuple(name for name in extra if name != 'text')
+        extra = tuple(name for name in extra if name not in ('text', 'region_text_match'))
     return (*COMMON_FILTERS, *extra)
 
 

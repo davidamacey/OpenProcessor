@@ -64053,6 +64053,24 @@
             }
           },
           {
+            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+              "title": "Sort"
+            }
+          },
+          {
             "in": "query",
             "name": "include_test",
             "required": false,
@@ -64078,6 +64096,29 @@
               ],
               "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "exact",
+                    "fuzzy",
+                    "fragment"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+              "title": "Region Text Match"
             }
           },
           {
@@ -64146,24 +64187,6 @@
               ],
               "description": "Only items with this ingest source tag.",
               "title": "Source"
-            }
-          },
-          {
-            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
-              "title": "Sort"
             }
           },
           {
@@ -64786,6 +64809,24 @@
             }
           },
           {
+            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
+              "title": "Sort"
+            }
+          },
+          {
             "in": "query",
             "name": "include_test",
             "required": false,
@@ -64811,6 +64852,29 @@
               ],
               "description": "Regions tab only: case-insensitive substring search on any box text.",
               "title": "Text"
+            }
+          },
+          {
+            "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+            "in": "query",
+            "name": "region_text_match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "exact",
+                    "fuzzy",
+                    "fragment"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Regions tab only, with `text`: `exact`, `fuzzy` (one edit) or `fragment` on the folded box text; unset is a case-insensitive substring (GET /review/tabs filter_specs, param region_text_match).",
+              "title": "Region Text Match"
             }
           },
           {
@@ -64879,24 +64943,6 @@
               ],
               "description": "Only items with this ingest source tag.",
               "title": "Source"
-            }
-          },
-          {
-            "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Review-sort id from GET /curation/methods (axis=sort). Omitted or 'default': the tab's own default. Unknown / shadow / disabled -> 400.",
-              "title": "Sort"
             }
           },
           {

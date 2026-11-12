@@ -39,7 +39,6 @@ const NOT_ON_BAR = [
   'on_negative_frame',
   'proposed_by_import',
   'region_text',
-  'region_text_match',
   'review_dismissed',
   'same_text_as',
   'source',

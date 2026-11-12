@@ -28,7 +28,6 @@ src/clients/curation_opensearch/ensure_fields.py <-> src/clients/curation_opense
 src/clients/curation_opensearch/ensure_overlay_fields.py <-> src/clients/curation_opensearch/ensure_overlay_fields.py	39	baseline at introduction; extract a shared helper to shrink
 src/clients/opensearch/indexes.py <-> src/clients/opensearch/indexes.py	31	baseline at introduction; extract a shared helper to shrink
 src/routers/clusters.py <-> src/routers/clusters.py	30	baseline at introduction; extract a shared helper to shrink
-src/routers/curation/review.py <-> src/routers/curation/review.py	16	baseline at introduction; extract a shared helper to shrink
 src/routers/curation/search.py <-> src/routers/curation/search.py	39	baseline at introduction; extract a shared helper to shrink
 src/routers/curation/search.py <-> src/routers/curation/search_image.py	13	baseline at introduction; extract a shared helper to shrink
 src/services/config_store/ingest_profiles.py <-> src/services/config_store/open_vocab.py	42	baseline at introduction; extract a shared helper to shrink

@@ -22,6 +22,7 @@ from typing import Any, get_args
 from src.config.region_state import RegionStatus
 from src.domain.embedding_state import EmbeddingState
 from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
+from src.services.curation.region_text_search import TextMatch
 
 
 # The ``region_status`` filter's selectable values on the ``regions`` tab
@@ -69,6 +70,11 @@ ORIGIN_LABELS: dict[str, str] = {
     'sam3': 'Open-vocabulary pass',
     'human': 'A person',
     'import': 'Dataset import',
+}
+TEXT_MATCH_LABELS: dict[str, str] = {
+    'exact': 'Exact (letters and digits)',
+    'fuzzy': 'Fuzzy (one edit)',
+    'fragment': 'Contains fragment',
 }
 REVIEW_STATUS_LABELS: dict[str, str] = {
     'pending': 'Pending review',
@@ -176,6 +182,13 @@ FILTER_SPECS: dict[str, dict[str, Any]] = {
         _spec('taken_from', 'date', 'Taken from', description=_TAKEN_HELP),
         _spec('taken_to', 'date', 'to', description=_TAKEN_HELP),
         _spec('text', 'text', 'Box text contains'),
+        _spec(
+            'region_text_match',
+            'enum',
+            'Text match',
+            options=_options(get_args(TextMatch), TEXT_MATCH_LABELS),
+            description='How the box text search matches; unset is a case-insensitive substring.',
+        ),
         _spec('region_status', 'enum', 'Status', options=REGION_STATUS_FILTER_OPTIONS),
         _spec('import_id', 'text', 'Dataset import'),
         _spec('dataset_split', 'enum', 'Split', options=DATASET_SPLIT_FILTER_OPTIONS),

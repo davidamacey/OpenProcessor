@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
 from src.services.curation import review_queries, review_sorts, review_tabs
@@ -22,6 +22,10 @@ from src.services.curation.image_join import ImageJoin, resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
 from src.services.embedding_spaces.readers import item_write_fields
+
+
+if TYPE_CHECKING:
+    from src.services.curation.region_text_search import TextMatch
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
@@ -41,6 +45,7 @@ class ReviewFilters:
     # default and so is read above.
     item: ItemFilter = dataclasses.field(default_factory=ItemFilter)
     region_status: str | None = REGION_STATUS_DEFAULT
+    region_text_match: TextMatch | None = None
     combine_conflict: bool = False
     import_id: str | None = None
     dataset_split: str | None = None
@@ -69,6 +74,7 @@ async def build_review_request(
         text=filters.text,
         max_rank=filters.max_rank,
         region_status=filters.region_status,
+        region_text_match=filters.region_text_match,
         vector_field=embedding.vector_field,
     )
     if filters.min_blur_ratio is not None:
