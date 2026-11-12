@@ -1,8 +1,4 @@
-frontend/src/lib/api.ts::apiFetch	33	baseline at introduction; decompose to shrink
-frontend/src/lib/api.undoCropRegion.test.ts::<anonymous>	21	baseline at introduction; decompose to shrink
-frontend/src/lib/api_clusters.ts::getCluster	18	baseline at introduction; decompose to shrink
 frontend/src/lib/api_cropMap.ts::mapRawCrop	53	baseline at introduction; decompose to shrink
-frontend/src/lib/api_errors.ts::errorDetail	17	baseline at introduction; decompose to shrink
 frontend/src/lib/clusters/clusterDetailController.svelte.ts::createClusterDetailController	16	baseline at introduction; decompose to shrink
 frontend/src/lib/contract/apiCallScanner.ts::resolveIdentifierKeys	16	baseline at introduction; decompose to shrink
 frontend/src/lib/contract/apiCallScanner.ts::scanApiCallSites	19	baseline at introduction; decompose to shrink
