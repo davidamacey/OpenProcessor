@@ -4,7 +4,10 @@
  * through `ui/Icon.svelte`), no pixel-sized `text-[Npx]`, no raw palette colour classes (colours
  * are the tokens in app.css `@theme`). Prose arrows (`→`) and the multiplication sign in a
  * dimension or a count ("1280×720", "models × datasets") are allowed; a lone `×` as a close
- * button is not. Each exception below carries its reason.
+ * button is not. Type follows the scale in app.css `@theme`: no Tailwind size utility
+ * (`text-xs`..`text-9xl`), no `uppercase`, `font-mono` only in an allow-listed code editor
+ * (ids, hashes and paths are written as `<code>`), and every page title goes through
+ * `ui/PageHeader.svelte`. Each exception below carries its reason.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -48,30 +51,126 @@ const CLOSE_GLYPH = /(^|>)\s*×\s*(<|$)|\S\s×\s*$|['"]×['"]/m;
 const PIXEL_TEXT = /\btext-\[[\d.]+(px|rem|em)\]/;
 const RAW_COLOUR =
   /(?<![\w-])(?:[a-z0-9-]+:)*(?:bg|text|border(?:-[trblxyse])?|ring|divide|outline|fill|stroke|from|to|via|accent|placeholder|decoration|shadow)-(?:zinc|slate|gray|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?![\w-])/;
+// The seven size tokens (text-caption..text-kpi) are the only sizes; Tailwind's own scale is not.
+const TW_SIZE = /\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/;
+// `font-mono` is for code editors only; an id, hash or path is a `<code>` element.
+const MONO_CLASS = /\bfont-mono\b/;
+// A `<code>` that wraps a sentence. A class list or a string literal of the word is not a class use.
+const CODE_PROSE = /<code[^>]*>[^<{]*\b[A-Za-z]{3,}\s+[A-Za-z]{3,}\s+[A-Za-z]{3,}/;
+// The `uppercase` utility in a class list. The transform names in the slot config
+// (`'uppercase'`, `uppercase: boolean`) are data, not a class.
+const UPPERCASE = /(?<=\s|class=["'`{])uppercase(?![\w-]|\s*\??:)/;
+// A page title is `PageHeader`'s h1; a workspace view keeps an `sr-only` one.
+const RAW_H1 = /<h1(?![^>]*\bsr-only\b)[^>]*class=/;
 
 /** file (relative to src) -> why it may break a rule. */
-const ALLOWED: Record<string, { rule: 'glyph' | 'colour'; why: string }> = {
-  'lib/keyboardDisplay.ts': {
-    rule: 'glyph',
-    why: 'keycap legends (arrows, shift, return, backspace) are text the keymap displays, not icons',
-  },
-  'lib/annotations/config/allowLists.ts': {
-    rule: 'colour',
-    why: 'the sub-box ring presets are the operator-facing profile contract (examples/annotation-profiles)',
-  },
-  'lib/annotations/servedRegionSlot.ts': {
-    rule: 'colour',
-    why: 'the served-slot default ring is the same contract as the ring presets',
-  },
-  'lib/components/CropCard.svelte': {
-    rule: 'colour',
-    why: 'the fallback ring when no slot is served is the same contract as the ring presets',
-  },
-};
+const ALLOWED: Record<string, { rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: string }> =
+  {
+    'lib/components/clusters/ClustersToolbar.svelte': {
+      rule: 'h1',
+      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
+    },
+    'lib/components/config/ConfigDocHeader.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11); the title shows a config name, which section 5.3 rule 4 replaces with the served label',
+    },
+    'lib/components/editor/EditorHeader.svelte': {
+      rule: 'h1',
+      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
+    },
+    'lib/components/review/ReviewHeader.svelte': {
+      rule: 'h1',
+      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
+    },
+    'lib/components/shell/ErrorPage.svelte': {
+      rule: 'h1',
+      why: 'a full-page error state, not a titled page; it has no PageHeader slots for an action row',
+    },
+    'lib/workspace/views/ClusterScope.svelte': {
+      rule: 'h1',
+      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
+    },
+    'routes/p/[project]/export/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/models/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/embedding-spaces/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/ingest-policy/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/models/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/models/new-endpoint/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/models/vlm/[name]/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/open-vocab/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/presets/[kind]/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/presets/[kind]/[name]/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/prompt-packs/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/p/[project]/settings/region-profiles/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/projects/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/projects/combine/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'routes/projects/combine/[job_id]/+page.svelte': {
+      rule: 'h1',
+      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
+    },
+    'lib/keyboardDisplay.ts': {
+      rule: 'glyph',
+      why: 'keycap legends (arrows, shift, return, backspace) are text the keymap displays, not icons',
+    },
+    'lib/annotations/config/allowLists.ts': {
+      rule: 'colour',
+      why: 'the sub-box ring presets are the operator-facing profile contract (examples/annotation-profiles)',
+    },
+    'lib/annotations/servedRegionSlot.ts': {
+      rule: 'colour',
+      why: 'the served-slot default ring is the same contract as the ring presets',
+    },
+    'lib/components/CropCard.svelte': {
+      rule: 'colour',
+      why: 'the fallback ring when no slot is served is the same contract as the ring presets',
+    },
+  };
 
 function offenders(
   test: (code: string) => boolean,
-  rule: 'glyph' | 'colour' | 'none',
+  rule: 'glyph' | 'colour' | 'mono' | 'h1' | 'none',
 ): string[] {
   return FILES.filter(({ rel, code }) => {
     const allowed = ALLOWED[path.sep === '/' ? rel : rel.replaceAll(path.sep, '/')];
@@ -125,6 +224,60 @@ describe('the patterns catch each spelling (negative controls)', () => {
     );
     expect(RAW_COLOUR.test('class="bg-black/60 text-white"')).toBe(false);
   });
+  it('Tailwind size utilities, but not the scale tokens', () => {
+    for (const c of [
+      'text-xs',
+      'text-sm',
+      'text-base',
+      'text-lg',
+      'text-xl',
+      'text-2xl',
+      'text-9xl',
+    ])
+      expect(TW_SIZE.test(`class="${c} p-1"`), c).toBe(true);
+    expect(TW_SIZE.test('class="md:text-sm"')).toBe(true);
+    for (const c of [
+      'text-caption',
+      'text-meta',
+      'text-control',
+      'text-body',
+      'text-title',
+      'text-h1',
+      'text-kpi',
+      'text-fg-1',
+      'text-center',
+    ])
+      expect(TW_SIZE.test(`class="${c}"`), c).toBe(false);
+  });
+  it('font-mono, however it sits in a class list', () => {
+    expect(MONO_CLASS.test('class="font-mono text-meta"')).toBe(true);
+    expect(MONO_CLASS.test('class="text-meta font-mono"')).toBe(true);
+    expect(MONO_CLASS.test('class="tabular-nums"')).toBe(false);
+  });
+  it('a <code> that wraps a sentence, but not an id or a path', () => {
+    expect(CODE_PROSE.test('<code>the whole sentence here</code>')).toBe(true);
+    expect(CODE_PROSE.test('<code class="x">items matching the filter</code>')).toBe(
+      true,
+    );
+    expect(CODE_PROSE.test('<code>{item.id}</code>')).toBe(false);
+    expect(CODE_PROSE.test('<code>/data/images/a.jpg</code>')).toBe(false);
+    expect(CODE_PROSE.test('<code>OP_CURATION_PROJECT</code>')).toBe(false);
+  });
+  it('the uppercase utility, but not the slot transform data', () => {
+    expect(UPPERCASE.test('class="uppercase tracking-wide"')).toBe(true);
+    expect(UPPERCASE.test('class="text-meta uppercase"')).toBe(true);
+    expect(UPPERCASE.test('class="text-meta uppercase text-fg-3"')).toBe(true);
+    expect(UPPERCASE.test("transform?: 'none' | 'uppercase' | 'lowercase'")).toBe(false);
+    expect(UPPERCASE.test('  uppercase: boolean;')).toBe(false);
+    expect(UPPERCASE.test("=== 'uppercase'")).toBe(false);
+    expect(UPPERCASE.test('class="normal-case"')).toBe(false);
+  });
+  it('a page h1 that bypasses PageHeader, but not an sr-only one', () => {
+    expect(RAW_H1.test('<h1 class="text-h1 font-semibold">Title</h1>')).toBe(true);
+    expect(RAW_H1.test('<h1 data-x="y" class="text-title">Title</h1>')).toBe(true);
+    expect(RAW_H1.test('<h1 class="sr-only">Gallery</h1>')).toBe(false);
+    expect(RAW_H1.test('<h1>Bare</h1>')).toBe(false);
+  });
   it('comments are not scanned, URLs are kept', () => {
     expect(stripComments('a // ✓ done\nb')).not.toContain('✓');
     expect(stripComments('<!-- ✓ --><p>x</p>')).toBe('<p>x</p>');
@@ -151,14 +304,41 @@ describe('product source', () => {
     expect(offenders((c) => RAW_COLOUR.test(c), 'colour')).toEqual([]);
   });
 
+  it('sizes text only with the seven scale tokens, never a Tailwind size utility', () => {
+    expect(offenders((c) => TW_SIZE.test(c), 'none')).toEqual([]);
+  });
+
+  it('keeps mono for allow-listed code editors; ids and paths are <code>', () => {
+    expect(offenders((c) => MONO_CLASS.test(c), 'mono')).toEqual([]);
+  });
+
+  it('never wraps a sentence in <code>', () => {
+    expect(offenders((c) => CODE_PROSE.test(c), 'none')).toEqual([]);
+  });
+
+  it('writes sentence case, never the uppercase utility', () => {
+    expect(offenders((c) => UPPERCASE.test(c), 'none')).toEqual([]);
+  });
+
+  it('gives every page title through PageHeader (a view keeps an sr-only h1)', () => {
+    expect(
+      offenders((c) => RAW_H1.test(c), 'h1').filter(
+        (f) => f !== path.join('lib', 'components', 'ui', 'PageHeader.svelte'),
+      ),
+    ).toEqual([]);
+  });
+
   it('keeps every exception to a file that still needs it', () => {
+    const TESTS = {
+      glyph: (c: string) => GLYPH_ICON.test(c) || CLOSE_GLYPH.test(c),
+      colour: (c: string) => RAW_COLOUR.test(c),
+      mono: (c: string) => MONO_CLASS.test(c),
+      h1: (c: string) => RAW_H1.test(c),
+    };
     for (const [file, { rule }] of Object.entries(ALLOWED)) {
       const hit = FILES.find((f) => f.rel.replaceAll(path.sep, '/') === file);
       expect(hit, `${file} no longer exists`).toBeDefined();
-      const broken =
-        rule === 'glyph'
-          ? GLYPH_ICON.test(hit!.code) || CLOSE_GLYPH.test(hit!.code)
-          : RAW_COLOUR.test(hit!.code);
+      const broken = TESTS[rule](hit!.code);
       expect(
         broken,
         `${file} no longer breaks the ${rule} rule: drop it from ALLOWED`,
