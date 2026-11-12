@@ -60,15 +60,27 @@ def sort_by_id(sort_id: str) -> ProjectSort:
     raise CursorError(msg)
 
 
+class UnknownStatusError(ValueError):
+    """A ``status`` filter value that is not one of :data:`FILTER_STATUSES`."""
+
+
 def listed_statuses(
     *, include_archived: bool, selectable: bool, status: Collection[str] | None
 ) -> tuple[str, ...]:
-    """The statuses a request can match: what the list shows, narrowed by the picker flag and filter."""
-    allowed = (*ALWAYS_LISTED, *(('archived',) if include_archived else ()))
+    """The statuses a request can match: what the list shows, narrowed by the picker flag and filter.
+
+    A ``status`` value outside :data:`FILTER_STATUSES` raises :class:`UnknownStatusError`; naming
+    ``archived`` asks for the archived projects, so it needs no ``include_archived`` beside it.
+    """
+    wanted = set(status or ())
+    if unknown := sorted(wanted - set(FILTER_STATUSES)):
+        msg = f'unknown status {unknown[0]!r}; one of {list(FILTER_STATUSES)}'
+        raise UnknownStatusError(msg)
+    allowed = (*ALWAYS_LISTED, *(('archived',) if include_archived or 'archived' in wanted else ()))
     if selectable:
         allowed = tuple(s for s in allowed if s in SELECTABLE)
-    if status:
-        allowed = tuple(s for s in allowed if s in set(status))
+    if wanted:
+        allowed = tuple(s for s in allowed if s in wanted)
     return allowed
 
 

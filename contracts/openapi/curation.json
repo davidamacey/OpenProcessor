@@ -7453,6 +7453,7 @@
               "name_conflict",
               "invalid_transition",
               "cursor_invalid",
+              "invalid_status",
               "image_counts_not_ready",
               "unknown_column",
               "export_outside_project",
@@ -43563,7 +43564,7 @@
             }
           },
           {
-            "description": "Only projects in one of these statuses (repeatable).",
+            "description": "Only projects in one of these statuses (repeatable); `archived` lists archived ones. An unknown value is `422 invalid_status`.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -43579,7 +43580,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only projects in one of these statuses (repeatable).",
+              "description": "Only projects in one of these statuses (repeatable); `archived` lists archived ones. An unknown value is `422 invalid_status`.",
               "title": "Status"
             }
           },

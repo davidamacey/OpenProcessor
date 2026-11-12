@@ -148,7 +148,10 @@ async def list_projects(
     ] = None,
     status: Annotated[
         list[str] | None,
-        Query(description='Only projects in one of these statuses (repeatable).'),
+        Query(
+            description='Only projects in one of these statuses (repeatable); `archived` lists archived ones. '
+            'An unknown value is `422 invalid_status`.'
+        ),
     ] = None,
     sort: Annotated[
         str, Query(description='One of the served `sort_options` ids.')
@@ -158,12 +161,16 @@ async def list_projects(
     registry = get_project_registry()
     await registry.ensure_fresh()
     try:
+        statuses = projects_listing.listed_statuses(
+            include_archived=include_archived, selectable=selectable, status=status
+        )
+    except projects_listing.UnknownStatusError as exc:
+        raise api_error(422, 'invalid_status', str(exc)) from exc
+    try:
         order = projects_listing.sort_by_id(sort)
         records, next_cursor, total = await projects_listing.fetch_page(
             session,
-            statuses=projects_listing.listed_statuses(
-                include_archived=include_archived, selectable=selectable, status=status
-            ),
+            statuses=statuses,
             q=q,
             sort=order,
             cursor=cursor,

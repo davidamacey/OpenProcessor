@@ -190,7 +190,7 @@ projects, plus `archived` ones with `include_archived=true`.
 
 | Method | Path | Body or query | Response | Errors |
 |---|---|---|---|---|
-| GET | `/curation/projects` | `include_archived` | `ProjectsResponse` (`default_slug`, `projects[]` of `ProjectSummary`, `capacity`, `limits`, `labels`) | |
+| GET | `/curation/projects` | `include_archived`, `q`, `selectable`, `status` (repeatable; `archived` lists the archived ones), `sort`, `cursor`, `limit` | `ProjectsResponse` (`default_slug`, `projects[]` of `ProjectSummary`, `total`, `next_cursor`, `sort_options`, `status_options`, `capacity`, `limits`, `labels`) | `422 invalid_status`, `400 cursor_invalid` |
 | POST | `/curation/projects` | `CreateProjectRequest` (`slug`, `display_name`, `description`, `clone_settings_from`, `clone_axes`) | `202 ProjectLifecycleResponse` (the `building` record plus the create `job_id`; poll `GET /curation/jobs/{job_id}`) | `422 slug_invalid`, `409 slug_taken`, `409 slug_retired`, `409 shard_budget_exceeded`, `409 clone_source_not_ready`, `422 validation_failed` |
 | GET | `/curation/projects/{project}` | | `ProjectRecordResponse` (summary plus `resources`, `error`) | `404 project_not_found` |
 | PATCH | `/curation/projects/{project}` | `PatchProjectRequest` (`display_name`, `description`, `expected_revision`). The slug is immutable | `ProjectLifecycleResponse` | `409 revision_conflict` |
