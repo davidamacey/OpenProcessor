@@ -109,6 +109,7 @@
         loadingMore={gallery.loadingMore}
         onselect={(id, e) => gallery.select(id, e)}
         onopen={open}
+        onlightbox={(card) => void ws.openLightbox(card.image_id, card.file_name)}
         onloadmore={() => void gallery.loadMore()}
       />
       <p class="mt-2 font-mono text-xs text-fg-3" data-testid="gallery-footer">

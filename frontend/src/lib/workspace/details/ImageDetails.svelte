@@ -36,7 +36,7 @@
     {@const image = detail.image}
     {@const counts = detail.counts}
     <section class="space-y-3 text-sm" data-testid="image-details">
-      <h2 class="truncate text-xs font-semibold tracking-wide text-fg-2 uppercase">
+      <h2 class="truncate text-title font-semibold text-fg-1" title={image.file_name}>
         {image.file_name}
       </h2>
       <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
@@ -80,6 +80,13 @@
           class="btn btn-primary"
           data-testid="open-image"
           href={resolve(editorHref(image.image_id, page.url.search))}>Open image</a
+        >
+        <button
+          type="button"
+          class="btn"
+          data-testid="lightbox-image"
+          onclick={() => void ws.openLightbox(image.image_id, image.file_name)}
+          >View full size</button
         >
         <button
           type="button"

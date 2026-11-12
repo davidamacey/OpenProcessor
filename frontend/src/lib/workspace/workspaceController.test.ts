@@ -386,4 +386,47 @@ describe('WorkspaceController', () => {
     await c.openEditor();
     expect(nav.goto).not.toHaveBeenCalled();
   });
+
+  describe('lightbox', () => {
+    it('opens on the focused image and closes', async () => {
+      visit('?view=gallery&focus=image%3Aimg-2');
+      const c = make();
+      await c.openLightbox();
+      expect(c.lightbox?.imageId).toBe('img-2');
+      c.closeLightbox();
+      expect(c.lightbox).toBeNull();
+    });
+
+    it("opens on a focused item's image", async () => {
+      nav.getCrop.mockResolvedValue({ image_id: 'img-9' });
+      visit('?view=detections&focus=item%3Acrop-1');
+      const c = make();
+      await c.openLightbox();
+      expect(c.lightbox?.imageId).toBe('img-9');
+    });
+
+    it('steps through the images the gallery has loaded and stops at the ends', async () => {
+      visit('?view=gallery');
+      const c = make();
+      c.registerPage({
+        kind: 'images',
+        ids: () => ['a', 'b', 'c'],
+        total: () => 3,
+        apply: () => {},
+      });
+      await c.openLightbox('b');
+      expect(c.lightboxNeighbour(-1)).toBe('a');
+      c.stepLightbox(1);
+      expect(c.lightbox?.imageId).toBe('c');
+      expect(c.lightboxNeighbour(1)).toBeNull();
+      c.stepLightbox(1);
+      expect(c.lightbox?.imageId).toBe('c');
+    });
+
+    it('has no neighbours where the view lists no images', async () => {
+      const c = make();
+      await c.openLightbox('x');
+      expect(c.lightboxNeighbour(1)).toBeNull();
+    });
+  });
 });

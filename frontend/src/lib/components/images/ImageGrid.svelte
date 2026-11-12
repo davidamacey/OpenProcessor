@@ -16,6 +16,7 @@
     loadingMore: boolean;
     onselect: (imageId: string, e: MouseEvent) => void;
     onopen: (imageId: string) => void;
+    onlightbox?: (card: ImageCardWire) => void;
     onloadmore: () => void;
   }
 
@@ -28,6 +29,7 @@
     loadingMore,
     onselect,
     onopen,
+    onlightbox,
     onloadmore,
   }: Props = $props();
 </script>
@@ -46,6 +48,7 @@
       focused={focusedId === card.image_id}
       onclick={(e) => onselect(card.image_id, e)}
       onopen={() => onopen(card.image_id)}
+      onlightbox={onlightbox ? () => onlightbox(card) : undefined}
     />
   {/each}
 </ul>

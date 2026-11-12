@@ -217,13 +217,46 @@ export class WorkspaceController {
     this.#write({ scope }, false);
   }
 
+  /** The focused image's id, or the focused item's image. */
+  async #focusedImageId(): Promise<string | null> {
+    const focus = this.#url.focus;
+    if (focus?.kind !== 'image' && focus?.kind !== 'item') return null;
+    return focus.kind === 'image'
+      ? focus.id
+      : ((await getCrop(focus.id)).image_id ?? null);
+  }
+
   /** Opens the focused image, or the focused item's image, in the editor with this query. */
   async openEditor(): Promise<void> {
-    const focus = this.#url.focus;
-    if (focus?.kind !== 'image' && focus?.kind !== 'item') return;
-    const imageId =
-      focus.kind === 'image' ? focus.id : (await getCrop(focus.id)).image_id;
+    const imageId = await this.#focusedImageId();
     if (imageId) void goto(resolve(editorHref(imageId, page.url.search)));
+  }
+
+  /** The image the lightbox shows, and the name it is labelled with; null when closed. */
+  lightbox = $state<{ imageId: string; label: string } | null>(null);
+
+  /** Opens the lightbox on `imageId`, else on the focused image (or the focused item's image). */
+  async openLightbox(imageId?: string, label = 'Image'): Promise<void> {
+    const id = imageId ?? (await this.#focusedImageId());
+    if (id) this.lightbox = { imageId: id, label };
+  }
+
+  closeLightbox(): void {
+    this.lightbox = null;
+  }
+
+  /** The neighbouring image in the view's loaded page, or null at the ends or in a view that
+   *  does not list images. */
+  lightboxNeighbour(step: -1 | 1): string | null {
+    if (!this.lightbox || this.#page?.kind !== 'images') return null;
+    const ids = this.#page.ids();
+    const at = ids.indexOf(this.lightbox.imageId);
+    return at < 0 ? null : (ids[at + step] ?? null);
+  }
+
+  stepLightbox(step: -1 | 1): void {
+    const next = this.lightboxNeighbour(step);
+    if (next) this.lightbox = { imageId: next, label: 'Image' };
   }
 
   /** Opens a cluster in place; the filter and the view stay. */

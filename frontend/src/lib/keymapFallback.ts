@@ -212,6 +212,7 @@ const SEEDS: ActionSeed[] = [
   ['workspace.scope_next', 'workspace', null, 'Next cluster', ['.']],
   ['workspace.toggle_details', 'workspace', null, 'Show or hide details', ['\\']],
   ['workspace.open_editor', 'workspace', null, 'Open in the image editor', ['shift+o']],
+  ['workspace.lightbox', 'workspace', null, 'Open the image full size', ['shift+space']],
   ['workspace.class_picker', 'workspace.items', null, 'Search all classes…', ['/']],
   [
     'workspace.escape',

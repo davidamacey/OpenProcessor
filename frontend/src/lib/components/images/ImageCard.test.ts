@@ -147,4 +147,13 @@ describe('ImageCard', () => {
     expect(box.getAttribute('title')).toBe('dog');
     expect(box.textContent?.trim()).toBe('');
   });
+
+  it('has a full-size control only when the grid gives one, and it does not select the card', () => {
+    const onlightbox = vi.fn();
+    const onclick = vi.fn();
+    const el = render({ card: imageCard(), onlightbox, onclick });
+    (el.querySelector('[data-testid="image-card-lightbox"]') as HTMLElement).click();
+    expect(onlightbox).toHaveBeenCalledOnce();
+    expect(onclick).not.toHaveBeenCalled();
+  });
 });

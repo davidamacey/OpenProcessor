@@ -366,6 +366,17 @@
       "modifiable": true
     },
     {
+      "context": "workspace",
+      "default": [
+        "shift+space"
+      ],
+      "description": "Open the focused image or the focused item's image in the lightbox.",
+      "group": null,
+      "id": "workspace.lightbox",
+      "label": "Open the image full size",
+      "modifiable": true
+    },
+    {
       "context": "workspace.items",
       "default": [
         "/"

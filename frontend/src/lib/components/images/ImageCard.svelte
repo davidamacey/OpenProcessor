@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$components/ui/Button.svelte';
   import Icon from '$components/ui/Icon.svelte';
   /**
    * One whole image: the served thumbnail with the served boxes over it, the served counts as
@@ -17,9 +18,11 @@
     focused: boolean;
     onclick: (e: MouseEvent) => void;
     onopen: () => void;
+    /** Shows the image full size; absent, the card has no such control. */
+    onlightbox?: () => void;
   }
 
-  let { card, selected, focused, onclick, onopen }: Props = $props();
+  let { card, selected, focused, onclick, onopen, onlightbox }: Props = $props();
 
   // A thumbnail that fails is asked for once more after a second; a second failure asks the
   // server why and shows its answer.
@@ -56,7 +59,7 @@
   data-selected={selected}
   aria-current={focused ? 'true' : undefined}
 >
-  <div class="relative">
+  <div class="group relative">
     <button
       type="button"
       class="relative flex w-full items-center justify-center overflow-hidden rounded-t bg-surface-0"
@@ -90,6 +93,17 @@
         </span>
       </span>
     </div>
+    {#if onlightbox}
+      <Button
+        variant="ghost"
+        size="sm"
+        icon="maximize"
+        class="absolute right-1 bottom-1 bg-surface-0/80 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+        aria-label="View {card.file_name} full size"
+        data-testid="image-card-lightbox"
+        onclick={onlightbox}
+      />
+    {/if}
     {#if missing}
       <SourceMissingBadge {missing} compact interactive />
     {/if}

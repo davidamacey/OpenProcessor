@@ -7,6 +7,7 @@
    */
   import { onDestroy } from 'svelte';
   import DetailsPanel from '$components/workspace/DetailsPanel.svelte';
+  import Lightbox from '$components/ui/Lightbox.svelte';
   import FilterBar from '$components/workspace/FilterBar.svelte';
   import ViewBar from '$components/workspace/ViewBar.svelte';
   import WorkspaceRail from '$components/workspace/WorkspaceRail.svelte';
@@ -79,6 +80,15 @@
         'workspace',
       ),
       keyboardStore.registerAction(
+        'workspace.lightbox',
+        () => {
+          // A card under the keyboard focus wins over the details focus.
+          const card = document.activeElement?.closest<HTMLElement>('[data-image-id]');
+          return void ws.openLightbox(card?.dataset.imageId);
+        },
+        'workspace',
+      ),
+      keyboardStore.registerAction(
         'workspace.class_picker',
         () => {
           if (ws.selection.kind !== 'none') ws.pickerOpen = true;
@@ -121,4 +131,13 @@
     </div>
     <DetailsPanel {ws} />
   </div>
+  {#if ws.lightbox}
+    <Lightbox
+      imageId={ws.lightbox.imageId}
+      label={ws.lightbox.label}
+      onclose={() => ws.closeLightbox()}
+      onprev={ws.lightboxNeighbour(-1) ? () => ws.stepLightbox(-1) : undefined}
+      onnext={ws.lightboxNeighbour(1) ? () => ws.stepLightbox(1) : undefined}
+    />
+  {/if}
 </div>
