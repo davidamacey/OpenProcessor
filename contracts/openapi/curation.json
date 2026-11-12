@@ -28879,6 +28879,21 @@
             "title": "Cluster Uid",
             "type": "string"
           },
+          "display_name": {
+            "description": "The one name a page shows for the cluster: its items' most common class, else the detector's most common class, else empty (as `ClusterCard.display_name`).",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "description": "Where `display_name` came from.",
+            "enum": [
+              "class",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "representative_box_ids": {
             "items": {
               "anyOf": [
@@ -28929,6 +28944,8 @@
           "size",
           "box_count",
           "validated_count",
+          "display_name",
+          "display_name_kind",
           "representative_crop_ids",
           "representative_box_ids",
           "representative_thumb_urls",

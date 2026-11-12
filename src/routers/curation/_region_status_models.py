@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from src.routers.curation._region_row_models import RegionRow
@@ -49,6 +51,13 @@ class RegionClusterCard(BaseModel):
     size: int = Field(description='Items with at least one box in the cluster.')
     box_count: int
     validated_count: int
+    display_name: str = Field(
+        description="The one name a page shows for the cluster: its items' most common class, "
+        "else the detector's most common class, else empty (as `ClusterCard.display_name`)."
+    )
+    display_name_kind: Literal['class', 'detector', 'none'] = Field(
+        description='Where `display_name` came from.'
+    )
     representative_crop_ids: list[str]
     representative_box_ids: list[str | None]
     representative_thumb_urls: list[str]

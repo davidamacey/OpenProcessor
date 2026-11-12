@@ -7,7 +7,7 @@ import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { SlotData, SlotKey, XYXY } from '$lib/annotations/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
-import type { Cluster } from '$lib/types';
+import type { Cluster, ClusterNameKind } from '$lib/types';
 import type { CursorPage } from '$lib/types_cursor';
 import type { ServedRegionProfile } from '$lib/types_health';
 
@@ -137,6 +137,8 @@ interface RawRegionCluster {
   size: number;
   box_count: number;
   validated_count: number;
+  display_name: string;
+  display_name_kind: ClusterNameKind;
   representative_crop_ids: string[];
   representative_thumb_urls: string[];
 }
@@ -163,8 +165,8 @@ export async function getRegionClusters(
       box_count: c.box_count,
       validated_count: c.validated_count,
       dominant_class_name: null,
-      display_name: '',
-      display_name_kind: 'none',
+      display_name: c.display_name,
+      display_name_kind: c.display_name_kind,
       near_dup_group_count: 0,
       dominant_pct: null,
       is_unlabeled: true,
