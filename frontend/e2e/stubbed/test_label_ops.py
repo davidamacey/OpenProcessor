@@ -148,7 +148,7 @@ def _open_history(page, app_url):
     expect(page.get_by_test_id('label-op-row').first).to_contain_text('UTC · by Human')
     expect(page.get_by_test_id('label-ops-end')).to_be_visible()
     if page.viewport_size['width'] >= 640:
-        expect(page.get_by_test_id('breadcrumb')).to_contain_text('quality')
+        expect(page.get_by_test_id('breadcrumb')).to_contain_text('Quality')
 
 
 def test_history_list_dry_run_then_confirm(stub, page, app_url):
