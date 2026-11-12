@@ -51,6 +51,7 @@ const LIST = {
   empty_reason: null,
   empty_message: null,
   pending_partition: null,
+  hidden: { test_holdout: 25, excluded: 4 },
 };
 
 function stubFetch(body: unknown = LIST) {
@@ -176,5 +177,13 @@ describe('getClusters empty state', () => {
       clusters: 9,
       items: 120,
     });
+  });
+});
+
+describe('getClusters hidden counts', () => {
+  it('returns the served counts of what the filter leaves out', async () => {
+    stubFetch();
+    const res = await getClusters();
+    expect(res.hidden).toEqual({ test_holdout: 25, excluded: 4 });
   });
 });

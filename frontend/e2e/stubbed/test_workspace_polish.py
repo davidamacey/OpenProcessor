@@ -1,13 +1,14 @@
 """Workspace polish: equal gallery card heights, the hidden-count note in Clusters, select-all in every view.
 
 - Gallery cards in one row have the same height, with or without the "+ more boxes" chip
+- The Clusters view shows "N matching" with the hidden note from the served total and hidden counts
 - Ctrl+A selects the loaded page in Gallery and Detections; a second Ctrl+A on a full page asks for all
   matching with the served total
 """
 
 from __future__ import annotations
 
-from fixtures.contract import fill, image_card, image_page
+from fixtures.contract import cluster_card, cluster_list, fill, image_card, image_page
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
@@ -86,3 +87,22 @@ def test_select_all_in_gallery_selects_the_loaded_images(stub, page, app_url):
     expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press('Control+a')
     expect(page.get_by_test_id('bulk-count')).to_have_text('20 selected', timeout=ACTION_TIMEOUT_MS)
+
+
+def test_clusters_show_the_matching_note_with_served_hidden_counts(stub, page, app_url):
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
+    stub.on(
+        'GET',
+        r'/clusters(\?|$)',
+        cluster_list(
+            cluster_card('cl-1', size=3),
+            cluster_card('cl-2', size=2),
+            hidden={'test_holdout': 25, 'excluded': 4},
+        ),
+    )
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    note = page.get_by_test_id('matching-note')
+    expect(note).to_contain_text('2', timeout=ACTION_TIMEOUT_MS)
+    expect(note).to_contain_text('25 test holdout and 4 ignored not listed')
+    shot(page, 'clusters-matching-note', widths=(1600, 430))

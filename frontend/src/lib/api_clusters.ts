@@ -5,7 +5,7 @@ import { getCrops } from '$lib/api_cropRead';
 import type { CursorPage, SortOption } from '$lib/types_cursor';
 import { apiFetch, qs, scoped } from '$lib/api';
 import { apiErrorText } from '$lib/api_errors';
-import type { Cluster, ClusterFilter, Crop, CropFilter } from '$lib/types';
+import type { Cluster, ClusterFilter, Crop, CropFilter, HiddenCounts } from '$lib/types';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   ClusterActivationAccepted,
@@ -73,6 +73,7 @@ type RawClustersResp = {
   empty_reason?: ClusterEmptyReason | null;
   empty_message?: string | null;
   pending_partition?: PendingPartition | null;
+  hidden?: HiddenCounts | null;
 };
 
 function _rawClusterToCluster(c: RawCluster): Cluster {
@@ -119,6 +120,8 @@ export interface ClustersResponse extends CursorPage<Cluster> {
   empty_reason: ClusterEmptyReason | null;
   empty_message: string | null;
   pending_partition: PendingPartition | null;
+  /** What the filter leaves out (the frozen holdout, ignored items), counted by the server. */
+  hidden: HiddenCounts | null;
 }
 
 function _rawToClustersResponse(
@@ -138,6 +141,7 @@ function _rawToClustersResponse(
     empty_reason: raw.empty_reason ?? null,
     empty_message: raw.empty_message ?? null,
     pending_partition: raw.pending_partition ?? null,
+    hidden: raw.hidden ?? null,
     representatives_offset:
       raw.representatives_offset ?? filter.representatives_offset ?? 0,
     representatives_limit:

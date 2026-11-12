@@ -58,6 +58,14 @@
     gridItemFilter,
   });
   let detailSearchCrop = $state<Crop | null>(null);
+  // The filter row's "N matching · M hidden" note: the served cluster count and hidden counts.
+  $effect(() => {
+    if (list.clusterPager.loading || list.clusterPager.error) return;
+    ws.matching = { total: list.total, hidden: list.hidden };
+    return () => {
+      ws.matching = null;
+    };
+  });
   // Select-all applies where cards are items: the search results. The cluster cards are opened,
   // not selected, so the key keeps its browser meaning there.
   $effect(() => {

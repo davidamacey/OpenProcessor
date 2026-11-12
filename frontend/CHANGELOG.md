@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `GET /clusters` serves `hidden` (frozen-holdout and ignored items its filter leaves out); the Clusters view shows the same "N matching" note as the other views, with the served total and hidden counts.
 - Ctrl/Cmd+A is one Workspace action (`workspace.select_all`) in every view that selects (Gallery, Detections, Table, an open cluster, search results): the first press selects the loaded page, a second on a full page offers "Select all N matching" with the served total. `cluster.select_all` and `clusters_search.select_all` are gone.
 - Review's "Rank · clarity" row shows the served words ("2nd · sharp") instead of "#2 · b4.50".
 - Review and the image editor share one filmstrip component (thumbnails around the open item with its served position); the two duplicates are gone.

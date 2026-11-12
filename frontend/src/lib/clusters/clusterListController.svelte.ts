@@ -17,7 +17,7 @@ import {
 import { filterPersistKey, parsePersistedFilter } from '$lib/clusters/persistedFilter';
 import type { SlotInventory } from '$lib/clusters/slotInventory.svelte';
 import { createPager } from '$lib/pager.svelte';
-import type { Cluster, ClusterFilter } from '$lib/types';
+import type { Cluster, ClusterFilter, HiddenCounts } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import type {
   ClusterFlag,
@@ -53,6 +53,7 @@ export function createClusterListController(deps: ClusterListDeps) {
   let emptyReason = $state<ClusterEmptyReason | null>(null);
   let emptyMessage = $state<string | null>(null);
   let total = $state(0);
+  let hidden = $state<HiddenCounts | null>(null);
   // Detector classes seen on served cards, in served order. Kept across
   // filters so a picker does not lose the values a filter just hid.
   let detectorClassOptions = $state<string[]>([]);
@@ -78,6 +79,7 @@ export function createClusterListController(deps: ClusterListDeps) {
       emptyReason = res.empty_reason;
       emptyMessage = res.empty_message;
       total = res.total;
+      hidden = res.hidden;
       rememberDetectorClasses(res.items);
       return res;
     },
@@ -264,6 +266,9 @@ export function createClusterListController(deps: ClusterListDeps) {
     },
     get total() {
       return total;
+    },
+    get hidden() {
+      return hidden;
     },
     get detectorClassOptions() {
       return detectorClassOptions;

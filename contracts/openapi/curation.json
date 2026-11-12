@@ -5817,6 +5817,10 @@
             "title": "Flag Vocabulary",
             "type": "array"
           },
+          "hidden": {
+            "$ref": "#/components/schemas/HiddenCounts",
+            "description": "Items matching the filter that the cards leave out (holdout, ignored)."
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ClusterCard"
@@ -5881,6 +5885,7 @@
           "flag_vocabulary",
           "truncated",
           "join_truncated",
+          "hidden",
           "empty_reason",
           "empty_message",
           "pending_partition"

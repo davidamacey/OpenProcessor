@@ -28,6 +28,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- `GET /clusters` serves `hidden` (frozen-holdout and ignored items its filter leaves out); the Clusters view shows the same "N matching" note as the other views, with the served total and hidden counts.
 - Ctrl/Cmd+A is one Workspace action (`workspace.select_all`) in every view that selects (Gallery, Detections, Table, an open cluster, search results): the first press selects the loaded page, a second on a full page offers "Select all N matching" with the served total. `cluster.select_all` and `clusters_search.select_all` are gone.
 - Items serve `clarity_label` (soft, clear, sharp) and `rank_label` (largest, 2nd, …), thresholds in `src/domain/item_labels.py`; the card chip shows them instead of "b0.14" (G-20).
 - `POST /classes` refuses an invalid name with 422 `invalid_class_name` and a `suggested_name` the caller can create instead. `POST /selection/summary` counts a human-moved box or a human delete as `locked`, like the other locks a bulk write skips.
