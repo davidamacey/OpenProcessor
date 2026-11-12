@@ -190,7 +190,11 @@ def _stub_common(stub) -> None:
     stub.on('GET', r'/train/profiles(\?|$)', {'profiles': []})
     stub.on('GET', r'/train/presets(\?|$)', {'class_subset_presets': []})
     stub.on('GET', r'/train/gpus(\?|$)', {'options': [], 'allowed_ids': [], 'unrestricted': True})
-    stub.on('GET', r'/training_cohorts(\?|$)', {'cohorts': []})
+    stub.on(
+        'GET',
+        r'/training_cohorts/summary(\?|$)',
+        {'cohorts': [], 'rows': []},
+    )
     stub.on(
         'GET',
         r'/bakeoff/profiles(\?|$)',

@@ -1,13 +1,14 @@
 """The Export class table sorts on the server (`GET /stats/classes?sort=`) and the Train
-cohorts show the counts `GET /training_cohorts` serves, with no per-cohort query from the page.
+cohorts are one `GET /training_cohorts/summary` matrix, with no per-class or per-cohort query.
 Stubbed screenshots at 1600 and 430 px."""
 
 from __future__ import annotations
 
 from urllib.parse import parse_qs, urlparse
 
+from fixtures.contract import fill
 from harness.constants import ACTION_TIMEOUT_MS
-from harness.screens import SCREENS
+from harness.screens import SCREENS, save_screens
 from playwright.sync_api import expect
 from test_train_gpus import CLASSES as TRAIN_CLASSES, register_train_mount
 
@@ -98,7 +99,7 @@ def test_export_header_click_asks_the_server_to_sort(stub, page, app_url):
     assert sorts[0] == 'trainable_gap'
     assert first_class(page) == 'fiat'
     page.get_by_role('columnheader', name='Class').click()
-    expect(page.locator('th[aria-sort="ascending"]')).to_have_text('Class ▲')
+    expect(page.locator('th[aria-sort="ascending"]')).to_have_text('Class')
     assert sorts[-1] == 'class_name'
     assert first_class(page) == 'audi'
     page.get_by_role('columnheader', name='Class').click()
@@ -119,42 +120,74 @@ def test_export_screens(stub, page, app_url):
         page.screenshot(path=str(out / f'export-table-{width}.png'), full_page=True)
 
 
-def cohorts(request, _match):
-    class_id = int(parse_qs(urlparse(request.url).query)['class_id'][0])
-    rows = [
-        ('validated', 'Validated', 'crop', 120 * class_id),
-        ('needs_labeling', 'Needs labeling', 'crop', 7 * class_id),
-        ('low_confidence', 'Low confidence', 'crop', 3 * class_id),
-        ('model_disagreements', 'Model disagreements', 'crop', 0),
-    ]
-    return {
-        'cohorts': [
-            {
-                'id': cid,
-                'label': label,
-                'description': f'{label} rows',
-                'cutoffs': {},
-                'endpoint': '/crops',
-                'params': {'class_id': class_id},
-                'row_kind': kind,
-                'count': count,
-            }
-            for cid, label, kind, count in rows
+def _summary():
+    cohorts = [
+        fill(
+            'CohortColumn',
+            id=cid,
+            label=label,
+            description=f'{label} rows',
+            endpoint='/crops',
+            params={},
+            row_kind='crop',
+            total=total,
+        )
+        for cid, label, total in [
+            ('validated', 'Validated', 120),
+            ('needs_labeling', 'Needs labeling', 7),
+            ('detector_proposals', 'Detector proposals not decided', 5),
         ]
-    }
+    ]
+    rows = [
+        fill(
+            'CohortRow',
+            class_id=1,
+            class_name='ducati',
+            kind='class',
+            counts={'validated': 120, 'needs_labeling': 7, 'detector_proposals': 2},
+        ),
+        fill(
+            'CohortRow',
+            class_id=2,
+            class_name='unused',
+            kind='class',
+            counts={'validated': 0, 'needs_labeling': 0, 'detector_proposals': 0},
+        ),
+        fill(
+            'CohortRow',
+            class_id=None,
+            class_name='tram',
+            kind='detector',
+            counts={'validated': 0, 'needs_labeling': 0, 'detector_proposals': 3},
+        ),
+    ]
+    return fill('TrainingCohortSummary', cohorts=cohorts, rows=rows)
 
 
-def test_train_cohorts_show_served_counts(stub, page, app_url):
+def test_train_cohorts_are_one_served_matrix(stub, page, app_url):
     register_train_mount(stub)
-    stub.on('GET', r'/training_cohorts(\?|$)', cohorts)
+    reads = []
+
+    def summary(_request, _match):
+        reads.append(1)
+        return _summary()
+
+    stub.on('GET', r'/training_cohorts/summary(\?|$)', summary)
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 24, 'crops': []})
     assert TRAIN_CLASSES[0]['class_id'] == 1
-    out = SCREENS / 'workflow_g28'
-    out.mkdir(parents=True, exist_ok=True)
     for width in (1600, 430):
         page.set_viewport_size({'width': width, 'height': 1000})
         page.goto(f'{app_url}/p/default/train')
-        page.get_by_role('heading', name='ducati').scroll_into_view_if_needed()
-        chip = page.locator('button[title="Validated rows"]').first
-        expect(chip).to_contain_text('120', timeout=ACTION_TIMEOUT_MS)
-        page.screenshot(path=str(out / f'train-cohorts-{width}.png'), full_page=True)
-    # An unhandled /crops or /regions request would have failed the stub's fail-closed guard.
+        table = page.get_by_test_id('training-cohorts')
+        expect(table.get_by_role('button', name='Preview 120 Validated for ducati')).to_be_visible(
+            timeout=ACTION_TIMEOUT_MS
+        )
+        # Empty classes are hidden by default; the detector-only label is a row of its own.
+        expect(table.get_by_role('cell', name='unused')).to_have_count(0)
+        expect(table.get_by_role('cell', name='tram')).to_be_visible()
+        table.scroll_into_view_if_needed()
+    save_screens(page, 'workflow_ux-e', 'train-cohorts', desktop=1600)
+    assert len(reads) == 2
+    page.get_by_role('button', name='Preview 120 Validated for ducati').click()
+    expect(page.get_by_test_id('cohort-preview')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    save_screens(page, 'workflow_ux-e', 'train-cohort-drawer', desktop=1600)

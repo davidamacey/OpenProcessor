@@ -1,7 +1,7 @@
 <script lang="ts">
   /** The training form's inline preflight report. */
   import { checkSeverityClass } from '$lib/train/trainDisplay';
-  import type { PreflightReport } from '$lib/types_train';
+  import type { PreflightCheck, PreflightReport } from '$lib/types_train';
 
   interface Props {
     preflight: PreflightReport | null;
@@ -9,6 +9,10 @@
   }
 
   let { preflight, preflighting }: Props = $props();
+
+  // The OK rows are one disclosure: a report of 17 passes buries the one warning.
+  const attention = $derived(preflight?.checks.filter((c) => c.severity !== 'ok') ?? []);
+  const passed = $derived(preflight?.checks.filter((c) => c.severity === 'ok') ?? []);
 </script>
 
 <!-- Preflight panel -->
@@ -29,33 +33,51 @@
     {/if}
   </header>
   {#if preflight}
-    <ul class="space-y-1.5">
-      {#each preflight.checks as c (c.name)}
-        <li
-          class="flex items-start gap-2 rounded border px-2 py-1.5 text-xs {checkSeverityClass(
-            c.severity,
-          )}"
-        >
-          <span class="font-mono text-caption uppercase tracking-wide opacity-70">
-            {c.severity}
-          </span>
-          <span class="font-mono text-caption text-fg-2">{c.name}</span>
-          <span class="grow">
-            {c.message}
-            {#if c.detail && Object.keys(c.detail).length > 0}
-              <details class="mt-1">
-                <summary class="cursor-pointer text-caption text-fg-3">detail</summary>
-                <pre
-                  class="mt-1 whitespace-pre-wrap break-all font-mono text-caption text-fg-2">{JSON.stringify(
-                    c.detail,
-                    null,
-                    2,
-                  )}</pre>
-              </details>
-            {/if}
-          </span>
-        </li>
-      {/each}
-    </ul>
+    {#if attention.length > 0}
+      <ul class="space-y-1.5" data-testid="preflight-open-rows">
+        {#each attention as c (c.name)}
+          {@render row(c)}
+        {/each}
+      </ul>
+    {/if}
+    {#if passed.length > 0}
+      <details class="mt-2" data-testid="preflight-ok-rows">
+        <summary class="cursor-pointer text-caption text-fg-3">
+          {passed.length} check{passed.length === 1 ? '' : 's'} passed
+        </summary>
+        <ul class="mt-1.5 space-y-1.5">
+          {#each passed as c (c.name)}
+            {@render row(c)}
+          {/each}
+        </ul>
+      </details>
+    {/if}
   {/if}
 </section>
+
+{#snippet row(c: PreflightCheck)}
+  <li
+    class="flex items-start gap-2 rounded border px-2 py-1.5 text-xs {checkSeverityClass(
+      c.severity,
+    )}"
+  >
+    <span class="font-mono text-caption uppercase tracking-wide opacity-70">
+      {c.severity}
+    </span>
+    <span class="font-mono text-caption text-fg-2">{c.name}</span>
+    <span class="grow">
+      {c.message}
+      {#if c.detail && Object.keys(c.detail).length > 0}
+        <details class="mt-1">
+          <summary class="cursor-pointer text-caption text-fg-3">detail</summary>
+          <pre
+            class="mt-1 font-mono text-caption break-all whitespace-pre-wrap text-fg-2">{JSON.stringify(
+              c.detail,
+              null,
+              2,
+            )}</pre>
+        </details>
+      {/if}
+    </span>
+  </li>
+{/snippet}

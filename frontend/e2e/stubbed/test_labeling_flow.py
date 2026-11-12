@@ -151,7 +151,11 @@ def register_base(stub, *, fail_put_label: bool = False) -> None:
     stub.on('GET', r'/train/profiles(\?|$)', {'profiles': []})
     stub.on('GET', r'/train/presets(\?|$)', {'class_subset_presets': []})
     stub.on('GET', r'/train/gpus(\?|$)', {'options': [], 'allowed_ids': [], 'unrestricted': True})
-    stub.on('GET', r'/training_cohorts(\?|$)', {'cohorts': []})
+    stub.on(
+        'GET',
+        r'/training_cohorts/summary(\?|$)',
+        {'cohorts': [], 'rows': []},
+    )
     stub.on(
         'GET',
         r'/bakeoff/profiles(\?|$)',

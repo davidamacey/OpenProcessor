@@ -23,33 +23,43 @@ import type {
 } from '$lib/types_train';
 
 /**
- * `GET {API_PREFIX}/training_cohorts?class_id=` — the deployment's own training-cohort definitions,
- * already resolved for the requested class (params fold `class_id` into
- * every cohort). `row_kind: 'region'` cohorts only appear when the
- * backend has a region profile configured; `class_id` omitted returns
- * the generic (unscoped) definitions. `/train`'s `runCohortQuery`
- * dispatches `endpoint`/`params` verbatim — no client re-derivation.
+ * `GET /training_cohorts/summary` (`TrainingCohortSummary`): every class by every cohort, counted
+ * by the server in one request. `endpoint` and `params` are how to fetch a cohort's rows
+ * (class-agnostic; a class row adds its `class_id`).
  */
-export interface ServedTrainingCohort {
+export interface CohortColumn {
   id: string;
   label: string;
   description: string;
   cutoffs: Record<string, number>;
   /** Relative to API_PREFIX, e.g. `/crops`, `/regions/training_candidates`. */
   endpoint: string;
-  /** Already resolved for the requested class — no `{classId}` templates. */
   params: Record<string, unknown>;
   row_kind: 'crop' | 'region';
-  /** Rows the cohort holds for the requested class, counted by the server. */
-  count: number | null;
+  /** Items the cohort holds, over every class and none. */
+  total: number;
 }
 
-export function getTrainingCohorts(
-  classId?: number | null,
+export interface CohortRow {
+  /** Null for a detector label the registry lacks. */
+  class_id: number | null;
+  class_name: string;
+  /** `class`: an active registry class. `detector`: a label on items without a class. */
+  kind: 'class' | 'detector';
+  /** Items per cohort id; every cohort is present. */
+  counts: Record<string, number>;
+}
+
+export interface TrainingCohortSummary {
+  cohorts: CohortColumn[];
+  rows: CohortRow[];
+}
+
+export function getTrainingCohortSummary(
   signal?: AbortSignal,
-): Promise<{ cohorts: ServedTrainingCohort[] }> {
-  return apiFetch<{ cohorts: ServedTrainingCohort[] }>(
-    `${scoped()}/training_cohorts${qs({ class_id: classId ?? undefined })}`,
+): Promise<TrainingCohortSummary> {
+  return apiFetch<TrainingCohortSummary>(
+    `${scoped()}/training_cohorts/summary`,
     {},
     signal,
   );
