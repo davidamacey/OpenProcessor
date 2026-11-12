@@ -1,7 +1,4 @@
 frontend/src/lib/api_cropMap.ts::mapRawCrop	53	baseline at introduction; decompose to shrink
 frontend/src/lib/clusters/clusterDetailController.svelte.ts::createClusterDetailController	16	baseline at introduction; decompose to shrink
-frontend/src/lib/export/exportRunController.svelte.ts::runExport	24	baseline at introduction; decompose to shrink
-frontend/src/lib/ingest/ingestRunController.svelte.ts::applyResponse	20	baseline at introduction; decompose to shrink
-frontend/src/lib/ingest/ingestRunController.svelte.ts::runChunk	16	baseline at introduction; decompose to shrink
 frontend/src/lib/itemFilter/itemFilterState.svelte.ts::setValue	17	baseline at introduction; decompose to shrink
 frontend/src/lib/review/multiBoxRegionController.svelte.ts::seedFrom	17	baseline at introduction; decompose to shrink
