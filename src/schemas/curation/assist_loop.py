@@ -64,8 +64,8 @@ class LoopRecursion(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
-    max_depth: int = Field(default=3, ge=0, le=6)
-    branching: int = Field(default=4, ge=2, le=8)
+    max_depth: int = Field(default=3, ge=0, le=6, description='Levels a failing node is split.')
+    branching: int = Field(default=4, ge=2, le=8, description='Parts a failing node is split into.')
     min_node_size: int = Field(
         default=40, ge=2, description='Smaller failing nodes are left for review.'
     )
@@ -76,7 +76,7 @@ class LoopBudget(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
-    max_vlm_crops: int = Field(ge=1)
+    max_vlm_crops: int = Field(ge=1, description='Crops the VLM may label in one run.')
     max_vlm_requests: int | None = Field(
         default=None, ge=1, description='null = crops / images per call, plus the concurrency.'
     )
@@ -91,12 +91,20 @@ class LoopAudit(BaseModel):
     vlm: str | None = Field(
         default=None, description="The audit model's endpoint name; null = the audit is off."
     )
-    acknowledge_external: bool = False
-    rate: float = Field(default=0.01, gt=0, le=1)
-    min_per_batch: int = Field(default=30, ge=1)
+    acknowledge_external: bool = Field(
+        default=False, description='Confirms crops may go to an external audit endpoint.'
+    )
+    rate: float = Field(
+        default=0.01, gt=0, le=1, description='Share of propagated labels re-checked.'
+    )
+    min_per_batch: int = Field(default=30, ge=1, description='Fewest labels re-checked per batch.')
     max_crops: int = Field(default=500, ge=1, description="The audit's own crop budget.")
-    floor: float = Field(default=0.85, gt=0, lt=1)
-    on_fail: Literal['pause', 'rollback'] = 'pause'
+    floor: float = Field(
+        default=0.85, gt=0, lt=1, description='Agreement below which the audit fails.'
+    )
+    on_fail: Literal['pause', 'rollback'] = Field(
+        default='pause', description='What a failed audit does: pause the loop or roll back.'
+    )
 
 
 class AssistLoopRequest(BaseModel):

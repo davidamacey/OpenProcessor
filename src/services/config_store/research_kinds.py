@@ -59,6 +59,11 @@ def _validated(kind: str, body: dict[str, Any]) -> dict[str, Any]:
         raise InvalidConfigBodyError(exc.errors(include_url=False, include_context=False)) from exc
 
 
+def body_json_schema(kind: str) -> dict[str, Any]:
+    """The JSON Schema of a kind's body, generated from the model that validates it."""
+    return RESEARCH_BODY_MODELS[kind].model_json_schema()
+
+
 @asynccontextmanager
 async def _tx(kind: str) -> AsyncIterator[tuple[AsyncSession, uuid.UUID | None]]:
     """The transaction a kind lives in: deployment scope for a deployment-wide kind, else the bound

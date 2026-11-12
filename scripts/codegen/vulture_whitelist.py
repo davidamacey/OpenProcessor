@@ -107,6 +107,7 @@ _.StreamingResponse  # src/app/factory.py; named only in the string cast cast('S
 _.list_all  # src/routers/curation/research_configs.py; route handler (GET /{kind}) registered by decorator inside the config-kind factory
 _.put_one  # src/routers/curation/research_configs.py; route handler (PUT /{kind}/{name}) registered by decorator inside the factory
 _.delete_one  # src/routers/curation/research_configs.py; route handler (DELETE /{kind}/{name}) registered by decorator inside the factory
+_.get_schema  # src/routers/curation/research_configs.py; route handler (GET /{kind}/schema) registered by decorator inside the factory
 _.__getattr__  # type: ignore[attr-defined]  # src/clients/__init__.py; PEP 562 module attribute hook
 _.ServerLive  # docker/test/fake_triton.py; called by gRPC by Triton's method name
 _.ServerReady  # docker/test/fake_triton.py; called by gRPC by Triton's method name

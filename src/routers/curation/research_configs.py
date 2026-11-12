@@ -22,6 +22,7 @@ from src.schemas.curation.research_config import (
     ResearchConfigDoc,
     ResearchConfigList,
     ResearchConfigPut,
+    ResearchConfigSchema,
     ServingActivateRequest,
     ServingActive,
 )
@@ -34,6 +35,7 @@ from src.services.config_store.research_kinds import (
     activate_project_axis,
     activate_serving_profile,
     active_serving_profile,
+    body_json_schema,
     delete_document,
     get_active,
     get_document,
@@ -55,6 +57,18 @@ def _conflict(name: str, exc: RevisionConflictError) -> Any:
 def _invalid(exc: InvalidConfigBodyError) -> Any:
     reasons = [f'{".".join(str(part) for part in e["loc"])}: {e["msg"]}' for e in exc.errors]
     return api_error(422, 'validation_failed', str(exc), reasons=reasons)
+
+
+def _register_schema(kind: str, path: str, *, tag: str, group: Any) -> None:
+    """``GET /<path>/schema``: the body's JSON Schema, from the pydantic model that validates it
+    (https://docs.pydantic.dev/latest/concepts/json_schema/). Registered before the document routes:
+    the literal path must win over ``/{name}``."""
+
+    @group.get(
+        f'/{path}/schema', response_model=ResearchConfigSchema, tags=[tag], name=f'schema_{kind}'
+    )
+    async def get_schema() -> ResearchConfigSchema:
+        return ResearchConfigSchema(kind=kind, json_schema=body_json_schema(kind))
 
 
 def _register_documents(kind: str, path: str, *, tag: str, group: Any) -> None:
@@ -186,7 +200,7 @@ async def activate_serving_profile_route(name: str, body: ServingActivateRequest
     )
 
 
-# `/{kind}/active` is registered before `/{kind}/{name}`: the literal path must win.
+# `/{kind}/active` and `/{kind}/schema` are registered before `/{kind}/{name}`: the literal path must win.
 _register_project_activation(
     'cluster_profile', 'cluster_profiles', KIND_AXES['cluster_profile'], tag='Clustering'
 )
@@ -196,6 +210,10 @@ _register_project_activation(
 _register_project_activation(
     'near_dup_profile', 'near_dup_profiles', KIND_AXES['near_dup_profile'], tag='Near-duplicates'
 )
+_register_schema('serving_profile', 'serving_profiles', tag='Serving', group=global_router)
+_register_schema('cluster_profile', 'cluster_profiles', tag='Clustering', group=router)
+_register_schema('assist_loop_preset', 'assist_loop_presets', tag='Auto-label', group=router)
+_register_schema('near_dup_profile', 'near_dup_profiles', tag='Near-duplicates', group=router)
 _register_documents('serving_profile', 'serving_profiles', tag='Serving', group=global_router)
 _register_documents('cluster_profile', 'cluster_profiles', tag='Clustering', group=router)
 _register_documents('assist_loop_preset', 'assist_loop_presets', tag='Auto-label', group=router)

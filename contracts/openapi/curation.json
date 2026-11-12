@@ -19750,11 +19750,13 @@
         "properties": {
           "acknowledge_external": {
             "default": false,
+            "description": "Confirms crops may go to an external audit endpoint.",
             "title": "Acknowledge External",
             "type": "boolean"
           },
           "floor": {
             "default": 0.85,
+            "description": "Agreement below which the audit fails.",
             "exclusiveMaximum": 1.0,
             "exclusiveMinimum": 0.0,
             "title": "Floor",
@@ -19769,12 +19771,14 @@
           },
           "min_per_batch": {
             "default": 30,
+            "description": "Fewest labels re-checked per batch.",
             "minimum": 1.0,
             "title": "Min Per Batch",
             "type": "integer"
           },
           "on_fail": {
             "default": "pause",
+            "description": "What a failed audit does: pause the loop or roll back.",
             "enum": [
               "pause",
               "rollback"
@@ -19784,6 +19788,7 @@
           },
           "rate": {
             "default": 0.01,
+            "description": "Share of propagated labels re-checked.",
             "exclusiveMinimum": 0.0,
             "maximum": 1.0,
             "title": "Rate",
@@ -19861,6 +19866,7 @@
         "description": "Hard caps; the loop never goes past one. ``max_vlm_crops`` has no default.",
         "properties": {
           "max_vlm_crops": {
+            "description": "Crops the VLM may label in one run.",
             "minimum": 1.0,
             "title": "Max Vlm Crops",
             "type": "integer"
@@ -20501,6 +20507,7 @@
         "properties": {
           "branching": {
             "default": 4,
+            "description": "Parts a failing node is split into.",
             "maximum": 8.0,
             "minimum": 2.0,
             "title": "Branching",
@@ -20508,6 +20515,7 @@
           },
           "max_depth": {
             "default": 3,
+            "description": "Levels a failing node is split.",
             "maximum": 6.0,
             "minimum": 0.0,
             "title": "Max Depth",
@@ -33568,6 +33576,26 @@
         "title": "ResearchConfigPut",
         "type": "object"
       },
+      "ResearchConfigSchema": {
+        "properties": {
+          "json_schema": {
+            "additionalProperties": true,
+            "description": "The JSON Schema (draft 2020-12) of the document body, generated from the model the server validates it with.",
+            "title": "Json Schema",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "json_schema"
+        ],
+        "title": "ResearchConfigSchema",
+        "type": "object"
+      },
       "ResolveConflict": {
         "properties": {
           "crop_id": {
@@ -45454,6 +45482,49 @@
         ]
       }
     },
+    "/curation/projects/{project}/assist_loop_presets/schema": {
+      "get": {
+        "operationId": "schema_assist_loop_preset_curation_projects__project__assist_loop_presets_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
     "/curation/projects/{project}/assist_loop_presets/{name}": {
       "delete": {
         "operationId": "delete_assist_loop_preset_curation_projects__project__assist_loop_presets__name__delete",
@@ -47108,6 +47179,49 @@
           }
         },
         "summary": "Active Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles/schema": {
+      "get": {
+        "operationId": "schema_cluster_profile_curation_projects__project__cluster_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Cluster Profile",
         "tags": [
           "Curation",
           "Clustering"
@@ -60127,6 +60241,49 @@
           }
         },
         "summary": "Active Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/schema": {
+      "get": {
+        "operationId": "schema_near_dup_profile_curation_projects__project__near_dup_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Near Dup Profile",
         "tags": [
           "Curation",
           "Near-duplicates"
@@ -75806,6 +75963,48 @@
           }
         },
         "summary": "Get Active Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      }
+    },
+    "/curation/serving_profiles/schema": {
+      "get": {
+        "operationId": "schema_serving_profile_curation_serving_profiles_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Schema Serving Profile",
         "tags": [
           "Projects",
           "Serving"

@@ -27,7 +27,11 @@ class _LevelCuts(_Strict):
     leak_cosine: float = Field(
         ge=rules.MIN_LEAK_COSINE, description='Members at or above it must stay on one split side.'
     )
-    max_group_size: int = Field(default=rules.DEFAULT_MAX_GROUP_SIZE, ge=rules.MIN_GROUP_SIZE_GUARD)
+    max_group_size: int = Field(
+        default=rules.DEFAULT_MAX_GROUP_SIZE,
+        ge=rules.MIN_GROUP_SIZE_GUARD,
+        description='Largest group kept whole; a bigger one is split.',
+    )
 
     @model_validator(mode='after')
     def _leak_is_not_stricter_than_dedup(self) -> Self:
@@ -38,22 +42,52 @@ class _LevelCuts(_Strict):
 
 
 class NearDupImageProfile(_LevelCuts):
-    dedup_cosine: float = Field(default=rules.DEFAULT_IMAGE_DEDUP_COSINE, le=1.0)
-    leak_cosine: float = Field(default=rules.DEFAULT_IMAGE_DEDUP_COSINE, ge=rules.MIN_LEAK_COSINE)
-    k: int = Field(default=rules.DEFAULT_K, ge=rules.MIN_K, le=rules.MAX_K)
+    dedup_cosine: float = Field(
+        default=rules.DEFAULT_IMAGE_DEDUP_COSINE,
+        le=1.0,
+        description='Images at or above it are duplicates.',
+    )
+    leak_cosine: float = Field(
+        default=rules.DEFAULT_IMAGE_DEDUP_COSINE,
+        ge=rules.MIN_LEAK_COSINE,
+        description='Images at or above it must stay on one split side.',
+    )
+    k: int = Field(
+        default=rules.DEFAULT_K,
+        ge=rules.MIN_K,
+        le=rules.MAX_K,
+        description='Nearest neighbours searched per image.',
+    )
 
 
 class NearDupItemProfile(_LevelCuts):
-    dedup_cosine: float = Field(default=rules.DEFAULT_ITEM_DEDUP_COSINE, le=1.0)
-    leak_cosine: float = Field(default=rules.DEFAULT_ITEM_DEDUP_COSINE, ge=rules.MIN_LEAK_COSINE)
-    scope: Literal['image_leak_groups'] = 'image_leak_groups'
-    same_detector_class: bool = True
+    dedup_cosine: float = Field(
+        default=rules.DEFAULT_ITEM_DEDUP_COSINE,
+        le=1.0,
+        description='Items at or above it are duplicates.',
+    )
+    leak_cosine: float = Field(
+        default=rules.DEFAULT_ITEM_DEDUP_COSINE,
+        ge=rules.MIN_LEAK_COSINE,
+        description='Items at or above it must stay on one split side.',
+    )
+    scope: Literal['image_leak_groups'] = Field(
+        default='image_leak_groups',
+        description='Items are compared only inside the leak groups of their images.',
+    )
+    same_detector_class: bool = Field(
+        default=True, description='Compare only items of one detector class.'
+    )
 
 
 class NearDupProfileBody(_Strict):
-    version: Literal[1] = 1
-    image: NearDupImageProfile = Field(default_factory=NearDupImageProfile)
-    item: NearDupItemProfile = Field(default_factory=NearDupItemProfile)
+    version: Literal[1] = Field(default=1, description='The body format version.')
+    image: NearDupImageProfile = Field(
+        default_factory=NearDupImageProfile, description='Cuts for whole images.'
+    )
+    item: NearDupItemProfile = Field(
+        default_factory=NearDupItemProfile, description='Cuts for items (region boxes).'
+    )
 
 
 # --- the wire of the routes -----------------------------------------------------------------
