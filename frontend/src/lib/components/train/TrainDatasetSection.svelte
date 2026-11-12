@@ -1,6 +1,7 @@
 <script lang="ts">
   /** /train's dataset card (which frozen export the run trains on) and,
    *  when the backend serves it, the single-class dataset export panel. */
+  import ClassSplitTable from '$components/export/ClassSplitTable.svelte';
   import { formatCount } from '$lib/format/count';
   import { classesStore } from '$stores/classes.svelte';
   import { datasetLabel } from '$lib/train/trainDisplay';
@@ -140,38 +141,10 @@
           per-class object counts ({dataset.multiClassExportState.class_split_counts
             .length})
         </summary>
-        <div class="mt-1 max-h-48 overflow-auto rounded border border-zinc-800">
-          <table class="w-full text-xs">
-            <thead
-              class="sticky top-0 border-b border-zinc-800 bg-zinc-950 text-left uppercase text-zinc-500"
-            >
-              <tr>
-                <th class="px-2 py-1 font-medium">Class</th>
-                <th class="px-2 py-1 text-right font-medium">Train (objects)</th>
-                <th class="px-2 py-1 text-right font-medium">Val (objects)</th>
-                <th class="px-2 py-1 text-right font-medium">Test (objects)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each dataset.multiClassExportState.class_split_counts as c (c.class_id)}
-                {@const missing = c.train === 0 || c.val === 0}
-                <tr
-                  class="border-b border-zinc-900 {missing
-                    ? 'bg-red-500/10 text-red-200'
-                    : 'text-zinc-300'}"
-                >
-                  <td class="px-2 py-1">{c.class_name}</td>
-                  <td class="px-2 py-1 text-right font-mono"
-                    >{c.train.toLocaleString()}</td
-                  >
-                  <td class="px-2 py-1 text-right font-mono">{c.val.toLocaleString()}</td>
-                  <td class="px-2 py-1 text-right font-mono">{c.test.toLocaleString()}</td
-                  >
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
+        <ClassSplitTable
+          class="mt-1 max-h-48"
+          rows={dataset.multiClassExportState.class_split_counts}
+        />
       </details>
     {:else}
       <!-- No per-export split data: the operator picked a past export

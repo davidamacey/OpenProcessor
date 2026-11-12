@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { focusOnMount } from '$lib/actions/focusOnMount';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
+  import KeyChips from '$components/settings/keymap/KeyChips.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
   import { contextRowActions } from '$components/settings/keymap/keymapModel';
   import type { KeymapCardController } from '$components/settings/keymap/keymapCardController.svelte';
@@ -41,48 +41,24 @@
                   🔒 {ctl.keysOf(action.id).map(formatShortcutKey).join(' / ') || '—'}
                 </span>
               {:else}
-                <div class="flex flex-wrap items-center gap-1">
-                  {#each ctl.keysOf(action.id) as k (k)}
-                    <span
-                      class="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-blue-300"
-                    >
-                      {formatShortcutKey(k)}
+                <KeyChips
+                  {ctl}
+                  keys={ctl.keysOf(action.id)}
+                  capturing={ctl.capturingActionId === action.id}
+                  onremove={(k) => ctl.removeKey(action.id, k)}
+                  onstart={() => ctl.startCapture(action.id)}
+                >
+                  {#snippet extra()}
+                    {#if ctl.isChanged(action.id)}
                       <button
-                        class="text-zinc-500 hover:text-red-400"
-                        aria-label={`remove ${k}`}
-                        onclick={() => ctl.removeKey(action.id, k)}
+                        class="text-zinc-500 underline hover:text-zinc-300"
+                        onclick={() => ctl.resetOneLocal(action.id)}
                       >
-                        ×
+                        reset
                       </button>
-                    </span>
-                  {/each}
-                  {#if ctl.capturingActionId === action.id}
-                    <button
-                      data-capture
-                      use:focusOnMount
-                      class="rounded border border-blue-600 bg-blue-950/40 px-1.5 py-0.5 text-blue-300"
-                      onkeydown={ctl.onCaptureKeydown}
-                      onblur={ctl.cancelCapture}
-                    >
-                      press a key…
-                    </button>
-                  {:else}
-                    <button
-                      class="rounded border border-zinc-700 px-1.5 py-0.5 text-zinc-400 hover:text-white"
-                      onclick={() => ctl.startCapture(action.id)}
-                    >
-                      Change
-                    </button>
-                  {/if}
-                  {#if ctl.isChanged(action.id)}
-                    <button
-                      class="text-zinc-500 underline hover:text-zinc-300"
-                      onclick={() => ctl.resetOneLocal(action.id)}
-                    >
-                      reset
-                    </button>
-                  {/if}
-                </div>
+                    {/if}
+                  {/snippet}
+                </KeyChips>
               {/if}
             </td>
           </tr>
