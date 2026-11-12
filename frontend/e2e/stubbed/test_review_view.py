@@ -185,11 +185,11 @@ SORT_OPTIONS = [
 def _queue(items: list[dict], **over) -> dict:
     return {
         'sort_options': SORT_OPTIONS,
+        'sort_applied': 'detector_confidence:desc',
         'items': items,
         'total': len(items),
         'next_cursor': None,
         'limit': 30,
-        'sort_applied': None,
         'sort_fallback_reason': None,
         'empty_reason': None,
         'hidden': {'test_holdout': 0, 'excluded': 0},
@@ -225,6 +225,9 @@ def test_the_review_states_render_at_1600_and_430(stub, page, app_url):
     page.set_viewport_size({'width': 1600, 'height': 1000})
     page.goto(review_url(app_url, 'check_machine'))
     expect(page.get_by_test_id('queue-counter').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('details-panel').locator('dt').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     shot(page, 'review-machine-label', widths=(1600, 430))
 
     page.set_viewport_size({'width': 1600, 'height': 1000})
