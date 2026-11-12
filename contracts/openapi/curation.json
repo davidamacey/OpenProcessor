@@ -6499,6 +6499,110 @@
         "title": "CocoAnnotationFileSpec",
         "type": "object"
       },
+      "CohortColumn": {
+        "description": "One cohort of the summary: how to fetch its rows and how many it holds in all.",
+        "properties": {
+          "cutoffs": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Cutoffs",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "row_kind": {
+            "enum": [
+              "crop",
+              "region"
+            ],
+            "title": "Row Kind",
+            "type": "string"
+          },
+          "total": {
+            "description": "Items the cohort holds, over every class and none.",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "description",
+          "cutoffs",
+          "endpoint",
+          "params",
+          "row_kind",
+          "total"
+        ],
+        "title": "CohortColumn",
+        "type": "object"
+      },
+      "CohortRow": {
+        "description": "One class (or detector label) with its count in every cohort.",
+        "properties": {
+          "class_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for a detector label the registry lacks.",
+            "title": "Class Id"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Items per cohort id; every cohort is present.",
+            "title": "Counts",
+            "type": "object"
+          },
+          "kind": {
+            "description": "`class`: an active registry class. `detector`: a label the detector named on items without a class, for which the registry has no class.",
+            "enum": [
+              "class",
+              "detector"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "class_id",
+          "class_name",
+          "kind",
+          "counts"
+        ],
+        "title": "CohortRow",
+        "type": "object"
+      },
       "CombineInclude": {
         "additionalProperties": false,
         "properties": {
@@ -40678,6 +40782,32 @@
           "cohorts"
         ],
         "title": "TrainingCohortList",
+        "type": "object"
+      },
+      "TrainingCohortSummary": {
+        "description": "``GET /training_cohorts/summary``: the classes x cohorts matrix, counted in one request.",
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/CohortColumn"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "rows": {
+            "description": "Classes by id, then the detector-only labels.",
+            "items": {
+              "$ref": "#/components/schemas/CohortRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohorts",
+          "rows"
+        ],
+        "title": "TrainingCohortSummary",
         "type": "object"
       },
       "TriggersWire": {
@@ -76211,6 +76341,49 @@
           }
         },
         "summary": "Training Cohorts",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/training_cohorts/summary": {
+      "get": {
+        "description": "Every class x every cohort, counted in one request: `{cohorts, rows}`.\n\n`cohorts` are the catalog's (`GET /training_cohorts`) with a `total`; `rows` has one row per\nactive class (by id) with its count in each cohort, then one per detector label that is on\nitems without a class and that the registry has no class for (`kind: detector`). The\ncohort *Detector proposals not decided* (the `to_label` queue: the item has no class yet) is\nlisted only while such items exist, and is counted by the detector's own label, so a label\nthe registry lacks is visible. The counts come from one search per cohort (never per class),\nsent as one multi-search.",
+        "operationId": "training_cohort_summary_curation_projects__project__training_cohorts_summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingCohortSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Training Cohort Summary",
         "tags": [
           "Curation"
         ]
