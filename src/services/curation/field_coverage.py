@@ -1,7 +1,8 @@
 """Per-field coverage counts for ``GET /curation/methods``.
 
 TTL-cached per items index so the methods endpoint stays an O(1)-per-request
-call; a failed count is cached as ``None`` (unknown), never ``0``.
+call; a failed count is cached as ``None`` (unknown), never ``0``. A review queue asks with
+``live=True`` instead, so every worker gives the same answer for the same data.
 """
 
 from __future__ import annotations
@@ -76,14 +77,24 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
     # rather than replaced -- otherwise they evict each other every call.
     counts: dict[str, int | None] = dict(cache) if cache is not None else {}
     missing = sorted(fields - counts.keys())
-    need_total = cache is None
+    counts.update(await _query_coverage(opensearch, index, missing, need_total=cache is None))
+    _COVERAGE_CACHE[index] = (entry[0] if fresh and entry is not None else now, counts)
+    return counts
+
+
+async def _query_coverage(
+    opensearch: Any, index: str, fields: list[str], *, need_total: bool
+) -> dict[str, int | None]:
+    """One ``size: 0`` search with an ``exists`` filter aggregation per field (and the hit total
+    when ``need_total``); a failed search maps every asked name to ``None`` (unknown)."""
+    counts: dict[str, int | None] = {}
     try:
         resp = await opensearch.search(
             index=index,
             body={
                 'size': 0,
                 'track_total_hits': need_total,
-                'aggs': {field: {'filter': {'exists': {'field': field}}} for field in missing},
+                'aggs': {field: {'filter': {'exists': {'field': field}}} for field in fields},
             },
         )
         if need_total:
@@ -91,17 +102,15 @@ async def _compute_field_coverage(opensearch: Any, fields: frozenset[str]) -> di
                 ((resp.get('hits') or {}).get('total') or {}).get('value', 0)
             )
         aggs = resp.get('aggregations') or {}
-        for field in missing:
+        for field in fields:
             bucket = aggs.get(field)
             counts[field] = int(bucket['doc_count']) if bucket is not None else None
     except OpenSearchException as exc:
         logger.warning('curation_methods_field_coverage_failed', error=str(exc))
         if need_total:
             counts[_COVERAGE_TOTAL_KEY] = None
-        for field in missing:
+        for field in fields:
             counts[field] = None
-
-    _COVERAGE_CACHE[index] = (entry[0] if fresh and entry is not None else now, counts)
     return counts
 
 
@@ -114,9 +123,23 @@ def invalidate_field_coverage() -> None:
     _COVERAGE_CACHE.pop(index_name(get_curation_config(), IndexRole.ITEMS), None)
 
 
-async def field_coverage(opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
-    """``{field: exists_count}`` over the items index (``None`` = unknown,
-    never ``0``); TTL-cached. Public face of :func:`_compute_field_coverage`."""
+async def field_coverage(
+    opensearch: Any, fields: frozenset[str], *, live: bool = False
+) -> dict[str, int | None]:
+    """``{field: exists_count}`` over the items index (``None`` = unknown, never ``0``).
+
+    ``live=False`` is the TTL-cached lookup of ``GET /methods``, which must stay O(1) per request.
+    ``live=True`` counts against the index now and touches no cache: the per-process cache makes
+    two API workers disagree for up to its TTL, which a review queue (the sorts it offers, the
+    sort it falls back to) must not do. The count is one ``size: 0`` search carrying an
+    ``exists`` filter aggregation per field, on a request that already searches the items index.
+    """
+    if live:
+        from src.config.curation_accessors import get_curation_config
+        from src.config.curation_roles import IndexRole, index_name
+
+        index = index_name(get_curation_config(), IndexRole.ITEMS)
+        return await _query_coverage(opensearch, index, sorted(fields), need_total=False)
     return await _compute_field_coverage(opensearch, fields)
 
 

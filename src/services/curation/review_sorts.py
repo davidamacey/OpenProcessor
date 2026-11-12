@@ -441,7 +441,7 @@ async def _first_covered(
         return primary, None
     from src.services.curation.field_coverage import field_coverage
 
-    coverage = await field_coverage(opensearch, fields)
+    coverage = await field_coverage(opensearch, fields, live=True)
     chosen = next(
         (
             sid
@@ -491,7 +491,7 @@ async def sort_options(tab: str, opensearch: Any) -> list[SortOption]:
         and tab in _ONLY_IN.get(rs.id, frozenset({tab}))
     ]
     fields = frozenset(rs.requires_field for rs in offered if rs.requires_field)
-    coverage = await field_coverage(opensearch, fields) if fields else {}
+    coverage = await field_coverage(opensearch, fields, live=True) if fields else {}
     return [
         {'id': rs.id, 'label': rs.label}
         for rs in offered
