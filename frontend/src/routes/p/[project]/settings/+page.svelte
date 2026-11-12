@@ -34,6 +34,7 @@
   import KeymapCard from '$lib/components/settings/KeymapCard.svelte';
   import OpenVocabCard from '$lib/components/settings/OpenVocabCard.svelte';
   import IngestPolicyCard from '$lib/components/settings/IngestPolicyCard.svelte';
+  import PresetsCard from '$lib/components/settings/PresetsCard.svelte';
   import VlmScopePanel from '$lib/components/settings/VlmScopePanel.svelte';
   import { keymapAvailability } from '$stores/keymap.svelte';
   import { resolve } from '$app/paths';
@@ -315,6 +316,7 @@
 
   <OpenVocabCard />
   <IngestPolicyCard />
+  <PresetsCard />
   <VlmScopePanel />
 
   {#if vlmAvailability.available === true}

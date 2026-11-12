@@ -74,6 +74,7 @@ const SCANNED_FILES = [
   'lib/api_jobs.ts',
   'lib/api_nearDup.ts',
   'lib/api_workflow.ts',
+  'lib/api_presets.ts',
 ] as const;
 
 /** The HTTP core (`apiFetch`, `scoped()`): composes no backend URL itself. */
@@ -90,6 +91,7 @@ const GLOBAL_SCANNED_FILES = [
   'lib/api_vlm.ts',
   'lib/api_combine.ts',
   'lib/api_jobs.ts',
+  'lib/api_presets.ts',
 ] as const;
 
 /** Every file that composes a backend URL through
