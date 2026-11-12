@@ -1,4 +1,5 @@
 <script lang="ts">
+  import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
   import ClusterRunPanel from '$lib/components/clusters/ClusterRunPanel.svelte';
@@ -266,6 +267,7 @@
         {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
           <ClusterRunPanel onserving={() => void list.loadFirst()} />
         {/if}
+        <EmptyNextSteps />
       </div>
     {/if}
   {:else}

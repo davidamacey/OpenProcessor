@@ -235,3 +235,94 @@ def test_draw_move_delete_survive_a_redetect(
         if _iou(list(row['bbox_norm']), detector_box) > 0.5
     ]
     assert [row['crop_id'] for row in on_the_deleted_box] == [ingested_crop_id]
+
+
+def test_editor_draws_moves_deletes_and_undoes_in_the_browser(
+    browser: Any,
+    live_url: str,
+    api: Any,
+    throwaway_project: dict[str, str],
+    ingested_crop_id: str,
+) -> None:
+    """The image editor on the throwaway project: draw a box and pick a class, move it, delete the
+    detector's box and undo that, and every change is there after a reload."""
+    prefix = throwaway_project['prefix']
+    detected = _item(api, prefix, ingested_crop_id)
+    image_id = detected['image_id']
+    api.post(f'{prefix}/classes', data={'name': 'e2e_editor', 'group': 'e2e'})
+
+    context = browser.new_context(
+        base_url=live_url,
+        extra_http_headers=_auth_headers(),
+        viewport={'width': 1600, 'height': 1000},
+    )
+    page = context.new_page()
+    try:
+        url = f'/p/{throwaway_project["slug"]}/images/{image_id}'
+        page.goto(url)
+        canvas = page.get_by_test_id('editor-canvas')
+        canvas.wait_for(timeout=POLL_TIMEOUT_S * 1000)
+        page.locator('[data-testid="overlay-box"]').first.wait_for(timeout=POLL_TIMEOUT_S * 1000)
+
+        def at(fx: float, fy: float) -> tuple[float, float]:
+            box = page.get_by_test_id('editor-frame').bounding_box()
+            assert box is not None
+            return box['x'] + fx * box['width'], box['y'] + fy * box['height']
+
+        # Draw a small box in the top-left corner and give it the class.
+        page.keyboard.press('b')
+        page.mouse.move(*at(0.02, 0.02))
+        page.mouse.down()
+        page.mouse.move(*at(0.12, 0.12), steps=8)
+        page.mouse.up()
+        page.get_by_role('combobox').fill('e2e_editor')
+        page.get_by_role('option', name='e2e_editor').click()
+        page.get_by_text('Saved', exact=True).wait_for(timeout=POLL_TIMEOUT_S * 1000)
+        drawn = _poll(
+            'the drawn item to be stored',
+            lambda: next(
+                (
+                    row
+                    for row in _image_items(api, prefix, image_id)
+                    if row['crop_id'] != ingested_crop_id
+                    and row['bbox_norm'] == pytest.approx([0.02, 0.02, 0.12, 0.12], abs=0.01)
+                ),
+                None,
+            ),
+        )
+        assert drawn['class_name'] == 'e2e_editor'
+
+        # Move it: the box is selected after the draw, so a drag from its middle moves it.
+        page.mouse.move(*at(0.07, 0.07))
+        page.mouse.down()
+        page.mouse.move(*at(0.27, 0.27), steps=8)
+        page.mouse.up()
+        moved = _poll(
+            'the move to be stored',
+            lambda: (
+                _item(api, prefix, drawn['crop_id'])['bbox_norm'][0] > 0.15
+                and _item(api, prefix, drawn['crop_id'])
+            ),
+        )
+        assert moved['geometry_revision'] >= 2
+
+        # Delete the drawn box, then bring it back with undo.
+        page.keyboard.press('Delete')
+        _poll(
+            'the delete to be stored',
+            lambda: _item(api, prefix, drawn['crop_id'])['class_excluded'] is True,
+        )
+        page.keyboard.press('Control+z')
+        _poll(
+            'the undo to be stored',
+            lambda: _item(api, prefix, drawn['crop_id'])['class_excluded'] is False,
+        )
+
+        page.reload()
+        page.locator('[data-testid="overlay-box"]').first.wait_for(timeout=POLL_TIMEOUT_S * 1000)
+        final = _item(api, prefix, drawn['crop_id'])
+        assert final['class_excluded'] is False
+        assert final['bbox_norm'][0] > 0.15
+        assert final['geometry_source'] == 'human'
+    finally:
+        context.close()

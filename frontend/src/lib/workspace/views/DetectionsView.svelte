@@ -8,6 +8,7 @@
   import CropResultGrid from '$components/CropResultGrid.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
+  import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import {
@@ -119,5 +120,8 @@
         {pager.items.length} / {pager.total}
       </p>
     </ViewState>
+    {#if status === 'empty'}
+      <EmptyNextSteps />
+    {/if}
   </div>
 </div>

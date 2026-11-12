@@ -135,7 +135,7 @@ Each project owns the indexes `{OP_PROJECT_INDEX_PREFIX}{slug}__{role}` (default
 `op_prj_cars__items`. Every other control record (projects, classes, configs, settings, jobs,
 embedding spaces, cluster partitions, near-duplicate groups) is in PostgreSQL. Bodies are in
 `src/clients/curation_opensearch/` (`bodies_core.py` for images and items, with the field groups in
-`cluster_fields.py`, `near_dup_fields.py`, `capture_fields.py`, `assist_fields.py` and
+`cluster_fields.py`, `near_dup_fields.py`, `capture_fields.py`, `count_fields.py`, `assist_fields.py` and
 `open_vocab_fields.py`). Indexes are created and migrated once by the `db-migrate` step
 (`scripts/opensearch/migrate.py`); the API only checks the schema stamp of each mapping and refuses
 to start with `opensearch_mapping_not_current`.

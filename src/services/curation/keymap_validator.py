@@ -22,6 +22,10 @@ from src.services.curation.keymap import (
 )
 
 
+# Contexts that own Tab as an object-cycling key, so binding it there is not a focus-key surprise.
+_FOCUS_KEY_CONTEXTS = frozenset({'box_edit', 'editor'})
+
+
 @dataclass(frozen=True)
 class ClassConflict:
     project: str
@@ -106,7 +110,7 @@ def _combo_issues(
                 {'combo': combo},
             )
         )
-    if combo in {'tab', 'shift+tab'} and action.context != 'box_edit':
+    if combo in {'tab', 'shift+tab'} and action.context not in _FOCUS_KEY_CONTEXTS:
         warnings.append(
             _warning(
                 'keymap_focus_key',

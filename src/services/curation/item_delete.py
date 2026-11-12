@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.core.logging import get_logger
+from src.services.curation.image_counts_refresh import enqueue_image_counts
 from src.services.curation.source_image_cache import evict_crop_cache
 from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import content_key, pending as near_dup_pending
@@ -145,6 +146,10 @@ async def _delete_round(
             errors.append({'crop_id': cid, 'error': str(result.get('error') or status)})
     if level == 'image':
         await content_key.release_bound(removed)
+    else:
+        await enqueue_image_counts(
+            fresh[cid][0].get('image_id') or '' for cid in removed if cid in fresh
+        )
     return deleted, gone, conflicted
 
 

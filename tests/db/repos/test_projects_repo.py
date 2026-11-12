@@ -268,3 +268,44 @@ async def test_load_project_preserves_ids_and_timestamps_and_reads_back(
     assert await read_sync(repo.read_projects_revision_sync) == before + 1
     with pytest.raises(repo.SlugTakenError):
         await write(repo.load_project, load)
+
+
+async def _page(**kw: Any) -> list[repo.ProjectRow]:
+    return await read(repo.list_page, **kw)
+
+
+async def test_list_page_is_bounded_by_the_limit_in_sql(repo_env: None) -> None:
+    for i in range(12):
+        await create(f'page-{i:02d}', status='active')
+    rows = await _page(statuses=('active',), q='page-', sort='name:asc', after=None, limit=5)
+    assert [r.slug for r in rows] == [f'page-{i:02d}' for i in range(5)]
+    assert await read(repo.count_matching, statuses=('active',), q='page-') == 12
+
+
+@pytest.mark.parametrize('sort', ['name:asc', 'updated_at:desc'])
+async def test_list_page_keyset_walks_every_project_once(repo_env: None, sort: str) -> None:
+    for i in range(11):
+        await create(f'walk-{sort[0]}{i:02d}', status='active')
+    seen: list[str] = []
+    after = None
+    while True:
+        rows = await _page(
+            statuses=('active',), q=f'walk-{sort[0]}', sort=sort, after=after, limit=4
+        )
+        seen += [r.slug for r in rows]
+        if len(rows) < 4:
+            break
+        last = rows[-1]
+        after = (last.slug if sort == 'name:asc' else last.updated_at, last.slug)
+    assert len(seen) == len(set(seen)) == 11
+
+
+async def test_list_page_filters_status_and_text(repo_env: None) -> None:
+    await create('filt-one', status='active')
+    await create('filt-two', status='building')
+    only = await _page(statuses=('building',), q='filt-', sort='name:asc', after=None, limit=10)
+    assert [r.slug for r in only] == ['filt-two']
+    both = await _page(
+        statuses=('building', 'active'), q='FILT_', sort='name:asc', after=None, limit=10
+    )
+    assert both == []  # `_` is literal, not a wildcard

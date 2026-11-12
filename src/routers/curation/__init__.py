@@ -91,6 +91,7 @@ import src.routers.curation.research_configs
 import src.routers.curation.review_terms  # isort: skip
 import src.routers.curation.review  # isort: skip
 import src.routers.curation.holdout_freeze  # isort: skip
+import src.routers.curation.image_counts
 import src.routers.curation.review_proposals
 import src.routers.curation.review_resolve
 import src.routers.curation.scores

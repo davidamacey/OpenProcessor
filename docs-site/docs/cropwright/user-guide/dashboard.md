@@ -8,6 +8,11 @@ title: Dashboard
 Pipeline health at a glance.
 
 - **Live dataset stats**, polled every 10 seconds.
+- **Next steps**: the curation loop in the order the backend serves it (ingest,
+  classes, cluster, activate, label, hotkeys, near-duplicates, export, train).
+  A done step shows a check; the first undone step is the one to do next, and
+  each step links to the page that does it. The empty Workspace shows the same
+  list. The backend decides which steps exist and which are done.
 - **Quick actions**: the VLM assist link (below), **Export Dataset (YOLO)**
   (behind a confirmation) and **Refresh**.
 - **Recluster now** — starts an auto-label run with stage progress,

@@ -33,6 +33,7 @@ TASK_MODULES = (
     'src.tasks.beat_schedule',
     'src.tasks.clustering',
     'src.tasks.embedding_reindex',
+    'src.tasks.image_counts',
     'src.tasks.near_dup',
     'src.tasks.near_dup_core',
     'src.tasks.source_backfill',

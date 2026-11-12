@@ -60,6 +60,16 @@ afterEach(() => {
 });
 
 describe('load', () => {
+  it('exposes the served status filter options, not its own list', async () => {
+    serve(() => undefined);
+    const admin = createProjectsAdmin();
+    await admin.load();
+    expect(admin.statusOptions.map((o) => o.id)).toEqual(
+      testProjectsResponse([]).status_options.map((o) => o.id),
+    );
+    expect(admin.sortCap).toBeNull();
+  });
+
   it('reads the served list, capacity and limits; include_archived only when toggled', async () => {
     serve(() => undefined);
     const admin = createProjectsAdmin();
@@ -67,9 +77,11 @@ describe('load', () => {
     expect(admin.list.map((p) => p.slug)).toEqual(['default', 'alpha']);
     expect(admin.capacity?.status).toBe('ok');
     expect(admin.limits?.cloneable_axes).toEqual(['settings_defaults', 'classes']);
-    expect(calls[0]!.url).toBe(`${API_PREFIX}/projects`);
+    expect(calls[0]!.url).toBe(`${API_PREFIX}/projects?limit=50`);
     await admin.setIncludeArchived(true);
-    expect(calls.at(-1)!.url).toBe(`${API_PREFIX}/projects?include_archived=true`);
+    expect(calls.at(-1)!.url).toBe(
+      `${API_PREFIX}/projects?include_archived=true&limit=50&sort=name%3Aasc`,
+    );
   });
 });
 
@@ -109,8 +121,8 @@ describe('create', () => {
     ]);
     // Both this page's list and the switcher's are re-read from the server.
     expect(calls.filter((c) => c.method === 'GET').map((c) => c.url)).toEqual([
-      `${API_PREFIX}/projects`,
-      `${API_PREFIX}/projects`,
+      expect.stringMatching(/\/projects(\?limit=50(&sort=name%3Aasc)?)?$/),
+      expect.stringMatching(/\/projects(\?limit=50(&sort=name%3Aasc)?)?$/),
     ]);
   });
 

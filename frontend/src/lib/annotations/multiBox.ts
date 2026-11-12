@@ -8,6 +8,7 @@
  * See the w8 multibox frontend plan.
  */
 
+import { toXyxy } from './boxGeometry';
 import type { SlotBox, BBoxNormLike, XYXY } from './types';
 
 /** A box as edited in the UI, before it is sent to the server. Mirrors
@@ -102,10 +103,6 @@ export type RegionBoxInput =
   | { box_id: string; bbox_norm: XYXY; state: string }
   | { box_id: string; state: string }
   | { box_id: null; bbox_norm: XYXY; state?: string };
-
-function toXyxy(b: BBoxNormLike): XYXY {
-  return [b.cx - b.w / 2, b.cy - b.h / 2, b.cx + b.w / 2, b.cy + b.h / 2];
-}
 
 /**
  * Builds the `boxes` array for `PUT /crops/{crop_id}/regions` from the

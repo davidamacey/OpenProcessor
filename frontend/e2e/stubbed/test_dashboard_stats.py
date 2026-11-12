@@ -33,7 +33,8 @@ CLASSES = [
 IDLE_JOB = auto_label_job()
 
 
-def test_dashboard_stats_unavailable(stub, page, app_url):
+def serve_dashboard(stub):
+    """Every read the dashboard makes, with empty data."""
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
     stub.on('GET', r'/pipeline/auto_label/status', IDLE_JOB)
@@ -50,6 +51,10 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
     # served per-class test holdout.
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
+
+
+def test_dashboard_stats_unavailable(stub, page, app_url):
+    serve_dashboard(stub)
 
     snapshot = {'state': {}, 'stats': {'error': 'stats unavailable (503)'}}
     sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'

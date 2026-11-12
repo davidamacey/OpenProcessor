@@ -138,9 +138,16 @@ def test_details_opens_the_image_with_an_open_image_link(stub, page, app_url):
     page.get_by_test_id('image-card-open').nth(1).click()
     expect(page.get_by_test_id('image-details')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('open-image')).to_have_attribute(
-        'href', re.compile('/images/img-1$')
+        'href', re.compile(r'/images/img-1\?.*view=gallery')
     )
     shot(page, 'gallery-details', widths=(1600, 430))
+    # The link reaches the image editor, still carrying the Workspace query.
+    page.get_by_test_id('open-image').click()
+    expect(page.get_by_test_id('editor-canvas')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert '/images/img-1' in page.url
+    expect(page.get_by_test_id('editor-back')).to_have_attribute(
+        'href', re.compile(r'/workspace\?.*view=gallery')
+    )
 
 
 def test_no_sideways_scroll_at_430(stub, page, app_url):

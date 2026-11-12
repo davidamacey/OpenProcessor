@@ -5,7 +5,8 @@
  * request, and never blocks the rest of the panel.
  */
 
-import { getCropHistory, getImage } from '$lib/api_cropRead';
+import { getCropHistory } from '$lib/api_cropRead';
+import { getImage } from '$lib/api_images';
 import { apiErrorText } from '$lib/api_errors';
 import type { Crop, CropHistoryEntry } from '$lib/types';
 import type { ImageDetailResponse, ImageInfo } from '$lib/types_images';

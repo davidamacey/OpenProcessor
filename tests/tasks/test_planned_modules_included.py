@@ -27,6 +27,7 @@ TASK_FAMILIES = (
     'b4_fanout',
     'b4_project',
     'beat_schedule',
+    'image_counts',
     'clustering',
     'embedding_reindex',
     'near_dup',

@@ -190,6 +190,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -397,6 +493,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -604,6 +796,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -812,6 +1100,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -1024,6 +1408,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -1243,6 +1723,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -1438,6 +2014,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -1645,6 +2317,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -1852,6 +2620,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -2063,6 +2927,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -2270,6 +3230,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -2484,6 +3540,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -2680,6 +3832,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -2908,6 +4156,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -3200,6 +4544,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -3402,6 +4842,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -3609,6 +5145,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -3812,6 +5444,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": [
@@ -4042,6 +5770,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": [
@@ -4276,6 +6100,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -4471,6 +6391,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -4674,6 +6690,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": [
@@ -4889,6 +7001,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -4907,6 +7115,25 @@
      "detail": {
       "combo": "b",
       "action_id": "review.region.back",
+      "conflicts": [
+       {
+        "project": "proj",
+        "class_id": 12,
+        "class_name": "bmw"
+       }
+      ]
+     },
+     "bypassable": false
+    },
+    {
+     "id": "keymap_class_hotkey_shadowed:overrides.editor.tool_draw",
+     "code": "keymap_class_hotkey_shadowed",
+     "severity": "warning",
+     "field": "overrides.editor.tool_draw",
+     "message": "Class 'bmw' (hotkey 'b') shares 'b' with Draw one box on editor.",
+     "detail": {
+      "combo": "b",
+      "action_id": "editor.tool_draw",
       "conflicts": [
        {
         "project": "proj",
@@ -5104,6 +7331,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -5319,6 +7642,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -5514,6 +7933,102 @@
    ],
    "region_gallery.undo": [
     "z"
+   ],
+   "editor.tool_select": [
+    "v"
+   ],
+   "editor.tool_draw": [
+    "b"
+   ],
+   "editor.tool_draw_sticky": [
+    "shift+b"
+   ],
+   "editor.tool_pan": [
+    "h"
+   ],
+   "editor.zoom_in": [
+    "="
+   ],
+   "editor.zoom_out": [
+    "-"
+   ],
+   "editor.zoom_fit": [
+    "0"
+   ],
+   "editor.zoom_actual": [
+    "1"
+   ],
+   "editor.delete": [
+    "delete",
+    "backspace"
+   ],
+   "editor.next_box": [
+    "tab"
+   ],
+   "editor.prev_box": [
+    "shift+tab"
+   ],
+   "editor.nudge_up": [
+    "arrowup"
+   ],
+   "editor.nudge_down": [
+    "arrowdown"
+   ],
+   "editor.nudge_left": [
+    "arrowleft"
+   ],
+   "editor.nudge_right": [
+    "arrowright"
+   ],
+   "editor.nudge_up_far": [
+    "shift+arrowup"
+   ],
+   "editor.nudge_down_far": [
+    "shift+arrowdown"
+   ],
+   "editor.nudge_left_far": [
+    "shift+arrowleft"
+   ],
+   "editor.nudge_right_far": [
+    "shift+arrowright"
+   ],
+   "editor.resize_up": [
+    "alt+shift+arrowup"
+   ],
+   "editor.resize_down": [
+    "alt+shift+arrowdown"
+   ],
+   "editor.resize_left": [
+    "alt+shift+arrowleft"
+   ],
+   "editor.resize_right": [
+    "alt+shift+arrowright"
+   ],
+   "editor.regions": [
+    "shift+r"
+   ],
+   "editor.labels": [
+    "shift+l"
+   ],
+   "editor.undo": [
+    "ctrl+z",
+    "meta+z"
+   ],
+   "editor.redo": [
+    "ctrl+shift+z",
+    "meta+shift+z"
+   ],
+   "editor.class_picker": [
+    "/"
+   ],
+   "editor.prev_image": [
+    ","
+   ],
+   "editor.next_image": [
+    "."
+   ],
+   "editor.cancel": [
+    "escape"
    ]
   },
   "issues": []
@@ -5528,6 +8043,25 @@
    "detail": {
     "combo": "b",
     "action_id": "review.region.back",
+    "conflicts": [
+     {
+      "project": "proj",
+      "class_id": 12,
+      "class_name": "bmw"
+     }
+    ]
+   },
+   "bypassable": false
+  },
+  {
+   "id": "",
+   "code": "keymap_class_hotkey_shadowed",
+   "severity": "warning",
+   "field": "overrides.editor.tool_draw",
+   "message": "Class 'bmw' (hotkey 'b') shares 'b' with Draw one box on editor.",
+   "detail": {
+    "combo": "b",
+    "action_id": "editor.tool_draw",
     "conflicts": [
      {
       "project": "proj",

@@ -12,6 +12,7 @@ from src.services.periodic import (
     cluster_refresh,
     db_backup,
     gpu_arbiter,
+    image_counts_drain,
     ingest_dispatch,
     job_stats,
     near_dup_ticks,
@@ -40,6 +41,12 @@ def ingest_dispatch_tick() -> None:
 def open_vocab_sweep_tick() -> None:
     """Start the next open-vocabulary drain of each project that left images pending."""
     run_periodic('open_vocab_sweep', open_vocab_sweep.tick())
+
+
+@app.task(name='op.periodic.image_counts_drain', **_TICK)
+def image_counts_drain_tick() -> None:
+    """Recount the images whose items changed and the ones never counted, for every project."""
+    run_periodic('image_counts_drain', image_counts_drain.tick())
 
 
 @app.task(name='op.periodic.upload_sweep', **_TICK)

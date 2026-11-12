@@ -19,6 +19,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.clients.curation_opensearch.assist_fields import ensure_assist_fields
 from src.clients.curation_opensearch.capture_fields import ensure_capture_fields
 from src.clients.curation_opensearch.cluster_fields import ensure_items_cluster_partition_fields
+from src.clients.curation_opensearch.count_fields import ensure_images_count_fields
 from src.clients.curation_opensearch.ensure_fields import (
     ensure_items_embedding_fields,
     ensure_items_exclusion_fields,
@@ -209,6 +210,7 @@ def _migrations() -> tuple[tuple[str, Callable[[Any], Awaitable[Any]]], ...]:
         ('capture_fields', ensure_capture_fields),
         ('label_op_field', ensure_items_label_op_field),
         ('geometry_fields', ensure_items_geometry_fields),
+        ('image_count_fields', ensure_images_count_fields),
     )
 
 

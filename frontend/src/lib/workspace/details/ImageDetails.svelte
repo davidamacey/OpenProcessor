@@ -1,11 +1,12 @@
 <script lang="ts">
   /** The focused image: its facts, its served counts and a way into the editor. */
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import ViewState from '$components/state/ViewState.svelte';
-  import { getImage } from '$lib/api_cropRead';
+  import { getImage } from '$lib/api_images';
   import { apiErrorText } from '$lib/api_errors';
   import { formatTimestamp } from '$lib/format/date';
-  import { projectHref } from '$lib/projectPaths';
+  import { editorHref } from '$lib/editor/editorUrl';
   import type { ImageDetailResponse } from '$lib/types_images';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
@@ -78,8 +79,7 @@
         <a
           class="btn btn-primary"
           data-testid="open-image"
-          href={resolve(projectHref(`/images/${encodeURIComponent(image.image_id)}`))}
-          >Open image</a
+          href={resolve(editorHref(image.image_id, page.url.search))}>Open image</a
         >
         <button
           type="button"

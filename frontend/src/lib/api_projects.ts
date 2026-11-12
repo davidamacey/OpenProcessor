@@ -25,7 +25,14 @@ import type {
 export function getProjects(
   signal?: AbortSignal,
   includeArchived = false,
-  filter: { q?: string; limit?: number; selectable?: boolean } = {},
+  filter: {
+    q?: string;
+    limit?: number;
+    selectable?: boolean;
+    status?: string[];
+    sort?: string;
+    cursor?: string | null;
+  } = {},
 ): Promise<ProjectsResponse> {
   return apiFetch<ProjectsResponse>(
     `${globalApi()}/projects${qs({
@@ -33,6 +40,9 @@ export function getProjects(
       q: filter.q || undefined,
       limit: filter.limit,
       selectable: filter.selectable ? true : undefined,
+      status: filter.status?.length ? filter.status : undefined,
+      sort: filter.sort,
+      cursor: filter.cursor || undefined,
     })}`,
     {},
     signal,

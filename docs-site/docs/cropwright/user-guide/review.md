@@ -21,7 +21,7 @@ the current filter. A click on a queue opens it in the Review view.
 - **Disagreements**: items where the detector, the VLM or the probe's model
   disagree, most contested first.
 - **New class proposals**: items flagged as needing a class that does not exist.
-- **Audit sample**: the crops drawn by an [accuracy audit](./audit.md). Listed
+- **Audit sample**: the crops drawn by an [accuracy audit](./quality.md). Listed
   only while a sample is pending; the project's next step points at it
   otherwise.
 - A **region** queue, labelled by the region profile's display name, when a
