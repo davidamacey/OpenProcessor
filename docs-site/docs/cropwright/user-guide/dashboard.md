@@ -9,16 +9,22 @@ Pipeline health at a glance.
 
 - **Live dataset stats**, polled every 10 seconds.
 - **Next steps**: the curation loop in the order the backend serves it (ingest,
-  classes, cluster, activate, label, hotkeys, near-duplicates, export, train).
+  classes, cluster, activate, label, hotkeys, near-duplicates, export, train, review
+  disagreements, audit).
   A done step shows a check; the first undone step is the one to do next, and
   each step links to the page that does it. The empty Workspace shows the same
   list. The backend decides which steps exist and which are done.
 - **Quick actions**: the VLM assist link (below), **Export Dataset (YOLO)**
   (behind a confirmation) and **Refresh**.
-- **Recluster now** — starts an auto-label run with stage progress,
-  shared with the backend's own scheduled run. It asks for confirmation. The
-  stages shown are the optional embedding of items that have none, the VLM
-  labeling stage, and finalize.
+- **Clusters**: says which partition is serving (clusters, items, method, when it was
+  fitted) and starts a clustering run with **Cluster items**. A finished partition that is
+  not serving shows **Activate it**.
+- **Auto-label**: **Auto-label now** (asks for confirmation) embeds the items that have no
+  vector when **Embed missing vectors first** is ticked, optionally runs the VLM over the
+  unvalidated items (**Run VLM labeling stage**, off by default), then finalizes. The
+  classifier's confident labels and human validations are never overwritten. A run shows its
+  stage progress and can be paused, resumed or cancelled. Grouping items into clusters is the
+  separate Clusters run above.
 - **Assist scope** (`AssistScopeBar`) — when the backend advertises a usable
   VLM prompt pack, an optional per-class scope lets you point the
   VLM-assisted sweep at a single class instead of the whole pool. Absent
@@ -30,7 +36,7 @@ Pipeline health at a glance.
 - Below the stats: the class balance chart, the last 20 recent labels and,
   with a served region profile, a detections panel with region coverage.
 
-<Screenshot name="cropwright/dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard — live stats and the clustering/assist trigger" />
+<Screenshot name="cropwright/dashboard-1600.png" alt="Cropwright dashboard" caption="Dashboard — live stats and the clustering and auto-label controls" />
 
 `/` itself is not a route — it redirects to the default project's dashboard,
 `/p/<default-project>/dashboard`. See [Projects](./projects.md) for how the

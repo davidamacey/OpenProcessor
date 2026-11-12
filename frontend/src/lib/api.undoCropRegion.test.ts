@@ -76,14 +76,18 @@ describe('undoCropRegion — W8 multi-box round trip', () => {
 
     const slot = crop.slots?.[widgetTagSlot.key];
     expect(slot?.subBoxes).toHaveLength(1);
-    expect(slot?.subBoxes?.[0].state).toBe('rejected');
-    expect(slot?.subBoxes?.[0].rawXyxy).toEqual([0.1, 0.02, 0.3, 0.06]);
+    expect(slot?.subBoxes?.[0]).toMatchObject({
+      state: 'rejected',
+      rawXyxy: [0.1, 0.02, 0.3, 0.06],
+      rejectionReason: 'sanity_reject:aspect_ratio',
+      textChoice: 'no_valid_reading',
+    });
     expect(slot?.subBoxes?.[0].score).toBeCloseTo(0.55);
-    expect(slot?.subBoxes?.[0].rejectionReason).toBe('sanity_reject:aspect_ratio');
-    expect(slot?.lifecycle?.status).toBe('verify_rejected');
-    expect(slot?.lifecycle?.validated).toBe(false);
-    expect(slot?.lifecycle?.autoConfirmed).toBe(false);
-    expect(slot?.subBoxes?.[0].textChoice).toBe('no_valid_reading');
+    expect(slot?.lifecycle).toMatchObject({
+      status: 'verify_rejected',
+      validated: false,
+      autoConfirmed: false,
+    });
     expect(slot?.boxSet?.revision).toBe(12);
   });
 });

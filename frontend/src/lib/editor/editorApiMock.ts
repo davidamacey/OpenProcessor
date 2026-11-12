@@ -18,7 +18,7 @@ export const editorApi = {
   excludeCrops: vi.fn(),
   unexcludeCrops: vi.fn(),
   putCropLabel: vi.fn(),
-  undoCropLabel: vi.fn(),
+  undoLabelOpToEnd: vi.fn(),
   undoCropRegion: vi.fn(),
   putRegionBoxes: vi.fn(),
 };
@@ -38,8 +38,11 @@ export const editorWritesModule = () => ({
   excludeCrops: editorApi.excludeCrops,
   unexcludeCrops: editorApi.unexcludeCrops,
   putCropLabel: editorApi.putCropLabel,
-  undoCropLabel: editorApi.undoCropLabel,
   undoCropRegion: editorApi.undoCropRegion,
+});
+
+export const editorLabelOpsModule = () => ({
+  undoLabelOpToEnd: editorApi.undoLabelOpToEnd,
 });
 
 export const editorRegionsModule = () => ({ putRegionBoxes: editorApi.putRegionBoxes });
@@ -70,13 +73,14 @@ export function resetEditorApi(): void {
   editorApi.undoItemGeometry.mockResolvedValue({
     item: { ...item, geometry_revision: 4 },
   });
-  for (const k of [
-    'excludeCrops',
-    'unexcludeCrops',
-    'putCropLabel',
-    'undoCropLabel',
-  ] as const)
+  for (const k of ['excludeCrops', 'unexcludeCrops', 'undoLabelOpToEnd'] as const)
     editorApi[k].mockResolvedValue({});
+  editorApi.putCropLabel.mockResolvedValue({
+    crop_id: 'c1',
+    class_id: 7,
+    class_name: 'car',
+    op_id: 'op-1',
+  });
   editorApi.undoCropRegion.mockResolvedValue({});
   editorApi.putRegionBoxes.mockResolvedValue({});
 }

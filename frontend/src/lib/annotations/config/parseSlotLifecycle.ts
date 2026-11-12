@@ -16,7 +16,46 @@ const STATE_ROLES: ReadonlySet<string> = new Set([
 /* lifecycle                                                           */
 /* ------------------------------------------------------------------ */
 
+const isIdentifierString = (v: unknown): v is string =>
+  typeof v === 'string' && IDENTIFIER_RE.test(v) && v.length <= LIMITS.identifierChars;
+
+const isValidAliases = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.length <= LIMITS.stateAliases && v.every(isIdentifierString);
+
+/** Optional state fields: wire name, validity check, message suffix when invalid. */
+const OPTIONAL_STATE_FIELDS = [
+  {
+    name: 'role',
+    ok: (v: unknown) => typeof v === 'string' && STATE_ROLES.has(v),
+    msg: 'is invalid',
+  },
+  { name: 'dim', ok: (v: unknown) => typeof v === 'boolean', msg: 'must be boolean' },
+  { name: 'badge', ok: isLabel, msg: 'is invalid' },
+  {
+    name: 'aliases',
+    ok: isValidAliases,
+    msg: 'must be a string array of valid identifiers',
+  },
+] as const;
+
+/** A state entry's first problem (message suffix after `states`), or null. */
+function stateProblem(s: Record<string, unknown>, seen: Set<string>): string | null {
+  if (!isIdentifierString(s.value)) return '[].value is invalid';
+  if (seen.has(s.value)) return ` has duplicate value "${s.value}"`;
+  seen.add(s.value);
+  if (!isLabel(s.label)) return '[].label is invalid';
+  if (typeof s.humanWritable !== 'boolean') return '[].humanWritable must be boolean';
+  for (const f of OPTIONAL_STATE_FIELDS) {
+    if (s[f.name] !== undefined && !f.ok(s[f.name])) return `[].${f.name} ${f.msg}`;
+  }
+  return null;
+}
+
 function parseStates(raw: unknown, key: string, errors: string[]): SlotState[] | null {
+  const fail = (msg: string): null => {
+    errors.push(`slot "${key}": capabilities.lifecycle.states${msg} — skipped`);
+    return null;
+  };
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > LIMITS.lifecycleStates) {
     errors.push(
       `slot "${key}": capabilities.lifecycle.states must be a non-empty array ≤ ${LIMITS.lifecycleStates} — skipped`,
@@ -26,92 +65,28 @@ function parseStates(raw: unknown, key: string, errors: string[]): SlotState[] |
   const seen = new Set<string>();
   const out: SlotState[] = [];
   for (const s of raw) {
-    if (!isPlainObject(s) || hasForbiddenKey(s)) {
-      errors.push(
-        `slot "${key}": capabilities.lifecycle.states entry must be an object — skipped`,
-      );
-      return null;
-    }
-    const { value, label, humanWritable } = s;
-    if (
-      typeof value !== 'string' ||
-      !IDENTIFIER_RE.test(value) ||
-      value.length > LIMITS.identifierChars
-    ) {
-      errors.push(
-        `slot "${key}": capabilities.lifecycle.states[].value is invalid — skipped`,
-      );
-      return null;
-    }
-    if (seen.has(value)) {
-      errors.push(
-        `slot "${key}": capabilities.lifecycle.states has duplicate value "${value}" — skipped`,
-      );
-      return null;
-    }
-    seen.add(value);
-    if (!isLabel(label)) {
-      errors.push(
-        `slot "${key}": capabilities.lifecycle.states[].label is invalid — skipped`,
-      );
-      return null;
-    }
-    if (typeof humanWritable !== 'boolean') {
-      errors.push(
-        `slot "${key}": capabilities.lifecycle.states[].humanWritable must be boolean — skipped`,
-      );
-      return null;
-    }
-    const item: SlotState = { value, label, humanWritable };
-    if (s.role !== undefined) {
-      if (typeof s.role !== 'string' || !STATE_ROLES.has(s.role)) {
-        errors.push(
-          `slot "${key}": capabilities.lifecycle.states[].role is invalid — skipped`,
-        );
-        return null;
-      }
-      item.role = s.role as SlotState['role'];
-    }
-    if (s.dim !== undefined) {
-      if (typeof s.dim !== 'boolean') {
-        errors.push(
-          `slot "${key}": capabilities.lifecycle.states[].dim must be boolean — skipped`,
-        );
-        return null;
-      }
-      item.dim = s.dim;
-    }
-    if (s.badge !== undefined) {
-      if (!isLabel(s.badge)) {
-        errors.push(
-          `slot "${key}": capabilities.lifecycle.states[].badge is invalid — skipped`,
-        );
-        return null;
-      }
-      item.badge = s.badge;
-    }
-    if (s.aliases !== undefined) {
-      if (
-        !Array.isArray(s.aliases) ||
-        s.aliases.length > LIMITS.stateAliases ||
-        !s.aliases.every(
-          (a) =>
-            typeof a === 'string' &&
-            IDENTIFIER_RE.test(a) &&
-            a.length <= LIMITS.identifierChars,
-        )
-      ) {
-        errors.push(
-          `slot "${key}": capabilities.lifecycle.states[].aliases must be a string array of valid identifiers — skipped`,
-        );
-        return null;
-      }
-      item.aliases = s.aliases as string[];
+    if (!isPlainObject(s) || hasForbiddenKey(s)) return fail(' entry must be an object');
+    const problem = stateProblem(s, seen);
+    if (problem) return fail(problem);
+    const item = {
+      value: s.value as string,
+      label: s.label as string,
+      humanWritable: s.humanWritable as boolean,
+    } as SlotState;
+    const loose = item as unknown as Record<string, unknown>;
+    for (const f of OPTIONAL_STATE_FIELDS) {
+      if (s[f.name] !== undefined) loose[f.name] = s[f.name];
     }
     out.push(item);
   }
   return out;
 }
+
+const LIFECYCLE_OPTIONAL_FIELDS = [
+  'verifiedField',
+  'rejectionReasonField',
+  'labelSourceField',
+] as const;
 
 export function parseLifecycle(
   raw: unknown,
@@ -119,70 +94,35 @@ export function parseLifecycle(
   errors: string[],
 ): LifecycleCapability | null | undefined {
   if (raw === undefined) return undefined;
-  if (!isPlainObject(raw) || hasForbiddenKey(raw)) {
-    errors.push(`slot "${key}": capabilities.lifecycle must be an object — skipped`);
+  const fail = (msg: string): null => {
+    errors.push(`slot "${key}": capabilities.lifecycle${msg} — skipped`);
     return null;
-  }
-  if (!isWireField(raw.statusField)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.statusField is required — skipped`,
-    );
-    return null;
-  }
-  if (raw.verifiedField !== undefined && !isWireField(raw.verifiedField)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.verifiedField is invalid — skipped`,
-    );
-    return null;
-  }
-  if (raw.rejectionReasonField !== undefined && !isWireField(raw.rejectionReasonField)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.rejectionReasonField is invalid — skipped`,
-    );
-    return null;
-  }
-  if (raw.labelSourceField !== undefined && !isWireField(raw.labelSourceField)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.labelSourceField is invalid — skipped`,
-    );
-    return null;
+  };
+  if (!isPlainObject(raw) || hasForbiddenKey(raw)) return fail(' must be an object');
+  if (!isWireField(raw.statusField)) return fail('.statusField is required');
+  for (const f of LIFECYCLE_OPTIONAL_FIELDS) {
+    if (raw[f] !== undefined && !isWireField(raw[f])) return fail(`.${f} is invalid`);
   }
   const states = parseStates(raw.states, key, errors);
   if (states === null) return null;
   const values = new Set(states.map((s) => s.value));
-  if (typeof raw.confirmState !== 'string' || !values.has(raw.confirmState)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.confirmState must name a states[].value — skipped`,
-    );
-    return null;
+  const namesState = (v: unknown): boolean => typeof v === 'string' && values.has(v);
+  if (!namesState(raw.confirmState)) {
+    return fail('.confirmState must name a states[].value');
   }
-  if (typeof raw.rejectState !== 'string' || !values.has(raw.rejectState)) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.rejectState must name a states[].value — skipped`,
-    );
-    return null;
-  }
-  if (
-    raw.falsePositiveState !== undefined &&
-    (typeof raw.falsePositiveState !== 'string' || !values.has(raw.falsePositiveState))
-  ) {
-    errors.push(
-      `slot "${key}": capabilities.lifecycle.falsePositiveState must name a states[].value — skipped`,
-    );
-    return null;
+  if (!namesState(raw.rejectState))
+    return fail('.rejectState must name a states[].value');
+  if (raw.falsePositiveState !== undefined && !namesState(raw.falsePositiveState)) {
+    return fail('.falsePositiveState must name a states[].value');
   }
   const out: LifecycleCapability = {
     statusField: raw.statusField,
     states,
-    confirmState: raw.confirmState,
-    rejectState: raw.rejectState,
+    confirmState: raw.confirmState as string,
+    rejectState: raw.rejectState as string,
   };
-  if (raw.verifiedField !== undefined) out.verifiedField = raw.verifiedField as string;
-  if (raw.rejectionReasonField !== undefined)
-    out.rejectionReasonField = raw.rejectionReasonField as string;
-  if (raw.labelSourceField !== undefined)
-    out.labelSourceField = raw.labelSourceField as string;
-  if (raw.falsePositiveState !== undefined)
-    out.falsePositiveState = raw.falsePositiveState as string;
+  for (const f of [...LIFECYCLE_OPTIONAL_FIELDS, 'falsePositiveState'] as const) {
+    if (raw[f] !== undefined) out[f] = raw[f] as string;
+  }
   return out;
 }

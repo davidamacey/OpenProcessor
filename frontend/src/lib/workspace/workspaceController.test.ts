@@ -149,6 +149,16 @@ describe('WorkspaceController', () => {
     expect(c.itemQuery().cluster_uid).toEqual([id]);
   });
 
+  it('names a near-duplicate scope for the bulk bar', () => {
+    const c = make();
+    expect(c.inNearDupGroup).toBe(false);
+    c.setScope({ kind: 'near_dup', id: 'g1' });
+    const { href } = lastGoto();
+    visit(href.slice(href.indexOf('?')));
+    flushSync();
+    expect(c.inNearDupGroup).toBe(true);
+  });
+
   it('an unapplied draft does not change the query', () => {
     visit('?class_name=widget');
     const c = make();
@@ -177,17 +187,47 @@ describe('WorkspaceController', () => {
     });
   });
 
-  it('a second select-all on a full page asks for all matching', () => {
+  it('select-all goes through the registered page; a second press on a full page asks for all matching', () => {
     visit('?view=detections');
     const c = make();
-    c.selectAll(['a', 'b'], 50);
+    const applied: string[][] = [];
+    c.registerPage({
+      kind: 'items',
+      ids: () => ['a', 'b'],
+      total: () => 50,
+      apply: (ids) => applied.push(ids),
+    });
+    expect(c.pressSelectAll()).toBe(true);
+    expect(applied).toEqual([['a', 'b']]);
     expect(c.selection).toEqual({ kind: 'items', cropIds: ['a', 'b'] });
     expect(c.pendingSelectAll).toBeNull();
-    c.selectAll(['a', 'b'], 50);
+    expect(c.pressSelectAll()).toBe(true);
     expect(c.pendingSelectAll).toEqual({ total: 50 });
+    expect(applied).toHaveLength(1);
     c.confirmSelectAllMatching();
     expect(c.selection).toEqual({ kind: 'matching' });
     expect(c.pendingSelectAll).toBeNull();
+  });
+
+  it('select-all uses the kind the page registers, not the view', () => {
+    visit('?view=clusters&scope=cluster%3Au1');
+    const c = make();
+    c.registerPage({ kind: 'items', ids: () => ['a'], total: () => 1, apply: () => {} });
+    c.pressSelectAll();
+    expect(c.selection).toEqual({ kind: 'items', cropIds: ['a'] });
+  });
+
+  it('select-all is not handled while no page is registered', () => {
+    const c = make();
+    expect(c.pressSelectAll()).toBe(false);
+    const off = c.registerPage({
+      kind: 'items',
+      ids: () => [],
+      total: () => 0,
+      apply: () => {},
+    });
+    off();
+    expect(c.pressSelectAll()).toBe(false);
   });
 
   it('a view can drop filter keys it does not apply', () => {

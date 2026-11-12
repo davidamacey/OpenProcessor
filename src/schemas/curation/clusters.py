@@ -12,7 +12,7 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import Field
 
-from src.schemas.curation.views import SortOption
+from src.schemas.curation.views import HiddenCounts, SortOption
 
 
 class ClusterRepresentative(TypedDict):
@@ -100,6 +100,10 @@ class ClusterListResponse(TypedDict):
             description='The area, location or group predicates matched more images than the '
             'join could use, so the list may be incomplete.'
         ),
+    ]
+    hidden: Annotated[
+        HiddenCounts,
+        Field(description='Items matching the filter that the cards leave out (holdout, ignored).'),
     ]
     empty_reason: Annotated[
         Literal['no_partition', 'pending_activation', 'filtered_empty'] | None,

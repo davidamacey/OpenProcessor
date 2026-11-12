@@ -28,6 +28,25 @@ const PROJECT_SECTIONS = [
 ] as const;
 export type ProjectSection = (typeof PROJECT_SECTIONS)[number];
 
+/** The header's primary navigation, in order: one source for the nav links and the breadcrumb. */
+export const PRIMARY_NAV: ReadonlyArray<{ section: ProjectSection; label: string }> = [
+  { section: 'dashboard', label: 'Dashboard' },
+  { section: 'ingest', label: 'Ingest' },
+  { section: 'workspace', label: 'Workspace' },
+  { section: 'classes', label: 'Classes' },
+  { section: 'export', label: 'Export' },
+  { section: 'models', label: 'Models' },
+  { section: 'train', label: 'Train' },
+  { section: 'bakeoff', label: 'Bake-off' },
+  { section: 'quality', label: 'Quality' },
+  { section: 'settings', label: 'Settings' },
+];
+
+/** The nav label of `section`; the section id for one the header does not link. */
+export function sectionLabel(section: ProjectSection): string {
+  return PRIMARY_NAV.find((n) => n.section === section)?.label ?? section;
+}
+
 /** A path inside a project: a known section, plus any sub-path, query
  *  or hash (`/workspace?view=review&queue=to_label`, `/workspace?view=clusters`, `/settings#keyboard`). */
 export type ProjectSubPath = `/${ProjectSection}${string}`;

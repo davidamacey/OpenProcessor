@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as sourceMissing from '$lib/sourceMissing';
 import { flushSync, mount, unmount } from 'svelte';
 import { imageCard } from '$lib/test/fixtures/imagePage';
 import { imageBox } from '$lib/test/fixtures/imageDetail';
@@ -107,5 +108,33 @@ describe('ImageCard', () => {
     expect(onclick).toHaveBeenCalledOnce();
     (el.querySelector('[data-testid="image-card-open"]') as HTMLElement).click();
     expect(onopen).toHaveBeenCalledOnce();
+  });
+
+  it('retries a failed thumbnail once, then shows the served source-missing badge', async () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(sourceMissing, 'fetchSourceMissing').mockResolvedValue({
+      alias: 'photos',
+      root_mounted: false,
+      message: 'not mounted',
+    });
+    try {
+      const el = render({ card: imageCard() });
+      const first = el.querySelector('img')!;
+      first.dispatchEvent(new Event('error'));
+      flushSync();
+      expect(spy).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+      flushSync();
+      const second = el.querySelector('img')!;
+      expect(second).not.toBe(first);
+      second.dispatchEvent(new Event('error'));
+      await vi.advanceTimersByTimeAsync(0);
+      flushSync();
+      expect(spy).toHaveBeenCalledOnce();
+      expect(el.querySelector('[role="status"]')?.textContent).toContain('photos');
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

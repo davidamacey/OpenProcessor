@@ -133,6 +133,22 @@ def _apply_import_fields_from(row: _FrameRow, src: dict[str, Any]) -> None:
     )
 
 
+def _frame_row_for(per_frame: dict[str, _FrameRow], src: dict[str, Any]) -> _FrameRow | None:
+    """The row of ``src``'s source frame (created on first sight, import provenance stamped),
+    or ``None`` for an item with no ``image_path``."""
+    image_path = str(src.get('image_path') or '')
+    if not image_path:
+        return None
+    frame_key = str(src.get('image_id') or image_path)
+    row = per_frame.setdefault(
+        frame_key,
+        _FrameRow(item_id=frame_key, image_id=frame_key, image_path=image_path),
+    )
+    row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
+    _apply_import_fields_from(row, src)
+    return row
+
+
 class RowCollector:
     """Turns items-index documents into per-output-image export rows."""
 
@@ -236,16 +252,10 @@ class RowCollector:
         cluster_by_frame: dict[str, list[str]] = defaultdict(list)
         for hit in hits:
             src = hit.get('_source') or {}
-            image_path = str(src.get('image_path') or '')
-            if not image_path:
+            row = _frame_row_for(per_frame, src)
+            if row is None:
                 continue
-            frame_key = str(src.get('image_id') or image_path)
-            row = per_frame.setdefault(
-                frame_key,
-                _FrameRow(item_id=frame_key, image_id=frame_key, image_path=image_path),
-            )
-            row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
-            _apply_import_fields_from(row, src)
+            frame_key = row.item_id
             if src.get('cluster_uid') is not None:
                 cluster_by_frame[frame_key].append(str(src['cluster_uid']))
 
@@ -351,16 +361,10 @@ class RowCollector:
         cluster_keys: dict[str, list[str]] = defaultdict(list)
         for hit in hits:
             src = hit.get('_source') or {}
-            image_path = str(src.get('image_path') or '')
-            if not image_path:
+            row = _frame_row_for(per_frame, src)
+            if row is None:
                 continue
-            frame_key = str(src.get('image_id') or image_path)
-            row = per_frame.setdefault(
-                frame_key,
-                _FrameRow(item_id=frame_key, image_id=frame_key, image_path=image_path),
-            )
-            row.has_test_crop = row.has_test_crop or bool(src.get('test_holdout'))
-            _apply_import_fields_from(row, src)
+            frame_key = row.item_id
             status = str(src.get(f.status) or '')
             if status in POSITIVE_REGION_STATUSES:
                 # An item can carry more than one accepted box

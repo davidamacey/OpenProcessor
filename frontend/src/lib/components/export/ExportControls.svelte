@@ -1,6 +1,7 @@
 <script lang="ts">
   /** /export's "Export to staging" section: options, registry downloads,
    *  and the served status of the latest export. */
+  import ClassSplitTable from '$components/export/ClassSplitTable.svelte';
   import { formatTimestamp } from '$lib/format/date';
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
@@ -293,38 +294,7 @@
         <summary class="cursor-pointer text-zinc-400 hover:text-zinc-200">
           Per-class object counts ({run.exportClassSplit.withObjects.length} classes with objects)
         </summary>
-        <div class="mt-2 max-h-64 overflow-auto rounded border border-zinc-800">
-          <table class="w-full text-xs">
-            <thead
-              class="sticky top-0 border-b border-zinc-800 bg-zinc-950 text-left uppercase text-zinc-500"
-            >
-              <tr>
-                <th class="px-2 py-1 font-medium">Class</th>
-                <th class="px-2 py-1 text-right font-medium">Train (objects)</th>
-                <th class="px-2 py-1 text-right font-medium">Val (objects)</th>
-                <th class="px-2 py-1 text-right font-medium">Test (objects)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each run.exportClassSplit.withObjects as c (c.class_id)}
-                {@const missing = c.train === 0 || c.val === 0}
-                <tr
-                  class="border-b border-zinc-900 {missing
-                    ? 'bg-red-500/10 text-red-200'
-                    : 'text-zinc-300'}"
-                >
-                  <td class="px-2 py-1">{c.class_name}</td>
-                  <td class="px-2 py-1 text-right font-mono"
-                    >{c.train.toLocaleString()}</td
-                  >
-                  <td class="px-2 py-1 text-right font-mono">{c.val.toLocaleString()}</td>
-                  <td class="px-2 py-1 text-right font-mono">{c.test.toLocaleString()}</td
-                  >
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
+        <ClassSplitTable class="mt-2 max-h-64" rows={run.exportClassSplit.withObjects} />
         {#if run.exportClassSplit.empty.length > 0}
           <p class="mt-1 text-zinc-500" data-testid="export-empty-classes">
             {run.exportClassSplit.empty.length} class{run.exportClassSplit.empty

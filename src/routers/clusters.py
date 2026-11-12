@@ -174,6 +174,32 @@ def refuse_faces_index(index: Annotated[str, Path()]) -> None:
 # =============================================================================
 
 
+def _train_response(result: dict[str, Any], index_name: str) -> TrainResponse:
+    """The wire response for a train/rebalance result dict (``status == 'error'`` carries zeros)."""
+    if result.get('status') == 'error':
+        return TrainResponse(
+            status='error',
+            index_name=index_name,
+            n_vectors=0,
+            n_clusters=0,
+            avg_cluster_size=0,
+            empty_clusters=0,
+            documents_updated=0,
+            training_time_s=0,
+            error=result.get('error'),
+        )
+    return TrainResponse(
+        status='success',
+        index_name=result.get('index_name', index_name),
+        n_vectors=result.get('n_vectors', 0),
+        n_clusters=result.get('n_clusters', 0),
+        avg_cluster_size=result.get('avg_cluster_size', 0),
+        empty_clusters=result.get('empty_clusters', 0),
+        documents_updated=result.get('documents_updated', 0),
+        training_time_s=result.get('training_time_s', 0),
+    )
+
+
 @router.post(
     '/train/{index}', response_model=TrainResponse, dependencies=[Depends(refuse_faces_index)]
 )
@@ -217,29 +243,7 @@ async def train_clusters(
             max_samples=max_samples,
         )
 
-        if result.get('status') == 'error':
-            return TrainResponse(
-                status='error',
-                index_name=index_name,
-                n_vectors=0,
-                n_clusters=0,
-                avg_cluster_size=0,
-                empty_clusters=0,
-                documents_updated=0,
-                training_time_s=0,
-                error=result.get('error'),
-            )
-
-        return TrainResponse(
-            status='success',
-            index_name=result.get('index_name', index_name),
-            n_vectors=result.get('n_vectors', 0),
-            n_clusters=result.get('n_clusters', 0),
-            avg_cluster_size=result.get('avg_cluster_size', 0),
-            empty_clusters=result.get('empty_clusters', 0),
-            documents_updated=result.get('documents_updated', 0),
-            training_time_s=result.get('training_time_s', 0),
-        )
+        return _train_response(result, index_name)
 
     except UpstreamError:
         raise
@@ -391,29 +395,7 @@ async def rebalance_clusters(
     try:
         result = await search_service.rebalance_clusters(index_name=index_name)
 
-        if result.get('status') == 'error':
-            return TrainResponse(
-                status='error',
-                index_name=index_name,
-                n_vectors=0,
-                n_clusters=0,
-                avg_cluster_size=0,
-                empty_clusters=0,
-                documents_updated=0,
-                training_time_s=0,
-                error=result.get('error'),
-            )
-
-        return TrainResponse(
-            status='success',
-            index_name=result.get('index_name', index_name),
-            n_vectors=result.get('n_vectors', 0),
-            n_clusters=result.get('n_clusters', 0),
-            avg_cluster_size=result.get('avg_cluster_size', 0),
-            empty_clusters=result.get('empty_clusters', 0),
-            documents_updated=result.get('documents_updated', 0),
-            training_time_s=result.get('training_time_s', 0),
-        )
+        return _train_response(result, index_name)
 
     except UpstreamError:
         raise

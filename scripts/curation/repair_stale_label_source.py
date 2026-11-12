@@ -12,19 +12,10 @@ it there. A human-owned or validated item is never touched.
 
 Dry run by default (read-only); ``--apply`` writes under OCC and records
 a restorable ``class_id_history`` snapshot per item.
-
-    python3 scripts/curation/repair_stale_label_source.py
-    python3 scripts/curation/repair_stale_label_source.py --verbose
-    python3 scripts/curation/repair_stale_label_source.py --apply
-
-The index is ``CurationConfig.items_index`` unless ``--index`` is given.
 """
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -35,14 +26,14 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 
-from src.config import get_curation_config
-from src.db.engine import run_with_engine
+from typing import TYPE_CHECKING
+
+from scripts.curation._repair_cli import build_repair_parser, exit_code, repair_main
 from src.services.curation.stale_label_source_repair import RepairPlan, apply_repairs, plan_repairs
-from src.services.projects.guard import make_script_opensearch
-from src.services.projects.script_binding import add_project_argument, bind_script_project
 
 
-DEFAULT_OPENSEARCH = os.environ.get('OPENSEARCH_URL', 'http://opensearch:9200')
+if TYPE_CHECKING:
+    import argparse
 
 
 def format_plan(plan: RepairPlan) -> str:
@@ -66,41 +57,15 @@ async def run(args: argparse.Namespace, client: object) -> int:
     if args.dry_run:
         print('Dry-run only. Pass --apply to write.')
         return 0
-    written = await apply_repairs(client, plans, index=args.index)
-    print(' '.join(f'{k}={v}' for k, v in written.items()))
-    return 1 if written['errors'] else 0
-
-
-async def _async_main(args: argparse.Namespace) -> int:
-    client = make_script_opensearch([args.opensearch_url], use_ssl=False, timeout=300)
-    try:
-        return await run(args, client)
-    finally:
-        await client.close()
+    return exit_code(await apply_repairs(client, plans, index=args.index))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    p.add_argument('--index', default=get_curation_config().items_index)
-    p.add_argument('--crop-id-prefix', default=None, help='Only crop ids starting with this.')
-    p.add_argument('--page-size', type=int, default=500)
-    p.add_argument('--opensearch-url', default=DEFAULT_OPENSEARCH)
-    p.add_argument('--verbose', action='store_true', help='Print one line per candidate.')
-    g = p.add_mutually_exclusive_group()
-    g.add_argument('--dry-run', action='store_true', default=True)
-    g.add_argument('--apply', dest='dry_run', action='store_false')
-    add_project_argument(p)
-    return p
+    return build_repair_parser(__doc__)
 
 
 def main() -> int:
-    args = build_parser().parse_args()
-    bind_script_project(args.project)
-    if args.page_size <= 0:
-        build_parser().error('--page-size must be positive')
-    return asyncio.run(run_with_engine(_async_main(args), 'op-repair-stale-label-source'))
+    return repair_main(build_parser, run, 'op-repair-stale-label-source')
 
 
 if __name__ == '__main__':

@@ -50,6 +50,7 @@ def _routes(owner: str, ids: dict[str, str]) -> dict[str, dict[str, str]]:
         f'/ingest/sources/{ids["source_id"]}': {},
         f'/pipeline/auto_label/status/{ids["autolabel_job_id"]}': {},
         f'/reprocess/jobs/{ids["reprocess_job_id"]}': {},
+        f'/select/diverse/{ids["selection_job_id"]}/items': {},
         f'/train/status/{train}': {},
         f'/train/manifest/{train}': {},
         f'/train/artifacts/{train}/results.csv': {},

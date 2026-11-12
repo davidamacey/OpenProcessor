@@ -71,6 +71,68 @@ export function createDefaultsEditor() {
     void strategiesStore.init();
   }
 
+  function withoutAxis<V>(rec: Record<string, V>, axis: string): Record<string, V> {
+    const next = { ...rec };
+    delete next[axis];
+    return next;
+  }
+
+  function onSaveSuccess(
+    spec: SettingsAxisSpec,
+    mode: 'set' | 'clear',
+    id: string | null,
+  ) {
+    selections = withoutAxis(selections, spec.axis);
+    if (saveErrors[spec.axis]) saveErrors = withoutAxis(saveErrors, spec.axis);
+    // /methods' per-entry `default: true` flag is derived server-side
+    // from this same record (plan §4.3) — invalidate the cache so the
+    // next mount of any StrategyBar/AssistScopeBar consumer re-fetches.
+    strategiesStore.reset();
+    toastStore.success(
+      mode === 'clear'
+        ? `Shared ${spec.label} default cleared`
+        : `Shared ${spec.label} default set to ${id}`,
+    );
+  }
+
+  /** The served words: a refused VLM pick names its endpoint and the
+   *  valid ids; other structured refusals carry their own `message`. */
+  function saveFailureMessage(e: unknown, mode: 'set' | 'clear'): string {
+    const unknown = unknownStrategyDetail(e);
+    if (unknown) {
+      return `Unknown ${unknown.axis.replace('_', ' ')} "${unknown.requested}" — valid: ${unknown.valid_ids.join(', ') || 'none'}.`;
+    }
+    const refusal = configErrorDetail(e);
+    if (refusal) return refusal.message;
+    return (
+      apiErrorText(e) ??
+      (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings')
+    );
+  }
+
+  function onSaveFailure(spec: SettingsAxisSpec, mode: 'set' | 'clear', e: unknown) {
+    const message = saveFailureMessage(e, mode);
+    saveErrors = { ...saveErrors, [spec.axis]: message };
+    // A refused save is shown under its control; the store's load-error
+    // state would otherwise replace the whole page with a Retry.
+    curationSettingsStore.error = null;
+    if (configErrorDetail(e)?.error === 'vlm_external_not_acknowledged') {
+      ackRefused = { ...ackRefused, [spec.axis]: true };
+    }
+    toastStore.error(message);
+    // Drop the rejected local pick — the control must revert to
+    // whatever is actually in effect, never keep showing the rejected
+    // value as though it had been saved.
+    selections = withoutAxis(selections, spec.axis);
+    // A 422 "not currently advertised" means /methods is stale (plan
+    // §4.4) — re-sync both caches rather than leave a dead option
+    // selectable.
+    if (e instanceof ApiError && e.status === 422) {
+      strategiesStore.reset();
+      void curationSettingsStore.refresh();
+    }
+  }
+
   async function confirmAction(): Promise<void> {
     if (!confirmSpec) return;
     if (confirmMode === 'set' && pendingId == null) return;
@@ -83,55 +145,9 @@ export function createDefaultsEditor() {
       } else {
         await curationSettingsStore.saveDefault(spec.axis, id as string);
       }
-      const nextSelections = { ...selections };
-      delete nextSelections[spec.axis];
-      selections = nextSelections;
-      if (saveErrors[spec.axis]) {
-        const nextErrors = { ...saveErrors };
-        delete nextErrors[spec.axis];
-        saveErrors = nextErrors;
-      }
-      // /methods' per-entry `default: true` flag is derived server-side
-      // from this same record (plan §4.3) — invalidate the cache so the
-      // next mount of any StrategyBar/AssistScopeBar consumer re-fetches.
-      strategiesStore.reset();
-      toastStore.success(
-        mode === 'clear'
-          ? `Shared ${spec.label} default cleared`
-          : `Shared ${spec.label} default set to ${id}`,
-      );
+      onSaveSuccess(spec, mode, id);
     } catch (e) {
-      // The served words: a refused VLM pick names its endpoint and the
-      // valid ids; other structured refusals carry their own `message`.
-      const unknown = unknownStrategyDetail(e);
-      const refusal = configErrorDetail(e);
-      const message = unknown
-        ? `Unknown ${unknown.axis.replace('_', ' ')} "${unknown.requested}" — valid: ${unknown.valid_ids.join(', ') || 'none'}.`
-        : refusal
-          ? refusal.message
-          : (apiErrorText(e) ??
-            (mode === 'clear' ? 'failed to clear setting' : 'failed to save settings'));
-      saveErrors = { ...saveErrors, [spec.axis]: message };
-      // A refused save is shown under its control; the store's load-error
-      // state would otherwise replace the whole page with a Retry.
-      curationSettingsStore.error = null;
-      if (configErrorDetail(e)?.error === 'vlm_external_not_acknowledged') {
-        ackRefused = { ...ackRefused, [spec.axis]: true };
-      }
-      toastStore.error(message);
-      // Drop the rejected local pick — the control must revert to
-      // whatever is actually in effect, never keep showing the rejected
-      // value as though it had been saved.
-      const nextSelections = { ...selections };
-      delete nextSelections[spec.axis];
-      selections = nextSelections;
-      // A 422 "not currently advertised" means /methods is stale (plan
-      // §4.4) — re-sync both caches rather than leave a dead option
-      // selectable.
-      if (e instanceof ApiError && e.status === 422) {
-        strategiesStore.reset();
-        void curationSettingsStore.refresh();
-      }
+      onSaveFailure(spec, mode, e);
     } finally {
       confirmSpec = null;
       pendingId = null;

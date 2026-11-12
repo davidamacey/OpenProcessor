@@ -205,7 +205,7 @@ async def create_drawn_item(
             await _stored(opensearch, crop_id, excludes) or {}, crop_id, box, class_name
         )
         return DrawnItem(raced, False, EmbedOutcome(raced.get(write.state_field, DEFERRED), None))
-    await enqueue_image_counts([image_id])
+    await enqueue_image_counts(opensearch, [image_id])
     await rerank_image_items(opensearch, image_id)
     await near_dup_pending.enqueue_pending_bound('item', [crop_id], 'added')
     embed = await embed_item_inline(opensearch, pe, crop_id)

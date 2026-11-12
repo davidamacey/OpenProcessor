@@ -28,6 +28,15 @@
     ws.select(gallery.workspaceSelection);
   });
 
+  $effect(() =>
+    ws.registerPage({
+      kind: 'images',
+      ids: () => gallery.cards.map((c) => c.image_id),
+      total: () => gallery.total,
+      apply: (ids) => gallery.replaceSelection(ids),
+    }),
+  );
+
   $effect(() => {
     if (gallery.status !== 'loading') {
       ws.matching = { total: gallery.total, hidden: gallery.hidden };

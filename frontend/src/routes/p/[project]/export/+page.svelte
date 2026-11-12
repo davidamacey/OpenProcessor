@@ -31,6 +31,8 @@
   let stats = $state<StatsSummary | null>(null);
   let holdout = $state<TestHoldoutStats | null>(null);
   let loading = $state<boolean>(false);
+  // The Gap column first, the order this table opens in; the server sorts every request.
+  let classSort = $state<string>('trainable_gap');
   let error = $state<string | null>(null);
 
   const run = createExportRunController(loadAll);
@@ -48,7 +50,7 @@
     error = null;
     try {
       const [s, h, e, d] = await Promise.allSettled([
-        getStats(),
+        getStats({ sort: classSort }),
         getTestHoldoutStats(),
         exportStatus(),
         listDatasets({ kind: 'yolo' }),
@@ -66,6 +68,11 @@
     } finally {
       loading = false;
     }
+  }
+
+  async function resortClasses(sort: string): Promise<void> {
+    classSort = sort;
+    await loadAll();
   }
 
   $effect(() => {
@@ -125,6 +132,9 @@
     {loading}
     {error}
     blockBelow={stats?.thresholds?.block_below ?? null}
+    sortApplied={stats?.sort_applied ?? null}
+    sortOptions={stats?.sort_options ?? []}
+    onSort={(sort) => void resortClasses(sort)}
   />
 
   <ExportControls {run} {hasMulticlassExport} />

@@ -27,6 +27,8 @@ CORE_NEAR_DUP_MAPPING = {
     'near_dup_run_id': {'type': 'keyword'},
 }
 
+_KNN_INDEX_SETTINGS = {'index': {'number_of_shards': 1, 'number_of_replicas': 0, 'knn': True}}
+
 
 class IndexesMixin:
     """Index creation, HNSW tuning and deletion for the visual-search indexes."""
@@ -37,6 +39,20 @@ class IndexesMixin:
     # =========================================================================
     # HNSW Configuration by Index Type
     # =========================================================================
+
+    def _knn_vector(self, index_type: IndexName) -> dict:
+        """The cosine HNSW ``knn_vector`` field mapping for ``index_type``."""
+        hnsw = self._get_hnsw_config(index_type)
+        return {
+            'type': 'knn_vector',
+            'dimension': self.embedding_dim,
+            'method': {
+                'name': 'hnsw',
+                'space_type': 'cosinesimil',
+                'engine': 'faiss',
+                'parameters': {'ef_construction': hnsw['ef_construction'], 'm': hnsw['m']},
+            },
+        }
 
     def _get_hnsw_config(self, index_type: IndexName) -> dict:
         """
@@ -112,33 +128,14 @@ class IndexesMixin:
         - clustered_at (date): Cluster assignment timestamp
         """
         index_name = IndexName.GLOBAL.value
-        hnsw = self._get_hnsw_config(IndexName.GLOBAL)
 
         index_body = {
-            'settings': {
-                'index': {
-                    'number_of_shards': 1,
-                    'number_of_replicas': 0,
-                    'knn': True,
-                },
-            },
+            'settings': _KNN_INDEX_SETTINGS,
             'mappings': {
                 'properties': {
                     'image_id': {'type': 'keyword'},
                     'image_path': {'type': 'keyword'},
-                    'global_embedding': {
-                        'type': 'knn_vector',
-                        'dimension': self.embedding_dim,
-                        'method': {
-                            'name': 'hnsw',
-                            'space_type': 'cosinesimil',
-                            'engine': 'faiss',
-                            'parameters': {
-                                'ef_construction': hnsw['ef_construction'],
-                                'm': hnsw['m'],
-                            },
-                        },
-                    },
+                    'global_embedding': self._knn_vector(IndexName.GLOBAL),
                     'cluster_id': {'type': 'integer'},
                     'cluster_distance': {'type': 'float'},
                     'width': {'type': 'integer'},
@@ -185,34 +182,15 @@ class IndexesMixin:
         - clustered_at (date): Cluster assignment timestamp
         """
         index_name = IndexName.VEHICLES.value
-        hnsw = self._get_hnsw_config(IndexName.VEHICLES)
 
         index_body = {
-            'settings': {
-                'index': {
-                    'number_of_shards': 1,
-                    'number_of_replicas': 0,
-                    'knn': True,
-                },
-            },
+            'settings': _KNN_INDEX_SETTINGS,
             'mappings': {
                 'properties': {
                     'detection_id': {'type': 'keyword'},
                     'image_id': {'type': 'keyword'},
                     'image_path': {'type': 'keyword'},
-                    'embedding': {
-                        'type': 'knn_vector',
-                        'dimension': self.embedding_dim,
-                        'method': {
-                            'name': 'hnsw',
-                            'space_type': 'cosinesimil',
-                            'engine': 'faiss',
-                            'parameters': {
-                                'ef_construction': hnsw['ef_construction'],
-                                'm': hnsw['m'],
-                            },
-                        },
-                    },
+                    'embedding': self._knn_vector(IndexName.VEHICLES),
                     'cluster_id': {'type': 'integer'},
                     'cluster_distance': {'type': 'float'},
                     'box': {'type': 'float'},
@@ -248,34 +226,15 @@ class IndexesMixin:
         - clustered_at (date): Cluster assignment timestamp
         """
         index_name = IndexName.PEOPLE.value
-        hnsw = self._get_hnsw_config(IndexName.PEOPLE)
 
         index_body = {
-            'settings': {
-                'index': {
-                    'number_of_shards': 1,
-                    'number_of_replicas': 0,
-                    'knn': True,
-                },
-            },
+            'settings': _KNN_INDEX_SETTINGS,
             'mappings': {
                 'properties': {
                     'detection_id': {'type': 'keyword'},
                     'image_id': {'type': 'keyword'},
                     'image_path': {'type': 'keyword'},
-                    'embedding': {
-                        'type': 'knn_vector',
-                        'dimension': self.embedding_dim,
-                        'method': {
-                            'name': 'hnsw',
-                            'space_type': 'cosinesimil',
-                            'engine': 'faiss',
-                            'parameters': {
-                                'ef_construction': hnsw['ef_construction'],
-                                'm': hnsw['m'],
-                            },
-                        },
-                    },
+                    'embedding': self._knn_vector(IndexName.PEOPLE),
                     'cluster_id': {'type': 'integer'},
                     'cluster_distance': {'type': 'float'},
                     'box': {'type': 'float'},
@@ -318,35 +277,16 @@ class IndexesMixin:
         - clustered_at (date): Cluster assignment timestamp
         """
         index_name = IndexName.FACES.value
-        hnsw = self._get_hnsw_config(IndexName.FACES)
 
         index_body = {
-            'settings': {
-                'index': {
-                    'number_of_shards': 1,
-                    'number_of_replicas': 0,
-                    'knn': True,
-                },
-            },
+            'settings': _KNN_INDEX_SETTINGS,
             'mappings': {
                 'properties': {
                     'face_id': {'type': 'keyword'},
                     'image_id': {'type': 'keyword'},
                     'image_path': {'type': 'keyword'},
                     'person_detection_id': {'type': 'keyword'},
-                    'embedding': {
-                        'type': 'knn_vector',
-                        'dimension': self.embedding_dim,
-                        'method': {
-                            'name': 'hnsw',
-                            'space_type': 'cosinesimil',
-                            'engine': 'faiss',
-                            'parameters': {
-                                'ef_construction': hnsw['ef_construction'],
-                                'm': hnsw['m'],
-                            },
-                        },
-                    },
+                    'embedding': self._knn_vector(IndexName.FACES),
                     'cluster_id': {'type': 'integer'},
                     'cluster_distance': {'type': 'float'},
                     'box': {'type': 'float'},

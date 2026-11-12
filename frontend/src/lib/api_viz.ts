@@ -3,6 +3,7 @@
  */
 import { apiFetch, isPlainObject, qs, scoped } from '$lib/api';
 import type { LatestJobStatus } from '$lib/jobs/jobPhase';
+import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import { ApiError, structuredDetail } from '$lib/api_errors';
 
 // -- embedding projection (2-d visualization overlay, Phase 5) -----------
@@ -24,9 +25,9 @@ import { ApiError, structuredDetail } from '$lib/api_errors';
 // produced.
 
 /**
- * One projected point. Color is derived client-side from `cluster_uid`
- * (see `colorForCluster` in `embeddingPlot.ts`) — this overlay decorates
- * an existing assignment, it never computes or chooses one.
+ * One projected point. `colour_index` is the served legend slot of its class (the plot maps a
+ * slot to a palette colour, never a class); `matched` is false when the shared filter leaves
+ * the point out, so it is drawn dimmed.
  */
 export interface VizPoint {
   crop_id: string;
@@ -35,10 +36,20 @@ export interface VizPoint {
   cluster_uid: string | null;
   class_name: string | null;
   class_source: string | null;
+  matched: boolean;
+  colour_index: number;
+}
+
+/** One class of the scatter: `class_name` is null for the points with no class. */
+export interface VizLegendEntry {
+  class_name: string | null;
+  colour_index: number;
+  count: number;
 }
 
 export interface VizProjectionResponse {
   points: VizPoint[];
+  legend: VizLegendEntry[];
   /** `points.length`, kept as a field for parity with other list responses
    *  in this file — the server doesn't send a separate total, there's no
    *  pagination here (`max_points` is a hard cap, not a page size). */
@@ -55,6 +66,7 @@ export interface VizProjectionResponse {
 
 const EMPTY_VIZ_PROJECTION: VizProjectionResponse = {
   points: [],
+  legend: [],
   total: 0,
   built: false,
   fitted_at: null,
@@ -76,6 +88,22 @@ function parseVizPoint(raw: unknown): VizPoint | null {
     cluster_uid,
     class_name: typeof raw.class_name === 'string' ? raw.class_name : null,
     class_source: typeof raw.class_source === 'string' ? raw.class_source : null,
+    matched: raw.matched !== false,
+    colour_index:
+      typeof raw.colour_index === 'number' && Number.isInteger(raw.colour_index)
+        ? raw.colour_index
+        : 0,
+  };
+}
+
+function parseLegendEntry(raw: unknown): VizLegendEntry | null {
+  if (!isPlainObject(raw)) return null;
+  const { colour_index, count } = raw;
+  if (typeof colour_index !== 'number' || typeof count !== 'number') return null;
+  return {
+    class_name: typeof raw.class_name === 'string' ? raw.class_name : null,
+    colour_index,
+    count,
   };
 }
 
@@ -87,21 +115,14 @@ function parseVizPoint(raw: unknown): VizPoint | null {
  * the served message (`apiErrorText`) instead of a false "not built yet".
  */
 export async function getVizProjection(
-  params: {
-    cluster_uid?: string | null;
-    class_id?: number | null;
-    max_points?: number;
-  } = {},
+  query: ItemFilterQuery,
+  maxPoints?: number,
   signal?: AbortSignal,
 ): Promise<VizProjectionResponse> {
   let raw: unknown;
   try {
     raw = await apiFetch<unknown>(
-      `${scoped()}/viz/projection${qs({
-        cluster_uid: params.cluster_uid ?? undefined,
-        class_id: params.class_id ?? undefined,
-        max_points: params.max_points ?? undefined,
-      })}`,
+      `${scoped()}/viz/projection${qs({ ...query, max_points: maxPoints })}`,
       {},
       signal,
     );
@@ -115,8 +136,10 @@ export async function getVizProjection(
   if (!isPlainObject(raw)) throw new Error('The projection response was not an object.');
   const rawPoints = Array.isArray(raw.points) ? raw.points : [];
   const points = rawPoints.map(parseVizPoint).filter((p): p is VizPoint => p != null);
+  const rawLegend = Array.isArray(raw.legend) ? raw.legend : [];
   return {
     points,
+    legend: rawLegend.map(parseLegendEntry).filter((e): e is VizLegendEntry => e != null),
     total: points.length,
     built: true,
     fitted_at: typeof raw.fitted_at === 'string' ? raw.fitted_at : null,

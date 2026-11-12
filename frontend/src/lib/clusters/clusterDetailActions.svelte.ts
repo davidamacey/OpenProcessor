@@ -1,11 +1,12 @@
 /**
- * The /clusters/[id] actions: class assignment and advance, the M-key move
+ * The cluster detail actions: class assignment and advance, the M-key move
  * picker, flag / ignore, the drag-and-drop handlers and
  * every keyboard action. Optimistic writes go through the shared
  * `createClusterActionController`; the move-picker state stays together
  * here with the drag set it races against.
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
+import { captureDragSelection } from '$lib/dragSelection';
 import { getClusters } from '$lib/api_clusters';
 import { flagNeedsNewClass } from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
@@ -18,8 +19,7 @@ import { keymapStore } from '$stores/keymap.svelte';
 import { toastStore } from '$stores/toast.svelte';
 
 export function createClusterDetailActions(view: ClusterDetailController) {
-  const { cropPager, sel, exclusionGuard, grid, loadFirst, loadMore, selectAllPage } =
-    view;
+  const { cropPager, sel, exclusionGuard, grid, loadFirst, loadMore } = view;
 
   // Class dropdown
   let confirmClassId = $state<number | null>(null);
@@ -197,16 +197,8 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     // replaces the selection with just that one. This is the only place
     // the multi-drag set is captured — the ClassSidebar's own dnd events
     // only see the one shadow item being hovered.
-    const draggedId = e.detail.info?.id;
-    if (draggedId && !dragIds.includes(draggedId)) {
-      if (sel.has(draggedId) && sel.size > 1) {
-        dragIds = [...sel.ids];
-      } else {
-        dragIds = [draggedId];
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- copied into the selection's own SvelteSet by its setter
-        sel.ids = new Set([draggedId]);
-      }
-    }
+    const captured = captureDragSelection(e.detail.info?.id, dragIds, sel);
+    if (captured) dragIds = captured;
     grid.setZoneItems(key, e.detail.items);
   }
 
@@ -280,7 +272,6 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     reg('cluster.undo', controller.undoLast);
     reg('cluster.ignore', () => void ignoreSelected('ignore'));
     reg('cluster.unignore', controller.undoIgnore);
-    reg('cluster.select_all', selectAllPage);
     // Arrow keys navigate within the loaded grid. With infinite scroll the
     // next-page concept is gone — left/right move selection by one position
     // in the visible filtered list.

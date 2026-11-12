@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { embeddingCoverageSuffix } from './embeddingPlot';
 import {
-  colorForCluster,
+  colourForIndex,
   computeScale,
+  dragToBox,
+  nearestPointId,
+  PALETTE_SIZE,
+  pointAlpha,
   pointInPolygon,
   selectIdsInLasso,
   type ScreenPoint,
   classifyRebuildPoll,
-  legendEntries,
 } from './embeddingPlot';
 
 describe('computeScale', () => {
@@ -135,32 +138,69 @@ describe('selectIdsInLasso', () => {
   });
 });
 
-describe('colorForCluster', () => {
-  const UIDS = Array.from(
-    { length: 12 },
-    (_, i) => `0b9f9a38-0000-4000-8000-0000000000${i}a`,
+describe('colourForIndex', () => {
+  it('maps a served slot to a palette colour and wraps past the palette', () => {
+    expect(colourForIndex(0)).toBe(colourForIndex(PALETTE_SIZE));
+    expect(colourForIndex(1)).not.toBe(colourForIndex(0));
+    expect(colourForIndex(-1)).toBe(colourForIndex(PALETTE_SIZE - 1));
+  });
+});
+
+describe('pointAlpha', () => {
+  it('dims a point the filter leaves out below every matched point', () => {
+    expect(pointAlpha(false, false, false)).toBeLessThan(pointAlpha(true, false, true));
+    expect(pointAlpha(false, true, true)).toBeLessThan(pointAlpha(true, false, true));
+  });
+
+  it('keeps the selection bright and the rest of the matched points muted', () => {
+    expect(pointAlpha(true, true, true)).toBeGreaterThan(pointAlpha(true, false, true));
+    expect(pointAlpha(true, false, false)).toBe(pointAlpha(true, true, true));
+  });
+});
+
+describe('dragToBox', () => {
+  const scale = computeScale(
+    [
+      { x: 0, y: 0 },
+      { x: 10, y: 20 },
+    ],
+    120,
+    120,
+    10,
   );
 
-  it('is deterministic — the same cluster uid always returns the same color', () => {
-    expect(colorForCluster(UIDS[0]!)).toBe(colorForCluster(UIDS[0]!));
+  it('turns a drag into a data-space box whatever the drag direction', () => {
+    const from = scale.toScreen(2, 4);
+    const to = scale.toScreen(6, 12);
+    const forward = dragToBox(scale, from, to);
+    const backward = dragToBox(scale, to, from);
+    expect(forward[0]).toBeCloseTo(2);
+    expect(forward[1]).toBeCloseTo(4);
+    expect(forward[2]).toBeCloseTo(6);
+    expect(forward[3]).toBeCloseTo(12);
+    expect(backward).toEqual(forward);
   });
 
-  it('returns a distinct neutral color for null (unassigned)', () => {
-    const unassigned = colorForCluster(null);
-    // null must not silently collide with a "real" cluster color.
-    for (const uid of UIDS) {
-      expect(colorForCluster(uid)).not.toBe(unassigned);
-    }
+  it('round-trips toScreen and toData', () => {
+    const at = scale.toScreen(3, 7);
+    const back = scale.toData(at.x, at.y);
+    expect(back.x).toBeCloseTo(3);
+    expect(back.y).toBeCloseTo(7);
+  });
+});
+
+describe('nearestPointId', () => {
+  const pts = [
+    { id: 'a', x: 10, y: 10 },
+    { id: 'b', x: 14, y: 10 },
+  ];
+
+  it('picks the nearest point inside the radius', () => {
+    expect(nearestPointId(pts, { x: 13, y: 10 }, 8)).toBe('b');
   });
 
-  it('treats an empty uid as unassigned and never throws', () => {
-    expect(() => colorForCluster('')).not.toThrow();
-    expect(colorForCluster('')).toBe(colorForCluster(null));
-  });
-
-  it('produces more than one distinct color across a spread of cluster uids', () => {
-    const colors = new Set(UIDS.map((u) => colorForCluster(u)));
-    expect(colors.size).toBeGreaterThan(1);
+  it('is null when nothing is near enough', () => {
+    expect(nearestPointId(pts, { x: 100, y: 100 }, 8)).toBeNull();
   });
 });
 
@@ -207,28 +247,5 @@ describe('embeddingCoverageSuffix (m20, 2026-09-24 interactive pass)', () => {
 
   it('never claims a gap when the pool total is smaller than shown (stale/inconsistent data)', () => {
     expect(embeddingCoverageSuffix(500, 422)).toBe('points');
-  });
-});
-
-describe('legendEntries (F-68)', () => {
-  it('lists the biggest clusters with their color and most common class name', () => {
-    const pts = [
-      { cluster_uid: 'uid-3', class_name: 'widget_a' },
-      { cluster_uid: 'uid-3', class_name: 'widget_a' },
-      { cluster_uid: 'uid-3', class_name: 'widget_b' },
-      { cluster_uid: 'uid-7', class_name: null },
-      { cluster_uid: null, class_name: null },
-      { cluster_uid: null, class_name: null },
-    ];
-    const e = legendEntries(pts, 2);
-    expect(e).toEqual([
-      {
-        clusterUid: 'uid-3',
-        color: colorForCluster('uid-3'),
-        count: 3,
-        className: 'widget_a',
-      },
-      { clusterUid: null, color: colorForCluster(null), count: 2, className: null },
-    ]);
   });
 });

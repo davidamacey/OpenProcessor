@@ -35,6 +35,8 @@ def _state(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_for) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     await _label(crops, fake, registry, 'c1', ids['widget'])
@@ -55,6 +57,8 @@ async def test_discard_then_undo_restores_exactly(crops, registry, ids, client_f
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_undo_after_discard_after_label_steps_back(crops, registry, ids, client_for) -> None:
     fake = QueryFakeOpenSearch({ITEMS: {'c1': _proposal_doc('c1')}})
     original = _state(fake.docs(ITEMS)['c1'])
@@ -147,6 +151,8 @@ def test_label_source_must_be_a_human_source(client_for, ids) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.db
+@pytest.mark.usefixtures('world')
 async def test_class_source_is_always_human_on_a_human_write(crops, registry, ids) -> None:
     from src.routers.curation._crop_write_models import CropLabelRequest
 

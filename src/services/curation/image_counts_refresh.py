@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from src.clients.image_counts_dirty import DirtyImages, mark_dirty
+from src.clients.image_counts_dirty import PARKED_TTL_S, DirtyImages, mark_dirty
 from src.config.curation_accessors import images_index, items_index
 from src.config.image_counts import sweep_per_tick
 from src.core.logging import get_logger
@@ -36,30 +36,36 @@ logger = get_logger(__name__)
 
 #: Images recounted per items aggregation and per bulk write.
 BATCH: Final = 500
-#: A drain stops starting batches after this long (the tick's soft limit is 120 s).
-DRAIN_BUDGET_S: Final = 90.0
+#: A drain stops starting batches after this long when the caller gives no budget.
+DRAIN_BUDGET_S: Final = 60.0
 
 
 class CountsWriteError(RuntimeError):
-    """The images index refused some count writes; the images stay marked for the next drain."""
+    """The images index refused the count writes of :attr:`failed`; the rest were stored."""
+
+    def __init__(self, failed: list[str], total: int) -> None:
+        super().__init__(f'{len(failed)} of {total} image count writes were refused')
+        self.failed = failed
 
 
 @dataclass
 class DrainReport:
     recounted: int = 0
     swept: int = 0
+    refused: int = 0
 
 
-async def enqueue_image_counts(image_ids: Iterable[str]) -> int:
+async def enqueue_image_counts(opensearch: Any, image_ids: Iterable[str]) -> int:
     """Mark ``image_ids`` for a recount (the entry point of a writer that changed their items)."""
-    return await mark_dirty(image_ids)
+    return await mark_dirty(opensearch, image_ids)
 
 
 async def recount_images(opensearch: Any, image_ids: list[str]) -> int:
     """Recompute the counts of ``image_ids`` from their items and store them; returns how many
     image documents were updated (an image deleted meanwhile is skipped).
 
-    Raises :class:`CountsWriteError` when the images index refuses a write for any other reason.
+    Raises :class:`CountsWriteError` (naming the refused ids) when the images index refuses a
+    write for any other reason; the other images of the call are stored.
     """
     if not image_ids:
         return 0
@@ -81,35 +87,58 @@ async def recount_images(opensearch: Any, image_ids: list[str]) -> int:
         elif status != 404:
             failed.append(image_id)
     if failed:
-        msg = f'{len(failed)} of {len(image_ids)} image count writes were refused'
-        raise CountsWriteError(msg)
+        raise CountsWriteError(failed, len(image_ids))
     return updated
 
 
-async def sweep_uncounted(opensearch: Any, limit: int | None = None) -> int:
+async def sweep_uncounted(opensearch: Any, dirty: DirtyImages, limit: int | None = None) -> int:
     """Recount up to ``limit`` images that have no ``counts_at`` (default: ``sweep_per_tick()``);
-    returns how many were found."""
+    returns how many were counted.
+
+    An image the images index refuses is parked (``DirtyImages.park``) and left out of the sweep
+    for an hour, so one that is refused for good cannot keep the first slot of every sweep.
+    """
     limit = sweep_per_tick() if limit is None else limit
     if limit == 0:
         return 0
+    must_not: list[dict[str, Any]] = [{'exists': {'field': 'counts_at'}}]
+    if parked := await dirty.parked():
+        must_not.append({'terms': {'image_id': parked}})
     resp = await opensearch.search(
         index=images_index(),
         body={
             'size': limit,
             'sort': [{'image_id': 'asc'}],
             '_source': False,
-            'query': {'bool': {'must_not': {'exists': {'field': 'counts_at'}}}},
+            'query': {'bool': {'must_not': must_not}},
         },
     )
     ids = [str(h['_id']) for h in resp['hits']['hits']]
-    await recount_images(opensearch, ids)
+    try:
+        await recount_images(opensearch, ids)
+    except CountsWriteError as exc:
+        await dirty.park(exc.failed)
+        logger.warning(
+            'image_counts_sweep_refused',
+            refused=len(exc.failed),
+            of=len(ids),
+            parked_for_s=PARKED_TTL_S,
+            sample=exc.failed[:3],
+        )
+        return len(ids) - len(exc.failed)
     return len(ids)
 
 
 async def drain(
     opensearch: Any, dirty: DirtyImages, *, budget_s: float = DRAIN_BUDGET_S
 ) -> DrainReport:
-    """Recount every marked image of the bound project, then sweep the never-counted ones."""
+    """Recount every marked image of the bound project, then sweep the never-counted ones.
+
+    An image whose count write the index refuses goes back to the dirty set (the next pass retries
+    it) and leaves the claimed set, so one refused image cannot keep the claimed set alive and
+    block every later claim. The pass never raises for a refusal: it is counted in
+    :attr:`DrainReport.refused` and logged.
+    """
     report = DrainReport()
     deadline = time.monotonic() + budget_s
     if await dirty.claim():
@@ -120,10 +149,23 @@ async def drain(
             batch = await dirty.batch(BATCH)
             if not batch:
                 break
-            await recount_images(opensearch, batch)
+            try:
+                await recount_images(opensearch, batch)
+            except CountsWriteError as exc:
+                await dirty.requeue(exc.failed)
+                await dirty.done([i for i in batch if i not in set(exc.failed)])
+                report.refused += len(exc.failed)
+                report.recounted += len(batch) - len(exc.failed)
+                logger.warning('image_counts_write_refused', refused=len(exc.failed), of=len(batch))
+                continue
             await dirty.done(batch)
             report.recounted += len(batch)
-    report.swept = await sweep_uncounted(opensearch)
-    if report.recounted or report.swept:
-        logger.info('image_counts_drained', recounted=report.recounted, swept=report.swept)
+    report.swept = await sweep_uncounted(opensearch, dirty)
+    if report.recounted or report.swept or report.refused:
+        logger.info(
+            'image_counts_drained',
+            recounted=report.recounted,
+            swept=report.swept,
+            refused=report.refused,
+        )
     return report

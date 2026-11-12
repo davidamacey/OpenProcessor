@@ -310,16 +310,9 @@ def main(argv: list[str] | None = None) -> int:
     files = common.take(
         common.ordered_files(args.root, pin=args.pin, manifest=args.manifest), args.n
     )
-    if args.mode == 'cpu-smoke':
-        body = cpu_smoke(files)
-    else:
-        if None in (args.det_plan, args.pe_plan, args.gpu_index):
-            p.error('run and profile need --det-plan, --pe-plan and --gpu-index')
-        body = (
-            run_gpu(args, files)
-            if args.mode == 'run'
-            else profile_gpu(args, argv if argv is not None else sys.argv[1:])
-        )
+    body = common.run_mode(
+        p, args, argv, files, cpu_smoke=cpu_smoke, run_gpu=run_gpu, profile_gpu=profile_gpu
+    )
     body['set'] = args.label
     body['environment'] = common.environment(args.gpu_index if args.mode != 'cpu-smoke' else None)
     common.write_json(args.out / f'pr2_{args.mode}_{args.label}.json', body)

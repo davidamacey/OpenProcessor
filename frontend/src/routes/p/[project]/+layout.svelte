@@ -10,10 +10,11 @@
   import { untrack } from 'svelte';
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
+  import AppLogo from '$components/AppLogo.svelte';
   import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
   import ResourcesMenu from '$components/ResourcesMenu.svelte';
-  import { projectHref, sectionOf } from '$lib/projectPaths';
+  import { PRIMARY_NAV, projectHref, sectionLabel, sectionOf } from '$lib/projectPaths';
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
   import { slotRegistryWarnings } from '$lib/annotations/registeredSlots';
@@ -183,7 +184,7 @@
   });
 
   const path = $derived(page.url.pathname);
-  /** The page section under `/p/<slug>/` (`review`, `clusters`, ...). */
+  /** The page section under `/p/<slug>/` (`workspace`, `quality`, ...). */
   const section = $derived(sectionOf(path));
 
   function navCurrent(s: string): 'page' | undefined {
@@ -192,16 +193,13 @@
   function navLinkClass(s: string): string {
     return `shrink-0 hover:text-white${section === s ? ' text-white' : ''}`;
   }
-  // Crumbs from the path below `/p/<slug>`: the section.
-  const crumbs = $derived.by(() => {
-    // No crumb on /dashboard — it is "home", already labeled by the
-    // title/nav; a redundant lowercase "dashboard" crumb added nothing.
-    if (!section || section === 'dashboard') return [];
-    const out: Array<{ label: string; href: ReturnType<typeof projectHref> }> = [
-      { label: section, href: projectHref(`/${section}`) },
-    ];
-    return out;
-  });
+  // The crumb: the section, labelled as its nav link is. No crumb on /dashboard: it is "home",
+  // already labeled by the title/nav.
+  const crumb = $derived(
+    section && section !== 'dashboard'
+      ? { label: sectionLabel(section), href: projectHref(`/${section}`) }
+      : null,
+  );
 
   const chipState = $derived(healthChip(healthStore.ok, healthStore.lastChecked));
   const dotClass = $derived(
@@ -241,21 +239,7 @@
           aria-label="About {appName}"
           title="About {appName}"
         >
-          <svg viewBox="0 0 128 128" class="h-6 w-6" role="img" aria-label={appBadge}>
-            <rect width="128" height="128" rx="24" fill="#09090b" />
-            <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-            <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-            <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
-            <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
-            <path
-              d="M33 49 l6 6 l12 -12"
-              fill="none"
-              stroke="#09090b"
-              stroke-width="4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <AppLogo class="h-6 w-6" label={appBadge} />
         </button>
         <a
           href={resolve(projectHref('/dashboard'))}
@@ -275,18 +259,15 @@
         aria-label="Breadcrumb"
         data-testid="breadcrumb"
       >
-        {#each crumbs as c, i (c.href)}
-          {#if i > 0}
-            <span class="shrink-0 text-zinc-600">/</span>
-          {/if}
+        {#if crumb}
           <a
-            href={resolve(c.href)}
+            href={resolve(crumb.href)}
             class="shrink-0 rounded px-1.5 py-0.5 text-zinc-300 hover:bg-zinc-900 hover:text-white"
-            aria-current={i === crumbs.length - 1 ? 'page' : undefined}
+            aria-current="page"
           >
-            {c.label}
+            {crumb.label}
           </a>
-        {/each}
+        {/if}
       </nav>
 
       <span class="grow"></span>
@@ -299,56 +280,13 @@
         class="order-last flex basis-full flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-300 md:order-none md:basis-auto"
         data-testid="primary-nav"
       >
-        <a
-          href={resolve(projectHref('/dashboard'))}
-          class={navLinkClass('dashboard')}
-          aria-current={navCurrent('dashboard')}>Dashboard</a
-        >
-        <a
-          href={resolve(projectHref('/ingest'))}
-          class={navLinkClass('ingest')}
-          aria-current={navCurrent('ingest')}>Ingest</a
-        >
-        <a
-          href={resolve(projectHref('/workspace'))}
-          class={navLinkClass('workspace')}
-          aria-current={navCurrent('workspace')}>Workspace</a
-        >
-        <a
-          href={resolve(projectHref('/classes'))}
-          class={navLinkClass('classes')}
-          aria-current={navCurrent('classes')}>Classes</a
-        >
-        <a
-          href={resolve(projectHref('/export'))}
-          class={navLinkClass('export')}
-          aria-current={navCurrent('export')}>Export</a
-        >
-        <a
-          href={resolve(projectHref('/models'))}
-          class={navLinkClass('models')}
-          aria-current={navCurrent('models')}>Models</a
-        >
-        <a
-          href={resolve(projectHref('/train'))}
-          class={navLinkClass('train')}
-          aria-current={navCurrent('train')}>Train</a
-        >
-        <a
-          href={resolve(projectHref('/bakeoff'))}
-          class={navLinkClass('bakeoff')}
-          aria-current={navCurrent('bakeoff')}>Bake-off</a
-        >
-        <a
-          href={resolve(projectHref('/quality/audit'))}
-          class={navLinkClass('quality')}
-          aria-current={navCurrent('quality')}>Quality</a
-        >
-        <a
-          href={resolve(projectHref('/settings'))}
-          class={navLinkClass('settings')}
-          aria-current={navCurrent('settings')}>Settings</a
-        >
+        {#each PRIMARY_NAV as item (item.section)}
+          <a
+            href={resolve(projectHref(`/${item.section}`))}
+            class={navLinkClass(item.section)}
+            aria-current={navCurrent(item.section)}>{item.label}</a
+          >
+        {/each}
       </nav>
 
       <ResourcesMenu />

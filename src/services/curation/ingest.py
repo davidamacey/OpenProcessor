@@ -400,8 +400,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         Delegates to :func:`src.services.curation.ingest_batch.run_ingest_batch`
         — see that module's docstring for why the batch path is more than
         ``ingest_one`` run N times concurrently. To ingest an
-        already-labeled dataset, use ``POST /datasets/imports``
-        (planned, route not yet built).
+        already-labeled dataset, use ``POST /datasets/imports``.
 
         Args:
             images: Raw image bytes, one per entry.

@@ -129,7 +129,18 @@ const CASES: Case[] = [
     name: 'EmbeddingPlot',
     status: getVizProjectionStatus,
     running: vizJob('running'),
-    mountIt: () => mount(EmbeddingPlot, { target }),
+    mountIt: () =>
+      mount(EmbeddingPlot, {
+        target,
+        props: {
+          query: {},
+          vizBox: null,
+          selectedIds: [],
+          onselect: () => {},
+          onbox: () => {},
+          onfocus: () => {},
+        },
+      }),
   },
 ];
 

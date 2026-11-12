@@ -18,8 +18,8 @@ import { undoStore } from '$stores/undo.svelte';
 export function createNewClassProposalsController() {
   // -- New-class proposals -------------------------------------------------
   //
-  // Aggregate view of the same cohort the `/review` "New Class Proposals"
-  // tab pages through one crop at a time — top VLM-proposed-but-unmatched
+  // Aggregate view of the same cohort the Review view's "New Class Proposals"
+  // queue pages through one crop at a time — top VLM-proposed-but-unmatched
   // terms with counts and a handful of sample crop ids each (GET
   // {API_PREFIX}/review/new_class_proposals/summary, rendered as thumbnails
   // only). The two actions per term — "Create class & assign" / "Map to

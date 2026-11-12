@@ -41,6 +41,7 @@ export class LabelOpsController {
   loadError = $state<string | null>(null);
   items = $state<LabelOp[]>([]);
   retention = $state<number | null>(null);
+  singleRetention = $state<number | null>(null);
   /** Pass as `after` for the next older page; null at the end of the kept history. */
   nextAfter = $state<string | null>(null);
   loadingOlder = $state(false);
@@ -73,6 +74,7 @@ export class LabelOpsController {
       const res = await this.#deps.list({ limit: LABEL_OPS_PAGE_SIZE }, signal);
       this.items = res.items;
       this.retention = res.retention;
+      this.singleRetention = res.single_retention;
       this.nextAfter = res.next_after;
       this.olderError = null;
     } catch (e) {
@@ -112,6 +114,7 @@ export class LabelOpsController {
       const items: LabelOp[] = [];
       let after: string | null = null;
       let retention = this.retention;
+      let singleRetention = this.singleRetention;
       do {
         const res: LabelOpList = await this.#deps.list(
           after === null
@@ -120,11 +123,13 @@ export class LabelOpsController {
         );
         items.push(...res.items);
         retention = res.retention;
+        singleRetention = res.single_retention;
         after = res.next_after;
       } while (after !== null && items.length < shown);
       if (gen !== this.#gen) return;
       this.items = items;
       this.retention = retention;
+      this.singleRetention = singleRetention;
       this.nextAfter = after;
       this.olderError = null;
     } catch (e) {

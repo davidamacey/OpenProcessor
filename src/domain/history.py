@@ -107,10 +107,11 @@ def record_class_history(
 
 
 HUMAN_DISCARD_WRITER = 'human:discard_crop'
+HUMAN_LABEL_WRITER = 'human:label_crop'
 
 HUMAN_LABEL_WRITERS = frozenset(
     {
-        'human:label_crop',
+        HUMAN_LABEL_WRITER,
         'human:batch_label_crops',
         'human:move_crops',
         'human:resolve_new_class',

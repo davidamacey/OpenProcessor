@@ -44,7 +44,6 @@ function tab(id: string, label: string, over: Record<string, unknown> = {}) {
 const EMPTY_STATE = {
   has_probe_predictions: false,
   has_item_scores: true,
-  has_imported_labels: false,
 };
 
 const PAYLOAD = {

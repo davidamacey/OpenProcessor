@@ -3,7 +3,7 @@
  * labeler's `Crop`. A leaf: imports no other `api*` module.
  */
 import type { ClusterRef } from '$contracts/ts/itemWire';
-import type { EmbeddingState } from '$lib/types_itemFilter';
+import type { ItemProvenanceFields } from '$lib/types_itemProvenance';
 import type { Crop, ItemTextLine } from '$lib/types';
 import { mapCropSlots } from '$lib/annotations/cropSlots';
 import type { XYXY } from '$lib/annotations/types';
@@ -21,7 +21,7 @@ function xyxyToBBoxNorm(bb: number[]): import('$lib/types').BBoxNorm {
 }
 
 /** Raw crop shape from the {API_PREFIX}/crops API. */
-export type RawCrop = {
+export type RawCrop = ItemProvenanceFields & {
   crop_id: string;
   image_id?: string;
   image_path: string;
@@ -61,6 +61,8 @@ export type RawCrop = {
   crop_rank_in_image?: number | null;
   crop_area_norm?: number | null;
   blur_lap_ratio?: number | null;
+  clarity_label?: 'soft' | 'clear' | 'sharp' | null;
+  rank_label?: string | null;
   classifier_raw_confidence?: number | null;
   proposal_name?: string | null;
   detector_class_name?: string | null;
@@ -101,33 +103,12 @@ export type RawCrop = {
   excluded_reason?: string | null;
   excluded_at?: string | null;
   item_text_lines?: unknown;
-  // VLM / import / combine item provenance (`ItemDoc`); each is
-  // served on every item, a missing key maps to null / false / [].
+  // VLM item provenance (`ItemDoc`); served on every item, a missing key maps to null.
   vlm_endpoint?: string | null;
   vlm_model?: string | null;
   vlm_prompt_pack?: string | null;
-  label_locked?: boolean;
-  import_ids?: string[];
-  dataset_split?: string | null;
-  imported_at?: string | null;
-  proposed_by_import?: string | null;
-  on_negative_frame?: boolean;
-  import_standalone_region?: boolean;
-  proposal_chain?: string[];
-  origin_project?: string | null;
-  origin_item_id?: string | null;
-  origin_image_id?: string | null;
-  origin_split?: string | null;
-  combine_conflict?: boolean;
-  combine_conflict_origins?: string[];
-  combine_merged_origins?: string[];
-  // v0.4.0 embedding state and open-vocabulary provenance (contract
-  // fce17771 `ItemDoc`); a missing key maps to null.
-  embedding_states?: Record<string, EmbeddingState>;
   // Near-duplicate group of the item (untyped in the contract: a lineage id when grouped).
   near_dup_group_id?: unknown;
-  near_dup_group_size?: number | null;
-  near_dup_is_representative?: boolean | null;
   source_prompt?: string | null;
   open_vocab_set?: string | null;
   open_vocab_revision?: number | null;
@@ -175,6 +156,8 @@ export const RAW_CROP_KEYS = [
   'crop_rank_in_image',
   'crop_area_norm',
   'blur_lap_ratio',
+  'clarity_label',
+  'rank_label',
   'classifier_raw_confidence',
   'proposal_name',
   'detector_class_name',
@@ -298,6 +281,14 @@ function mapCropScores(c: RawCrop) {
   } satisfies Partial<Crop>;
 }
 
+/** The served words for a crop's size rank and sharpness. */
+function mapCropLabels(c: RawCrop) {
+  return {
+    clarity_label: c.clarity_label ?? null,
+    rank_label: c.rank_label ?? null,
+  } satisfies Partial<Crop>;
+}
+
 /** The box-edit revision and lock of a served crop. */
 function mapCropGeometry(c: RawCrop) {
   return {
@@ -381,6 +372,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     embedding_states: c.embedding_states ?? {},
     ...mapCropScores(c),
     ...mapCropGeometry(c),
+    ...mapCropLabels(c),
     ...mapCropOrigin(c),
     near_dup_group_id:
       typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,

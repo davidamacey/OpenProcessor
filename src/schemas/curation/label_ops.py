@@ -45,7 +45,10 @@ class LabelOp(BaseModel):
 class LabelOpList(BaseModel):
     items: list[LabelOp]
     limit: int
-    retention: int
+    retention: int = Field(description='Bulk operations kept per project (the newest).')
+    single_retention: int = Field(
+        description='Single label writes kept per project (the newest), counted apart from the bulk ones.'
+    )
     next_after: str | None = Field(default=None, description='Pass as `after` for the next page.')
 
 

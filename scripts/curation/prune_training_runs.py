@@ -30,7 +30,6 @@ project's own runs under its own binding.
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -40,13 +39,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from typing import TYPE_CHECKING
+
+from scripts.curation._prune_cli import new_prune_parser, run_over_projects
 from src.config import get_curation_config
-from src.config.project_context import bind_project
-from src.services.projects.script_binding import (
-    abind_script_project,
-    add_project_argument,
-    script_project_registry,
-)
 from src.services.training import model_registry
 from src.services.training.run_retention import (
     apply_bakeoff_out_prune,
@@ -57,6 +53,10 @@ from src.services.training.run_retention import (
     plan_bakeoff_out_prune,
     plan_run_prune,
 )
+
+
+if TYPE_CHECKING:
+    import argparse
 
 
 def _run_one_project(args: argparse.Namespace) -> int:
@@ -101,42 +101,16 @@ def _run_one_project(args: argparse.Namespace) -> int:
     return 0
 
 
-async def run(args: argparse.Namespace) -> int:
-    """Prune every active + archived project (or just ``--project SLUG``
-    when given), each under its own binding."""
-    if args.project:
-        await abind_script_project(args.project)
-        return _run_one_project(args)
-
-    registry = script_project_registry()
-    await registry.refresh_strict()
-    projects = registry.active_projects() + registry.archived_projects()
-    rc = 0
-    for record in projects:
-        print(f'== project {record.slug} ({record.status}) ==')
-        with bind_project(record, read_only=record.status == 'archived'):
-            rc = _run_one_project(args) or rc
-    return rc
-
-
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    p = new_prune_parser(__doc__)
     p.add_argument('--keep-last', type=int, default=20)
     p.add_argument('--bakeoff-out-keep-last', type=int, default=20)
-    g = p.add_mutually_exclusive_group()
-    g.add_argument('--dry-run', dest='apply', action='store_false', default=False)
-    g.add_argument('--apply', dest='apply', action='store_true')
-    add_project_argument(p)
-    # Default: every active + archived project, each under its own binding.
-    p.set_defaults(project=None)
     return p
 
 
 def main() -> int:
     args = build_parser().parse_args()
-    return asyncio.run(run(args))
+    return asyncio.run(run_over_projects(args, _run_one_project))
 
 
 if __name__ == '__main__':

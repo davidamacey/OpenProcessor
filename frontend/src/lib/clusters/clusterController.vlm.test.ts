@@ -47,8 +47,13 @@ describe('acceptVlmForCrop', () => {
   // A label does not move an item between clusters, so accepting a
   // suggestion applies it in place whatever class it names.
   it('applies the suggestion in place, without removing the crop, and records undo', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
-    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+    vi.mocked(putCropLabel).mockResolvedValue({
+      crop_id: 'a',
+      class_id: 9,
+      class_name: 'van',
+      op_id: 'op-a',
+    });
+    const recordLabelOpSpy = vi.spyOn(undoStore, 'recordLabelOp');
     const a = crop('a', { vlm_suggested_class_id: 9, vlm_suggested_class_name: 'van' });
     const { cropPager, exclusionGuard, controller } = setup([a]);
 
@@ -60,7 +65,7 @@ describe('acceptVlmForCrop', () => {
     expect(cropPager.items[0]!.class_name).toBe('van');
     expect(exclusionGuard.accept(a)).toBe(true);
     expect(putCropLabel).toHaveBeenCalledWith('a', 9);
-    expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
+    expect(recordLabelOpSpy).toHaveBeenCalledWith('op-a', ['a']);
   });
 
   it('reverts the optimistic label (class restored) when the write fails', async () => {

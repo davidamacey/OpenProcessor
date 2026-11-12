@@ -31,10 +31,11 @@
     >
   </header>
   <p class="text-xs text-zinc-400">
-    Bulk labels and moves recorded for this project. An undo restores only the items still
-    carrying the operation's label; anything edited since, in the test holdout or whose
-    restore class was renamed is kept as it is.
-    {#if ctl.retention != null}The newest {ctl.retention} are kept.{/if}
+    Labels and moves recorded for this project, single or bulk. An undo restores only the
+    items still carrying the operation's label; anything edited since, in the test holdout
+    or whose restore class was renamed is kept as it is.
+    {#if ctl.retention != null && ctl.singleRetention != null}The newest {ctl.retention} bulk
+      operations and the newest {ctl.singleRetention} single labels are kept.{/if}
   </p>
 
   {#if ctl.loading && ctl.items.length === 0 && !ctl.loadError}

@@ -41,11 +41,21 @@ const CASES: [string, string[]][] = [
     }),
   ],
   [
+    'CropLabelResponse',
+    keys<keyof T.CropLabelWritten>({
+      crop_id: true,
+      class_id: true,
+      class_name: true,
+      op_id: true,
+    }),
+  ],
+  [
     'LabelOpList',
     keys<keyof T.LabelOpList>({
       items: true,
       limit: true,
       retention: true,
+      single_retention: true,
       next_after: true,
     }),
   ],

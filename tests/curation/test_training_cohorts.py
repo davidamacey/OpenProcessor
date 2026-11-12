@@ -12,6 +12,7 @@ endpoint returns as ``selection_reason``.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -21,6 +22,7 @@ from src.services.curation.training_cohorts import (
     LOW_CONFIDENCE_MAX,
     REGION_LOW_SCORE_MAX,
     TRAINING_CANDIDATE_MODES,
+    cohort_catalog,
 )
 
 
@@ -52,10 +54,65 @@ def _by_id(client: TestClient, **params: Any) -> dict[str, dict[str, Any]]:
             'endpoint',
             'params',
             'row_kind',
+            'count',
         }
     return {c['id']: c for c in cohorts}
 
 
+@pytest.fixture
+def counts(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    counter = AsyncMock(return_value=7)
+    monkeypatch.setattr('src.routers.curation.cohorts.cohort_count', counter)
+    return counter
+
+
+def test_each_cohort_serves_its_count_for_the_class(client: TestClient, counts: AsyncMock) -> None:
+    cohorts = _by_id(client, class_id=4)
+    assert {c['count'] for c in cohorts.values()} == {7}
+    assert {call.args[2] for call in counts.await_args_list} == {4}
+    assert counts.await_count == len(cohorts)
+
+
+def test_no_class_means_nocounts(client: TestClient, counts: AsyncMock) -> None:
+    assert {c['count'] for c in _by_id(client).values()} == {None}
+    counts.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_crop_cohortcounts_through_the_crops_listing_query() -> None:
+    from src.routers.curation.cohorts import cohort_count
+
+    seen: dict[str, Any] = {}
+
+    class Fake:
+        async def count(self, *, index: str, body: dict[str, Any]) -> dict[str, int]:
+            seen['body'] = body
+            return {'count': 12}
+
+    entry = next(c for c in cohort_catalog(4) if c['id'] == 'validated')
+    assert await cohort_count(Fake(), entry, 4) == 12
+    text = str(seen['body'])
+    assert "'class_id': 4" in text
+    assert "'class_validated': True" in text
+
+
+@pytest.mark.asyncio
+async def test_a_region_cohortcounts_through_the_training_candidates_total(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers.curation.cohorts import cohort_count
+
+    page = AsyncMock(return_value={'total': 5})
+    monkeypatch.setattr('src.routers.curation.cohorts.training_candidates', page)
+    monkeypatch.setattr('src.services.curation.training_cohorts.get_active_region_profile', object)
+    entry = next(c for c in cohort_catalog(4) if c['id'] == 'disagreement')
+    assert await cohort_count(object(), entry, 4) == 5
+    assert page.await_args is not None
+    kwargs = page.await_args.kwargs
+    assert (kwargs['mode'], kwargs['limit'], kwargs['class_id']) == ('disagreement', 1, 4)
+
+
+@pytest.mark.usefixtures('counts')
 def test_core_cohorts_carry_backend_cutoffs(client: TestClient) -> None:
     cohorts = _by_id(client, class_id=4)
     assert {'validated', 'needs_labeling', 'low_confidence', 'model_disagreements'} <= set(cohorts)
@@ -84,6 +141,7 @@ def test_low_confidence_cutoff_is_the_review_band() -> None:
     assert f"'lt': {LOW_CONFIDENCE_MAX}" in str(must)
 
 
+@pytest.mark.usefixtures('counts')
 def test_region_cohorts_only_with_a_region_profile(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

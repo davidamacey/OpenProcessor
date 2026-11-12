@@ -22,6 +22,7 @@ from fixtures.contract import auto_label_job, cluster_card, cluster_list, item_c
 from fixtures.wire import labeled_stats, make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
+from harness.vlm_menu import open_vlm_menu, serve_workspace_reads
 from playwright.sync_api import expect
 from test_dataset_import import FORMATS
 
@@ -299,7 +300,8 @@ def test_failed_auto_label_job_shows_its_error_and_stage(stub, page, app_url):
     stub.on('GET', r'/pipeline/auto_label/status', failed)
     stub.on('GET', r'/stats/dataset(\?|$)', copy.deepcopy(DATASET_STATS))
     stub.on('GET', r'/detections/summary(\?|$)', copy.deepcopy(SUMMARY))
-    page.goto(f'{app_url}/p/default/dashboard')
+    serve_workspace_reads(stub)
+    open_vlm_menu(stub, page, app_url)
     expect(page.get_by_text('Error: embedding service unavailable')).to_be_visible(
         timeout=ACTION_TIMEOUT_MS
     )

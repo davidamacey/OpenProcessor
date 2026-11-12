@@ -52,4 +52,19 @@ describe('/train cohort definitions come from GET /training_cohorts?class_id=', 
     expect(fn).toMatch(/params\.classifier_conf_lt/);
     expect(fn).toMatch(/params\.label_validated/);
   });
+
+  it('counts are the served per-cohort count, not one query per cohort from the browser', () => {
+    expect(src).not.toMatch(/Promise\.allSettled/);
+    expect(src).not.toMatch(/runCohortQuery\([^)]*,\s*1\s*,/);
+    expect(src).toMatch(/c\.count/);
+  });
+
+  it('a hand-declared cohort has no served count and says so instead of a spinner', () => {
+    const panel = readFileSync(
+      path.resolve(here, '../../../../lib/components/train/TrainingCohortsPanel.svelte'),
+      'utf-8',
+    );
+    expect(panel).toMatch(/cohort\.count === undefined/);
+    expect(panel).toMatch(/Count not available/);
+  });
 });

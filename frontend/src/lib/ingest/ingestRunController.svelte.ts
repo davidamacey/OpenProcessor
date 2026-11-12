@@ -227,56 +227,65 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
     // instead — never used when the lengths differ, since that's the
     // signal a result genuinely didn't come back at all.
     const canFallBackToRequestOrder = res.results.length === chunk.length;
-    totals.secondary_detector_failures += res.summary?.secondary_detector_failures ?? 0;
-    totals.n_embedded += res.summary?.n_embedded ?? 0;
-    totals.n_not_embedded += res.summary?.n_not_embedded ?? 0;
-    totals.n_embed_failed += res.summary?.n_embed_failed ?? 0;
-    totals.n_filtered += res.summary?.n_filtered ?? 0;
+    addSummaryTotals(res.summary);
     for (let i = 0; i < chunk.length; i++) {
       const f = chunk[i]!;
       const id = identifierFor(f);
       let r = byIdentifier.get(id);
       if (!r && canFallBackToRequestOrder) {
         const positional = res.results[i];
-        if (positional && positional.source_identifier == null) {
-          r = positional;
-        }
+        if (positional && positional.source_identifier == null) r = positional;
       }
       totals.uploaded_bytes += f.size;
-      if (!r) {
-        results.set(f.id, {
-          identifier: id,
-          kind: 'failed',
-          error: 'no result returned',
-        });
-        totals.failed++;
-        continue;
-      }
-      if (r.status === 'success') {
-        results.set(f.id, {
-          identifier: id,
-          kind: 'ingested',
-          image_id: r.image_id,
-          n_crops: r.n_crops,
-          secondary_detector_error: r.secondary_detector_error ?? null,
-          n_embedded: r.n_embedded,
-          n_not_embedded: r.n_not_embedded,
-          n_embed_failed: r.n_embed_failed,
-        });
-        totals.successful++;
-        totals.crops_indexed += r.n_crops;
-      } else if (r.status === 'duplicate') {
-        results.set(f.id, { identifier: id, kind: 'duplicate', image_id: r.image_id });
-        totals.duplicates++;
-      } else {
-        results.set(f.id, {
-          identifier: id,
-          kind: 'failed',
-          error: r.error,
-          error_kind: r.error_kind,
-        });
-        totals.failed++;
-      }
+      recordResult(f.id, id, r);
+    }
+  }
+
+  function addSummaryTotals(summary: BatchIngestResponse['summary'] | undefined): void {
+    totals.secondary_detector_failures += summary?.secondary_detector_failures ?? 0;
+    totals.n_embedded += summary?.n_embedded ?? 0;
+    totals.n_not_embedded += summary?.n_not_embedded ?? 0;
+    totals.n_embed_failed += summary?.n_embed_failed ?? 0;
+    totals.n_filtered += summary?.n_filtered ?? 0;
+  }
+
+  /** Store one file's outcome and count it; `r` undefined means no result came back. */
+  function recordResult(
+    fileId: string,
+    id: string,
+    r: BatchIngestResponse['results'][number] | undefined,
+  ): void {
+    if (!r) {
+      results.set(fileId, {
+        identifier: id,
+        kind: 'failed',
+        error: 'no result returned',
+      });
+      totals.failed++;
+    } else if (r.status === 'success') {
+      results.set(fileId, {
+        identifier: id,
+        kind: 'ingested',
+        image_id: r.image_id,
+        n_crops: r.n_crops,
+        secondary_detector_error: r.secondary_detector_error ?? null,
+        n_embedded: r.n_embedded,
+        n_not_embedded: r.n_not_embedded,
+        n_embed_failed: r.n_embed_failed,
+      });
+      totals.successful++;
+      totals.crops_indexed += r.n_crops;
+    } else if (r.status === 'duplicate') {
+      results.set(fileId, { identifier: id, kind: 'duplicate', image_id: r.image_id });
+      totals.duplicates++;
+    } else {
+      results.set(fileId, {
+        identifier: id,
+        kind: 'failed',
+        error: r.error,
+        error_kind: r.error_kind,
+      });
+      totals.failed++;
     }
   }
 
@@ -308,48 +317,54 @@ export function createIngestRun(deps: IngestRunDeps): IngestRun {
       const res = await deps.upload(req, abortController.signal);
       applyResponse(chunk, res);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 413) {
-        const isBackendStyle = e.body !== null && typeof e.body === 'object';
-        if (isBackendStyle) {
-          if (!halvedOnce.has(chunk) && chunk.length > 1) {
-            halvedOnce.add(chunk);
-            const mid = Math.ceil(chunk.length / 2);
-            const a = chunk.slice(0, mid);
-            const b = chunk.slice(mid);
-            halvedOnce.add(a);
-            halvedOnce.add(b);
-            queue.splice(cursor, 0, a, b);
-          } else {
-            markChunk(chunk, 'failed', e.detail ?? 'request too large', 'too_large');
-          }
-        } else {
-          // nginx-style 413 — HTML body, not JSON. Stop the whole run;
-          // do not retry.
-          state = 'error';
-          errorReason =
-            `Upload rejected by the Cropwright proxy — request larger than ` +
-            `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`;
-          cancelRequested = true;
-          toastStore.error(errorReason);
-          markChunk(chunk, 'not_sent');
-        }
-      } else if (e instanceof ApiError && e.status === 422) {
-        markChunk(chunk, 'failed', e.detail ?? 'validation failed');
-      } else if (e instanceof ApiError && e.status === 503) {
-        // Requeue this exact chunk so Resume retries it.
-        queue.splice(cursor, 0, chunk);
-        if (state !== 'error') {
-          state = 'paused';
-          pauseReason = e.detail ?? 'backend unavailable';
-          armPauseGate();
-          toastStore.warn(`Upload paused — ${pauseReason}`);
-        }
-      } else {
-        // Network error (retries already exhausted by apiFetch) or an
-        // abort. Both are safe to leave as "not sent": a rerun resumes
-        // via server-side content dedup, per §A.4.
-        markChunk(chunk, 'not_sent');
+      handleUploadError(chunk, e);
+    }
+  }
+
+  function handleUploadError(chunk: Chunk, e: unknown): void {
+    if (e instanceof ApiError && e.status === 413) {
+      handleTooLarge(chunk, e);
+    } else if (e instanceof ApiError && e.status === 422) {
+      markChunk(chunk, 'failed', e.detail ?? 'validation failed');
+    } else if (e instanceof ApiError && e.status === 503) {
+      // Requeue this exact chunk so Resume retries it.
+      queue.splice(cursor, 0, chunk);
+      if (state !== 'error') {
+        state = 'paused';
+        pauseReason = e.detail ?? 'backend unavailable';
+        armPauseGate();
+        toastStore.warn(`Upload paused — ${pauseReason}`);
       }
+    } else {
+      // Network error (retries already exhausted by apiFetch) or an
+      // abort. Both are safe to leave as "not sent": a rerun resumes
+      // via server-side content dedup, per §A.4.
+      markChunk(chunk, 'not_sent');
+    }
+  }
+
+  function handleTooLarge(chunk: Chunk, e: ApiError): void {
+    const isBackendStyle = e.body !== null && typeof e.body === 'object';
+    if (!isBackendStyle) {
+      // nginx-style 413 — HTML body, not JSON. Stop the whole run;
+      // do not retry.
+      state = 'error';
+      errorReason =
+        `Upload rejected by the Cropwright proxy — request larger than ` +
+        `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`;
+      cancelRequested = true;
+      toastStore.error(errorReason);
+      markChunk(chunk, 'not_sent');
+    } else if (!halvedOnce.has(chunk) && chunk.length > 1) {
+      halvedOnce.add(chunk);
+      const mid = Math.ceil(chunk.length / 2);
+      const a = chunk.slice(0, mid);
+      const b = chunk.slice(mid);
+      halvedOnce.add(a);
+      halvedOnce.add(b);
+      queue.splice(cursor, 0, a, b);
+    } else {
+      markChunk(chunk, 'failed', e.detail ?? 'request too large', 'too_large');
     }
   }
 

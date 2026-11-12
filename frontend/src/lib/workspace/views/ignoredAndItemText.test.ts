@@ -11,7 +11,7 @@
  *    browse filters `class_excluded` out server-side
  *  - the item-text search fetch uses the `item_text` param, and its 400
  *    branch renders an inline hint rather than a toast
- *  - both new mode branches render before the `showEmbeddingViz` branch,
+ *  - both new mode branches render before the slot-gallery branch,
  *    matching the existing `searchModeActive` precedent
  */
 
@@ -52,9 +52,9 @@ describe('/clusters Ignored bucket (W7)', () => {
     expect(body).not.toMatch(/cluster_id/);
   });
 
-  it('the ignoredModeActive grid branch renders before showEmbeddingViz (searchModeActive precedent)', () => {
+  it('the ignoredModeActive grid branch renders before the slot gallery (searchModeActive precedent)', () => {
     const ignoredBranch = gridSrc.indexOf('{:else if modes.ignoredModeActive}');
-    const embeddingBranch = gridSrc.indexOf('{:else if showEmbeddingViz}');
+    const embeddingBranch = gridSrc.indexOf('{:else if slotGallery}');
     expect(ignoredBranch).toBeGreaterThan(-1);
     expect(embeddingBranch).toBeGreaterThan(-1);
     expect(ignoredBranch).toBeLessThan(embeddingBranch);
@@ -79,9 +79,9 @@ describe('/clusters item-text search (W8)', () => {
     expect(status400Branch).not.toMatch(/toastStore\.error/);
   });
 
-  it('the itemTextModeActive grid branch renders before showEmbeddingViz', () => {
+  it('the itemTextModeActive grid branch renders before the slot gallery', () => {
     const itemTextBranch = gridSrc.indexOf('{:else if modes.itemTextModeActive}');
-    const embeddingBranch = gridSrc.indexOf('{:else if showEmbeddingViz}');
+    const embeddingBranch = gridSrc.indexOf('{:else if slotGallery}');
     expect(itemTextBranch).toBeGreaterThan(-1);
     expect(embeddingBranch).toBeGreaterThan(-1);
     expect(itemTextBranch).toBeLessThan(embeddingBranch);

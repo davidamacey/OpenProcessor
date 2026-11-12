@@ -49,7 +49,7 @@ function isSlotBoundClass(cls: { kind: 'item' | 'region' }): boolean {
 
 /**
  * True if `cls` may be offered as an ITEM-class assignment target — the
- * `/review` class picker and quick-assign row. Stricter than
+ * Review view's class picker and quick-assign row. Stricter than
  * `isAssignableClass`: a slot-bound region class is never an item's class,
  * so offering it there only invites `/` + Enter mislabeling an item as a
  * region (visual audit 2026-09-24, R1).

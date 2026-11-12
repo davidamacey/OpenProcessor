@@ -5,7 +5,7 @@ import { getCrops } from '$lib/api_cropRead';
 import type { CursorPage, SortOption } from '$lib/types_cursor';
 import { apiFetch, qs, scoped } from '$lib/api';
 import { apiErrorText } from '$lib/api_errors';
-import type { Cluster, ClusterFilter, Crop, CropFilter } from '$lib/types';
+import type { Cluster, ClusterFilter, Crop, CropFilter, HiddenCounts } from '$lib/types';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   ClusterActivationAccepted,
@@ -73,6 +73,7 @@ type RawClustersResp = {
   empty_reason?: ClusterEmptyReason | null;
   empty_message?: string | null;
   pending_partition?: PendingPartition | null;
+  hidden?: HiddenCounts | null;
 };
 
 function _rawClusterToCluster(c: RawCluster): Cluster {
@@ -119,6 +120,8 @@ export interface ClustersResponse extends CursorPage<Cluster> {
   empty_reason: ClusterEmptyReason | null;
   empty_message: string | null;
   pending_partition: PendingPartition | null;
+  /** What the filter leaves out (the frozen holdout, ignored items), counted by the server. */
+  hidden: HiddenCounts | null;
 }
 
 function _rawToClustersResponse(
@@ -138,6 +141,7 @@ function _rawToClustersResponse(
     empty_reason: raw.empty_reason ?? null,
     empty_message: raw.empty_message ?? null,
     pending_partition: raw.pending_partition ?? null,
+    hidden: raw.hidden ?? null,
     representatives_offset:
       raw.representatives_offset ?? filter.representatives_offset ?? 0,
     representatives_limit:
@@ -219,46 +223,73 @@ export function getClusterFacets(
   );
 }
 
+export interface GetClusterOpts {
+  classSource?: string | null;
+  maxRank?: number | null;
+  minBlurRatio?: number | null;
+  classifierConfLt?: number | null;
+  /**
+   * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
+   * special-cased server-side today (crops.py `order` query param —
+   * see the curation strategy plan §1); an id the backend
+   * doesn't recognize is harmless (qs() still sends it, the server
+   * just falls back to its default ordering). Typed as `string` rather
+   * than a fixed union so a new `{API_PREFIX}/methods`-reported order id doesn't
+   * require touching this signature — callers should still gate which
+   * ids they actually offer against what `{API_PREFIX}/methods` reports.
+   */
+  order?: string | null;
+  /**
+   * Pool-scale overlay parameter, forwarded to `{API_PREFIX}/crops?k=` only when
+   * set (curation-strategy plan Phase 4 — `order: 'diverse'`'s "how
+   * many diverse crops" count). Meaningless for every other `order`
+   * value; the caller (`/clusters/[id]`) only sets it in diverse mode.
+   */
+  k?: number | null;
+  /** The facet filters, each sent as the served `GET /crops` parameter of
+   *  the same name: the detector's class (repeatable), a confidence band
+   *  (`detector_conf_min` inclusive, `detector_conf_max` exclusive), a
+   *  review tab id, and the validated flag. */
+  detectorClassName?: string[];
+  detectorConfMin?: number | null;
+  detectorConfMax?: number | null;
+  reviewTab?: string | null;
+  labelValidated?: boolean | null;
+  /** `GET /crops` `sort`, e.g. `detector_confidence:desc`. */
+  sort?: string | null;
+}
+
+/** Nullable option values become absent filter keys. */
+function clusterCropFilter(uid: string, limit: number, opts: GetClusterOpts): CropFilter {
+  const filter = {
+    cluster_uid: [uid],
+    limit,
+    class_source: opts.classSource,
+    max_rank: opts.maxRank,
+    min_blur_ratio: opts.minBlurRatio,
+    classifier_conf_lt: opts.classifierConfLt,
+    order: opts.order,
+    k: opts.k,
+    detector_class_name: opts.detectorClassName?.length
+      ? opts.detectorClassName
+      : undefined,
+    detector_conf_min: opts.detectorConfMin,
+    detector_conf_max: opts.detectorConfMax,
+    review_tab: opts.reviewTab,
+    label_validated: opts.labelValidated,
+    sort: opts.sort,
+  };
+  return Object.fromEntries(
+    Object.entries(filter).filter(([, v]) => v != null),
+  ) as unknown as CropFilter;
+}
+
 export async function getCluster(
   uid: string,
   cursor: string | null = null,
   limit = 60,
   signal?: AbortSignal,
-  opts: {
-    classSource?: string | null;
-    maxRank?: number | null;
-    minBlurRatio?: number | null;
-    classifierConfLt?: number | null;
-    /**
-     * Forwarded verbatim to `{API_PREFIX}/crops?order=`. Only `'outliers'` is
-     * special-cased server-side today (crops.py `order` query param —
-     * see the curation strategy plan §1); an id the backend
-     * doesn't recognize is harmless (qs() still sends it, the server
-     * just falls back to its default ordering). Typed as `string` rather
-     * than a fixed union so a new `{API_PREFIX}/methods`-reported order id doesn't
-     * require touching this signature — callers should still gate which
-     * ids they actually offer against what `{API_PREFIX}/methods` reports.
-     */
-    order?: string | null;
-    /**
-     * Pool-scale overlay parameter, forwarded to `{API_PREFIX}/crops?k=` only when
-     * set (curation-strategy plan Phase 4 — `order: 'diverse'`'s "how
-     * many diverse crops" count). Meaningless for every other `order`
-     * value; the caller (`/clusters/[id]`) only sets it in diverse mode.
-     */
-    k?: number | null;
-    /** The facet filters, each sent as the served `GET /crops` parameter of
-     *  the same name: the detector's class (repeatable), a confidence band
-     *  (`detector_conf_min` inclusive, `detector_conf_max` exclusive), a
-     *  review tab id, and the validated flag. */
-    detectorClassName?: string[];
-    detectorConfMin?: number | null;
-    detectorConfMax?: number | null;
-    reviewTab?: string | null;
-    labelValidated?: boolean | null;
-    /** `GET /crops` `sort`, e.g. `detector_confidence:desc`. */
-    sort?: string | null;
-  } = {},
+  opts: GetClusterOpts = {},
 ): Promise<{
   /** The served card (`GET /clusters/{uid}`); null when the server refused it, see `cardError`. */
   cluster: Cluster | null;
@@ -274,24 +305,7 @@ export async function getCluster(
   // (model / vlm / human / low_conf / ...) without touching
   // the cluster card stats — the header still shows the whole-cluster
   // totals so the operator sees the filter against the full size.
-  const filter: CropFilter = {
-    cluster_uid: [uid],
-    limit,
-    class_source: opts.classSource ?? undefined,
-    max_rank: opts.maxRank ?? undefined,
-    min_blur_ratio: opts.minBlurRatio ?? undefined,
-    classifier_conf_lt: opts.classifierConfLt ?? undefined,
-    order: opts.order ?? undefined,
-    k: opts.k ?? undefined,
-    detector_class_name: opts.detectorClassName?.length
-      ? opts.detectorClassName
-      : undefined,
-    detector_conf_min: opts.detectorConfMin ?? undefined,
-    detector_conf_max: opts.detectorConfMax ?? undefined,
-    review_tab: opts.reviewTab ?? undefined,
-    label_validated: opts.labelValidated ?? undefined,
-    sort: opts.sort ?? undefined,
-  };
+  const filter = clusterCropFilter(uid, limit, opts);
   let cardError: string | null = null;
   const [crops, card] = await Promise.all([
     getCrops(filter, cursor, signal),

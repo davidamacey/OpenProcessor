@@ -186,6 +186,8 @@ class ItemDoc(BaseModel):
     crop_rank_in_image: int | None = None
     crop_area_norm: float | None = None
     blur_lap_ratio: float | None = None
+    clarity_label: Literal['soft', 'clear', 'sharp'] | None = None
+    rank_label: str | None = None
     proposal_name: str | None = None
     # The detector's own answer (set at ingest, never overwritten by a relabel):
     # its label in registry-name form, its raw score, and its registry id when the
@@ -196,7 +198,7 @@ class ItemDoc(BaseModel):
     # Full-image open-vocabulary pass provenance: the target prompt that found
     # the item, the prompt set and revision that ran it, and the outline
     # (normalized (x, y) points in the source frame; null in list responses,
-    # present on GET /crops/{id} and the items of GET /crops/{id}/context).
+    # present on GET /crops/{id} and the items of GET /images/{image_id}).
     source_prompt: str | None = None
     open_vocab_set: str | None = None
     open_vocab_revision: int | None = None

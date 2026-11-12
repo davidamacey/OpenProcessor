@@ -117,6 +117,42 @@ function parseVocabulary(
   return out;
 }
 
+const TEXT_WIRE_FIELDS = [
+  'valueField',
+  'rawField',
+  'sourceField',
+  'confidenceField',
+  'engineVersionField',
+] as const;
+const TEXT_TRANSFORMS: readonly unknown[] = ['none', 'uppercase', 'lowercase', 'trim'];
+
+function isValidMaxLength(v: unknown): boolean {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 4096;
+}
+
+/** First scalar-field problem of a text capability, or null. */
+function textScalarProblem(raw: Record<string, unknown>): string | null {
+  for (const f of TEXT_WIRE_FIELDS) {
+    if (raw[f] !== undefined && !isWireField(raw[f])) return `${f} is invalid`;
+  }
+  if (!isLabel(raw.label)) return 'label is required';
+  if (raw.placeholder !== undefined && !isLabel(raw.placeholder)) {
+    return 'placeholder is invalid';
+  }
+  if (raw.transform !== undefined && !TEXT_TRANSFORMS.includes(raw.transform)) {
+    return 'transform must be one of none/uppercase/lowercase/trim';
+  }
+  return null;
+}
+
+const TEXT_COPIED_FIELDS = [
+  ...TEXT_WIRE_FIELDS,
+  'placeholder',
+  'transform',
+  'maxLength',
+  'monospace',
+] as const;
+
 export function parseText(
   raw: unknown,
   key: string,
@@ -127,44 +163,14 @@ export function parseText(
     errors.push(`slot "${key}": capabilities.text must be an object — skipped`);
     return null;
   }
-  for (const f of [
-    'valueField',
-    'rawField',
-    'sourceField',
-    'confidenceField',
-    'engineVersionField',
-  ] as const) {
-    if (raw[f] !== undefined && !isWireField(raw[f])) {
-      errors.push(`slot "${key}": capabilities.text.${f} is invalid — skipped`);
-      return null;
-    }
-  }
-  if (!isLabel(raw.label)) {
-    errors.push(`slot "${key}": capabilities.text.label is required — skipped`);
-    return null;
-  }
-  if (raw.placeholder !== undefined && !isLabel(raw.placeholder)) {
-    errors.push(`slot "${key}": capabilities.text.placeholder is invalid — skipped`);
-    return null;
-  }
-  if (
-    raw.transform !== undefined &&
-    !['none', 'uppercase', 'lowercase', 'trim'].includes(raw.transform as string)
-  ) {
-    errors.push(
-      `slot "${key}": capabilities.text.transform must be one of none/uppercase/lowercase/trim — skipped`,
-    );
+  const problem = textScalarProblem(raw);
+  if (problem) {
+    errors.push(`slot "${key}": capabilities.text.${problem} — skipped`);
     return null;
   }
   const pattern = parsePattern(raw.pattern, key, errors);
   if (pattern === null) return null;
-  if (
-    raw.maxLength !== undefined &&
-    (typeof raw.maxLength !== 'number' ||
-      !Number.isInteger(raw.maxLength) ||
-      raw.maxLength < 1 ||
-      raw.maxLength > 4096)
-  ) {
+  if (raw.maxLength !== undefined && !isValidMaxLength(raw.maxLength)) {
     errors.push(
       `slot "${key}": capabilities.text.maxLength must be an integer in [1, 4096] — skipped`,
     );
@@ -178,19 +184,11 @@ export function parseText(
   if (vocabulary === null) return null;
 
   const out: TextCapability = { label: raw.label as string };
-  if (raw.valueField !== undefined) out.valueField = raw.valueField as string;
-  if (raw.rawField !== undefined) out.rawField = raw.rawField as string;
-  if (raw.sourceField !== undefined) out.sourceField = raw.sourceField as string;
-  if (raw.confidenceField !== undefined)
-    out.confidenceField = raw.confidenceField as string;
-  if (raw.engineVersionField !== undefined)
-    out.engineVersionField = raw.engineVersionField as string;
-  if (raw.placeholder !== undefined) out.placeholder = raw.placeholder as string;
-  if (raw.transform !== undefined)
-    out.transform = raw.transform as TextCapability['transform'];
+  const loose = out as unknown as Record<string, unknown>;
+  for (const f of TEXT_COPIED_FIELDS) {
+    if (raw[f] !== undefined) loose[f] = raw[f];
+  }
   if (pattern !== undefined) out.pattern = pattern;
-  if (raw.maxLength !== undefined) out.maxLength = raw.maxLength as number;
-  if (raw.monospace !== undefined) out.monospace = raw.monospace as boolean;
   if (vocabulary !== undefined) out.vocabulary = vocabulary;
   return out;
 }

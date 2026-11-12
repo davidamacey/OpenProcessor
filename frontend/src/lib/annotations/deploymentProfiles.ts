@@ -59,6 +59,17 @@ export async function fetchDeploymentProfiles(
     return EMPTY;
   }
 
+  return readProfileResponse(res);
+}
+
+const OVERSIZE: DeploymentProfileLoad = {
+  slots: [],
+  warnings: [
+    `deployment profile exceeds the 256 KB deployment-profile size cap — ignored`,
+  ],
+};
+
+async function readProfileResponse(res: Response): Promise<DeploymentProfileLoad> {
   if (res.status === 404) return EMPTY;
 
   const contentType = res.headers.get('content-type') ?? '';
@@ -76,12 +87,7 @@ export async function fetchDeploymentProfiles(
 
   const lengthHeader = res.headers.get('content-length');
   if (lengthHeader != null && Number(lengthHeader) > LIMITS.documentBytes) {
-    return {
-      slots: [],
-      warnings: [
-        `deployment profile exceeds the 256 KB deployment-profile size cap — ignored`,
-      ],
-    };
+    return OVERSIZE;
   }
 
   let body: string;
@@ -91,15 +97,7 @@ export async function fetchDeploymentProfiles(
     return EMPTY;
   }
 
-  if (body.length > LIMITS.documentBytes) {
-    return {
-      slots: [],
-      warnings: [
-        `deployment profile exceeds the 256 KB deployment-profile size cap — ignored`,
-      ],
-    };
-  }
-
+  if (body.length > LIMITS.documentBytes) return OVERSIZE;
   if (body.trim().length === 0) return EMPTY;
 
   let parsed: unknown;
@@ -111,7 +109,6 @@ export async function fetchDeploymentProfiles(
       warnings: [`deployment profile is not valid JSON: ${apiErrorText(e)}`],
     };
   }
-
   return parseProfileDocument(parsed);
 }
 

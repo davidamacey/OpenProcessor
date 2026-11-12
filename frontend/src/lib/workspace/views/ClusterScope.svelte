@@ -43,6 +43,15 @@
     ws.select(ids.length > 0 ? { kind: 'items', cropIds: ids } : NO_SELECTION);
   });
 
+  $effect(() =>
+    ws.registerPage({
+      kind: 'items',
+      ids: () => view.filteredCrops.map((c) => c.id),
+      total: () => view.cropPager.total,
+      apply: (ids) => view.sel.selectAll(ids),
+    }),
+  );
+
   $effect(() => {
     ws.scopeCard = view.cluster;
     return () => {

@@ -38,11 +38,11 @@ describe('VlmQuickAction', () => {
     expect(t.querySelector('button.btn-primary')).toBeNull();
   });
 
-  it('a project with an active VLM links to the clusters, where assist runs are started', async () => {
+  it('a project with an active VLM links to the Workspace, where the AI menu starts VLM work', async () => {
     const t = await render({ source: 'saved', active: { name: 'x', revision: 1 } });
     const link = t.querySelector('a.btn-primary');
-    expect(link?.textContent).toContain('Assist with the VLM');
-    expect(link?.getAttribute('href')).toMatch(/\/workspace\?view=clusters$/);
+    expect(link?.textContent).toContain('Workspace AI menu');
+    expect(link?.getAttribute('href')).toMatch(/\/workspace$/);
     expect(t.querySelector('button')).toBeNull();
     expect(t.querySelector('[data-testid="vlm-activate-first"]')).toBeNull();
   });

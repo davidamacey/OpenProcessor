@@ -143,3 +143,23 @@ def test_locate_works_under_the_stored_sort(monkeypatch: pytest.MonkeyPatch) -> 
     assert out.status_code == 200
     assert out.json()['in_view'] is True
     assert out.json()['index'] == 0
+
+
+def _page_bodies(fake: _Recording) -> list[dict[str, Any]]:
+    return [b for i, b in fake.searches if i == IMAGES]
+
+
+def test_a_scope_already_checked_as_counted_carries_no_second_uncounted_aggregation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`label_state` checks the scope with one count; the page search then needs no `uncounted`
+    aggregation to say the same thing again, and the served sorts are unchanged."""
+    fake = _counted(True)
+    body = _get(fake, monkeypatch, label_state='has_unlabeled').json()
+    assert SORT in [o['id'] for o in body['sort_options']]
+    assert [b for b in _page_bodies(fake) if 'uncounted' in (b.get('aggs') or {})] == []
+
+    plain = _counted(True)
+    again = _get(plain, monkeypatch).json()
+    assert SORT in [o['id'] for o in again['sort_options']]
+    assert len([b for b in _page_bodies(plain) if 'uncounted' in (b.get('aggs') or {})]) == 1

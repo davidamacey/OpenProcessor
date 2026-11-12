@@ -17,67 +17,28 @@
  * per project; reset on a project switch.
  */
 import { getDatasetFormats } from '$lib/api_datasetImport';
-import { apiErrorText, type ApiError } from '$lib/api_errors';
+import { ConfigAvailability } from '$lib/config/configAvailability.svelte';
 import { onProjectChange } from '$lib/projectChange';
 import type { DatasetFormatsResponse } from '$lib/types_import';
 
-class DatasetsAvailabilityStore {
-  /** `null` until the probe answers. */
-  available = $state<boolean | null>(null);
+class DatasetsAvailabilityStore extends ConfigAvailability<DatasetFormatsResponse> {
   formats = $state<DatasetFormatsResponse | null>(null);
-  error = $state<string | null>(null);
-  #inflight: Promise<void> | null = null;
-  #loaded = false;
-  #generation = 0;
 
-  init(): Promise<void> {
-    if (this.#loaded) return Promise.resolve();
-    if (this.#inflight) return this.#inflight;
-    const gen = this.#generation;
-    this.#inflight = (async () => {
-      try {
-        const formats = await getDatasetFormats();
-        if (gen !== this.#generation) return;
-        this.formats = formats;
-        this.available = true;
-        this.error = null;
-        this.#loaded = true;
-      } catch (e) {
-        if (gen !== this.#generation) return;
-        if ((e as Error)?.name === 'AbortError') return;
-        const err = e as Partial<ApiError>;
-        if (err?.status === 404 || err?.status === 501) {
-          this.available = false;
-          this.#loaded = true;
-          return;
-        }
-        this.error = apiErrorText(e);
-      } finally {
-        if (gen === this.#generation) this.#inflight = null;
-      }
-    })();
-    return this.#inflight;
+  constructor() {
+    super(getDatasetFormats);
   }
 
-  /** Re-probe after a failure other than 404 (the retry button). */
-  retry(): Promise<void> {
-    this.error = null;
-    this.#loaded = false;
-    return this.init();
+  protected override accept(value: DatasetFormatsResponse): void {
+    this.formats = value;
+  }
+
+  protected override clear(): void {
+    this.formats = null;
   }
 
   /** Served status label, else the raw id. */
   statusLabel(status: string): string {
     return this.formats?.status_labels?.[status] ?? status;
-  }
-
-  reset(): void {
-    this.#generation += 1;
-    this.#inflight = null;
-    this.#loaded = false;
-    this.available = null;
-    this.formats = null;
-    this.error = null;
   }
 }
 

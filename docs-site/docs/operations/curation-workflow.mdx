@@ -81,8 +81,8 @@ is also seeded `pending_detection` for the detection worker.
 
 <Screenshot
   name="cropwright/clusters-1600.png"
-  alt="Cluster cards served by GET /curation/projects/{project}/clusters, captured from Cropwright, a frontend for this backend"
-  caption="Cluster cards from GET /clusters (captured from Cropwright, a frontend for this backend)"
+  alt="The Clusters view of the Cropwright Workspace: cluster cards served by GET /curation/projects/{project}/clusters"
+  caption="Cluster cards from GET /clusters, in the Workspace Clusters view of Cropwright (a frontend for this backend)"
 />
 
 ```bash
@@ -106,8 +106,8 @@ activates it at once. Review it first with `GET .../clusters/partitions/{partiti
 
 <Screenshot
   name="cropwright/review-1600.png"
-  alt="Review queue served by GET /curation/projects/{project}/review/{tab}, captured from Cropwright, a frontend for this backend"
-  caption="Review queue from GET /review/{tab} (captured from Cropwright, a frontend for this backend)"
+  alt="The Review view of the Cropwright Workspace: a queue served by GET /curation/projects/{project}/review/{tab}"
+  caption="Review queue from GET /review/{tab}, in the Workspace Review view of Cropwright (a frontend for this backend)"
 />
 
 - **VLM assist.** A project runs its active VLM endpoint and calls no VLM until it
@@ -149,7 +149,8 @@ activates it at once. Review it first with `GET .../clusters/partitions/{partiti
   crops that a human labelled are ordinary human labels, so they are
   holdout-eligible.
 - **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
-  `POST /crops/move`, exclude/discard, and undo for each. Every write is
+  `POST /crops/move`, exclude/discard, and undo for each. A label or move, single or bulk, is
+  a [label operation](../guides/label-operations-and-undo.mdx) undone by its `op_id`. Every write is
   recorded in `GET /crops/{crop_id}/history`. A human label is
   **locked**: no worker, VLM pass, re-ingest or reprocess overwrites it.
 - **Keyboard.** Each project has its own [keymap](../guides/keymaps.mdx).

@@ -41,10 +41,10 @@ from scripts.datasets._common import FetchError, download, write_csv, write_json
 from scripts.datasets.proxy_manifest import (
     Licence,
     build_manifest,
+    cmd_verify,
     file_entry,
     label_row,
     load_manifest,
-    verify_dataset_dir,
     verify_manifest,
     write_dataset,
 )
@@ -268,14 +268,6 @@ def cmd_compcars(args: argparse.Namespace) -> int:
         )
     _index_in_place(root, 'compcars_web_nature', COMPCARS_LICENCE.url, COMPCARS_LICENCE, rows)
     return 0
-
-
-def cmd_verify(args: argparse.Namespace) -> int:
-    report = verify_dataset_dir(args.directory)
-    for line in report.problems()[:20]:
-        logger.error(line)
-    logger.info('verify %s: %s', args.directory, 'ok' if report.ok else 'FAILED')
-    return 0 if report.ok else 1
 
 
 def build_parser() -> argparse.ArgumentParser:

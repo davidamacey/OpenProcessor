@@ -1,5 +1,6 @@
 # path (kind)	uses	reason: why the use is correct per process (see check_process_state.py)
 src/app/lifespan.py (create_task)	1	the per-process ops-metrics refresh loop; each worker reports its own metrics (multiprocess dir)
+src/clients/image_counts_dirty.py (module container)	1	per-event-loop Valkey client (a connection pool); holds no data, a dropped client is rebuilt on the next mark, and the marks themselves live in Valkey
 src/clients/curation_opensearch/ensure_overlay_fields.py (module container)	1	per-process memo of an index setting; the value is re-read from the index on a miss
 src/config/task_routes/region_text.py (module container)	1	import-time route table, filled once when the module loads and never mutated afterwards
 src/db/engine.py (module container)	1	the per-process engine registry; a SQLAlchemy engine and its pool are process-local by design

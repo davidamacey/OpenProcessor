@@ -8,6 +8,7 @@
   import type { Snippet } from 'svelte';
   import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import ClassPicker from '$components/ClassPicker.svelte';
+  import DiverseSample from '$components/workspace/DiverseSample.svelte';
   import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
   import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -25,6 +26,10 @@
   let { ws, onapplied, extra }: Props = $props();
 
   const actions = createSelectionActionController(() => ws.itemSelection() ?? {});
+  // The open near-duplicate group as a whole: the filter carries `near_dup_group`, so the label
+  // reaches every member the server counts, not only the ones loaded.
+  const group = createSelectionActionController(() => ({ filter: ws.itemBody() }));
+  let groupPickerOpen = $state(false);
   let reasonsOpen = $state(false);
 
   const hasSelection = $derived(ws.selection.kind !== 'none');
@@ -52,6 +57,12 @@
     void actions.open('label');
   }
 
+  function labelGroup(cls: { id: number }): void {
+    groupPickerOpen = false;
+    group.classId = cls.id;
+    void group.open('label');
+  }
+
   function ignore(reason: string): void {
     reasonsOpen = false;
     actions.reason = reason;
@@ -60,7 +71,7 @@
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs"
+  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-zinc-800 bg-zinc-900/60 px-4 py-2 text-xs"
   role="toolbar"
   aria-label="Bulk actions"
   data-testid="bulk-bar"
@@ -162,6 +173,17 @@
   <button type="button" class="btn" onclick={() => void undoStore.undoLast()}>
     Undo
   </button>
+  {#if ws.inNearDupGroup}
+    <button
+      type="button"
+      class="btn"
+      data-testid="label-whole-group"
+      onclick={() => (groupPickerOpen = true)}
+    >
+      Label whole duplicate group…
+    </button>
+  {/if}
+  <DiverseSample {ws} />
   {@render extra?.()}
 </div>
 
@@ -171,4 +193,11 @@
   onpick={assign}
   onclose={() => (ws.pickerOpen = false)}
 />
+<ClassPicker
+  open={groupPickerOpen}
+  mode="assign"
+  onpick={labelGroup}
+  onclose={() => (groupPickerOpen = false)}
+/>
 <SelectionActionDialog controller={actions} {onapplied} />
+<SelectionActionDialog controller={group} {onapplied} />

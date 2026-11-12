@@ -47,39 +47,38 @@ export function structuredErrorCode(body: unknown): string | null {
   return typeof code === 'string' ? code : null;
 }
 
+/** A structured `{error, message}` detail: the served `message`, else the machine code. */
+function structuredText(d: Record<string, unknown>): unknown {
+  return typeof d.message === 'string' && d.message ? d.message : (d.error ?? null);
+}
+
+function joinValidationEntries(entries: unknown[]): string | null {
+  const msgs = entries
+    .map((entry) => formatValidationEntry(entry))
+    .filter((m): m is string => !!m);
+  return msgs.length ? msgs.join('; ') : null;
+}
+
+/** `detail`/`message` of an object body, flattened to a string-or-other. */
+function rawDetail(rec: Record<string, unknown>): unknown {
+  const raw = rec.detail ?? rec.message ?? null;
+  // Pydantic/FastAPI validation errors (`{detail: [{loc, msg, ...}, ...]}`):
+  // every entry renders "field: message" (from the server's own `loc`).
+  if (Array.isArray(raw)) return joinValidationEntries(raw);
+  // Structured FastAPI details (`{detail: {error, message, ...}}`): the
+  // served `message` is the sentence to show; `error` is the machine code
+  // and only stands in when no message was served.
+  if (raw && typeof raw === 'object')
+    return structuredText(raw as Record<string, unknown>);
+  return raw;
+}
+
 function errorDetail(body: unknown): string | null {
   let raw: unknown = null;
   if (typeof body === 'string') {
     raw = body;
   } else if (body && typeof body === 'object') {
-    const rec = body as Record<string, unknown>;
-    raw = rec.detail ?? rec.message ?? null;
-    // Pydantic/FastAPI validation errors (`{detail: [{loc, msg, ...}, ...]}`,
-    // e.g. the 422 for a class name that doesn't match `^[a-z0-9_]+$`) —
-    // join every entry's `msg` so the server's validation text reaches the
-    // toast instead of falling through to a generic "API 422" message.
-    // p1 (2026-09-24 interactive pass): the raw pydantic sentence
-    // ("String should match pattern '^[a-z0-9_]+$'") gave no field
-    // context and read as internal-error jargon. Each entry now renders
-    // "field: message" (from the server's own `loc`), and the one most
-    // common pydantic phrasing gets a lighter wording — still the
-    // server's own regex/value, never invented.
-    if (Array.isArray(raw)) {
-      const msgs = raw
-        .map((entry) => formatValidationEntry(entry))
-        .filter((m): m is string => !!m);
-      raw = msgs.length ? msgs.join('; ') : null;
-    }
-    // Structured FastAPI details (`{detail: {error, message, ...}}`): the
-    // served `message` is the sentence to show; `error` is the machine code
-    // and only stands in when no message was served.
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      const rec2 = raw as Record<string, unknown>;
-      raw =
-        typeof rec2.message === 'string' && rec2.message
-          ? rec2.message
-          : (rec2.error ?? null);
-    }
+    raw = rawDetail(body as Record<string, unknown>);
   }
   if (typeof raw !== 'string') return null;
   const text = raw.trim();

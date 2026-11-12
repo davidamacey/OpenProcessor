@@ -521,3 +521,19 @@ describe('CropCard — label confirmation (#119)', () => {
     expect(chip(el)?.getAttribute('title')).toBe('Label source: Human-confirmed');
   });
 });
+
+describe('CropCard — served rank and clarity words', () => {
+  it('shows the served rank_label and clarity_label, never the raw ratio', () => {
+    const el = renderCard({
+      crop: baseCrop({
+        crop_rank_in_image: 1,
+        rank_label: 'largest',
+        blur_lap_ratio: 0.14,
+        clarity_label: 'soft',
+      }),
+    });
+    const chip = el.querySelector('[data-testid="rank-clarity-chip"]');
+    expect(chip?.textContent?.replace(/\s+/g, ' ').trim()).toBe('largest · soft');
+    expect(el.textContent).not.toContain('b0.14');
+  });
+});

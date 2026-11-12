@@ -50,6 +50,7 @@ function response(
     empty_reason: null,
     empty_message: null,
     pending_partition: null,
+    hidden: null,
     ...extra,
   };
 }

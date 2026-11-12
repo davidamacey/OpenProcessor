@@ -79,7 +79,6 @@ _STORED_SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
     'unlabeled_count:asc': ('Fewest unlabelled first', [{'counts.unlabeled': {'order': 'asc'}}]),
 }
 STORED_SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _STORED_SORTS.items()]
-STORED_SORT_IDS: Final = frozenset(_STORED_SORTS)
 _STORED_LABEL_STATE: Final[dict[str, list[dict[str, Any]]]] = {
     'has_unlabeled': [{'range': {'counts.unlabeled': {'gt': 0}}}],
     'all_labeled': [
@@ -171,8 +170,10 @@ async def _use_stored_label_state(
 
 async def _image_query(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
-) -> tuple[dict[str, Any], bool]:
-    """The images-index query for ``q`` and whether an item join was truncated."""
+) -> tuple[dict[str, Any], bool, bool]:
+    """``(query, join truncated, scope known counted)``: the images-index query for ``q``, whether
+    an item join was truncated, and whether the stored-counts check already found every image of
+    the scope counted (so the page needs no second check)."""
     f = without_image_predicates(q.item_filter)
     if q.view.label_state == 'no_items' and not f.is_empty():
         msg = 'label_state=no_items cannot be combined with an item filter'
@@ -185,9 +186,11 @@ async def _image_query(
     ]
     filters = _image_level_clauses(q, policy)
     state = q.view.label_state
+    counted = False
     if state is not None and await _use_stored_label_state(opensearch, q, f, filters):
         filters.extend(_STORED_LABEL_STATE[state])
         state = None
+        counted = True
     positive: list[list[dict[str, Any]]] = []
     negative: list[list[dict[str, Any]]] = []
     if state == 'has_unlabeled':
@@ -213,9 +216,10 @@ async def _image_query(
         must_not.append({'terms': {'image_id': ids}})
         truncated = truncated or more
     body: dict[str, Any] = {'filter': filters, 'must_not': must_not}
-    return {'bool': {k: v for k, v in body.items() if v}} if filters or must_not else {
-        'match_all': {}
-    }, truncated
+    query = (
+        {'bool': {k: v for k, v in body.items() if v}} if filters or must_not else {'match_all': {}}
+    )
+    return query, truncated, counted
 
 
 def _card(src: dict[str, Any], prefix: str, policy: str, facts: Any) -> ImageCard:
@@ -262,14 +266,22 @@ async def image_page(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> ImagePage:
     """One page of images with their counts and boxes."""
+    return (await image_page_counted(opensearch, q, embedding, policy))[0]
+
+
+async def image_page_counted(
+    opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
+) -> tuple[ImagePage, bool]:
+    """:func:`image_page` and whether every image in the list's scope carries its stored counts
+    (the fact ``ImagePage.sort_options`` is built from), so a caller needs no second count."""
     sort = _sort_clause(q.view.sort_id)
-    query, join_truncated = await _image_query(opensearch, q, embedding, policy)
+    query, join_truncated, scope_counted = await _image_query(opensearch, q, embedding, policy)
     body = page_body(
         {
             'track_total_hits': True,
             'query': query,
             '_source': {'includes': list(IMAGE_SOURCE_FIELDS)},
-            'aggs': {'uncounted': {'filter': _UNCOUNTED}},
+            **({} if scope_counted else {'aggs': {'uncounted': {'filter': _UNCOUNTED}}}),
         },
         sort=sort,
         tiebreak='image_id',
@@ -278,7 +290,7 @@ async def image_page(
         limit=q.limit,
     )
     resp = await opensearch.search(index=images_index(), body=body)
-    ready = int(resp['aggregations']['uncounted']['doc_count']) == 0
+    ready = scope_counted or int(resp['aggregations']['uncounted']['doc_count']) == 0
     if q.view.sort_id in _STORED_SORTS and not ready:
         raise _not_ready()
     kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.view.sort_id, limit=q.limit)
@@ -289,7 +301,7 @@ async def image_page(
     empty = None
     if not cards:
         empty = 'no_match' if q.narrowed() else 'no_images'
-    return ImagePage(
+    page = ImagePage(
         items=cards,
         next_cursor=next_cursor,
         total=int(resp['hits']['total']['value']),
@@ -308,6 +320,7 @@ async def image_page(
         empty_reason=empty,
         empty_message=EMPTY_MESSAGES[empty] if empty else None,
     )
+    return page, ready
 
 
 async def locate_image(
@@ -321,7 +334,7 @@ async def locate_image(
     """Where ``image_id`` (whose stored document is ``image_source``, ``None`` when there is none)
     sits in the list ``q`` would serve; its cursor and limit are ignored."""
     sort = _sort_clause(q.view.sort_id)
-    query, _truncated = await _image_query(opensearch, q, embedding, policy)
+    query, _truncated, _counted = await _image_query(opensearch, q, embedding, policy)
     if q.view.sort_id in _STORED_SORTS and not await counts_ready(opensearch, query):
         raise _not_ready()
     out = ImageLocate(

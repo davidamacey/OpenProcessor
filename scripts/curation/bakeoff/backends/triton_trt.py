@@ -12,12 +12,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import Detection
-from .yolo_post import decode_yolo_v11, letterbox, nms, to_input_tensor
+from .yolo_post import decode_yolo_v11, detections, letterbox, nms, to_input_tensor
 
 
 if TYPE_CHECKING:
     import numpy as np
+
+    from .base import Detection
 
 
 class TritonYoloDetector:
@@ -71,14 +72,4 @@ class TritonYoloDetector:
             coords_normalized=self.coords_normalized,
         )
         keep = nms(boxes, scores, self.iou, class_ids)
-        return [
-            Detection(
-                float(boxes[i, 0]),
-                float(boxes[i, 1]),
-                float(boxes[i, 2]),
-                float(boxes[i, 3]),
-                float(scores[i]),
-                int(class_ids[i]),
-            )
-            for i in keep
-        ]
+        return detections(boxes, scores, class_ids, keep)

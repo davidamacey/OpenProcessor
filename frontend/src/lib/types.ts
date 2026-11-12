@@ -9,7 +9,8 @@
 
 import type { ClusterRef } from '$contracts/ts/itemWire';
 import type { SlotData, SlotKey } from '$lib/annotations/types';
-import type { EmbeddingState, ItemFilterQuery } from '$lib/types_itemFilter';
+import type { ItemFilterQuery } from '$lib/types_itemFilter';
+import type { ItemProvenanceFields } from '$lib/types_itemProvenance';
 import type { ItemAssist } from '$lib/types_assist';
 import type {
   ClusterListFilter,
@@ -41,7 +42,7 @@ export interface ItemTextLine {
   rel_height: number | null;
 }
 
-export interface Crop {
+export interface Crop extends ItemProvenanceFields {
   id: string;
   source_image_path: string;
   /** The source image's id (wire `image_id`); undefined on a legacy item
@@ -155,6 +156,10 @@ export interface Crop {
   /** Crop/full Laplacian ratio (higher = clearer).
    *  Drives the clarity slider. */
   blur_lap_ratio?: number | null;
+  /** The served word for the clarity score (the thresholds are the backend's). */
+  clarity_label?: 'soft' | 'clear' | 'sharp' | null;
+  /** The served size rank in its photo: "largest", "2nd", … */
+  rank_label?: string | null;
   /** Raw detector confidence (recorded even below the 0.75 floor). */
   classifier_raw_confidence?: number | null;
   /** Coarse COCO class hint for coco_yolo11_proposal blind spots. */
@@ -209,33 +214,8 @@ export interface Crop {
   geometry_locked: boolean;
   /** The served words for what locks this box; null when nothing does. */
   lock_label: string | null;
-  /** a human-locked label the pipeline must not overwrite. */
-  label_locked?: boolean;
-  /** ids of the dataset imports that carried this item. */
-  import_ids?: string[];
-  dataset_split?: string | null;
-  imported_at?: string | null;
-  proposed_by_import?: string | null;
-  on_negative_frame?: boolean;
-  import_standalone_region?: boolean;
-  proposal_chain?: string[];
-  /** P4: where a combined item came from (null on a non-combined one). */
-  origin_project?: string | null;
-  origin_item_id?: string | null;
-  origin_image_id?: string | null;
-  origin_split?: string | null;
-  combine_conflict?: boolean;
-  combine_conflict_origins?: string[];
-  combine_merged_origins?: string[];
-  /** Per embedding space: whether the item has a vector in it and why not. A
-   *  space with no state for the item (written before the field existed, or
-   *  not built yet) has no key. */
-  embedding_states?: Record<string, EmbeddingState>;
-  /** Near-duplicate group of the item: the lineage id, the member count, and whether the item
-   *  represents it. All null for an item in no group. */
+  /** Near-duplicate group of the item: the lineage id; null for an item in no group. */
   near_dup_group_id?: string | null;
-  near_dup_group_size?: number | null;
-  near_dup_is_representative?: boolean | null;
   /** v0.4.0 open vocabulary: the prompt, set and set revision that found
    *  this item, its image-normalised mask outline, and why the region
    *  gate skipped it. `null` when not served. */

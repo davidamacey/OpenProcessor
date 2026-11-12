@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Embedding is a Workspace view: the embedding scatter follows the filter (the rest is dimmed), is coloured by the served class legend with its counts, a lasso selects items for the bulk bar, a click opens an item in the details panel, and a box drawn on it (Shift+drag or Draw a box) becomes an "Area: embedding box" chip that filters every view.
+- One "AI" menu in the Workspace view bar: the Auto-label run with its settings (no VLM needed), and, while the project has an active VLM, Assist on the selection (or the scope) and the auto-label loop with its status on the button. Without a VLM the last two are disabled with a link to Models settings.
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
 - Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.
@@ -20,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The "Embedding plot" toggle of the cluster list and the plot's own class and cluster scope: the Embedding view replaces them and takes the Workspace filter; its inline Assign and Move bar is the Workspace bulk bar.
+- The Dashboard Auto-label panel and the Clusters auto-label loop panel: both live in the Workspace AI menu. The Dashboard action now links to the menu (or to Models settings when no VLM is active).
 - `/map`: the Map is a Workspace view (`/workspace?view=map`) with area filters; its crop side panel is the cell details.
 - `/review`: Review is a Workspace view (`/workspace?view=review&queue=<queue>`); the top-bar Review link, the Review tab bar, the strategy row, the diverse overlay, the semantic search box on Review, its own filter bar and its own class picker are gone (Review uses the Workspace filter and class picker).
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
@@ -27,6 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Z undoes a single label write (Review, the Workspace cluster and detections views) through its served label operation, so the same undo is in the Label history after a reload; the client keeps no separate stack for label writes. The editor's class change undoes the same way; its own command stack keeps only geometry. Label history says how many bulk operations and single labels are kept.
+- The image editor shows a minimap (a 160 px thumbnail with the boxes and the part in view) for a photo larger than four viewports; a click on it pans there.
+- A near-duplicate representative's details open its group in the Workspace, where "Label whole duplicate group…" labels every member through the server's dry run (`{filter: {near_dup_group}}`).
+- "Diverse sample…" is a Workspace selection action again: it starts the served diverse-selection job over the current filter, follows it, and makes the picked items the selection. `POST /select/diverse` takes the Workspace item filter as `scope.item_filter`.
+- `GET /clusters` serves `hidden` (frozen-holdout and ignored items its filter leaves out); the Clusters view shows the same "N matching" note as the other views, with the served total and hidden counts.
+- Ctrl/Cmd+A is one Workspace action (`workspace.select_all`) in every view that selects (Gallery, Detections, Table, an open cluster, search results): the first press selects the loaded page, a second on a full page offers "Select all N matching" with the served total. `cluster.select_all` and `clusters_search.select_all` are gone.
+- Review's "Rank · clarity" row shows the served words ("2nd · sharp") instead of "#2 · b4.50".
+- Review and the image editor share one filmstrip component (thumbnails around the open item with its served position); the two duplicates are gone.
+- Gallery cards are one height: every thumbnail sits in the same 4:3 frame, the "+ more boxes" mark moved onto the thumbnail, and the grid rows are equal.
+- A gallery thumbnail that fails to load is retried once after a second, then shows the server's source-missing badge (G-27).
+- Items serve `clarity_label` (soft, clear, sharp) and `rank_label` (largest, 2nd, …), thresholds in `src/domain/item_labels.py`; the card chip shows them instead of "b0.14" (G-20).
+- The source-image overlay labels every item box and draws region boxes only for the selected item; an "All regions" toggle draws them for all (G-19).
 - Every grid pages by cursor: the shared pager follows the served `next_cursor`, a deep link loads the page that starts at the located item in one request, and no view sees a page number. The audit queue has Previous and Next.
 - Image overlays draw the served boxes and names (`BoxLayer`); region boxes show their read text or the region name and number instead of "Object N".
 - The source image of an item is reached through its `image_id`: `SourceImageOverlay` and the crop detail read `GET /images/{image_id}` (the image, its counts, every item on it and the boxes to draw) and draw over `GET /images/{image_id}/file`; near-duplicate image members take `GET /images/{image_id}/thumbnail` directly, so the page no longer looks up an item standing on each image. `GET /crops/{id}/context`, `GET /crops/{id}/image`, `GET /images/serve` and `GET /images/root/{alias}` are gone.

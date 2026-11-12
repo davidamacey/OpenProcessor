@@ -18,7 +18,7 @@ from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_listing import crop_list_body
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import join_truncated
-from src.services.curation.image_view import STORED_SORT_IDS, ImageQuery, image_page
+from src.services.curation.image_view import ImageQuery, image_page_counted
 from src.services.curation.list_cursor import split_page
 from src.services.curation.wire import serialize_item
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
@@ -164,17 +164,12 @@ async def images_table(
     columns: list[TableColumn],
 ) -> TablePage:
     """A page of the images ``q`` matches (``q.view.sort`` is the image list's sort id)."""
-    page = await image_page(opensearch, q, embedding, policy)
+    page, ready = await image_page_counted(opensearch, q, embedding, policy)
     ids = [c.id for c in columns]
-    ready = any(o['id'] in STORED_SORT_IDS for o in page.sort_options)
+    served = {c.id: c for c in table_cells.columns_of('images', counts_ready=ready)}
     return _page(
         'images',
-        [
-            c.model_copy(update={'sortable': True})
-            if ready and c.id in table_cells.COUNT_SORTED
-            else c
-            for c in columns
-        ],
+        [served[i] for i in ids],
         [
             TableRow(
                 crop_id=None,

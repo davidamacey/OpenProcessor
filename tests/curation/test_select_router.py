@@ -120,6 +120,15 @@ def test_scope_query_review_tab_reuses_review_queries() -> None:
     assert {'range': {'cluster_score': {'lte': 0.65}}} in q['bool']['must']
 
 
+def test_scope_query_carries_the_workspace_item_filter_clauses() -> None:
+    from src.routers.curation.select import SelectDiverseScope, _build_scope_query
+
+    clause = {'term': {'class_name': 'car'}}
+    q = _build_scope_query(SelectDiverseScope(), 'pe_embedding', [clause])
+    assert clause in q['bool']['must']
+    assert {'term': {'test_holdout': True}} in q['bool']['must_not']
+
+
 def test_scope_query_unknown_review_tab_raises_http_400() -> None:
     from src.core.exceptions import RequestRejectedError
     from src.routers.curation.select import SelectDiverseScope, _build_scope_query
@@ -427,6 +436,36 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
     assert set(body['crop_ids']) <= {cid for cid, _ in pool}
 
 
+def test_select_diverse_scope_takes_the_workspace_item_filter(
+    select_app_client: _Client,
+) -> None:
+    select_app_client.fake_os.count = AsyncMock(return_value={'count': 0})
+    select_app_client.fake_os.search = AsyncMock(
+        return_value={'_scroll_id': 'sid', 'hits': {'hits': []}}
+    )
+    select_app_client.fake_os.scroll = AsyncMock(
+        return_value={'_scroll_id': 'sid', 'hits': {'hits': []}}
+    )
+    select_app_client.fake_os.clear_scroll = AsyncMock(return_value=None)
+
+    r = select_app_client.post(
+        '/curation/projects/default/select/diverse',
+        json={'k': 3, 'scope': {'item_filter': {'class_names': ['car']}}},
+    )
+    assert r.status_code == 200
+    query = select_app_client.fake_os.count.await_args.kwargs['body']['query']
+    assert 'car' in str(query['bool']['must'])
+    assert {'term': {'test_holdout': True}} in query['bool']['must_not']
+
+
+def test_select_diverse_refuses_a_bad_item_filter(select_app_client: _Client) -> None:
+    r = select_app_client.post(
+        '/curation/projects/default/select/diverse',
+        json={'k': 3, 'scope': {'item_filter': {'conf_min': 0.9, 'conf_max': 0.1}}},
+    )
+    assert r.status_code == 400
+
+
 def test_select_diverse_job_path_for_large_pool(
     select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -474,6 +513,82 @@ def test_select_cancel_with_no_job_running(
     r = select_app_client.post('/curation/projects/default/select/cancel')
     assert r.status_code == 200
     assert r.json()['cancelled'] is False
+
+
+def _stored(ids: list[str], status: str = 'completed') -> AsyncMock:
+    return AsyncMock(return_value=(status, {'crop_ids': ids, 'n_pool': 9}))
+
+
+def _items_url(job_id: str = '00000000-0000-0000-0000-000000000001') -> str:
+    return f'/curation/projects/default/select/diverse/{job_id}/items'
+
+
+def test_select_items_pages_the_stored_result_in_order(
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ids = [f'c{i}' for i in range(5)]
+    monkeypatch.setattr('src.routers.curation.select.stored_selection', _stored(ids))
+    hydrated: list[list[str]] = []
+
+    async def by_ids(_os: Any, wanted: list[str]) -> list[dict[str, Any]]:
+        hydrated.append(wanted)
+        return [{'crop_id': c} for c in wanted]
+
+    monkeypatch.setattr('src.routers.curation.select.crops_by_ids', by_ids)
+    monkeypatch.setattr(
+        'src.routers.curation.select.attach_item_display_nos', AsyncMock(return_value=None)
+    )
+
+    first = select_app_client.get(_items_url(), params={'limit': 2}).json()
+    second = select_app_client.get(
+        _items_url(), params={'limit': 2, 'cursor': first['next_cursor']}
+    ).json()
+    last = select_app_client.get(
+        _items_url(), params={'limit': 2, 'cursor': second['next_cursor']}
+    ).json()
+
+    pages = [[c['crop_id'] for c in p['crops']] for p in (first, second, last)]
+    assert pages == [['c0', 'c1'], ['c2', 'c3'], ['c4']]
+    assert [p['total'] for p in (first, second, last)] == [5, 5, 5]
+    assert last['next_cursor'] is None
+    assert len({c for page in pages for c in page}) == 5
+
+
+def test_select_status_serves_the_count_not_the_id_list() -> None:
+    from src.services.curation.selection.job import state_dict
+
+    view = SimpleNamespace(
+        id='j1',
+        status='completed',
+        started_at=None,
+        finished_at=None,
+        error_message=None,
+        params={'k': 2, 'scope': {}},
+        progress={'total': 9},
+        result={'selection': {'crop_ids': ['a', 'b'], 'method': 'kcenter_greedy', 'n_pool': 9}},
+    )
+    assert state_dict(view)['result'] == {  # type: ignore[arg-type]
+        'method': 'kcenter_greedy',
+        'n_pool': 9,
+        'n_selected': 2,
+    }
+
+
+def test_select_items_refuses_a_cursor_of_another_sort(
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation.list_cursor import encode_cursor
+
+    monkeypatch.setattr('src.routers.curation.select.stored_selection', _stored(['a']))
+    r = select_app_client.get(_items_url(), params={'cursor': encode_cursor('other', [1])})
+    assert r.status_code == 400
+
+
+def test_select_items_waits_for_a_finished_job(
+    select_app_client: _Client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr('src.routers.curation.select.stored_selection', _stored([], 'running'))
+    assert select_app_client.get(_items_url()).status_code == 409
 
 
 # =============================================================================

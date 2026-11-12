@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.routers.curation import search as search_router, viz as viz_router
+from src.routers.curation import _search_params, viz as viz_router
 from src.services.curation.strategy_registry import get_registry
 
 
@@ -25,7 +25,7 @@ _FLAG_CASES = [
     (
         'semantic_search',
         'OP_SEMANTIC_SEARCH_ENABLED',
-        search_router._semantic_search_enabled,
+        _search_params.semantic_search_enabled,
         {'experimental', 'stable'},
     ),
     (

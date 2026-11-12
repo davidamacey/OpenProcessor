@@ -116,9 +116,10 @@ def projects_response(
     api_prefix: str,
     projects: list[dict[str, Any]] | None = None,
     capacity_status: str = 'ok',
+    default_slug: str = DEFAULT_PROJECT_SLUG,
 ) -> dict[str, Any]:
     return {
-        'default_slug': DEFAULT_PROJECT_SLUG,
+        'default_slug': default_slug,
         'projects': projects if projects is not None else [default_project(api_prefix)],
         'capacity': {
             'status': capacity_status,
@@ -238,6 +239,8 @@ _EXPLICIT: dict[str, Any] = {
     'crop_rank_in_image': 2,
     'crop_area_norm': 0.19,
     'blur_lap_ratio': 4.5,
+    'clarity_label': 'sharp',
+    'rank_label': '2nd',
     'proposal_name': 'car',
     'detector_class_name': 'sedan',
     'detector_class_id': 8,

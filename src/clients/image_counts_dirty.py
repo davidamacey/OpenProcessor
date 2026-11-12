@@ -12,10 +12,14 @@ The set is keyed by the bound project's slug, so projects never share one.
 * RENAME: https://valkey.io/commands/rename/
 * SRANDMEMBER: https://valkey.io/commands/srandmember/
 * SREM: https://valkey.io/commands/srem/
+* SMEMBERS: https://valkey.io/commands/smembers/
+* EXPIRE: https://valkey.io/commands/expire/
 """
 
 from __future__ import annotations
 
+import asyncio
+import weakref
 from typing import TYPE_CHECKING, Any, Final
 
 import redis
@@ -35,6 +39,8 @@ logger = get_logger(__name__)
 
 KEY_PREFIX: Final = 'op:image_counts:'
 _TIMEOUT_S: Final = 1.0
+#: How long the sweep leaves an image alone after the images index refused its count write.
+PARKED_TTL_S: Final = 3600
 
 #: The item fields the stored counts depend on: a write that touches none of them cannot change a
 #: count (``counts.items``, ``labeled``, ``validated``, ``unlabeled``, ``in_holdout``).
@@ -49,8 +55,12 @@ def claimed_key() -> str:
     return f'{KEY_PREFIX}claimed:{current_project().record.slug}'
 
 
+def refused_key() -> str:
+    return f'{KEY_PREFIX}refused:{current_project().record.slug}'
+
+
 def valkey_client() -> aioredis.Redis:
-    """A Valkey client for one operation (the caller closes it)."""
+    """A Valkey client for one operation of the drain (the caller closes it)."""
     settings = QueueSettings.from_env()
     return aioredis.Redis.from_url(
         settings.url,
@@ -60,28 +70,78 @@ def valkey_client() -> aioredis.Redis:
     )
 
 
-async def mark_dirty(image_ids: Iterable[str]) -> int:
-    """Add ``image_ids`` to the bound project's dirty set; returns how many were given.
+class CountsMarkError(RuntimeError):
+    """Neither Valkey nor the images index took the mark of a changed image."""
 
-    Called after the items write it describes has committed, so it never raises: a Valkey outage
-    must not turn a label that was stored into an error. A failure is logged at error level with
-    the number of images, and the images are recounted by the next backfill or any later write.
+
+_HEALTH_CHECK_S: Final = 30
+_SHARED: dict[weakref.ref[asyncio.AbstractEventLoop], aioredis.Redis] = {}
+
+
+def shared_valkey_client() -> aioredis.Redis:
+    """The running event loop's Valkey client, built on first use and reused by every mark.
+
+    A client owns a connection pool (https://redis-py.readthedocs.io/en/stable/connections.html),
+    so a label operation no longer opens a TCP connection per write batch. The client is per
+    loop: asyncio connections cannot cross loops, and a Celery child runs each task on a loop of
+    its own, so the clients of closed or collected loops are dropped here. Callers do not close
+    it.
+    """
+    for ref in list(_SHARED):
+        if (loop := ref()) is None or loop.is_closed():
+            del _SHARED[ref]
+    key = weakref.ref(asyncio.get_running_loop())
+    client = _SHARED.get(key)
+    if client is None:
+        settings = QueueSettings.from_env()
+        client = _SHARED[key] = aioredis.Redis.from_url(
+            settings.url,
+            socket_timeout=_TIMEOUT_S,
+            socket_connect_timeout=_TIMEOUT_S,
+            health_check_interval=_HEALTH_CHECK_S,
+            **client_kwargs(settings),
+        )
+    return client
+
+
+async def mark_dirty(opensearch: Any, image_ids: Iterable[str]) -> int:
+    """Add ``image_ids`` to the bound project's dirty set; returns how many were marked.
+
+    Called after the items write it describes has committed. If Valkey does not answer, the
+    images are marked through the images index instead: their ``counts_at`` is cleared, which is
+    exactly what the periodic sweep looks for, so the next drain recounts them, and until then a
+    list treats the scope as uncounted and reads live counts (``image_view.counts_ready``). Only
+    when that write fails too is the mark lost, and then the error is raised (a
+    :class:`CountsMarkError` or the index's own error), never swallowed.
     """
     ids = sorted({i for i in image_ids if i})
     if not ids:
         return 0
-    key = dirty_key()
-    client = None
     try:
-        client = valkey_client()
-        await client.sadd(key, *ids)
+        await shared_valkey_client().sadd(dirty_key(), *ids)
     except (redis.RedisError, EnvError, OSError):
         logger.error('image_counts_mark_failed', images=len(ids), exc_info=True)
-        return 0
-    finally:
-        if client is not None:
-            await client.aclose()
+        await _clear_counts_at(opensearch, ids)
     return len(ids)
+
+
+async def _clear_counts_at(opensearch: Any, image_ids: list[str]) -> None:
+    from src.config.curation_accessors import images_index
+
+    index = images_index()
+    body: list[dict[str, Any]] = []
+    for image_id in image_ids:
+        body.append({'update': {'_index': index, '_id': image_id, 'retry_on_conflict': 3}})
+        body.append({'doc': {'counts_at': None}})
+    resp = await opensearch.bulk(body=body, refresh=False)
+    refused = [
+        i
+        for i, item in zip(image_ids, resp.get('items') or [], strict=True)
+        if int((item.get('update') or {}).get('status', 0)) not in (200, 201, 404)
+    ]
+    if refused:
+        msg = f'{len(refused)} of {len(image_ids)} images could not be marked for a recount'
+        raise CountsMarkError(msg)
 
 
 def changed_image_ids(written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]) -> list[str]:
@@ -98,21 +158,21 @@ def changed_image_ids(written: Iterable[tuple[Mapping[str, Any], Mapping[str, An
     return ids
 
 
-async def mark_items_created(index: str, image_ids: Iterable[str]) -> None:
+async def mark_items_created(opensearch: Any, index: str, image_ids: Iterable[str]) -> None:
     """Mark the images that just got items in ``index``; a write to any index but the bound
     project's items index changes no image count."""
     from src.config.curation_accessors import items_index
 
     if index == items_index():
-        await mark_dirty(image_ids)
+        await mark_dirty(opensearch, image_ids)
 
 
 async def mark_items_written(
-    index: str, written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]
+    opensearch: Any, index: str, written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]
 ) -> None:
     """Mark the images of the updates an OCC helper just committed on ``index``, for the updates
     that touch a count field."""
-    await mark_items_created(index, changed_image_ids(written))
+    await mark_items_created(opensearch, index, changed_image_ids(written))
 
 
 class DirtyImages:
@@ -144,3 +204,23 @@ class DirtyImages:
     async def done(self, image_ids: list[str]) -> None:
         if image_ids:
             await self._client.srem(claimed_key(), *image_ids)
+
+    async def requeue(self, image_ids: list[str]) -> None:
+        """Move ``image_ids`` from the claimed set back to the dirty set (a retry on a later claim).
+
+        Added to the dirty set first, so a failure between the two calls duplicates a mark and
+        never loses one.
+        """
+        if image_ids:
+            await self._client.sadd(dirty_key(), *image_ids)
+            await self._client.srem(claimed_key(), *image_ids)
+
+    async def park(self, image_ids: list[str]) -> None:
+        """Keep the sweep off ``image_ids`` for :data:`PARKED_TTL_S` (the whole set expires that
+        long after the last addition, so a parked image is tried again about an hour later)."""
+        if image_ids:
+            await self._client.sadd(refused_key(), *image_ids)
+            await self._client.expire(refused_key(), PARKED_TTL_S)
+
+    async def parked(self) -> list[str]:
+        return sorted(str(m) for m in await self._client.smembers(refused_key()))

@@ -22,122 +22,98 @@ const COHORT_OPS: ReadonlySet<string> = new Set(['exists', 'eq', 'lt', 'contains
 /* trainingCohorts                                                     */
 /* ------------------------------------------------------------------ */
 
+type ParamValue = string | number | boolean;
+
+/** True when a string param value only uses known `{placeholder}`s and safe chars. */
+function isSafeParamString(pv: string): boolean {
+  let sawBadPlaceholder = false;
+  const stripped = pv.replace(/\{([^{}]*)\}/g, (_m, name: string) => {
+    if (!COHORT_PLACEHOLDERS.includes(name)) sawBadPlaceholder = true;
+    return '_';
+  });
+  return !sawBadPlaceholder && /^[A-Za-z0-9._-]*$/.test(stripped);
+}
+
+/** Why a query param is rejected (message suffix), or null when it is fine. */
+function paramProblem(pk: string, pv: unknown): string | null {
+  if (!isIdentifier(pk)) return `params key "${pk}" is invalid`;
+  if (typeof pv === 'number' || typeof pv === 'boolean') return null;
+  if (typeof pv === 'string') {
+    return isSafeParamString(pv) ? null : `params.${pk} value is invalid`;
+  }
+  return `params.${pk} must be a string, number, or boolean`;
+}
+
+function parseEndpointQuery(
+  raw: Record<string, unknown>,
+  fail: (msg: string) => null,
+): CohortQuery | null {
+  const pathResult = validatePathTemplate(raw.path, COHORT_PLACEHOLDERS);
+  if (!pathResult.template) return fail(`path — ${pathResult.error}`);
+  if (!isPlainObject(raw.params) || hasForbiddenKey(raw.params)) {
+    return fail('params must be an object');
+  }
+  const entries = Object.entries(raw.params);
+  if (entries.length > LIMITS.cohortParams) {
+    return fail(`params exceeds ${LIMITS.cohortParams} entries`);
+  }
+  const params: Record<string, ParamValue> = {};
+  for (const [pk, pv] of entries) {
+    const problem = paramProblem(pk, pv);
+    if (problem) return fail(problem);
+    params[pk] = pv as ParamValue;
+  }
+  return { kind: 'endpoint', path: raw.path as string, params };
+}
+
+function filterProblem(f: unknown): string | null {
+  if (!isPlainObject(f) || hasForbiddenKey(f)) return 'filters entry must be an object';
+  if (!isWireField(f.field)) return 'filters[].field is invalid';
+  if (typeof f.op !== 'string' || !COHORT_OPS.has(f.op)) return 'filters[].op is invalid';
+  return null;
+}
+
+function parsePredicateQuery(
+  raw: Record<string, unknown>,
+  fail: (msg: string) => null,
+): CohortQuery | null {
+  if (!Array.isArray(raw.filters)) return fail('filters must be an array');
+  const filters: CohortFilter[] = [];
+  for (const f of raw.filters) {
+    const problem = filterProblem(f);
+    if (problem) return fail(problem);
+    const rec = f as Record<string, unknown>;
+    const filter: CohortFilter = { field: rec.field as string, op: rec.op as CohortOp };
+    if ('value' in rec) filter.value = rec.value as CohortFilter['value'];
+    filters.push(filter);
+  }
+  const out: { kind: 'predicate'; filters: CohortFilter[]; excludeTestHoldout?: true } = {
+    kind: 'predicate',
+    filters,
+  };
+  if (raw.excludeTestHoldout !== undefined) {
+    if (raw.excludeTestHoldout !== true) {
+      return fail('excludeTestHoldout must be literally true');
+    }
+    out.excludeTestHoldout = true;
+  }
+  return out;
+}
+
 function parseCohortQuery(
   raw: unknown,
   key: string,
   cohortId: string,
   errors: string[],
 ): CohortQuery | null {
-  if (!isPlainObject(raw) || hasForbiddenKey(raw)) {
-    errors.push(`slot "${key}": cohort "${cohortId}".query must be an object — skipped`);
+  const fail = (msg: string): null => {
+    errors.push(`slot "${key}": cohort "${cohortId}".query.${msg} — skipped`);
     return null;
-  }
-  if (raw.kind === 'endpoint') {
-    const pathResult = validatePathTemplate(raw.path, COHORT_PLACEHOLDERS);
-    if (!pathResult.template) {
-      errors.push(
-        `slot "${key}": cohort "${cohortId}".query.path — ${pathResult.error} — skipped`,
-      );
-      return null;
-    }
-    if (!isPlainObject(raw.params) || hasForbiddenKey(raw.params)) {
-      errors.push(
-        `slot "${key}": cohort "${cohortId}".query.params must be an object — skipped`,
-      );
-      return null;
-    }
-    const entries = Object.entries(raw.params);
-    if (entries.length > LIMITS.cohortParams) {
-      errors.push(
-        `slot "${key}": cohort "${cohortId}".query.params exceeds ${LIMITS.cohortParams} entries — skipped`,
-      );
-      return null;
-    }
-    const params: Record<string, string | number | boolean> = {};
-    for (const [pk, pv] of entries) {
-      if (!isIdentifier(pk)) {
-        errors.push(
-          `slot "${key}": cohort "${cohortId}".query.params key "${pk}" is invalid — skipped`,
-        );
-        return null;
-      }
-      if (typeof pv === 'number' || typeof pv === 'boolean') {
-        params[pk] = pv;
-        continue;
-      }
-      if (typeof pv === 'string') {
-        let sawBadPlaceholder = false;
-        const stripped = pv.replace(/\{([^{}]*)\}/g, (_m, name: string) => {
-          if (!COHORT_PLACEHOLDERS.includes(name)) sawBadPlaceholder = true;
-          return '_';
-        });
-        if (sawBadPlaceholder || !/^[A-Za-z0-9._-]*$/.test(stripped)) {
-          errors.push(
-            `slot "${key}": cohort "${cohortId}".query.params.${pk} value is invalid — skipped`,
-          );
-          return null;
-        }
-        params[pk] = pv;
-        continue;
-      }
-      errors.push(
-        `slot "${key}": cohort "${cohortId}".query.params.${pk} must be a string, number, or boolean — skipped`,
-      );
-      return null;
-    }
-    return { kind: 'endpoint', path: raw.path as string, params };
-  }
-  if (raw.kind === 'predicate') {
-    if (!Array.isArray(raw.filters)) {
-      errors.push(
-        `slot "${key}": cohort "${cohortId}".query.filters must be an array — skipped`,
-      );
-      return null;
-    }
-    const filters: CohortFilter[] = [];
-    for (const f of raw.filters) {
-      if (!isPlainObject(f) || hasForbiddenKey(f)) {
-        errors.push(
-          `slot "${key}": cohort "${cohortId}".query.filters entry must be an object — skipped`,
-        );
-        return null;
-      }
-      if (!isWireField(f.field)) {
-        errors.push(
-          `slot "${key}": cohort "${cohortId}".query.filters[].field is invalid — skipped`,
-        );
-        return null;
-      }
-      if (typeof f.op !== 'string' || !COHORT_OPS.has(f.op)) {
-        errors.push(
-          `slot "${key}": cohort "${cohortId}".query.filters[].op is invalid — skipped`,
-        );
-        return null;
-      }
-      const filter: CohortFilter = { field: f.field, op: f.op as CohortOp };
-      if ('value' in f) filter.value = f.value as CohortFilter['value'];
-      filters.push(filter);
-    }
-    const out: { kind: 'predicate'; filters: CohortFilter[]; excludeTestHoldout?: true } =
-      {
-        kind: 'predicate',
-        filters,
-      };
-    if (raw.excludeTestHoldout !== undefined) {
-      if (raw.excludeTestHoldout !== true) {
-        errors.push(
-          `slot "${key}": cohort "${cohortId}".query.excludeTestHoldout must be literally true — skipped`,
-        );
-        return null;
-      }
-      out.excludeTestHoldout = true;
-    }
-    return out;
-  }
-  errors.push(
-    `slot "${key}": cohort "${cohortId}".query.kind must be "endpoint" or "predicate" — skipped`,
-  );
-  return null;
+  };
+  if (!isPlainObject(raw) || hasForbiddenKey(raw)) return fail('must be an object');
+  if (raw.kind === 'endpoint') return parseEndpointQuery(raw, fail);
+  if (raw.kind === 'predicate') return parsePredicateQuery(raw, fail);
+  return fail('kind must be "endpoint" or "predicate"');
 }
 
 function parseCohort(

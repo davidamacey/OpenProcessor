@@ -13,6 +13,9 @@ from src.services.embedding_spaces.readers import vector_source_excludes
 
 logger = get_logger(__name__)
 
+HUMAN_RELABEL_RETRIES = 5
+"""Retry rounds a human relabel gives a 409 before it reports a conflict."""
+
 
 async def occ_bulk_human_relabel(
     opensearch: Any,
@@ -20,7 +23,7 @@ async def occ_bulk_human_relabel(
     merger: Any,
     *,
     writer_id: str,
-    max_retries: int = 5,
+    max_retries: int = HUMAN_RELABEL_RETRIES,
 ) -> dict[str, Any]:
     """Batch OCC relabel: one mget page + one bulk call instead of
     one ``occ_update_one`` round-trip per crop. ``refresh='wait_for'`` is

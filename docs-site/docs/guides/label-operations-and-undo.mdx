@@ -5,7 +5,7 @@ title: Label operations and undo
 
 # Label operations and undo
 
-A bulk label or move is recorded as a **label operation**. List recent ones and undo any of
+A label or move, single or bulk, is recorded as a **label operation**. List recent ones and undo any of
 them from the server, item by item, long after the browser tab that made it is gone. Undo
 never reverts a later human edit. Examples assume `API=http://localhost:4603` and project
 `cars`.
@@ -14,12 +14,16 @@ never reverts a later human edit. Examples assume `API=http://localhost:4603` an
 
 `PUT .../crops/batch_label` and `POST .../crops/move` (with `crop_ids` or a `selection`) each
 create one operation; the response carries its `op_id` (null for an empty selection or a dry
-run). Each written item is tagged with `label_op_id`, and its class history entry carries the
+run). `PUT .../crops/{crop_id}/label` does too: it stays a synchronous write, records its
+operation (one member) in the same request and answers `op_id`, so one Z, or the Label history
+after a reload, undoes it the same way. Each written item is tagged with `label_op_id`, and its class history entry carries the
 same `op_id`.
 
 - Records are PostgreSQL rows (an operation plus a member row per item written), written before
-  the first item. The newest 200 per project are kept; one being written or undone is never
-  pruned.
+  the first item. The newest 200 bulk operations per project are kept, and the newest 1,000
+  single label writes are kept apart from them, so a run of single labels never evicts a bulk
+  operation (`retention` and `single_retention` in the list). One being written or undone is
+  never pruned.
 - A crash while writing leaves `interrupted`, while undoing `undo_interrupted`; both can be
   undone again.
 - Operations name the class they wrote, never a class id.
@@ -81,6 +85,6 @@ undo ([Multi-box regions](./multi-box-regions.mdx#undo)).
 
 ## In Cropwright
 
-The **Label ops** page (project navigation) lists the recorded operations and shows the
+The **Label history** tab of the Quality page lists the recorded operations (single and bulk) and shows the
 server's dry run before an undo. Semantics:
 [`docs/design/cq3_label_operations.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/design/cq3_label_operations.md).

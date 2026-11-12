@@ -67,6 +67,8 @@
     "crop_rank_in_image",
     "crop_area_norm",
     "blur_lap_ratio",
+    "clarity_label",
+    "rank_label",
     "proposal_name",
     "detector_class_name",
     "detector_class_id",
@@ -765,6 +767,23 @@
         ],
         "default": null
       },
+      "clarity_label": {
+        "anyOf": [
+          {
+            "enum": [
+              "soft",
+              "clear",
+              "sharp"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Clarity Label"
+      },
       "class_confidence": {
         "anyOf": [
           {
@@ -1461,6 +1480,18 @@
         "default": "",
         "title": "Proposed Class Name",
         "type": "string"
+      },
+      "rank_label": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Rank Label"
       },
       "region_auto_confirmed": {
         "anyOf": [

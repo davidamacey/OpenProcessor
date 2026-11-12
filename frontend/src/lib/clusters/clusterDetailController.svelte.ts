@@ -20,6 +20,30 @@ import { classSourcesStore } from '$stores/classSources.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
 
+type CropsPage = Awaited<ReturnType<typeof getCluster>>['crops'];
+
+/** The registry class named by the card's served dominant class (identity is the name). */
+function registryClassFor(name: string | null | undefined) {
+  return name == null
+    ? null
+    : (classesStore.classes.find((c) => c.name === name) ?? null);
+}
+
+function diverseOrderMeta(crops: CropsPage) {
+  return {
+    method: crops.order_method ?? null,
+    version: crops.order_version ?? null,
+    n_pool: crops.n_pool ?? null,
+  };
+}
+
+function unembeddedOf(crops: CropsPage) {
+  return {
+    count: crops.n_unembedded ?? null,
+    request: crops.suggested_reprocess ?? null,
+  };
+}
+
 export function createClusterDetailController(uid: () => string) {
   const clusterUid = $derived(uid());
 
@@ -30,12 +54,7 @@ export function createClusterDetailController(uid: () => string) {
 
   // The registry class whose name is the card's served dominant class; drives the
   // validated / labeled / cluster-total banner in the header. Class identity is the name.
-  const clsForCluster = $derived(
-    cluster?.dominant_class_name != null
-      ? (classesStore.classes.find((c) => c.name === cluster!.dominant_class_name) ??
-          null)
-      : null,
-  );
+  const clsForCluster = $derived(registryClassFor(cluster?.dominant_class_name));
 
   // Provenance echoed back by a pool-scale overlay ordering (Phase 4 —
   // order=diverse). Captured here (not by cropPager, which only retains
@@ -92,18 +111,8 @@ export function createClusterDetailController(uid: () => string) {
       const res = await getCluster(clusterUid, cursor, pageSize, undefined, query);
       cluster = res.cluster;
       cardError = res.cardError;
-      orderMeta =
-        orderMode === 'diverse'
-          ? {
-              method: res.crops.order_method ?? null,
-              version: res.crops.order_version ?? null,
-              n_pool: res.crops.n_pool ?? null,
-            }
-          : null;
-      unembedded = {
-        count: res.crops.n_unembedded ?? null,
-        request: res.crops.suggested_reprocess ?? null,
-      };
+      orderMeta = orderMode === 'diverse' ? diverseOrderMeta(res.crops) : null;
+      unembedded = unembeddedOf(res.crops);
       return res.crops;
     },
     keyOf: (c) => c.id,
@@ -354,10 +363,6 @@ export function createClusterDetailController(uid: () => string) {
     );
   }
 
-  function selectAllPage(): void {
-    sel.selectAll(filteredCrops.map((c) => c.id));
-  }
-
   function deselectAll(): void {
     sel.clear();
   }
@@ -509,7 +514,6 @@ export function createClusterDetailController(uid: () => string) {
     loadFirst,
     loadMore,
     clickSelect,
-    selectAllPage,
     deselectAll,
   };
 }

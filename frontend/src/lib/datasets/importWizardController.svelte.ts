@@ -264,6 +264,19 @@ export class ImportWizard {
    * Returns the new job to follow, or `null` when the server refused, or
    * answered with an already-completed import (`reusedJob`).
    */
+  #recordStartRefusal(e: unknown): void {
+    const d = datasetErrorDetail(e);
+    this.refusal = {
+      code: d?.error ?? null,
+      message: apiErrorText(e),
+      importId: d?.import_id ?? null,
+      issues: d?.issues ?? [],
+    };
+    if (d?.error === 'class_mapping_incomplete')
+      this.unmappedFromServer = d.unmapped ?? [];
+    if (d?.error === 'dataset_changed') void this.runPreview();
+  }
+
   async start(): Promise<DatasetImportJob | null> {
     const p = this.preview;
     if (!p || this.starting) return null;
@@ -283,16 +296,7 @@ export class ImportWizard {
       }
       return job;
     } catch (e) {
-      const d = datasetErrorDetail(e);
-      this.refusal = {
-        code: d?.error ?? null,
-        message: apiErrorText(e),
-        importId: d?.import_id ?? null,
-        issues: d?.issues ?? [],
-      };
-      if (d?.error === 'class_mapping_incomplete')
-        this.unmappedFromServer = d.unmapped ?? [];
-      if (d?.error === 'dataset_changed') void this.runPreview();
+      this.#recordStartRefusal(e);
       return null;
     } finally {
       this.starting = false;

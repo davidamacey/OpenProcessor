@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 
+from fixtures.contract import crop_label_written
 from fixtures.wire import make_item, project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import expect_handled, wait_for_paint
@@ -89,14 +90,14 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
 
     def label_handler(request, match):
         label_calls.append(match.string)
-        return (200, review_item(0))
+        return (200, crop_label_written('crop-0', op_id='op-crop-0'))
 
     def undo_handler(request, match):
         undo_calls.append(match.string)
         return (200, review_item(0))
 
     stub.on('PUT', r'/crops/([^/]+)/label$', label_handler)
-    stub.on('POST', r'/crops/([^/]+)/label/undo(_batch)?$', undo_handler)
+    stub.on('POST', r'/label_ops/[^/]+/undo$', undo_handler)
 
     # The page opens `default`'s event stream on load; the stub records it
     # when it answers, which on a loaded runner can trail the send. Wait for

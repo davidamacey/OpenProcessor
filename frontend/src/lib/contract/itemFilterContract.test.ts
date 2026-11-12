@@ -95,6 +95,7 @@ describe('item-filter body schemas', () => {
       geo_bbox: true,
       geo_polygon: true,
       has_location: true,
+      viz_box: true,
       near_dup_group: true,
       conf_max: true,
       conf_min: true,
@@ -168,6 +169,7 @@ describe('ItemFilterQuery', () => {
       geo_bbox: true,
       geo_polygon: true,
       has_location: true,
+      viz_box: true,
       near_dup_group: true,
       region_text_match: true,
       import_id: true,
@@ -230,6 +232,7 @@ describe('CropFilter (getCrops spreads every key into the query)', () => {
       item_text: true,
       region_text_match: true,
       import_id: true,
+      viz_box: true,
     } satisfies Record<keyof CropFilter, true>);
     const path = Object.keys(S.paths).find((p) =>
       /\/projects\/\{project\}\/crops$/.test(p),

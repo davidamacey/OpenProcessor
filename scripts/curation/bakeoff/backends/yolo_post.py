@@ -11,6 +11,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from .base import Detection
+
 
 def letterbox(
     image_rgb: np.ndarray, size: int = 640, *, color: int = 114
@@ -143,3 +145,50 @@ def nms(
         iou = np.where(union > 0, inter / union, 0.0)
         order = rest[iou < iou_thresh]
     return keep
+
+
+def detections(
+    boxes: np.ndarray, scores: np.ndarray, class_ids: np.ndarray, keep: list[int]
+) -> list[Detection]:
+    """The kept rows as :class:`Detection` values."""
+    return [
+        Detection(
+            float(boxes[i, 0]),
+            float(boxes[i, 1]),
+            float(boxes[i, 2]),
+            float(boxes[i, 3]),
+            float(scores[i]),
+            int(class_ids[i]),
+        )
+        for i in keep
+    ]
+
+
+def decode_output(
+    output: np.ndarray,
+    *,
+    scale: float,
+    pad: tuple[int, int],
+    imgsz: int,
+    conf: float,
+    iou: float,
+    coords_normalized: bool,
+    class_names: dict[int, str] | None,
+) -> list[Detection]:
+    """Decode a raw YOLO output tensor: the YOLO26 NMS-free head ``[1, max_det, 6]``
+    needs no NMS; the older ``[1, 4+nc, N]`` grid is decoded and run through NMS."""
+    if output.ndim == 3 and output.shape[-1] == 6:
+        boxes, scores, class_ids = decode_yolo26_e2e(output, scale=scale, pad=pad, conf_thresh=conf)
+        keep = list(range(len(scores)))
+    else:
+        boxes, scores, class_ids = decode_yolo_v11(
+            output,
+            scale=scale,
+            pad=pad,
+            input_size=imgsz,
+            conf_thresh=conf,
+            coords_normalized=coords_normalized,
+            num_classes=len(class_names) if class_names else None,
+        )
+        keep = nms(boxes, scores, iou, class_ids)
+    return detections(boxes, scores, class_ids, keep)

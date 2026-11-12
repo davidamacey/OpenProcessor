@@ -26,6 +26,7 @@ class FakeValkeySets:
 
     def __init__(self, data: dict[str, set[str]] | None = None) -> None:
         self.data: dict[str, set[str]] = {} if data is None else data
+        self.ttls: dict[str, int] = {}
 
     async def sadd(self, key: str, *members: str) -> int:
         members_set = self.data.setdefault(key, set())
@@ -54,6 +55,13 @@ class FakeValkeySets:
         if not current:
             self.data.pop(key, None)
         return len(removed)
+
+    async def smembers(self, key: str) -> set[str]:
+        return set(self.data.get(key, set()))
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        self.ttls[key] = seconds
+        return key in self.data
 
     async def aclose(self) -> None:
         return None

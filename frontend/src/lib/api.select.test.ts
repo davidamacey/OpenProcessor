@@ -5,7 +5,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
-import { cancelSelect, getSelectStatus, selectDiverse } from '$lib/api_select';
+import {
+  cancelSelect,
+  getDiverseItems,
+  getSelectStatus,
+  selectDiverse,
+} from '$lib/api_select';
 
 /**
  * P2-10: `/review`'s diverse overlay (`POST {API_PREFIX}/select/diverse`). The
@@ -150,10 +155,10 @@ describe('getSelectStatus / cancelSelect', () => {
         JSON.stringify({
           status: 'completed',
           result: {
-            crop_ids: ['x', 'y'],
             method: 'kcenter_greedy',
             version: 'v1',
-            n_pool: 2,
+            n_pool: 5,
+            n_selected: 2,
           },
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -164,11 +169,30 @@ describe('getSelectStatus / cancelSelect', () => {
     const st = await getSelectStatus();
     expect(st.status).toBe('completed');
     expect(st.result).toEqual({
-      crop_ids: ['x', 'y'],
       method: 'kcenter_greedy',
       version: 'v1',
-      n_pool: 2,
+      n_pool: 5,
+      n_selected: 2,
     });
+  });
+
+  it('reads the picked items a page at a time with the shared cursor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          crops: [{ crop_id: 'x' }, { crop_id: 'y' }],
+          next_cursor: 'c2',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = await getDiverseItems('job-1', 'c1');
+    expect(page).toEqual({ ids: ['x', 'y'], next_cursor: 'c2' });
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toContain('/select/diverse/job-1/items?');
+    expect(url).toContain('cursor=c1');
   });
 
   it('leaves result null for a failed/cancelled job', async () => {

@@ -66,7 +66,14 @@
             <span
               class="font-mono text-[10px] {selected ? 'text-blue-200' : 'text-zinc-500'}"
             >
-              {count == null ? '…' : count.toLocaleString()}
+              {#if cohort.count === undefined}
+                <span
+                  title="Count not available: a cohort declared in the annotation profile is not counted by the server"
+                  >n/a</span
+                >
+              {:else}
+                {count == null ? '…' : count.toLocaleString()}
+              {/if}
             </span>
           </button>
         {/each}

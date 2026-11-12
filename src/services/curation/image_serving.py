@@ -11,7 +11,7 @@ This module used to also burn bbox overlays into the full-resolution
 source image server-side (the "expand to source" view). Every served
 image is now the clean source render (resize + EXIF transpose + crop,
 never a drawn box or label) — the frontend draws its own boxes from the
-geometry ``GET {prefix}/crops/{id}/context`` already serves in
+geometry ``GET {prefix}/images/{image_id}`` already serves in
 source-image-normalized coordinates. There is no overlay flag to opt
 back into: the drawing code was removed, not hidden behind a query
 param.

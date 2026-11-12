@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TrainingCohort(BaseModel):
@@ -15,6 +15,13 @@ class TrainingCohort(BaseModel):
     endpoint: str
     params: dict[str, Any]
     row_kind: Literal['crop', 'region']
+    count: int | None = Field(
+        default=None,
+        description=(
+            'Rows the cohort holds for the requested `class_id`, counted by the same query that '
+            'serves its rows; null when no class was asked for.'
+        ),
+    )
 
 
 class TrainingCohortList(BaseModel):

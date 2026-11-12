@@ -72,7 +72,6 @@ class ReviewEmptyState(BaseModel):
 
     has_probe_predictions: bool
     has_item_scores: bool
-    has_imported_labels: bool
     has_unembedded_items: bool = Field(
         description='Some item in the project has no vector, so a queue that skips them can be empty.'
     )

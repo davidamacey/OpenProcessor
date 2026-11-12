@@ -4,23 +4,20 @@
    * Everything listed is served; `ProfileList` follows it. Absent (one line)
    * until the backend serves region profiles.
    */
-  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import ConfirmDialog from '$components/ConfirmDialog.svelte';
   import ConfigActivePanel from '$components/config/ConfigActivePanel.svelte';
   import ConfigGate from '$components/config/ConfigGate.svelte';
-  import ConfigCloneDialog from '$components/config/ConfigCloneDialog.svelte';
+  import ConfigRowTail from '$components/config/ConfigRowTail.svelte';
+  import ConfigListDialogs from '$components/config/ConfigListDialogs.svelte';
   import ProfileImpactPanel from '$components/profiles/ProfileImpactPanel.svelte';
   import ProfileVocabularyPanel from '$components/profiles/ProfileVocabularyPanel.svelte';
-  import type { CloneSource } from '$lib/config/configList.svelte';
-  import { formatTimestamp } from '$lib/format/date';
+  import { createCloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';
   import { PROFILE_ACTIVE_COPY } from '$lib/profiles/profileCopy';
   import { createProfileList } from '$lib/profiles/profileListController.svelte';
   import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
   import type { RegionProfileSummary } from '$lib/types_profiles';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { toastStore } from '$stores/toast.svelte';
 
   $effect(() => {
     keyboardStore.setScope('settings');
@@ -34,37 +31,9 @@
     return () => list.stop();
   });
 
-  let cloneFrom = $state<CloneSource | null>(null);
-  let deleting = $state<RegionProfileSummary | null>(null);
-
-  function openClone(from: CloneSource): void {
-    list.clearClone();
-    cloneFrom = from;
-  }
-
-  async function doClone(
-    name: string,
-    description: string,
-    fromProject: string | null,
-  ): Promise<void> {
-    if (!cloneFrom) return;
-    const doc = await list.clone(cloneFrom, name, description, fromProject);
-    if (!doc) return;
-    cloneFrom = null;
-    toastStore.success(`Created ${doc.name}`);
-    await goto(
-      resolve(projectHref(`/settings/region-profiles/${encodeURIComponent(doc.name)}`)),
-    );
-  }
-
-  async function doDelete(): Promise<void> {
-    const row = deleting;
-    if (!row) return;
-    if (await list.remove(row)) {
-      deleting = null;
-      toastStore.success(`Deleted ${row.name}`);
-    }
-  }
+  const flow = createCloneDeleteFlow<RegionProfileSummary>(list, (name) =>
+    projectHref(`/settings/region-profiles/${encodeURIComponent(name)}`),
+  );
 </script>
 
 <div class="mx-auto flex max-w-6xl flex-col gap-4 p-6">
@@ -201,27 +170,7 @@
                 <td class="py-1.5 pr-3 font-mono text-xs text-zinc-300">
                   {p.parent_classes.length > 0 ? p.parent_classes.join(', ') : '—'}
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-zinc-500">
-                  {p.updated_at ? formatTimestamp(p.updated_at) : '—'}
-                </td>
-                <td class="py-1.5 text-right whitespace-nowrap">
-                  <button
-                    type="button"
-                    class="btn btn-sm"
-                    onclick={() => openClone({ name: p.name, source: null })}
-                    >Clone</button
-                  >
-                  {#if !p.read_only}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      onclick={() => {
-                        list.deleteError = null;
-                        deleting = p;
-                      }}>Delete</button
-                    >
-                  {/if}
-                </td>
+                <ConfigRowTail row={p} {flow} />
               </tr>
             {/each}
           </tbody>
@@ -252,7 +201,7 @@
                 <button
                   type="button"
                   class="btn btn-sm"
-                  onclick={() => openClone({ name: t.name, source: 'template' })}
+                  onclick={() => flow.openClone({ name: t.name, source: 'template' })}
                   >Clone</button
                 >
               </li>
@@ -289,36 +238,9 @@
   </ConfigGate>
 </div>
 
-{#if cloneFrom}
-  <ConfigCloneDialog
-    title="Clone {cloneFrom.name}{cloneFrom.source === 'template' ? ' (template)' : ''}"
-    nameLabel="New profile name"
-    withDescription
-    busy={list.busy}
-    error={list.cloneError}
-    report={list.cloneReport}
-    offerProjects={cloneFrom.source !== 'template'}
-    onconfirm={(name, description, fromProject) =>
-      void doClone(name, description, fromProject)}
-    oncancel={() => (cloneFrom = null)}
-  />
-{/if}
-
-{#if deleting}
-  <ConfirmDialog
-    title="Delete {deleting.name}"
-    confirmLabel="Delete"
-    danger
-    busy={list.busy}
-    onconfirm={() => void doDelete()}
-    oncancel={() => (deleting = null)}
-  >
-    <p>
-      Deletes the profile at revision {deleting.revision}. Items it already produced keep
-      their results.
-    </p>
-    {#if list.deleteError}<p class="text-red-300" data-testid="delete-error">
-        {list.deleteError}
-      </p>{/if}
-  </ConfirmDialog>
-{/if}
+<ConfigListDialogs {flow} {list} nameLabel="New profile name">
+  {#snippet deleteNote(row)}
+    Deletes the profile at revision {row.revision}. Items it already produced keep their
+    results.
+  {/snippet}
+</ConfigListDialogs>

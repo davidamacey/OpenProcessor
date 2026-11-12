@@ -2,10 +2,11 @@
  * Pool-scale diverse selection (`/select*`) and the selection writes that act
  * on every item a filter matches.
  */
-import { apiFetch, isPlainObject, scoped } from '$lib/api';
+import { apiFetch, isPlainObject, qs, scoped } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
+  DiverseJobResult,
   DiverseSelection,
   SelectDiverseScope,
   SelectJobStatus,
@@ -98,6 +99,18 @@ export async function selectDiverse(
   }
 }
 
+function parseDiverseJobResult(raw: unknown): DiverseJobResult | null {
+  if (!isPlainObject(raw)) return null;
+  const { n_pool, n_selected } = raw;
+  if (typeof n_pool !== 'number' || typeof n_selected !== 'number') return null;
+  return {
+    method: typeof raw.method === 'string' ? raw.method : 'diverse',
+    version: typeof raw.version === 'string' ? raw.version : '',
+    n_pool,
+    n_selected,
+  };
+}
+
 function parseSelectJobStatus(raw: unknown): SelectJobStatus {
   if (!isPlainObject(raw)) return { status: 'unknown' };
   return {
@@ -106,17 +119,34 @@ function parseSelectJobStatus(raw: unknown): SelectJobStatus {
     // `result` is only populated once status === 'completed' (job.py's
     // _JobState) — null/absent every other status, including 'failed'/
     // 'cancelled', where there's nothing to hydrate.
-    result: parseDiverseSelection(raw.result),
+    result: parseDiverseJobResult(raw.result),
     error: typeof raw.error === 'string' ? raw.error : null,
   };
 }
 
-/** Poll the singleton diverse-selection job. Caller decides polling
- *  cadence/cleanup (see `/review`'s `+page.svelte` — mirrors the
- *  `bakeoff` page's setInterval/clearInterval pattern). */
+/** Poll the singleton diverse-selection job. The caller decides the polling cadence and
+ *  cleanup (see `createDiverseSample` in `$lib/workspace/diverseSample.svelte`). */
 export async function getSelectStatus(signal?: AbortSignal): Promise<SelectJobStatus> {
   const raw = await apiFetch<unknown>(`${scoped()}/select/status`, {}, signal);
   return parseSelectJobStatus(raw);
+}
+
+/** One page of the items a finished selection job picked, in pick order
+ *  (`GET /select/diverse/{job_id}/items`, the shared cursor). */
+export async function getDiverseItems(
+  jobId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<{ ids: string[]; next_cursor: string | null }> {
+  const raw = await apiFetch<{
+    crops: { crop_id: string }[];
+    next_cursor: string | null;
+  }>(
+    `${scoped()}/select/diverse/${encodeURIComponent(jobId)}/items${qs({ limit: 500, cursor: cursor ?? undefined })}`,
+    {},
+    signal,
+  );
+  return { ids: raw.crops.map((c) => c.crop_id), next_cursor: raw.next_cursor };
 }
 
 /** Cancel the singleton diverse-selection job, if any is running. Real

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from src.clients.occ_locks import is_locked_box, is_locked_item
 from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
+from src.domain.item_labels import clarity_label, rank_label
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
 from src.domain.region_boxes import region_box_display_name
 from src.services.curation.assist.item_wire import assist_to_wire
@@ -108,8 +109,8 @@ def item_list_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
 
 def item_context_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
     """:func:`item_list_source_excludes` keeping ``mask_polygon``: the items of
-    ``GET /crops/{id}/context`` are drawn together over the source image, so
-    each carries its outline (bounded by that route's sibling cap)."""
+    ``GET /images/{image_id}`` are drawn together over the source image, so
+    each carries its outline (bounded by that route's item cap)."""
     return [e for e in item_list_source_excludes(vector_excludes) if e != 'mask_polygon']
 
 
@@ -381,6 +382,8 @@ def serialize_item(
         'crop_rank_in_image': src.get('crop_rank_in_image'),
         'crop_area_norm': src.get('crop_area_norm'),
         'blur_lap_ratio': src.get('blur_lap_ratio'),
+        'clarity_label': clarity_label(src.get('blur_lap_ratio')),
+        'rank_label': rank_label(src.get('crop_rank_in_image')),
         'proposal_name': src.get('proposal_name'),
         'detector_class_name': src.get('detector_class_name'),
         'detector_class_id': src.get('detector_class_id'),
@@ -388,7 +391,7 @@ def serialize_item(
         # Full-image open-vocabulary pass: the prompt that found the item, the
         # set@revision that ran it, and the outline (source frame, normalized).
         # List endpoints send ``mask_polygon`` as null (``item_list_source_excludes``);
-        # ``GET /crops/{id}`` and ``GET /crops/{id}/context`` carry it.
+        # ``GET /crops/{id}`` and ``GET /images/{image_id}`` carry it.
         'source_prompt': src.get('source_prompt'),
         'open_vocab_set': src.get('open_vocab_set'),
         'open_vocab_revision': src.get('open_vocab_revision'),

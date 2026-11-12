@@ -9,6 +9,7 @@ from src.config.curation_accessors import items_index
 from src.domain.label_ops import LABEL_OP_ID_RE, current_query
 from src.services.curation.label_ops.store import (
     LABEL_OPS_KEEP,
+    SINGLE_LABEL_OPS_KEEP,
     LabelOpRecord,
     ServedStatus,
     list_ops,
@@ -106,4 +107,10 @@ async def list_label_ops(
 
 
 def _list_body(items: list[dict[str, Any]], limit: int, next_after: str | None) -> dict[str, Any]:
-    return {'items': items, 'limit': limit, 'retention': LABEL_OPS_KEEP, 'next_after': next_after}
+    return {
+        'items': items,
+        'limit': limit,
+        'retention': LABEL_OPS_KEEP,
+        'single_retention': SINGLE_LABEL_OPS_KEEP,
+        'next_after': next_after,
+    }

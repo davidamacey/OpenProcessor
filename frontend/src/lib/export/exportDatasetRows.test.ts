@@ -3,6 +3,8 @@ import {
   buildExportRows,
   gapCellTitle,
   hasCurrentMulticlassExport,
+  isServedSortField,
+  nextClassSort,
   registryArtifactsAvailable,
   splitExportClasses,
 } from './exportDatasetRows';
@@ -202,5 +204,25 @@ describe('gapCellTitle', () => {
     expect(gapCellTitle(3, null)).toBe(
       '3 more trainable crops needed to reach the per-class minimum',
     );
+  });
+});
+
+describe('class table sort requests (the server sorts)', () => {
+  it('another column asks for the field bare; the same column flips the served direction', () => {
+    expect(nextClassSort('trainable', 'trainable_gap:desc')).toBe('trainable');
+    expect(nextClassSort('trainable_gap', 'trainable_gap:desc')).toBe(
+      'trainable_gap:asc',
+    );
+    expect(nextClassSort('trainable_gap', 'trainable_gap:asc')).toBe(
+      'trainable_gap:desc',
+    );
+    expect(nextClassSort('class_name', null)).toBe('class_name');
+  });
+
+  it('a column is sortable only when the server serves an order on it', () => {
+    const options = [{ id: 'count:asc' }, { id: 'count:desc' }];
+    expect(isServedSortField('count', options)).toBe(true);
+    expect(isServedSortField('trainable', options)).toBe(false);
+    expect(isServedSortField('count', [])).toBe(false);
   });
 });

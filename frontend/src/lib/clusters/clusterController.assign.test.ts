@@ -55,9 +55,14 @@ afterEach(() => {
 // this file does either.
 describe('assignClassToSelected', () => {
   it('labels the selection, records undo off putCropLabel, and clears the selection on success (single crop)', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.mocked(putCropLabel).mockResolvedValue({
+      crop_id: 'a',
+      class_id: 3,
+      class_name: 'widget_a',
+      op_id: 'op-a',
+    });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
-    const recordWritesSpy = vi.spyOn(undoStore, 'recordWrites');
+    const recordLabelOpSpy = vi.spyOn(undoStore, 'recordLabelOp');
     const successSpy = vi.spyOn(toastStore, 'success').mockImplementation(() => 'x');
     const a = crop('a');
     const { cropPager, sel, controller } = setup([a]);
@@ -70,7 +75,7 @@ describe('assignClassToSelected', () => {
     expect(cropPager.items[0]!.label_validated).toBe(true);
     expect(cropPager.items[0]!.label_source).toBe('human_confirmed');
     expect(putCropLabel).toHaveBeenCalledWith('a', 3);
-    expect(recordWritesSpy).toHaveBeenCalledWith(['a']);
+    expect(recordLabelOpSpy).toHaveBeenCalledWith('op-a', ['a']);
     expect(sel.size).toBe(0);
     expect(successSpy).toHaveBeenCalledWith('Labeled 1 crop.');
   });
@@ -162,7 +167,12 @@ describe('assignClassToSelected', () => {
   // header chip reads `classesStore`'s server-owned `validated_count` —
   // a successful write must re-fetch it rather than leave it stale.
   it('refreshes classesStore after a successful label write so the header count is current', async () => {
-    vi.mocked(putCropLabel).mockResolvedValue({} as never);
+    vi.mocked(putCropLabel).mockResolvedValue({
+      crop_id: 'a',
+      class_id: 3,
+      class_name: 'widget_a',
+      op_id: 'op-a',
+    });
     vi.spyOn(classesStore, 'byId').mockReturnValue({ id: 3, name: 'widget_a' } as never);
     const refreshSpy = vi.spyOn(classesStore, 'refresh').mockResolvedValue();
     const a = crop('a');

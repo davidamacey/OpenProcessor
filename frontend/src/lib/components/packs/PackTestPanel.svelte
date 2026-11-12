@@ -12,6 +12,7 @@
   import ConfigIssueList from '$components/config/ConfigIssueList.svelte';
   import TestPreviewItem from '$components/config/TestPreviewItem.svelte';
   import TestRefs from '$components/configTest/TestRefs.svelte';
+  import TestRunOutcome from '$components/configTest/TestRunOutcome.svelte';
   import TestVlmPicker from '$components/configTest/TestVlmPicker.svelte';
 
   interface Props {
@@ -110,34 +111,8 @@
         />
       </div>
     </div>
-    <div>
-      <button
-        type="button"
-        class="btn btn-primary btn-sm"
-        disabled={!t.canRun}
-        onclick={run}
-        data-testid="test-run">{t.running ? 'Testing…' : 'Run test'}</button
-      >
-    </div>
-
-    {#if t.error}
-      <div class="space-y-1" data-testid="test-error">
-        <p class="text-red-300">{t.error}</p>
-        {#if t.errorReport}
-          <ConfigIssueList
-            issues={[...t.errorReport.errors, ...t.errorReport.warnings]}
-            showField
-          />
-        {/if}
-      </div>
-    {/if}
-
-    {#if t.result}
-      {@const r = t.result}
-      <div
-        class="flex flex-col gap-3 border-t border-zinc-800 pt-3"
-        data-testid="test-result"
-      >
+    <TestRunOutcome {t} onrun={run}>
+      {#snippet result(r)}
         <TestRefs pack={r.pack} vlm={r.vlm} latencyMs={r.latency_ms} />
         <p class="text-xs" data-testid="test-parse-status">
           {#if r.parse_ok}
@@ -225,7 +200,7 @@
             {/if}
           </article>
         {/each}
-      </div>
-    {/if}
+      {/snippet}
+    </TestRunOutcome>
   </section>
 {/if}

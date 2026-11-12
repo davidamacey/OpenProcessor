@@ -7,6 +7,7 @@ The per-project wrapper (advisory lock, one pass per active project) is the shar
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from curation.query_fakes import QueryFakeOpenSearch
@@ -77,3 +78,42 @@ def test_the_drain_opens_its_valkey_client_once_per_pass(monkeypatch: pytest.Mon
     monkeypatch.setattr(image_counts_drain, 'opensearch_client', client)
     asyncio.run(image_counts_drain.drain_bound_project())
     assert len(seen) == 1
+
+
+class _Clock:
+    now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_the_tick_budget_is_shared_so_every_project_gets_a_fair_share(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One drain budget per project summed past the task's soft limit (a busy project starved the
+    later ones until the tick was killed); the tick's budget is split over its projects."""
+    projects = [SimpleNamespace(slug=s) for s in ('a', 'b', 'c')]
+    clock = _Clock()
+    seen: list[float | None] = []
+
+    async def drain_one(budget_s: float | None = None) -> None:
+        seen.append(budget_s)
+        # The first project uses its whole share and a little more (a batch in flight).
+        clock.now += (budget_s or 0) + 1 if len(seen) == 1 else 0
+
+    async def each(_lock: int, body: Any, *, task: str) -> None:
+        for project in projects:
+            await body(project)
+
+    monkeypatch.setattr(image_counts_drain, 'drain_bound_project', drain_one)
+    monkeypatch.setattr(image_counts_drain, 'for_each_project', each)
+    monkeypatch.setattr(image_counts_drain, 'read_tick_projects', lambda: projects)
+    monkeypatch.setattr(image_counts_drain.time, 'monotonic', clock)
+    asyncio.run(image_counts_drain.tick())
+    total = image_counts_drain.TICK_BUDGET_S
+    assert seen[0] is not None
+    assert seen[0] == total / 3
+    # The overrun of the first project comes out of what is left (split over the two to go);
+    # a project that finishes at once leaves its share to the one after it.
+    assert seen[1] == (total - seen[0] - 1) / 2
+    assert seen[2] == total - seen[0] - 1

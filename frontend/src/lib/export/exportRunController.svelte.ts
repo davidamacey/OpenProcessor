@@ -11,7 +11,7 @@ import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
 import { createNearDupRefreshController } from '$lib/nearDup/nearDupRefreshController.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import type { ExportStatus } from '$lib/types_export';
+import type { ExportResult, ExportStatus } from '$lib/types_export';
 
 export function downloadUrl(url: string, suggestedName: string): void {
   const a = document.createElement('a');
@@ -22,6 +22,27 @@ export function downloadUrl(url: string, suggestedName: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/** The finished (or still-running) synchronous export response as an `ExportStatus`. */
+function statusFromResult(res: ExportResult): ExportStatus {
+  return {
+    status: res.status,
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- converted to an ISO string at once, never stored or mutated
+    last_run: res.finished_at ?? res.started_at ?? new Date().toISOString(),
+    export_dir: res.export_dir ?? null,
+    error: res.status === 'failed' ? (res.message ?? 'unknown error') : null,
+    message: res.message ?? null,
+    image_count: res.image_count ?? null,
+    object_count: res.object_count ?? null,
+    split_object_counts:
+      (res.split_object_counts as ExportStatus['split_object_counts']) ?? null,
+    require_fully_labeled_images: res.require_fully_labeled_images ?? null,
+    unlabeled_items_on_exported_images: res.unlabeled_items_on_exported_images ?? null,
+    images_with_unlabeled_items: res.images_with_unlabeled_items ?? null,
+    images_dropped_not_fully_labeled: res.images_dropped_not_fully_labeled ?? null,
+    skipped_items: res.skipped_items ?? null,
+  };
 }
 
 /** `loadAll` re-reads the page's data after a finished export. */
@@ -95,24 +116,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
         collapse_near_duplicates: collapseNearDuplicates,
         item_filter: exportFilter.toBody(),
       });
-      exportState = {
-        status: res.status,
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- converted to an ISO string at once, never stored or mutated
-        last_run: res.finished_at ?? res.started_at ?? new Date().toISOString(),
-        export_dir: res.export_dir ?? null,
-        error: res.status === 'failed' ? (res.message ?? 'unknown error') : null,
-        message: res.message ?? null,
-        image_count: res.image_count ?? null,
-        object_count: res.object_count ?? null,
-        split_object_counts:
-          (res.split_object_counts as ExportStatus['split_object_counts']) ?? null,
-        require_fully_labeled_images: res.require_fully_labeled_images ?? null,
-        unlabeled_items_on_exported_images:
-          res.unlabeled_items_on_exported_images ?? null,
-        images_with_unlabeled_items: res.images_with_unlabeled_items ?? null,
-        images_dropped_not_fully_labeled: res.images_dropped_not_fully_labeled ?? null,
-        skipped_items: res.skipped_items ?? null,
-      };
+      exportState = statusFromResult(res);
       if (res.status === 'running' || res.status === 'pending') {
         toastStore.info(`Export started: ${res.status}`);
         startPolling();

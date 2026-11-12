@@ -52,6 +52,7 @@ function make(over: Partial<LabelOpsDeps> = {}) {
       items: [op('a')],
       limit: 20,
       retention: 200,
+      single_retention: 1000,
       next_after: null,
     }),
     undo: vi.fn((_id: string, dry: boolean) => Promise.resolve(undoResult(dry))),
@@ -66,6 +67,7 @@ describe('LabelOpsController', () => {
     await ctl.load();
     expect(ctl.items.map((o) => o.op_id)).toEqual(['a']);
     expect(ctl.retention).toBe(200);
+    expect(ctl.singleRetention).toBe(1000);
     expect(ctl.loading).toBe(false);
   });
 
@@ -82,6 +84,7 @@ describe('LabelOpsController', () => {
       items: [op('a')],
       limit: 20,
       retention: 200,
+      single_retention: 1000,
       next_after: 'a',
     });
     const { ctl } = make({ list });
@@ -100,12 +103,14 @@ describe('LabelOpsController', () => {
         items: full,
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: 'o19',
       })
       .mockResolvedValueOnce({
         items: [op('p0')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: null,
       });
     const { ctl } = make({ list });
@@ -125,6 +130,7 @@ describe('LabelOpsController', () => {
         items: [op('a')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: 'a',
       })
       .mockRejectedValueOnce(new ApiError(500, '/x', { detail: 'index down' }))
@@ -132,6 +138,7 @@ describe('LabelOpsController', () => {
         items: [op('b')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: null,
       });
     const { ctl } = make({ list });
@@ -154,6 +161,7 @@ describe('LabelOpsController', () => {
         items: [op('a')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: 'a',
       })
       .mockReturnValueOnce(slow)
@@ -161,6 +169,7 @@ describe('LabelOpsController', () => {
         items: [op('n')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: null,
       });
     const { ctl } = make({ list });
@@ -182,24 +191,28 @@ describe('LabelOpsController', () => {
         items: page1,
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: 'o19',
       })
       .mockResolvedValueOnce({
         items: [op('p0')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: null,
       })
       .mockResolvedValueOnce({
         items: page1,
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: 'o19',
       })
       .mockResolvedValueOnce({
         items: [op('p0')],
         limit: 20,
         retention: 200,
+        single_retention: 1000,
         next_after: null,
       });
     const { ctl } = make({ list });

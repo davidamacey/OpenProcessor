@@ -410,6 +410,19 @@
       "modifiable": false
     },
     {
+      "context": "workspace",
+      "default": [
+        "a",
+        "ctrl+a",
+        "meta+a"
+      ],
+      "description": "Select every loaded card or row; press again on a full page to select all matching.",
+      "group": null,
+      "id": "workspace.select_all",
+      "label": "Select all on the page",
+      "modifiable": true
+    },
+    {
       "context": "table",
       "default": [
         "arrowup"
@@ -557,19 +570,6 @@
     {
       "context": "cluster",
       "default": [
-        "a",
-        "ctrl+a",
-        "meta+a"
-      ],
-      "description": "Select every visible crop.",
-      "group": "select_all",
-      "id": "cluster.select_all",
-      "label": "Select all on page",
-      "modifiable": true
-    },
-    {
-      "context": "cluster",
-      "default": [
         "arrowleft"
       ],
       "description": "Go to the previous crop.",
@@ -598,17 +598,6 @@
       "group": null,
       "id": "cluster.move",
       "label": "Move selected to cluster...",
-      "modifiable": true
-    },
-    {
-      "context": "clusters_search",
-      "default": [
-        "a"
-      ],
-      "description": "Select every search result.",
-      "group": "select_all",
-      "id": "clusters_search.select_all",
-      "label": "Select all results",
       "modifiable": true
     },
     {

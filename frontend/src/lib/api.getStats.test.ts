@@ -19,6 +19,35 @@ afterEach(() => {
 });
 
 describe('getStats', () => {
+  it('asks /stats/classes for the order and returns the served sort', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        urls.push(url);
+        return Promise.resolve(
+          ok(
+            url.includes('/stats/classes')
+              ? {
+                  classes: [],
+                  sort_applied: 'trainable_gap:desc',
+                  sort_options: [{ id: 'trainable_gap:desc', label: 'Gap (desc)' }],
+                }
+              : {},
+          ),
+        );
+      }),
+    );
+
+    const result = await getStats({ sort: 'trainable_gap' });
+
+    expect(urls.some((u) => u.includes('/stats/classes?sort=trainable_gap'))).toBe(true);
+    expect(result.sort_applied).toBe('trainable_gap:desc');
+    expect(result.sort_options).toEqual([
+      { id: 'trainable_gap:desc', label: 'Gap (desc)' },
+    ]);
+  });
+
   it('still returns per_class when /stats/dataset 503s', async () => {
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/stats/dataset')) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AppLogo from '$components/AppLogo.svelte';
   import Modal from '$components/Modal.svelte';
 
   interface Props {
@@ -13,21 +14,7 @@
 {#if open}
   <Modal label="About {appName}" {onclose}>
     <div class="mb-3 flex items-center gap-2">
-      <svg viewBox="0 0 128 128" class="h-8 w-8 shrink-0 rounded border border-zinc-700">
-        <rect width="128" height="128" rx="24" fill="#09090b" />
-        <rect x="26" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-        <rect x="60" y="70" width="30" height="30" rx="5" fill="#3f3f46" />
-        <rect x="26" y="34" width="30" height="30" rx="5" fill="#60a5fa" />
-        <rect x="60" y="34" width="30" height="30" rx="5" fill="#f59e0b" />
-        <path
-          d="M33 49 l6 6 l12 -12"
-          fill="none"
-          stroke="#09090b"
-          stroke-width="4"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <AppLogo class="h-8 w-8 shrink-0 rounded border border-zinc-700" />
       <h3 class="text-base font-semibold">{appName}</h3>
     </div>
 

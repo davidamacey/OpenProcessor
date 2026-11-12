@@ -17,16 +17,16 @@
  */
 import { apiErrorText, type ApiError } from '$lib/api_errors';
 
-export class ConfigAvailability {
+export class ConfigAvailability<T = unknown> {
   /** `null` until the probe answers. */
   available = $state<boolean | null>(null);
   error = $state<string | null>(null);
-  #probe: () => Promise<unknown>;
+  #probe: () => Promise<T>;
   #inflight: Promise<void> | null = null;
   #loaded = false;
   #generation = 0;
 
-  constructor(probe: () => Promise<unknown>) {
+  constructor(probe: () => Promise<T>) {
     this.#probe = probe;
   }
 
@@ -36,8 +36,9 @@ export class ConfigAvailability {
     const gen = this.#generation;
     this.#inflight = (async () => {
       try {
-        await this.#probe();
+        const value = await this.#probe();
         if (gen !== this.#generation) return;
+        this.accept(value);
         this.available = true;
         this.error = null;
         this.#loaded = true;
@@ -58,6 +59,9 @@ export class ConfigAvailability {
     return this.#inflight;
   }
 
+  /** Subclass hook: keep what the successful probe returned. */
+  protected accept(_value: T): void {}
+
   /** Re-probe after a failure other than 404 (the Retry button). */
   retry(): Promise<void> {
     this.error = null;
@@ -66,10 +70,14 @@ export class ConfigAvailability {
   }
 
   reset(): void {
+    this.clear();
     this.#generation += 1;
     this.#inflight = null;
     this.#loaded = false;
     this.available = null;
     this.error = null;
   }
+
+  /** Subclass hook: drop what `accept` kept. */
+  protected clear(): void {}
 }
