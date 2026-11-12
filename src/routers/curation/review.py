@@ -140,8 +140,8 @@ async def review_tabs(opensearch: OpenSearchDep, filters: ReviewFiltersDep) -> d
     ``GET /next_steps`` says what to do. Must be registered before ``GET /review/{tab}`` so it
     isn't shadowed as ``tab='tabs'``.
 
-    Also carries ``empty_state`` -- ``{has_probe_predictions,
-    has_item_scores}`` -- computed once here so a client can annotate any
+    Also carries ``empty_state`` -- ``{has_probe_predictions, has_item_scores,
+    has_unembedded_items, suggested_reprocess}`` -- computed once here so a client can annotate any
     queue's zero-result state (the same reasons ``GET /review/{queue}``'s own
     ``empty_reason`` uses) without a per-queue round trip.
     """

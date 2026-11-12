@@ -13,7 +13,6 @@ from typing import Any
 
 from src.config import IndexRole, get_curation_config, index_name
 from src.domain.embedding_state import not_embedded_clause
-from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
 from src.services.curation.detections_summary import suggested_embed_request
 from src.services.curation.item_filter import ItemFilter
 from src.services.embedding_spaces.readers import item_vector_field
@@ -36,13 +35,6 @@ async def _count_unembedded(opensearch: Any) -> int:
         index=_items_index(), body={'query': not_embedded_clause(vector_field)}
     )
     return int(resp.get('count', 0))
-
-
-async def _imported_labels_exist(opensearch: Any) -> bool:
-    resp = await opensearch.count(
-        index=_items_index(), body={'query': {'term': {'class_source': LABEL_IMPORT_CLASS_SOURCE}}}
-    )
-    return int(resp.get('count', 0)) > 0
 
 
 REGION_PROFILE_OFF_REASON = (
@@ -84,12 +76,10 @@ async def review_tabs_empty_state(opensearch: Any) -> dict[str, Any]:
     ``has_unembedded_items``, so an empty queue can offer the embed action."""
     has_probe_predictions = await _field_has_any_value(opensearch, 'probe_pred_entropy')
     has_item_scores = await _field_has_any_value(opensearch, 'mistakenness_score')
-    has_imported_labels = await _imported_labels_exist(opensearch)
     unembedded = await _count_unembedded(opensearch)
     return {
         'has_probe_predictions': has_probe_predictions,
         'has_item_scores': has_item_scores,
-        'has_imported_labels': has_imported_labels,
         'has_unembedded_items': unembedded > 0,
         'suggested_reprocess': suggested_embed_request(ItemFilter()) if unembedded else None,
     }

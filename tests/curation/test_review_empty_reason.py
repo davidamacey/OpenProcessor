@@ -56,12 +56,11 @@ async def test_compute_empty_reason_default_no_items_match() -> None:
 @pytest.mark.asyncio
 async def test_review_tabs_empty_state_flags() -> None:
     fake = AsyncMock()
-    fake.count = AsyncMock(side_effect=[{'count': 3}, {'count': 0}, {'count': 2}, {'count': 0}])
+    fake.count = AsyncMock(side_effect=[{'count': 3}, {'count': 0}, {'count': 0}])
     state = await rer.review_tabs_empty_state(fake)
     assert state == {
         'has_probe_predictions': True,
         'has_item_scores': False,
-        'has_imported_labels': True,
         'has_unembedded_items': False,
         'suggested_reprocess': None,
     }
@@ -70,7 +69,7 @@ async def test_review_tabs_empty_state_flags() -> None:
 @pytest.mark.asyncio
 async def test_review_tabs_empty_state_offers_the_embed_request_for_unembedded_items() -> None:
     fake = AsyncMock()
-    fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 0}, {'count': 0}, {'count': 4}])
+    fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 0}, {'count': 4}])
     state = await rer.review_tabs_empty_state(fake)
     assert state['has_unembedded_items'] is True
     request = state['suggested_reprocess']
@@ -132,7 +131,6 @@ def test_review_tabs_serves_empty_state_summary(monkeypatch: pytest.MonkeyPatch)
     assert r.json()['empty_state'] == {
         'has_probe_predictions': False,
         'has_item_scores': True,
-        'has_imported_labels': False,
         'has_unembedded_items': False,
         'suggested_reprocess': None,
     }

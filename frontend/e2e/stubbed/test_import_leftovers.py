@@ -50,7 +50,6 @@ CLASSES = [
 EMPTY_STATE = {
     'has_probe_predictions': True,
     'has_item_scores': True,
-    'has_imported_labels': True,
 }
 
 IMPORT_ID = 'imp_20260927T120000_1a2b3c4d'

@@ -1289,7 +1289,7 @@ one of `options`), `multi_enum` (repeatable parameter, any of `options`:
 class NAME, no fixed options: the names come from `GET /classes` and the
 detector labels of `GET /ingest/config`), `bool`, `number` / `integer`
 (`min`, `max`) or `text`. `empty_state` is `{has_probe_predictions,
-has_item_scores, has_imported_labels, has_unembedded_items,
+has_item_scores, has_unembedded_items,
 suggested_reprocess}`: `suggested_reprocess` is the dry-run embed
 `ReprocessRequest` exactly when `has_unembedded_items`, so an empty queue
 can offer the embed action.
