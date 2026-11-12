@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import resource
 import sys
 import time
@@ -59,7 +58,7 @@ from scripts.research.cluster_diag.dataset import (
     load_bundle,
     read_jsonl,
 )
-from scripts.research.cluster_diag.run import SEED, calibration_mask
+from scripts.research.cluster_diag.run import SEED, calibration_mask, run_and_write
 from scripts.research.cluster_diag.section2_reference import reproduction
 
 
@@ -448,16 +447,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     t.add_argument('--sweep', type=float, nargs='*', default=[], help='more cuts (dense mode)')
     args = ap.parse_args(argv)
     run = run_scale_time if args.cmd == 'scale-time' else COMMANDS[args.cmd][0]
-    load_start = os.getloadavg()
-    result = {
-        'command': args.cmd,
-        'git_sha': scorecard.current_git_sha(),
-        'load_avg_start': load_start,
-        **run(args),
-        'load_avg_end': os.getloadavg(),
-    }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(result, indent=1, default=float) + '\n')
+    run_and_write(args, run)
     return 0
 
 

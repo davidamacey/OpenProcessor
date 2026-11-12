@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -25,7 +24,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.bench import eval_split, scorecard
+from scripts.bench import eval_split
 from scripts.research.cluster_diag import (
     chaining as ch,
     class_prior as cp,
@@ -39,7 +38,7 @@ from scripts.research.cluster_diag import (
 )
 from scripts.research.cluster_diag.class_prior_run import EXTRA_SPLIT_SEEDS, stored_partition
 from scripts.research.cluster_diag.dataset import detector_keys, load_bundle, read_jsonl
-from scripts.research.cluster_diag.run import SEED, calibration_mask
+from scripts.research.cluster_diag.run import SEED, calibration_mask, run_and_write
 
 
 Y3_CUTS = (0.346, 0.30, 0.25, 0.20, 0.15)
@@ -259,16 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             p.add_argument('--rule-fit', type=Path, required=True)
     args = ap.parse_args(argv)
     run = {'y3': run_y3, 'y2': run_y2, 'y1': run_y1, 'y4': run_y4}[args.cmd]
-    load_start = os.getloadavg()
-    result = {
-        'command': args.cmd,
-        'git_sha': scorecard.current_git_sha(),
-        'load_avg_start': load_start,
-        **run(args),
-        'load_avg_end': os.getloadavg(),
-    }
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(result, indent=1, default=float) + '\n')
+    run_and_write(args, run)
     return 0
 
 

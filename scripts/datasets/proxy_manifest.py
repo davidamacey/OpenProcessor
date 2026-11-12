@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -18,7 +19,10 @@ from scripts.datasets._common import FetchError, sha256_file, write_json
 
 
 if TYPE_CHECKING:
+    import argparse
     from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = 'proxy-dataset-manifest/1'
 MANIFEST_NAME = 'manifest.json'
@@ -227,6 +231,15 @@ def verify_dataset_dir(directory: Path, *, check_hashes: bool = True) -> VerifyR
             if r['path'] not in listed
         ]
     return report
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """The ``verify`` subcommand of the fetch scripts: log up to 20 problems, exit 1 on any."""
+    report = verify_dataset_dir(args.directory)
+    for line in report.problems()[:20]:
+        logger.error(line)
+    logger.info('verify %s: %s', args.directory, 'ok' if report.ok else 'FAILED')
+    return 0 if report.ok else 1
 
 
 def write_dataset(

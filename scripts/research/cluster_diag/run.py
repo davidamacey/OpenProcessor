@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -31,6 +32,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.bench import scorecard
 from scripts.bench.eval_split import load_manifest, split_groups_of
 from scripts.bench.parity_metrics import adjusted_rand_index
 from scripts.research.cluster_diag import diagnostics as dg, heldout as ho, partitions as pt
@@ -302,6 +304,22 @@ def run_e5(args: argparse.Namespace) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------- cli
+
+
+def run_and_write(
+    args: argparse.Namespace, run: Callable[[argparse.Namespace], dict[str, Any]]
+) -> None:
+    """Run one command and write its result with the git sha and the host load around it."""
+    load_start = os.getloadavg()
+    result = {
+        'command': args.cmd,
+        'git_sha': scorecard.current_git_sha(),
+        'load_avg_start': load_start,
+        **run(args),
+        'load_avg_end': os.getloadavg(),
+    }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(result, indent=1, default=float) + '\n')
 
 
 def main(argv: Sequence[str] | None = None) -> int:

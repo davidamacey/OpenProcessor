@@ -35,9 +35,9 @@ from scripts.datasets._common import FetchError, download
 from scripts.datasets.proxy_manifest import (
     Licence,
     build_manifest,
+    cmd_verify,
     file_entry,
     label_row,
-    verify_dataset_dir,
     write_dataset,
 )
 
@@ -162,14 +162,6 @@ def cmd_openimages(args: argparse.Namespace) -> int:
     oi.write_dataset(args.out, 'openimages_faces', OI_LICENCE, got, args.split, [], args.pin)
     logger.info('openimages faces: %d images -> %s', len(got), args.out)
     return 0
-
-
-def cmd_verify(args: argparse.Namespace) -> int:
-    report = verify_dataset_dir(args.directory)
-    for line in report.problems()[:20]:
-        logger.error(line)
-    logger.info('verify %s: %s', args.directory, 'ok' if report.ok else 'FAILED')
-    return 0 if report.ok else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
