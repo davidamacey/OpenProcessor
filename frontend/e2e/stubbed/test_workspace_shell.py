@@ -203,11 +203,11 @@ def test_slash_opens_the_class_picker_and_space_toggles_the_focused_card(stub, p
     serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=detections')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
-    thumb = page.locator('button[aria-pressed]').first
+    thumb = page.locator('[data-testid=detections-view] button[aria-pressed]').first
     thumb.focus()
     page.keyboard.press('Space')
     expect(page.get_by_test_id('bulk-count')).to_have_text('1 selected', timeout=ACTION_TIMEOUT_MS)
-    page.locator('button[aria-pressed]').nth(1).focus()
+    page.locator('[data-testid=detections-view] button[aria-pressed]').nth(1).focus()
     page.keyboard.press('Space')
     expect(page.get_by_test_id('bulk-count')).to_have_text('2 selected', timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press('/')
