@@ -140,6 +140,7 @@ ErrorCode = Literal[
     'degenerate_box',
     'geometry_conflict',
     'regions_outside_item',
+    'regions_changed',
     'nothing_to_undo',
     'test_busy',
     'test_timeout',

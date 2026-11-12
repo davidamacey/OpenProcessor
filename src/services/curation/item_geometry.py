@@ -30,8 +30,11 @@ from src.services.curation.edit_history import (
     EDIT_HISTORY_FIELD,
     GEOMETRY_UNDO_WRITER,
     GEOMETRY_WRITER,
+    REGION_REVISION_BEFORE,
     EditKind,
+    find_edit_undo,
     record_edit,
+    with_dropped_regions,
 )
 from src.services.curation.edit_undo import edit_undo_update
 from src.services.curation.item_embed_inline import EmbedOutcome, embed_item_inline
@@ -71,6 +74,10 @@ class RegionsOutsideItemError(Exception):
     def __init__(self, box_ids: list[str]) -> None:
         super().__init__('regions_outside_item')
         self.box_ids = box_ids
+
+
+class RegionsChangedError(Exception):
+    """The edit to undo dropped region boxes and a region write has happened since."""
 
 
 class NoGeometryToUndoError(Exception):
@@ -127,14 +134,15 @@ def geometry_edit_merger(
         if unlisted:
             raise RegionsOutsideItemError(unlisted)
         now = now_iso()
+        history = record_edit(current, kind=EditKind.GEOMETRY, writer=GEOMETRY_WRITER, now=now)
+        if drop & outside:
+            history = with_dropped_regions(history, current)
         update: dict[str, Any] = {
             'bbox_norm': new_box,
             'crop_area_norm': box_area_norm(new_box),
             'geometry_source': GEOMETRY_SOURCE_HUMAN,
             'geometry_revision': revision + 1,
-            EDIT_HISTORY_FIELD: record_edit(
-                current, kind=EditKind.GEOMETRY, writer=GEOMETRY_WRITER, now=now
-            ),
+            EDIT_HISTORY_FIELD: history,
             'updated_at': now,
             **resets,
         }
@@ -154,6 +162,10 @@ def geometry_undo_merger(resets: dict[str, Any]) -> Callable[[dict[str, Any]], d
     moved forward (an undo is a change a stale editor must see), the vector cleared."""
 
     def _merge(current: dict[str, Any]) -> dict[str, Any]:
+        entry = find_edit_undo(current.get(EDIT_HISTORY_FIELD), EditKind.GEOMETRY)
+        before = (entry or {}).get('state', {}).get(REGION_REVISION_BEFORE)
+        if before is not None and int(current.get(get_region_fields().revision) or 0) != before + 1:
+            raise RegionsChangedError
         update = edit_undo_update(current, EditKind.GEOMETRY, GEOMETRY_UNDO_WRITER)
         if update is None:
             raise NoGeometryToUndoError
@@ -289,6 +301,14 @@ async def undo_geometry(
         )
     except NotFoundError as exc:
         raise _not_found(crop_id) from exc
+    except RegionsChangedError as exc:
+        raise RequestRejectedError(
+            409,
+            error_body(
+                'regions_changed',
+                'the region boxes were edited after this move dropped some; undo it by hand',
+            ),
+        ) from exc
     except NoGeometryToUndoError as exc:
         raise RequestRejectedError(
             409, error_body('nothing_to_undo', f'nothing to undo for crop geometry {crop_id}')

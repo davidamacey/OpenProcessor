@@ -277,3 +277,40 @@ def test_a_stale_editor_after_an_undo_conflicts(world: Any) -> None:
     _patch(client, MOVED, 0)
     _undo(client)
     assert _patch(client, FAR, 1).status_code == 409
+
+
+def _two_regions(world: Any) -> None:
+    inside = box('b1', state='accepted', bbox=(0.15, 0.15, 0.3, 0.3))
+    outside = box('b2', state='accepted', bbox=(0.4, 0.4, 0.5, 0.5))
+    world.docs(ITEMS)['it-1'].update({F.boxes: [inside, outside], F.count: 2, F.rejected_count: 0})
+
+
+def test_undo_puts_back_the_region_boxes_a_move_dropped(world: Any) -> None:
+    _two_regions(world)
+    client = _client(world, FakePE())
+    shrink = [0.1, 0.1, 0.35, 0.35]
+    assert _patch(client, shrink, 0, drop_region_box_ids=['b2']).status_code == 200
+    assert _undo(client).status_code == 200
+    stored = world.docs(ITEMS)['it-1']
+    assert stored['bbox_norm'] == ORIGINAL
+    assert [b['box_id'] for b in stored[F.boxes]] == ['b1', 'b2']
+    assert stored[F.count] == 2
+
+
+def test_undo_of_a_move_that_dropped_nothing_leaves_later_region_edits(world: Any) -> None:
+    _two_regions(world)
+    client = _client(world, FakePE())
+    assert _patch(client, [0.05, 0.05, 0.6, 0.6], 0).status_code == 200
+    world.docs(ITEMS)['it-1'][F.boxes] = [box('b1', state='rejected', bbox=(0.15, 0.15, 0.3, 0.3))]
+    assert _undo(client).status_code == 200
+    assert [b['state'] for b in world.docs(ITEMS)['it-1'][F.boxes]] == ['rejected']
+
+
+def test_undo_after_a_region_edit_that_followed_a_drop_is_refused(world: Any) -> None:
+    _two_regions(world)
+    client = _client(world, FakePE())
+    assert _patch(client, [0.1, 0.1, 0.35, 0.35], 0, drop_region_box_ids=['b2']).status_code == 200
+    world.docs(ITEMS)['it-1'][F.revision] = int(world.docs(ITEMS)['it-1'][F.revision]) + 1
+    resp = _undo(client)
+    assert (resp.status_code, resp.json()['detail']['error']) == (409, 'regions_changed')
+    assert world.docs(ITEMS)['it-1']['bbox_norm'] == [0.1, 0.1, 0.35, 0.35]
