@@ -169,6 +169,9 @@ class _FakeTransport:
                 )
             except (NotImplementedError, KeyError, TypeError, ValueError):
                 aggs = {}
+        if spec.get('sort'):
+            # a sorted search answers each hit's sort values; the document id stands in for them
+            hits = [{**h, 'sort': [h['_id']]} for h in hits]
         size = spec.get('size', 10)
         resp: dict[str, Any] = {
             'hits': {
