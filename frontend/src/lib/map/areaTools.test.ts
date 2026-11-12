@@ -58,6 +58,39 @@ describe('AreaTools', () => {
     expect(h.applyFilter).not.toHaveBeenCalled();
   });
 
+  it('an extend without a gesture records nothing, so a later finish cannot see it', () => {
+    const tools = new AreaTools(host());
+    tools.extend([8, 47]);
+    expect(tools.points).toEqual([]);
+    expect(tools.drawing).toBe(false);
+  });
+
+  it('a rectangle dragged up and to the left keeps south < north and west < east', () => {
+    const h = host();
+    const tools = new AreaTools(h);
+    tools.begin('rectangle', [9, 48]);
+    tools.extend([8.5, 47.25]);
+    tools.extend([7.5, 46.75]);
+    tools.finish();
+    expect(h.filter.geoBbox).toEqual({ west: 7.5, south: 46.75, east: 9, north: 48 });
+  });
+
+  it('a lasso keeps its vertices in drawing order, unrounded and not re-closed', () => {
+    const h = host();
+    const tools = new AreaTools(h);
+    tools.begin('lasso', [7.123456789, 46.5]);
+    tools.extend([9.1, 46.25]);
+    tools.extend([8.2, 48.75]);
+    tools.extend([7.3, 47.5]);
+    tools.finish();
+    expect(h.filter.geoPolygon).toEqual([
+      [7.123456789, 46.5],
+      [9.1, 46.25],
+      [8.2, 48.75],
+      [7.3, 47.5],
+    ]);
+  });
+
   it('cancel drops the gesture without touching the filter', () => {
     const h = host();
     const tools = new AreaTools(h);
