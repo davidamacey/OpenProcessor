@@ -68,6 +68,8 @@ export interface ItemFilterQuery {
   /** `lon,lat;lon,lat;...`, 3 to 64 vertices. */
   geo_polygon?: string;
   has_location?: boolean;
+  /** `x1,y1,x2,y2` over the Embedding scatter; an inverted box is a 422. */
+  viz_box?: string;
   near_dup_group?: string;
   region_text_match?: TextMatch;
 }
@@ -82,6 +84,7 @@ export interface ItemFilter {
   geo_bbox?: GeoBox | null;
   geo_polygon?: [number, number][] | null;
   has_location?: boolean | null;
+  viz_box?: [number, number, number, number] | null;
   near_dup_group?: string | null;
   conf_max?: number | null;
   conf_min?: number | null;

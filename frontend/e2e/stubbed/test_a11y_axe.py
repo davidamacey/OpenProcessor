@@ -21,6 +21,7 @@ from test_cluster_discard import CLASSES, CLUSTERS, crop
 from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
+from test_embedding_view import serve as serve_embedding
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_gallery_view import serve as serve_gallery
 from test_label_confirmation import _stub_audit
@@ -201,6 +202,12 @@ PAGES = [
         '[data-testid="cluster-facets"]',
     ),
     ('workspace-map', '/p/default/workspace?view=map', serve_map, '[data-testid=map-located]'),
+    (
+        'workspace-embedding',
+        '/p/default/workspace?view=embedding&class_name=sedan',
+        lambda stub: serve_embedding(stub, []),
+        '[data-testid=embedding-legend-entry]',
+    ),
     (
         'workspace-gallery',
         '/p/default/workspace?view=gallery',

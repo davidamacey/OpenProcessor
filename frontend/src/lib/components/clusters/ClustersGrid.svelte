@@ -5,7 +5,6 @@
   import ClusterRunPanel from '$lib/components/clusters/ClusterRunPanel.svelte';
   import ClusterGridCard from '$lib/components/clusters/ClusterGridCard.svelte';
   import CropResultGrid from '$lib/components/CropResultGrid.svelte';
-  import EmbeddingPlot from '$lib/components/EmbeddingPlot.svelte';
   import MatchingItemsView from '$lib/components/itemFilter/MatchingItemsView.svelte';
   import SlotGallery from '$lib/components/slots/SlotGallery.svelte';
   import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
@@ -18,32 +17,24 @@
   import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
 
   // The /clusters content area: one of the mode swaps (search, ignored,
-  // item text, matching items, embedding plot, slot gallery) or the card
+  // item text, matching items, slot gallery) or the card
   // grid with its infinite-scroll sentinel.
   let {
     list,
     modes,
-    classFilter,
     matchingModeActive,
     matchingQuery,
     matchingBody,
     exitMatchingMode,
-    showEmbeddingViz,
-    embeddingVizBannerRequired,
-    embeddingVizCoverageTotal,
     slotGallery,
     ondetail,
   }: {
     list: ClusterListController;
     modes: ClusterSearchModes;
-    classFilter: number | null;
     matchingModeActive: boolean;
     matchingQuery: () => ItemFilterQuery;
     matchingBody: () => ItemFilter;
     exitMatchingMode: () => void;
-    showEmbeddingViz: boolean;
-    embeddingVizBannerRequired: boolean;
-    embeddingVizCoverageTotal: number | null;
     slotGallery: SlotGalleryController | null;
     ondetail: (c: Crop) => void;
   } = $props();
@@ -55,8 +46,7 @@
 <div class="flex-1 overflow-auto p-4">
   {#if modes.searchModeActive}
     <!-- Global dataset-wide search results — a mode swap over the card
-         grid, not a new page (mirrors showEmbeddingViz's own swap
-         above). Infinite scroll is not offered: {API_PREFIX}/search/text isn't
+         grid, not a new page. Infinite scroll is not offered: {API_PREFIX}/search/text isn't
          paginated the way the cluster grid's sentinel expects. -->
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <span class="flex items-center gap-2 text-zinc-300" data-testid="search-summary">
@@ -219,16 +209,6 @@
       body={matchingBody}
       onexit={exitMatchingMode}
       {ondetail}
-    />
-  {:else if showEmbeddingViz}
-    <!-- Replaces the card grid entirely (plan §5.6 — no layout thrash
-         from showing both at once). Lazily mounted: this is the only
-         place <EmbeddingPlot> appears, so it never instantiates (never
-         fetches) while the toggle is off. -->
-    <EmbeddingPlot
-      classId={classFilter}
-      bannerRequired={embeddingVizBannerRequired}
-      coveragePoolTotal={embeddingVizCoverageTotal}
     />
   {:else if slotGallery}
     <!-- Slot gallery: SlotGallery.svelte, backed by

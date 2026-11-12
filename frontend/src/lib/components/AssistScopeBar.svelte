@@ -73,7 +73,7 @@
   // redeploy, a flag flipped off) while its value is selected. Force the
   // stale selection back to "server default" rather than sending an id
   // the backend no longer advertises. Same shape as /train's
-  // datasetExportAvailable reset and /clusters' showEmbeddingViz reset —
+  // datasetExportAvailable reset —
   // the `!= null` guard is what makes the effect converge instead of
   // looping on state it also reads. Defense in depth: nothing can select
   // a value before the axis is available, so this should never fire.

@@ -27,7 +27,6 @@ function modes() {
   stop = $effect.root(() => {
     m = createClusterSearchModes({
       clusterPager: { items: [] } as never,
-      showEmbeddingViz: false,
       gridItemFilter: () => ({ class_name: ['widget'] }),
     });
   });

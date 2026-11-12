@@ -1,6 +1,5 @@
 /**
- * Pure geometry/color helpers for `EmbeddingPlot.svelte` (curation-
- * strategy plan Phase 5, curation strategy plan §2.7/§5.6).
+ * Pure geometry/color helpers for `EmbeddingPlot.svelte`.
  *
  * Kept out of the component (mirrors the
  * `pager.svelte.ts` split — logic that doesn't need Svelte reactivity
@@ -27,6 +26,8 @@ export interface ScaledPoint extends ScreenPoint {
 export interface PlotScale {
   /** Project a data-space (x, y) into canvas pixel space. */
   toScreen(x: number, y: number): ScreenPoint;
+  /** The inverse of `toScreen`: a canvas pixel back to data space. */
+  toData(x: number, y: number): ScreenPoint;
 }
 
 /**
@@ -56,7 +57,7 @@ export function computeScale(
   if (points.length === 0 || width <= 0 || height <= 0) {
     const cx = width / 2;
     const cy = height / 2;
-    return { toScreen: () => ({ x: cx, y: cy }) };
+    return { toScreen: () => ({ x: cx, y: cy }), toData: () => ({ x: 0, y: 0 }) };
   }
   let minX = Infinity;
   let maxX = -Infinity;
@@ -77,6 +78,12 @@ export function computeScale(
       return {
         x: padding + ((x - minX) / spanX) * innerW,
         y: padding + (1 - (y - minY) / spanY) * innerH,
+      };
+    },
+    toData(x: number, y: number): ScreenPoint {
+      return {
+        x: minX + ((x - padding) / innerW) * spanX,
+        y: minY + (1 - (y - padding) / innerH) * spanY,
       };
     },
   };
@@ -128,15 +135,8 @@ export function selectIdsInLasso(
 }
 
 /**
- * Deterministic color for a `cluster_uid`. The plot DECORATES an existing
- * assignment (curation-strategy plan §2.7 — "color from the served cluster...
- * decorates, doesn't decide") — never compute/guess a cluster from this
- * color or feed it back into any assignment logic.
- *
- * `null` (no cluster assigned) gets a neutral gray distinct from every
- * palette entry, so "unassigned" reads as a visually distinct bucket
- * rather than colliding with whatever cluster happens to hash to a
- * similar hue.
+ * The palette a served legend slot (`colour_index`) maps to. The server decides which class
+ * has which slot; the plot only turns a slot into a colour (slots past the palette wrap).
  */
 const PALETTE: readonly string[] = [
   '#60a5fa', // blue-400
@@ -152,79 +152,50 @@ const PALETTE: readonly string[] = [
   '#e879f9', // fuchsia-400
   '#38bdf8', // sky-400
 ];
-const UNASSIGNED_COLOR = '#71717a'; // zinc-500
 
-/** FNV-1a over the uid's characters: a stable palette slot per uid. */
-function slotOf(uid: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < uid.length; i++) {
-    h ^= uid.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h % PALETTE.length;
-}
-
-export function colorForCluster(clusterUid: string | null): string {
-  if (clusterUid == null || clusterUid === '') return UNASSIGNED_COLOR;
-  return PALETTE[slotOf(clusterUid)]!;
+export function colourForIndex(index: number): string {
+  return PALETTE[((index % PALETTE.length) + PALETTE.length) % PALETTE.length]!;
 }
 
 export const PALETTE_SIZE = PALETTE.length;
 
-export interface LegendEntry {
-  clusterUid: string | null;
-  color: string;
-  /** Points of this cluster in the served projection. */
-  count: number;
-  /** The most common served `class_name` among those points, if any. */
-  className: string | null;
+/** How a point is painted: dimmed when the filter leaves it out, or when others are selected. */
+export function pointAlpha(
+  matched: boolean,
+  selected: boolean,
+  anySelected: boolean,
+): number {
+  if (!matched) return 0.18;
+  return selected || !anySelected ? 0.9 : 0.25;
 }
 
-/**
- * the plot had no legend, so its
- * colors meant nothing without hovering. The biggest clusters in the
- * served points, each with its color and the class name its points carry
- * most often. Display only: nothing here assigns anything.
- */
-export function legendEntries(
-  points: readonly { cluster_uid: string | null; class_name: string | null }[],
-  max = 8,
-): LegendEntry[] {
-  const byCluster = new Map<
-    string | null,
-    { count: number; names: Map<string, number> }
-  >();
+/** The corners of a drag in data space, ordered so that x1 <= x2 and y1 <= y2. */
+export function dragToBox(
+  scale: PlotScale,
+  from: ScreenPoint,
+  to: ScreenPoint,
+): [number, number, number, number] {
+  const a = scale.toData(from.x, from.y);
+  const b = scale.toData(to.x, to.y);
+  return [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)];
+}
+
+/** The id of the point nearest `at` within `radius` pixels, or null. */
+export function nearestPointId(
+  points: ReadonlyArray<ScaledPoint>,
+  at: ScreenPoint,
+  radius: number,
+): string | null {
+  let best: string | null = null;
+  let bestD = radius * radius;
   for (const p of points) {
-    let e = byCluster.get(p.cluster_uid);
-    if (!e) {
-      e = { count: 0, names: new Map() };
-      byCluster.set(p.cluster_uid, e);
+    const d = (p.x - at.x) ** 2 + (p.y - at.y) ** 2;
+    if (d <= bestD) {
+      bestD = d;
+      best = p.id;
     }
-    e.count += 1;
-    if (p.class_name) e.names.set(p.class_name, (e.names.get(p.class_name) ?? 0) + 1);
   }
-  return [...byCluster.entries()]
-    .map(([clusterUid, e]) => {
-      let className: string | null = null;
-      let best = 0;
-      for (const [n, c] of e.names) {
-        if (c > best) {
-          best = c;
-          className = n;
-        }
-      }
-      return {
-        clusterUid,
-        color: colorForCluster(clusterUid),
-        count: e.count,
-        className,
-      };
-    })
-    .sort(
-      (a, b) =>
-        b.count - a.count || (a.clusterUid ?? '').localeCompare(b.clusterUid ?? ''),
-    )
-    .slice(0, max);
+  return best;
 }
 
 /** What the plot should do with one rebuild-job status poll. */

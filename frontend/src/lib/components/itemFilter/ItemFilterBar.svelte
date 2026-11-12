@@ -62,6 +62,7 @@
     'geo_bbox',
     'geo_polygon',
     'has_location',
+    'viz_box',
     'import_id',
   ]);
   const chips = $derived(

@@ -7,7 +7,7 @@ import { API_PREFIX } from '$lib/api';
 import { ApiError, apiErrorText } from '$lib/api_errors';
 import { getVizProjection, rebuildVizProjection } from '$lib/api_viz';
 
-/** getVizProjection(): only the served 404 `projection_not_built` is "not built"; every other failure rejects. */
+/** getVizProjection({}): only the served 404 `projection_not_built` is "not built"; every other failure rejects. */
 describe('getVizProjection', () => {
   const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
     new Response(JSON.stringify(body), {
@@ -30,6 +30,8 @@ describe('getVizProjection', () => {
             y: -2.3,
             cluster_uid: 'uid-17',
             class_name: 'widget_a',
+            matched: false,
+            colour_index: 3,
           },
           { crop_id: 'b', x: 0, y: 0, cluster_uid: null, class_name: null },
           // Malformed entries — must be dropped, not crash the whole parse.
@@ -39,6 +41,11 @@ describe('getVizProjection', () => {
           null,
           'garbage',
         ],
+        legend: [
+          { class_name: 'widget_a', colour_index: 3, count: 1 },
+          { class_name: null, colour_index: 0, count: 1 },
+          { class_name: 'bad' },
+        ],
         projection_version: '1',
         fitted_at: '2026-09-10T00:00:00Z',
         stale: false,
@@ -46,7 +53,7 @@ describe('getVizProjection', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await getVizProjection({ max_points: 100 });
+    const res = await getVizProjection({}, 100);
 
     expect(res.built).toBe(true);
     expect(res.points).toEqual([
@@ -57,6 +64,8 @@ describe('getVizProjection', () => {
         cluster_uid: 'uid-17',
         class_name: 'widget_a',
         class_source: null,
+        matched: false,
+        colour_index: 3,
       },
       {
         crop_id: 'b',
@@ -65,7 +74,13 @@ describe('getVizProjection', () => {
         cluster_uid: null,
         class_name: null,
         class_source: null,
+        matched: true,
+        colour_index: 0,
       },
+    ]);
+    expect(res.legend).toEqual([
+      { class_name: 'widget_a', colour_index: 3, count: 1 },
+      { class_name: null, colour_index: 0, count: 1 },
     ]);
     expect(res.total).toBe(2);
     expect(res.projection_version).toBe('1');
@@ -77,7 +92,7 @@ describe('getVizProjection', () => {
     expect(url).toContain('max_points=100');
   });
 
-  it('forwards cluster_uid/class_id and omits unset params', async () => {
+  it('forwards the shared filter query and omits an unset max_points', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         points: [],
@@ -88,10 +103,11 @@ describe('getVizProjection', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await getVizProjection({ cluster_uid: 'uid-42' });
+    await getVizProjection({ cluster_uid: ['uid-42'], viz_box: '0,0,1,1' });
 
     const url = fetchMock.mock.calls[0]?.[0] as string;
     expect(url).toContain('cluster_uid=uid-42');
+    expect(url).toContain('viz_box=0%2C0%2C1%2C1');
     expect(url).not.toContain('class_id');
     expect(url).not.toContain('max_points');
   });
@@ -106,7 +122,7 @@ describe('getVizProjection', () => {
         ),
       );
     vi.stubGlobal('fetch', fetchMock);
-    const res = await getVizProjection();
+    const res = await getVizProjection({});
     expect(res.built).toBe(false);
     expect(res.points).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -123,7 +139,7 @@ describe('getVizProjection', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    expect((await getVizProjection()).stale).toBe(true);
+    expect((await getVizProjection({})).stale).toBe(true);
   });
 
   it('rejects a 404 that is not the projection_not_built code (not a false "not built")', async () => {
@@ -133,7 +149,7 @@ describe('getVizProjection', () => {
         new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
       );
     vi.stubGlobal('fetch', fetchMock);
-    await expect(getVizProjection()).rejects.toMatchObject({ status: 404 });
+    await expect(getVizProjection({})).rejects.toMatchObject({ status: 404 });
   });
 
   it('rejects a 503 projection_unavailable with the served message', async () => {
@@ -146,14 +162,14 @@ describe('getVizProjection', () => {
         ),
       );
     vi.stubGlobal('fetch', fetchMock);
-    const err = await getVizProjection().catch((e: unknown) => e);
+    const err = await getVizProjection({}).catch((e: unknown) => e);
     expect(apiErrorText(err)).toBe('Index is down.');
   }, 10_000);
 
   it('rejects on a network failure after the retry budget', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(getVizProjection()).rejects.toThrow('fetch failed');
+    await expect(getVizProjection({})).rejects.toThrow('fetch failed');
     expect(fetchMock).toHaveBeenCalledTimes(4);
   }, 10_000);
 
@@ -165,7 +181,7 @@ describe('getVizProjection', () => {
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    await expect(getVizProjection()).rejects.toThrow();
+    await expect(getVizProjection({})).rejects.toThrow();
   });
 
   it('propagates a caller-initiated abort instead of swallowing it into the fallback', async () => {
@@ -179,7 +195,7 @@ describe('getVizProjection', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const p = getVizProjection(undefined, ctrl.signal);
+    const p = getVizProjection({}, undefined, ctrl.signal);
     ctrl.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
   });

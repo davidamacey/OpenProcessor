@@ -9,7 +9,10 @@ import DetectionsView from './views/DetectionsView.svelte';
 import TableView from './views/TableView.svelte';
 import MapView from './views/MapView.svelte';
 import ReviewView from './views/ReviewView.svelte';
+import EmbeddingView from './views/EmbeddingView.svelte';
+import { isEmbeddingVizAvailable } from '$lib/strategies';
 import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
+import { strategiesStore } from '$stores/strategies.svelte';
 import { page } from '$app/state';
 import type { WorkspaceController } from './workspaceController.svelte';
 import type { ViewId } from './workspaceUrl';
@@ -21,7 +24,8 @@ export interface ViewEntry {
   component: Component<{ ws: WorkspaceController }>;
   /** The keymap context the view's keys are registered under. */
   keyContext: 'cluster' | 'table' | 'map' | 'review';
-  /** Absent means always available; the Map view needs a project that serves a map. */
+  /** Absent means always available; the Map view needs a project that serves a map and the
+   *  Embedding view a deployment that serves the projection. */
   available?: (ws: WorkspaceController) => boolean;
 }
 
@@ -42,6 +46,14 @@ export const VIEWS: readonly ViewEntry[] = [
     component: MapView,
     keyContext: 'map',
     available: () => mapAvailabilityStore.availableFor(page.params.project),
+  },
+  {
+    id: 'embedding',
+    label: 'Embedding',
+    component: EmbeddingView,
+    keyContext: 'cluster',
+    // The overlay is offered only where `/methods` reports the projection.
+    available: () => isEmbeddingVizAvailable(strategiesStore.methods.overlays),
   },
 ];
 

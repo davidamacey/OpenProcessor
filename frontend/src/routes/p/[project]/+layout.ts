@@ -1,6 +1,7 @@
 import { regionRuleWarnings } from '$lib/annotations/registeredSlots';
 import { loadKeymap } from '$stores/keymap.svelte';
 import { mapAvailabilityStore } from '$stores/mapAvailability.svelte';
+import { strategiesStore } from '$stores/strategies.svelte';
 import { projectPauseStore } from '$stores/projectPause.svelte';
 import { loadRegionProfile } from '$stores/regionProfile.svelte';
 import { projectsStore, type ProjectResolution } from '$stores/projects.svelte';
@@ -33,6 +34,8 @@ export const load: LayoutLoad = async ({
   void projectPauseStore.load(resolution.project);
   // The Map nav link: shown only when the project has a served map.
   void mapAvailabilityStore.load(resolution.project.slug);
+  // The Embedding tab: shown only when `/methods` reports the projection overlay.
+  void strategiesStore.init();
 
   // The served region profile (`{prefix}/health.region_profile`) and the
   // served keymap are per project. This is after the prefix moved and

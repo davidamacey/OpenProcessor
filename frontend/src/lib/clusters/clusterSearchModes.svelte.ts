@@ -35,7 +35,6 @@ import { undoStore } from '$stores/undo.svelte';
 /** The page state the modes read and set. */
 export interface ClusterSearchModesState {
   readonly clusterPager: Pager<Cluster>;
-  showEmbeddingViz: boolean;
   /** The grid's item filter, which "More like this" is scoped by as text search is. */
   gridItemFilter(): ItemFilterQuery;
 }
@@ -357,12 +356,6 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
   // aren't a single cluster, those actions don't make sense here.
   $effect(() => {
     if (!searchModeActive) return;
-    // Force the embedding plot off — same guard pattern the slot-gallery
-    // view already uses (the page's isSlotFilter effect): the plot
-    // colors by cluster over the card grid's own crops, which search
-    // mode replaces entirely.
-    if (s.showEmbeddingViz) s.showEmbeddingViz = false;
-
     const offDrop = dropOnClassStore.register(
       async (cls: RegistryClass, droppedIds: string[]) => {
         const ids = droppedIds.length > 0 ? droppedIds : [...searchSel.ids];

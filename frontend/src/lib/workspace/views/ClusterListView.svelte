@@ -7,7 +7,6 @@
     createSlotGalleryController,
     type SlotGalleryController,
   } from '$lib/slots/slotGalleryController.svelte';
-  import { isEmbeddingVizAvailable, isEmbeddingVizBannerRequired } from '$lib/strategies';
   import { findActiveClassByName } from '$lib/classNameKey';
   import { createClusterListController } from '$lib/clusters/clusterListController.svelte';
   import { createClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
@@ -25,7 +24,6 @@
   import type { ClusterListFilter, ClusterSortId } from '$lib/types_clusterList';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
-  import { strategiesStore } from '$stores/strategies.svelte';
 
   let { ws }: { ws: WorkspaceController } = $props();
 
@@ -49,12 +47,6 @@
   });
   const modes = createClusterSearchModes({
     clusterPager: list.clusterPager,
-    get showEmbeddingViz() {
-      return showEmbeddingViz;
-    },
-    set showEmbeddingViz(v: boolean) {
-      showEmbeddingViz = v;
-    },
     gridItemFilter,
   });
   let detailSearchCrop = $state<Crop | null>(null);
@@ -134,39 +126,6 @@
   const isSlotFilter = $derived(gallerySlot != null);
   const slotGallery = $derived(gallerySlot ? galleryFor(gallerySlot) : null);
 
-  // Embedding-plot overlay (curation-strategy plan Phase 5 —
-  // curation strategy plan §2.7/§5.6). Off by default,
-  // lazily mounted: <EmbeddingPlot> only appears in ClustersGrid inside
-  // its showEmbeddingViz branch, so it never instantiates
-  // (never calls getVizProjection) until the operator explicitly toggles
-  // it on. Mirrors isDiverseOverlayAvailable's gating pattern exactly —
-  // the toggle button itself is absent (not just disabled) unless
-  // {API_PREFIX}/methods reports the overlay at stable/experimental.
-  $effect(() => {
-    void strategiesStore.init();
-  });
-  const embeddingVizAvailable = $derived(
-    isEmbeddingVizAvailable(strategiesStore.methods.overlays),
-  );
-  const embeddingVizBannerRequired = $derived(
-    isEmbeddingVizBannerRequired(strategiesStore.methods.overlays),
-  );
-  // m20 (2026-09-24 interactive pass): served field_coverage_total for
-  // the viz_projection overlay, so EmbeddingPlot can note when it's
-  // showing fewer points than the pool the fit was computed over.
-  const embeddingVizCoverageTotal = $derived(
-    strategiesStore.methods.overlays.find((o) => o.id === 'viz_projection')
-      ?.field_coverage_total ?? null,
-  );
-  let showEmbeddingViz = $state<boolean>(false);
-  // The slot-gallery view (isSlotFilter) has its own grid + bulk-triage
-  // toolbar; the embedding plot projects items with a real cluster_id,
-  // which regions (sub-bboxes, not their own cluster docs) never have. Force the toggle off rather than
-  // leaving a stale plot mounted over a view it doesn't apply to.
-  $effect(() => {
-    if (isSlotFilter && showEmbeddingViz) showEmbeddingViz = false;
-  });
-
   // M4: `loadSlotInventoryCards` used to run exactly once, right after the
   // first `loadFirst()` — if the root layout's own `classesStore.acquire()`
   // fetch hadn't resolved yet at that moment, `classesStore.classes` was
@@ -220,8 +179,6 @@
     {matchingModeActive}
     {enterMatchingMode}
     {exitMatchingMode}
-    {embeddingVizAvailable}
-    bind:showEmbeddingViz
   />
 
   <AssistLoopPanel />
@@ -233,14 +190,10 @@
   <ClustersGrid
     {list}
     {modes}
-    {classFilter}
     {matchingModeActive}
     {matchingQuery}
     {matchingBody}
     {exitMatchingMode}
-    {showEmbeddingViz}
-    {embeddingVizBannerRequired}
-    {embeddingVizCoverageTotal}
     {slotGallery}
     ondetail={(c) => (detailSearchCrop = c)}
   />

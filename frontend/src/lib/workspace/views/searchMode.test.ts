@@ -8,10 +8,8 @@
  *  - unregistering dropOnClassStore when search mode ends (flagged in
  *    the plan as an easy-to-miss regression: forgetting this leaves
  *    /clusters eating drops after the user backs out of search)
- *  - forcing the embedding-plot toggle off when search activates,
- *    mirroring the existing isSlotFilter guard
  *  - the mode-switch branch rendering before the existing card-grid
- *    `{:else}`, matching the showEmbeddingViz precedent
+ *    `{:else}`
  *  - M (move) and AHC grouping are NOT wired for search-mode label
  *    actions (out of scope per the plan — search results aren't a
  *    single cluster)
@@ -62,10 +60,6 @@ describe('/clusters search mode', () => {
     expect(body).toMatch(/return \(\) => \{\s*offDrop\(\);/);
   });
 
-  it('forces showEmbeddingViz off when search mode activates, same guard idiom as isSlotFilter', () => {
-    expect(src).toMatch(/if \(s\.showEmbeddingViz\) s\.showEmbeddingViz = false;/);
-  });
-
   it('only wires A / Z / X / Escape in search mode — no M (move) or sub-cluster grouping', () => {
     const body = extractSearchModeEffect(src);
     // K1: registered by keymap action id (defaults a / z / x / Escape).
@@ -82,10 +76,10 @@ describe('/clusters search mode', () => {
     expect(body).not.toMatch(/openMovePicker/);
   });
 
-  it('renders the search-results branch before the existing card-grid {:else} (mirrors showEmbeddingViz)', () => {
+  it('renders the search-results branch before the existing card-grid {:else} (the slot gallery follows)', () => {
     const gridIdx = gridSrc.indexOf('<!-- Grid -->');
     const searchIdx = gridSrc.indexOf('{#if modes.searchModeActive}');
-    const embedIdx = gridSrc.indexOf('{:else if showEmbeddingViz}');
+    const embedIdx = gridSrc.indexOf('{:else if slotGallery}');
     expect(gridIdx).toBeGreaterThan(-1);
     expect(searchIdx).toBeGreaterThan(gridIdx);
     expect(embedIdx).toBeGreaterThan(searchIdx);
