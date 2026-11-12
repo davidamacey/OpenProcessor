@@ -69,7 +69,8 @@ labeled it, each shown only when recorded. **Reprocess** is available there. A
 won't overwrite it.
 
 A [dataset import](./dataset-import.md)'s **Review imported labels** link lists
-the imported items in the Detections view. A
+the imported items in the Detections view, narrowed to that import (`import_id`
+is part of the shared filter, so Review honours it too). A
 [combine job](./combine-projects.md)'s **Review flagged conflicts** opens the
 Check machine labels queue with the combine-conflict filter on.
 

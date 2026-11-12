@@ -227,3 +227,17 @@ def test_counts_follow_the_filter(monkeypatch: pytest.MonkeyPatch) -> None:
     narrowed = {t['id']: t['count'] for t in _tabs(client, class_name='car')}
     assert narrowed['to_label'] == 0
     assert narrowed['check_machine'] == 1
+
+
+def test_import_id_narrows_a_queue_and_the_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``import_id`` is a shared item-filter parameter: every list route takes it, the queues too."""
+    docs = {
+        'a': _machine('a', import_ids=['imp1']),
+        'b': _machine('b', import_ids=['imp2']),
+        'c': _machine('c'),
+    }
+    client = _client(docs, monkeypatch)
+    assert sorted(_ids(client.get(f'{BASE}/review/check_machine'))) == ['a', 'b', 'c']
+    assert _ids(client.get(f'{BASE}/review/check_machine', params={'import_id': 'imp1'})) == ['a']
+    counts = {t['id']: t['count'] for t in _tabs(client, import_id='imp1')}
+    assert counts['check_machine'] == 1

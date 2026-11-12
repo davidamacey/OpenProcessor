@@ -467,6 +467,10 @@ def test_job_progresses_to_done(stub, page, app_url):
     expect(page.get_by_test_id('next-steps')).to_contain_text('Group the imported region boxes')
     expect(page.get_by_role('button', name='Cancel import')).to_have_count(0)
     expect(page.get_by_role('button', name='Undo import')).to_be_visible()
+    # The link narrows the Workspace to this import.
+    href = page.get_by_test_id('review-imported-link').get_attribute('href') or ''
+    assert f'import_id={IMPORT_ID}' in href, href
+    assert 'view=detections' in href, href
     assert reads[0] >= 3, reads
 
 

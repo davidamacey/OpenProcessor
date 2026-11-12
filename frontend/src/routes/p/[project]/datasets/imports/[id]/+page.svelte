@@ -119,8 +119,11 @@
             <a
               class="ml-auto text-xs text-blue-300 underline hover:text-blue-200"
               data-testid="review-imported-link"
-              href={resolve(projectHref('/workspace?view=detections&queue=imported'))}
-              >Review imported labels</a
+              href={resolve(
+                projectHref(
+                  `/workspace?view=detections&queue=imported&import_id=${encodeURIComponent(j.import_id)}`,
+                ),
+              )}>Review imported labels</a
             >
           </div>
 

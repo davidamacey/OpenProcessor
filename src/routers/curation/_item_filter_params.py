@@ -129,6 +129,10 @@ def item_filter_query(
         list[ReviewStatus] | None,
         Query(description='pending, validated, dismissed or excluded; repeatable.'),
     ] = None,
+    import_id: Annotated[
+        str | None,
+        Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
+    ] = None,
     taken_from: TakenDate = None,
     taken_to: TakenDate = None,
     cluster_uid: Annotated[
@@ -187,6 +191,7 @@ def item_filter_query(
         origin=origin or [],
         embedding_state=embedding_state or [],
         review_status=review_status or [],
+        import_id=import_id,
         taken_from=taken_from,
         taken_to=taken_to,
         image_ids=image_id or [],

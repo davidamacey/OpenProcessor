@@ -55,6 +55,7 @@ export interface ItemFilterQuery {
   review_status?: ReviewStatus[];
   open_vocab_set?: string;
   source_prompt?: string;
+  import_id?: string;
   /** Capture day (ISO 8601), inclusive; UTC capture time, else wall-clock time. */
   taken_from?: string | null;
   taken_to?: string | null;
