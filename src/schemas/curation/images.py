@@ -116,3 +116,23 @@ class ImageInfo(BaseModel):
     dataset_split: str | None = None
     in_holdout: bool
     near_dup: ImageNearDup | None = None
+
+
+class ImageLocate(BaseModel):
+    """``GET /images/locate``: where an image sits in the list the same filters and sort serve."""
+
+    image_id: str
+    in_view: bool
+    index: int | None = Field(description='0-based position in the list; null when not in it.')
+    total: int = Field(description='Images in the list.')
+    cursor_before: str | None = Field(
+        description='Pass as `cursor` to `GET /images` for the page that starts at this image; '
+        'null for the first row and when not in the list.'
+    )
+    cursor_after: str | None = Field(
+        description='Pass as `cursor` for the page right after this image; null when not in it.'
+    )
+    reason: Literal['not_found', 'filtered_out'] | None = Field(
+        description='Why it is not in the list; null when in_view.'
+    )
+    reason_message: str | None = Field(description='The served sentence for `reason`.')

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 from src.config.curation_accessors import images_index
 from src.config.project_context import project_api_base
-from src.schemas.curation.images import ImageCard, ImagePage
+from src.schemas.curation.images import ImageCard, ImageLocate, ImagePage
 from src.schemas.curation.views import HiddenCounts
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_counts import item_facts
@@ -37,7 +37,8 @@ from src.services.curation.image_join import (
     without_image_predicates,
 )
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
-from src.services.curation.list_cursor import page_body, split_page
+from src.services.curation.list_cursor import page_body, split_page, with_tiebreak
+from src.services.curation.list_locate import locate_item
 
 
 if TYPE_CHECKING:
@@ -220,4 +221,53 @@ async def image_page(
             )
         ),
         empty_reason=empty,
+    )
+
+
+async def locate_image(
+    opensearch: Any,
+    q: ImageQuery,
+    embedding: WriteFields,
+    policy: str,
+    image_id: str,
+    image_source: dict[str, Any] | None,
+) -> ImageLocate:
+    """Where ``image_id`` (whose stored document is ``image_source``, ``None`` when there is none)
+    sits in the list ``q`` would serve; its cursor and limit are ignored."""
+    if q.view.sort not in _SORTS:
+        msg = f'sort must be one of {sorted(_SORTS)}'
+        raise ImageQueryError(msg)
+    query, _truncated = await _image_query(opensearch, q, embedding, policy)
+    out = ImageLocate(
+        image_id=image_id,
+        in_view=False,
+        index=None,
+        total=int((await opensearch.count(index=images_index(), body={'query': query}))['count']),
+        cursor_before=None,
+        cursor_after=None,
+        reason='not_found',
+        reason_message='No such image.',
+    )
+    if image_source is None:
+        return out
+    source = {**image_source, 'image_id': image_id}
+    source[_TAKEN] = (source.get('capture') or {}).get('taken_local')
+    where = await locate_item(
+        opensearch,
+        index=images_index(),
+        query=query,
+        sort=with_tiebreak(_SORTS[q.view.sort][1], 'image_id'),
+        sort_id=q.view.sort,
+        source=source,
+        id_field='image_id',
+    )
+    if where is None:
+        return out.model_copy(
+            update={
+                'reason': 'filtered_out',
+                'reason_message': 'The image is not in the current filtered view.',
+            }
+        )
+    return out.model_copy(
+        update={'in_view': True, 'reason': None, 'reason_message': None, **where.as_wire()}
     )
