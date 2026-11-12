@@ -22,6 +22,7 @@
   import { dndzone, SOURCES, TRIGGERS } from 'svelte-dnd-action';
   import CropCard from '$components/CropCard.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
+  import { captureDragSelection } from '$lib/dragSelection';
   import type { Selection } from '$lib/selection.svelte';
   import type { Crop } from '$lib/types';
 
@@ -77,14 +78,9 @@
       info: { id: string; trigger: TRIGGERS; source: SOURCES };
     }>,
   ): void {
-    const draggedId = e.detail.info?.id;
-    if (draggedId && !dragIds.includes(draggedId)) {
-      if (sel.has(draggedId) && sel.size > 1) {
-        dragIds = [...sel.ids];
-      } else {
-        dragIds = [draggedId];
-        sel.ids = new Set([draggedId]);
-      }
+    const captured = captureDragSelection(e.detail.info?.id, dragIds, sel);
+    if (captured) {
+      dragIds = captured;
       ondragidschange?.(dragIds);
     }
     dragItems = e.detail.items;

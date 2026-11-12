@@ -33,7 +33,8 @@ describe('CropResultGrid.svelte', () => {
   });
 
   it('captures the Finder-pattern multi-drag set on consider (drag a selected card drags the whole selection)', () => {
-    expect(src).toMatch(/sel\.has\(draggedId\)\s*&&\s*sel\.size > 1/);
+    // the rule itself (selected card -> whole selection) is tested in dragSelection.test.ts
+    expect(src).toMatch(/captureDragSelection\(e\.detail\.info\?\.id, dragIds, sel\)/);
   });
 
   it('drops the drag-local override on finalize rather than adopting the dnd library snapshot', () => {

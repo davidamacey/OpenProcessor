@@ -6,6 +6,7 @@
  * here with the drag set it races against.
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
+import { captureDragSelection } from '$lib/dragSelection';
 import { getClusters } from '$lib/api_clusters';
 import { flagNeedsNewClass } from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
@@ -197,16 +198,8 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     // replaces the selection with just that one. This is the only place
     // the multi-drag set is captured — the ClassSidebar's own dnd events
     // only see the one shadow item being hovered.
-    const draggedId = e.detail.info?.id;
-    if (draggedId && !dragIds.includes(draggedId)) {
-      if (sel.has(draggedId) && sel.size > 1) {
-        dragIds = [...sel.ids];
-      } else {
-        dragIds = [draggedId];
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- copied into the selection's own SvelteSet by its setter
-        sel.ids = new Set([draggedId]);
-      }
-    }
+    const captured = captureDragSelection(e.detail.info?.id, dragIds, sel);
+    if (captured) dragIds = captured;
     grid.setZoneItems(key, e.detail.items);
   }
 
