@@ -13,6 +13,9 @@ vi.mock('$lib/api_images', async () =>
 vi.mock('$lib/api_cropWrites', async () =>
   (await import('./editorApiMock')).editorWritesModule(),
 );
+vi.mock('$lib/labelOps/runLabelOp', async () =>
+  (await import('./editorApiMock')).editorLabelOpsModule(),
+);
 vi.mock('$lib/api_regionBoxes', async () =>
   (await import('./editorApiMock')).editorRegionsModule(),
 );
