@@ -89,7 +89,7 @@ every save is a new revision number, numbers are never reused, and
 ### Paging and ordering
 
 - `GET /crops`, `GET /review/{tab}`, `GET /regions`, `GET /regions/training_candidates`,
-  `GET /classes/{class_id}/crops` and `GET /audit/queue` page with `cursor` and `limit`. A page
+  `GET /classes/{class_id}/crops` page with `cursor` and `limit`. A page
   carries `total`, `limit` and `next_cursor` (`null` on the last page). Pass `next_cursor` back
   as `cursor` to read the next page, as deep as the list goes. A cursor belongs to the sort that
   served it: another sort refuses it with `400 cursor_invalid`. The `outliers` and `diverse`
@@ -1950,7 +1950,7 @@ schemas are in `contracts/openapi/curation.json`.
 | Object-store ingest | `POST /ingest/objects`, `POST /ingest/objects/presign` | The S3-compatible sibling of `/ingest/upload`: the request carries references and the API fetches the bytes. Which buckets and prefixes may be read is `OP_S3_ALLOWED` (empty means off). Credentials never travel in a request. |
 | Ingest sources | `/ingest/sources`, `/ingest/sources/{source_id}`, `.../run`, `.../retry-dead`, `.../events` | A registered folder or bucket prefix with watch, schedule or webhook triggers, drained by the one bulk runner. `events` receives S3 event notifications (`409 webhook_disabled` when the source takes none). [Ingest sources](../../docs-site/docs/guides/ingest-sources.mdx) |
 | Region stage | `GET /region_stage`, `POST /region_stage/pause`, `POST /region_stage/resume` | Pause or resume the region stage for this project only (idempotent, loses nothing). `409` until a region profile is active. |
-| Accuracy audit | `POST /audit/start`, `GET /audit/queue`, `GET /audit/report` | Draws a stratified sample of machine-labelled crops for a human to label through the normal label routes, then reports how often the detector and the VLM agreed with those labels. `409 audit_no_candidates` when nothing is eligible. |
+| Accuracy audit | `POST /audit/start`, `GET /audit/report` | Draws a stratified sample of machine-labelled crops for a human to label in the `audit` review queue through the normal label routes, then reports how often the detector and the VLM agreed with those labels. `409 audit_no_candidates` when nothing is eligible. |
 | Class seeding | `POST /classes/seed_from_detector` | Creates registry classes from the ingest detector's vocabulary; `422 unknown_detector_names`, `503 detector_unavailable`. |
 | Detections | `GET /detections/summary` | Stored detections per detector label, each with its embedding breakdown, over the shared item filter. |
 | VLM scope policy | `GET/PUT /vlm/policy` | Which crops the VLM stage takes (scope `all` when none was written). `PUT` takes `expected_revision` (`409 revision_conflict`); it applies at the worker's next poll and the next `auto_label` run, and stored labels are untouched. |

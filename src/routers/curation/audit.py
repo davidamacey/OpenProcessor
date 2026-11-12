@@ -1,9 +1,9 @@
 """Curation router sub-module: the accuracy audit.
 
-``POST /audit/start`` draws a stratified sample of machine-labelled crops,
-``GET /audit/queue`` lists the drawn crops still waiting for a human (who labels
-them through the normal label routes) and ``GET /audit/report`` reports how often
-the detector and the VLM agreed with those human labels. See
+``POST /audit/start`` draws a stratified sample of machine-labelled crops, the
+``audit`` review queue (``GET /review/audit``) lists the drawn crops still waiting for a
+human (who labels them through the normal label routes) and ``GET /audit/report`` reports
+how often the detector and the VLM agreed with those human labels. See
 :mod:`src.services.curation.audit`.
 """
 
@@ -13,27 +13,11 @@ from typing import Any
 
 from fastapi import Query
 
-from src.config.curation_accessors import items_index
-from src.routers._errors import server_error
 from src.routers.curation._api_error import api_error
-from src.routers.curation._audit_models import (
-    AuditQueueResponse,
-    AuditReport,
-    AuditStartRequest,
-    AuditStartResponse,
-)
+from src.routers.curation._audit_models import AuditReport, AuditStartRequest, AuditStartResponse
 from src.routers.curation._common import OpenSearchDep, router
-from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.schemas.curation.config_common import ApiErrorResponse
-from src.services.curation.audit import (
-    DEFAULT_MIN_PER_CLASS,
-    load_report,
-    pending_query,
-    start_audit,
-)
-from src.services.curation.list_cursor import CursorError, page_body, split_page
-from src.services.curation.wire import item_list_source_excludes, serialize_item
-from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
+from src.services.curation.audit import DEFAULT_MIN_PER_CLASS, load_report, start_audit
 
 
 @router.post(
@@ -56,49 +40,6 @@ async def audit_start(body: AuditStartRequest, opensearch: OpenSearchDep) -> dic
             'no machine-labelled crop with a detector answer is eligible',
         )
     return result
-
-
-@router.get('/audit/queue', response_model=AuditQueueResponse)
-async def audit_queue(
-    opensearch: OpenSearchDep,
-    batch_id: str | None = Query(None, description='Only this batch.'),
-    cursor: CursorQ = None,
-    limit: int = Query(30, ge=1, le=200),
-) -> dict[str, Any]:
-    """Drawn crops still waiting for a human label, in a stable order."""
-    excludes = await vector_source_excludes()
-    try:
-        body = page_body(
-            {
-                'query': pending_query(batch_id),
-                'track_total_hits': True,
-                '_source': {'excludes': item_list_source_excludes(excludes)},
-            },
-            sort=[],
-            tiebreak='crop_id',
-            cursor=cursor,
-            sort_id='crop_id:asc',
-            limit=limit,
-        )
-    except CursorError as exc:
-        raise cursor_refused(exc) from exc
-    try:
-        resp = await opensearch.search(index=items_index(), body=body)
-    except Exception as exc:
-        raise server_error(503, 'opensearch unavailable', exc) from exc
-    hits, next_cursor = split_page(
-        (resp.get('hits') or {}).get('hits') or [], sort_id='crop_id:asc', limit=limit
-    )
-    state_fields = await item_state_fields()
-    return {
-        'total': int(((resp.get('hits') or {}).get('total') or {}).get('value', 0)),
-        'next_cursor': next_cursor,
-        'limit': limit,
-        'items': [
-            serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
-            for h in hits
-        ],
-    }
 
 
 @router.get('/audit/report', response_model=AuditReport)

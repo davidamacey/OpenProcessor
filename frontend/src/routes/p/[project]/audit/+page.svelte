@@ -10,7 +10,8 @@
   import { AuditController } from '$lib/labelConfirmation/auditController.svelte';
   import { humanizeId } from '$lib/humanizeId';
   import AuditClassTable from '$lib/components/audit/AuditClassTable.svelte';
-  import AuditQueueList from '$lib/components/audit/AuditQueueList.svelte';
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
   import AuditStartForm from '$lib/components/audit/AuditStartForm.svelte';
   import ConfusionMatrix from '$lib/components/audit/ConfusionMatrix.svelte';
 
@@ -88,13 +89,19 @@
 
     <ConfusionMatrix confusion={r.confusion} />
 
-    {#if audit.queue}
-      <AuditQueueList
-        queue={audit.queue}
-        hasPrevious={audit.hasPrevious}
-        onprevious={() => void audit.previous()}
-        onnext={() => void audit.next()}
-      />
-    {/if}
+    <section class="surface flex flex-wrap items-center gap-3 p-4 text-sm">
+      {#if r.pending > 0}
+        <a
+          class="btn"
+          href={resolve(projectHref('/workspace?view=review&queue=audit'))}
+          data-testid="audit-open-queue">Label the sample in Review</a
+        >
+        <span class="text-zinc-400">{r.pending.toLocaleString()} crops are waiting.</span>
+      {:else}
+        <span class="text-zinc-500" data-testid="audit-nothing-waiting"
+          >Nothing is waiting. Draw a sample to start an audit.</span
+        >
+      {/if}
+    </section>
   {/if}
 </div>

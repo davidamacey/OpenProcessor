@@ -140,8 +140,8 @@ activates it at once. Review it first with `GET .../clusters/partitions/{partiti
 - **Accuracy audit.** Nothing else measures how often the detector or the VLM
   is right. `POST /audit/start` draws a stratified sample of machine-labelled,
   unvalidated, non-holdout crops that carry the detector's answer
-  (`min_per_class` per detector class, `sample_size` in total), `GET /audit/queue`
-  lists them, and you label them through the normal label routes. Each human
+  (`min_per_class` per detector class, `sample_size` in total), the `audit`
+  review queue lists them, and you label them through the normal label routes. Each human
   label stamps whether the detector, the VLM, both or neither was right.
   `GET /audit/report` returns per-class precision with Wilson 95% intervals, the
   `{detector class: {human class: n}}` confusion matrix and an

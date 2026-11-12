@@ -8,14 +8,17 @@ totals, so the rail needs no request per queue.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.msearch import msearch_checked
 from src.config.curation_accessors import items_index
 from src.services.curation.image_join import resolve_filter_join
-from src.services.curation.review_filters import ReviewFilters
 from src.services.curation.review_request import review_query
 from src.services.embedding_spaces.readers import item_write_fields
+
+
+if TYPE_CHECKING:
+    from src.services.curation.review_filters import ReviewFilters
 
 
 NO_AUDIT_SAMPLE = (

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.routers.curation._item_models import ItemDoc
 from src.services.curation.audit import DEFAULT_MIN_PER_CLASS, DEFAULT_SAMPLE_SIZE
 
 
@@ -44,15 +43,6 @@ class AuditStartResponse(BaseModel):
     requested: int
     min_per_class: int
     strata: list[AuditStratum]
-
-
-class AuditQueueResponse(BaseModel):
-    total: int
-    next_cursor: str | None = Field(
-        description='Pass as `cursor` for the next page; null on the last page.'
-    )
-    limit: int
-    items: list[ItemDoc]
 
 
 class AuditClassStat(BaseModel):

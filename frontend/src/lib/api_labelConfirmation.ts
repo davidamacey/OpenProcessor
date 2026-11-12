@@ -5,9 +5,6 @@
  * modules circular). Types live in `$lib/types_labelConfirmation`.
  */
 import { apiFetch, qs, scoped } from '$lib/api';
-import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
-import type { Crop } from '$lib/types';
-import type { CursorPage } from '$lib/types_cursor';
 import type {
   AuditReport,
   AuditStartRequest,
@@ -60,19 +57,4 @@ export function getAuditReport(
     {},
     signal,
   );
-}
-
-/** `GET /audit/queue`: drawn crops still waiting for a human label. */
-export async function getAuditQueue(
-  cursor: string | null = null,
-  limit = 30,
-  batchId?: string | null,
-  signal?: AbortSignal,
-): Promise<CursorPage<Crop>> {
-  const res = await apiFetch<Omit<CursorPage<Crop>, 'items'> & { items: RawCrop[] }>(
-    `${scoped()}/audit/queue${qs({ cursor: cursor ?? undefined, limit, batch_id: batchId ?? undefined })}`,
-    {},
-    signal,
-  );
-  return { ...res, items: res.items.map(mapRawCrop) };
 }
