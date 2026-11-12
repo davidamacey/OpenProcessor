@@ -368,7 +368,7 @@ async def test_review_counts_equal_what_the_review_query_matches(
             assert card['review_counts'][tab] == matched, (cluster_uid, tab)
     # The route itself, across both clusters.
     for tab in cc.CLUSTER_REVIEW_TABS:
-        served = client.get(f'{URL}/review/{tab}', params={'page_size': 100}).json()
+        served = client.get(f'{URL}/crops', params={'review_tab': tab, 'limit': 100}).json()
         assert served['total'] == sum(c['review_counts'][tab] for c in cards.values()), tab
     # a1 (low VLM confidence), a3 (outlier) and a4 (unmatched) are in the queue; a2 only
     # disagrees with the detector (its own tab) and a5 is clean.

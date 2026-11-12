@@ -20,7 +20,7 @@ from curation.query_fakes import QueryFakeOpenSearch
 from src.config import get_region_fields
 from src.config.curation_accessors import base_curation_config
 from src.domain.ingest_class_sources import unlabeled_proposal_class_sources
-from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog, tab_filters
+from src.services.curation.review_tabs import QUEUES, tab_filters
 
 
 # The regions queue exists only while a region profile is active (GH #51).
@@ -30,17 +30,19 @@ pytestmark = pytest.mark.usefixtures('reference_region_profile')
 ITEMS = base_curation_config().items_index
 F = get_region_fields()
 
-# One doc body per tab that qualifies for that tab's queue.
+# One doc body per queue that qualifies for that queue.
 _QUALIFYING: dict[str, dict[str, Any]] = {
-    'all': {'class_source': 'vlm_unmatched'},
-    'mismatches': {'class_source': 'vlm_unmatched'},
-    'vlm_low_conf': {'class_source': 'vlm', 'vlm_confidence': 'low', 'confidence': 0.3},
-    'outliers': {'cluster_score': 0.4},
-    'uncertainty': {'probe_pred_entropy': 1.5},
+    'to_label': {},
+    'check_machine': {'class_id': 1, 'class_source': 'vlm', 'confidence': 0.3},
+    'disagreements': {'class_source': 'vlm_unmatched'},
+    'audit': {'audit_sample': True},
     'regions': {
         F.boxes: [{'box_id': 'b1', 'bbox_norm': [0.1, 0.1, 0.2, 0.2], 'state': 'accepted'}]
     },
     'new_class_proposals': {'needs_new_class': True},
+}
+# `review_tab` filter values that are rank-limited by definition.
+_PRIMARY_FILTER_VALUES: dict[str, dict[str, Any]] = {
     'primary_low_conf': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
     'classifier_blind_spots': {'class_source': sorted(unlabeled_proposal_class_sources())[0]},
 }
@@ -66,7 +68,7 @@ def _client(fake: Any, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 def _docs(tab: str) -> dict[str, dict[str, Any]]:
-    body = _QUALIFYING[tab]
+    body = {**_QUALIFYING, **_PRIMARY_FILTER_VALUES}[tab]
     return {
         f'rank{rank}': {'crop_id': f'rank{rank}', 'crop_rank_in_image': rank, **body}
         for rank in (1, 2, 3, 5)
@@ -88,28 +90,27 @@ def test_max_rank_limits_every_tab(tab: str, monkeypatch: pytest.MonkeyPatch) ->
     assert {i['crop_id'] for i in r3.json()['items']} == {'rank1', 'rank2', 'rank3'}
 
 
-@pytest.mark.parametrize(
-    'tab', sorted(set(_QUALIFYING) - {'primary_low_conf', 'classifier_blind_spots'})
-)
+@pytest.mark.parametrize('tab', sorted(_QUALIFYING))
 def test_no_max_rank_serves_every_rank(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
     r = client.get(f'/curation/projects/default/review/{tab}', params={'page_size': 50})
     assert r.json()['total'] == 4
 
 
-@pytest.mark.parametrize('tab', ['primary_low_conf', 'classifier_blind_spots'])
-def test_primary_tabs_keep_their_served_default(tab: str, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize('tab', sorted(_PRIMARY_FILTER_VALUES))
+def test_primary_filter_values_keep_their_rank_default(
+    tab: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: _docs(tab)}), monkeypatch)
-    r = client.get(f'/curation/projects/default/review/{tab}', params={'page_size': 50})
-    assert {i['crop_id'] for i in r.json()['items']} == {'rank1', 'rank2'}
-    served = {t['id']: t for t in review_tab_catalog()}[tab]
-    assert served['filter_defaults'] == {'max_rank': 2}
+    r = client.get('/curation/projects/default/crops', params={'review_tab': tab})
+    assert {c['crop_id'] for c in r.json()['crops']} == {'rank1', 'rank2'}
 
 
 def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _client(QueryFakeOpenSearch({ITEMS: _docs('all')}), monkeypatch)
+    client = _client(QueryFakeOpenSearch({ITEMS: _docs('to_label')}), monkeypatch)
     body = client.get(
-        '/curation/projects/default/review/all/locate', params={'crop_id': 'rank3', 'max_rank': 2}
+        '/curation/projects/default/review/to_label/locate',
+        params={'crop_id': 'rank3', 'max_rank': 2},
     ).json()
     assert body['in_queue'] is False
     assert body['reason'] == 'filtered_out'
@@ -120,7 +121,8 @@ def test_locate_uses_the_same_max_rank(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _client(QueryFakeOpenSearch({ITEMS: {}}), monkeypatch)
     tabs = {t['id']: t for t in client.get('/curation/projects/default/review/tabs').json()['tabs']}
-    assert set(tabs) == set(KNOWN_TABS)
+    # The audit queue exists only while a drawn sample is pending.
+    assert set(tabs) == set(QUEUES) - {'audit'}
     for tab_id, tab in tabs.items():
         assert tab['filters'] == list(tab_filters(tab_id))
         assert 'max_rank' in tab['filters']
@@ -130,8 +132,9 @@ def test_tabs_catalog_serves_filters_per_tab(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_text_is_ignored_off_the_regions_tab(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = _client(QueryFakeOpenSearch({ITEMS: _docs('all')}), monkeypatch)
+    client = _client(QueryFakeOpenSearch({ITEMS: _docs('to_label')}), monkeypatch)
     r = client.get(
-        '/curation/projects/default/review/all', params={'text': 'nothing-matches', 'page_size': 50}
+        '/curation/projects/default/review/to_label',
+        params={'text': 'nothing-matches', 'page_size': 50},
     )
     assert r.json()['total'] == 4

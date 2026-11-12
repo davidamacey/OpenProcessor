@@ -101,7 +101,7 @@ PARAMS = {
 
 @pytest.mark.parametrize(
     'path',
-    ['/crops', '/review/all', '/stats/classes', '/stats/dataset', '/clusters', '/regions'],
+    ['/crops', '/review/to_label', '/stats/classes', '/stats/dataset', '/clusters', '/regions'],
 )
 @pytest.mark.db
 @pytest.mark.usefixtures('world')
@@ -157,7 +157,7 @@ def test_every_served_any_option_is_accepted_like_omitting_it(
             for s in tab['filter_specs']
             if s['kind'] == 'enum' and s['allows_unset']
         }
-        assert {p for _, p in unset} >= {'on_negative_frame', 'dataset_split'}
+        assert {p for _, p in unset} >= {'on_negative_frame'}
         for (tab_id, param), any_value in unset.items():
             for path in ('/crops', f'/review/{tab_id}'):
                 client.get(f'{base}{path}')  # warm one-time caches so the bodies compare

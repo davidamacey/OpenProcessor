@@ -15,6 +15,7 @@ from fastapi import Depends, HTTPException, Path as PathParam, Query
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
+from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, get_class_registry, is_not_found, router
 from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._item_filter_params import ItemFilterQuery
@@ -22,8 +23,6 @@ from src.routers.curation._page_models import ReviewLocateResponse, ReviewQueueP
 from src.routers.curation._review_params import (
     BlurQ,
     CombineConflictQ,
-    DatasetSplitQ,
-    ImportIdQ,
     IncludeTest,
     MistakeQ,
     NearDupQ,
@@ -35,7 +34,9 @@ from src.routers.curation._review_params import (
     TextQ,
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
+from src.schemas.curation.config_common import ApiErrorResponse
 from src.services.curation import review_empty_reason, review_reasons
+from src.services.curation.audit import has_pending_sample
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import item_filter_clauses
@@ -43,8 +44,8 @@ from src.services.curation.list_cursor import CursorError, page_body, split_page
 from src.services.curation.list_locate import UnlocatableSortError, locate_item
 from src.services.curation.review_filters import REGION_STATUS_DEFAULT, ReviewFilters
 from src.services.curation.review_request import build_review_request
-from src.services.curation.review_tab_status import tab_counts, unavailable_reason
-from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
+from src.services.curation.review_tab_status import absent_queues, tab_counts
+from src.services.curation.review_tabs import QUEUES, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import (
     item_state_fields,
@@ -53,7 +54,8 @@ from src.services.embedding_spaces.readers import (
 )
 
 
-_TAB_DESCRIPTION = 'One of: ' + ' | '.join(KNOWN_TABS)
+_TAB_DESCRIPTION = 'One of: ' + ' | '.join(QUEUES)
+_NOT_A_QUEUE: dict[int | str, dict[str, Any]] = {404: {'model': ApiErrorResponse}}
 
 
 def _review_filters(
@@ -67,8 +69,6 @@ def _review_filters(
     source: SourceQ = None,
     region_status: RegionStatusQ = REGION_STATUS_DEFAULT,
     combine_conflict: CombineConflictQ = False,
-    import_id: ImportIdQ = None,
-    dataset_split: DatasetSplitQ = None,
     on_negative_frame: OnNegativeFrameQ = None,
 ) -> ReviewFilters:
     return ReviewFilters(
@@ -83,13 +83,29 @@ def _review_filters(
         item=item_filter.model_copy(update={'max_rank': None}),
         region_status=region_status,
         combine_conflict=combine_conflict,
-        import_id=import_id,
-        dataset_split=dataset_split,
         on_negative_frame=on_negative_frame,
     )
 
 
 ReviewFiltersDep = Annotated[ReviewFilters, Depends(_review_filters)]
+
+
+def _queue(
+    tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
+) -> str:
+    """The queue a ``/review/{tab}`` path names. The other tab ids are ``review_tab`` filter values
+    only, so they answer 404 here."""
+    if tab not in QUEUES:
+        raise api_error(
+            404,
+            'not_a_queue',
+            f'{tab!r} is not a review queue; choose from {", ".join(QUEUES)}. '
+            'Filter any list with review_tab instead.',
+        )
+    return tab
+
+
+QueueDep = Annotated[str, Depends(_queue)]
 
 
 async def _request(tab: str, filters: ReviewFilters, sort: str | None, opensearch: Any) -> Any:
@@ -115,61 +131,54 @@ async def _hidden(
 
 
 @router.get('/review/tabs', response_model=ReviewTabsResponse)
-async def review_tabs(opensearch: OpenSearchDep) -> dict[str, Any]:
-    """Every review tab's ``id``/``label``/``description`` plus
-    ``filters`` (the query parameters it honours)
-    ``filter_defaults`` (values it applies when one is omitted) and
-    ``filter_specs`` (self-describing enum filters) — the frontend renders this instead of hardcoding tab labels or assuming a
-    filter works everywhere. Must be registered before ``GET /review/{tab}``
-    so it isn't shadowed as ``tab='tabs'``.
+async def review_tabs(opensearch: OpenSearchDep, filters: ReviewFiltersDep) -> dict[str, Any]:
+    """The review queues in order: ``id``, ``label``, ``description``, the ``filters`` each honours,
+    their ``filter_defaults`` and self-describing ``filter_specs``, and ``count``, the items the
+    queue holds under the filter the request carries (the same filter ``GET /review/{queue}``
+    takes). A queue that cannot fill is not listed: the audit queue exists only while a drawn
+    sample is pending, the region queue only while a region profile is active, and
+    ``GET /next_steps`` says what to do. Must be registered before ``GET /review/{tab}`` so it
+    isn't shadowed as ``tab='tabs'``.
 
     Also carries ``empty_state`` -- ``{has_probe_predictions,
     has_item_scores}`` -- computed once here so a client can annotate any
-    tab's zero-result state (the same reasons ``GET /review/{tab}``'s own
-    ``empty_reason`` uses) without a per-tab round trip.
+    queue's zero-result state (the same reasons ``GET /review/{queue}``'s own
+    ``empty_reason`` uses) without a per-queue round trip.
     """
     empty_state = await review_empty_reason.review_tabs_empty_state(opensearch)
-    catalog = review_tab_catalog()
-    reasons = {t['id']: unavailable_reason(t['id'], empty_state) for t in catalog}
     try:
-        counts = await tab_counts(
-            opensearch, [tab for tab, reason in reasons.items() if reason is None]
-        )
+        absent = absent_queues(has_pending_audit=await has_pending_sample(opensearch))
+        queues = [t for t in review_tab_catalog() if t['id'] not in absent]
+        counts = await tab_counts(opensearch, [t['id'] for t in queues], filters)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
     return {
-        'tabs': [
-            {
-                **t,
-                'available': reasons[t['id']] is None,
-                'unavailable_reason': reasons[t['id']],
-                'count': counts.get(t['id'], 0),
-            }
-            for t in catalog
-        ],
+        'tabs': [{**t, 'count': counts[t['id']]} for t in queues],
         'empty_state': empty_state,
     }
 
 
-@router.get('/review/{tab}', response_model=None, responses={200: {'model': ReviewQueuePage}})
+@router.get(
+    '/review/{tab}',
+    response_model=None,
+    responses={200: {'model': ReviewQueuePage}, **_NOT_A_QUEUE},
+)
 async def review_queue(
-    tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
+    tab: QueueDep,
     opensearch: OpenSearchDep,
     filters: ReviewFiltersDep,
     cursor: CursorQ = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 30,
     sort: SortQ = None,
 ) -> dict[str, Any]:
-    """Human review queue for the labeler ``/review`` page.
-
-    Each tab maps to a deterministic OpenSearch query against the
-    configured items index plus a ``reason`` string the labeler renders to
-    explain why the crop landed in this queue. Items already validated by
-    a human are excluded from every tab — except ``model_disagreements``,
-    where validated crops are exactly the input set, and ``regions``,
-    which reviews the region annotation independently of the item's
-    class validation. Order: the applied sort (``sort_applied``), then
-    ``crop_id``.
+    """One review queue: a deterministic OpenSearch query against the items index plus a ``reason``
+    string that explains why the crop landed in it. Items a human already validated are excluded
+    from every queue, except the model-disagreement source of ``disagreements`` (validated crops
+    are exactly its input) and ``regions``, which reviews the region annotation independently of
+    the item's class validation. Order: the applied sort (``sort_applied``), then ``crop_id``. A
+    tab id that is not a queue answers 404 ``not_a_queue``.
     """
     if review_empty_reason.region_queue_is_off(tab):
         return {
@@ -216,7 +225,7 @@ async def review_queue(
         (resp.get('hits') or {}).get('hits') or [], sort_id=req.sort_applied, limit=limit
     )
     registry_names: frozenset[str] = frozenset()
-    if tab == 'mismatches':
+    if tab == 'disagreements':
         from src.services.curation.new_class_terms import normalize_term
 
         registry_names = frozenset(
@@ -231,8 +240,8 @@ async def review_queue(
         src = h.get('_source') or {}
         item = serialize_item(src, h.get('_id', ''), state_fields=state_fields)
         # Review-only extra on top of the shared wire item.
-        if tab == 'mismatches':
-            item['reason'] = review_reasons.mismatch_reason(src, registry_names, req.reason)
+        if tab == 'disagreements':
+            item['reason'] = review_reasons.disagreement_reason(src, registry_names)
         elif tab == 'regions':
             item['reason'] = review_reasons.region_reason(src, region_fields, req.reason)
         else:
@@ -262,10 +271,12 @@ async def review_queue(
 
 
 @router.get(
-    '/review/{tab}/locate', response_model=None, responses={200: {'model': ReviewLocateResponse}}
+    '/review/{tab}/locate',
+    response_model=None,
+    responses={200: {'model': ReviewLocateResponse}, **_NOT_A_QUEUE},
 )
 async def review_locate(
-    tab: Annotated[str, PathParam(description=_TAB_DESCRIPTION)],
+    tab: QueueDep,
     crop_id: Annotated[str, Query(description='The item to find.')],
     opensearch: OpenSearchDep,
     filters: ReviewFiltersDep,

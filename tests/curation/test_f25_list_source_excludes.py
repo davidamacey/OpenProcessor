@@ -83,7 +83,7 @@ def test_crops_list_excludes_class_id_history(client: TestClient, fake_os: _Reco
 
 
 def test_review_queue_excludes_class_id_history(client: TestClient, fake_os: _RecordingOS) -> None:
-    r = client.get(f'{P}/review/all')
+    r = client.get(f'{P}/review/to_label')
     assert r.status_code == 200, r.text
     excludes = fake_os.search_bodies[-1]['_source']['excludes']
     assert 'class_id_history' in excludes
@@ -137,7 +137,7 @@ def _flip(embedding_registry: Any) -> None:
     embedding_registry.add(new_space(Target.BOX, 'mobileclip2_s2'), primary=True)
 
 
-@pytest.mark.parametrize('route', ['crops', 'review/all', 'regions'])
+@pytest.mark.parametrize('route', ['crops', 'review/to_label', 'regions'])
 @pytest.mark.usefixtures('reference_region_profile')
 def test_list_routes_exclude_the_vectors_of_a_flipped_primary(
     client: TestClient, fake_os: _RecordingOS, embedding_registry: Any, route: str

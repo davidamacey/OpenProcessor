@@ -1,10 +1,9 @@
 """Tests for ``src.services.curation.review_sorts`` — "the single most
 important test in this file."
 
-The golden-body regression guard: every one of the 9 existing
-``GET /curation/review/{tab}`` tabs must resolve, with ``?sort`` absent, to the
-*exact* OpenSearch sort clause `the review router hardcoded before this
-registry existed. A drift here silently reorders a production review queue.
+The golden-body regression guard: every ``GET /curation/review/{queue}`` queue that has a
+default must resolve, with ``?sort`` absent, to the *exact* OpenSearch sort clause below. A drift
+here silently reorders a production review queue.
 """
 
 from __future__ import annotations
@@ -14,78 +13,51 @@ import pytest
 from src.services.curation import review_sorts
 
 
-# The literal legacy `sort = [...]` the review router hardcoded per tab before
-# this registry existed (read directly off the pre-refactor router source —
-# see git history for the earlier router version). Any change here must be deliberate.
-LEGACY_TAB_CLAUSES: dict[str, list[dict]] = {
-    'all': [{'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}],
-    'mismatches': [{'updated_at': {'order': 'desc'}}],
-    'vlm_low_conf': [{'updated_at': {'order': 'desc'}}],
-    'outliers': [
-        {'cluster_score': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
+_DESC = {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}
+# Any change here must be deliberate.
+DEFAULT_QUEUE_CLAUSES: dict[str, list[dict]] = {
+    'to_label': [{'detector_confidence': {**_DESC, 'unmapped_type': 'float'}}],
+    'check_machine': [
+        {'confidence': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'float'}}
     ],
-    'uncertainty': [
-        {'probe_pred_entropy': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}}
-    ],
-    'regions': [
-        {'region_max_score': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-    ],
-    'model_disagreements': [
+    'disagreements': [
         {'probe_pred_entropy': {'order': 'asc', 'missing': '_last', 'unmapped_type': 'double'}}
     ],
-    'primary_low_conf': [
-        {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {
-            'confidence': {
-                'order': 'asc',
-                'missing': '_last',
-                'unmapped_type': 'double',
-            }
-        },
-    ],
-    'classifier_blind_spots': [
-        {'crop_area_norm': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-        {'confidence': {'order': 'desc', 'missing': '_last', 'unmapped_type': 'double'}},
-    ],
+    'audit': [],
+    'regions': [{'region_max_score': _DESC}],
 }
 
-# The legacy default sort id each tab resolves to (independently declared
-# here, not imported, so a typo in review_sorts._TAB_DEFAULTS can't also
-# hide from this test).
+# The default sort id each queue resolves to (independently declared here, not imported, so a typo
+# in review_sorts._TAB_DEFAULTS can't also hide from this test).
 EXPECTED_DEFAULT_IDS: dict[str, str] = {
-    'all': 'atypicality',
-    'mismatches': 'recent',
-    'vlm_low_conf': 'recent',
-    'outliers': 'atypicality',
-    'uncertainty': 'uncertainty_entropy',
+    'to_label': 'detector_confidence:desc',
+    'check_machine': 'confidence:asc',
+    'disagreements': 'disagreement_entropy_asc',
+    'audit': 'crop_id:asc',
     'regions': 'region_score',
-    'model_disagreements': 'disagreement_entropy_asc',
-    'primary_low_conf': 'primary_low_conf_default',
-    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
 
 
-@pytest.mark.parametrize('tab', sorted(LEGACY_TAB_CLAUSES))
-def test_default_sort_for_tab_matches_expected_literal(tab: str) -> None:
+@pytest.mark.parametrize('tab', sorted(DEFAULT_QUEUE_CLAUSES))
+def test_default_sort_for_queue_matches_expected_id(tab: str) -> None:
     assert review_sorts.default_sort_for_tab(tab) == EXPECTED_DEFAULT_IDS[tab]
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('tab', sorted(LEGACY_TAB_CLAUSES))
-async def test_build_sort_none_is_byte_identical_to_legacy_clause(tab: str) -> None:
-    """The golden-body regression guard: ?sort absent must reproduce the
-    exact legacy sort clause for every tab, key order and all (OpenSearch
-    request bodies are order-sensitive for tie-breaking multi-field sorts).
-    No ``opensearch`` client passed -- no shared-settings override lookup,
-    same as every pre-existing caller of this function."""
+@pytest.mark.parametrize('tab', sorted(DEFAULT_QUEUE_CLAUSES))
+async def test_build_sort_none_serves_the_queue_default_clause(tab: str) -> None:
+    """The golden-body regression guard: ?sort absent must reproduce the exact default sort
+    clause for every queue, key order and all (OpenSearch request bodies are order-sensitive for
+    tie-breaking multi-field sorts). No ``opensearch`` client passed -- no shared-settings
+    override lookup."""
     clause, applied_id, fallback_reason = await review_sorts.build_sort(None, tab=tab)
-    assert clause == LEGACY_TAB_CLAUSES[tab]
+    assert clause == DEFAULT_QUEUE_CLAUSES[tab]
     assert applied_id == EXPECTED_DEFAULT_IDS[tab]
     assert fallback_reason is None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('tab', sorted(LEGACY_TAB_CLAUSES))
+@pytest.mark.parametrize('tab', sorted(DEFAULT_QUEUE_CLAUSES))
 async def test_build_sort_default_literal_matches_none(tab: str) -> None:
     """?sort=default must behave identically to omitting ?sort."""
     via_none = await review_sorts.build_sort(None, tab=tab)

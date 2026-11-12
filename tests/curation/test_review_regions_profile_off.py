@@ -75,7 +75,7 @@ def test_locate_says_the_profile_is_off(client: TestClient, profile_off: None) -
 def test_other_tabs_are_unaffected_by_the_profile_being_off(
     client: TestClient, fake: _Recording, profile_off: None
 ) -> None:
-    body = client.get(f'{P}/review/all').json()
+    body = client.get(f'{P}/review/to_label').json()
     assert body['total'] == 1
     assert fake.searches >= 1
 

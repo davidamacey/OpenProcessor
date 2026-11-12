@@ -1,8 +1,7 @@
-"""Per-item review reasons: why an item sits in the ``mismatches`` and ``regions`` tabs.
+"""Per-item review reasons: why an item sits in the ``disagreements`` and ``regions`` queues.
 
-The tab-level reason comes from
-:func:`~src.services.curation.review_queries.build_tab_query`; these two refine it
-per item.
+The queue-level reason comes from
+:func:`~src.services.curation.review_queries.build_tab_query`; these refine it per item.
 """
 
 from __future__ import annotations
@@ -12,6 +11,19 @@ from typing import Any
 from src.config.region_rejection import compose_rejection_reason
 from src.config.region_state import RegionStatus
 from src.domain.region_boxes import read_boxes
+
+
+def disagreement_reason(src: dict[str, Any], registry_names: frozenset[str]) -> str:
+    """Per-item reason in the ``disagreements`` queue: which of its three sources holds the item.
+
+    A validated item is there because the new model disagrees with its label; a VLM reply that
+    matched no class is a mismatch; the rest are VLM classes that differ from the detector's.
+    """
+    if src.get('class_validated'):
+        return 'new model disagrees with the validated label'
+    if src.get('class_source') == 'vlm_unmatched':
+        return mismatch_reason(src, registry_names, "VLM's reply did not match any registry class")
+    return "VLM's class differs from the detector's class"
 
 
 def mismatch_reason(src: dict[str, Any], registry_names: frozenset[str], default: str) -> str:

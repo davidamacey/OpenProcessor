@@ -21,7 +21,9 @@ from src.db.session import project_tx
 from src.schemas.curation.workflow_steps import WorkflowStep, WorkflowSteps
 from src.services.clustering.assign import serving_partition_id
 from src.services.clustering.partitions import list_partitions
+from src.services.curation.audit import has_pending_sample
 from src.services.curation.dataset_thresholds import adequacy
+from src.services.curation.review_tab_status import NO_AUDIT_SAMPLE
 
 
 if TYPE_CHECKING:
@@ -45,6 +47,7 @@ class WorkflowFacts:
     exports: int = 0
     training_runs: int = 0
     promoted_model: bool = False
+    audit_pending: bool = False
 
 
 def _plural(count: int, one: str, many: str) -> str:
@@ -148,7 +151,17 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
                 detail='A model is promoted; its disagreements are worth a look.',
                 done=False,
                 section='workspace',
-                query='queue=mismatches',
+                query='queue=disagreements',
+            )
+        )
+    if f.images and not f.audit_pending:
+        steps.append(
+            WorkflowStep(
+                id='audit',
+                label='Draw an audit sample',
+                detail=NO_AUDIT_SAMPLE,
+                done=False,
+                section='audit',
             )
         )
     view: Literal['gallery', 'clusters'] = 'clusters' if f.item_partition_serving else 'gallery'
@@ -203,6 +216,7 @@ async def gather_facts(
             is not None,
             exports=await _count(session, DatasetExport, project),
             training_runs=await _count(session, TrainingRun, project),
+            audit_pending=await has_pending_sample(opensearch),
             promoted_model=await _flag(
                 session,
                 select(Promotion.id).where(

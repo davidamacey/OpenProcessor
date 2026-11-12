@@ -1,5 +1,6 @@
-"""The ``detector_disagreements`` review tab: unvalidated crops whose VLM class
-differs from the class the detector itself gave (``detector_class_name``).
+"""The detector-disagreement source: unvalidated crops whose VLM class differs from the class the
+detector itself gave (``detector_class_name``). It is one of the three sources of the
+``disagreements`` queue and still a ``review_tab=detector_disagreements`` filter value.
 
 The disagreement test is a painless script (OpenSearch cannot compare two fields
 otherwise); the in-memory fake evaluates it through a registered Python twin of
@@ -26,7 +27,9 @@ from src.services.curation.review_tab_clauses import DETECTOR_DISAGREES_SCRIPT
 
 
 ITEMS = base_curation_config().items_index
-URL = '/curation/projects/default/review/detector_disagreements'
+URL = '/curation/projects/default/review/disagreements'
+SORT = 'detector_disagreement_default'
+FIVE = {'disagree_med', 'disagree_low', 'disagree_high', 'disagree_unrated', 'reclassified'}
 
 
 def _disagrees(doc: dict[str, Any]) -> bool:
@@ -95,26 +98,26 @@ def client(fake: QueryFakeOpenSearch, monkeypatch: pytest.MonkeyPatch) -> TestCl
     return TestClient(app)
 
 
-def test_only_unvalidated_vlm_disagreements_are_listed(client: TestClient) -> None:
-    body = client.get(URL, params={'page_size': 100}).json()
-    ids = {item['crop_id'] for item in body['items']}
-    assert ids == {
-        'disagree_med',
-        'disagree_low',
-        'disagree_high',
-        'disagree_unrated',
-        'reclassified',
-    }
-    assert body['total'] == 5  # the tab count is the listed set, nothing hidden
-    assert {item['reason'] for item in body['items']} == {
-        "VLM's class differs from the detector's class"
-    }
+def test_the_filter_value_lists_only_unvalidated_vlm_disagreements(client: TestClient) -> None:
+    body = client.get(
+        '/curation/projects/default/crops',
+        params={'review_tab': 'detector_disagreements', 'limit': 100},
+    ).json()
+    assert {c['crop_id'] for c in body['crops']} == FIVE
+    assert body['total'] == 5  # the count is the listed set, nothing hidden
+
+
+def test_the_queue_lists_them_with_the_vlm_that_matched_no_class(client: TestClient) -> None:
+    body = client.get(URL, params={'limit': 100}).json()
+    assert {i['crop_id'] for i in body['items']} == FIVE | {'unmatched'}
+    reasons = {i['crop_id']: i['reason'] for i in body['items']}
+    assert {reasons[c] for c in FIVE} == {"VLM's class differs from the detector's class"}
 
 
 @pytest.mark.asyncio
-async def test_default_sort_is_vlm_then_detector_confidence() -> None:
-    clause, applied, reason = await review_sorts.build_sort(None, tab='detector_disagreements')
-    assert applied == 'detector_disagreement_default'
+async def test_the_sort_is_vlm_then_detector_confidence() -> None:
+    clause, applied, reason = await review_sorts.build_sort(SORT, tab='disagreements')
+    assert applied == SORT
     assert reason is None
     assert clause == [
         review_sorts.VLM_CONFIDENCE_RANK_SORT,
@@ -122,18 +125,12 @@ async def test_default_sort_is_vlm_then_detector_confidence() -> None:
     ]
 
 
-def test_tab_is_in_the_served_catalog_with_the_common_filters() -> None:
+def test_the_queue_is_in_the_served_catalog_with_the_common_filters() -> None:
     tabs = {t['id']: t for t in review_tabs.review_tab_catalog()}
-    tab = tabs['detector_disagreements']
-    assert tab['label'] == 'Detector disagreements'
+    tab = tabs['disagreements']
+    assert tab['label'] == 'Disagreements'
     assert 'detector' in tab['description'].lower()
     assert set(tab['filters']) == set(review_tabs.COMMON_FILTERS)
-
-
-def test_the_unknown_tab_error_names_the_new_tab(client: TestClient) -> None:
-    r = client.get('/curation/projects/default/review/not_a_tab')
-    assert r.status_code == 400
-    assert 'detector_disagreements' in r.text
 
 
 def test_the_query_never_selects_a_validated_or_excluded_item() -> None:
@@ -150,8 +147,8 @@ def test_the_query_never_selects_a_validated_or_excluded_item() -> None:
 
 
 def test_queue_lists_hard_cases_first(client: TestClient) -> None:
-    items = client.get(URL, params={'page_size': 100}).json()['items']
-    confidences = [item['vlm_confidence'] for item in items]
+    items = client.get(URL, params={'limit': 100, 'sort': SORT}).json()['items']
+    confidences = [i['vlm_confidence'] for i in items if i['crop_id'] in FIVE]
     assert confidences[0] is None
     assert confidences[1] == 'low'
     assert sorted(confidences[2:4]) == ['medium', 'medium']
@@ -160,10 +157,10 @@ def test_queue_lists_hard_cases_first(client: TestClient) -> None:
 
 @pytest.mark.asyncio
 async def test_locate_ranks_each_item_by_the_same_order(fake: QueryFakeOpenSearch) -> None:
-    req = await build_review_request('detector_disagreements', ReviewFilters(), None, fake)
+    req = await build_review_request('disagreements', ReviewFilters(), SORT, fake)
     resp = await fake.search(index=ITEMS, body={'query': req.query, 'sort': req.sort, 'size': 100})
     served = [hit['_id'] for hit in resp['hits']['hits']]
-    assert len(served) == 5
+    assert len(served) == 6
     for position, crop_id in enumerate(served):
         source = {**fake.docs(ITEMS)[crop_id], 'crop_id': crop_id}
         before = {'bool': {'filter': [req.query, before_query(req.sort, source)]}}

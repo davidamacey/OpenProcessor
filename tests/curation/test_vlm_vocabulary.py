@@ -14,7 +14,8 @@ import pytest
 from _route_helpers import api_routes
 
 from src.domain import ingest_class_sources
-from src.services.curation.review_tabs import KNOWN_TABS
+from src.services.curation.review_tab_clauses import SIMPLE_TABS
+from src.services.curation.review_tabs import QUEUES
 from src.services.curation.stats_dataset import count_by_proposal, rollup_class_sources
 
 
@@ -35,9 +36,9 @@ def test_non_ingest_class_sources_are_vendor_neutral() -> None:
     assert ingest_class_sources.VLM_CLASS_SOURCE == 'vlm'
 
 
-def test_review_tab_is_vlm_low_conf() -> None:
-    assert 'vlm_low_conf' in KNOWN_TABS
-    assert not any(_VENDOR_RE.search(t) for t in KNOWN_TABS)
+def test_review_tab_ids_are_vendor_neutral() -> None:
+    assert 'vlm_low_conf' in SIMPLE_TABS
+    assert not any(_VENDOR_RE.search(t) for t in (*QUEUES, *SIMPLE_TABS))
 
 
 def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:

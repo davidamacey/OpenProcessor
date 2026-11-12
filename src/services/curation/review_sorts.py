@@ -4,11 +4,8 @@ A ``get_method``/``available_methods``-style registry for the *sort* axis — a 
 to a cluster or mutates any doc; it only picks the OpenSearch ``sort`` clause
 ``GET /curation/review/{tab}`` uses to order an already-built query.
 
-Before this module existed, the review router hardcoded a ``sort = [...]``
-literal per tab. ``default_sort_for_tab`` is now the single source of truth
-for what each of the 9 existing tabs used to hardcode — its return values
-MUST byte-match those legacy literals exactly (the golden-body regression
-guard in ``tests/curation/test_review_sorts.py`` is the enforcement).
+``default_sort_for_tab`` is the single source of truth for the sort each queue opens with
+(``tests/curation/test_review_sorts.py`` pins the clauses).
 
 Selection semantics: ``?sort`` absent or literal
 ``'default'`` resolves per-tab and always succeeds. An explicit, *unknown*
@@ -32,6 +29,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.config.region_fields import get_region_fields
+from src.services.curation.crop_browse import CROP_SORT_LABELS, parse_crop_sort
 
 
 if TYPE_CHECKING:
@@ -75,6 +73,23 @@ class ReviewSort:
     this field to decide whether to offer the sort at all."""
     status: StrategyStatus
     description: str
+
+
+AUDIT_SAMPLE_ORDER = 'crop_id:asc'
+
+
+def _crop_sort(sort_id: str, *, requires_field: str) -> ReviewSort:
+    """A review sort that is also a ``GET /crops`` sort id, so the queue and the Detections view
+    name the same order the same way."""
+    field, _, direction = sort_id.partition(':')
+    return ReviewSort(
+        id=sort_id,
+        label=CROP_SORT_LABELS[field][direction],
+        clause=parse_crop_sort(sort_id)[1],
+        requires_field=requires_field,
+        status='stable',
+        description=f'The same order as the {sort_id!r} sort of GET /crops.',
+    )
 
 
 def _mistakenness_status() -> StrategyStatus:
@@ -130,10 +145,18 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             clause=[{'updated_at': {'order': 'desc'}}],
             requires_field=None,
             status='stable',
-            description=(
-                'Most recently touched crop first. Legacy default for the '
-                'mismatches and vlm_low_conf tabs.'
-            ),
+            description=('Most recently touched crop first. The fallback every sort ends at.'),
+        ),
+        _crop_sort('detector_confidence:desc', requires_field='detector_confidence'),
+        _crop_sort('confidence:asc', requires_field='confidence'),
+        ReviewSort(
+            id=AUDIT_SAMPLE_ORDER,
+            label='Sample order',
+            # No sort key: the crop_id tiebreak every review query ends in is the order.
+            clause=[],
+            requires_field=None,
+            status='stable',
+            description='The audit sample in a stable order. Default for the audit queue.',
         ),
         ReviewSort(
             id='representativeness',
@@ -169,8 +192,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             requires_field='cluster_score',
             status='stable',
             description=(
-                'Farthest from its cluster centroid first: the served cluster_score, lowest first. '
-                "The outliers tab and the 'all' tab's ordering."
+                'Farthest from its cluster centroid first: the served cluster_score, lowest first.'
             ),
         ),
         ReviewSort(
@@ -189,8 +211,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             status='stable',
             description=(
                 'Highest active-learning probe entropy first — real per-class '
-                'entropy since the Phase 1 probe-posterior fix. Legacy default '
-                'for the uncertainty tab.'
+                'entropy since the Phase 1 probe-posterior fix.'
             ),
         ),
         ReviewSort(
@@ -268,7 +289,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             description=(
                 'Highest-confidence region detection first (falling back to a '
                 "rejected candidate's own score when there is no accepted "
-                'region score). Legacy default for the regions tab.'
+                'region score). Default for the regions queue.'
             ),
         ),
         ReviewSort(
@@ -286,8 +307,8 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             requires_field='probe_pred_entropy',
             status='stable',
             description=(
-                'Lowest probe entropy (most confident disagreement) first. Legacy '
-                'default for the model_disagreements tab.'
+                'Lowest probe entropy (most confident disagreement) first. Default for '
+                'the disagreements queue.'
             ),
         ),
         ReviewSort(
@@ -301,8 +322,8 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             status='stable',
             description=(
                 "The VLM's own confidence from low to high (an answer with no recorded "
-                "confidence first), then the detector's confidence high to low. Default for "
-                'the detector_disagreements tab.'
+                "confidence first), then the detector's confidence high to low. The disagreements "
+                "queue's fallback when no probe has run."
             ),
         ),
         ReviewSort(
@@ -329,7 +350,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             ],
             requires_field='crop_area_norm',
             status='stable',
-            description='Legacy default for the primary_low_conf tab.',
+            description='Largest subject first, then the least confident.',
         ),
         ReviewSort(
             id='classifier_blind_spots_default',
@@ -356,7 +377,7 @@ def _build_review_sorts() -> dict[str, ReviewSort]:
             ],
             requires_field='crop_area_norm',
             status='stable',
-            description='Legacy default for the classifier_blind_spots tab.',
+            description='Largest subject first, then the most confident detection.',
         ),
     ]
     return {rs.id: rs for rs in entries}
@@ -374,26 +395,18 @@ def get_review_sorts() -> dict[str, ReviewSort]:
 
 
 _TAB_DEFAULTS: dict[str, str] = {
-    'all': 'atypicality',
-    'mismatches': 'recent',
-    'vlm_low_conf': 'recent',
-    'detector_disagreements': 'detector_disagreement_default',
-    'outliers': 'atypicality',
-    'uncertainty': 'uncertainty_entropy',
+    'to_label': 'detector_confidence:desc',
+    'check_machine': 'confidence:asc',
+    'disagreements': 'disagreement_entropy_asc',
+    'audit': AUDIT_SAMPLE_ORDER,
     'regions': 'region_score',
-    'model_disagreements': 'disagreement_entropy_asc',
-    'primary_low_conf': 'primary_low_conf_default',
-    'classifier_blind_spots': 'classifier_blind_spots_default',
 }
-"""The literal legacy ``sort = [...]`` each of the 9 ``GET /curation/review/{tab}``
-tabs hardcoded before this registry existed, keyed by the sort id whose
-``clause`` byte-matches it. Read directly off the review-queries module — do not
-edit without re-checking the router against this table."""
+"""The sort id each queue opens with. ``new_class_proposals`` has none and takes the deployment
+default, else ``recent``."""
 
 
 _TAB_FALLBACKS: dict[str, tuple[str, ...]] = {
-    'all': ('mistakenness',),
-    'uncertainty': ('mistakenness', 'atypicality'),
+    'disagreements': ('detector_disagreement_default',),
 }
 """Sorts tried, in order, after a resolved default with 0% field coverage
 and before the terminal ``'recent'`` (``updated_at``, which every item
@@ -446,7 +459,7 @@ async def _first_covered(
 
 
 def default_sort_for_tab(tab: str) -> str:
-    """The legacy default sort id for ``tab``. Raises :class:`ValueError`
+    """The default sort id for the queue ``tab``. Raises :class:`ValueError`
     for a tab this registry doesn't know about (should never happen in
     practice — the review-queries module validates ``tab`` against its own known
     set before this is ever called)."""

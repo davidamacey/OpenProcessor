@@ -32,6 +32,4 @@ class ReviewFilters:
     region_status: str | None = REGION_STATUS_DEFAULT
     region_text_match: TextMatch | None = None
     combine_conflict: bool = False
-    import_id: str | None = None
-    dataset_split: str | None = None
     on_negative_frame: bool | None = None

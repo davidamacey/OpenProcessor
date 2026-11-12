@@ -137,12 +137,12 @@ def test_crops_filter_by_detector_confidence_band(client: TestClient) -> None:
 
 
 def test_crops_filter_by_review_tab_equals_the_review_route(client: TestClient) -> None:
-    in_crops = sorted(_ids(client, review_tab='outliers'))
+    in_crops = sorted(_ids(client, review_tab='disagreements'))
     in_review = sorted(
         i['crop_id']
-        for i in client.get(f'{URL}/review/outliers', params={'page_size': 100}).json()['items']
+        for i in client.get(f'{URL}/review/disagreements', params={'limit': 100}).json()['items']
     )
-    assert in_crops == in_review == ['c6']
+    assert in_crops == in_review == ['c3', 'c4']
 
 
 def test_review_tab_and_detector_class_combine(client: TestClient) -> None:

@@ -59,7 +59,10 @@ def build_tab_query(
     else:
         raise RequestRejectedError(
             status_code=400,
-            detail=f'unknown review tab: {tab}. Must be one of: {", ".join(review_tabs.KNOWN_TABS)}',
+            detail=(
+                f'unknown review tab: {tab}. '
+                f'Must be one of: {", ".join(review_tab_clauses.SIMPLE_TABS)}, regions'
+            ),
         )
 
     # Subject-size limit, applied once here for every tab that

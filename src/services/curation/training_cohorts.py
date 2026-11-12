@@ -19,7 +19,7 @@ from src.services.detection.profile_registry import get_active_region_profile
 
 LOW_CONFIDENCE_MAX = 0.75
 """Classifier confidence below this is "unsure" (the primary_low_conf
-review band and the low_confidence cohort)."""
+review_tab filter value and the low_confidence cohort)."""
 
 REGION_LOW_SCORE_MAX = 0.6
 """A verified primary-detector region scored below this is a high-loss
@@ -62,7 +62,8 @@ CORE_COHORTS: dict[str, CohortSpec] = {
     'model_disagreements': CohortSpec(
         'Model disagreements',
         'Validated items where the latest model disagrees with the human label',
-        '/review/model_disagreements',
+        '/crops',
+        {'review_tab': 'model_disagreements'},
     ),
 }
 

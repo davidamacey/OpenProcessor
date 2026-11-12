@@ -181,6 +181,12 @@ def pending_query(batch_id: str | None = None) -> dict[str, Any]:
     return {'bool': {'filter': filters, 'must_not': [{'term': {'class_validated': True}}]}}
 
 
+async def has_pending_sample(opensearch: Any) -> bool:
+    """Whether any drawn crop still waits for a human (the audit queue exists only then)."""
+    resp = await opensearch.count(index=items_index(), body={'query': pending_query()})
+    return int(resp.get('count', 0)) > 0
+
+
 async def load_report(
     opensearch: Any, *, min_per_class: int = DEFAULT_MIN_PER_CLASS
 ) -> dict[str, Any]:

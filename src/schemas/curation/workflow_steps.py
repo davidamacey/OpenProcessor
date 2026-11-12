@@ -18,6 +18,7 @@ StepId = Literal[
     'export',
     'train',
     'review_disagreements',
+    'audit',
 ]
 
 
@@ -28,7 +29,7 @@ class WorkflowStep(BaseModel):
     done: bool
     section: str = Field(
         description='The project page that does it: `ingest`, `classes`, `workspace`, '
-        '`quality/near-duplicates`, `export` or `train`.'
+        '`quality/near-duplicates`, `export`, `train` or `audit`.'
     )
     query: str | None = Field(default=None, description='Optional search string for the link.')
 

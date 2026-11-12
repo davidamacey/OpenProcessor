@@ -59,20 +59,6 @@ CombineConflictQ = Annotated[
         )
     ),
 ]
-ImportIdQ = Annotated[
-    str | None,
-    Query(description='Imported tab only: items labeled by this dataset import.'),
-]
-DatasetSplitQ = Annotated[
-    str | None,
-    UnsetIfEmpty,
-    Query(
-        description=(
-            'Imported tab only: the split the import filed the frame under '
-            '(GET /review/tabs filter_specs, param dataset_split).'
-        )
-    ),
-]
 OnNegativeFrameQ = Annotated[
     bool | None,
     UnsetIfEmpty,
@@ -97,8 +83,6 @@ SortQ = Annotated[
 __all__ = [
     'BlurQ',
     'CombineConflictQ',
-    'DatasetSplitQ',
-    'ImportIdQ',
     'IncludeTest',
     'MistakeQ',
     'NearDupQ',

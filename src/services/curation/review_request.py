@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
-from src.services.curation import review_queries, review_sorts, review_tabs
+from src.services.curation import review_queries, review_sorts
 from src.services.curation.image_join import ImageJoin, resolve_filter_join
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
@@ -24,6 +24,7 @@ from src.services.embedding_spaces.readers import item_write_fields
 
 if TYPE_CHECKING:
     from src.services.curation.review_filters import ReviewFilters
+    from src.services.embedding_spaces.readers import WriteFields
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
@@ -39,12 +40,11 @@ class ReviewRequest:
     image_join: ImageJoin | None = None
 
 
-async def build_review_request(
-    tab: str, filters: ReviewFilters, sort_id: str | None, opensearch: Any
-) -> ReviewRequest:
-    """Raises ``RequestRejectedError(400)`` for an unknown tab, ``ValueError`` for
-    a bad sort id or confidence band."""
-    embedding = await item_write_fields()
+def review_query(
+    tab: str, filters: ReviewFilters, embedding: WriteFields, join: ImageJoin | None
+) -> tuple[dict[str, Any], str]:
+    """``(query, reason)`` of the queue ``tab`` under ``filters``. Raises
+    ``RequestRejectedError(400)`` for an unknown tab, ``ValueError`` for a bad confidence band."""
     must, must_not, reason = review_queries.build_tab_query(
         tab,
         include_test=filters.include_test,
@@ -66,18 +66,23 @@ async def build_review_request(
         must.append({'term': {'combine_conflict': True}})
     if filters.on_negative_frame is not None:
         must.append(review_queries.negative_frame_clause(filters.on_negative_frame))
-    honoured = review_tabs.tab_filters(tab)
-    if filters.import_id and 'import_id' in honoured:
-        must.append({'term': {'import_ids': filters.import_id}})
-    if filters.dataset_split and 'dataset_split' in honoured:
-        must.append({'term': {'dataset_split': filters.dataset_split}})
-    join = await resolve_filter_join(opensearch, filters.item)
     must.extend(item_filter_clauses(filters.item, embedding=embedding, image_join=join))
+    return {'bool': {'must': must, 'must_not': must_not}}, reason
+
+
+async def build_review_request(
+    tab: str, filters: ReviewFilters, sort_id: str | None, opensearch: Any
+) -> ReviewRequest:
+    """Raises ``RequestRejectedError(400)`` for an unknown tab, ``ValueError`` for
+    a bad sort id or confidence band."""
+    embedding = await item_write_fields()
+    join = await resolve_filter_join(opensearch, filters.item)
+    query, reason = review_query(tab, filters, embedding, join)
     clause, applied, fallback = await review_sorts.build_sort(
         sort_id, tab=tab, opensearch=opensearch
     )
     return ReviewRequest(
-        query={'bool': {'must': must, 'must_not': must_not}},
+        query=query,
         sort=[*clause, TIEBREAK],
         sort_applied=applied,
         reason=reason,
@@ -90,4 +95,5 @@ __all__ = [
     'TIEBREAK',
     'ReviewRequest',
     'build_review_request',
+    'review_query',
 ]

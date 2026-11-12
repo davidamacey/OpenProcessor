@@ -166,7 +166,7 @@ EXTRA_PARAMS: dict[str, dict[str, Any]] = {
     '/search/similar': {'crop_id': 'a1'},
     '/search/text': {'q': 'car'},
 }
-PATH_VALUES = {'tab': 'all'}
+PATH_VALUES = {'tab': 'to_label'}
 
 
 def _sent(fake: QueryFakeOpenSearch) -> str:
@@ -207,7 +207,8 @@ def test_geo_bbox_narrows_every_filter_route(
         assert 'area, location or near-duplicate-group' in got.text
         return
     # Routes that need the database or an encoder fail after they ran their search.
-    assert 'geo_bbox' not in got.text, (path, got.text[:300])
+    # A refusal names the parameter; a served body may echo it as null.
+    assert got.status_code < 400 or 'geo_bbox' not in got.text, (path, got.text[:300])
     sent = _sent(fake)
     asked_images = '"geo_bounding_box"' in sent
     joined = '"image_id": ["img-a", "img-b"]' in sent

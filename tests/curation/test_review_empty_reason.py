@@ -1,4 +1,4 @@
-"""C3: `GET /review/{tab}`'s `empty_reason` on a zero-result page, and
+"""C3: `GET /review/{queue}`'s `empty_reason` on a zero-result page, and
 `GET /review/tabs`'s `empty_state` summary.
 """
 
@@ -26,40 +26,10 @@ def _client(fake) -> TestClient:
 
 
 @pytest.mark.asyncio
-async def test_compute_empty_reason_no_probe_predictions() -> None:
-    fake = AsyncMock()
-    fake.count = AsyncMock(return_value={'count': 0})
-    reason = await rer.compute_empty_reason(
-        'uncertainty', SimpleNamespace(min_mistakenness=None), fake
-    )
-    assert reason == 'no probe predictions — run a probe'
-
-
-@pytest.mark.asyncio
-async def test_compute_empty_reason_probe_tab_with_predictions_falls_through() -> None:
-    fake = AsyncMock()
-    fake.count = AsyncMock(return_value={'count': 5})
-    reason = await rer.compute_empty_reason(
-        'uncertainty', SimpleNamespace(min_mistakenness=None), fake
-    )
-    assert reason == 'no items match'
-
-
-@pytest.mark.asyncio
-async def test_compute_empty_reason_model_disagreements_probe_gate() -> None:
-    fake = AsyncMock()
-    fake.count = AsyncMock(return_value={'count': 0})
-    reason = await rer.compute_empty_reason(
-        'model_disagreements', SimpleNamespace(min_mistakenness=None), fake
-    )
-    assert reason == 'no probe predictions — run a probe'
-
-
-@pytest.mark.asyncio
 async def test_compute_empty_reason_item_scores_never_computed() -> None:
     fake = AsyncMock()
     fake.count = AsyncMock(return_value={'count': 0})
-    reason = await rer.compute_empty_reason('all', SimpleNamespace(min_mistakenness=0.5), fake)
+    reason = await rer.compute_empty_reason('to_label', SimpleNamespace(min_mistakenness=0.5), fake)
     assert reason == 'item scores never computed'
 
 
@@ -77,7 +47,9 @@ async def test_compute_empty_reason_no_unclassified_proposals() -> None:
 async def test_compute_empty_reason_default_no_items_match() -> None:
     fake = AsyncMock()
     fake.count = AsyncMock(return_value={'count': 0})
-    reason = await rer.compute_empty_reason('all', SimpleNamespace(min_mistakenness=None), fake)
+    reason = await rer.compute_empty_reason(
+        'to_label', SimpleNamespace(min_mistakenness=None), fake
+    )
     assert reason == 'no items match'
 
 
@@ -116,11 +88,11 @@ def test_review_queue_serves_empty_reason_when_zero_results(
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
-    r = _client(fake).get('/curation/projects/default/review/uncertainty')
+    r = _client(fake).get('/curation/projects/default/review/to_label')
     assert r.status_code == 200, r.text
     body = r.json()
     assert body['total'] == 0
-    assert body['empty_reason'] == 'no probe predictions — run a probe'
+    assert body['empty_reason'] == 'no items match'
 
 
 def test_review_queue_empty_reason_is_null_when_items_exist(
@@ -139,14 +111,17 @@ def test_review_queue_empty_reason_is_null_when_items_exist(
     monkeypatch.setattr(
         'src.services.curation.index_bootstrap.ensure_indexes', AsyncMock(return_value=None)
     )
-    r = _client(fake).get('/curation/projects/default/review/all')
+    r = _client(fake).get('/curation/projects/default/review/to_label')
     assert r.status_code == 200, r.text
     assert r.json()['empty_reason'] is None
 
 
 def test_review_tabs_serves_empty_state_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = AsyncMock()
-    fake.count = AsyncMock(side_effect=[{'count': 0}, {'count': 7}, {'count': 0}, {'count': 0}])
+    # The four empty-state counts, then whether an audit sample is pending.
+    fake.count = AsyncMock(
+        side_effect=[{'count': 0}, {'count': 7}, {'count': 0}, {'count': 0}, {'count': 0}]
+    )
 
     async def msearch(*, body: list) -> dict:
         return {'responses': [{'hits': {'total': {'value': 0}}} for _ in body[::2]]}

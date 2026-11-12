@@ -179,6 +179,8 @@ ErrorCode = Literal[
     'audit_no_candidates',
     'audit_required',
     'audit_precision_low',
+    # A review path that names no queue.
+    'not_a_queue',
 ]
 
 # Pack/profile, region and VLM validation codes, plus the keymap_* codes.

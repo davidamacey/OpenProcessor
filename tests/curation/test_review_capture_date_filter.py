@@ -61,12 +61,12 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def _ids(client: TestClient, **params: Any) -> set[str]:
-    r = client.get(f'{BASE}/all', params=params)
+    r = client.get(f'{BASE}/check_machine', params=params)
     assert r.status_code == 200, r.text
     return {i['crop_id'] for i in r.json()['items']}
 
 
-@pytest.mark.parametrize('tab', [t for t in review_tabs.KNOWN_TABS if t != 'regions'])
+@pytest.mark.parametrize('tab', [t for t in review_tabs.QUEUES if t != 'regions'])
 def test_every_tab_serves_the_capture_range_as_date_specs(tab: str) -> None:
     assert {'taken_from', 'taken_to'} <= set(review_tabs.tab_filters(tab))
     served = {t['id']: t for t in review_tabs.review_tab_catalog()}[tab]
@@ -87,8 +87,10 @@ def test_the_range_narrows_the_queue(client: TestClient) -> None:
 
 
 def test_a_bad_date_or_inverted_range_is_refused(client: TestClient) -> None:
-    assert client.get(f'{BASE}/all', params={'taken_from': 'not-a-date'}).status_code == 422
+    assert (
+        client.get(f'{BASE}/check_machine', params={'taken_from': 'not-a-date'}).status_code == 422
+    )
     inverted = client.get(
-        f'{BASE}/all', params={'taken_from': '2024-06-01', 'taken_to': '2024-03-01'}
+        f'{BASE}/check_machine', params={'taken_from': '2024-06-01', 'taken_to': '2024-03-01'}
     )
     assert inverted.status_code in (400, 422)

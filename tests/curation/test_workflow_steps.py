@@ -22,6 +22,7 @@ DONE = WorkflowFacts(
     exports=1,
     training_runs=1,
     promoted_model=True,
+    audit_pending=True,
 )
 
 
