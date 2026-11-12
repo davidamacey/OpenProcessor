@@ -118,6 +118,7 @@ describe('drawing', () => {
     c.setTool('draw');
     c.draw(BOX);
     expect(c.picker).toEqual({ kind: 'draw', box: BOX });
+    expect(c.pendingBox).toEqual(BOX);
     expect(c.tool).toBe('select');
     await c.pick(car);
     c.draw(BOX);

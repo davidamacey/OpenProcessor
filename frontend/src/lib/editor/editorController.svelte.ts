@@ -366,6 +366,10 @@ export function createEditorController(deps: EditorDeps) {
     get picker() {
       return picker;
     },
+    /** The box drawn and not yet saved, while the class picker is open for it. */
+    get pendingBox(): XYXY | null {
+      return picker?.kind === 'draw' ? picker.box : null;
+    },
     /** The class used last in this session, ranked first in the picker. */
     get recentClasses(): string[] {
       return lastClass ? [lastClass] : [];

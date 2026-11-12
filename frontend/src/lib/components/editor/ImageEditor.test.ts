@@ -128,6 +128,7 @@ describe('ImageEditor', () => {
     flushSync();
     const input = document.querySelector('input[role="combobox"]') as HTMLInputElement;
     expect(input).not.toBeNull();
+    expect(target.querySelector('[data-testid="pending-box"]')).not.toBeNull();
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     flushSync();
     await vi.waitFor(() => expect(api.createImageItem).toHaveBeenCalledOnce());

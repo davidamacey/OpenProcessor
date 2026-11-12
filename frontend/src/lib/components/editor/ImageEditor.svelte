@@ -130,6 +130,7 @@
             tool={c.tool}
             showLabels={c.labels}
             busy={c.picker !== null}
+            pending={c.pendingBox}
             ondraw={c.draw}
             onmove={c.move}
             onselect={c.select}

@@ -110,7 +110,7 @@
   {@render button('editor.zoom_fit', 'Fit the picture', 'Fit', onfit)}
   {@render button(
     'editor.zoom_actual',
-    'Actual size',
+    `Actual size, ${Math.round(zoomPercent)}%`,
     `${Math.round(zoomPercent)}%`,
     onactual,
   )}

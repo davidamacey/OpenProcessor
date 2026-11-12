@@ -43,6 +43,8 @@
     tool: EditorTool;
     showLabels: boolean;
     busy?: boolean;
+    /** A drawn box waiting for its class: kept on screen while the picker is open. */
+    pending?: XYXY | null;
     ondraw: (box: XYXY) => void;
     onmove: (cropId: string, box: XYXY) => void;
     onselect: (cropId: string | null) => void;
@@ -62,6 +64,7 @@
     tool,
     showLabels,
     busy = false,
+    pending = null,
     ondraw,
     onmove,
     onselect,
@@ -386,7 +389,7 @@
 
     {#if overlay && selectedCropId !== null && tool === 'select'}
       <div
-        class="absolute border-2 border-dashed border-sky-300 {selectedLocked
+        class="absolute z-20 border-2 border-dashed border-sky-300 {selectedLocked
           ? 'cursor-not-allowed'
           : 'cursor-move'}"
         style={boxStyle(overlay)}
@@ -407,9 +410,17 @@
       </div>
     {/if}
 
+    {#if pending}
+      <div
+        class="pointer-events-none absolute z-20 border-2 border-dashed border-sky-400 bg-sky-400/20"
+        style={boxStyle(pending)}
+        data-testid="pending-box"
+      ></div>
+    {/if}
+
     {#if draft}
       <div
-        class="pointer-events-none absolute border-2 border-dashed border-sky-400 bg-sky-400/10"
+        class="pointer-events-none absolute z-20 border-2 border-dashed border-sky-400 bg-sky-400/10"
         style={boxStyle(draft)}
         data-testid="draft-box"
       ></div>

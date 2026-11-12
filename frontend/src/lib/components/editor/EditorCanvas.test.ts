@@ -36,6 +36,7 @@ function render(
     boxes?: ImageBox[];
     selectedCropId?: string | null;
     locks?: Record<string, string | null>;
+    pending?: [number, number, number, number] | null;
   } = {},
 ): Calls & { canvas: Record<string, (...a: never[]) => unknown> } {
   const calls: Calls = {
@@ -56,6 +57,7 @@ function render(
       selectedCropId: over.selectedCropId ?? null,
       locks: over.locks ?? {},
       tool: over.tool ?? 'select',
+      pending: over.pending ?? null,
       showLabels: true,
       ...calls,
     },
@@ -291,6 +293,13 @@ describe('EditorCanvas zoom and pan', () => {
     });
     flushSync();
     expect(onzoom).toHaveBeenLastCalledWith(50);
+  });
+});
+
+describe('EditorCanvas pending box', () => {
+  it('keeps a box waiting for its class on screen', () => {
+    render({ pending: [0.2, 0.2, 0.4, 0.4] });
+    expect(target.querySelector('[data-testid="pending-box"]')).not.toBeNull();
   });
 });
 
