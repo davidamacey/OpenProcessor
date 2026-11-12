@@ -176,8 +176,22 @@ class ResearchConfigList(BaseModel):
     items: list[ResearchConfigDoc]
 
 
+class ResearchAxis(BaseModel):
+    """A place a project kind can be active; a kind may be active on several."""
+
+    axis: str = Field(description='The id `activate` and `active` take.')
+    label: str
+    target: str | None = Field(
+        description='What the axis serves (a cluster profile body names its `target`); null when '
+        'the axis does not depend on the body.'
+    )
+
+
 class ResearchConfigSchema(BaseModel):
     kind: str
+    axes: list[ResearchAxis] = Field(
+        description='Where the kind can be activated; empty for the deployment-wide serving profile.'
+    )
     json_schema: dict[str, Any] = Field(
         description='The JSON Schema (draft 2020-12) of the document body, generated from the model '
         'the server validates it with.'

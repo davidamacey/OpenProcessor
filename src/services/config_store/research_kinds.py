@@ -16,10 +16,15 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from src.config.cluster_profile import TARGET_AXES
 from src.db.models.config import ACTIVATION_AXES, DEPLOYMENT_CONFIG_KINDS
 from src.db.repos import config as repo
 from src.db.session import async_session_factory, deployment_tx, project_tx
-from src.schemas.curation.research_config import RESEARCH_BODY_MODELS, ResearchConfigDoc
+from src.schemas.curation.research_config import (
+    RESEARCH_BODY_MODELS,
+    ResearchAxis,
+    ResearchConfigDoc,
+)
 from src.services.config_store.bound_project import bound_project_id
 
 
@@ -38,6 +43,23 @@ KIND_AXES: dict[str, tuple[str, ...]] = {
     for kind in RESEARCH_KINDS
     if kind not in DEPLOYMENT_CONFIG_KINDS
 }
+
+
+AXIS_LABELS: dict[str, str] = {
+    'clustering_item': 'Items',
+    'clustering_region_box': 'Region boxes',
+    'assist_loop_preset': 'Assist loop',
+    'near_dup': 'Near-duplicates',
+}
+_AXIS_TARGETS = {axis: target for target, axis in TARGET_AXES.items()}
+
+
+def kind_axes(kind: str) -> list[ResearchAxis]:
+    """The axes a kind can be activated on, with the label to show and the body target each serves."""
+    return [
+        ResearchAxis(axis=axis, label=AXIS_LABELS[axis], target=_AXIS_TARGETS.get(axis))
+        for axis in KIND_AXES.get(kind, ())
+    ]
 
 
 class InvalidConfigBodyError(ValueError):

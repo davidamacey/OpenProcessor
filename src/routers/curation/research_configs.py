@@ -39,6 +39,7 @@ from src.services.config_store.research_kinds import (
     delete_document,
     get_active,
     get_document,
+    kind_axes,
     list_documents,
     save_document,
     wire_doc,
@@ -68,7 +69,9 @@ def _register_schema(kind: str, path: str, *, tag: str, group: Any) -> None:
         f'/{path}/schema', response_model=ResearchConfigSchema, tags=[tag], name=f'schema_{kind}'
     )
     async def get_schema() -> ResearchConfigSchema:
-        return ResearchConfigSchema(kind=kind, json_schema=body_json_schema(kind))
+        return ResearchConfigSchema(
+            kind=kind, axes=kind_axes(kind), json_schema=body_json_schema(kind)
+        )
 
 
 def _register_documents(kind: str, path: str, *, tag: str, group: Any) -> None:

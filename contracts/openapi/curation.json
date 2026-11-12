@@ -33478,6 +33478,39 @@
         "title": "ResearchActive",
         "type": "object"
       },
+      "ResearchAxis": {
+        "description": "A place a project kind can be active; a kind may be active on several.",
+        "properties": {
+          "axis": {
+            "description": "The id `activate` and `active` take.",
+            "title": "Axis",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the axis serves (a cluster profile body names its `target`); null when the axis does not depend on the body.",
+            "title": "Target"
+          }
+        },
+        "required": [
+          "axis",
+          "label",
+          "target"
+        ],
+        "title": "ResearchAxis",
+        "type": "object"
+      },
       "ResearchConfigDoc": {
         "properties": {
           "body": {
@@ -33578,6 +33611,14 @@
       },
       "ResearchConfigSchema": {
         "properties": {
+          "axes": {
+            "description": "Where the kind can be activated; empty for the deployment-wide serving profile.",
+            "items": {
+              "$ref": "#/components/schemas/ResearchAxis"
+            },
+            "title": "Axes",
+            "type": "array"
+          },
           "json_schema": {
             "additionalProperties": true,
             "description": "The JSON Schema (draft 2020-12) of the document body, generated from the model the server validates it with.",
@@ -33591,6 +33632,7 @@
         },
         "required": [
           "kind",
+          "axes",
           "json_schema"
         ],
         "title": "ResearchConfigSchema",
