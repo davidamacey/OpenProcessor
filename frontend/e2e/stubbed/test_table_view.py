@@ -4,6 +4,8 @@ selection into the bulk bar, and a table that scrolls inside its own container a
 from __future__ import annotations
 
 import re
+import struct
+import zlib
 from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
@@ -29,6 +31,25 @@ SORTS = [
     {'id': 'class_name:asc', 'label': 'Class, A to Z'},
     {'id': 'class_name:desc', 'label': 'Class, Z to A'},
 ]
+
+
+def png(shade: int) -> bytes:
+    """A 24x24 grey-green tile; stands in for a crop thumbnail."""
+    rows = b''.join(
+        b'\x00' + b''.join(bytes([shade + x * 3, 120 + y * 2, 110]) for x in range(24))
+        for y in range(24)
+    )
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack('>I', len(data)) + body + struct.pack('>I', zlib.crc32(body))
+
+    return (
+        b'\x89PNG\r\n\x1a\n'
+        + chunk(b'IHDR', struct.pack('>IIBBBBB', 24, 24, 8, 2, 0, 0, 0))
+        + chunk(b'IDAT', zlib.compress(rows))
+        + chunk(b'IEND', b'')
+    )
 
 
 def table_page(shown: list[str], sort: str, rows: str = 'detections') -> dict:
@@ -78,6 +99,11 @@ def serve(stub) -> list[dict]:
             shown, q.get('sort', 'detector_confidence:desc'), q.get('rows', 'detections')
         )
 
+    stub.on(
+        'GET',
+        r'/crops/crop-(\d)/thumbnail',
+        lambda _r, m: (200, png(40 + int(m.group(1)) * 30), 'image/png'),
+    )
     stub.on(
         'GET',
         r'/table/columns$',

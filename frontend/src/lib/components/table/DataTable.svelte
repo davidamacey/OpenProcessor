@@ -71,7 +71,10 @@
         {#each columns as c (c.id)}
           <th
             scope="col"
-            class="px-2 py-1 font-medium whitespace-nowrap text-zinc-300 {ALIGN[c.align]}"
+            class="px-2 py-1 font-medium whitespace-nowrap text-zinc-300 {c.kind ===
+            'thumbnail'
+              ? 'w-14'
+              : ''} {ALIGN[c.align]}"
             aria-sort={ariaSort(c)}
           >
             {#if c.kind === 'thumbnail' && !c.label}

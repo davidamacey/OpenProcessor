@@ -9,6 +9,8 @@ The **Table** view lists detections or images as rows, with the columns you choo
 cell is text the backend already formatted, so what you read is what the server holds. Use
 it to sort by anything and act on the rows.
 
+<Screenshot name="cropwright/table-1600.png" alt="The Table view with two rows selected: thumbnail, class and confidence columns, sorted by confidence" caption="The Table view: the arrow marks the sort the server applied; two rows are selected" />
+
 ## Rows and columns
 
 - **Detections** shows one row per item; **images** shows one row per image.
