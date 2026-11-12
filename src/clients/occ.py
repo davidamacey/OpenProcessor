@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.clients.image_counts_dirty import mark_items_written
 from src.clients.occ_locks import is_locked_box, is_locked_class, is_locked_item
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
@@ -153,6 +154,7 @@ async def occ_update_one(
                 if_primary_term=primary_term,
                 refresh=refresh,
             )
+            await mark_items_written(index, [(source, update_doc)])
             return update_doc
         except Exception as exc:  # opensearchpy ConflictError or transport error
             last_error = exc
@@ -305,11 +307,13 @@ async def occ_skip_on_conflict_bulk(
             continue
 
         items = resp.get('items') or []
-        for (doc_id, _update_doc, source), item in zip(pending, items, strict=True):
+        written: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for (doc_id, update_doc, source), item in zip(pending, items, strict=True):
             action = item.get('update') or {}
             status = action.get('status')
             if status in (200, 201):
                 updated_ids.append(doc_id)
+                written.append((source, update_doc))
                 continue
             error = action.get('error') or {}
             err_type = error.get('type', '')
@@ -326,6 +330,7 @@ async def occ_skip_on_conflict_bulk(
                 skipped_ids.append(doc_id)
                 continue
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
+        await mark_items_written(index, written)
 
     return {
         'updated': len(updated_ids),

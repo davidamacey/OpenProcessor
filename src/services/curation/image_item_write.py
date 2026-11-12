@@ -23,6 +23,7 @@ from src.schemas.curation.config_common import error_body
 from src.services.classes.resolve import class_id_for_name, class_name_for_id
 from src.services.curation.class_label import ItemLabel
 from src.services.curation.edit_history import GEOMETRY_WRITER
+from src.services.curation.image_counts_refresh import enqueue_image_counts
 from src.services.curation.image_detail import image_source
 from src.services.curation.item_doc import DetectedItem, build_item_doc, region_seed_status
 from src.services.curation.item_embed_inline import EmbedOutcome, embed_item_inline
@@ -204,6 +205,7 @@ async def create_drawn_item(
             await _stored(opensearch, crop_id, excludes) or {}, crop_id, box, class_name
         )
         return DrawnItem(raced, False, EmbedOutcome(raced.get(write.state_field, DEFERRED), None))
+    await enqueue_image_counts([image_id])
     await rerank_image_items(opensearch, image_id)
     await near_dup_pending.enqueue_pending_bound('item', [crop_id], 'added')
     embed = await embed_item_inline(opensearch, pe, crop_id)

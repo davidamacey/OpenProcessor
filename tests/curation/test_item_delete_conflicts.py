@@ -64,3 +64,27 @@ async def test_a_document_that_conflicts_every_round_is_reported_skipped_and_kep
 
     assert set(fake.docs(_index())) == {'c1'}
     assert (result['deleted'], result['skipped'], result['errors']) == (1, ['c1'], [])
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_item_marks_its_image_for_a_recount(
+    image_counts_dirty: dict[str, set[str]],
+) -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            _index(): {
+                'c1': {'crop_id': 'c1', 'image_id': 'img-1'},
+                'c2': {'crop_id': 'c2', 'image_id': 'img-2'},
+                'c3': {'crop_id': 'c3', 'image_id': 'img-3'},
+            }
+        }
+    )
+
+    async def not_c3(crop_id: str, _doc: dict[str, Any]) -> bool:
+        return crop_id != 'c3'
+
+    await delete_items(
+        fake, ['c1', 'c2', 'c3'], items_index=_index(), crop_cache_dir=None, deletable=not_c3
+    )
+
+    assert image_counts_dirty == {'op:image_counts:dirty:default': {'img-1', 'img-2'}}
