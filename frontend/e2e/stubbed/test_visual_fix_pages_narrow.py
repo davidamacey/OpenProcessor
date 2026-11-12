@@ -266,6 +266,8 @@ def test_dashboard_auto_label_card_stacks_at_800(stub, page, app_url):
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 20, 'crops': []})
     stub.on('GET', r'/pipeline/auto_label/status', COMPLETED_JOB)
 
+    # The clusters view lists a slot card per region class from that slot's own browse route.
+    stub.on('GET', r'/regions(\?|$)', {'items': [], 'total': 0})
     serve_workspace_reads(stub)
     open_vlm_menu(stub, page, app_url)
     desc = page.locator('[data-testid="recluster-description"]')

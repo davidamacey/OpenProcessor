@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from fixtures.job_rows import make_project
 
 from src.core.exceptions import RequestRejectedError
 from src.db.session import async_session_factory
@@ -13,8 +14,9 @@ pytestmark = [pytest.mark.db, pytest.mark.asyncio]
 
 
 async def test_a_start_queues_the_job_and_a_second_start_is_busy_naming_the_running_job(
-    project, job_env, producer, wakes, monkeypatch: pytest.MonkeyPatch
+    pg, job_env, producer, wakes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    project = make_project(pg)
     monkeypatch.setattr(route, 'current_project_id', lambda: project)
     async with async_session_factory()() as session:
         started = await route.start_image_counts_backfill(session)

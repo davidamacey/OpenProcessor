@@ -31,6 +31,7 @@ from src.services.config_store.research_kinds import (
     KIND_AXES,
     ActiveConflictError,
     AxisTargetMismatchError,
+    ConfigInUseError,
     InvalidConfigBodyError,
     RevisionConflictError,
     UnknownConfigError,
@@ -118,6 +119,8 @@ def _register_documents(kind: str, path: str, *, tag: str, group: Any) -> None:
             await delete_document(kind, name, expected_revision=expected_revision)
         except KeyError as exc:
             raise api_error(404, 'not_found', f'no {kind} {name!r}') from exc
+        except ConfigInUseError as exc:
+            raise api_error(409, 'in_use', f'{name!r} is active; activate another first') from exc
         except RevisionConflictError as exc:
             raise _conflict(name, exc) from exc
         return Response(status_code=204)

@@ -320,14 +320,15 @@ async def test_a_space_that_was_never_built_has_no_run_in_the_list(app, pg, clie
     assert {(s['run_id'], s['run_status']) for s in spaces} == {(None, None)}
 
 
-def _space_id(pg, slug: str, key: str) -> str:
+def _space_id(pg, slug: str, key: str, target: str = 'item') -> str:
     return str(
         sql(
             pg,
             'SELECT s.id FROM embedding_spaces s JOIN projects p ON p.id = s.project_id '
-            'WHERE p.slug = %s AND s.space_key = %s',
+            'WHERE p.slug = %s AND s.space_key = %s AND s.target = %s',
             slug,
             key,
+            target,
         )[0][0]
     )
 

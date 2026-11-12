@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 ActiveConflictError = repo.ActiveConflictError
+ConfigInUseError = repo.ConfigInUseError
 RevisionConflictError = repo.RevisionConflictError
 ACTIVE_SERVING_KEY = 'active_serving_profile'
 RESEARCH_KINDS = tuple(RESEARCH_BODY_MODELS)

@@ -1,3 +1,4 @@
+import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/api_regionBoxes', async () => {
@@ -514,5 +515,23 @@ describe('vector_refresh (boxes without a vector)', () => {
     expect(c.vectorRefresh).not.toBeNull();
     c.seedFrom(cropWithBoxes('c2', [boxA]));
     expect(c.vectorRefresh).toBeNull();
+  });
+});
+
+describe('seedFrom run from an effect, as the bbox editor does', () => {
+  it('a drawn box survives: the effect follows the crop, not the selection', () => {
+    const crop = cropWithBoxes('c1', [boxA]);
+    const c = createMultiBoxRegionController(() => widgetTagSlot);
+    const cleanup = $effect.root(() => {
+      $effect(() => {
+        c.seedFrom(crop);
+      });
+    });
+    flushSync();
+    c.addBox({ cx: 0.8, cy: 0.8, w: 0.1, h: 0.1 });
+    flushSync();
+    expect(c.boxes).toHaveLength(2);
+    expect(c.selectedIndex).toBe(1);
+    cleanup();
   });
 });

@@ -19,6 +19,7 @@ from src.core.logging import get_logger, get_request_id
 if TYPE_CHECKING:
     from fastapi import Request
 
+    from src.clients.occ import OCCFinalConflictError
     from src.config.faces import FacesDisabledError
     from src.core.exceptions import RequestRejectedError
     from src.utils.retry import RetryExhaustedError, TritonDeadlineError
@@ -123,4 +124,29 @@ async def faces_disabled_response(request: Request, exc: FacesDisabledError) -> 
     return JSONResponse(
         status_code=400,
         content={'detail': str(exc), 'error': 'faces_disabled', 'request_id': req_id},
+    )
+
+
+async def occ_final_conflict_response(request: Request, exc: OCCFinalConflictError) -> JSONResponse:
+    """A human-write route re-raised an exhausted-retry OCC conflict -> 409, so the labeler can
+    tell "someone else edited this concurrently" from an opaque 500. Registered ahead of the
+    generic ``Exception`` handler."""
+    req_id = get_request_id()
+    logger.warning(
+        'occ_final_conflict',
+        request_id=req_id,
+        method=request.method,
+        path=request.url.path,
+        doc_id=exc.doc_id,
+        retries=exc.retries,
+    )
+    return JSONResponse(
+        status_code=409,
+        content={
+            'detail': 'concurrent write conflict; refresh and retry',
+            'doc_id': exc.doc_id,
+            'retries': exc.retries,
+            'request_id': req_id,
+        },
+        headers={'X-Request-ID': req_id},
     )

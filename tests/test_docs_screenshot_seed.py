@@ -108,7 +108,7 @@ def test_staging_copies_each_dataset_once(tmp_path: Path) -> None:
 
 
 def test_every_seeded_state_is_a_registered_state() -> None:
-    assert len(registry.SEEDED_STATES) == 17
+    assert len(registry.SEEDED_STATES) == 16
     assert set(registry.SEEDED_STATES) <= set(registry.STATES)
 
 

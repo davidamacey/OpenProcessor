@@ -42,7 +42,7 @@ def test_train_finishes_then_promote_succeeds_and_the_model_is_listed(api: Any) 
     manifest = api.get(f'{BASE}/manifest/{job_id}').json()
     assert manifest.get('promoted_to'), manifest
 
-    listed = api.get('/models')
+    listed = api.get('/models/')
     assert listed.status_code == 200, listed.text
     by_name = {m['name']: m for m in listed.json()['models']}
     assert name in by_name, sorted(by_name)

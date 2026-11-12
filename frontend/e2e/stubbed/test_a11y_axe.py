@@ -16,7 +16,13 @@ from fixtures.image_editor import Editor
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
 from playwright.sync_api import expect
-from test_assist_loop_panel import serve_loop, serve_plan_form, show_finished_loop, show_plan_form
+from test_assist_loop_panel import (
+    open_panel,
+    serve_loop,
+    serve_plan_form,
+    show_finished_loop,
+    show_plan_form,
+)
 from test_cluster_discard import CLASSES, CLUSTERS, crop
 from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
@@ -172,7 +178,7 @@ PAGES = [
         'clusters-loop-plan',
         '/p/default/workspace?view=clusters',
         serve_plan_form,
-        '[data-testid="loop-panel-toggle"]',
+        '[data-testid="vlm-menu-toggle"]',
         show_plan_form,
     ),
     (
@@ -189,16 +195,17 @@ PAGES = [
         'clusters-loop-finished',
         '/p/default/workspace?view=clusters',
         lambda stub: serve_loop(stub, 'completed'),
-        '[data-testid="loop-panel-toggle"]',
+        '[data-testid="vlm-menu-toggle"]',
         show_finished_loop,
     ),
     (
         'clusters-loop-live',
         '/p/default/workspace?view=clusters',
         lambda stub: serve_loop(stub, 'running'),
-        '[data-testid="loop-panel-toggle"]',
-        lambda page: expect(page.get_by_test_id('loop-cancel')).to_be_visible(
-            timeout=ACTION_TIMEOUT_MS
+        '[data-testid="vlm-menu-toggle"]',
+        lambda page: (
+            open_panel(page),
+            expect(page.get_by_test_id('loop-cancel')).to_be_visible(timeout=ACTION_TIMEOUT_MS),
         ),
     ),
     (
