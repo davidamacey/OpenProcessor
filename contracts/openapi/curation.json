@@ -52280,6 +52280,105 @@
         ]
       }
     },
+    "/curation/projects/{project}/crops/{crop_id}/preview": {
+      "get": {
+        "description": "The item's box with its surroundings, scaled so its longest side is between `min_side` and\n`max_side`: a small box is enlarged, which a thumbnail never does.\n\nThe cut is the box grown by `pad` of its size on every side (kept inside the image) and\nresampled with Lanczos, Pillow's high-quality filter for both enlarging and shrinking\n(https://pillow.readthedocs.io/en/stable/handbook/concepts.html#filters). `outline` draws the\nbox in the highlight yellow. LRU cached; the response is `no-cache` with an `ETag` of the\nimage, the box and the parameters, so a moved box is a new body and an unmoved one a 304.\n`422 preview_sides` when `min_side` is above `max_side`.",
+        "operationId": "crop_context_preview_curation_projects__project__crops__crop_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Context added on every side, as a share of the box width and height.",
+            "in": "query",
+            "name": "pad",
+            "required": false,
+            "schema": {
+              "default": 0.6,
+              "description": "Context added on every side, as a share of the box width and height.",
+              "maximum": 2.0,
+              "minimum": 0.0,
+              "title": "Pad",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Enlarge the cut until its longest side is this.",
+            "in": "query",
+            "name": "min_side",
+            "required": false,
+            "schema": {
+              "default": 320,
+              "description": "Enlarge the cut until its longest side is this.",
+              "maximum": 2048,
+              "minimum": 32,
+              "title": "Min Side",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Shrink the cut until its longest side is this.",
+            "in": "query",
+            "name": "max_side",
+            "required": false,
+            "schema": {
+              "default": 1024,
+              "description": "Shrink the cut until its longest side is this.",
+              "maximum": 2048,
+              "minimum": 64,
+              "title": "Max Side",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Draw the item box on the cut.",
+            "in": "query",
+            "name": "outline",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Draw the item box on the cut.",
+              "title": "Outline",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Crop Context Preview",
+        "tags": [
+          "Curation - Crops"
+        ]
+      }
+    },
     "/curation/projects/{project}/crops/{crop_id}/region/undo": {
       "post": {
         "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",
@@ -52852,7 +52951,7 @@
             "schema": {
               "default": 128,
               "description": "Square thumbnail size",
-              "maximum": 512,
+              "maximum": 1024,
               "minimum": 32,
               "title": "Size",
               "type": "integer"

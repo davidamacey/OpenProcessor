@@ -6,6 +6,7 @@ Exposes:
 - ``GET {prefix}/images/{image_id}/thumbnail``  — whole-frame thumbnail of an image (LRU cached)
 - ``GET {prefix}/images/cache/stats``           — thumbnail cache hit/miss stats
 - ``GET {prefix}/crops/{id}/thumbnail``         — 128px item-crop thumbnail (LRU cached)
+- ``GET {prefix}/crops/{id}/preview``           — padded, enlarged context crop of an item (LRU cached)
 - ``GET {prefix}/crops/{id}/region_thumbnail``  — region-of-interest sub-bbox thumbnail
 
 Exports **two** routers — ``router`` (images) and ``crops_router``
@@ -27,6 +28,7 @@ from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.domain.region_boxes import read_boxes
 from src.routers._errors import server_error
+from src.services.curation.crop_preview import PREVIEW_CACHE
 from src.services.curation.image_detail import image_source
 from src.services.curation.image_serving import (
     THUMBNAIL_CACHE,
@@ -195,7 +197,7 @@ def _source_missing_error(crop_doc: dict[str, Any]) -> HTTPException:
 async def crop_thumbnail(
     crop_id: str,
     opensearch: OpenSearchDep,
-    size: Annotated[int, Query(ge=32, le=512, description='Square thumbnail size')] = 128,
+    size: Annotated[int, Query(ge=32, le=1024, description='Square thumbnail size')] = 128,
     v: Annotated[
         int | None,
         Query(description='The item `geometry_revision`: a cache key only, the server ignores it.'),
@@ -225,6 +227,81 @@ async def crop_thumbnail(
         raise server_error(500, 'thumbnail render failed', exc) from exc
 
     return Response(content=jpeg, media_type='image/jpeg', headers=_IMAGE_CACHE_HEADERS)
+
+
+def _preview_headers(image_path: Any, bbox: Any, *params: object) -> dict[str, str]:
+    """Revalidate-every-time headers for a preview: the URL names only the item, and a person can
+    move its box, so the ETag names the image, the box and every parameter."""
+    tag = hashlib.sha1(
+        f'{image_path}|{list(bbox)}|{params}'.encode(), usedforsecurity=False
+    ).hexdigest()[:16]
+    return {'Cache-Control': 'no-cache', 'ETag': f'"{tag}"'}
+
+
+@crops_router.get('/{crop_id}/preview', response_class=Response)
+async def crop_context_preview(
+    crop_id: str,
+    request: Request,
+    opensearch: OpenSearchDep,
+    pad: Annotated[
+        float,
+        Query(
+            ge=0.0,
+            le=2.0,
+            description='Context added on every side, as a share of the box width and height.',
+        ),
+    ] = 0.6,
+    min_side: Annotated[
+        int, Query(ge=32, le=2048, description='Enlarge the cut until its longest side is this.')
+    ] = 320,
+    max_side: Annotated[
+        int, Query(ge=64, le=2048, description='Shrink the cut until its longest side is this.')
+    ] = 1024,
+    outline: Annotated[bool, Query(description='Draw the item box on the cut.')] = False,
+) -> Response:
+    """The item's box with its surroundings, scaled so its longest side is between `min_side` and
+    `max_side`: a small box is enlarged, which a thumbnail never does.
+
+    The cut is the box grown by `pad` of its size on every side (kept inside the image) and
+    resampled with Lanczos, Pillow's high-quality filter for both enlarging and shrinking
+    (https://pillow.readthedocs.io/en/stable/handbook/concepts.html#filters). `outline` draws the
+    box in the highlight yellow. LRU cached; the response is `no-cache` with an `ETag` of the
+    image, the box and the parameters, so a moved box is a new body and an unmoved one a 304.
+    `422 preview_sides` when `min_side` is above `max_side`.
+    """
+    if min_side > max_side:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                'error': 'preview_sides',
+                'message': f'min_side ({min_side}) is above max_side ({max_side})',
+            },
+        )
+    crop = await _fetch_crop(crop_id, opensearch)
+    bbox_norm = crop.get('bbox_norm')
+    if not bbox_norm or len(bbox_norm) != 4:
+        raise HTTPException(status_code=500, detail='crop has invalid bbox_norm')
+    image_path = _resolve_image_for_crop(crop)
+    headers = _preview_headers(image_path, bbox_norm, pad, min_side, max_side, outline)
+    if request.headers.get('if-none-match') == headers['ETag']:
+        return Response(status_code=304, headers=headers)
+    try:
+        jpeg = await PREVIEW_CACHE.get_or_compute(
+            image_path,
+            tuple(bbox_norm),
+            pad=pad,
+            min_side=min_side,
+            max_side=max_side,
+            outline=outline,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise _source_missing_error(crop) from exc
+    except Exception as exc:
+        logger.error('crop_preview_failed', crop_id=crop_id, error=str(exc))
+        raise server_error(500, 'preview render failed', exc) from exc
+    return Response(content=jpeg, media_type='image/jpeg', headers=headers)
 
 
 @crops_router.get('/{crop_id}/region_thumbnail')
