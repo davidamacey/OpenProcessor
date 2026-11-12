@@ -30,7 +30,7 @@ describe('createImageItem', () => {
     });
     const body = {
       bbox_norm: [0.1, 0.1, 0.5, 0.5] as [number, number, number, number],
-      class_name: 'car',
+      class_name: 'widget',
       request_id: '6f1c3b6e-0000-4000-8000-000000000001',
     };
     const res = await createImageItem('img-1', body);
@@ -101,11 +101,11 @@ describe('locateImage', () => {
       reason: null,
       reason_message: null,
     });
-    const res = await locateImage({ class_name: ['car'], sort: 'taken_at' }, 'img-9');
+    const res = await locateImage({ class_name: ['widget'], sort: 'taken_at' }, 'img-9');
     const [url] = f.mock.calls[0];
     const u = new URL(url, 'http://x');
     expect(u.pathname).toBe(`${API_PREFIX}/images/locate`);
-    expect(u.searchParams.getAll('class_name')).toEqual(['car']);
+    expect(u.searchParams.getAll('class_name')).toEqual(['widget']);
     expect(u.searchParams.get('target_image_id')).toBe('img-9');
     expect(u.searchParams.get('sort')).toBe('taken_at');
     expect(res.cursor_before).toBe('cb');

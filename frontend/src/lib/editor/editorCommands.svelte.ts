@@ -33,7 +33,7 @@ export type CommandResult =
     };
 
 export interface EditorCommand {
-  /** Shown in the undo tooltip, e.g. `Draw car`. */
+  /** Shown in the undo tooltip, e.g. `Draw widget`. */
   label: string;
   apply(): Promise<CommandResult>;
   revert(): Promise<CommandResult>;

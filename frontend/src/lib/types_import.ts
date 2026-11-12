@@ -5,13 +5,7 @@
  * Pinned field-for-field to the vendored OpenAPI (OpenProcessor f582aa05)
  * by `contract/datasetsContract.test.ts`.
  */
-import type {
-  EmbeddingState,
-  ItemOrigin,
-  ReviewStatus,
-  SelectionSample,
-} from '$lib/types_itemFilter';
-import type { GeoBox } from '$lib/types_map';
+import type { ItemFilter, SelectionSample } from '$lib/types_itemFilter';
 
 /** `LabeledChoice`: a served vocabulary entry (`value` is the wire id). */
 export interface LabeledChoice {
@@ -429,59 +423,17 @@ export type ReprocessRegionMode = 'redetect' | 'reverify';
 
 /** `ReprocessFilter`: the reprocess-only keys plus the shared item filter
  *  (`ItemFilter`, `types_itemFilter.ts`). */
-export interface ReprocessFilter {
+export interface ReprocessFilter extends ItemFilter {
   all_images?: boolean;
-  class_id?: number | null;
-  class_names?: string[];
-  class_source?: string | null;
-  classifier_conf_lt?: number | null;
-  cluster_uids?: string[];
-  geo_bbox?: GeoBox | null;
-  geo_polygon?: [number, number][] | null;
-  has_location?: boolean | null;
-  near_dup_group?: string | null;
-  conf_max?: number | null;
-  conf_min?: number | null;
-  dataset_split?: string | null;
   detector?: string[];
-  detector_class_names?: string[];
-  detector_conf_max?: number | null;
-  detector_conf_min?: number | null;
-  embedding_state?: EmbeddingState[];
-  exclude_class_names?: string[];
-  image_ids?: string[];
-  import_id?: string | null;
   include_detected?: boolean;
-  item_text?: string | null;
-  label_source?: string | null;
-  label_validated?: boolean | null;
-  max_area?: number | null;
-  max_rank?: number | null;
-  min_area?: number | null;
-  min_blur_ratio?: number | null;
   missing_provenance?: boolean;
   missing_status?: boolean;
-  needs_new_class?: boolean | null;
-  on_negative_frame?: boolean | null;
-  open_vocab_set?: string | null;
   open_vocab_status?: OpenVocabStatus[];
-  origin?: ItemOrigin[];
   profile_not?: string | null;
   profile_revision_below?: number | null;
-  proposed_by_import?: boolean | null;
   reason?: string[];
-  region_gate_skipped?: boolean | null;
-  /** The item has a box whose folded text matches this (at most 200 characters). */
-  region_text?: string | null;
-  region_text_match?: 'exact' | 'fuzzy' | 'fragment';
   region_status?: string[];
-  review_dismissed?: boolean | null;
-  review_status?: ReviewStatus[];
-  review_tab?: string | null;
-  source?: string | null;
-  source_prompt?: string | null;
-  taken_from?: string | null;
-  taken_to?: string | null;
 }
 
 export interface ReprocessTargets {

@@ -78,7 +78,7 @@ export function resetEditorApi(): void {
   editorApi.putCropLabel.mockResolvedValue({
     crop_id: 'c1',
     class_id: 7,
-    class_name: 'car',
+    class_name: 'widget',
     op_id: 'op-1',
   });
   editorApi.undoCropRegion.mockResolvedValue({});

@@ -14,9 +14,9 @@ afterEach(() => {
 
 const row = (over: Partial<ObjectRow> = {}): ObjectRow => ({
   cropId: 'c1',
-  label: 'car',
+  label: 'widget',
   tone: 'validated',
-  className: 'car',
+  className: 'widget',
   lockLabel: null,
   locked: false,
   deleted: false,
@@ -35,10 +35,10 @@ function render(rows: ObjectRow[], selectedCropId: string | null = null) {
 
 describe('ObjectList', () => {
   it('lists the served labels in the served order', () => {
-    render([row({ cropId: 'a', label: 'car' }), row({ cropId: 'b', label: 'bus' })]);
+    render([row({ cropId: 'a', label: 'widget' }), row({ cropId: 'b', label: 'bus' })]);
     expect(
       [...target.querySelectorAll('li[data-crop-id]')].map((l) => l.textContent?.trim()),
-    ).toEqual(['car', 'bus']);
+    ).toEqual(['widget', 'bus']);
   });
 
   it('says so when there are no objects', () => {

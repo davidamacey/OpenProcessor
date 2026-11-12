@@ -21,7 +21,7 @@ describe('reviewSource', () => {
   it('uses the queue route when a queue is set', async () => {
     const source = reviewSource({
       queue: 'to_label',
-      filter: { class_name: ['car'] },
+      filter: { class_name: ['widget'] },
       sort: 'confidence:asc',
     });
     await source.page('c1', 30);
@@ -30,7 +30,7 @@ describe('reviewSource', () => {
       'to_label',
       'c1',
       30,
-      { class_name: ['car'], sort: 'confidence:asc' },
+      { class_name: ['widget'], sort: 'confidence:asc' },
       undefined,
     );
     expect(getCrops).not.toHaveBeenCalled();
@@ -39,13 +39,13 @@ describe('reviewSource', () => {
   it('uses crops with the detections sort otherwise', async () => {
     const source = reviewSource({
       queue: null,
-      filter: { class_name: ['car'] },
+      filter: { class_name: ['widget'] },
       sort: 'detector_confidence:desc',
     });
     const served = await source.page(null, 30);
     expect(source.kind).toBe('crops');
     expect(getCrops).toHaveBeenCalledWith(
-      { class_name: ['car'], sort: 'detector_confidence:desc', limit: 30 },
+      { class_name: ['widget'], sort: 'detector_confidence:desc', limit: 30 },
       null,
       undefined,
     );
@@ -94,13 +94,13 @@ describe('reviewSource', () => {
     });
     const at = await reviewSource({
       queue: null,
-      filter: { class_name: ['car'] },
+      filter: { class_name: ['widget'] },
       sort: 'updated_at:desc',
     }).locate('x1');
     expect(locateCrop).toHaveBeenCalledTimes(1);
     expect(locateCrop).toHaveBeenCalledWith(
       'x1',
-      { class_name: ['car'], sort: 'updated_at:desc' },
+      { class_name: ['widget'], sort: 'updated_at:desc' },
       undefined,
     );
     expect(locateInReviewQueue).not.toHaveBeenCalled();

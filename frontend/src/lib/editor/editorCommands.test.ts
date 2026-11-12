@@ -28,7 +28,7 @@ const {
 
 const item = editorItem();
 const BOX: [number, number, number, number] = [0.1, 0.1, 0.5, 0.5];
-const car = { id: 7, name: 'car' } as RegistryClass;
+const widget = { id: 7, name: 'widget' } as RegistryClass;
 
 function conflict(): ApiError {
   return new ApiError(409, '/geometry', { detail: 'The box changed. Reload.' });
@@ -38,18 +38,18 @@ beforeEach(resetEditorApi);
 
 describe("each command's revert inverts apply", () => {
   it('draw: creates the item, then excludes it as not an object', async () => {
-    const cmd = drawCommand('img-1', BOX, 'car');
+    const cmd = drawCommand('img-1', BOX, 'widget');
     expect((await cmd.apply()).ok).toBe(true);
     expect(api.createImageItem).toHaveBeenCalledWith(
       'img-1',
-      expect.objectContaining({ bbox_norm: BOX, class_name: 'car' }),
+      expect.objectContaining({ bbox_norm: BOX, class_name: 'widget' }),
     );
     await cmd.revert();
     expect(api.excludeCrops).toHaveBeenCalledWith(['new-1'], 'not_an_object');
   });
 
   it('draw: redo restores the item it created instead of creating a second', async () => {
-    const cmd = drawCommand('img-1', BOX, 'car');
+    const cmd = drawCommand('img-1', BOX, 'widget');
     await cmd.apply();
     await cmd.revert();
     await cmd.apply();
@@ -77,7 +77,7 @@ describe("each command's revert inverts apply", () => {
   });
 
   it('class: labels with the registry id, then undoes the recorded label operation', async () => {
-    const cmd = classCommand(item, car);
+    const cmd = classCommand(item, widget);
     await cmd.apply();
     expect(api.putCropLabel).toHaveBeenCalledWith('c1', 7);
     await cmd.revert();
@@ -89,16 +89,16 @@ describe("each command's revert inverts apply", () => {
       .mockResolvedValueOnce({
         crop_id: 'c1',
         class_id: 7,
-        class_name: 'car',
+        class_name: 'widget',
         op_id: 'op-1',
       })
       .mockResolvedValueOnce({
         crop_id: 'c1',
         class_id: 7,
-        class_name: 'car',
+        class_name: 'widget',
         op_id: 'op-2',
       });
-    const cmd = classCommand(item, car);
+    const cmd = classCommand(item, widget);
     await cmd.apply();
     await cmd.revert();
     await cmd.apply();
@@ -108,7 +108,7 @@ describe("each command's revert inverts apply", () => {
 
   it('class: a failed operation undo is reported, not swallowed', async () => {
     api.undoLabelOpToEnd.mockRejectedValueOnce(new Error('the undo did not finish'));
-    const cmd = classCommand(item, car);
+    const cmd = classCommand(item, widget);
     await cmd.apply();
     const r = await cmd.revert();
     expect(r.ok).toBe(false);
@@ -134,7 +134,7 @@ describe("each command's revert inverts apply", () => {
 describe('draw retry', () => {
   it('reuses the request id after a failed attempt', async () => {
     api.createImageItem.mockRejectedValueOnce(new Error('network down'));
-    const cmd = drawCommand('img-1', BOX, 'car');
+    const cmd = drawCommand('img-1', BOX, 'widget');
     expect((await cmd.apply()).ok).toBe(false);
     expect((await cmd.apply()).ok).toBe(true);
     const ids = api.createImageItem.mock.calls.map((c) => c[1].request_id);
@@ -144,8 +144,8 @@ describe('draw retry', () => {
   });
 
   it('uses a new request id for the next box', () => {
-    const a = drawCommand('img-1', BOX, 'car');
-    const b = drawCommand('img-1', BOX, 'car');
+    const a = drawCommand('img-1', BOX, 'widget');
+    const b = drawCommand('img-1', BOX, 'widget');
     void a.apply();
     void b.apply();
     expect(api.createImageItem.mock.calls[0][1].request_id).not.toBe(
@@ -253,10 +253,10 @@ describe('CommandStack', () => {
 
   it('names the next undo and redo for the tooltip', async () => {
     const { s } = stack();
-    await s.run(drawCommand('img-1', BOX, 'car'));
-    expect(s.undoLabel).toBe('Draw car');
+    await s.run(drawCommand('img-1', BOX, 'widget'));
+    expect(s.undoLabel).toBe('Draw widget');
     await s.undo();
-    expect(s.redoLabel).toBe('Draw car');
+    expect(s.redoLabel).toBe('Draw widget');
   });
 
   it('a move that would strand region boxes reports them and sends nothing else', async () => {

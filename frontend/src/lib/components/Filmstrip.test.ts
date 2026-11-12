@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 const tiles = [
-  { id: 'a', label: 'Car', thumbUrl: '/t/a' },
+  { id: 'a', label: 'Widget', thumbUrl: '/t/a' },
   { id: 'b', label: 'Bus', thumbUrl: '/t/b' },
   { id: 'c', label: 'Truck', thumbUrl: '/t/c' },
 ];
@@ -44,7 +44,7 @@ describe('Filmstrip (buttons, as Review uses it)', () => {
   it('marks only the focused item as current and names each by its served label', () => {
     render();
     expect(items().map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Car',
+      'Widget',
       'Bus',
       'Truck',
     ]);

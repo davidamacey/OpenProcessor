@@ -28,8 +28,8 @@ const PAGE = { items: [], total: 4 } as unknown as ImagePage;
 
 function host() {
   return {
-    itemQuery: vi.fn(() => ({ class_name: ['car'], review_tab: 'unreviewed' })),
-    itemBody: vi.fn(() => ({ class_names: ['car'], review_tab: 'unreviewed' })),
+    itemQuery: vi.fn(() => ({ class_name: ['widget'], review_tab: 'unreviewed' })),
+    itemBody: vi.fn(() => ({ class_names: ['widget'], review_tab: 'unreviewed' })),
     setFocus: vi.fn(),
     applyFilter: vi.fn(),
     filter: { geoBbox: null, hasLocation: null },
@@ -69,7 +69,7 @@ describe('MapController', () => {
     await new MapController(host(), d).loadCells({ zoom: 6, bbox: '7,46,9,48' });
     expect(d.cells).toHaveBeenCalledWith(
       { zoom: 6, bbox: '7,46,9,48' },
-      { class_name: ['car'], review_tab: 'unreviewed' },
+      { class_name: ['widget'], review_tab: 'unreviewed' },
       expect.any(AbortSignal),
     );
   });
@@ -106,13 +106,13 @@ describe('MapController', () => {
     await ctl.focusCell(CELL);
     expect(h.setFocus).toHaveBeenCalledWith({ kind: 'cell', id: '9/267/179' });
     expect(d.summary).toHaveBeenCalledWith(
-      { filter: { class_names: ['car'], review_tab: 'unreviewed', geo_bbox: BOUNDS } },
+      { filter: { class_names: ['widget'], review_tab: 'unreviewed', geo_bbox: BOUNDS } },
       expect.any(AbortSignal),
     );
     expect(d.images).toHaveBeenCalledTimes(1);
     expect(d.images).toHaveBeenCalledWith(
       {
-        class_name: ['car'],
+        class_name: ['widget'],
         review_tab: 'unreviewed',
         geo_bbox: '8.4375,47.5,8.4551,47.51',
         limit: CELL_CARDS,

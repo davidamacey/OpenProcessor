@@ -22,7 +22,7 @@ vi.mock('$lib/api_regionBoxes', async () =>
 
 const { createEditorController } = await import('./editorController.svelte');
 
-const car = { id: 7, name: 'car' } as RegistryClass;
+const widget = { id: 7, name: 'widget' } as RegistryClass;
 const BOX: [number, number, number, number] = [0.1, 0.1, 0.5, 0.5];
 
 const c1 = editorItem({ crop_id: 'c1' });
@@ -80,7 +80,7 @@ describe('boxes', () => {
     // The write succeeds, but until the server's image is back nothing new is drawn.
     let release: (v: unknown) => void = () => {};
     api.createImageItem.mockReturnValueOnce(new Promise((r) => (release = r)));
-    const picked = c.pick(car);
+    const picked = c.pick(widget);
     await Promise.resolve();
     expect(c.boxes).toEqual(served().boxes);
     const after = imageDetail({
@@ -123,9 +123,9 @@ describe('drawing', () => {
     expect(c.picker).toEqual({ kind: 'draw', box: BOX });
     expect(c.pendingBox).toEqual(BOX);
     expect(c.tool).toBe('select');
-    await c.pick(car);
+    await c.pick(widget);
     c.draw(BOX);
-    expect(c.recentClasses).toEqual(['car']);
+    expect(c.recentClasses).toEqual(['widget']);
     expect(c.picker).toEqual({ kind: 'draw', box: BOX });
   });
 
@@ -146,10 +146,10 @@ describe('drawing', () => {
     });
     c.draw(BOX);
     api.getImage.mockResolvedValue(after);
-    await c.pick(car);
+    await c.pick(widget);
     expect(api.createImageItem).toHaveBeenCalledWith(
       'img-1',
-      expect.objectContaining({ bbox_norm: BOX, class_name: 'car' }),
+      expect.objectContaining({ bbox_norm: BOX, class_name: 'widget' }),
     );
     expect(c.picker).toBeNull();
     expect(c.selectedCropId).toBe('new-1');
@@ -172,13 +172,13 @@ describe('selecting and editing', () => {
   it('a class hotkey relabels the selected object', async () => {
     const { c } = await setup();
     c.select('c2');
-    await c.setClass(car);
+    await c.setClass(widget);
     expect(api.putCropLabel).toHaveBeenCalledWith('c2', 7);
   });
 
   it('a class hotkey with nothing selected does nothing', async () => {
     const { c } = await setup();
-    await c.setClass(car);
+    await c.setClass(widget);
     expect(api.putCropLabel).not.toHaveBeenCalled();
   });
 
