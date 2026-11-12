@@ -97,6 +97,37 @@ def image_detail(
     )
 
 
+def image_card(image_id: str, **over: Any) -> dict[str, Any]:
+    """One served ``ImageCard`` of the gallery: thumbnail, counts and the boxes to draw."""
+    base = {
+        'file_name': f'{image_id}.jpg',
+        'thumbnail_url': f'/curation/projects/default/images/{image_id}/thumbnail',
+        'width': 640,
+        'height': 480,
+        'counts': fill('ImageCounts', items=2, labeled=1, validated=1, unlabeled=1),
+        'boxes': [
+            box_view(f'{image_id}-a', 'widget', bbox_norm=[0.1, 0.1, 0.4, 0.5]),
+            box_view(
+                f'{image_id}-b', 'unlabeled', tone='unlabeled', bbox_norm=[0.5, 0.2, 0.9, 0.8]
+            ),
+        ],
+    }
+    base.update(over)
+    return fill('ImageCard', image_id=image_id, **base)
+
+
+def image_page(*cards: dict[str, Any], **over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        'items': list(cards),
+        'total': len(cards),
+        'limit': 60,
+        'sort_applied': 'indexed_at:desc',
+        'sort_options': [{'id': 'indexed_at:desc', 'label': 'Newest indexed'}],
+    }
+    base.update(over)
+    return fill('ImagePage', **base)
+
+
 def label_op_accepted(op_id: str = 'op-1', job_id: str = 'job-1') -> dict[str, Any]:
     return fill('LabelOpAccepted', op_id=op_id, job_id=job_id)
 

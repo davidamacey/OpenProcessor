@@ -4,6 +4,7 @@
  */
 import type { Component } from 'svelte';
 import ClustersView from './views/ClustersView.svelte';
+import GalleryView from './views/GalleryView.svelte';
 import DetectionsView from './views/DetectionsView.svelte';
 import type { WorkspaceController } from './workspaceController.svelte';
 import type { ViewId } from './workspaceUrl';
@@ -18,6 +19,7 @@ export interface ViewEntry {
 }
 
 export const VIEWS: readonly ViewEntry[] = [
+  { id: 'gallery', label: 'Gallery', component: GalleryView, keyContext: 'cluster' },
   { id: 'clusters', label: 'Clusters', component: ClustersView, keyContext: 'cluster' },
   {
     id: 'detections',

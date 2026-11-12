@@ -1,6 +1,7 @@
 /** A served `GET /images/{id}` body (`ImageDetailResponse`) for component tests: every key
  *  present, `image`, `items` and `boxes` taken from the test. */
-import type { Crop, ImageBox, ImageDetailResponse } from '$lib/types';
+import type { Crop } from '$lib/types';
+import type { ImageBox, ImageDetailResponse } from '$lib/types_images';
 
 export function imageDetail(
   over: { image?: Record<string, unknown>; items?: Crop[]; boxes?: ImageBox[] } = {},
@@ -40,6 +41,9 @@ export function imageBox(over: Partial<ImageBox> = {}): ImageBox {
     class_name: 'widget_a',
     tone: 'validated',
     state: null,
+    locked: false,
+    lock_label: null,
+    geometry_revision: null,
     ...over,
   };
 }

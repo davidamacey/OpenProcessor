@@ -5,8 +5,19 @@
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { CropMetaLoader } from '$lib/cropMeta/cropMetaLoader.svelte';
   import { formatTimestamp } from '$lib/format/date';
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
 
-  let { crop, loader }: { crop: Crop; loader: CropMetaLoader } = $props();
+  let {
+    crop,
+    loader,
+    onopencrop,
+  }: {
+    crop: Crop;
+    loader: CropMetaLoader;
+    /** Opens a sibling item in the host; absent, siblings are plain thumbnails. */
+    onopencrop?: (crop: Crop) => void;
+  } = $props();
 
   const imageMeta = $derived(loader.imageMeta);
   const siblings = $derived(loader.siblings);
@@ -53,34 +64,39 @@
         />
       </div>
     {/if}
-    <dl class="grid grid-cols-2 gap-y-1 text-[11px] text-zinc-400">
-      {#if imageMeta.width != null && imageMeta.height != null}
-        <dt class="text-zinc-500">Size</dt>
-        <dd class="font-mono">{imageMeta.width}×{imageMeta.height}</dd>
-      {/if}
-      {#if imageMeta.source}
-        <dt class="text-zinc-500">Source</dt>
-        <dd>{imageMeta.source}</dd>
-      {/if}
-      {#if imageMeta.indexed_at}
-        <dt class="text-zinc-500">Indexed</dt>
-        <dd class="font-mono" title={imageMeta.indexed_at}>
-          {formatTimestamp(imageMeta.indexed_at)}
-        </dd>
-      {/if}
-    </dl>
+    <a
+      class="text-[11px] text-sky-300 underline hover:text-sky-200"
+      data-testid="open-image"
+      href={resolve(projectHref(`/images/${encodeURIComponent(imageMeta.image_id)}`))}
+      >Open image</a
+    >
     {#if siblings && siblings.length > 0}
       <div class="mt-2 text-[10px] uppercase tracking-wider text-zinc-500">
         Siblings ({siblings.length})
       </div>
       <div class="mt-1 flex flex-wrap gap-1.5">
         {#each siblings as sib (sib.id)}
-          <img
-            src={getThumbUrl(sib.id, 64)}
-            alt="sibling crop"
-            title={sib.class_name ?? sib.id}
-            class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
-          />
+          {#snippet thumb()}
+            <img
+              src={getThumbUrl(sib.id, 64)}
+              alt="sibling crop"
+              class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
+            />
+          {/snippet}
+          {#if onopencrop}
+            <button
+              type="button"
+              data-testid="sibling-crop"
+              title={sib.class_name ?? sib.id}
+              aria-label="Open sibling {sib.class_name ?? sib.id}"
+              class="rounded hover:ring-2 hover:ring-zinc-500"
+              onclick={() => onopencrop(sib)}
+            >
+              {@render thumb()}
+            </button>
+          {:else}
+            <span title={sib.class_name ?? sib.id}>{@render thumb()}</span>
+          {/if}
         {/each}
       </div>
     {/if}

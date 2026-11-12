@@ -4,7 +4,7 @@
    * and nothing else: no label, colour or geometry is derived here. The parent supplies the
    * positioned wrapper; boxes are placed in percent of it.
    */
-  import type { ImageBox } from '$lib/types';
+  import type { ImageBox } from '$lib/types_images';
   import { boxToneClass } from '$lib/boxes/boxTone';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 
@@ -14,9 +14,11 @@
     selectedCropId?: string | null;
     /** Fires for a click on a box of another item. Absent = boxes are not clickable. */
     onselect?: (cropId: string) => void;
+    /** False on a thumbnail too small for text: boxes draw, labels do not. */
+    showLabels?: boolean;
   }
 
-  let { boxes, selectedCropId = null, onselect }: Props = $props();
+  let { boxes, selectedCropId = null, onselect, showLabels = true }: Props = $props();
 
   function pct(n: number): string {
     return `${(n * 100).toFixed(3)}%`;
@@ -38,7 +40,7 @@
   }`}
   {@const boxStyle = `left:${pct(x1)}; top:${pct(y1)}; width:${pct(x2 - x1)}; height:${pct(y2 - y1)};`}
   {#snippet label()}
-    {#if selected || b.kind !== 'item'}
+    {#if showLabels && (selected || b.kind !== 'item')}
       <span
         class="pointer-events-none absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
       >

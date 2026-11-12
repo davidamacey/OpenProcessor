@@ -295,6 +295,17 @@ def test_empty_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.get(f'{BASE}/images', params={'source': 'x'}).json()['empty_reason'] == 'no_match'
 
 
+def test_empty_message_is_served_and_limit_echoed(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _client(QueryFakeOpenSearch({ITEMS: {}, IMAGES: {}}), monkeypatch)
+    empty = client.get(f'{BASE}/images', params={'limit': 7}).json()
+    assert empty['empty_message'] == 'No images yet. Ingest images to see them here.'
+    assert empty['limit'] == 7
+    narrowed = client.get(f'{BASE}/images', params={'source': 'x'}).json()
+    assert narrowed['empty_message'] == 'No images match this filter.'
+    full = _client(_world(), monkeypatch).get(f'{BASE}/images').json()
+    assert full['empty_message'] is None
+
+
 def test_location_filters_follow_the_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _world()
     kept = _client(fake, monkeypatch).get(

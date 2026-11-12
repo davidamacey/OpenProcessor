@@ -21,6 +21,7 @@ from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
+from test_gallery_view import serve as serve_gallery
 from test_label_ops import serve as serve_label_ops
 from test_open_vocab import serve_open_vocab
 from test_prompt_packs import serve_packs
@@ -178,6 +179,22 @@ PAGES = [
         f'/p/default/workspace?view=clusters&scope=cluster:{FACET_UID}',
         serve_cluster_with_facets,
         '[data-testid="cluster-facets"]',
+    ),
+    (
+        'workspace-gallery',
+        '/p/default/workspace?view=gallery',
+        lambda stub: serve_gallery(stub, []),
+        '[data-testid=image-card]',
+    ),
+    (
+        'workspace-gallery-details',
+        '/p/default/workspace?view=gallery',
+        lambda stub: serve_gallery(stub, []),
+        '[data-testid=image-card]',
+        lambda page: (
+            page.get_by_test_id('image-card-open').nth(1).click(),
+            expect(page.get_by_test_id('image-details')).to_be_visible(timeout=ACTION_TIMEOUT_MS),
+        ),
     ),
     (
         'workspace-detections',

@@ -374,3 +374,26 @@ def test_region_drain_agrees(
         f'{{prefix}}/ingest/region_drain total_unfinished was {first} (and, on '
         f'retry, {second})'
     )
+
+
+def test_gallery_total_agrees_with_images_total(
+    guarded_page: Any, live_url: str, live_project: dict[str, Any]
+) -> None:
+    served = int_field(api_get(live_url, live_project, '/images?limit=1'), 'total')
+    if served == 0:
+        pytest.skip('the live project has no images yet; nothing to agree on')
+    page = guarded_page.page
+    page.goto(
+        f'{live_url}{page_path(live_project, "/workspace?view=gallery")}',
+        wait_until='domcontentloaded',
+    )
+    page.locator('[data-testid="gallery-total"]').wait_for(timeout=15_000)
+    page.locator('[data-testid="image-card"]').first.wait_for(timeout=15_000)
+    displayed = int(page.locator('[data-testid="gallery-total"]').inner_text().replace(',', ''))
+    assert displayed == served, f'Gallery showed {displayed} images, GET /images total is {served}'
+    # Every visible card draws exactly the boxes the card served; the page was fetched with
+    # the same default limit, so compare the first page.
+    cards = api_get(live_url, live_project, '/images')['items']
+    for card in cards:
+        drawn = page.locator(f'[data-image-id="{card["image_id"]}"] [data-testid="overlay-box"]')
+        assert drawn.count() == len(card['boxes']), card['image_id']

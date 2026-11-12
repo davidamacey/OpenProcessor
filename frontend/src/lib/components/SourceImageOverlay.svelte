@@ -1,6 +1,6 @@
 <script module lang="ts">
   import { apiErrorText } from '$lib/api_errors';
-  import type { ImageDetailResponse } from '$lib/types';
+  import type { ImageDetailResponse } from '$lib/types_images';
   import { activeProjectKey } from '$lib/api';
   import { onProjectChange } from '$lib/projectChange';
 

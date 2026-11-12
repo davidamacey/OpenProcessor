@@ -6,11 +6,11 @@ import { apiBase, apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
 import type {
   Crop,
-  ImageDetailResponse,
   CropFilter,
   CropHistoryResponse,
   PaginatedResponse,
 } from '$lib/types';
+import type { ImageDetailResponse } from '$lib/types_images';
 import type { CursorPage } from '$lib/types_cursor';
 import type { SearchCrop } from '$lib/types_review';
 

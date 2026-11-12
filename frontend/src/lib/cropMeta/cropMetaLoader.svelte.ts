@@ -7,7 +7,8 @@
 
 import { getCropHistory, getImage } from '$lib/api_cropRead';
 import { apiErrorText } from '$lib/api_errors';
-import type { Crop, CropHistoryEntry, ImageDetailResponse, ImageInfo } from '$lib/types';
+import type { Crop, CropHistoryEntry } from '$lib/types';
+import type { ImageDetailResponse, ImageInfo } from '$lib/types_images';
 
 export function createCropMetaLoader(crop: () => Pick<Crop, 'id' | 'image_id'>) {
   // -- History (G7) — lazy, fetched once per crop.id, never blocks the

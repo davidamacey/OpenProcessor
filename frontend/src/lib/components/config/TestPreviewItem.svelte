@@ -11,7 +11,8 @@
   import { apiErrorText } from '$lib/api_errors';
   import SourceImageOverlay from '$components/SourceImageOverlay.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
-  import type { Crop, ImageDetailResponse } from '$lib/types';
+  import type { Crop } from '$lib/types';
+  import type { ImageDetailResponse } from '$lib/types_images';
 
   interface Props {
     preview: Crop;

@@ -49,6 +49,10 @@ LabelState = Literal['has_unlabeled', 'all_labeled', 'no_items']
 DEFAULT_SORT: Final = 'indexed_at:desc'
 LIMIT_MAX: Final = 200
 LIMIT_DEFAULT: Final = 60
+EMPTY_MESSAGES: Final = {
+    'no_images': 'No images yet. Ingest images to see them here.',
+    'no_match': 'No images match this filter.',
+}
 
 _TAKEN = 'capture.taken_local'
 _SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
@@ -214,6 +218,7 @@ async def image_page(
         items=cards,
         next_cursor=next_cursor,
         total=int(resp['hits']['total']['value']),
+        limit=q.limit,
         join_truncated=join_truncated,
         sort_applied=q.view.sort_id,
         sort_options=SORT_OPTIONS,
@@ -226,6 +231,7 @@ async def image_page(
             )
         ),
         empty_reason=empty,
+        empty_message=EMPTY_MESSAGES[empty] if empty else None,
     )
 
 
