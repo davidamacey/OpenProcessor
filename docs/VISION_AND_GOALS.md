@@ -6,6 +6,26 @@ It exists so that anyone — human or AI agent — working in this repository
 can orient quickly: `CLAUDE.md` and `README.md` both link here rather than
 restating it.
 
+## The user's job (read this first)
+
+A user loads images and runs an existing detector that finds the objects
+(cars, people, products). The detector does not know the classes the user
+cares about: make and model, species, defect type. The user labels the data
+the way they want, in their own class scheme, and the app makes that fast:
+
+1. Embeddings group similar objects into clusters, so one decision labels
+   a whole group instead of one box at a time.
+2. The user labels a cluster with a class (new classes are created by
+   name), moves or excludes the outliers, and fixes boxes; review queues
+   and the map (GPS) help find what is left.
+3. Optionally, the assist loop has a VLM label the mini-clusters, and the
+   user checks and corrects its output.
+4. The labelled dataset is exported and a new model is trained on the
+   user's classes, then promoted and served.
+
+Every screen and route is judged by whether it makes this loop faster and
+clearer. A feature that does not serve it needs a reason.
+
 ## The core mission
 
 OpenProcessor is a public, generic backend for computer-vision dataset
