@@ -61,9 +61,22 @@
           >
           <td class="py-1.5 pr-3 font-mono text-xs">{s.docs_with_vector ?? '—'}</td>
           <td class="py-1.5 pr-3">
-            {#if run}<ReindexRunProgress {run} />{:else}<span
-                class="text-xs text-zinc-500">—</span
-              >{/if}
+            {#if run}
+              <ReindexRunProgress {run} />
+            {:else if s.run_status}
+              <span
+                class="flex flex-wrap items-center gap-2 text-xs"
+                data-testid="last-run"
+              >
+                <span
+                  class="rounded border border-zinc-700 px-1.5 text-[11px] text-zinc-200"
+                  data-testid="last-run-status">{s.run_status}</span
+                >
+                <span class="text-zinc-400">{s.run_mode}</span>
+              </span>
+            {:else}
+              <span class="text-xs text-zinc-500">—</span>
+            {/if}
           </td>
           <td class="py-1.5 text-right whitespace-nowrap">
             <button type="button" class="btn btn-sm" onclick={() => onaction('build', s)}

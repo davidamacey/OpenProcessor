@@ -36,6 +36,9 @@ describe('embedding space contract', () => {
         status: true,
         ready_at: true,
         docs_with_vector: true,
+        run_id: true,
+        run_mode: true,
+        run_status: true,
       }),
     );
   });

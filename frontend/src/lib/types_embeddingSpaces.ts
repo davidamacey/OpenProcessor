@@ -31,6 +31,11 @@ export interface EmbeddingSpaceView {
   status: EmbeddingSpaceStatus;
   ready_at: string | null;
   docs_with_vector: number | null;
+  /** The newest re-index run of the space, whoever started it; null when it never had one. */
+  run_id: string | null;
+  run_mode: string | null;
+  /** That run's job status. */
+  run_status: string | null;
 }
 
 export interface EmbeddingSpaceListResponse {

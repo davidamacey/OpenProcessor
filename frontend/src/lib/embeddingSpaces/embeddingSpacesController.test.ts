@@ -13,6 +13,9 @@ const space = (over: Partial<EmbeddingSpaceView> = {}): EmbeddingSpaceView => ({
   status: 'building',
   ready_at: null,
   docs_with_vector: 10,
+  run_id: null,
+  run_mode: null,
+  run_status: null,
   ...over,
 });
 
@@ -60,6 +63,49 @@ function setup(over = {}) {
   };
   return { st: createEmbeddingSpaces(deps), deps };
 }
+
+describe('EmbeddingSpacesState follows the runs the list names', () => {
+  it('follows a build started elsewhere: the run the list names, until its job ends', async () => {
+    const running = space({ run_id: 'run-9', run_mode: 'build', run_status: 'running' });
+    const { st, deps } = setup({
+      getEmbeddingSpaces: vi.fn().mockResolvedValue([running]),
+    });
+    deps.getEmbeddingReindexRun
+      .mockResolvedValueOnce(run({ id: 'run-9', docs_done: 10 }))
+      .mockResolvedValue(
+        run({ id: 'run-9', docs_done: 100, job_status: 'succeeded', finished_at: 'x' }),
+      );
+    await st.loadSpaces();
+    expect(st.isFollowing(running)).toBe(true);
+    await vi.waitFor(() => expect(st.isFollowing(running)).toBe(false));
+    expect(deps.getEmbeddingReindexRun.mock.calls[0]![0]).toBe('run-9');
+    expect(st.runOf(running)?.docs_done).toBe(100);
+  });
+
+  it('does not follow a run that already ended, and offers cancel only for a followed one', async () => {
+    const done = space({ run_id: 'run-3', run_mode: 'build', run_status: 'succeeded' });
+    const { st, deps } = setup({ getEmbeddingSpaces: vi.fn().mockResolvedValue([done]) });
+    await st.loadSpaces();
+    expect(deps.getEmbeddingReindexRun).not.toHaveBeenCalled();
+    expect(st.isFollowing(done)).toBe(false);
+    expect(await st.cancel(done, false)).toBe(false);
+  });
+
+  it('follows a queued, paused or cancelling run too, and one run only once', async () => {
+    const queued = space({ run_id: 'run-5', run_mode: 'backfill', run_status: 'queued' });
+    const { st, deps } = setup({
+      getEmbeddingSpaces: vi.fn().mockResolvedValue([queued]),
+      pollIntervalMs: 20,
+    });
+    await st.loadSpaces();
+    await st.loadSpaces();
+    st.stop();
+    await vi.waitFor(() => expect(deps.getEmbeddingReindexRun).toHaveBeenCalled());
+    expect(deps.getEmbeddingReindexRun.mock.calls.every((c) => c[0] === 'run-5')).toBe(
+      true,
+    );
+  });
+});
 
 describe('EmbeddingSpacesState', () => {
   it('loads the spaces and the encoders, each with its own error', async () => {

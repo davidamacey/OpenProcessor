@@ -1,11 +1,11 @@
 /**
  * The Embedding spaces page: the project's spaces (all targets), the encoders the deployment can
  * serve, and the writes that register, restart or backfill, promote, retire and cancel. A started
- * build (the 202 names its `run_id`) is followed through the served re-index run until its job leaves
- * the active statuses. Every refusal is the server's: the controller keeps its code and message and
- * decides nothing (a promote that lacks an evaluation is `embedding_evaluation_missing`, and only
- * that code offers `force`). The served space list carries no run id, so a build started elsewhere
- * is followed once it is restarted here.
+ * build is followed through the served re-index run until its job leaves the active statuses: the
+ * ones started here (the 202 names its `run_id`) and, because the served space list names each
+ * space's newest run and its status, the ones started anywhere else. Every refusal is the server's:
+ * the controller keeps its code and message and decides nothing (a promote that lacks an evaluation
+ * is `embedding_evaluation_missing`, and only that code offers `force`).
  */
 import {
   buildEmbeddingSpace,
@@ -72,6 +72,8 @@ export class EmbeddingSpacesState {
 
   #deps: Partial<EmbeddingSpacesDeps>;
   #follows: Record<string, AbortController> = {};
+  /** Runs this tab followed to their end: a list that still names one as active (its job row lags the run's) must not start the same follow again. */
+  #followed: Record<string, true> = {};
 
   constructor(deps: Partial<EmbeddingSpacesDeps> = {}) {
     this.#deps = deps;
@@ -85,9 +87,26 @@ export class EmbeddingSpacesState {
     try {
       this.spaces = await (this.#deps.getEmbeddingSpaces ?? getEmbeddingSpaces)();
       this.loadError = null;
+      this.#followServedRuns(this.spaces);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.loadError = apiErrorText(e);
+    }
+  }
+
+  /** Follows every space whose newest run is still active and is not followed yet. */
+  #followServedRuns(spaces: EmbeddingSpaceView[]): void {
+    for (const s of spaces) {
+      const key = spaceRunKey(s);
+      if (
+        s.run_id &&
+        s.run_status &&
+        jobPhase(s.run_status) === 'active' &&
+        !(key in this.following) &&
+        !(s.run_id in this.#followed)
+      ) {
+        void this.#follow(key, s.run_id);
+      }
     }
   }
 
@@ -233,6 +252,7 @@ export class EmbeddingSpacesState {
       if ((e as Error)?.name === 'AbortError') return;
     }
     if (this.#follows[key] === ctl) {
+      this.#followed[runId] = true;
       delete this.#follows[key];
       this.following = Object.fromEntries(
         Object.entries(this.following).filter(([k]) => k !== key),
