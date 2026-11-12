@@ -35,6 +35,7 @@ def _routes(owner: str, ids: dict[str, str]) -> dict[str, dict[str, str]]:
         f'/near_duplicates/runs/{ids["run_id"]}': {},
         f'/near_duplicates/groups/{ids["group_id"]}': {'level': 'image'},
         f'/crops/{owner}-item-0004/region_thumbnail': {'box_id': 'b1'},
+        f'/crops/{owner}-item-0001/preview': {},
         f'/assist/loops/{loop}': {},
         f'/assist/loops/{loop}/nodes': {},
         f'/assist/runs/{run}': {},
@@ -99,6 +100,24 @@ def test_a_run_log_tail_names_only_the_projects_own_run(
     foreign = client.get(base + LOG_TAIL.format(leak_env.pg_ids[other]['train_job_id']))
     assert foreign.status_code == 200
     assert foreign.json()['lines'] == []
+
+
+@pytest.mark.parametrize(('slug', 'other'), PAIRS)
+def test_the_cohort_summary_counts_only_the_projects_own_classes(
+    leak_env: LeakEnv, slug: str, other: str
+) -> None:
+    """The matrix is built from the bound project's registry and its items index: every class row
+    is one of the project's own, and nothing of the other project is in the body. (The route
+    sweep proves the searches touch only the project's own indexes.)"""
+    client = TestClient(leak_env.app, raise_server_exceptions=False)
+    base = SCOPED.format(project=slug)
+    summary = client.get(f'{base}/training_cohorts/summary')
+    assert summary.status_code == 200, summary.text[:300]
+    own = {c['class_id'] for c in client.get(f'{base}/classes').json()['classes']}
+    rows = summary.json()['rows']
+    assert {r['class_id'] for r in rows if r['kind'] == 'class'} <= own
+    assert f'{other}-' not in summary.text
+    assert f'{other}_' not in summary.text
 
 
 @pytest.mark.parametrize(('slug', 'other'), PAIRS)
