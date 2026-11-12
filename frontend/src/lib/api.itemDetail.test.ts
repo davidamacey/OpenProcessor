@@ -5,7 +5,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
-import { getCropHistory, getImage, getCrops } from '$lib/api_cropRead';
+import { getCropHistory, getCrops } from '$lib/api_cropRead';
+import { getImage } from '$lib/api_images';
 import { imageDetail } from '$lib/test/fixtures/imageDetail';
 import { ApiError } from '$lib/api_errors';
 import { makeItem } from './test/makeItem';

@@ -36,7 +36,7 @@
    * over the clean pixels of `GET {API_PREFIX}/images/{id}/file`; nothing is burned in and no
    * label or colour is derived here (see `BoxLayer`).
    */
-  import { getImage, getImageFileUrl } from '$lib/api_cropRead';
+  import { getImage, getImageFileUrl } from '$lib/api_images';
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
   import SourceMissingBadge from './SourceMissingBadge.svelte';
   import type { OverlayShape } from '$lib/configTest/overlayShapes';

@@ -10,13 +10,13 @@ import { flushSync, mount, unmount } from 'svelte';
 import { imageBox, imageDetail } from '$lib/test/fixtures/imageDetail';
 
 vi.mock('$lib/api', () => ({ activeProjectKey: vi.fn(() => 'default') }));
-vi.mock('$lib/api_cropRead', () => ({
+vi.mock('$lib/api_images', () => ({
   getImage: vi.fn(),
   getImageFileUrl: (id: string) => `/image/${id}`,
 }));
 
 const { activeProjectKey } = await import('$lib/api');
-const { getImage } = await import('$lib/api_cropRead');
+const { getImage } = await import('$lib/api_images');
 const { default: SourceImageOverlay, resetForProjectChange } =
   await import('./SourceImageOverlay.svelte');
 

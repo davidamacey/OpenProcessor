@@ -43,6 +43,7 @@ const SCANNED_FILES = [
   'lib/api_images.ts',
   'lib/api_datasetImport.ts',
   'lib/api_export.ts',
+  'lib/api_images.ts',
   'lib/api_ingest.ts',
   'lib/api_models.ts',
   'lib/api_packs.ts',
