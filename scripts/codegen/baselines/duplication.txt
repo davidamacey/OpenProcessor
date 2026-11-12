@@ -1,1 +1,0 @@
-frontend/src/lib/api_cropMap.ts <-> frontend/src/lib/types.ts	21	baseline at introduction; extract a shared helper to shrink
