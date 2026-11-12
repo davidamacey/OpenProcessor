@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Ingest policy form: the class resolution defaults to `by_name` and its help says it adds the registry class when it is missing (the detector's class is now a machine label by default).
 - Z undoes a single label write (Review, the Workspace cluster and detections views) through its served label operation, so the same undo is in the Label history after a reload; the client keeps no separate stack for label writes. The editor's class change undoes the same way; its own command stack keeps only geometry. Label history says how many bulk operations and single labels are kept.
 - The image editor shows a minimap (a 160 px thumbnail with the boxes and the part in view) for a photo larger than four viewports; a click on it pans there.
 - A near-duplicate representative's details open its group in the Workspace, where "Label whole duplicate group…" labels every member through the server's dry run (`{filter: {near_dup_group}}`).
