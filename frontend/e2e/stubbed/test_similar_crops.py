@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import embedding_space, embedding_spaces
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 from test_cluster_discard import CLASSES, CLUSTERS, crop
@@ -105,7 +105,7 @@ def test_more_like_this_from_review_pane(stub, page, app_url):
 
     serve_review(stub)
     seen = serve_similar(stub)
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     link = page.get_by_test_id('review-similar')
     expect(link).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     shoot(page, 'review', link.scroll_into_view_if_needed)
@@ -136,7 +136,7 @@ def test_more_like_this_hidden_when_semantic_search_off(stub, page, app_url):
 
     serve_review(stub)
     stub.on('GET', r'/methods(\?|$)', SEMANTIC_OFF)
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     expect(page.locator('main')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('review-similar').count() == 0
 

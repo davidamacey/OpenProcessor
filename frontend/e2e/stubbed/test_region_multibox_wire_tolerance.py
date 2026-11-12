@@ -6,7 +6,7 @@ longer exist)."""
 from __future__ import annotations
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 CLASSES = [
@@ -126,7 +126,7 @@ def test_review_region_tab_tolerates_a_served_region_boxes_list(stub, page, app_
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
 

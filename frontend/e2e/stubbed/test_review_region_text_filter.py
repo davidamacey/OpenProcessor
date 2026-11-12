@@ -15,7 +15,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import save_screens
 
 
@@ -40,9 +40,21 @@ REVIEW_TABS = {
             'id': 'regions',
             'label': REGION_TAB_LABEL,
             'description': '',
+            'count': 0,
             'filters': ['text', 'region_status'],
             'filter_defaults': {'region_status': 'all'},
             'filter_specs': [
+                {
+                    'param': 'text',
+                    'kind': 'text',
+                    'label': 'Box text contains',
+                    'options': [],
+                    'min': None,
+                    'max': None,
+                    'description': '',
+                    'default': None,
+                    'allows_unset': True,
+                },
                 {
                     'param': 'region_status',
                     'kind': 'enum',
@@ -108,7 +120,7 @@ def test_region_text_input_reaches_the_queue_with_the_status_filter(stub, page, 
 
     stub.on('GET', r'/review/regions(\?|$)', regions)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert all('text' not in _query(u) for u in calls), calls
     first_counter = page.get_by_test_id('queue-counter').first.inner_text()
@@ -119,6 +131,7 @@ def test_region_text_input_reaches_the_queue_with_the_status_filter(stub, page, 
         lambda r: '/review/regions' in r.url and 'text=KLM' in r.url, timeout=ACTION_TIMEOUT_MS
     ) as sent:
         text_input.fill('KLM')
+        text_input.press('Enter')  # the shared text field commits on Enter or blur
     query = _query(sent.value.url)
     assert query['text'] == ['KLM']
     # The served default (`all`) is not sent; only a chosen value is.
@@ -142,6 +155,7 @@ def test_region_text_input_reaches_the_queue_with_the_status_filter(stub, page, 
         lambda r: '/review/regions' in r.url and 'text=' not in r.url, timeout=ACTION_TIMEOUT_MS
     ) as cleared:
         text_input.fill('')
+        text_input.press('Enter')  # the shared text field commits on Enter or blur
     assert 'text' not in _query(cleared.value.url)
     assert _query(cleared.value.url)['region_status'] == ['detected']
 
@@ -190,7 +204,7 @@ def test_served_text_match_mode_reaches_the_queue(stub, page, app_url):
         {'items': [_item('plate-a')], 'total': 1, 'page': 1, 'page_size': 30},
     )
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     select = page.locator('label:has-text("Text match") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert select.input_value() == ''

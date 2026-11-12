@@ -15,7 +15,7 @@ import re
 
 from fixtures.contract import cluster_card, cluster_list, item_cluster
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
@@ -25,7 +25,7 @@ ROUTES = [
     '/p/default/dashboard',
     '/p/default/workspace?view=clusters',
     '/p/default/workspace?view=clusters&scope=cluster:cl-fixture-0001',
-    '/p/default/review',
+    '/p/default/workspace?view=review&queue=to_label',
     '/p/default/classes',
     '/p/default/export',
     '/p/default/models',
@@ -274,7 +274,7 @@ def test_labeling_flow(stub, page, app_url):
 
     # ---- review page --------------------------------------------
     register_base(stub, fail_put_label=True)
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(counter.first).to_contain_text('3 total', timeout=ACTION_TIMEOUT_MS)

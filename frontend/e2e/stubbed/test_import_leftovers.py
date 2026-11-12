@@ -1,18 +1,13 @@
-"""Import leftovers: the `imported` review tab, URL-seeded `import_id` / `combine_conflict`
-filters, lock badges, and image Reprocess from a browse card. Payloads follow
-the vendored contract in the neutral widget domain; the fail-closed stub means
-any request the page makes that a test did not expect fails the test.
+"""Import leftovers: the URL-seeded `combine_conflict` queue filter, lock badges, and image
+Reprocess from a browse card. Payloads follow the vendored contract in the neutral widget domain;
+the fail-closed stub means any request the page makes that a test did not expect fails the test.
 
-  1. `test_imported_tab_and_import_id_chip` — the tab appears when served, the
-     URL-seeded `import_id` chip is shown and sent, removing it refetches.
-  2. `test_imported_tab_absent_when_not_served` — no tab; a `?tab=imported`
-     link falls back to All with a visible reason.
-  3. `test_url_filter_not_sent_when_the_tab_does_not_serve_it`.
-  4. `test_combine_conflict_chip_from_the_url_is_sent`.
-  5. `test_lock_badge_only_on_a_locked_label`.
-  6. `test_image_reprocess_from_a_cluster_card` — body asserted, served items
+  1. `test_combine_conflict_filter_from_the_url_is_sent` -- a served queue-only filter in the
+     address is shown and sent; a queue that does not serve it never sends it.
+  2. `test_lock_badge_only_on_a_locked_label`.
+  3. `test_image_reprocess_from_a_cluster_card` -- body asserted, served items
      adopted into the grid.
-  7. `test_import_provenance_rows_in_details`.
+  4. `test_import_provenance_rows_in_details`.
 """
 
 from __future__ import annotations
@@ -23,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import item_cluster
 from fixtures.wire import make_item, review_tab, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import expect_handled
 from playwright.sync_api import expect
 from test_dataset_import import CLUSTER_UID, FORMATS, serve_cluster
@@ -61,16 +56,23 @@ EMPTY_STATE = {
 IMPORT_ID = 'imp_20260927T120000_1a2b3c4d'
 
 
-def tabs_with_imported(**imported_over: Any) -> dict[str, Any]:
+COMBINE_CONFLICT_SPEC = {
+    'param': 'combine_conflict',
+    'kind': 'bool',
+    'label': 'Project-combine conflicts only',
+    'options': [],
+    'min': None,
+    'max': None,
+    'description': '',
+    'default': None,
+    'allows_unset': True,
+}
+
+
+def served_queues(**check_machine_over: Any) -> dict[str, Any]:
     return review_tabs(
-        review_tab('all', 'All', filters=['class_id', 'source', 'combine_conflict', 'import_id']),
-        review_tab(
-            'imported',
-            'Imported labels',
-            description='Items whose labels came from a dataset import',
-            filters=['class_id', 'source', 'import_id', 'dataset_split', 'on_negative_frame'],
-            **imported_over,
-        ),
+        review_tab('to_label', 'To label'),
+        review_tab('check_machine', 'Check machine labels', **check_machine_over),
         empty_state=EMPTY_STATE,
     )
 
@@ -110,78 +112,27 @@ def review_requests(seen: list[dict[str, list[str]]], tab: str) -> list[dict[str
     return [s for s in seen if s['path'][0].endswith(f'/review/{tab}')]
 
 
-def test_imported_tab_and_import_id_chip(stub, page, app_url):
-    seen = serve_review(stub, tabs_with_imported())
-
-    page.goto(f'{app_url}/p/default/review?tab=imported&import_id={IMPORT_ID}')
+def test_combine_conflict_filter_from_the_url_is_sent(stub, page, app_url):
+    seen = serve_review(stub, served_queues(filter_specs=[COMBINE_CONFLICT_SPEC]))
+    page.goto(review_url(app_url, 'check_machine', combine_conflict='true'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    tab = page.get_by_role('button', name='Imported labels')
-    expect(tab).to_have_attribute('data-active', 'true', timeout=ACTION_TIMEOUT_MS)
-    chip = page.get_by_test_id('filter-chip-import-id')
-    expect(chip).to_contain_text(f'Import {IMPORT_ID}')
-    first = review_requests(seen, 'imported')
-    assert first, seen
-    assert first[0]['import_id'] == [IMPORT_ID], first[0]
-
-    # Removing the chip refetches without the filter and clears the URL.
-    with page.expect_request(lambda r: '/review/imported' in r.url and 'import_id' not in r.url):
-        chip.click()
-    expect(chip).to_have_count(0)
-    assert 'import_id' not in page.url, page.url
-
-
-def test_imported_tab_absent_when_not_served(stub, page, app_url):
-    serve_review(stub, review_tabs(review_tab('all', 'All'), empty_state=EMPTY_STATE))
-
-    page.goto(f'{app_url}/p/default/review?tab=all')
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_role('button', name='All', exact=True).first).to_be_visible()
-    assert page.get_by_role('button', name='Imported', exact=False).count() == 0
-
-    # A bookmark to the tab falls back to All, with the reason shown.
-    page.goto(f'{app_url}/p/default/review?tab=imported')
-    notice = page.get_by_test_id('tab-unavailable')
-    expect(notice).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    expect(notice).to_contain_text('imported')
-    expect(page.get_by_role('button', name='All', exact=True).first).to_have_attribute(
-        'data-active', 'true'
+    expect(page.get_by_test_id('queue-filters')).to_contain_text(
+        'Project-combine conflicts only', timeout=ACTION_TIMEOUT_MS
     )
-
-
-def test_url_filter_not_sent_when_the_tab_does_not_serve_it(stub, page, app_url):
-    # `all` serves no `import_id` here.
-    seen = serve_review(
-        stub,
-        review_tabs(
-            review_tab('all', 'All', filters=['class_id', 'source']), empty_state=EMPTY_STATE
-        ),
-    )
-    page.goto(f'{app_url}/p/default/review?tab=all&import_id={IMPORT_ID}')
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
-    reqs = review_requests(seen, 'all')
-    assert reqs, seen
-    assert all('import_id' not in r for r in reqs), reqs
-    expect(page.get_by_test_id('filter-chip-import-id')).to_have_count(0)
-
-
-def test_combine_conflict_chip_from_the_url_is_sent(stub, page, app_url):
-    seen = serve_review(stub, tabs_with_imported())
-    page.goto(f'{app_url}/p/default/review?tab=all&combine_conflict=true')
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    chip = page.get_by_test_id('filter-chip-combine-conflict')
-    expect(chip).to_contain_text('Combine conflicts only', timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
-    reqs = review_requests(seen, 'all')
+    reqs = review_requests(seen, 'check_machine')
     assert reqs and reqs[0]['combine_conflict'] == ['true'], reqs
 
-    # Switching tab clears it from the state and the URL.
-    with page.expect_request(lambda r: '/review/imported' in r.url):
-        page.get_by_role('button', name='Imported labels').click()
-    expect(chip).to_have_count(0)
-    assert 'combine_conflict' not in page.url, page.url
-    imported = review_requests(seen, 'imported')
-    assert imported and all('combine_conflict' not in r for r in imported), imported
+
+def test_queue_filter_the_queue_does_not_serve_is_not_sent(stub, page, app_url):
+    seen = serve_review(stub, served_queues())
+    page.goto(review_url(app_url, 'check_machine', combine_conflict='true'))
+    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
+    reqs = review_requests(seen, 'check_machine')
+    assert reqs, seen
+    assert all('combine_conflict' not in r for r in reqs), reqs
+    expect(page.get_by_test_id('queue-filters')).to_have_count(0)
 
 
 def serve_locked_cluster(stub: Any, locked_ids: set[str]) -> None:

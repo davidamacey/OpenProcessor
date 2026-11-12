@@ -8,7 +8,7 @@ Set OP_E2E_SHOT_DIR to also save full-page screenshots of both states.
 from __future__ import annotations
 
 import pytest
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
 from playwright.sync_api import expect
 from test_cluster_discard import CLASSES, CLUSTERS, crop
@@ -91,7 +91,7 @@ def test_crop_card_shows_source_not_mounted(stub, page, app_url, size):
 def test_review_pane_shows_source_not_mounted(stub, page, app_url, size):
     page.set_viewport_size(SIZES[size])
     serve_review_pane(stub)
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     badge = page.get_by_role('status').filter(has_text='Source not mounted')
     expect(badge.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(badge.first).to_contain_text('archive')
@@ -99,7 +99,9 @@ def test_review_pane_shows_source_not_mounted(stub, page, app_url, size):
     panel = page.get_by_test_id('review-source-panel')
     expect(panel.get_by_role('status')).to_contain_text('Source not mounted')
     expect(panel.get_by_role('button', name='hide boxes')).to_have_count(0)
-    expect(page.get_by_role('status').filter(has_text='Source not mounted')).to_have_count(2)
+    # The Review pane, its source panel, and the Workspace details panel each say it.
+    # (the details panel is a drawer below 1280 px, so only the first two are always there).
+    assert page.get_by_role('status').filter(has_text='Source not mounted').count() >= 2
     _no_visible_image(page)
     shot(page, f'review-pane-{size}')
     assert stub.unhandled == [], stub.unhandled

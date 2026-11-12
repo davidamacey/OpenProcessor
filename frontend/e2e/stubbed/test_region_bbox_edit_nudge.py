@@ -11,7 +11,7 @@ crop being edited, with the nudged geometry.
 from __future__ import annotations
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
@@ -116,7 +116,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
 
     stub.on('PATCH', r'/crops/([^/]+)/region_meta$', region_meta)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter').first
     counter.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(counter).to_contain_text('3 total', timeout=ACTION_TIMEOUT_MS)

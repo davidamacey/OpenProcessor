@@ -10,7 +10,7 @@ Z -> undoLast() -> `POST {API_PREFIX}/crops/{id}/label/undo`
 from __future__ import annotations
 
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from playwright.sync_api import expect
 
 
@@ -89,7 +89,7 @@ def test_review_assign_then_undo(stub, page, app_url):
 
     stub.on('POST', r'/crops/([^/]+)/label/undo$', undo_handler)
 
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()

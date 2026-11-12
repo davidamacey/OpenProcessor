@@ -14,6 +14,7 @@ from fixtures.contract import cluster_card, cluster_facets, embedding_spaces, fi
 from fixtures.wire import (
     REGION_PROFILE,
     REGION_TAB_LABEL,
+    make_item,
     projects_response,
     review_tab,
     review_tabs,
@@ -123,6 +124,10 @@ class Stub:
         # (later registration wins).
         self.on('GET', r'/images/[^/]+$', self._image_detail)
         self.on('GET', r'/images/[^/]+/file(/|$|\?)', self._image)
+        # The Workspace details panel reads the focused item and its history on every
+        # Review and Detections visit; a test that cares registers its own (later wins).
+        self.on('GET', r'/crops/(?!locate$)([^/]+)$', self._crop)
+        self.on('GET', r'/crops/([^/]+)/history$', self._crop_history)
         self.on('GET', r'(/events|/stream)(/|$|\?)', (204, '', 'text/plain'))
         self.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
         # /clusters/[id] lists the assist runs for the viewed cluster on every visit.
@@ -235,15 +240,18 @@ class Stub:
                 'region_profile': REGION_PROFILE,
             },
         )
-        # Every review tab's served
-        # id/label/description (contracts/openapi/curation.json,
-        # `/curation/review/tabs`). The region tab's label is served (the
-        # region profile's display name), so tests find that tab by
-        # REGION_TAB_LABEL; every other tab falls back to its static label.
+        # The served queues (contracts/openapi/curation.json, `/curation/review/tabs`): the
+        # three plain queues and the region queue, labelled by the region profile's display
+        # name. The audit queue is absent, as it is without a pending sample.
         self.on(
             'GET',
             r'/review/tabs(\?|$)',
-            review_tabs(review_tab('regions', REGION_TAB_LABEL)),
+            review_tabs(
+                review_tab('to_label', 'To label'),
+                review_tab('check_machine', 'Check machine labels'),
+                review_tab('disagreements', 'Disagreements'),
+                review_tab('regions', REGION_TAB_LABEL),
+            ),
         )
         self.on('GET', r'/bakeoff/runs(\?|$)', {'runs': []})
         # /ingest's own page reads its status table and its config on
@@ -405,6 +413,15 @@ class Stub:
     @staticmethod
     def _card(_request: Any, match: re.Match[str]) -> HandlerResult:
         return (200, cluster_card(match.group(1)))
+
+    @staticmethod
+    def _crop(_request: Any, match: re.Match[str]) -> HandlerResult:
+        crop_id = match.group(1)
+        return (200, make_item(crop_id=crop_id, image_id=f'img-{crop_id}'))
+
+    @staticmethod
+    def _crop_history(_request: Any, match: re.Match[str]) -> HandlerResult:
+        return (200, {'crop_id': match.group(1), 'entries': []})
 
     @staticmethod
     def _image_detail(_request: Any, match: re.Match[str]) -> HandlerResult:

@@ -10,7 +10,7 @@ threshold) renders as a muted "model unsure: <predicted class>" instead."""
 from __future__ import annotations
 
 from fixtures.wire import make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 CLASSES = [
@@ -64,7 +64,7 @@ def _open(stub, page, app_url, item) -> None:
         r'/review/(?!tabs)',
         lambda _r, _m: (200, {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30}),
     )
-    page.goto(f'{app_url}/p/default/review?tab=model_disagreements')
+    page.goto(review_url(app_url, 'disagreements'))
     page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
 

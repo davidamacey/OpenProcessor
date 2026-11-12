@@ -9,14 +9,14 @@ no "changed" toast.
 
 from __future__ import annotations
 
-from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, review_tabs
-from harness.constants import ACTION_TIMEOUT_MS
+from fixtures.wire import REGION_PROFILE, REGION_TAB_LABEL, review_tab, review_tabs
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from test_labeling_flow import register_base
 
 
 def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, page, app_url):
     register_base(stub)
-    stub.on('GET', r'/review/tabs(\?|$)', review_tabs())
+    stub.on('GET', r'/review/tabs(\?|$)', review_tabs(review_tab('regions', REGION_TAB_LABEL)))
     stub.on(
         'GET',
         r'/review/(?!tabs)',
@@ -33,8 +33,8 @@ def test_failed_boot_health_then_success_shows_region_tab_without_toast(stub, pa
 
     stub.on('GET', r'/health$', health)
 
-    page.goto(f'{app_url}/p/default/review')
-    page.get_by_test_id('review-tabs').get_by_role('button', name=REGION_TAB_LABEL).wait_for(
+    page.goto(review_url(app_url, 'regions'))
+    page.get_by_test_id('queue-regions').filter(has_text=REGION_TAB_LABEL).wait_for(
         timeout=ACTION_TIMEOUT_MS
     )
     assert calls['n'] >= 4, calls

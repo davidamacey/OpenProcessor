@@ -9,7 +9,7 @@ import re
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import project, projects_response
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 
 
 API_PREFIX = '/curation'
@@ -36,7 +36,7 @@ def test_picker_is_bounded_scrollable_and_searchable(stub, page, app_url):
         r'/review/(?!tabs)',
         (200, {'items': [], 'total': 0, 'next_cursor': None, 'limit': 30}),
     )
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('project-switcher-trigger').click()
     page.get_by_test_id('project-switcher-menu').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('project-option-survey-00').wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -68,4 +68,4 @@ def test_picker_is_bounded_scrollable_and_searchable(stub, page, app_url):
 
     page.keyboard.press('ArrowDown')
     page.keyboard.press('Enter')
-    page.wait_for_url(re.compile(r'/p/survey-41/review'), timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_url(re.compile(r'/p/survey-41/workspace'), timeout=ACTION_TIMEOUT_MS)

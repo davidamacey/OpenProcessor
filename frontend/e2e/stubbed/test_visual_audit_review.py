@@ -1,11 +1,9 @@
-"""/review and top-nav fixes from the visual audit.
+"""Review view and top-nav fixes from the visual audit.
 
 - R1: the slot-bound region class (most validated) topped the `/` picker
   and was the first quick-assign chip, so `/` + Enter labeled an item as
   a region.
-- R2: at 800px the tab strip clipped "New class proposals"/the region tab
-  with no hint, the active tab could sit invisible past the edge, and the
-  Confirm/Skip/Discard row sat below the fold.
+- R2: at 800px the Confirm/Skip/Discard row sat below the fold.
 - Narrow nav: at 800px the primary nav scrolled with no hint that links
   sat off-screen.
 - R3: an empty queue said only "Queue empty.".
@@ -14,7 +12,6 @@
 from __future__ import annotations
 
 import copy
-import re
 import struct
 import zlib
 
@@ -27,9 +24,8 @@ from fixtures.wire import (
     review_tab,
     review_tabs,
 )
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
-from playwright.sync_api import expect
 from test_dataset_import import FORMATS
 
 
@@ -79,11 +75,9 @@ CLASSES = [
 TABS = review_tabs(
     review_tab('regions', REGION_TAB_LABEL),
     review_tab(
-        'uncertainty',
-        'Uncertainty',
+        'disagreements',
+        'Disagreements',
         description='High active-learning probe entropy',
-        available=False,
-        unavailable_reason='No probe predictions yet. Run a probe from the Dashboard to fill this tab.',
     ),
     review_tab('new_class_proposals', 'New class proposals', count=7),
 )
@@ -136,7 +130,7 @@ def _stub_review(
     stub.on('GET', r'/images/[^/]+/file$', (200, source_png, 'image/png'))
 
     def review_handler(request, _match):
-        if empty_uncertainty and '/review/uncertainty' in request.url:
+        if empty_uncertainty and '/review/disagreements' in request.url:
             body = {
                 'items': [],
                 'total': 0,
@@ -162,7 +156,7 @@ def test_picker_and_quick_assign_never_offer_the_region_class(stub, page, app_ur
     """R1: item-class targets only, the item's own proposal ranked first."""
     _stub_review(stub)
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
@@ -181,27 +175,14 @@ def test_picker_and_quick_assign_never_offer_the_region_class(stub, page, app_ur
     assert 'touringbike' in row_names[0], row_names
 
 
-def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
-    """R2 + narrow nav: overflow is signalled, the active tab is scrolled
-    into view, the page never overflows, and the actions stay on screen."""
+def test_narrow_review_nav_shows_every_link_and_the_actions_stay_on_screen(stub, page, app_url):
+    """R2 + narrow nav: no link sits behind a scroll, the page never overflows, and the
+    actions stay on screen."""
     _stub_review(stub)
     page.set_viewport_size({'width': 800, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-
-    # The active (last) tab was invisible past the edge — now scrolled in.
-    active = page.get_by_role('button', name=REGION_TAB_LABEL, exact=True)
-    active.wait_for(timeout=10000)
-    # Scroll-into-view layout needs a real paint, not an arbitrary sleep.
     wait_for_paint(page)
-    strip_box = page.get_by_test_id('review-tabs').bounding_box()
-    box = active.bounding_box()
-    assert strip_box
-    assert box
-    assert box['x'] >= strip_box['x'] - 1, (box, strip_box)
-    assert box['x'] + box['width'] <= strip_box['x'] + strip_box['width'] + 1, (box, strip_box)
-    # ... and the tabs scrolled off to the left are signalled.
-    assert page.get_by_test_id('review-tabs-more-left').is_visible()
 
     # The primary nav wraps: every link is on screen, none behind a scroll.
     vw = page.evaluate('window.innerWidth')
@@ -213,34 +194,27 @@ def test_narrow_review_tabs_and_nav_show_hidden_items(stub, page, app_url):
     assert overflow <= 1, overflow
 
     # Action row within the viewport without scrolling.
-    page.goto(f'{app_url}/p/default/review')
+    page.goto(review_url(app_url, 'to_label'))
     confirm = page.get_by_role('button', name='Confirm', exact=True)
     confirm.wait_for(timeout=ACTION_TIMEOUT_MS)
     cbox = confirm.bounding_box()
     assert cbox and cbox['y'] + cbox['height'] <= 1000, cbox
-    assert page.get_by_test_id('review-tabs-more-right').is_visible()
 
 
-def test_empty_queue_explains_itself_and_dims_the_tab(stub, page, app_url):
+def test_empty_queue_explains_itself(stub, page, app_url):
     """R3: an empty queue gives the served description + fallback reason."""
     _stub_review(stub, empty_uncertainty=True)
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review?tab=uncertainty')
+    page.goto(review_url(app_url, 'disagreements'))
     empty = page.get_by_test_id('queue-empty')
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     # The panel mounts before the served tab description arrives; wait for it.
     empty.get_by_text('High active-learning probe entropy').wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
-    assert 'The Uncertainty queue is empty.' in text, text
+    assert 'The Disagreements queue is empty.' in text, text
     assert 'High active-learning probe entropy' in text, text
     assert "no item has 'probe_pred_entropy' yet" in text, text
     assert 'Queue empty.' not in text
-    unavailable = page.get_by_test_id('tab-unavailable')
-    expect(unavailable).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_role('button', name='Uncertainty')).to_have_attribute(
-        'title', re.compile('Run a probe')
-    )
-    expect(page.get_by_test_id('tab-count').first).to_have_text('7')
 
 
 def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(stub, page, app_url):
@@ -256,7 +230,7 @@ def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(st
         empty_state={'has_probe_predictions': False, 'has_item_scores': True},
     )
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review?tab=uncertainty')
+    page.goto(review_url(app_url, 'disagreements'))
     empty = page.get_by_test_id('queue-empty')
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
@@ -294,7 +268,7 @@ def test_empty_queue_offers_embed_them_only_when_served_and_relevant(stub, page,
     # Reprocess is present only while the deployment serves the import/reprocess vocabulary.
     stub.on('GET', r'/datasets/formats(\?|$)', copy.deepcopy(FORMATS))
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review?tab=uncertainty')
+    page.goto(review_url(app_url, 'disagreements'))
     empty = page.get_by_test_id('queue-empty')
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     empty.get_by_role('button', name='Embed them').wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -312,7 +286,7 @@ def test_empty_queue_hides_embed_them_for_an_unrelated_reason(stub, page, app_ur
             'suggested_reprocess': _EMBED_REQUEST,
         },
     )
-    page.goto(f'{app_url}/p/default/review?tab=uncertainty')
+    page.goto(review_url(app_url, 'disagreements'))
     empty = page.get_by_test_id('queue-empty')
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
     empty.get_by_role('link', name='Run a probe on /train').wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -402,7 +376,7 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
         {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30},
     )
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     # the reason lives on the rejected box and renders as its served
     # label in the Reason row, not as a raw id in an editable input.
     served = page.get_by_text('Verifier gave no verdict').first
@@ -416,20 +390,3 @@ def test_region_panel_shows_served_rejection_label_and_neutral_text_placeholder(
     )
     assert 'type the text…' in placeholders, placeholders
     assert 'ABC123' not in placeholders, placeholders
-
-
-def test_subject_toggle_default_explains_itself(stub, page, app_url):
-    """R11: the subject toggle's first option silently meant "Top 2" on one
-    tab and "All ranks" elsewhere — it now carries a tooltip saying which."""
-    _stub_review(stub)
-    stub.on(
-        'GET',
-        r'/review/tabs(\?|$)',
-        review_tabs(review_tab('all', 'All', filter_defaults={'max_rank': 2})),
-    )
-    page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.goto(f'{app_url}/p/default/review')
-    top2 = page.get_by_role('button', name='Top 2', exact=True)
-    top2.wait_for(timeout=ACTION_TIMEOUT_MS)
-    title = top2.get_attribute('title') or ''
-    assert 'default' in title, title

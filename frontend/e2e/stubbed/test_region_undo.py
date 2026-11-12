@@ -13,7 +13,7 @@ never pushed onto `undoStore`) — `POST .../region/undo` was never called.
 from __future__ import annotations
 
 from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
@@ -79,7 +79,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
 
     stub.on('POST', r'/crops/([^/]+)/region/undo$', region_undo_handler)
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(counter.first).to_contain_text('1 total', timeout=ACTION_TIMEOUT_MS)
@@ -141,7 +141,7 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
         lambda request, match: undo_calls.append(match.string) or (200, tag_item()),
     )
 
-    page.goto(f'{app_url}/p/default/review?tab={REGION_TAB_URL_ID}')
+    page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(counter.first).to_contain_text('1 total', timeout=ACTION_TIMEOUT_MS)

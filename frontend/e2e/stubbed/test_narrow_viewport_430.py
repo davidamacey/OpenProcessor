@@ -17,7 +17,7 @@ from fixtures.contract import (
     image_page,
     item_cluster,
 )
-from fixtures.wire import REGION_CLASS, REGION_TAB_URL_ID, make_item, project, projects_response
+from fixtures.wire import REGION_CLASS, make_item, project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS, API_PREFIX
 from harness.waits import wait_for_paint
 
@@ -61,12 +61,12 @@ ROUTES: list[tuple[str, str]] = [
     ('/workspace?view=clusters&scope=cluster:cl-fixture-0064', "[data-testid='class-name']"),
     ('/workspace?view=gallery', "[data-testid='gallery-view']"),
     ('/workspace?view=detections', "[data-testid='detections-view']"),
-    ('/review?tab=all', "[data-testid='queue-counter']"),
-    ('/review?tab=uncertainty', "[data-testid='queue-counter']"),
-    ('/review?tab=model_disagreements', "[data-testid='queue-counter']"),
-    ('/review?tab=classifier_blind_spots', "[data-testid='queue-counter']"),
-    ('/review?tab=new_class_proposals', "[data-testid='queue-counter']"),
-    (f'/review?tab={REGION_TAB_URL_ID}', "[data-testid='queue-counter']"),
+    ('/workspace?view=review', "[data-testid='queue-counter']"),
+    ('/workspace?view=review&queue=to_label', "[data-testid='queue-counter']"),
+    ('/workspace?view=review&queue=check_machine', "[data-testid='queue-counter']"),
+    ('/workspace?view=review&queue=disagreements', "[data-testid='queue-counter']"),
+    ('/workspace?view=review&queue=audit', "[data-testid='queue-counter']"),
+    ('/workspace?view=review&queue=regions', "[data-testid='queue-counter']"),
     ('/audit', 'h1'),
     ('/classes', 'h1'),
     ('/export', 'h1'),
