@@ -79,7 +79,6 @@ _STORED_SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
     'unlabeled_count:asc': ('Fewest unlabelled first', [{'counts.unlabeled': {'order': 'asc'}}]),
 }
 STORED_SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _STORED_SORTS.items()]
-STORED_SORT_IDS: Final = frozenset(_STORED_SORTS)
 _STORED_LABEL_STATE: Final[dict[str, list[dict[str, Any]]]] = {
     'has_unlabeled': [{'range': {'counts.unlabeled': {'gt': 0}}}],
     'all_labeled': [
@@ -262,6 +261,14 @@ async def image_page(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> ImagePage:
     """One page of images with their counts and boxes."""
+    return (await image_page_counted(opensearch, q, embedding, policy))[0]
+
+
+async def image_page_counted(
+    opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
+) -> tuple[ImagePage, bool]:
+    """:func:`image_page` and whether every image in the list's scope carries its stored counts
+    (the fact ``ImagePage.sort_options`` is built from), so a caller needs no second count."""
     sort = _sort_clause(q.view.sort_id)
     query, join_truncated = await _image_query(opensearch, q, embedding, policy)
     body = page_body(
@@ -289,7 +296,7 @@ async def image_page(
     empty = None
     if not cards:
         empty = 'no_match' if q.narrowed() else 'no_images'
-    return ImagePage(
+    page = ImagePage(
         items=cards,
         next_cursor=next_cursor,
         total=int(resp['hits']['total']['value']),
@@ -308,6 +315,7 @@ async def image_page(
         empty_reason=empty,
         empty_message=EMPTY_MESSAGES[empty] if empty else None,
     )
+    return page, ready
 
 
 async def locate_image(
