@@ -20,7 +20,7 @@ import {
   createSelectionSummary,
   type SelectionSummaryState,
 } from './selectionSummary.svelte';
-import type { Cluster } from '$lib/types';
+import type { Cluster, HiddenCounts } from '$lib/types';
 import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
@@ -52,6 +52,8 @@ export class WorkspaceController {
   #detailsChoice = $state<boolean | null>(null);
   readonly #wide =
     typeof matchMedia === 'function' ? new MediaQuery(DETAILS_MEDIA) : null;
+  /** The active view's served total and what its filter leaves out, for the filter row. */
+  matching = $state<{ total: number; hidden: HiddenCounts | null } | null>(null);
   /** The class picker the bulk bar owns; `workspace.class_picker` opens it. */
   pickerOpen = $state(false);
   /** The queues and classes rail as a drawer under `lg`. */

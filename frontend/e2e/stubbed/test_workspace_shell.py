@@ -216,6 +216,25 @@ def test_slash_opens_the_class_picker_and_space_toggles_the_focused_card(stub, p
     )
 
 
+def test_the_filter_bar_states_the_served_total_and_what_is_hidden(stub, page, app_url):
+    serve(stub)
+    stub.on(
+        'GET',
+        r'/crops(\?|$)',
+        {
+            'total': 3,
+            'next_cursor': None,
+            'limit': 60,
+            'crops': [crop(i) for i in range(3)],
+            'hidden': {'test_holdout': 2, 'excluded': 1},
+        },
+    )
+    page.goto(f'{app_url}/p/default/workspace?view=detections')
+    bar = page.get_by_test_id('workspace-filter-bar')
+    expect(bar).to_contain_text('3 matching', timeout=ACTION_TIMEOUT_MS)
+    expect(bar).to_contain_text('2 test holdout and 1 ignored not listed')
+
+
 def test_back_restores_the_previous_view(stub, page, app_url):
     serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')

@@ -5,6 +5,7 @@
    * sits behind one "Filters" button.
    */
   import { resolve } from '$app/paths';
+  import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
   import ItemFilterBar from '$components/itemFilter/ItemFilterBar.svelte';
   import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import { projectHref, type ProjectSubPath } from '$lib/projectPaths';
@@ -57,6 +58,12 @@
       rootClass="contents"
     />
   </div>
+  {#if ws.matching}
+    <span class="text-xs text-zinc-300" data-testid="matching-note">
+      <strong class="text-zinc-100">{ws.matching.total.toLocaleString()}</strong>
+      matching<HiddenItemsNote hidden={ws.matching.hidden} />
+    </span>
+  {/if}
   {#if scope}
     <button
       type="button"

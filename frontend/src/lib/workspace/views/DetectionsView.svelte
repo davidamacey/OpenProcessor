@@ -29,6 +29,13 @@
     ws.select(ids.length > 0 ? { kind: 'items', cropIds: ids } : NO_SELECTION);
   });
 
+  $effect(() => {
+    if (!pager.loading) ws.matching = { total: pager.total, hidden: items.hidden };
+    return () => {
+      ws.matching = null;
+    };
+  });
+
   const queryKey = $derived(JSON.stringify(ws.itemQuery()));
   $effect(() => {
     void queryKey;
