@@ -256,6 +256,7 @@ def test_sort_options_are_served_and_an_unknown_sort_is_refused(
         'taken_at:desc',
         'taken_at:asc',
         'file_name:asc',
+        'file_name:desc',
     ]
     assert all(o['label'] for o in body['sort_options'])
     asc = client.get(f'{BASE}/images', params=ASC).json()

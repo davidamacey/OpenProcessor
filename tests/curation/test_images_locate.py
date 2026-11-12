@@ -5,14 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from curation.paging_fakes import PagingOpenSearch
-from curation.query_fakes import QueryFakeOpenSearch
+from curation.paging_fakes import AggregatingPagingOpenSearch, images_client
 from src.config import IndexRole, index_name
 from src.config.curation_accessors import base_curation_config
-from src.routers.curation import images_view as route
 
 
 CFG = base_curation_config()
@@ -20,15 +17,6 @@ IMAGES = index_name(CFG, IndexRole.IMAGES)
 ITEMS = CFG.items_index
 BASE = '/curation/projects/default'
 N = 30
-
-
-class _Fake(PagingOpenSearch):
-    """Total ordering for the page reads; aggregation reads (the item join) go to the base fake."""
-
-    async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
-        if 'aggs' in body or 'aggregations' in body:
-            return await QueryFakeOpenSearch.search(self, index=index, body=body, **kw)
-        return await super().search(index=index, body=body, **kw)
 
 
 def _docs() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -54,22 +42,8 @@ def _docs() -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    from _curation_app import mount_curation_routers
-
-    from src.routers.curation import _raw_opensearch_dep, router as curation_router
-    from src.services.curation import index_bootstrap
-
-    async def _policy() -> str:
-        return 'store'
-
-    monkeypatch.setattr(route, 'get_location_policy', _policy)
-    monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
     images, items = _docs()
-    fake = _Fake({IMAGES: images, ITEMS: items})
-    app = FastAPI()
-    mount_curation_routers(app, curation_router)
-    app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
-    return TestClient(app)
+    return images_client(AggregatingPagingOpenSearch({IMAGES: images, ITEMS: items}), monkeypatch)
 
 
 def _ids(client: TestClient, **params: Any) -> list[str]:

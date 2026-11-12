@@ -57,6 +57,7 @@ _SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
     'taken_at:desc': ('Newest captured', [{_TAKEN: {'order': 'desc', 'missing': '_last'}}]),
     'taken_at:asc': ('Oldest captured', [{_TAKEN: {'order': 'asc', 'missing': '_last'}}]),
     'file_name:asc': ('Path (A to Z)', [{'image_path': {'order': 'asc'}}]),
+    'file_name:desc': ('Path (Z to A)', [{'image_path': {'order': 'desc'}}]),
 }
 SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _SORTS.items()]
 
@@ -76,8 +77,12 @@ class ImageViewParams:
     in_holdout: bool | None = None
     near_dup: NearDupFilter | None = None
     label_state: LabelState | None = None
-    sort: str = DEFAULT_SORT
+    sort: str | None = None
     include_test: bool = False
+
+    @property
+    def sort_id(self) -> str:
+        return self.sort or DEFAULT_SORT
 
     def narrowed(self) -> bool:
         return any(
@@ -180,7 +185,7 @@ async def image_page(
     opensearch: Any, q: ImageQuery, embedding: WriteFields, policy: str
 ) -> ImagePage:
     """One page of images with their counts and boxes."""
-    if q.view.sort not in _SORTS:
+    if q.view.sort_id not in _SORTS:
         msg = f'sort must be one of {sorted(_SORTS)}'
         raise ImageQueryError(msg)
     query, join_truncated = await _image_query(opensearch, q, embedding, policy)
@@ -190,14 +195,14 @@ async def image_page(
             'query': query,
             '_source': {'includes': list(IMAGE_SOURCE_FIELDS)},
         },
-        sort=_SORTS[q.view.sort][1],
+        sort=_SORTS[q.view.sort_id][1],
         tiebreak='image_id',
         cursor=q.cursor,
-        sort_id=q.view.sort,
+        sort_id=q.view.sort_id,
         limit=q.limit,
     )
     resp = await opensearch.search(index=images_index(), body=body)
-    kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.view.sort, limit=q.limit)
+    kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.view.sort_id, limit=q.limit)
     ids = [str(h['_source']['image_id']) for h in kept]
     facts = await item_facts(opensearch, ids, include_test=q.view.include_test)
     prefix = project_api_base()
@@ -210,7 +215,7 @@ async def image_page(
         next_cursor=next_cursor,
         total=int(resp['hits']['total']['value']),
         join_truncated=join_truncated,
-        sort_applied=q.view.sort,
+        sort_applied=q.view.sort_id,
         sort_options=SORT_OPTIONS,
         hidden=HiddenCounts(
             **await hidden_counts(
@@ -234,7 +239,7 @@ async def locate_image(
 ) -> ImageLocate:
     """Where ``image_id`` (whose stored document is ``image_source``, ``None`` when there is none)
     sits in the list ``q`` would serve; its cursor and limit are ignored."""
-    if q.view.sort not in _SORTS:
+    if q.view.sort_id not in _SORTS:
         msg = f'sort must be one of {sorted(_SORTS)}'
         raise ImageQueryError(msg)
     query, _truncated = await _image_query(opensearch, q, embedding, policy)
@@ -256,8 +261,8 @@ async def locate_image(
         opensearch,
         index=images_index(),
         query=query,
-        sort=with_tiebreak(_SORTS[q.view.sort][1], 'image_id'),
-        sort_id=q.view.sort,
+        sort=with_tiebreak(_SORTS[q.view.sort_id][1], 'image_id'),
+        sort_id=q.view.sort_id,
         source=source,
         id_field='image_id',
     )

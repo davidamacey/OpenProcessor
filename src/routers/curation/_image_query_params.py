@@ -11,12 +11,7 @@ from typing import Annotated
 
 from fastapi import Depends, Query
 
-from src.services.curation.image_view import (
-    DEFAULT_SORT,
-    ImageViewParams,
-    LabelState,
-    NearDupFilter,
-)
+from src.services.curation.image_view import ImageViewParams, LabelState, NearDupFilter
 
 
 def image_view_query(
@@ -39,8 +34,8 @@ def image_view_query(
         ),
     ] = None,
     sort: Annotated[
-        str, Query(description='One of the `sort_options` ids the response serves.')
-    ] = DEFAULT_SORT,
+        str | None, Query(description='One of the `sort_options` ids the response serves.')
+    ] = None,
     include_test: Annotated[
         bool, Query(description='Count and draw held-out test items too.')
     ] = False,

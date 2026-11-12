@@ -97,6 +97,7 @@ import src.routers.curation.selection_summary
 import src.routers.curation.settings
 import src.routers.curation.source_backfill
 import src.routers.curation.stats
+import src.routers.curation.table_view
 import src.routers.curation.viz
 import src.routers.curation.vlm_activation
 import src.routers.curation.vlm_policy
