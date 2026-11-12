@@ -7,9 +7,7 @@
   import CropResultGrid from '$components/CropResultGrid.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
-  import NextStepsCard from '$lib/components/NextStepsCard.svelte';
-  import { projectsStore } from '$stores/projects.svelte';
-  import { nextStepsStore } from '$stores/nextSteps.svelte';
+  import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import { createMatchingItems } from '$lib/itemFilter/matchingItems.svelte';
@@ -89,14 +87,8 @@
         {pager.items.length} / {pager.total}
       </p>
     </ViewState>
-    {#if status === 'empty' && nextStepsStore.steps.length > 0 && projectsStore.current}
-      <div class="mx-auto max-w-2xl p-4">
-        <NextStepsCard
-          steps={nextStepsStore.steps}
-          next={nextStepsStore.next}
-          slug={projectsStore.current.slug}
-        />
-      </div>
+    {#if status === 'empty'}
+      <EmptyNextSteps />
     {/if}
   </div>
 </div>

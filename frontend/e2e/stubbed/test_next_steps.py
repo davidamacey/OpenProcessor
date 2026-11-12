@@ -76,3 +76,12 @@ def test_empty_workspace_shows_the_same_steps(stub, page, app_url):
     expect(page.get_by_test_id('view-state-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('next-step')).to_have_count(3)
     save_screens(page, 'workflow_3e', 'workspace-empty-next-steps')
+
+
+def test_empty_clusters_view_shows_the_same_steps(stub, page, app_url):
+    serve_next_steps(stub, FRESH)
+    stub.on('GET', r'/clusters(\?|$)', cluster_list())
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    expect(page.get_by_test_id('clusters-empty')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('next-step')).to_have_count(3)
+    save_screens(page, 'workflow_3e', 'workspace-empty-clusters-next-steps')
