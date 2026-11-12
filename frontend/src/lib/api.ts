@@ -227,6 +227,52 @@ export interface ApiFetchOptions {
   global?: boolean;
 }
 
+function requestHeaders(init: RequestInit): Record<string, string> {
+  return {
+    Accept: 'application/json',
+    // A multipart body (ingestUpload) must let the browser set its
+    // own `Content-Type: multipart/form-data; boundary=...` — a
+    // hardcoded `application/json` here breaks the boundary and the
+    // backend can't parse the parts at all.
+    ...(init.body && !(init.body instanceof FormData)
+      ? { 'Content-Type': 'application/json' }
+      : {}),
+    ...((init.headers ?? {}) as Record<string, string>),
+  };
+}
+
+async function readOkBody<T>(res: Response, assertFresh: () => void): Promise<T> {
+  if (res.status === 204) return undefined as T;
+  const ct = res.headers.get('content-type') ?? '';
+  // `+json` covers structured-syntax types such as the map's application/geo+json (RFC 6839).
+  const out =
+    ct.includes('application/json') || ct.includes('+json')
+      ? ((await res.json()) as T)
+      : ((await res.text()) as unknown as T);
+  assertFresh();
+  return out;
+}
+
+async function readErrorBody(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    try {
+      return await res.text();
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** A served `Retry-After` (503 only) replaces this attempt's fixed backoff
+ *  delay, clamped to MAX_RETRY_AFTER_MS; it never adds an attempt. */
+function backoffDelayMs(attempt: number, retryAfterMs: number | null): number {
+  return retryAfterMs != null
+    ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS)
+    : RETRY_DELAYS_MS[attempt]!;
+}
+
 export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
@@ -246,7 +292,6 @@ export async function apiFetch<T>(
       throw staleProjectError();
     }
   };
-  let attempt = 0;
   let lastError: unknown;
   // Reads: 1 initial + 3 retries on 5xx => 4 attempts max. A write may
   // already have been executed server-side (a 504 or a lost response), so it
@@ -254,76 +299,55 @@ export async function apiFetch<T>(
   const method = (init.method ?? 'GET').toUpperCase();
   const maxAttempts =
     method === 'GET' || method === 'HEAD' ? RETRY_DELAYS_MS.length + 1 : 1;
-  for (; attempt < maxAttempts; attempt++) {
-    let retryAfterMs: number | null = null;
-    try {
-      const res = await fetch(url, {
-        ...init,
-        signal: signal ?? init.signal ?? null,
-        headers: {
-          Accept: 'application/json',
-          // A multipart body (ingestUpload) must let the browser set its
-          // own `Content-Type: multipart/form-data; boundary=...` — a
-          // hardcoded `application/json` here breaks the boundary and the
-          // backend can't parse the parts at all.
-          ...(init.body && !(init.body instanceof FormData)
-            ? { 'Content-Type': 'application/json' }
-            : {}),
-          ...(init.headers ?? {}),
-        },
-      });
-      assertFresh();
-      if (res.ok) {
-        if (res.status === 204) return undefined as T;
-        const ct = res.headers.get('content-type') ?? '';
-        // `+json` covers structured-syntax types such as the map's application/geo+json (RFC 6839).
-        const out =
-          ct.includes('application/json') || ct.includes('+json')
-            ? ((await res.json()) as T)
-            : ((await res.text()) as unknown as T);
-        assertFresh();
-        return out;
-      }
-      let body: unknown = null;
-      try {
-        body = await res.json();
-      } catch {
-        try {
-          body = await res.text();
-        } catch {
-          /* ignore */
-        }
-      }
-      if (res.status === 409 && isNoRegionProfileDetail(structuredErrorCode(body))) {
-        notifyRegionProfileUnavailable();
-        throw new RegionProfileUnavailableError(url, body);
-      }
-      const err = new ApiError(res.status, url, body);
-      // Don't retry on 4xx — they won't get better.
-      if (res.status < 500) throw err;
-      if (res.status === 503) retryAfterMs = parseRetryAfterMs(res);
-      lastError = err;
-    } catch (e) {
-      if (e instanceof ApiError && e.status < 500) throw e;
-      if (e instanceof DOMException && e.name === 'AbortError') throw e;
-      lastError = e;
-    }
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const result = await attemptFetch<T>(url, init, signal, assertFresh);
+    if ('value' in result) return result.value;
+    lastError = result.error;
     // A retry after the project changed would fetch the OLD project's
     // URL again — stop instead.
     assertFresh();
     if (attempt < maxAttempts - 1) {
-      // A served `Retry-After` (503 only) replaces this attempt's fixed
-      // backoff delay, clamped to MAX_RETRY_AFTER_MS — it never adds an
-      // attempt or extends the total retry budget.
-      const delay =
-        retryAfterMs != null
-          ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS)
-          : RETRY_DELAYS_MS[attempt]!;
       // An abort during the backoff propagates — the caller cancelled.
-      await sleep(delay, signal);
+      await sleep(backoffDelayMs(attempt, result.retryAfterMs), signal);
     }
   }
   throw lastError ?? new Error(`apiFetch failed: ${url}`);
+}
+
+type AttemptResult<T> = { value: T } | { error: unknown; retryAfterMs: number | null };
+
+/** One request: the parsed body, or the retryable failure. Non-retryable
+ *  failures (4xx, abort, stale project) throw. */
+async function attemptFetch<T>(
+  url: string,
+  init: RequestInit,
+  signal: AbortSignal | undefined,
+  assertFresh: () => void,
+): Promise<AttemptResult<T>> {
+  let retryAfterMs: number | null = null;
+  try {
+    const res = await fetch(url, {
+      ...init,
+      signal: signal ?? init.signal ?? null,
+      headers: requestHeaders(init),
+    });
+    assertFresh();
+    if (res.ok) return { value: await readOkBody<T>(res, assertFresh) };
+    const body = await readErrorBody(res);
+    if (res.status === 409 && isNoRegionProfileDetail(structuredErrorCode(body))) {
+      notifyRegionProfileUnavailable();
+      throw new RegionProfileUnavailableError(url, body);
+    }
+    const err = new ApiError(res.status, url, body);
+    // Don't retry on 4xx — they won't get better.
+    if (res.status < 500) throw err;
+    if (res.status === 503) retryAfterMs = parseRetryAfterMs(res);
+    return { error: err, retryAfterMs };
+  } catch (e) {
+    if (e instanceof ApiError && e.status < 500) throw e;
+    if (e instanceof DOMException && e.name === 'AbortError') throw e;
+    return { error: e, retryAfterMs: null };
+  }
 }
 
 // -- query string helpers ------------------------------------------------

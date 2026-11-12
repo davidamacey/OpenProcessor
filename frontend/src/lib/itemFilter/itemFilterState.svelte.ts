@@ -56,6 +56,24 @@ function pick<T extends string>(values: string[], allowed: readonly T[]): T[] {
   return values.filter((v): v is T => (allowed as readonly string[]).includes(v));
 }
 
+/** Query params that carry one number, and the field each sets. */
+const NUMBER_PARAMS: Record<
+  string,
+  'confMin' | 'confMax' | 'minArea' | 'maxArea' | 'maxRank'
+> = {
+  conf_min: 'confMin',
+  conf_max: 'confMax',
+  min_area: 'minArea',
+  max_area: 'maxArea',
+  max_rank: 'maxRank',
+};
+
+function parseFiniteOrNull(str: string): number | null {
+  if (str === '') return null;
+  const n = Number(str);
+  return Number.isFinite(n) ? n : null;
+}
+
 export class ItemFilterState {
   classNames = $state<string[]>([]);
   excludeClassNames = $state<string[]>([]);
@@ -275,32 +293,17 @@ export class ItemFilterState {
   setValue(param: string, value: string | string[]): void {
     const list = Array.isArray(value) ? value : value === '' ? [] : [value];
     const str = Array.isArray(value) ? (value[0] ?? '') : value;
-    const num = (): number | null => {
-      if (str === '') return null;
-      const n = Number(str);
-      return Number.isFinite(n) ? n : null;
-    };
+    const numberField = Object.hasOwn(NUMBER_PARAMS, param) ? NUMBER_PARAMS[param] : null;
+    if (numberField) {
+      this[numberField] = parseFiniteOrNull(str);
+      return;
+    }
     switch (param) {
       case 'class_name':
         this.classNames = list;
         break;
       case 'exclude_class_name':
         this.excludeClassNames = list;
-        break;
-      case 'conf_min':
-        this.confMin = num();
-        break;
-      case 'conf_max':
-        this.confMax = num();
-        break;
-      case 'min_area':
-        this.minArea = num();
-        break;
-      case 'max_area':
-        this.maxArea = num();
-        break;
-      case 'max_rank':
-        this.maxRank = num();
         break;
       case 'origin':
         this.origin = pick(list, ITEM_ORIGINS);

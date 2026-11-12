@@ -110,6 +110,15 @@ export interface MultiBoxRegionOptions {
   onitem?: (crop: Crop) => void;
 }
 
+function seededSelection(
+  sameCrop: boolean,
+  current: number | null,
+  count: number,
+): number | null {
+  if (count === 0) return null;
+  return sameCrop && current != null ? Math.min(current, count - 1) : 0;
+}
+
 export function createMultiBoxRegionController(
   slot: () => SlotSpec | null,
   opts: MultiBoxRegionOptions = {},
@@ -137,11 +146,7 @@ export function createMultiBoxRegionController(
     // which can land after the operator has already pressed Tab: the same
     // crop keeps the selection (clamped), only a new crop starts at box 1.
     const sameCrop = (crop?.id ?? null) === seededCropId;
-    if (sameCrop && selectedIndex != null && editable.length > 0) {
-      selectedIndex = Math.min(selectedIndex, editable.length - 1);
-    } else {
-      selectedIndex = editable.length > 0 ? 0 : null;
-    }
+    selectedIndex = seededSelection(sameCrop, selectedIndex, editable.length);
     if (!sameCrop) vectorRefresh = null;
     seededCropId = crop?.id ?? null;
   }

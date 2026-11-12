@@ -26,14 +26,9 @@ export interface PromoteGateDetail {
   thresholds?: Record<string, number> | null;
 }
 
-export function promoteGateDetail(e: unknown): PromoteGateDetail | null {
-  if (!(e instanceof ApiError) || e.status !== 422) return null;
-  const detail = (e.body as { detail?: unknown } | null)?.detail;
-  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
-  const d = detail as Record<string, unknown>;
-  if (typeof d.message !== 'string' || !Array.isArray(d.failures)) return null;
+function parseGateFailures(list: unknown[]): PromoteGateFailure[] {
   const failures: PromoteGateFailure[] = [];
-  for (const raw of d.failures) {
+  for (const raw of list) {
     if (!raw || typeof raw !== 'object') continue;
     const f = raw as Record<string, unknown>;
     if (typeof f.code !== 'string' || typeof f.message !== 'string') continue;
@@ -43,6 +38,16 @@ export function promoteGateDetail(e: unknown): PromoteGateDetail | null {
       class_name: typeof f.class_name === 'string' ? f.class_name : null,
     });
   }
+  return failures;
+}
+
+export function promoteGateDetail(e: unknown): PromoteGateDetail | null {
+  if (!(e instanceof ApiError) || e.status !== 422) return null;
+  const detail = (e.body as { detail?: unknown } | null)?.detail;
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+  const d = detail as Record<string, unknown>;
+  if (typeof d.message !== 'string' || !Array.isArray(d.failures)) return null;
+  const failures = parseGateFailures(d.failures);
   const thresholds =
     d.thresholds && typeof d.thresholds === 'object'
       ? (d.thresholds as Record<string, number>)

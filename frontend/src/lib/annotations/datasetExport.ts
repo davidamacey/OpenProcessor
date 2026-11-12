@@ -55,6 +55,40 @@ function nonEmptyString(v: unknown): string | undefined {
   return typeof v === 'string' && v.length > 0 ? v : undefined;
 }
 
+const REQUIRED_STRING_KEYS = [
+  'kind',
+  'label',
+  'buildPath',
+  'statusPath',
+  'datasetKind',
+  'blurb',
+  'profileName',
+] as const;
+
+type RequiredStrings = Record<(typeof REQUIRED_STRING_KEYS)[number], string>;
+
+function requiredStrings(raw: Record<string, unknown>): RequiredStrings | undefined {
+  const out: Partial<RequiredStrings> = {};
+  for (const k of REQUIRED_STRING_KEYS) {
+    const v = nonEmptyString(raw[k]);
+    if (!v) return undefined;
+    out[k] = v;
+  }
+  return out as RequiredStrings;
+}
+
+/** `classIds` as declared, or undefined when malformed or (for the item box source) empty. */
+function validClassIds(raw: Record<string, unknown>): number[] | undefined {
+  const classIds = raw.classIds ?? [];
+  if (!Array.isArray(classIds) || !classIds.every((c) => Number.isInteger(c) && c >= 0)) {
+    return undefined;
+  }
+  // Mirrors the backend's own rule, so a bad profile fails here instead of
+  // as a 422 after the operator clicks Build.
+  if (raw.boxSource === 'item' && classIds.length === 0) return undefined;
+  return classIds as number[];
+}
+
 /**
  * The slot's declared dataset export, or `undefined` when it declares
  * none or declares a malformed
@@ -69,51 +103,26 @@ export function datasetExportForSlot(slot: SlotSpec): DatasetExportSpec | undefi
   const raw = slot.extras?.datasetExport;
   if (!isRecord(raw)) return undefined;
 
-  const kind = nonEmptyString(raw.kind);
-  const label = nonEmptyString(raw.label);
-  const buildPath = nonEmptyString(raw.buildPath);
-  const statusPath = nonEmptyString(raw.statusPath);
-  const datasetKind = nonEmptyString(raw.datasetKind);
-  const blurb = nonEmptyString(raw.blurb);
-  const profileName = nonEmptyString(raw.profileName);
-  if (
-    !kind ||
-    !label ||
-    !buildPath ||
-    !statusPath ||
-    !datasetKind ||
-    !blurb ||
-    !profileName
-  ) {
-    return undefined;
-  }
+  const strings = requiredStrings(raw);
+  if (!strings) return undefined;
   if (raw.boxSource !== 'item' && raw.boxSource !== 'region') return undefined;
-  const classIds = raw.classIds ?? [];
-  if (!Array.isArray(classIds) || !classIds.every((c) => Number.isInteger(c) && c >= 0)) {
-    return undefined;
-  }
-  // Mirrors the backend's own rule, so a bad profile fails here instead of
-  // as a 422 after the operator clicks Build.
-  if (raw.boxSource === 'item' && classIds.length === 0) return undefined;
+  const classIds = validClassIds(raw);
+  if (!classIds) return undefined;
   const regionClassName =
     raw.regionClassName === undefined ? undefined : nonEmptyString(raw.regionClassName);
   if (raw.regionClassName !== undefined && !regionClassName) return undefined;
   // Prefix-relative only. An absolute URL here would bypass apiBase and
   // API_PREFIX both, which is the bug class regionThumbUrl.test.ts exists
   // to prevent on the image side.
-  if (!buildPath.startsWith('/') || !statusPath.startsWith('/')) return undefined;
+  if (!strings.buildPath.startsWith('/') || !strings.statusPath.startsWith('/')) {
+    return undefined;
+  }
 
   return {
-    kind,
-    label,
-    buildPath,
-    statusPath,
-    datasetKind,
+    ...strings,
     singleClass: raw.singleClass === true,
-    blurb,
-    profileName,
     boxSource: raw.boxSource,
     ...(regionClassName ? { regionClassName } : {}),
-    classIds: classIds as number[],
+    classIds,
   };
 }

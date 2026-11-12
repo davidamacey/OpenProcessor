@@ -143,6 +143,27 @@ const SUBBOX_OPTIONAL_FIELDS = [
   'revisionField',
 ] as const;
 
+/** First list/bbox/optional-field problem of a subBox (message suffix), or null. */
+function subBoxFieldProblem(
+  raw: Record<string, unknown>,
+  hasList: boolean,
+): string | null {
+  if (hasList === (raw.bboxField !== undefined)) {
+    return ' needs exactly one of listField (multi-box) or bboxField (read-only single box)';
+  }
+  if (hasList && !isWireField(raw.listField)) return '.listField is invalid';
+  if (!hasList) {
+    if (!isWireField(raw.bboxField)) return '.bboxField is invalid';
+    if (raw.storedFrame !== 'source' && raw.storedFrame !== 'parent') {
+      return ".storedFrame must be 'source' or 'parent'";
+    }
+  }
+  for (const f of SUBBOX_OPTIONAL_FIELDS) {
+    if (raw[f] !== undefined && !isWireField(raw[f])) return `.${f} is invalid`;
+  }
+  return null;
+}
+
 export function parseSubBox(
   raw: unknown,
   key: string,
@@ -154,33 +175,10 @@ export function parseSubBox(
     return null;
   }
   const hasList = raw.listField !== undefined;
-  if (hasList === (raw.bboxField !== undefined)) {
-    errors.push(
-      `slot "${key}": capabilities.subBox needs exactly one of listField (multi-box) or bboxField (read-only single box) — skipped`,
-    );
+  const problem = subBoxFieldProblem(raw, hasList);
+  if (problem) {
+    errors.push(`slot "${key}": capabilities.subBox${problem} — skipped`);
     return null;
-  }
-  if (hasList && !isWireField(raw.listField)) {
-    errors.push(`slot "${key}": capabilities.subBox.listField is invalid — skipped`);
-    return null;
-  }
-  if (!hasList) {
-    if (!isWireField(raw.bboxField)) {
-      errors.push(`slot "${key}": capabilities.subBox.bboxField is invalid — skipped`);
-      return null;
-    }
-    if (raw.storedFrame !== 'source' && raw.storedFrame !== 'parent') {
-      errors.push(
-        `slot "${key}": capabilities.subBox.storedFrame must be 'source' or 'parent' — skipped`,
-      );
-      return null;
-    }
-  }
-  for (const f of SUBBOX_OPTIONAL_FIELDS) {
-    if (raw[f] !== undefined && !isWireField(raw[f])) {
-      errors.push(`slot "${key}": capabilities.subBox.${f} is invalid — skipped`);
-      return null;
-    }
   }
   const thumbnail = parseThumbnail(raw.thumbnail, key, errors);
   if (thumbnail === null) return null;

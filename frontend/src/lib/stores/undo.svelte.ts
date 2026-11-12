@@ -46,6 +46,58 @@ import type { Crop, UndoEntry } from '$lib/types';
 
 const MAX = 50;
 
+async function revertLabelOp(entry: UndoEntry): Promise<Crop[]> {
+  const out = await undoLabelOpToEnd(entry.op_id!, false);
+  toastStore.success(
+    `Reverted ${out.restored}${out.kept_changed > 0 ? ` (${out.kept_changed} changed since, kept)` : ''}.`,
+  );
+  return entry.crop_ids.length > 0 ? await getCropsByIds(entry.crop_ids) : [];
+}
+
+async function revertExclusion(entry: UndoEntry, kind: 'exclude' | 'unexclude') {
+  if (kind === 'exclude') await unexcludeCrops(entry.crop_ids);
+  else await excludeCrops(entry.crop_ids, 'ignore');
+  toastStore.success(
+    kind === 'exclude'
+      ? `Restored ${entry.crop_ids.length}.`
+      : `Ignored ${entry.crop_ids.length} again.`,
+  );
+  return [];
+}
+
+async function revertBatch(ids: string[], region: boolean): Promise<Crop[]> {
+  const res = region ? await undoCropRegionBatch(ids) : await undoLabelBatch(ids);
+  const parts = [`Reverted ${res.undone}.`];
+  if (res.nothing_to_undo.length > 0) {
+    parts.push(`${res.nothing_to_undo.length} nothing to undo.`);
+  }
+  if (res.conflicts.length > 0) {
+    parts.push(`${res.conflicts.length} conflict(s).`);
+  }
+  toastStore.success(parts.join(' '));
+  return res.items;
+}
+
+/** Undo one entry on the route matching its kind; throws on failure. */
+async function revertEntry(entry: UndoEntry): Promise<Crop[]> {
+  const kind = entry.kind ?? 'label';
+  if (kind === 'label_op') return revertLabelOp(entry);
+  if (kind === 'exclude' || kind === 'unexclude') return revertExclusion(entry, kind);
+  if (kind === 'vlm_dismiss') {
+    const crop = await undoVlmDismiss(entry.crop_ids[0]!);
+    toastStore.success('VLM suggestion restored.');
+    return [crop];
+  }
+  const region = kind === 'region';
+  if (entry.crop_ids.length === 1) {
+    const id = entry.crop_ids[0]!;
+    const crop = region ? await undoCropRegion(id) : await undoCropLabel(id);
+    toastStore.success('Reverted.');
+    return [crop];
+  }
+  return revertBatch(entry.crop_ids, region);
+}
+
 /** `UndoEntry` tagged with the project it was recorded under. Crop ids
  *  are content-derived (the same image gets the same `crop_id` in every
  *  project — projects_plan §2.1), so a bare crop id isn't enough to know
@@ -193,51 +245,8 @@ class UndoStore {
       toastStore.info('Nothing to undo.');
       return [];
     }
-    const kind = entry.kind ?? 'label';
     try {
-      if (kind === 'label_op') {
-        const out = await undoLabelOpToEnd(entry.op_id!, false);
-        toastStore.success(
-          `Reverted ${out.restored}${out.kept_changed > 0 ? ` (${out.kept_changed} changed since, kept)` : ''}.`,
-        );
-        return entry.crop_ids.length > 0 ? await getCropsByIds(entry.crop_ids) : [];
-      }
-      if (kind === 'exclude' || kind === 'unexclude') {
-        if (kind === 'exclude') await unexcludeCrops(entry.crop_ids);
-        else await excludeCrops(entry.crop_ids, 'ignore');
-        toastStore.success(
-          kind === 'exclude'
-            ? `Restored ${entry.crop_ids.length}.`
-            : `Ignored ${entry.crop_ids.length} again.`,
-        );
-        return [];
-      }
-      if (kind === 'vlm_dismiss') {
-        const crop = await undoVlmDismiss(entry.crop_ids[0]!);
-        toastStore.success('VLM suggestion restored.');
-        return [crop];
-      }
-      if (entry.crop_ids.length === 1) {
-        const crop =
-          kind === 'region'
-            ? await undoCropRegion(entry.crop_ids[0]!)
-            : await undoCropLabel(entry.crop_ids[0]!);
-        toastStore.success('Reverted.');
-        return [crop];
-      }
-      const res =
-        kind === 'region'
-          ? await undoCropRegionBatch(entry.crop_ids)
-          : await undoLabelBatch(entry.crop_ids);
-      const parts = [`Reverted ${res.undone}.`];
-      if (res.nothing_to_undo.length > 0) {
-        parts.push(`${res.nothing_to_undo.length} nothing to undo.`);
-      }
-      if (res.conflicts.length > 0) {
-        parts.push(`${res.conflicts.length} conflict(s).`);
-      }
-      toastStore.success(parts.join(' '));
-      return res.items;
+      return await revertEntry(entry);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         toastStore.info('Nothing left to undo.');

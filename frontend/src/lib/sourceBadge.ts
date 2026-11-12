@@ -35,6 +35,24 @@ export interface SourceBadge {
   unvalidated: boolean;
 }
 
+/** Roles whose badge is just the label in a fixed tone. */
+const PLAIN_ROLE_TONE: Record<string, string> = {
+  proposal: TONE.proposal,
+  low_conf: TONE.proposal,
+  model: TONE.model,
+  open_vocab: TONE.openVocab,
+};
+
+function vlmBadge(role: string, text: string, validated: boolean): SourceBadge {
+  // A VLM label that no human validated is a suggestion, never "labeled".
+  if (role === 'vlm' && !validated) {
+    return { text: CONFIRMATION.vlm, cls: TONE.vlm, unvalidated: true };
+  }
+  return validated
+    ? { text, cls: TONE.vlm, unvalidated: false }
+    : { text: `${text} ·`, cls: TONE.vlm, unvalidated: true };
+}
+
 export function sourceBadge(
   src: string | null | undefined,
   validated: boolean,
@@ -52,25 +70,15 @@ export function sourceBadge(
   const text = label || src;
   if (r === 'human')
     return { text: CONFIRMATION.human, cls: TONE.human, unvalidated: false };
-  // A VLM label that no human validated is a suggestion, never "labeled".
-  if (r === 'vlm' && !validated)
-    return { text: CONFIRMATION.vlm, cls: TONE.vlm, unvalidated: true };
-  if (r.startsWith('vlm')) {
-    return validated
-      ? { text, cls: TONE.vlm, unvalidated: false }
-      : { text: `${text} ·`, cls: TONE.vlm, unvalidated: true };
-  }
+  if (r.startsWith('vlm')) return vlmBadge(r, text, validated);
   if (r === 'cluster')
     return {
       text: validated ? CONFIRMATION.cluster : text,
       cls: TONE.cluster,
       unvalidated: false,
     };
-  if (r === 'proposal' || r === 'low_conf')
-    return { text, cls: TONE.proposal, unvalidated: false };
-  if (r === 'model') return { text, cls: TONE.model, unvalidated: false };
-  if (r === 'open_vocab') return { text, cls: TONE.openVocab, unvalidated: false };
-  return { text, cls: TONE.proposal, unvalidated: false };
+  const cls = PLAIN_ROLE_TONE[r] ?? TONE.proposal;
+  return { text, cls, unvalidated: false };
 }
 
 /** The wording for a class label's confirmation state, or null when the
