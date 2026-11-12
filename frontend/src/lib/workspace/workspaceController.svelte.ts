@@ -60,6 +60,12 @@ export class WorkspaceController {
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
   summary!: SelectionSummaryState;
+  /** The grid Review was opened from; `closeReview` returns to it. A Review that was
+   *  deep-linked has no origin and returns to the Detections grid. */
+  #reviewOrigin = $state<ViewId>('detections');
+  /** The item Review stands on, kept here as well as in the URL so a quick `Esc` right after a
+   *  confirm still returns to it, before the URL write has landed. */
+  #reviewFocus: string | null = null;
   /** The open cluster's served card, set by the cluster scope for the details panel. */
   scopeCard = $state<Cluster | null>(null);
 
@@ -159,6 +165,28 @@ export class WorkspaceController {
   /** Opens a cluster in place; the filter and the view stay. */
   openCluster(uid: string | null): void {
     this.setScope(uid ? { kind: 'cluster', id: uid } : null);
+  }
+
+  /** Opens Review at one item, over the same filter, queue and scope; the item stays focused. */
+  openReview(cropId: string): void {
+    if (this.view !== 'review') this.#reviewOrigin = this.view;
+    this.#reviewFocus = cropId;
+    this.#write({ view: 'review', focus: { kind: 'item', id: cropId } }, false);
+  }
+
+  /** Review moved on to another item: the focus follows it (a replace, not a history entry). */
+  setReviewFocus(cropId: string): void {
+    this.#reviewFocus = cropId;
+    this.setFocus({ kind: 'item', id: cropId });
+  }
+
+  /** Leaves Review for the grid it was opened from, focused on the item Review stopped on. */
+  closeReview(): void {
+    const focus: FocusRef | null = this.#reviewFocus
+      ? { kind: 'item', id: this.#reviewFocus }
+      : this.#url.focus;
+    this.#reviewFocus = null;
+    this.#write({ view: this.#reviewOrigin, focus }, false);
   }
 
   setFocus(focus: FocusRef | null): void {

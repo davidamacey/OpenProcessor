@@ -35,9 +35,26 @@
     ws.setView(views[(at + by + views.length) % views.length]!.id);
   }
 
-  // Escape peels one layer: the selection, then the open scope, then the panel.
+  // Enter on a grid card opens Review at that card: the focused card, else the one the
+  // details panel shows, else the single selected card.
+  function openReview(): boolean {
+    const card = document.activeElement?.closest<HTMLElement>('[data-crop-id]');
+    const focused = ws.url.focus?.kind === 'item' ? ws.url.focus.id : null;
+    const selected =
+      ws.selection.kind === 'items' && ws.selection.cropIds.length === 1
+        ? ws.selection.cropIds[0]!
+        : null;
+    const id = card?.dataset.cropId ?? focused ?? selected;
+    if (!id) return false;
+    ws.openReview(id);
+    return true;
+  }
+
+  // Escape peels one layer: Review back to its grid (the selection is not shown there), the
+  // selection, the open scope, then the panel.
   function escape(): void {
-    if (ws.selection.kind !== 'none') ws.clearSelection();
+    if (ws.view === 'review') ws.closeReview();
+    else if (ws.selection.kind !== 'none') ws.clearSelection();
     else if (ws.url.scope) ws.setScope(null);
     else if (ws.detailsOpen) ws.toggleDetails();
   }
@@ -63,6 +80,7 @@
         },
         'workspace',
       ),
+      keyboardStore.registerAction('workspace.open_review', openReview, 'cluster'),
       // Space on a focused card toggles it, like Ctrl+click.
       keyboardStore.registerAction(
         'workspace.select_toggle',
