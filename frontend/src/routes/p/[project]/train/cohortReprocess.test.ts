@@ -22,7 +22,7 @@ const src = normalize(
 describe('train cohort preview cards', () => {
   it('re-run the preview when a slot or crop card reprocesses its image', () => {
     const wired = src.match(
-      /onreprocessed=\{\(\) => void ctl\.loadCohortPreview\(group, activeCohort\)\}/g,
+      /onreprocessed=\{\(\) => void ctl\.openPreview\(picked\.row, picked\.column\)\}/g,
     );
     expect(wired).toHaveLength(2);
     expect(src).toMatch(/<SlotCard .{0,300}?onreprocessed=/);

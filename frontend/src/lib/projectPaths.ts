@@ -17,7 +17,7 @@ const NAV_GROUP_LABELS = {
   home: 'Dashboard',
   data: 'Data',
   model: 'Model',
-  quality: 'Quality',
+  quality: 'Data quality',
   settings: 'Settings',
 } as const;
 export type NavGroupId = keyof typeof NAV_GROUP_LABELS;
@@ -39,7 +39,7 @@ const SECTION_TABLE = [
   { section: 'models', label: 'Models', group: 'model' },
   { section: 'train', label: 'Train', group: 'model' },
   { section: 'bakeoff', label: 'Bake-off', group: 'model' },
-  { section: 'quality', label: 'Quality', group: 'quality' },
+  { section: 'quality', label: 'Data quality', group: 'quality' },
   { section: 'settings', label: 'Settings', group: 'settings' },
 ] as const;
 
@@ -92,6 +92,12 @@ const SUBPAGE_LABELS: Partial<Record<ProjectSection, Record<string, string>>> = 
   settings: {
     'embedding-spaces': 'Embedding spaces',
     'ingest-policy': 'Ingest policy',
+    keyboard: 'Keyboard shortcuts',
+    'cluster-profiles': 'Cluster profiles',
+    'assist-loop-presets': 'Assist-loop presets',
+    'near-dup-profiles': 'Near-duplicate profiles',
+    'serving-profiles': 'Serving profiles',
+    scores: 'Curation scores',
     models: 'Models',
     'open-vocab': 'Open vocabulary',
     presets: 'Presets',

@@ -10,6 +10,8 @@ export class DetectionsSummaryState {
   summary = $state<DetectionsSummary | null>(null);
   loading = $state(false);
   error = $state<string | null>(null);
+  /** The thrown error itself, so the page can show its request id. */
+  failure = $state<unknown>(null);
 
   #get: (signal?: AbortSignal) => Promise<DetectionsSummary>;
 
@@ -22,12 +24,14 @@ export class DetectionsSummaryState {
   async load(signal?: AbortSignal): Promise<void> {
     this.loading = true;
     this.error = null;
+    this.failure = null;
     try {
       this.summary = await this.#get(signal);
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.summary = null;
       this.error = detectorErrorLines(e).join(' ');
+      this.failure = e;
     } finally {
       this.loading = false;
     }

@@ -6,6 +6,7 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ErrorState from '$components/ui/ErrorState.svelte';
   import { VlmPolicyEditor } from '$lib/labelConfirmation/vlmPolicyController.svelte';
   import {
     knobsFor,
@@ -72,9 +73,14 @@
   {#if editor.loading}
     <p class="text-sm text-fg-3">Loading…</p>
   {:else if editor.loadError}
-    <p class="text-sm text-danger-text" data-testid="vlm-scope-load-error">
-      {editor.loadError}
-    </p>
+    <div data-testid="vlm-scope-load-error">
+      <ErrorState
+        title="VLM scope unavailable"
+        message={editor.loadError}
+        error={editor.loadFailure}
+        onretry={() => void editor.load()}
+      />
+    </div>
   {:else}
     <fieldset class="flex flex-col gap-2">
       <legend class="sr-only">VLM scope</legend>

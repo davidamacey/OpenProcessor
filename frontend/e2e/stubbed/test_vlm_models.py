@@ -717,8 +717,10 @@ def test_absent_when_the_registry_404s(stub, page, app_url):
 
     with page.expect_response(lambda r: r.url.endswith('/vlm/endpoints') and r.status == 404):
         page.goto(f'{app_url}/p/default/settings')
-    expect(page.get_by_role('heading', name='Deployment defaults')).to_be_visible()
-    expect(page.get_by_test_id('vlm-models-card')).to_have_count(0)
+    expect(page.get_by_role('heading', name='General')).to_be_visible()
+    expect(
+        page.get_by_test_id('sidebar-nav').get_by_role('link', name='Models and VLM')
+    ).to_have_count(0)
 
     page.goto(f'{app_url}/p/default/settings/models')
     expect(page.get_by_test_id('vlm-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)

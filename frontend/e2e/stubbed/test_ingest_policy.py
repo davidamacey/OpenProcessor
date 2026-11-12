@@ -194,7 +194,7 @@ def test_a_409_offers_reload_and_keep_my_edits(stub, page, app_url):
     expect(conflict).to_have_count(0)
 
 
-def test_settings_card_links_to_the_page(stub, page, app_url):
+def test_settings_sidebar_links_to_the_page(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/ingest/policy(\?|$)', POLICY)
     stub.on('GET', r'/methods(\?|$)', {'strategies': [], 'flags': {}})
@@ -202,11 +202,9 @@ def test_settings_card_links_to_the_page(stub, page, app_url):
     stub.on('GET', r'/scores/coverage(\?|$)', {'coverage': {}})
     stub.on('GET', r'/scores/status(\?|$)', {'status': 'idle'})
     page.goto(f'{app_url}/p/default/settings')
-    card = page.get_by_test_id('ingest-policy-card')
-    card.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('ingest-policy-card-mode')).to_contain_text('Embedding: all')
-    expect(card.get_by_role('link', name='Open ingest policy')).to_have_attribute(
-        'href', '/p/default/settings/ingest-policy'
+    link = page.get_by_test_id('sidebar-nav').get_by_role('link', name='Ingest policy')
+    expect(link).to_have_attribute(
+        'href', '/p/default/settings/ingest-policy', timeout=ACTION_TIMEOUT_MS
     )
 
 

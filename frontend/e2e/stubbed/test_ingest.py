@@ -282,7 +282,7 @@ def test_drain_gate(stub, page, app_url):
         lambda *_: start_calls.append(1) or (202, auto_label_job('queued')),
     )
 
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector('text=4')
 
@@ -306,7 +306,7 @@ def test_drain_gate(stub, page, app_url):
             'observed_at': '2026-09-25T00:00:01Z',
         },
     )
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
     auto_label_btn = page.get_by_role('button', name='Auto-label now', exact=True)
     auto_label_btn.wait_for()
@@ -326,7 +326,7 @@ def test_drain_gate(stub, page, app_url):
             'observed_at': '2026-09-25T00:00:30Z',
         },
     )
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
 
     auto_label_btn = page.get_by_role('button', name='Auto-label now', exact=True)
@@ -378,7 +378,7 @@ def test_server_path_batch_panel(stub, page, app_url):
 
     stub.on('POST', r'/ingest/batch', batch_handler)
 
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=folder')
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector('text=Server-path ingest')
     assert '/data/archive' in page.locator('body').inner_text()
@@ -411,7 +411,7 @@ def test_upload_disabled_shows_one_line_and_no_upload_panel(stub, page, app_url)
     expect(page.locator('input[type=file]')).to_have_count(0)
     expect(page.get_by_role('heading', name='Upload', exact=True)).to_have_count(0)
     # The rest of the page (status table, clustering handoff) still renders.
-    page.get_by_role('heading', name='Clustering').wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('heading', name='Pipeline').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert not [c for c in stub.calls if '/ingest/upload' in c[1]]
 
 

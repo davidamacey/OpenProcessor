@@ -21,6 +21,8 @@
   import { getTestHoldoutStats } from '$lib/api_export';
   import { getTrainPresets, getTrainProfiles, tailTrainLog } from '$lib/api_train';
   import ResourceLinksRow from '$lib/components/ResourceLinksRow.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import CampaignCard from '$components/CampaignCard.svelte';
   import LogTail from '$components/LogTail.svelte';
   import PromoteModal from '$components/PromoteModal.svelte';
@@ -96,10 +98,6 @@
           // Non-fatal — the class picker just omits the holdout clause.
         }
       })(),
-      // Deliberately NOT auto-fetched here: with N classes each carrying
-      // ~4 cohorts, an eager fetch-on-mount is an N×4+ parallel-request
-      // storm against the backend (§9.10's flagged risk). Counts load
-      // lazily, only for the class group actually scrolled into view.
     ]);
   });
 
@@ -113,34 +111,31 @@
   <title>Train · Cropwright</title>
 </svelte:head>
 
-<div class="mx-auto max-w-6xl space-y-4 px-4 py-6">
-  <!-- Header -->
-  <header class="flex flex-wrap items-end justify-between gap-3">
-    <div>
-      <h1 class="text-xl font-semibold tracking-tight">Train model</h1>
-      <p class="mt-1 text-sm text-fg-2">
-        YOLO26 detector training over the frozen export. Submits a job to the
-        curation-trainer container and tails progress until it finishes.
-      </p>
-      <div class="mt-2">
-        <ResourceLinksRow />
-      </div>
-    </div>
-    <button
-      type="button"
-      class="btn"
-      onclick={async () => {
-        await Promise.all([
-          dataset.refreshDataset(),
-          runs.refreshRuns(),
-          runs.pullStatus(),
-        ]);
-      }}
-      disabled={dataset.refreshing}
-    >
-      {dataset.refreshing ? 'Refreshing…' : 'Refresh'}
-    </button>
-  </header>
+<PageShell class="space-y-4">
+  <PageHeader
+    title="Train model"
+    description="YOLO26 detector training over the frozen export. Submits a job to the curation-trainer container and tails progress until it finishes."
+  >
+    {#snippet meta()}
+      <ResourceLinksRow />
+    {/snippet}
+    {#snippet actions()}
+      <button
+        type="button"
+        class="btn"
+        onclick={async () => {
+          await Promise.all([
+            dataset.refreshDataset(),
+            runs.refreshRuns(),
+            runs.pullStatus(),
+          ]);
+        }}
+        disabled={dataset.refreshing}
+      >
+        {dataset.refreshing ? 'Refreshing…' : 'Refresh'}
+      </button>
+    {/snippet}
+  </PageHeader>
 
   <TrainDatasetSection {dataset} {exporter} />
 
@@ -212,7 +207,7 @@
 
   <!-- Training cohorts -->
   <TrainingCohortsPanel ctl={cohorts} />
-</div>
+</PageShell>
 
 <PromoteModal
   open={actions.promoteOpen}

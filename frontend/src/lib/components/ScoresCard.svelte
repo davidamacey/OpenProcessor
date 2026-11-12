@@ -202,7 +202,7 @@
 
 <section class="surface flex flex-col gap-4 p-5">
   <div class="flex flex-wrap items-center gap-3">
-    <h2 class="text-base font-semibold">Curation scores</h2>
+    <h2 class="text-title font-semibold">Scorer coverage</h2>
     <span class="grow"></span>
     <button
       type="button"

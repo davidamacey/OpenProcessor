@@ -47,9 +47,9 @@
   }
 </script>
 
-<div class="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">New VLM endpoint</h1>
+    <h1 class="text-h1 font-semibold text-fg-1">New VLM endpoint</h1>
     <span class="grow"></span>
     <a
       class="text-xs text-accent-text hover:underline"

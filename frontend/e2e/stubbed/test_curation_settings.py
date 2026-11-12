@@ -138,7 +138,9 @@ def test_curation_settings(stub, page, app_url):
     assert not [c for c in stub.console_errors if c.startswith('pageerror')], (
         'page should render with no pageerror'
     )
-    assert page.locator('select').count() == 0, 'zero <select> elements expected'
+    assert page.locator('[data-testid="settings-content"] select').count() == 0, (
+        'zero <select> elements expected'
+    )
     assert page.get_by_role('button', name='Save').count() == 0, 'zero Save buttons expected'
 
     # ================================================================
@@ -150,13 +152,13 @@ def test_curation_settings(stub, page, app_url):
     page.goto(f'{app_url}/p/default/settings')
     page.get_by_text('Review queue sort').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    selects = page.locator('select')
+    selects = page.locator('[data-testid="settings-content"] select')
     # The cluster method is a cluster-profile setting now, not a shared default.
     expect(selects).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text('Clustering method').count() == 0
     assert page.get_by_text('Review queue sort').count() > 0
 
-    options_text = page.locator('select option').all_inner_texts()
+    options_text = page.locator('[data-testid="settings-content"] select option').all_inner_texts()
     assert 'HDBSCAN probe sort' not in ' '.join(options_text), (
         'the shadow sort must not be among the options'
     )
@@ -198,7 +200,9 @@ def test_curation_settings(stub, page, app_url):
 
     assert page.get_by_text('grounding_v2').count() > 0
     assert page.get_by_text('warehouse_v1').count() > 0
-    expect(page.locator('select')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid="settings-content"] select')).to_have_count(
+        2, timeout=ACTION_TIMEOUT_MS
+    )
     advisory_heading = page.get_by_text('Not settable on this backend')
     advisory_section = advisory_heading.locator('xpath=ancestor::section[1]')
     assert advisory_section.get_by_role('button', name='Save').count() == 0
@@ -230,9 +234,9 @@ def test_curation_settings(stub, page, app_url):
     page.goto(f'{app_url}/p/default/settings')
     page.get_by_text('Detection profile').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text('Not settable on this backend').count() == 0
-    expect(page.locator('select option', has_text='off (served')).to_have_count(
-        1, timeout=ACTION_TIMEOUT_MS
-    )
+    expect(
+        page.locator('[data-testid="settings-content"] select option', has_text='off (served')
+    ).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
 
     # ================================================================
     # Pass 4 — 422 surfaces the server's own words.
@@ -243,7 +247,7 @@ def test_curation_settings(stub, page, app_url):
     page.goto(f'{app_url}/p/default/settings')
     page.get_by_text('Review queue sort').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    sort_select4 = page.locator('select').nth(0)
+    sort_select4 = page.locator('[data-testid="settings-content"] select').nth(0)
     sort_select4.select_option('uncertainty_entropy')
     save_btn4 = page.get_by_role('button', name='Save').nth(0)
     expect(save_btn4).to_be_enabled(timeout=ACTION_TIMEOUT_MS)
@@ -259,6 +263,7 @@ def test_curation_settings(stub, page, app_url):
     error_text = page.get_by_text(re.compile(r"is not a currently-advertised id for axis 'sort'"))
     expect(error_text.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_text(re.compile(r"valid ids:\s*\['recent'\]")).count() > 0
-    assert page.locator('select').nth(0).input_value() != 'uncertainty_entropy', (
-        "the control's value must not be left showing the rejected selection as though saved"
-    )
+    assert (
+        page.locator('[data-testid="settings-content"] select').nth(0).input_value()
+        != 'uncertainty_entropy'
+    ), "the control's value must not be left showing the rejected selection as though saved"

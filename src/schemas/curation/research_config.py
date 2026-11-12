@@ -109,12 +109,6 @@ class ClusterProfileBody(_Strict):
     params: dict[str, float | int | str | bool | None] = Field(
         default_factory=dict, description='Options of the method, such as n_clusters.'
     )
-    pool: dict[str, float | int | str | bool | None] = Field(
-        default_factory=dict, description='Stored with the profile; the fit does not read it yet.'
-    )
-    assign: dict[str, float | int | str | bool | None] = Field(
-        default_factory=dict, description='Stored with the profile; the fit does not read it yet.'
-    )
     refresh: ClusterRefreshRule = Field(description='When a new run starts.')
     activation: Literal['auto_when_safe', 'human'] = Field(
         default='human',

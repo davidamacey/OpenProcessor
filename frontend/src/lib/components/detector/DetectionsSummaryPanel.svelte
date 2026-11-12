@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import ErrorState from '$components/ui/ErrorState.svelte';
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
   import { embeddingStateChips } from '$components/embedding/embeddingCopy';
   import { DetectionsSummaryState } from '$lib/detector/detectionsSummaryController.svelte';
@@ -38,9 +39,14 @@
   </div>
 
   {#if summaryState.error}
-    <p class="text-xs text-danger-text" data-testid="detections-error">
-      {summaryState.error}
-    </p>
+    <div data-testid="detections-error">
+      <ErrorState
+        title="Detections unavailable"
+        message={summaryState.error}
+        error={summaryState.failure}
+        onretry={() => void summaryState.load()}
+      />
+    </div>
   {:else if !s}
     <p class="text-xs text-fg-3">Loading...</p>
   {:else}

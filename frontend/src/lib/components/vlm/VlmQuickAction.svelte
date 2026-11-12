@@ -12,6 +12,9 @@
   import { getActiveVlm } from '$lib/api_vlm';
   import { projectHref } from '$lib/projectPaths';
 
+  /** False when the served next step belongs to another action (one primary per view). */
+  let { primary = true }: { primary?: boolean } = $props();
+
   let off = $state(false);
 
   onMount(() => {
@@ -26,16 +29,15 @@
 </script>
 
 {#if off}
-  <a
-    class="btn"
-    data-testid="vlm-activate-first"
-    href={resolve(projectHref('/settings/models'))}
-    title="This project has no VLM. Activate one on the Models settings page."
-    >Assist with the VLM: activate one first</a
-  >
+  <span class="text-meta text-fg-3" data-testid="vlm-activate-first">
+    No VLM is active for this project.
+    <a class="text-accent-text underline" href={resolve(projectHref('/settings/models'))}
+      >Activate one</a
+    > to assist with it.
+  </span>
 {:else}
   <a
-    class="btn btn-primary"
+    class="btn {primary ? 'btn-primary' : ''}"
     href={resolve(projectHref('/workspace'))}
     title="Open the Workspace and use its AI menu: Assist, the auto-label loop, Auto-label"
     >Open the Workspace AI menu</a

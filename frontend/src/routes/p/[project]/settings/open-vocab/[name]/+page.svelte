@@ -109,7 +109,7 @@
   ]);
 </script>
 
-<div class="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <ConfigDocHeader
     name={setName}
     doc={ed.doc}

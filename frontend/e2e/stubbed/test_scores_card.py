@@ -131,7 +131,7 @@ def test_scores_card_shows_error_with_retry_on_404(stub, page, app_url):
     # pre-/scores/* backend, it surfaces the served failure instead.
     register(stub, coverage_status=404)
 
-    page.goto(f'{app_url}/p/default/settings')
+    page.goto(f'{app_url}/p/default/settings/scores')
     page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 
@@ -144,7 +144,7 @@ def test_scores_card_shows_error_with_retry_on_404(stub, page, app_url):
 def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f'{app_url}/p/default/settings')
+    page.goto(f'{app_url}/p/default/settings/scores')
     page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 
@@ -182,7 +182,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
 def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
-    page.goto(f'{app_url}/p/default/settings')
+    page.goto(f'{app_url}/p/default/settings/scores')
     page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 

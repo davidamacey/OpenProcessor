@@ -81,7 +81,7 @@ def _open(stub, page, app_url, items):
     stub.on('GET', r'/ingest/bulk(\?|$)', {'items': [], 'total': 0, 'page': 1, 'page_size': 5})
     state = {'items': items}
     stub.on('GET', r'/ingest/sources(\?|$)', lambda _r, _m: _list(state['items']))
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=sources')
     page.wait_for_selector('text=Sources (S3 buckets and watched folders)')
     return state
 

@@ -136,7 +136,7 @@ describe('the primary navigation', () => {
 
   it('gives the breadcrumb the label of the nav link, and the id for a section with no link', () => {
     expect(sectionLabel('bakeoff')).toBe('Bake-off');
-    expect(sectionLabel('quality')).toBe('Quality');
+    expect(sectionLabel('quality')).toBe('Data quality');
     expect(sectionLabel('images')).toBe('Images');
     expect(sectionLabel('datasets')).toBe('Datasets');
   });
@@ -180,7 +180,7 @@ describe('breadcrumbOf', () => {
 
   it('adds a human label for a known sub-page and the raw name for an object', () => {
     expect(trail('/p/alpha/quality/near-duplicates')).toEqual([
-      ['Quality', '/p/alpha/quality'],
+      ['Data quality', '/p/alpha/quality'],
       ['Near-duplicates', null],
     ]);
     expect(trail('/p/alpha/settings/prompt-packs/my%20pack')).toEqual([

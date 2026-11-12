@@ -28,6 +28,9 @@
    * the gap between polls.
    */
   import { apiBase } from '$lib/api';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
+  import AdoptDetectorDialog from '$components/detector/AdoptDetectorDialog.svelte';
   import NextStepsCard from '$lib/components/NextStepsCard.svelte';
   import { nextStepsStore } from '$stores/nextSteps.svelte';
   import { projectsStore } from '$stores/projects.svelte';
@@ -35,6 +38,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
+  import DataQualityCard from '$components/dashboard/DataQualityCard.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
@@ -55,6 +59,11 @@
   $effect(() => {
     void nextStepsStore.init();
   });
+
+  // One primary button per view: the served next step says which action it is. A step that
+  // offers a write (the adopt button on the card) takes it over from the two below.
+  const nextId = $derived(nextStepsStore.next?.action ? null : nextStepsStore.next?.id);
+  let adoptOpen = $state(false);
 
   // ---- Class balance + recent labels (from the legacy `/` page) --------
 
@@ -141,15 +150,11 @@
   }
 </script>
 
-<div class="mx-auto max-w-7xl space-y-6 p-6">
-  <header class="flex items-end justify-between">
-    <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <p class="text-sm text-fg-3">
-        Pipeline stats and manual clustering control. Stats refresh every 10s.
-      </p>
-    </div>
-  </header>
+<PageShell width="wide" class="space-y-6">
+  <PageHeader
+    title="Dashboard"
+    description="Pipeline stats and manual clustering control. Stats refresh every 10s."
+  />
 
   {#if !healthStore.ok}
     <div
@@ -167,13 +172,16 @@
       steps={nextStepsStore.steps}
       next={nextStepsStore.next}
       slug={projectsStore.current.slug}
+      onaction={(step) => {
+        if (step.action === 'adopt_detector_classes') adoptOpen = true;
+      }}
     />
   {/if}
 
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
     <h2 class="mr-3 text-sm font-semibold text-fg-2">Quick actions</h2>
-    <VlmQuickAction />
+    <VlmQuickAction primary={nextId === 'label'} />
     <button class="btn" type="button" onclick={openExportConfirm}>
       Export Dataset (YOLO)
     </button>
@@ -188,7 +196,9 @@
     </button>
   </section>
 
-  <ClusterRunPanel />
+  <ClusterRunPanel primary={nextId === 'cluster'} />
+
+  <DataQualityCard />
 
   <DatasetStats />
 
@@ -233,7 +243,14 @@
       </ul>
     {/if}
   </section>
-</div>
+</PageShell>
+
+{#if adoptOpen}
+  <AdoptDetectorDialog
+    onclose={() => (adoptOpen = false)}
+    ondone={() => void nextStepsStore.refresh()}
+  />
+{/if}
 
 {#if exportConfirmOpen}
   <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a

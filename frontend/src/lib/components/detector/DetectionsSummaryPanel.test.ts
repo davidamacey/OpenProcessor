@@ -129,6 +129,42 @@ describe('DetectionsSummaryPanel', () => {
     expect(q('detections-error')!.textContent).toContain('index down');
   });
 
+  it('renders a failed read as an ErrorState with the request id and a Retry that reads again', async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u === `${API_PREFIX}/datasets/formats`) return json(formatsFixture());
+        if (u.endsWith('/detections/summary')) {
+          calls += 1;
+          return calls === 1
+            ? new Response(JSON.stringify({ detail: 'Not Found' }), {
+                status: 404,
+                headers: { 'content-type': 'application/json', 'x-request-id': 'req-77' },
+              })
+            : json(SUMMARY);
+        }
+        return json({}, 404);
+      }),
+    );
+    await render();
+    const err = document.querySelector('[data-testid="error-state"]');
+    expect(err).not.toBeNull();
+    expect(err!.textContent).toContain('Not Found');
+    expect(
+      document.querySelector('[data-testid="error-state-request-id"]')!.textContent,
+    ).toBe('req-77');
+    [...err!.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Retry'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('detections-total')).not.toBeNull();
+    });
+    expect(calls).toBe(2);
+  });
+
   describe('DetectionsSummaryPanel labels', () => {
     it('renders two rows with the same label name (the backend names a missing label "(no label)")', async () => {
       const row = {

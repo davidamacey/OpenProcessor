@@ -80,9 +80,9 @@
   }
 </script>
 
-<div class="mx-auto flex max-w-7xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="font-mono text-2xl font-semibold tracking-tight">{endpointName}</h1>
+    <h1 class="font-mono text-h1 font-semibold text-fg-1">{endpointName}</h1>
     {#if ed.doc}
       {@const d = ed.doc}
       <span class="text-sm text-fg-2" data-testid="config-meta">

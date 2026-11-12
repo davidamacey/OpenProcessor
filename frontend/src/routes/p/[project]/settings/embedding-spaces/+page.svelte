@@ -42,9 +42,9 @@
   };
 </script>
 
-<div class="mx-auto flex w-full max-w-6xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Embedding spaces</h1>
+    <h1 class="text-h1 font-semibold text-fg-1">Embedding spaces</h1>
     <span class="grow"></span>
     <button type="button" class="btn btn-sm" onclick={() => void st.load()}
       >Refresh</button

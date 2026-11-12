@@ -587,8 +587,10 @@ def test_absent_when_prompt_packs_404(stub, page, app_url):
 
     with page.expect_response(lambda r: r.url.endswith('/prompt_packs') and r.status == 404):
         page.goto(f'{app_url}/p/default/settings')
-    expect(page.get_by_role('heading', name='Deployment defaults')).to_be_visible()
-    expect(page.get_by_test_id('prompt-packs-card')).to_have_count(0)
+    expect(page.get_by_role('heading', name='General')).to_be_visible()
+    expect(
+        page.get_by_test_id('sidebar-nav').get_by_role('link', name='Prompt packs')
+    ).to_have_count(0)
 
     page.goto(f'{app_url}/p/default/settings/prompt-packs')
     expect(page.get_by_test_id('packs-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)

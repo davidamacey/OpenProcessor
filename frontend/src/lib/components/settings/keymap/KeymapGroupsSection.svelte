@@ -11,7 +11,7 @@
   let { ctl }: { ctl: KeymapCardController } = $props();
 </script>
 
-{#each namedGroups() as g (g)}
+{#each namedGroups().filter( (g) => ctl.matches(groupLabel(g), ...groupMembers(g).flatMap( (a) => [a.label, contextLabel(a.context)] )) ) as g (g)}
   {@const members = groupMembers(g)}
   {@const canonical = ctl.groupCanonicalKeys(g)}
   <details class="mb-3 rounded border border-line" open data-testid={`group-${g}`}>

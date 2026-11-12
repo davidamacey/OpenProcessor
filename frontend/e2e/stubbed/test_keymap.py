@@ -257,12 +257,15 @@ def test_keymap_absent_when_404(stub, page, app_url):
     # `GET {prefix}/keymap` — no override needed to exercise that path.
 
     page.goto(f'{app_url}/p/default/settings', wait_until='domcontentloaded')
-    page.wait_for_selector('text=Curation scores', timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_selector('[data-testid="sidebar-nav"]', timeout=ACTION_TIMEOUT_MS)
     # Real wait for the page to finish firing its on-mount requests
     # (including the 404'd GET /keymap this assertion depends on) instead
     # of an arbitrary settle sleep.
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
-    assert page.locator('text=Keyboard shortcuts').count() == 0
+    # Keyboard shortcuts stays in the sidebar (a client preference); its page says the
+    # backend does not serve the keymap.
+    page.get_by_test_id('sidebar-nav').get_by_role('link', name='Keyboard shortcuts').click()
+    expect(page.get_by_test_id('keymap-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     dismiss_calls: list[str] = []
 
@@ -328,7 +331,7 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on('POST', r'/keymap/validate(\?|$)', keymap_validate)
     stub.on('PUT', r'/keymap(\?|$)', keymap_put)
 
-    page.goto(f'{app_url}/p/default/settings', wait_until='domcontentloaded')
+    page.goto(f'{app_url}/p/default/settings/keyboard', wait_until='domcontentloaded')
     page.wait_for_selector('text=Keyboard shortcuts', timeout=ACTION_TIMEOUT_MS)
 
     # Find the Discard row, remove the default 'd' key, add 'x' instead.
@@ -449,7 +452,7 @@ def test_keymap_per_context_override(stub, page, app_url):
     stub.on('POST', r'/keymap/validate(\?|$)', keymap_validate)
     stub.on('PUT', r'/keymap(\?|$)', keymap_put)
 
-    page.goto(f'{app_url}/settings', wait_until='domcontentloaded')
+    page.goto(f'{app_url}/p/default/settings/keyboard', wait_until='domcontentloaded')
     page.wait_for_selector('text=Keyboard shortcuts', timeout=ACTION_TIMEOUT_MS)
 
     # Expand the 'discard' verb group's "Customize per page" disclosure

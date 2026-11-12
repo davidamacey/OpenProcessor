@@ -75,7 +75,7 @@ def _base(stub) -> None:
 def _open(stub, page, app_url, *, base: bool = True) -> None:
     if base:
         _base(stub)
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=folder')
     page.wait_for_selector('text=Bulk ingest (folder or manifest)')
     page.get_by_test_id('bulk-path').wait_for(timeout=ACTION_TIMEOUT_MS)
 

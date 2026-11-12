@@ -17,15 +17,19 @@
    */
   import IngestDropZone from '$lib/components/ingest/IngestDropZone.svelte';
   import IngestRunPanel from '$lib/components/ingest/IngestRunPanel.svelte';
-  import IngestStatusTable from '$lib/components/ingest/IngestStatusTable.svelte';
-  import RegionDrainPanel from '$lib/components/ingest/RegionDrainPanel.svelte';
+  import RegionDrainDetails from '$lib/components/ingest/RegionDrainDetails.svelte';
+  import IngestPipelineRail from '$lib/components/ingest/IngestPipelineRail.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import BulkIngestPanel from '$lib/components/ingest/BulkIngestPanel.svelte';
   import IngestSourcesPanel from '$lib/components/ingest/IngestSourcesPanel.svelte';
   import IngestBatchPanel from '$lib/components/ingest/IngestBatchPanel.svelte';
   import IngestDetectorCard from '$lib/components/ingest/IngestDetectorCard.svelte';
   import RegionStagePanel from '$lib/components/ingest/RegionStagePanel.svelte';
-  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import Chip from '$components/ui/Chip.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
+  import Tabs from '$components/ui/Tabs.svelte';
   import { getIngestConfig } from '$lib/api_ingest';
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { projectHref } from '$lib/projectPaths';
@@ -33,6 +37,7 @@
     resolveIngestConfig,
     serverPathIngestAvailable,
   } from '$lib/ingest/ingestConfig';
+  import Card from '$components/ui/Card.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
   import type { IngestFile } from '$lib/ingest/fileSource';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
@@ -57,6 +62,31 @@
 
   const config = $derived(servedConfig ? resolveIngestConfig(servedConfig) : null);
 
+  // The tab is the address: `?tab=`, so reload and Back keep it. Import dataset is its own page.
+  const TAB_IDS = ['upload', 'folder', 'sources', 'activity'] as const;
+  const tab = $derived.by(() => {
+    const t = page.url.searchParams.get('tab');
+    return TAB_IDS.find((id) => id === t) ?? 'upload';
+  });
+  const tabItems = $derived([
+    { id: 'upload', label: 'Upload', href: projectHref('/ingest') },
+    ...(config && serverPathIngestAvailable(config)
+      ? [
+          {
+            id: 'folder',
+            label: 'Server folder',
+            href: projectHref('/ingest?tab=folder'),
+          },
+        ]
+      : []),
+    { id: 'sources', label: 'Sources', href: projectHref('/ingest?tab=sources') },
+    ...(datasetsAvailability.available === true
+      ? [{ id: 'import', label: 'Import dataset', href: projectHref('/datasets/import') }]
+      : []),
+    { id: 'activity', label: 'Activity', href: projectHref('/ingest?tab=activity') },
+  ]);
+  const shownTab = $derived(tabItems.some((t) => t.id === tab) ? tab : 'upload');
+
   let selectedFiles = $state<IngestFile[]>([]);
   let statusRefreshToken = $state(0);
   let runState = $state<IngestRunState>('idle');
@@ -71,112 +101,108 @@
   }
 </script>
 
-<!-- max-w-7xl matches /dashboard, not the narrower content pages —
-     ClusteringHandoff embeds the real AutoLabelPanel, whose internal
-     `justify-between` description/controls row was designed for that
-     width and wraps badly in anything narrower (caught by the piece-9
-     live-build screenshot review). -->
-<div class="mx-auto max-w-7xl space-y-6 p-6">
-  <div class="flex flex-wrap items-baseline justify-between gap-2">
-    <h1 class="text-lg font-semibold text-fg-1">Ingest</h1>
-    {#if datasetsAvailability.available === true}
-      <a
-        class="text-sm text-accent-text hover:underline"
-        data-testid="ingest-dataset-import-link"
-        href={resolve(projectHref('/datasets/import'))}>Import a labeled dataset</a
-      >
-    {/if}
-  </div>
+<PageShell width="wide">
+  <PageHeader title="Ingest" description="Bring images into the project.">
+    {#snippet meta()}
+      {#if servedConfig?.detector}
+        <Chip tone="info" title="The detector that proposes boxes at ingest"
+          >Detector {servedConfig.detector.model} v{servedConfig.detector.version}</Chip
+        >
+      {/if}
+    {/snippet}
+  </PageHeader>
 
   {#if configError}
-    <p class="text-sm text-danger-text">
+    <p class="text-body text-danger-text">
       Could not load the ingest config: {configError}
     </p>
   {:else if !config}
-    <p class="text-sm text-fg-3">Loading…</p>
+    <p class="text-body text-fg-3">Loading…</p>
   {:else}
-    {#if servedConfig}
-      <IngestDetectorCard config={servedConfig} />
-    {/if}
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="min-w-0">
+        <Tabs label="Ingest" value={shownTab} items={tabItems} />
 
-    {#if !config.uploadEnabled}
-      <p class="text-sm text-fg-2" data-testid="ingest-upload-disabled">
-        Browser uploads are disabled on this deployment.
-      </p>
-    {:else}
-      {#if !config.uploadPersistsBytes}
-        <p
-          class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
-        >
-          This backend indexes uploads without keeping the image; use server-path ingest
-          or the command-line uploader.
-        </p>
-      {/if}
-
-      <section class="space-y-3 rounded-lg border border-line p-4">
-        <h2 class="text-sm font-semibold text-fg-1">Upload</h2>
-        <IngestDropZone
-          acceptedExtensions={config.acceptedExtensions}
-          onselect={(files) => (selectedFiles = files)}
-        />
-        {#if selectedFiles.length > 0}
-          <p class="text-xs text-fg-2">{selectedFiles.length} files selected</p>
+        {#if shownTab === 'upload'}
+          <div class="space-y-4">
+            {#if servedConfig}
+              <IngestDetectorCard config={servedConfig} />
+            {/if}
+            {#if !config.uploadEnabled}
+              <p class="text-body text-fg-2" data-testid="ingest-upload-disabled">
+                Browser uploads are disabled on this deployment.
+              </p>
+            {:else}
+              {#if !config.uploadPersistsBytes}
+                <p
+                  class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
+                >
+                  This backend indexes uploads without keeping the image; use server-path
+                  ingest or the command-line uploader.
+                </p>
+              {/if}
+              <section class="space-y-3">
+                <IngestDropZone
+                  acceptedExtensions={config.acceptedExtensions}
+                  onselect={(files) => (selectedFiles = files)}
+                />
+                {#if selectedFiles.length > 0}
+                  <p class="text-xs text-fg-2">{selectedFiles.length} files selected</p>
+                {/if}
+                <IngestRunPanel
+                  files={selectedFiles}
+                  {config}
+                  onChunkDone={() => (statusRefreshToken += 1)}
+                  onStateChange={(s) => (runState = s)}
+                />
+              </section>
+            {/if}
+          </div>
+        {:else if shownTab === 'folder'}
+          <div class="space-y-6">
+            <section class="space-y-3">
+              <h2 class="text-title font-semibold text-fg-1">
+                Bulk ingest (folder or manifest)
+              </h2>
+              <BulkIngestPanel />
+            </section>
+            <!-- Server-path ingest, gated on the served `batch.enabled` and at least one
+                 served `batch.source_roots` entry. -->
+            <section class="space-y-3">
+              <h2 class="text-title font-semibold text-fg-1">Server-path ingest</h2>
+              <IngestBatchPanel {config} />
+            </section>
+          </div>
+        {:else if shownTab === 'sources'}
+          <section class="space-y-3">
+            <h2 class="text-title font-semibold text-fg-1">
+              Sources (S3 buckets and watched folders)
+            </h2>
+            <IngestSourcesPanel />
+          </section>
+        {:else}
+          <div class="space-y-6">
+            {#if regionProfileStore.configured}
+              <Card>
+                <RegionDrainDetails
+                  {drain}
+                  error={drainError ? 'worklog read failed' : null}
+                  lastChecked={drainObservedAt}
+                />
+                <RegionStagePanel />
+              </Card>
+            {/if}
+            <ClusteringHandoff {runState} {drain} {drainError} {drainObservedAt} />
+          </div>
         {/if}
-        <IngestRunPanel
-          files={selectedFiles}
-          {config}
-          onChunkDone={() => (statusRefreshToken += 1)}
-          onStateChange={(s) => (runState = s)}
-        />
-      </section>
-    {/if}
-
-    {#if serverPathIngestAvailable(config)}
-      <section class="space-y-3 rounded-lg border border-line p-4">
-        <h2 class="text-sm font-semibold text-fg-1">Bulk ingest (folder or manifest)</h2>
-        <BulkIngestPanel />
-      </section>
-    {/if}
-
-    <section class="space-y-3 rounded-lg border border-line p-4">
-      <h2 class="text-sm font-semibold text-fg-1">
-        Sources (S3 buckets and watched folders)
-      </h2>
-      <IngestSourcesPanel />
-    </section>
-
-    {#if serverPathIngestAvailable(config)}
-      <!-- Piece 11: server-path ingest, gated on the served `batch.enabled`
-           and at least one served `batch.source_roots` entry — a
-           deployment with batch ingest off, or no mounted server-side
-           root, has nothing to offer here. -->
-      <section class="space-y-3 rounded-lg border border-line p-4">
-        <h2 class="text-sm font-semibold text-fg-1">Server-path ingest</h2>
-        <IngestBatchPanel {config} />
-      </section>
-    {/if}
-
-    <!-- The region drain only exists with a served region profile; without
-         one there is no region worklog to wait on, so the panel (and its
-         poll) is absent and the clustering gate sees no drain. -->
-    <section class="grid gap-6" class:sm:grid-cols-2={regionProfileStore.configured}>
-      <div class="rounded-lg border border-line p-4">
-        <IngestStatusTable refreshToken={statusRefreshToken} />
       </div>
-      {#if regionProfileStore.configured}
-        <div class="rounded-lg border border-line p-4">
-          <RegionDrainPanel
-            pollIntervalS={config.regionDrainPollIntervalS}
-            onUpdate={onDrainUpdate}
-          />
-          <RegionStagePanel />
-        </div>
-      {/if}
-    </section>
 
-    <section class="rounded-lg border border-line p-4">
-      <h2 class="mb-2 text-sm font-semibold text-fg-1">Clustering</h2>
-      <ClusteringHandoff {runState} {drain} {drainError} {drainObservedAt} />
-    </section>
+      <IngestPipelineRail
+        refreshToken={statusRefreshToken}
+        regionConfigured={regionProfileStore.configured}
+        drainPollIntervalS={config.regionDrainPollIntervalS}
+        {onDrainUpdate}
+      />
+    </div>
   {/if}
-</div>
+</PageShell>

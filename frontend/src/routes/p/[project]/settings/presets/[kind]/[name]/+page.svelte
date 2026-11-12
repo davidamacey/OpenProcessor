@@ -40,7 +40,7 @@
   }
 </script>
 
-<div class="mx-auto flex w-full max-w-7xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   {#if !kind || !ed}
     <p class="text-sm text-fg-2" data-testid="preset-unknown-kind">
       There is no such kind of preset.
@@ -51,7 +51,7 @@
     >
   {:else}
     <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="font-mono text-2xl font-semibold tracking-tight">{name}</h1>
+      <h1 class="font-mono text-h1 font-semibold text-fg-1">{name}</h1>
       {#if ed.doc}
         <span class="text-sm text-fg-2" data-testid="config-meta">
           {kind.noun} · revision {ed.doc.revision}

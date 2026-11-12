@@ -30,17 +30,11 @@
   import { curationSettingsStore } from '$stores/curationSettings.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
   import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
-  import ScoresCard from '$lib/components/ScoresCard.svelte';
-  import KeymapCard from '$lib/components/settings/KeymapCard.svelte';
-  import OpenVocabCard from '$lib/components/settings/OpenVocabCard.svelte';
-  import IngestPolicyCard from '$lib/components/settings/IngestPolicyCard.svelte';
-  import PresetsCard from '$lib/components/settings/PresetsCard.svelte';
   import VlmScopePanel from '$lib/components/settings/VlmScopePanel.svelte';
-  import { keymapAvailability } from '$stores/keymap.svelte';
   import { resolve } from '$app/paths';
-  import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
-  import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';
-  import { vlmAvailability } from '$lib/vlm/vlmAvailability.svelte';
+  import EmptyState from '$components/ui/EmptyState.svelte';
+  import ErrorState from '$components/ui/ErrorState.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
   import { projectHref } from '$lib/projectPaths';
 
   // `axisOptions()` returns the shared `MethodInfoBase[]` (it serves every
@@ -64,9 +58,6 @@
   $effect(() => {
     void curationSettingsStore.init();
     void strategiesStore.init();
-    void packsAvailability.init();
-    void profilesAvailability.init();
-    void vlmAvailability.init();
   });
 
   const editor = createDefaultsEditor();
@@ -91,12 +82,12 @@
   );
 </script>
 
-<div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
-  <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Deployment defaults</h1>
-    <span class="grow"></span>
-    <button type="button" class="btn" onclick={reload}>Reload</button>
-  </header>
+<div class="flex flex-col gap-4">
+  <PageHeader title="General">
+    {#snippet actions()}
+      <button type="button" class="btn" onclick={reload}>Reload</button>
+    {/snippet}
+  </PageHeader>
 
   <div
     class="rounded border border-line-strong bg-surface-1/60 px-4 py-3 text-sm text-fg-2"
@@ -108,10 +99,21 @@
   {#if curationSettingsStore.loading && !curationSettingsStore.loaded}
     <section class="surface p-6 text-sm text-fg-3">Loading settings…</section>
   {:else if curationSettingsStore.error}
-    <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-danger-text">{curationSettingsStore.error}</p>
-      <button type="button" class="btn w-fit" onclick={reload}>Retry</button>
-    </section>
+    <div data-testid="settings-load-error">
+      <ErrorState
+        title="Settings unavailable"
+        message={curationSettingsStore.error}
+        error={curationSettingsStore.failure}
+        onretry={reload}
+      />
+    </div>
+  {:else if settableAxes(strategiesStore.methods).length === 0}
+    <div data-testid="settings-no-defaults">
+      <EmptyState
+        title="No shared defaults to set"
+        description="This backend offers no setting that applies to every operator."
+      />
+    </div>
   {:else}
     <section class="surface flex flex-col gap-5 p-5">
       <div class="flex items-center justify-between">
@@ -274,71 +276,7 @@
     {/if}
   {/if}
 
-  {#if packsAvailability.available === true}
-    <section
-      class="surface flex flex-wrap items-center gap-3 p-5"
-      data-testid="prompt-packs-card"
-    >
-      <div class="flex min-w-0 flex-col gap-1">
-        <h2 class="text-base font-semibold">Prompt packs</h2>
-        <p class="text-xs text-fg-2">
-          Edit the VLM's instructions, test them on a crop, and choose which revision is
-          active.
-        </p>
-      </div>
-      <span class="grow"></span>
-      <a class="btn" href={resolve(projectHref('/settings/prompt-packs'))}
-        >Open prompt packs</a
-      >
-    </section>
-  {/if}
-
-  {#if profilesAvailability.available === true}
-    <section
-      class="surface flex flex-wrap items-center gap-3 p-5"
-      data-testid="region-profiles-card"
-    >
-      <div class="flex min-w-0 flex-col gap-1">
-        <h2 class="text-base font-semibold">Region profiles</h2>
-        <p class="text-xs text-fg-2">
-          Choose what part of an item to find, with which models, and which revision is
-          active.
-        </p>
-      </div>
-      <span class="grow"></span>
-      <a class="btn" href={resolve(projectHref('/settings/region-profiles'))}
-        >Open region profiles</a
-      >
-    </section>
-  {/if}
-
-  <OpenVocabCard />
-  <IngestPolicyCard />
-  <PresetsCard />
   <VlmScopePanel />
-
-  {#if vlmAvailability.available === true}
-    <section
-      class="surface flex flex-wrap items-center gap-3 p-5"
-      data-testid="vlm-models-card"
-    >
-      <div class="flex min-w-0 flex-col gap-1">
-        <h2 class="text-base font-semibold">Models</h2>
-        <p class="text-xs text-fg-2">
-          Register VLM endpoints, test them, choose which one this project uses, and see
-          every model choice in one place.
-        </p>
-      </div>
-      <span class="grow"></span>
-      <a class="btn" href={resolve(projectHref('/settings/models'))}>Open models</a>
-    </section>
-  {/if}
-
-  <ScoresCard />
-
-  {#if keymapAvailability.available === true}
-    <KeymapCard />
-  {/if}
 </div>
 
 {#if confirmSpec}

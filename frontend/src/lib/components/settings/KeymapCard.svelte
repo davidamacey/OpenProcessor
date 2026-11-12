@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * "Keyboard shortcuts" card — `/settings#keyboard` (K2 + K2b,
+   * "Keyboard shortcuts" card — `/settings/keyboard` (K2 + K2b,
    * configurable keyboard shortcuts plan §5.4).
    *
    * Two sections:
@@ -26,10 +26,11 @@
    * action, a locked key) for immediate feedback while typing.
    *
    * Absent, not disabled, when `keymapAvailability.available !== true` —
-   * `/settings/+page.svelte` gates on that, mirroring `ScoresCard`'s own
+   * the Settings layout gates the section on that, mirroring `ScoresCard`'s own
    * "absent on a pre-route backend" rule.
    */
 
+  import SaveBar from '$components/ui/SaveBar.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
   import KeymapGroupsSection from '$components/settings/keymap/KeymapGroupsSection.svelte';
   import KeymapContextsSection from '$components/settings/keymap/KeymapContextsSection.svelte';
@@ -39,20 +40,16 @@
   const ctl = createKeymapCardController();
 </script>
 
-<div id="keyboard" class="rounded-lg border border-line bg-surface-0 p-4">
-  <div class="mb-3 flex items-center justify-between">
-    <div>
-      <h2 class="text-sm font-semibold text-white">Keyboard shortcuts</h2>
-      <p class="text-xs text-fg-3">Applies to this project, in every browser.</p>
-    </div>
-    {#if !keymapStore.isDefault}
+<div id="keyboard">
+  {#if !keymapStore.isDefault}
+    <p class="mb-3">
       <span
         class="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-caption text-warn-text"
       >
         custom keys
       </span>
-    {/if}
-  </div>
+    </p>
+  {/if}
 
   {#if ctl.revisionConflictMessage}
     <div
@@ -90,26 +87,37 @@
     </div>
   {/if}
 
+  <label class="mb-3 block">
+    <span class="sr-only">Search shortcuts</span>
+    <input
+      type="search"
+      class="input w-full max-w-sm"
+      placeholder="Search shortcuts"
+      data-testid="keymap-search"
+      bind:value={ctl.filter}
+    />
+  </label>
+
   <KeymapGroupsSection {ctl} />
 
   <KeymapContextsSection {ctl} />
 
-  <div class="mt-3 flex items-center gap-3">
-    <button
-      class="rounded bg-accent-fill px-3 py-1.5 text-sm text-white hover:bg-accent-fill disabled:opacity-50"
-      disabled={!ctl.hasChanges || ctl.saving}
-      onclick={ctl.openConfirm}
-    >
-      Save
-    </button>
+  <div class="mt-3">
     <button
       class="text-sm text-fg-2 underline hover:text-fg-1"
       onclick={() => (ctl.resetAllOpen = true)}
     >
       Reset all to defaults
     </button>
-    {#if ctl.validating}<span class="text-xs text-fg-3">ctl.validating…</span>{/if}
+    {#if ctl.validating}<span class="ml-3 text-xs text-fg-3">Checking…</span>{/if}
   </div>
+
+  <SaveBar
+    dirty={ctl.hasChanges}
+    saving={ctl.saving}
+    onsave={ctl.openConfirm}
+    ondiscard={ctl.discardChanges}
+  />
 
   <KeymapConfirmModals {ctl} />
 </div>

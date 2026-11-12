@@ -15,12 +15,15 @@
     ctl?: ClusterRunController;
     /** Called when a different partition starts serving, so a page can reload what it shows. */
     onserving?: () => void;
+    /** False when the served next step belongs to another action (one primary per view). */
+    primary?: boolean;
   }
 
   let {
     target = 'item',
     ctl = new ClusterRunController(target),
     onserving,
+    primary = true,
   }: Props = $props();
 
   let lastServing: string | null | undefined;
@@ -54,7 +57,7 @@
     </div>
     <button
       type="button"
-      class="btn btn-primary"
+      class="btn {primary ? 'btn-primary' : ''}"
       disabled={ctl.busy}
       onclick={() => void ctl.cluster()}
       data-testid="cluster-run-start"
