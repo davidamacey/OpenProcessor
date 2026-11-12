@@ -158,6 +158,13 @@ def projects_response(
         'labels': {'status': PROJECT_STATUS_LABELS},
         'include_archived': False,
         'total': len(projects) if projects is not None else 1,
+        'next_cursor': None,
+        'sort': 'name:asc',
+        'sort_options': [
+            {'id': 'name:asc', 'label': 'Name'},
+            {'id': 'updated_at:desc', 'label': 'Recently updated'},
+            {'id': 'items:desc', 'label': 'Most items'},
+        ],
     }
 
 

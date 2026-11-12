@@ -114,6 +114,12 @@ export interface ProjectsResponse {
   include_archived: boolean;
   /** Projects matching `q`, before `limit` cut the page. */
   total: number;
+  /** Pass as `cursor` for the next page; `null` on the last. */
+  next_cursor: string | null;
+  /** The sort id this page is in. */
+  sort: string;
+  /** The served sorts, labelled. */
+  sort_options: { id: string; label: string }[];
 }
 
 export interface ProjectWarning {

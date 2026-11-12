@@ -101,6 +101,13 @@ export function testProjectsResponse(
     },
     include_archived: false,
     total: projects.length,
+    next_cursor: null,
+    sort: 'name:asc',
+    sort_options: [
+      { id: 'name:asc', label: 'Name' },
+      { id: 'updated_at:desc', label: 'Recently updated' },
+      { id: 'items:desc', label: 'Most items' },
+    ],
     ...over,
   };
 }

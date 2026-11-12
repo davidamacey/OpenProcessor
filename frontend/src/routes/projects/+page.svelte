@@ -140,7 +140,7 @@
       </p>
     {/if}
 
-    <div class="mb-3 flex items-center gap-3">
+    <div class="mb-3 flex flex-wrap items-center gap-3">
       <label class="flex items-center gap-2 text-sm text-zinc-300">
         <input
           type="checkbox"
@@ -151,7 +151,39 @@
         />
         Show archived
       </label>
-      <span class="grow"></span>
+      <input
+        type="search"
+        class="min-w-0 max-w-56 grow rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-100 placeholder:text-zinc-500"
+        placeholder="Find a project…"
+        aria-label="Find a project"
+        data-testid="projects-search"
+        value={admin.query}
+        oninput={(e) => admin.type(e.currentTarget.value)}
+      />
+      <select
+        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+        aria-label="Status"
+        data-testid="projects-status-filter"
+        value={admin.statusFilter}
+        onchange={(e) => void admin.setStatusFilter(e.currentTarget.value)}
+      >
+        <option value="">Any status</option>
+        {#each ['active', 'archived', 'building', 'failed', 'deleting'] as st (st)}
+          <option value={st}>{admin.statusLabel(st)}</option>
+        {/each}
+      </select>
+      <select
+        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm text-zinc-200"
+        aria-label="Sort"
+        data-testid="projects-sort"
+        value={admin.sort}
+        onchange={(e) => void admin.setSort(e.currentTarget.value)}
+      >
+        {#each admin.sortOptions as o (o.id)}
+          <option value={o.id}>{o.label}</option>
+        {/each}
+      </select>
+      <span class="grow max-md:hidden"></span>
       <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
         >Combine projects…</a
       >
@@ -325,6 +357,21 @@
           {/each}
         </tbody>
       </table>
+    </div>
+    <div
+      class="mt-2 flex items-center gap-3 text-xs text-zinc-500"
+      data-testid="projects-pager"
+    >
+      <span>Showing {admin.list.length} of {admin.total}</span>
+      {#if admin.hasMore}
+        <button
+          type="button"
+          class="btn"
+          disabled={admin.loading}
+          data-testid="projects-more"
+          onclick={() => void admin.more()}>Show more</button
+        >
+      {/if}
     </div>
   </main>
 </div>
