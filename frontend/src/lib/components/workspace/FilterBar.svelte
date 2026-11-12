@@ -62,7 +62,7 @@
       type="button"
       class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
       data-testid="scope-chip"
-      aria-label="Leave {scope.kind} scope"
+      title="Leave this {scope.kind}"
       onclick={() => ws.setScope(null)}
     >
       {scope.kind === 'cluster' ? 'Cluster' : scope.kind} · {scope.id} ×
@@ -73,7 +73,7 @@
       type="button"
       class="chip border-blue-500/60 bg-blue-500/15 text-blue-100"
       data-testid="queue-chip"
-      aria-label="Leave the {queueLabel} queue"
+      title="Leave the {queueLabel} queue"
       onclick={() => ws.setQueue(null)}
     >
       Queue · {queueLabel} ×

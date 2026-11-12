@@ -140,7 +140,7 @@ describe('ClassPicker', () => {
 
   it('picks the highlighted class with Enter', () => {
     render();
-    const input = type('bu');
+    const input = type('ga');
     key(input, 'Enter');
     expect(onpick.mock.calls[0]![0]).toMatchObject({ name: 'gadget' });
   });

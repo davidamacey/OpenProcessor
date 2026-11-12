@@ -29,6 +29,14 @@
   let reasonsOpen = $state(false);
 
   const hasSelection = $derived(ws.selection.kind !== 'none');
+  const count = $derived.by((): number | null => {
+    const sel = ws.selection;
+    if (sel.kind === 'none') return null;
+    if (sel.kind === 'items') return sel.cropIds.length;
+    if (sel.kind === 'images') return sel.imageIds.length;
+    if (sel.kind === 'clusters') return sel.clusterUids.length;
+    return null;
+  });
   const text = $derived.by(() => {
     if (!hasSelection) return 'Nothing selected';
     if (ws.summary.error) return ws.summary.error;
@@ -64,6 +72,9 @@
     aria-live="polite"
     data-testid="bulk-summary">{text}</span
   >
+  {#if count !== null}
+    <span class="font-mono text-zinc-500" data-testid="bulk-count">{count} selected</span>
+  {/if}
   {#if ws.pendingSelectAll}
     <button
       type="button"
@@ -126,7 +137,7 @@
     {/if}
     {#if reasonsOpen}
       <div
-        class="absolute left-0 top-full z-20 mt-1 w-48 rounded border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
+        class="absolute left-0 top-full z-20 mt-1 w-44 rounded sm:left-auto sm:right-0 border border-zinc-700 bg-zinc-900 py-1 shadow-lg"
         data-testid="ignore-reasons"
       >
         {#each excludeReasonsStore.reasons as r (r.id)}

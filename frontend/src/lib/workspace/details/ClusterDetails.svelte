@@ -36,15 +36,17 @@
     <p
       class="font-mono text-[11px] text-zinc-300"
       data-testid="cluster-header-counts"
-      title="Class-wide counts are every crop of this class (test holdout included), from the class registry; 'in this cluster' is this cluster's own member count."
+      title="validated · labeled · cluster total — class-wide counts are every crop of this class (test holdout included), from the class registry; 'in this cluster' is this cluster's own member count (test holdout included). The grid lists only reviewable members."
     >
       {#if cls}
         <span class="text-zinc-500">class-wide:</span>
         <span class="text-emerald-300">{(cls.validated_count ?? 0).toLocaleString()}</span
         >
         <span class="text-zinc-500">validated</span>
+        <span class="mx-1 text-zinc-600">·</span>
         <span class="text-blue-300">{(cls.count ?? 0).toLocaleString()}</span>
-        <span class="text-zinc-500">labeled</span> |
+        <span class="text-zinc-500">labeled</span>
+        <span class="mx-1 text-zinc-600">|</span>
       {/if}
       <span class="text-zinc-200">{card.size.toLocaleString()}</span>
       <span class="text-zinc-500">in this cluster</span>

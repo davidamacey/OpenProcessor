@@ -9,7 +9,7 @@
  * `itemQuery()` and `itemBody()` are the only places that combine the
  * filter, the queue and the scope: views call them and never build a filter.
  */
-import { SvelteURLSearchParams } from 'svelte/reactivity';
+import { MediaQuery, SvelteURLSearchParams } from 'svelte/reactivity';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { page } from '$app/state';
@@ -40,11 +40,7 @@ import {
   type WorkspaceUrlState,
 } from './workspaceUrl';
 
-const DETAILS_MEDIA = '(min-width: 1280px)';
-
-function wideScreen(): boolean {
-  return typeof matchMedia === 'function' && matchMedia(DETAILS_MEDIA).matches;
-}
+const DETAILS_MEDIA = 'min-width: 1280px';
 
 export class WorkspaceController {
   /** The bar's draft. Applying it writes the URL; the URL re-seeds it. */
@@ -52,7 +48,10 @@ export class WorkspaceController {
   selection = $state<WorkspaceSelection>(NO_SELECTION);
   /** Set by a second select-all on a full page: the served total to confirm. */
   pendingSelectAll = $state<{ total: number } | null>(null);
-  detailsOpen = $state(wideScreen());
+  /** The user's choice for the details panel; unset, it follows the screen width. */
+  #detailsChoice = $state<boolean | null>(null);
+  readonly #wide =
+    typeof matchMedia === 'function' ? new MediaQuery(DETAILS_MEDIA) : null;
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
@@ -242,8 +241,12 @@ export class WorkspaceController {
     this.railOpen = !this.railOpen;
   }
 
+  get detailsOpen(): boolean {
+    return this.#detailsChoice ?? this.#wide?.current ?? false;
+  }
+
   toggleDetails(): void {
-    this.detailsOpen = !this.detailsOpen;
+    this.#detailsChoice = !this.detailsOpen;
   }
 
   dispose(): void {

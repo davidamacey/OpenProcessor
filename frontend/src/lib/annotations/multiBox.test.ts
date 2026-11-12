@@ -241,15 +241,15 @@ describe('toCanvasBoxes', () => {
   it('region box labels are the served display names', () => {
     const editable = toEditableBoxes([
       box({ boxId: 'b1', displayName: 'ABC123' }),
-      box({ boxId: 'b2', displayName: 'Plate 2', locked: true }),
+      box({ boxId: 'b2', displayName: 'Tag 2', locked: true }),
     ]);
-    const canvas = toCanvasBoxes(editable, 'Plate', new Set(['b2']));
-    expect(canvas.map((b) => b.label)).toEqual(['ABC123', 'Plate 2']);
+    const canvas = toCanvasBoxes(editable, 'Tag', new Set(['b2']));
+    expect(canvas.map((b) => b.label)).toEqual(['ABC123', 'Tag 2']);
     expect(canvas.map((b) => b.locked)).toEqual([false, true]);
   });
 
   it('a box not yet saved is named by the region name alone', () => {
     const { boxes } = addBox([], { cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 });
-    expect(toCanvasBoxes(boxes, 'Plate', new Set())[0]!.label).toBe('Plate');
+    expect(toCanvasBoxes(boxes, 'Tag', new Set())[0]!.label).toBe('Tag');
   });
 });

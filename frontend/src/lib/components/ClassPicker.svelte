@@ -90,7 +90,7 @@
               >
             {/if}
             <span class="grow truncate">{cls.name}</span>
-            <span class="shrink-0 text-[10px] text-zinc-500">{cls.count}</span>
+            <span class="shrink-0 text-[10px] text-zinc-300">{cls.count}</span>
           </button>
         </li>
       {/each}
