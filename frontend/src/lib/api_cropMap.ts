@@ -265,6 +265,41 @@ function asStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
 
+/** The audit-sample fields of a served crop. */
+function mapCropAudit(c: RawCrop) {
+  return {
+    audit_sample: c.audit_sample ?? null,
+    audit_label_name: c.audit_label_name ?? null,
+    audit_label_source: c.audit_label_source ?? null,
+    audit_outcome: c.audit_outcome ?? null,
+    audit_human_name: c.audit_human_name ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** The mistakenness and probe fields of a served crop. */
+function mapCropScores(c: RawCrop) {
+  return {
+    mistakenness_score: c.mistakenness_score ?? null,
+    mistakenness_method: c.mistakenness_method ?? null,
+    mistakenness_version: c.mistakenness_version ?? null,
+    mistakenness_scored_at: c.mistakenness_scored_at ?? null,
+    probe_disagreement: c.probe_disagreement ?? null,
+    probe_in_scope: c.probe_in_scope ?? null,
+    probe_model_version: c.probe_model_version ?? null,
+    probe_actionable: c.probe_actionable ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** Where a combined crop came from. */
+function mapCropOrigin(c: RawCrop) {
+  return {
+    origin_project: c.origin_project ?? null,
+    origin_item_id: c.origin_item_id ?? null,
+    origin_image_id: c.origin_image_id ?? null,
+    origin_split: c.origin_split ?? null,
+  } satisfies Partial<Crop>;
+}
+
 export function mapRawCrop(c: RawCrop): Crop {
   const bb = c.bbox_norm ?? [0, 0, 0, 0];
   const out: Crop = {
@@ -275,11 +310,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
     detector_class_name: c.detector_class_name ?? null,
-    audit_sample: c.audit_sample ?? null,
-    audit_label_name: c.audit_label_name ?? null,
-    audit_label_source: c.audit_label_source ?? null,
-    audit_outcome: c.audit_outcome ?? null,
-    audit_human_name: c.audit_human_name ?? null,
+    ...mapCropAudit(c),
     detector_class_id: c.detector_class_id ?? null,
     detector_confidence: c.detector_confidence ?? null,
     class_source: c.class_source ?? null,
@@ -311,14 +342,6 @@ export function mapRawCrop(c: RawCrop): Crop {
     vlm_confidence: c.vlm_confidence ?? null,
     vlm_suggested_class_id: c.vlm_proposed_class_id ?? null,
     vlm_suggested_class_name: c.vlm_proposed_class_name ?? null,
-    mistakenness_score: c.mistakenness_score ?? null,
-    mistakenness_method: c.mistakenness_method ?? null,
-    mistakenness_version: c.mistakenness_version ?? null,
-    mistakenness_scored_at: c.mistakenness_scored_at ?? null,
-    probe_disagreement: c.probe_disagreement ?? null,
-    probe_in_scope: c.probe_in_scope ?? null,
-    probe_model_version: c.probe_model_version ?? null,
-    probe_actionable: c.probe_actionable ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
@@ -334,14 +357,12 @@ export function mapRawCrop(c: RawCrop): Crop {
     on_negative_frame: !!c.on_negative_frame,
     import_standalone_region: !!c.import_standalone_region,
     proposal_chain: asStringArray(c.proposal_chain),
-    origin_project: c.origin_project ?? null,
-    origin_item_id: c.origin_item_id ?? null,
-    origin_image_id: c.origin_image_id ?? null,
-    origin_split: c.origin_split ?? null,
     combine_conflict: !!c.combine_conflict,
     combine_conflict_origins: asStringArray(c.combine_conflict_origins),
     combine_merged_origins: asStringArray(c.combine_merged_origins),
     embedding_states: c.embedding_states ?? {},
+    ...mapCropScores(c),
+    ...mapCropOrigin(c),
     near_dup_group_id:
       typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,
     near_dup_group_size: c.near_dup_group_size ?? null,
