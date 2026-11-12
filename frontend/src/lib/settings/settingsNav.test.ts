@@ -30,6 +30,10 @@ describe('settingsNav', () => {
     expect(by('personal')).toEqual(['Keyboard shortcuts']);
   });
 
+  it('Keyboard shortcuts is a client preference and never needs a served feature', () => {
+    expect(SETTINGS_SECTIONS.find((s) => s.id === 'keyboard')!.needs).toBeUndefined();
+  });
+
   it('a sub-page belongs to its section, the longest path wins', () => {
     expect(sectionOfPath('/p/x/settings')?.id).toBe('general');
     expect(sectionOfPath('/p/x/settings/models/vlm/a')?.id).toBe('models');

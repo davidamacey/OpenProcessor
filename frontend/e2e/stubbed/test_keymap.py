@@ -262,7 +262,10 @@ def test_keymap_absent_when_404(stub, page, app_url):
     # (including the 404'd GET /keymap this assertion depends on) instead
     # of an arbitrary settle sleep.
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
-    assert page.locator('text=Keyboard shortcuts').count() == 0
+    # Keyboard shortcuts stays in the sidebar (a client preference); its page says the
+    # backend does not serve the keymap.
+    page.get_by_test_id('sidebar-nav').get_by_role('link', name='Keyboard shortcuts').click()
+    expect(page.get_by_test_id('keymap-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     dismiss_calls: list[str] = []
 

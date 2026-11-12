@@ -7,6 +7,11 @@ from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import save_screens
 from playwright.sync_api import expect
 from test_ingest import _base_ingest_stubs
+from test_keymap import served_keymap_doc
+from test_open_vocab import serve_open_vocab
+from test_prompt_packs import serve_packs
+from test_region_profiles import serve_profiles
+from test_vlm_models import serve_registry
 
 
 FOLDER = '/data/archive'
@@ -56,8 +61,23 @@ def test_settings_sidebar_and_search(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/scores/coverage(\?|$)', {'coverage': {}})
     stub.on('GET', r'/scores/status(\?|$)', {'status': 'idle'})
+    # Every feature probe served, so the screenshot shows the whole navigation.
+    serve_packs(stub)
+    serve_profiles(stub)
+    serve_registry(stub)
+    serve_open_vocab(stub)
+    stub.on('GET', r'/keymap(\?|$)', served_keymap_doc())
+    stub.on('GET', r'/vlm/policy(\?|$)', {'scope': 'all', 'revision': 1})
     page.goto(f'{app_url}/p/default/settings')
     nav = page.get_by_test_id('sidebar-nav')
+    for name in (
+        'Prompt packs',
+        'Region profiles',
+        'Models and VLM',
+        'Open vocabulary',
+        'Keyboard shortcuts',
+    ):
+        expect(nav.get_by_role('link', name=name)).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(nav.get_by_role('link', name='General')).to_have_attribute(
         'aria-current', 'page', timeout=ACTION_TIMEOUT_MS
     )

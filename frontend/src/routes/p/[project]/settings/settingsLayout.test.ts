@@ -81,6 +81,7 @@ describe('Settings layout', () => {
         'Cluster profiles',
         'Curation scores',
         'Serving profiles',
+        'Keyboard shortcuts',
       ]),
     );
     for (const absent of [

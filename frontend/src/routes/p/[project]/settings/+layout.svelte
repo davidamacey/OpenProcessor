@@ -25,7 +25,6 @@
   import { packsAvailability } from '$lib/packs/packsAvailability.svelte';
   import { profilesAvailability } from '$lib/profiles/profilesAvailability.svelte';
   import { vlmAvailability } from '$lib/vlm/vlmAvailability.svelte';
-  import { keymapAvailability } from '$stores/keymap.svelte';
 
   let { children }: { children: Snippet } = $props();
 
@@ -42,7 +41,6 @@
     profiles: () => profilesAvailability.available,
     vlm: () => vlmAvailability.available,
     openVocab: () => openVocabAvailability.available,
-    keymap: () => keymapAvailability.available,
   };
   const offered = $derived(
     SETTINGS_SECTIONS.filter((s) => !s.needs || served[s.needs]() === true),

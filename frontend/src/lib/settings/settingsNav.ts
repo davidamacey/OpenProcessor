@@ -9,7 +9,7 @@ import type { ProjectSubPath } from '$lib/projectPaths';
 
 export type SettingsScope = 'Project' | 'Deployment' | 'Personal';
 export type SettingsGroupId = 'project' | 'labelling' | 'deployment' | 'personal';
-export type SettingsNeed = 'packs' | 'profiles' | 'vlm' | 'openVocab' | 'keymap';
+export type SettingsNeed = 'packs' | 'profiles' | 'vlm' | 'openVocab';
 
 export interface SettingsSection {
   id: string;
@@ -122,7 +122,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     group: 'personal',
     scope: 'Project',
     keywords: 'keys hotkeys keymap bindings',
-    needs: 'keymap',
   },
 ];
 
