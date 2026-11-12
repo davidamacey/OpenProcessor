@@ -115,7 +115,7 @@ async def test_a_repeat_is_served_from_the_cache_and_a_moved_box_is_not(
         return real(*args, **kwargs)
 
     monkeypatch.setattr(crop_preview, 'render_preview', counting)
-    cache = PreviewCache(maxsize=4)
+    cache = PreviewCache(max_bytes=1 << 20)
     params: dict[str, Any] = {'pad': 0.6, 'min_side': 320, 'max_side': 1024, 'outline': False}
     first = await cache.get_or_compute(photo, TINY, **params)
     again = await cache.get_or_compute(photo, TINY, **params)
@@ -124,6 +124,20 @@ async def test_a_repeat_is_served_from_the_cache_and_a_moved_box_is_not(
     await cache.get_or_compute(photo, (0.1, 0.1, 0.2, 0.2), **params)
     await cache.get_or_compute(photo, TINY, **{**params, 'outline': True})
     assert len(calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_the_cache_is_bounded_by_bytes_not_entries(photo: Path) -> None:
+    params: dict[str, Any] = {'pad': 0.6, 'min_side': 320, 'max_side': 1024, 'outline': False}
+    one = len(await PreviewCache(max_bytes=1 << 20).get_or_compute(photo, TINY, **params))
+    cache = PreviewCache(max_bytes=one * 2 + 1)
+    for i in range(5):
+        await cache.get_or_compute(photo, (0.1 + i / 20, 0.1, 0.2 + i / 20, 0.2), **params)
+    assert cache.size_bytes <= one * 2 + 1
+    # An entry larger than the whole budget is served, never stored (and never raises).
+    tiny = PreviewCache(max_bytes=one - 1)
+    assert await tiny.get_or_compute(photo, TINY, **params)
+    assert tiny.size_bytes == 0
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +157,7 @@ def client(photo: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
 
     monkeypatch.setattr(images_router, '_fetch_crop', fetch_crop)
     monkeypatch.setattr(images_router, '_resolve_image_for_crop', lambda _crop: photo)
-    monkeypatch.setattr(images_router, 'PREVIEW_CACHE', PreviewCache(maxsize=8))
+    monkeypatch.setattr(images_router, 'PREVIEW_CACHE', PreviewCache(max_bytes=1 << 20))
     app = FastAPI()
     app.include_router(images_router.crops_router)
     app.dependency_overrides[images_router._raw_opensearch_dep] = lambda: object()
