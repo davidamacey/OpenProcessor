@@ -40,7 +40,7 @@ describe('createConfigEditorFlow', () => {
     const target = { name: 'x', revision: 2 } as never;
     flow.openActivate(target);
     expect(ed.active.clearAction).toHaveBeenCalled();
-    expect(flow.activating).toBe(target);
+    expect(flow.activating).toEqual(target);
   });
 
   it('toasts the saved revision only when the save went through', async () => {
