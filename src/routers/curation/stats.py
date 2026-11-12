@@ -40,7 +40,7 @@ async def stats_classes(
         Query(
             description=(
                 "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. "
-                'Default `class_id:asc`. An unknown field or direction is a 400.'
+                'A bare field takes its default direction. Default `class_id:asc`. An unknown field or direction is a 400.'
             )
         ),
     ] = None,

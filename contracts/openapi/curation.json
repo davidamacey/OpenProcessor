@@ -72101,7 +72101,7 @@
             }
           },
           {
-            "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. Default `class_id:asc`. An unknown field or direction is a 400.",
+            "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. A bare field takes its default direction. Default `class_id:asc`. An unknown field or direction is a 400.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -72114,7 +72114,7 @@
                   "type": "null"
                 }
               ],
-              "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. Default `class_id:asc`. An unknown field or direction is a 400.",
+              "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. A bare field takes its default direction. Default `class_id:asc`. An unknown field or direction is a 400.",
               "title": "Sort"
             }
           },

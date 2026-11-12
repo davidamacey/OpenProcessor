@@ -37,6 +37,8 @@ CLASS_SORT_LABELS: dict[str, str] = {
     'test_count': 'Test (held out)',
 }
 DEFAULT_CLASS_SORT = 'class_id:asc'
+# A bare field sorts names and ids ascending and every count largest first.
+ASCENDING_BY_DEFAULT = frozenset({'class_name', 'class_id'})
 CLASS_SORT_OPTIONS: list[SortOption] = [
     {'id': f'{field}:{direction}', 'label': f'{label} ({direction})'}
     for field, label in CLASS_SORT_LABELS.items()
@@ -45,11 +47,12 @@ CLASS_SORT_OPTIONS: list[SortOption] = [
 
 
 def parse_class_sort(sort: str | None) -> tuple[str, bool]:
-    """``'<field>[:asc|desc]'`` -> ``(field, descending)``.
+    """``'<field>[:asc|desc]'`` -> ``(field, descending)``; a bare field takes its default direction.
 
     Raises ``ValueError`` (the router maps it to 400) for an unknown field or direction."""
     field, _, direction = (sort or DEFAULT_CLASS_SORT).strip().partition(':')
-    field, direction = field.strip(), (direction.strip() or 'asc').lower()
+    field = field.strip()
+    direction = (direction.strip() or ('asc' if field in ASCENDING_BY_DEFAULT else 'desc')).lower()
     if field not in CLASS_SORT_LABELS:
         msg = f'unknown sort field {field!r}; choose from {sorted(CLASS_SORT_LABELS)}'
         raise ValueError(msg)

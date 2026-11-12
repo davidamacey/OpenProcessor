@@ -92,6 +92,8 @@ def _ids(client: TestClient, sort: str | None) -> list[int]:
     ('sort', 'expected'),
     [
         (None, [1, 2, 3]),
+        ('class_name', [2, 1, 3]),
+        ('count', [2, 3, 1]),
         ('class_name:asc', [2, 1, 3]),
         ('class_id:desc', [3, 2, 1]),
         ('count:desc', [2, 3, 1]),
