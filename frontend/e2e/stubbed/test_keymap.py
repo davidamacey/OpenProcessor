@@ -397,18 +397,6 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.assert_fail_closed()
 
 
-CLUSTER_CLASSES = [
-    {
-        'id': 1,
-        'name': 'widget',
-        'group': None,
-        'hotkey_letter': None,
-        'count': 10,
-        'validated_count': 5,
-        'deprecated': False,
-    },
-]
-
 CLUSTER_UID = 'cl-fixture-0001'
 CLUSTER_LIST = cluster_list(cluster_card(CLUSTER_UID, size=3, dominant_class_name='widget'))
 
@@ -526,7 +514,6 @@ def test_keymap_per_context_override(stub, page, app_url):
         discard_calls.append((request.method, match.string))
         return (200, cluster_crop(1))
 
-    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLUSTER_CLASSES})
     stub.on('GET', r'/clusters(\?|$)', CLUSTER_LIST)
     stub.on(
         'GET',

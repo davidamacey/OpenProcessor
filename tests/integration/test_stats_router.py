@@ -260,8 +260,11 @@ def test_stats_dataset_labeled_counts_consistent(app_client: TestClient) -> None
     # of crops with a class_id -- the only crops labeled.* should cover.
     with_class_total = 6
 
-    bucket_sum = sum(int(labeled[k]) for k in labeled)
-    assert bucket_sum == with_class_total, (
+    # ``total`` and ``rows`` are served alongside the provenance counts (R-7); only the counts sum.
+    buckets = {row['key']: int(row['count']) for row in labeled['rows']}
+    assert buckets == {k: int(labeled[k]) for k in buckets}
+    bucket_sum = sum(buckets.values())
+    assert bucket_sum == int(labeled['total']) == with_class_total, (
         f'labeled.* buckets sum to {bucket_sum} but {with_class_total} crops carry a class_id'
     )
 

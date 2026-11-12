@@ -122,6 +122,30 @@ export interface ClustersResponse extends PaginatedResponse<Cluster> {
   pending_partition: PendingPartition | null;
 }
 
+function _rawToClustersResponse(
+  raw: RawClustersResp,
+  filter: ClusterFilter,
+): ClustersResponse {
+  const items = (raw.items ?? []).map(_rawClusterToCluster);
+  return {
+    items,
+    total: raw.total ?? items.length,
+    page: 1,
+    page_size: items.length,
+    sort: raw.sort ?? null,
+    sort_options: raw.sort_options ?? [],
+    flag_vocabulary: raw.flag_vocabulary ?? [],
+    truncated: raw.truncated === true,
+    empty_reason: raw.empty_reason ?? null,
+    empty_message: raw.empty_message ?? null,
+    pending_partition: raw.pending_partition ?? null,
+    representatives_offset:
+      raw.representatives_offset ?? filter.representatives_offset ?? 0,
+    representatives_limit:
+      raw.representatives_limit ?? filter.representatives_limit ?? 50,
+  };
+}
+
 export async function getClusters(
   filter: ClusterFilter = {},
   signal?: AbortSignal,
@@ -166,24 +190,7 @@ export async function getClusters(
     {},
     signal,
   );
-  const items = (raw.items ?? []).map(_rawClusterToCluster);
-  return {
-    items,
-    total: raw.total ?? items.length,
-    page: 1,
-    page_size: items.length,
-    sort: raw.sort ?? null,
-    sort_options: raw.sort_options ?? [],
-    flag_vocabulary: raw.flag_vocabulary ?? [],
-    truncated: raw.truncated === true,
-    empty_reason: raw.empty_reason ?? null,
-    empty_message: raw.empty_message ?? null,
-    pending_partition: raw.pending_partition ?? null,
-    representatives_offset:
-      raw.representatives_offset ?? filter.representatives_offset ?? 0,
-    representatives_limit:
-      raw.representatives_limit ?? filter.representatives_limit ?? 50,
-  };
+  return _rawToClustersResponse(raw, filter);
 }
 
 /** One cluster's facet counts (`GET {P}/clusters/{cluster_uid}/facets`). */

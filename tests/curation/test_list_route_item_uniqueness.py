@@ -14,7 +14,9 @@ from fastapi import FastAPI
 ONE_ENTRY_PER_DOC = {
     '/audit/queue',
     '/classes/{class_id}/crops',
+    '/clusters/{cluster_uid}',  # representatives: one hit per member document
     '/crops',
+    '/near_duplicates/groups/{group_id}',  # members: one row per (group, member id)
     '/images/{image_id}',
     '/review/{tab}',
     '/search/similar',
