@@ -54,6 +54,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 ### Fixed
 
 - **Audit counters.** `POST /audit/start` waits for its marks to be searchable, so `GET /audit/report` right after a draw counts every drawn crop as waiting instead of a lagging share of them.
+- **Small-crop thumbnails.** `GET /crops/{crop_id}/thumbnail` serves a box under 32 px on its long side with its surroundings (the preview cut, at the thumbnail size) instead of a few pixels that showed as a black tile, and a box under one pixel wide renders instead of answering 400.
 - **Adopt detector classes.** An item excluded while an adoption runs is no longer given a class, and detector names that normalize to nothing no longer count as pending items (the workflow step now reaches done and "adopt again" stops repeating).
 - **Navigation.** The desktop and menu navs have distinct landmark names, the menu closes when the window grows to the desktop layout, and the scroll and back chevrons are icons.
 - **Crop preview cache.** The `GET /crops/{crop_id}/preview` cache is bounded in bytes (16 MiB per process) instead of by entry count, so 2048 px previews cannot grow it past that.

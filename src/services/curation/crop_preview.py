@@ -47,16 +47,29 @@ def _normalized(bbox_norm: Sequence[float]) -> tuple[float, float, float, float]
     return x1, y1, x2, y2
 
 
+def _pixel_edge(low: float, high: float, size: int) -> tuple[int, int]:
+    start, end = max(0, int(low * size)), min(size, int(high * size))
+    if end <= start < size and high > low:
+        end = start + 1  # a sub-pixel box still covers the pixel it sits in
+    return start, end
+
+
+def pixel_box(bbox_norm: Sequence[float], width: int, height: int) -> tuple[int, int, int, int]:
+    """The box in pixels, clamped to the image and at least one pixel on each side when it has
+    any normalized area. ``ValueError`` for a box with no area or one outside the image."""
+    x1, y1, x2, y2 = _normalized(bbox_norm)
+    (bx1, bx2), (by1, by2) = _pixel_edge(x1, x2, width), _pixel_edge(y1, y2, height)
+    if bx2 <= bx1 or by2 <= by1:
+        raise ValueError(f'invalid bbox after pixel mapping: ({bx1},{by1},{bx2},{by2})')
+    return bx1, by1, bx2, by2
+
+
 def padded_pixel_box(
     bbox_norm: Sequence[float], width: int, height: int, pad: float
 ) -> tuple[tuple[int, int, int, int], tuple[int, int, int, int]]:
     """``(context, box)`` in pixels: the box and the box grown by ``pad`` of its size on every
     side, clamped to the image. ``ValueError`` for a box with no area."""
-    x1, y1, x2, y2 = _normalized(bbox_norm)
-    bx1, by1 = max(0, int(x1 * width)), max(0, int(y1 * height))
-    bx2, by2 = min(width, int(x2 * width)), min(height, int(y2 * height))
-    if bx2 <= bx1 or by2 <= by1:
-        raise ValueError(f'invalid bbox after pixel mapping: ({bx1},{by1},{bx2},{by2})')
+    bx1, by1, bx2, by2 = pixel_box(bbox_norm, width, height)
     mx, my = round((bx2 - bx1) * pad), round((by2 - by1) * pad)
     context = (max(0, bx1 - mx), max(0, by1 - my), min(width, bx2 + mx), min(height, by2 + my))
     return context, (bx1, by1, bx2, by2)
@@ -171,6 +184,7 @@ __all__ = [
     'PREVIEW_CACHE',
     'PreviewCache',
     'padded_pixel_box',
+    'pixel_box',
     'render_preview',
     'target_scale',
 ]
