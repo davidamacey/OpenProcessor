@@ -47947,21 +47947,25 @@
             }
           },
           {
-            "description": "Members of this cluster of the served partition.",
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
             "in": "query",
             "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "format": "uuid",
-                  "type": "string"
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Members of this cluster of the served partition.",
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
               "title": "Cluster Uid"
             }
           },
@@ -49251,21 +49255,25 @@
             }
           },
           {
-            "description": "Members of this cluster of the served partition.",
+            "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
             "in": "query",
             "name": "cluster_uid",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "format": "uuid",
-                  "type": "string"
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "maxItems": 200,
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Members of this cluster of the served partition.",
+              "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
               "title": "Cluster Uid"
             }
           },

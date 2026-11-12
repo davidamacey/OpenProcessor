@@ -284,7 +284,10 @@ def test_a_regions_cursor_of_another_sort_is_refused() -> None:
     first = client.get('/curation/projects/default/regions', params={'limit': 2}).json()
     resp = client.get(
         '/curation/projects/default/regions',
-        params={'cursor': first['next_cursor'], 'cluster_uid': 'u1'},
+        params={
+            'cursor': first['next_cursor'],
+            'cluster_uid': '6f1c1d3e-0a7e-4c55-9d5e-2f0f8f2a9b11',
+        },
     )
     assert resp.status_code == 400
     assert resp.json()['detail']['error'] == 'cursor_invalid'

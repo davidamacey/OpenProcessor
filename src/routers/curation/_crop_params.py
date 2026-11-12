@@ -6,7 +6,6 @@ the index in the list the same request would serve.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -29,7 +28,6 @@ class CropBrowse:
     """What a crops request asks for besides the item filter, the cursor and the limit."""
 
     sort: str | None = None
-    cluster_uid: uuid.UUID | None = None
     label_source: str | None = None
     class_source: str | None = None
     label_validated: bool | None = None
@@ -63,11 +61,6 @@ def crop_browse(
                 'lists every id with its label. Ignored by order=outliers|diverse.'
             )
         ),
-    ] = None,
-    cluster_uid: Annotated[
-        uuid.UUID | None,
-        UnsetIfEmpty,
-        Query(description='Members of this cluster of the served partition.'),
     ] = None,
     label_source: str | None = None,
     class_source: str | None = None,
@@ -162,7 +155,6 @@ def crop_browse(
 ) -> CropBrowse:
     return CropBrowse(
         sort=sort,
-        cluster_uid=cluster_uid,
         label_source=label_source,
         class_source=class_source,
         label_validated=label_validated,
@@ -213,7 +205,6 @@ async def resolve_listing(opensearch: Any, item_filter: ItemFilter, p: CropBrows
             sort=p.sort,
             item_filter_params=item_filter.model_dump(exclude_defaults=True),
             route_params={
-                'cluster_uid': None if p.cluster_uid is None else str(p.cluster_uid),
                 'label_source': p.label_source,
                 'class_source': p.class_source,
                 'label_validated': p.label_validated,

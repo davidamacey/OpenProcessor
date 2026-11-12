@@ -94,7 +94,9 @@ async def list_crops(
                 index=items_index(),
                 order=browse.order,
                 query_clause=listing.query_clause,
-                cluster_uid=None if browse.cluster_uid is None else str(browse.cluster_uid),
+                cluster_uid=str(item_filter.cluster_uids[0])
+                if len(item_filter.cluster_uids) == 1
+                else None,
                 item_filter=listing.item_filter,
                 cursor=cursor,
                 limit=limit,
