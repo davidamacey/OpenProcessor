@@ -102,6 +102,16 @@ export function testProjectsResponse(
     include_archived: false,
     total: projects.length,
     next_cursor: null,
+    default_limit: 50,
+    max_limit: 200,
+    sort_cap: null,
+    status_options: [
+      { id: 'active', label: 'Active' },
+      { id: 'archived', label: 'Archived' },
+      { id: 'building', label: 'Building' },
+      { id: 'failed', label: 'Failed' },
+      { id: 'deleting', label: 'Deleting' },
+    ],
     sort: 'name:asc',
     sort_options: [
       { id: 'name:asc', label: 'Name' },

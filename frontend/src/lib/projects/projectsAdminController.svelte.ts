@@ -102,9 +102,8 @@ const TRANSIENT_STATUSES = ['building', 'deleting'];
 /** How often the list is re-read while any row is transient. */
 const TRANSIENT_POLL_MS = 2000;
 
-/** Rows per page; a refresh re-reads as many as are already shown (the server caps at 500). */
+/** Rows per page; a refresh re-reads as many as are already shown, up to the served maximum. */
 export const ADMIN_PAGE = 50;
-const MAX_PAGE = 500;
 const TYPE_DELAY_MS = 250;
 
 export function createProjectsAdmin() {
@@ -120,6 +119,9 @@ export function createProjectsAdmin() {
   let statusFilter = $state('');
   let sort = $state<string | undefined>(undefined);
   let sortOptions = $state<{ id: string; label: string }[]>([]);
+  let statusOptions = $state<{ id: string; label: string }[]>([]);
+  let maxLimit = $state(ADMIN_PAGE);
+  let sortCap = $state<number | null>(null);
   let total = $state(0);
   let nextCursor = $state<string | null>(null);
   let typeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -154,13 +156,16 @@ export function createProjectsAdmin() {
     const mine = ++seq;
     loading = true;
     try {
-      const shown = Math.min(MAX_PAGE, Math.max(ADMIN_PAGE, list.length));
+      const shown = Math.min(maxLimit, Math.max(ADMIN_PAGE, list.length));
       const res = await getProjects(undefined, includeArchived, filter(null, shown));
       if (mine !== seq) return;
       list = res.projects;
       total = res.total;
       nextCursor = res.next_cursor ?? null;
       sortOptions = res.sort_options ?? [];
+      statusOptions = res.status_options ?? [];
+      sortCap = res.sort_cap ?? null;
+      maxLimit = res.max_limit ?? ADMIN_PAGE;
       sort = res.sort;
       capacity = res.capacity;
       limits = res.limits;
@@ -262,6 +267,12 @@ export function createProjectsAdmin() {
     },
     get sortOptions() {
       return sortOptions;
+    },
+    get statusOptions() {
+      return statusOptions;
+    },
+    get sortCap() {
+      return sortCap;
     },
     get total() {
       return total;

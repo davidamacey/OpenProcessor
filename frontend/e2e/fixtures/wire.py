@@ -159,6 +159,16 @@ def projects_response(
         'include_archived': False,
         'total': len(projects) if projects is not None else 1,
         'next_cursor': None,
+        'default_limit': 50,
+        'max_limit': 200,
+        'sort_cap': None,
+        'status_options': [
+            {'id': 'active', 'label': 'Active'},
+            {'id': 'archived', 'label': 'Archived'},
+            {'id': 'building', 'label': 'Building'},
+            {'id': 'failed', 'label': 'Failed'},
+            {'id': 'deleting', 'label': 'Deleting'},
+        ],
         'sort': 'name:asc',
         'sort_options': [
             {'id': 'name:asc', 'label': 'Name'},

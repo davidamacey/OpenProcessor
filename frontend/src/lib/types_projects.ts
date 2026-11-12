@@ -120,6 +120,13 @@ export interface ProjectsResponse {
   sort: string;
   /** The served sorts, labelled. */
   sort_options: { id: string; label: string }[];
+  /** Set when the sort ranks only this many recent matches (`items:desc`); `null` when exact. */
+  /** Page size when `limit` is omitted, and the most one page may hold. */
+  default_limit: number;
+  max_limit: number;
+  sort_cap: number | null;
+  /** The statuses the `status` filter takes, in display order, labelled. */
+  status_options: { id: string; label: string }[];
 }
 
 export interface ProjectWarning {

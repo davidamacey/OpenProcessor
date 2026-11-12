@@ -60,6 +60,16 @@ afterEach(() => {
 });
 
 describe('load', () => {
+  it('exposes the served status filter options, not its own list', async () => {
+    serve(() => undefined);
+    const admin = createProjectsAdmin();
+    await admin.load();
+    expect(admin.statusOptions.map((o) => o.id)).toEqual(
+      testProjectsResponse([]).status_options.map((o) => o.id),
+    );
+    expect(admin.sortCap).toBeNull();
+  });
+
   it('reads the served list, capacity and limits; include_archived only when toggled', async () => {
     serve(() => undefined);
     const admin = createProjectsAdmin();

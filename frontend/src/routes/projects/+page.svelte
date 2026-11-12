@@ -168,8 +168,8 @@
         onchange={(e) => void admin.setStatusFilter(e.currentTarget.value)}
       >
         <option value="">Any status</option>
-        {#each ['active', 'archived', 'building', 'failed', 'deleting'] as st (st)}
-          <option value={st}>{admin.statusLabel(st)}</option>
+        {#each admin.statusOptions as st (st.id)}
+          <option value={st.id}>{st.label}</option>
         {/each}
       </select>
       <select
@@ -363,6 +363,11 @@
       data-testid="projects-pager"
     >
       <span>Showing {admin.list.length} of {admin.total}</span>
+      {#if admin.sortCap !== null}
+        <span data-testid="projects-sort-cap"
+          >Ranked among the {admin.sortCap} most recently updated.</span
+        >
+      {/if}
       {#if admin.hasMore}
         <button
           type="button"

@@ -68,6 +68,10 @@ const CASES: [string, string[]][] = [
       next_cursor: true,
       sort: true,
       sort_options: true,
+      default_limit: true,
+      max_limit: true,
+      sort_cap: true,
+      status_options: true,
     } satisfies Record<keyof T.ProjectsResponse, true>),
   ],
   [

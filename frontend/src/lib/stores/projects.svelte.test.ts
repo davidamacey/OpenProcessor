@@ -29,6 +29,33 @@ afterEach(() => {
   projectsStore.select(DEFAULT);
 });
 
+describe('load', () => {
+  it('reads one page and fetches the default project when it falls past that page', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        urls.push(String(url));
+        if (/\/projects\/default$/.test(String(url)))
+          return json({ ...DEFAULT, resources: {} });
+        return json(
+          testProjectsResponse([testProject({ slug: 'aa' })], {
+            total: 500,
+            next_cursor: 'c1',
+          }),
+        );
+      }),
+    );
+    projectsStore.loaded = false;
+    projectsStore.list = [];
+    await projectsStore.load();
+    expect(urls[0]).toMatch(/\/projects$/);
+    expect(urls.some((u) => /\/projects\/default$/.test(u))).toBe(true);
+    expect(projectsStore.list.map((p) => p.slug).sort()).toEqual(['aa', 'default']);
+    expect(projectsStore.defaultProject?.slug).toBe('default');
+  });
+});
+
 describe('resolve', () => {
   it('finds a listed, selectable project without a request', async () => {
     const fetchMock = vi.fn();
