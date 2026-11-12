@@ -4,7 +4,7 @@
    * and nothing else: no label, colour or geometry is derived here. The parent supplies the
    * positioned wrapper; boxes are placed in percent of it.
    */
-  import type { ImageBox } from '$lib/types';
+  import type { ImageBox } from '$lib/types_images';
   import { boxToneClass } from '$lib/boxes/boxTone';
   import { regionStatusesStore } from '$stores/regionStatuses.svelte';
 

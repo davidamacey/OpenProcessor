@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import type { ImageBox } from '$lib/types';
+import type { ImageBox } from '$lib/types_images';
 import BoxLayer from './BoxLayer.svelte';
 
 function box(over: Partial<ImageBox> = {}): ImageBox {
@@ -14,6 +14,9 @@ function box(over: Partial<ImageBox> = {}): ImageBox {
     class_name: 'widget',
     tone: 'validated',
     state: null,
+    locked: false,
+    lock_label: null,
+    geometry_revision: null,
     ...over,
   };
 }
