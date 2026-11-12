@@ -10,7 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import Depends, FastAPI
-from fixtures.job_rows import make_project, sql
+from fixtures.job_rows import make_project, seed_default_spaces, sql
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import set_bound_project
@@ -301,3 +301,20 @@ async def test_docs_with_vector_comes_from_the_index_for_spaces_that_have_a_fiel
     _set_space_status(pg, alpha, 'building')
     building = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
     assert (building['status'], building['docs_with_vector']) == ('building', 42)
+
+
+async def test_the_list_names_the_latest_run_of_a_space_started_elsewhere(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    started = (await client.post(url(alpha, '/spaces'), json=REGISTER)).json()
+    listed = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    run = (await client.get(url(alpha, f'/reindex-runs/{started["run_id"]}'))).json()
+    assert listed['run_id'] == started['run_id']
+    assert (listed['run_mode'], listed['run_status']) == (run['mode'], run['job_status'])
+
+
+async def test_a_space_that_was_never_built_has_no_run_in_the_list(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    seed_default_spaces(pg, app.state.records[alpha].id)
+    spaces = (await client.get(url(alpha, '/spaces'))).json()['spaces']
+    assert spaces
+    assert {(s['run_id'], s['run_status']) for s in spaces} == {(None, None)}

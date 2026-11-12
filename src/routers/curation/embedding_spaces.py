@@ -9,7 +9,7 @@ stable ``{"error": code, "message": ...}`` body.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, Header, Query
 
@@ -42,6 +42,9 @@ from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIn
 from src.services.jobs.service import rejection
 
 
+if TYPE_CHECKING:
+    from src.services.embedding_spaces.reindex_runs import LatestRun
+
 IdempotencyKey = Annotated[
     str | None,
     Header(
@@ -66,7 +69,11 @@ async def _index() -> ReindexIndex:
 IndexDep = Annotated[ReindexIndex, Depends(_index)]
 
 
-def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpaceView:
+def _view(
+    found: views.SpaceWithModel,
+    docs: int | None = None,
+    run: LatestRun | None = None,
+) -> EmbeddingSpaceView:
     row, model = found.space, found.model
     return EmbeddingSpaceView(
         space_key=row.space_key,
@@ -78,6 +85,9 @@ def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpac
         status=row.status.value,
         ready_at=row.ready_at,
         docs_with_vector=docs,
+        run_id=None if run is None else str(run.run_id),
+        run_mode=None if run is None else run.mode,
+        run_status=None if run is None else run.job_status,
     )
 
 
@@ -111,8 +121,12 @@ async def list_embedding_spaces(
     project = current_project_id()
     rows = await spaces.list_project_spaces(session, project, target)
     found = await views.with_models(session, project, rows)
+    runs = await views.latest_runs(session, project, rows)
     return EmbeddingSpaceListResponse(
-        spaces=[_view(f, await views.docs_with_vector(index, f.space)) for f in found]
+        spaces=[
+            _view(f, await views.docs_with_vector(index, f.space), runs.get(f.space.id))
+            for f in found
+        ]
     )
 
 

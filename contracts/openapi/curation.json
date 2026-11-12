@@ -11592,6 +11592,42 @@
             "title": "Role",
             "type": "string"
           },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest re-index run of the space, whoever started it; null when none, or when the route does not ask (promote).",
+            "title": "Run Id"
+          },
+          "run_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mode of that run (build, backfill, clear).",
+            "title": "Run Mode"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run's job status (queued, running, succeeded, failed, cancelled ...).",
+            "title": "Run Status"
+          },
           "space_key": {
             "title": "Space Key",
             "type": "string"

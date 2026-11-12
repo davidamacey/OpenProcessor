@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.services.embedding_spaces.reindex import ReindexIndex
+    from src.services.embedding_spaces.reindex_runs import LatestRun
 
 logger = get_logger(__name__)
 
@@ -68,6 +69,14 @@ async def docs_with_vector(index: ReindexIndex, space: repo.SpaceRow) -> int | N
     except OpenSearchException as exc:
         logger.warning('embedding_space_count_failed', space=space.space_key, error=str(exc))
         return None
+
+
+async def latest_runs(
+    session: AsyncSession, project_id: uuid.UUID, rows: Sequence[repo.SpaceRow]
+) -> dict[uuid.UUID, LatestRun]:
+    """The newest run of each of ``rows`` that has one, by space id."""
+    async with project_tx(session, project_id):
+        return await reindex_runs.latest_runs_by_space(session, [r.id for r in rows])
 
 
 async def run_view(

@@ -37,6 +37,18 @@ class EmbeddingSpaceView(BaseModel):
     docs_with_vector: int | None = Field(
         description='Documents holding a vector in this space; null when the index was not asked.'
     )
+    run_id: str | None = Field(
+        default=None,
+        description='The newest re-index run of the space, whoever started it; null when none, '
+        'or when the route does not ask (promote).',
+    )
+    run_mode: str | None = Field(
+        default=None, description='Mode of that run (build, backfill, clear).'
+    )
+    run_status: str | None = Field(
+        default=None,
+        description="The run's job status (queued, running, succeeded, failed, cancelled ...).",
+    )
 
 
 class EmbeddingSpaceListResponse(BaseModel):
