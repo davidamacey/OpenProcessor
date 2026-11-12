@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Presets: serving profiles (deployment-wide), cluster profiles, assist-loop presets and near-duplicate profiles each have a list and an editor under Settings (`/settings/presets/<kind>`). New, Clone and Delete; Save sends the revision it was made against and a stale one is the server's 409 with "Reload" and "Keep my edits"; a refused body lists each field the server names; Activate shows what is active now and what will be, per target for cluster profiles.
+- Embedding spaces page (`/settings/embedding-spaces`): the project's spaces per target, the encoders the deployment can serve (with why one is unavailable), Register, Restart or backfill, Promote (the server's `embedding_space_not_ready` and `embedding_evaluation_missing` refusals, with Promote without an evaluation offered only after the second), Retire a non-primary space, and Cancel build. A build started on the page shows the served run's job status and document counts.
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
 - Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.

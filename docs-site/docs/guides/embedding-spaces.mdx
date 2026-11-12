@@ -1,0 +1,36 @@
+---
+sidebar_position: 18
+title: Embedding spaces
+---
+
+# Embedding spaces
+
+A space is one set of vectors for a target (`item`, `box`, `frame` or `item_text`) made by one
+encoder version. A project always has a primary space; you can add candidates, build them and
+promote one. In Cropwright this is **Settings, Presets and embedding spaces, Embedding spaces**
+(`/p/<project>/settings/embedding-spaces`); the user view is
+[Embedding spaces in Cropwright](../cropwright/user-guide/embedding-spaces.md). Every route
+below sits under `http://localhost:4603/curation/projects/<slug>`; `B` is that base URL.
+
+```bash
+curl -s "$B/embedding/spaces?target=item"                    # live and retired spaces
+curl -s "$API/curation/embedding/models"                     # encoders this deployment can serve
+curl -s -X POST "$B/embedding/spaces" -H 'content-type: application/json' \
+  -H 'Idempotency-Key: try-12345678' \
+  -d '{"model_key":"mobileclip2_s2","model_version":1,"target":"item"}'   # register and start the build
+curl -s "$B/embedding/reindex-runs/RUN_ID"                   # build progress
+curl -s -X POST "$B/embedding/spaces/SPACE_KEY/build?target=item" -H 'content-type: application/json' \
+  -d '{"mode":"backfill","batch_size":64}'                   # restart a failed build or backfill
+curl -s -X POST "$B/embedding/spaces/SPACE_KEY/promote?target=item" -H 'content-type: application/json' \
+  -d '{"force":false}'                                       # make it the primary
+curl -s -X POST "$B/embedding/spaces/SPACE_KEY/retire?target=item"   # retire a non-primary space
+curl -s -X POST "$B/embedding/reindex-runs/RUN_ID/cancel?abandon=false"   # stop a build
+```
+
+Register, build and retire answer `202` with the `run_id` of the run and the `job_id` of its job;
+poll the run for `job_status` and the documents done, failed and skipped. Promote answers
+`409 embedding_space_not_ready` until the build is complete, and `409
+embedding_evaluation_missing` until an evaluation of the candidate against the current primary
+exists; `force` waives only the missing evaluation. The primary space cannot be retired.
+Cancel without `abandon` leaves the space `building`, so it can be restarted as a backfill; with
+`abandon` the space is marked failed and its partial vectors are cleared.
