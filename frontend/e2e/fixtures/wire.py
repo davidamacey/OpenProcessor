@@ -299,6 +299,10 @@ _EXPLICIT: dict[str, Any] = {
     'mask_polygon': None,
     'region_gate_skip': None,
     'assist': None,
+    'geometry_revision': 0,
+    'geometry_source': 'detector',
+    'geometry_locked': False,
+    'lock_label': None,
     # Capture time/place of the photo; null when the file carried none.
     'capture': None,
     # Audit draw state the audit queue shows (#166); all null off the audit queue.
