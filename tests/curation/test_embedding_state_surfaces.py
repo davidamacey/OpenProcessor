@@ -14,7 +14,6 @@ from src.config.region_fields import get_region_fields
 from src.services.curation import semantic_search
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.item_filter import ItemFilter
-from src.services.curation.review_empty_reason import compute_empty_reason
 from src.services.curation.stats_embedding import embedding_aggregations, embedding_summary
 from src.services.projects.combine.copy_docs import transform_item
 
@@ -131,17 +130,6 @@ async def test_ordered_page_reports_how_many_it_could_not_rank(
     assert request['scopes'] == ['embed']
     assert request['dry_run'] is True
     assert request['targets']['filter']['embedding_state'] == ['not_selected', 'deferred', 'failed']
-
-
-@pytest.mark.asyncio
-async def test_empty_all_queue_says_items_are_not_embedded() -> None:
-    os_fake = AsyncMock()
-    os_fake.count = AsyncMock(return_value={'count': 5})
-    reason = await compute_empty_reason('all', None, os_fake)
-    assert '5 items have no embedding' in reason
-
-    os_fake.count = AsyncMock(return_value={'count': 0})
-    assert await compute_empty_reason('all', None, os_fake) == 'no items match'
 
 
 def _space_copy(target_dim: int):

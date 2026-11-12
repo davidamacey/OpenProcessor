@@ -74,9 +74,9 @@ async def test_put_new_sort_default_flips_methods_but_never_overrides_a_tab_defa
     assert sort_entries['atypicality']['default'] is False
 
     _clause, applied, _ = await review_sorts.build_sort(
-        None, tab='all', opensearch=app_client.fake_os
+        None, tab='to_label', opensearch=app_client.fake_os
     )
-    assert applied == 'atypicality'
+    assert applied == 'detector_confidence:desc'
     _clause, applied, _ = await review_sorts.build_sort(
         None, tab='new_class_proposals', opensearch=app_client.fake_os
     )
