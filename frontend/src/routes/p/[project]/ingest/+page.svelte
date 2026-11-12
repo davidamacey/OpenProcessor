@@ -17,6 +17,7 @@
    */
   import IngestDropZone from '$lib/components/ingest/IngestDropZone.svelte';
   import IngestRunPanel from '$lib/components/ingest/IngestRunPanel.svelte';
+  import RegionDrainDetails from '$lib/components/ingest/RegionDrainDetails.svelte';
   import IngestPipelineRail from '$lib/components/ingest/IngestPipelineRail.svelte';
   import ClusteringHandoff from '$lib/components/ingest/ClusteringHandoff.svelte';
   import BulkIngestPanel from '$lib/components/ingest/BulkIngestPanel.svelte';
@@ -182,7 +183,14 @@
         {:else}
           <div class="space-y-6">
             {#if regionProfileStore.configured}
-              <Card><RegionStagePanel /></Card>
+              <Card>
+                <RegionDrainDetails
+                  {drain}
+                  error={drainError ? 'worklog read failed' : null}
+                  lastChecked={drainObservedAt}
+                />
+                <RegionStagePanel />
+              </Card>
             {/if}
             <ClusteringHandoff {runState} {drain} {drainError} {drainObservedAt} />
           </div>

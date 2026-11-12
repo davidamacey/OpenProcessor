@@ -31,7 +31,11 @@
   </Card>
   {#if regionConfigured}
     <Card data-testid="ingest-rail-detection">
-      <RegionDrainPanel pollIntervalS={drainPollIntervalS} onUpdate={onDrainUpdate} />
+      <RegionDrainPanel
+        compact
+        pollIntervalS={drainPollIntervalS}
+        onUpdate={onDrainUpdate}
+      />
     </Card>
   {/if}
   <ClusterRunPanel primary={false} />

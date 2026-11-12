@@ -6,6 +6,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
+import { regionProfileStore } from '$stores/regionProfile.svelte';
+import { WIDGET_TAG_PROFILE } from '$lib/test/fixtures/regionSlot';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 
 const state = vi.hoisted(() => ({ page: { url: new URL('http://x/p/demo/ingest') } }));
@@ -14,13 +16,14 @@ vi.mock('$app/state', () => state);
 vi.mock('$lib/api_ingest', async () => {
   const actual =
     await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
-  return { ...actual, getIngestConfig: vi.fn() };
+  return { ...actual, getIngestConfig: vi.fn(), getRegionDrain: vi.fn() };
 });
 
-import { getIngestConfig } from '$lib/api_ingest';
+import { getIngestConfig, getRegionDrain } from '$lib/api_ingest';
 import IngestPage from './+page.svelte';
 
 const getConfig = vi.mocked(getIngestConfig);
+const getDrain = vi.mocked(getRegionDrain);
 
 let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | undefined;
@@ -157,5 +160,46 @@ describe('/ingest — served config', () => {
       expect(target.querySelector('input[type=file]')).not.toBeNull(),
     );
     expect(target.textContent).not.toContain('Server-path ingest');
+  });
+
+  describe('the region worklog', () => {
+    const DRAIN = {
+      pending_detection: 7,
+      pending_verification: 2,
+      total_unfinished: 9,
+      drained: false,
+      stable_for_s: 0,
+      observed_at: '2026-01-01T00:00:00Z',
+      region_dependencies: [],
+      stall_reason: null,
+    };
+
+    it('the rail shows only the pending-detection count; the full worklog is on the Activity tab, from the same read', async () => {
+      getDrain.mockResolvedValue(DRAIN as never);
+      getConfig.mockResolvedValue(servedIngestConfig());
+      regionProfileStore.seed(WIDGET_TAG_PROFILE);
+      await render();
+      await vi.waitFor(() =>
+        expect(
+          target.querySelector('[data-testid="region-drain-pending"]')?.textContent,
+        ).toBe('7'),
+      );
+      expect(target.textContent).not.toContain('Total unfinished');
+      expect(
+        target.querySelector('[data-testid="region-drain-total-unfinished"]'),
+      ).toBeNull();
+      unmount(instance!);
+      state.page.url = new URL('http://x/p/demo/ingest?tab=activity');
+      getDrain.mockClear();
+      await render();
+      await vi.waitFor(() =>
+        expect(
+          target
+            .querySelector('[data-testid="region-drain-total-unfinished"]')
+            ?.textContent?.trim(),
+        ).toBe('9'),
+      );
+      expect(getDrain).toHaveBeenCalledTimes(1);
+    });
   });
 });
