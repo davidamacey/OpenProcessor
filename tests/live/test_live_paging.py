@@ -25,7 +25,12 @@ LIMIT = 500
 
 @pytest.fixture(scope='module')
 def cohort(opensearch: Any) -> Iterator[list[str]]:
-    """``CLONES`` copies of one seeded crop, each with its own ``confidence`` so the sort has ties."""
+    """``CLONES`` copies of one seeded crop, each with its own ``confidence`` so the sort has ties.
+
+    The clones are browsable items whatever the source became earlier in the session: the holdout
+    freeze (``test_live_classes``) holds ``cls0_0000`` out, and a clone that inherited that flag
+    would be hidden from ``GET /crops`` (``include_test`` is off), leaving only the seeded rows.
+    """
     source = get_doc(opensearch, INDEXES['items'], 'cls0_0000')['_source']
     ids = [f'{PREFIX}{i:06d}' for i in range(CLONES)]
     for start in range(0, CLONES, BATCH):
@@ -33,7 +38,15 @@ def cohort(opensearch: Any) -> Iterator[list[str]]:
         for i, doc_id in enumerate(ids[start : start + BATCH], start=start):
             lines += [
                 json.dumps({'index': {'_index': INDEXES['items'], '_id': doc_id}}),
-                json.dumps({**source, 'crop_id': doc_id, 'confidence': round((i % 50) / 50, 2)}),
+                json.dumps(
+                    {
+                        **source,
+                        'crop_id': doc_id,
+                        'confidence': round((i % 50) / 50, 2),
+                        'test_holdout': False,
+                        'class_excluded': False,
+                    }
+                ),
             ]
         resp = opensearch.post(
             '/_bulk',

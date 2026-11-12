@@ -146,6 +146,42 @@ def wait_for_state(
     return state
 
 
+def request_when_free(
+    send: Any,
+    *,
+    busy: str,
+    on_active: Any = None,
+    timeout: float = 120.0,
+    interval: float = 2.0,
+) -> Any:
+    """Send a request, and send it again while the API answers ``409`` with error ``busy``.
+
+    A route that shares an exclusivity group with background work (a class merge behind a rename's
+    projection sync) or that refuses while a worker drains (``project_busy``: "retry") is answered
+    409 until that work ends. ``on_active`` is called with the ``active_job_id`` the answer names,
+    to wait on that served job. Returns the last response at the deadline, busy or not, so the
+    caller's assertion shows what it saw.
+    """
+
+    def is_busy(resp: Any) -> bool:
+        if resp.status_code != 409:
+            return False
+        detail = resp.json().get('detail')
+        return isinstance(detail, dict) and detail.get('error') == busy
+
+    def attempt() -> Any:
+        resp = send()
+        if on_active is not None and is_busy(resp):
+            active = resp.json()['detail'].get('active_job_id')
+            if active:
+                on_active(active)
+        return resp
+
+    return wait_for_state(
+        attempt, lambda resp: not is_busy(resp), timeout=timeout, interval=interval
+    )
+
+
 def wait_until(predicate: Any, *, timeout: float = 60.0, interval: float = 0.5) -> Any:
     """Poll ``predicate`` until it returns something truthy."""
     deadline = time.monotonic() + timeout
@@ -206,15 +242,15 @@ def run_near_duplicates(api: Any, prefix: str = PROJECT_PREFIX) -> None:
         return wait_for_state(fetch, lambda j: j['status'] in JOB_TERMINAL, timeout=180.0)
 
     for level in ('image', 'item'):
-        for _attempt in range(10):
-            started = api.post(
+        started = request_when_free(
+            lambda level=level: api.post(
                 f'{prefix}/near_duplicates/runs', json={'level': level, 'mode': 'full'}
-            )
-            if started.status_code != 409:
-                break
-            busy = started.json()['detail']
-            assert busy['error'] == 'job_busy', started.text
-            wait(busy['active_job_id'])
+            ),
+            busy='job_busy',
+            on_active=wait,
+            timeout=600.0,
+            interval=1.0,
+        )
         assert started.status_code == 202, started.text
         job = wait(started.json()['job_id'])
         assert job['status'] == 'completed', job
