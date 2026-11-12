@@ -12,11 +12,14 @@
     crop,
     loader,
     onopencrop,
+    showImage = true,
   }: {
     crop: Crop;
     loader: CropMetaLoader;
     /** Opens a sibling item in the host; absent, siblings are plain thumbnails. */
     onopencrop?: (crop: Crop) => void;
+    /** False beside a host that already draws the source image. */
+    showImage?: boolean;
   } = $props();
 
   const imageMeta = $derived(loader.imageMeta);
@@ -54,7 +57,7 @@
   {:else if imageError}
     <p class="text-[11px] text-red-300">Source image unavailable: {imageError}</p>
   {:else if imageMeta}
-    {#if contextRes}
+    {#if contextRes && showImage}
       <div class="mb-2 h-40 w-full overflow-hidden rounded bg-zinc-950">
         <SourceImageOverlay
           imageId={contextRes.image.image_id}

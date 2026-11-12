@@ -26,10 +26,8 @@
 
   interface Props {
     crop: Crop;
-    /** Embedded under /review's own item panel, which already shows the
-     *  class, label source, detector score and VLM confidence directly
-     *  above — hide those rows here instead of repeating them (visual
-     *  audit 2026-09-24, R11). */
+    /** Beside the Review pane, which already shows the class, label source, scores, VLM answer,
+     *  assist suggestions and the source image: leave those out here, so each fact shows once. */
     embedded?: boolean;
     /** The served post-write crop after a Reprocess, for the host to
      *  adopt in place of `crop`. */
@@ -157,7 +155,7 @@
        number, or the classifier's own score) — distinct from
        `label_confidence` above, which is always the detector score. Null
        for human labels, so this row is omitted then. -->
-  {#if crop.class_confidence != null}
+  {#if !embedded && crop.class_confidence != null}
     <dt class="text-zinc-500">Label confidence</dt>
     <dd class="font-mono text-zinc-200">
       {classConfidenceSourceLabel}
@@ -165,19 +163,19 @@
     </dd>
   {/if}
 
-  {#if crop.vlm_raw_class}
+  {#if !embedded && crop.vlm_raw_class}
     <dt class="text-zinc-500">VLM said</dt>
     <dd class="text-zinc-300">{crop.vlm_raw_class}</dd>
   {/if}
 
-  {#if crop.assist}
+  {#if !embedded && crop.assist}
     <dt class="text-zinc-500">Assist</dt>
     <dd data-testid="meta-assist">
       <AssistSuggestions assist={crop.assist} className={crop.class_name} />
     </dd>
   {/if}
 
-  {#if crop.vlm_class_empty_reason}
+  {#if !embedded && crop.vlm_class_empty_reason}
     <dt class="text-zinc-500">VLM empty reason</dt>
     <dd class="text-orange-300" title={crop.vlm_class_empty_reason}>
       {humanizeId(crop.vlm_class_empty_reason)}
@@ -276,4 +274,4 @@
   historyLoading={loader.historyLoading}
 />
 
-<CropSourceContext {crop} {loader} {onopencrop} />
+<CropSourceContext {crop} {loader} {onopencrop} showImage={!embedded} />

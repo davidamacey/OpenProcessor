@@ -20,7 +20,7 @@ import {
   createSelectionSummary,
   type SelectionSummaryState,
 } from './selectionSummary.svelte';
-import type { Cluster, HiddenCounts } from '$lib/types';
+import type { Cluster, Crop, HiddenCounts } from '$lib/types';
 import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
@@ -192,6 +192,17 @@ export class WorkspaceController {
   setReviewFocus(cropId: string): void {
     this.#reviewFocus = cropId;
     this.setFocus({ kind: 'item', id: cropId });
+  }
+
+  #adoptReviewItem: ((crop: Crop) => void) | null = null;
+
+  /** The Review view's way to take a crop the details panel re-read (after a Reprocess). */
+  setReviewAdopt(adopt: ((crop: Crop) => void) | null): void {
+    this.#adoptReviewItem = adopt;
+  }
+
+  adoptReviewItem(crop: Crop): void {
+    this.#adoptReviewItem?.(crop);
   }
 
   /** Leaves Review for the grid it was opened from, focused on the item Review stopped on. */

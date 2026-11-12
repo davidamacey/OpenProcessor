@@ -80,8 +80,10 @@ server's message there.
 
 ## Item details
 
-The **Details** panel shows the item's label history, its source image with
-every box drawn over it, and provenance rows: how it was imported, which
+The Review pane keeps what you decide with: the reason, the current label and
+proposal, the model's prediction, the scores and the actions. The Workspace
+**Details** panel beside it (a drawer under 1280 px) holds the rest, each fact
+once: the item's label history, the sibling items on its image, and provenance rows: how it was imported, which
 project it was combined from, and which VLM endpoint, model and prompt pack
 labeled it, each shown only when recorded. **Reprocess** is available there. A
 **lock** icon on a label or box means a human set it and machine proposals

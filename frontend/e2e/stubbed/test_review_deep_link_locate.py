@@ -41,6 +41,7 @@ from urllib.parse import parse_qs, urlparse
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, PLACEHOLDER_PHOTO, review_url
 from harness.waits import wait_for_paint
+from playwright.sync_api import expect
 
 
 CLASSES = [
@@ -189,7 +190,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     assert review_page_requests == [None, LOCATE_CURSOR, AFTER_LOCATED], review_page_requests
 
     # Rows remain after the located one: the filmstrip shows them after the located item.
-    assert page.get_by_test_id('filmstrip-item').count() > 1
+    expect(page.get_by_test_id('filmstrip-item').nth(1)).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
     # F8 D6: the counter shows the served queue position (index 3000 ->
     # #3001), not the cursor's index within the one loaded page.

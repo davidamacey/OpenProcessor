@@ -11,6 +11,9 @@
 
   const target = $derived.by((): { kind: DetailsKind; id: string | null } | null => {
     const focus = ws.url.focus;
+    // Beside the Review pane the item shows what the pane does not.
+    if (focus?.kind === 'item' && ws.view === 'review')
+      return { kind: 'review', id: focus.id };
     if (focus && focus.kind in DETAILS)
       return { kind: focus.kind as DetailsKind, id: focus.id };
     if (ws.selection.kind !== 'none') return { kind: 'selection', id: null };

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
+- Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
 - Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.
 - Review offers the server's sort options for the open queue (the shared Sort menu, `sort_review` in the address); a queue opens in its own order.
 - Review is a Workspace view. `Enter` on a Detections card opens it at that item and `Esc` returns to the same card; the rail lists the served queues (To label, Check machine labels, Disagreements, New class proposals, Audit sample and the region queue) with their counts under the filter.

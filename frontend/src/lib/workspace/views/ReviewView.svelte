@@ -23,6 +23,7 @@
   import { createReviewSlotEditController } from '$lib/review/reviewSlotEditController.svelte';
   import { createReviewTabsController } from '$lib/review/reviewTabsController.svelte';
   import { isSlotTab } from '$lib/reviewTabs';
+  import type { ReviewItem } from '$lib/types_review';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { classesStore } from '$stores/classes.svelte';
 
@@ -71,9 +72,14 @@
       .map((c) => ({ id: c.id, displayName: c.display_name })),
   );
 
-  // "Details" disclosure: collapsed by default; CropMetaPanel only mounts (and fetches
-  // history/image) once the operator opens it.
-  let detailsOpen = $state<boolean>(false);
+  // A Reprocess in the details panel re-reads the item: take it into the queue.
+  $effect(() => {
+    ws.setReviewAdopt((c) => {
+      const idx = queue.items.findIndex((x) => x.id === c.id);
+      if (idx >= 0) queue.items[idx] = { ...queue.items[idx], ...c } as ReviewItem;
+    });
+    return () => ws.setReviewAdopt(null);
+  });
 </script>
 
 <div class="flex h-full flex-col" data-testid="review-view">
@@ -110,16 +116,7 @@
         sortFallbackReason={loader.sortFallbackReason}
       />
     {:else}
-      <ReviewCropPane
-        {current}
-        {tabs}
-        {loader}
-        {actions}
-        {picker}
-        {edit}
-        {slot}
-        bind:detailsOpen
-      />
+      <ReviewCropPane {current} {tabs} {loader} {actions} {picker} {edit} {slot} />
     {/if}
   </div>
 

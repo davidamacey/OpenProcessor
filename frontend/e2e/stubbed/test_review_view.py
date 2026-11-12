@@ -399,3 +399,38 @@ def test_text_search_in_review_uses_the_workspace_query_and_swaps_the_queue(stub
         '3 total', timeout=ACTION_TIMEOUT_MS
     )
     assert 'q=' not in page.url, page.url
+
+
+def test_each_fact_of_the_review_item_appears_once(stub, page, app_url):
+    """The Review pane keeps the review facts (reason, proposal, model, actions); the Workspace
+    details panel is the one place for provenance, history and the rest, without repeating the
+    class, label source and confidence rows or the source image the pane already shows."""
+    serve(stub)
+    rich = dict(
+        item(0),
+        vlm_endpoint='env@abc123',
+        vlm_model='example/vision-model',
+        label_confidence=0.73,
+        reason='model proposal, no human has confirmed it',
+    )
+    stub.on('GET', r'/crops/crop-0$', (200, rich))
+    stub.on('GET', r'/review/check_machine(\?|$)', _queue([rich]))
+    stub.on(
+        'GET',
+        r'/review/tabs(\?|$)',
+        review_tabs(review_tab('check_machine', 'Check machine labels', count=1)),
+    )
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    page.goto(review_url(app_url, 'check_machine'))
+    panel = page.get_by_test_id('details-panel')
+    expect(panel.get_by_test_id('vlm-provenance-endpoint')).to_have_text(
+        'env@abc123', timeout=ACTION_TIMEOUT_MS
+    )
+    assert page.get_by_test_id('vlm-provenance-endpoint').count() == 1
+    assert page.get_by_role('button', name='▸ Details').count() == 0
+    rows = [t.strip() for t in panel.locator('dt').all_inner_texts()]
+    assert 'Class' not in rows and 'Label source' not in rows, rows
+    assert 'Confidence' not in rows and 'Detector score' not in rows, rows
+    assert panel.get_by_test_id('overlay-box').count() == 0
+    meta = page.get_by_test_id('review-meta-pane')
+    assert 'Current label' in meta.inner_text()

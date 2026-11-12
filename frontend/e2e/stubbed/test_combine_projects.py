@@ -588,6 +588,22 @@ def test_conflict_review_link_leads_to_a_review_that_sends_the_filter(stub, page
         return (200, {'items': [item], 'total': 1, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/(?!tabs)', combined_items)
+    # The details panel reads the focused item itself.
+    stub.on(
+        'GET',
+        r'/crops/crop-0$',
+        lambda _r, _m: (
+            200,
+            review_item(
+                0,
+                origin_project='widgets-a',
+                origin_item_id='it_77',
+                combine_conflict=True,
+                vlm_endpoint='env@abc123',
+                vlm_model='example/vision-model',
+            ),
+        ),
+    )
     stub.on('GET', r'/crops/[^/]+/history$', {'crop_id': 'crop-0', 'entries': []})
 
     page.goto(f'{app_url}/projects/combine/{JOB_ID}')
@@ -603,8 +619,7 @@ def test_conflict_review_link_leads_to_a_review_that_sends_the_filter(stub, page
         'Project-combine conflicts only', timeout=ACTION_TIMEOUT_MS
     )
 
-    meta = page.get_by_test_id('review-meta-pane')
-    meta.get_by_role('button', name='▸ Details').click()
+    meta = page.get_by_test_id('details-panel')
     expect(meta.get_by_test_id('combine-origin-project')).to_contain_text(
         'widgets-a', timeout=ACTION_TIMEOUT_MS
     )
