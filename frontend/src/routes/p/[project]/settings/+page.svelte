@@ -32,6 +32,8 @@
   import { hasFieldCoverage, type MethodInfoBase } from '$lib/strategies';
   import VlmScopePanel from '$lib/components/settings/VlmScopePanel.svelte';
   import { resolve } from '$app/paths';
+  import EmptyState from '$components/ui/EmptyState.svelte';
+  import ErrorState from '$components/ui/ErrorState.svelte';
   import PageHeader from '$components/ui/PageHeader.svelte';
   import { projectHref } from '$lib/projectPaths';
 
@@ -97,10 +99,21 @@
   {#if curationSettingsStore.loading && !curationSettingsStore.loaded}
     <section class="surface p-6 text-sm text-fg-3">Loading settings…</section>
   {:else if curationSettingsStore.error}
-    <section class="surface flex flex-col gap-3 p-6 text-sm">
-      <p class="text-danger-text">{curationSettingsStore.error}</p>
-      <button type="button" class="btn w-fit" onclick={reload}>Retry</button>
-    </section>
+    <div data-testid="settings-load-error">
+      <ErrorState
+        title="Settings unavailable"
+        message={curationSettingsStore.error}
+        error={curationSettingsStore.failure}
+        onretry={reload}
+      />
+    </div>
+  {:else if settableAxes(strategiesStore.methods).length === 0}
+    <div data-testid="settings-no-defaults">
+      <EmptyState
+        title="No shared defaults to set"
+        description="This backend offers no setting that applies to every operator."
+      />
+    </div>
   {:else}
     <section class="surface flex flex-col gap-5 p-5">
       <div class="flex items-center justify-between">

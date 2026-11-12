@@ -31,6 +31,8 @@ function bodyOf(p: VlmPolicy): VlmPolicyBody {
 export class VlmPolicyEditor {
   loading = $state(true);
   loadError = $state<string | null>(null);
+  /** The thrown error, so the page can show its request id. */
+  loadFailure = $state<unknown>(null);
   revision = $state<number | null>(null);
   draft = $state<VlmPolicyBody>({});
   saving = $state(false);
@@ -64,11 +66,13 @@ export class VlmPolicyEditor {
   async load(signal?: AbortSignal): Promise<void> {
     this.loading = true;
     this.loadError = null;
+    this.loadFailure = null;
     try {
       this.#adopt(await this.#deps.getPolicy(signal));
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
       this.loadError = detectorErrorLines(e).join(' ');
+      this.loadFailure = e;
     } finally {
       this.loading = false;
     }

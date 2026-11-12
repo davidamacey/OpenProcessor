@@ -34,6 +34,8 @@ class CurationSettingsStore {
   loaded = $state<boolean>(false);
   /** Load error. */
   error = $state<string | null>(null);
+  /** The thrown error, so a page can show its request id. */
+  failure = $state<unknown>(null);
   /** In-flight axis id during a save, for per-control button state. */
   saving = $state<string | null>(null);
 
@@ -52,11 +54,13 @@ class CurationSettingsStore {
         if (gen !== this.#gen) return;
         this.settings = settings;
         this.error = null;
+        this.failure = null;
       } catch (e) {
         if (gen !== this.#gen) return;
         if ((e as Error)?.name === 'AbortError') return;
         this.settings = EMPTY_CURATION_SETTINGS;
         this.error = apiErrorText(e) ?? 'failed to load settings';
+        this.failure = e;
       } finally {
         if (gen === this.#gen) {
           this.loading = false;

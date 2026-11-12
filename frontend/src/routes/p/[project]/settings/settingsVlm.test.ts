@@ -239,7 +239,7 @@ describe('/settings VLM dropdown', () => {
       'local_vlm is unreachable right now.',
     );
     // Not the load-error replacement: the control and its Save are still there.
-    expect(target.textContent).not.toContain('Retry');
+    expect(q('settings-load-error')).toBeNull();
     expect(vlmSelect()).toBeDefined();
   });
 

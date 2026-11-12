@@ -139,6 +139,30 @@ describe('VlmScopePanel', () => {
     expect(q('[data-testid="vlm-scope-save"]')).toBeNull();
   });
 
+  it('renders that failure as an ErrorState with the request id and a Retry that reads again', async () => {
+    let calls = 0;
+    await render({
+      get: async () => {
+        calls += 1;
+        if (calls === 1)
+          throw new ApiError(404, 'u', { detail: 'Not Found' }, undefined, 'req-5');
+        return SERVED;
+      },
+    });
+    const box = q('[data-testid="vlm-scope-load-error"]')!;
+    expect(box.querySelector('[data-testid="error-state"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="error-state-request-id"]')?.textContent).toBe(
+      'req-5',
+    );
+    [...box.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Retry'))!
+      .click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(q('[data-testid="vlm-scope-save"]')).not.toBeNull();
+    });
+  });
+
   it('says a VLM label stays a suggestion whatever the scope', async () => {
     await render();
     expect(target.textContent).toContain('suggestion until a human validates it');
