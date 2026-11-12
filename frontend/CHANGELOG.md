@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Review's "Rank · clarity" row shows the served words ("2nd · sharp") instead of "#2 · b4.50".
 - Review and the image editor share one filmstrip component (thumbnails around the open item with its served position); the two duplicates are gone.
 - Gallery cards are one height: every thumbnail sits in the same 4:3 frame, the "+ more boxes" mark moved onto the thumbnail, and the grid rows are equal.
 - A gallery thumbnail that fails to load is retried once after a second, then shows the server's source-missing badge (G-27).

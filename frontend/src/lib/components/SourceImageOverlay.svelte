@@ -213,7 +213,7 @@
       <div class="pointer-events-auto absolute top-1 right-1 z-20 flex gap-1">
         <button
           type="button"
-          class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-900"
+          class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] whitespace-nowrap text-zinc-300 hover:bg-zinc-900"
           onclick={() => (showBoxes = !showBoxes)}
         >
           {showBoxes ? 'hide boxes' : 'show boxes'}
@@ -221,7 +221,7 @@
         {#if showBoxes}
           <button
             type="button"
-            class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-900"
+            class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] whitespace-nowrap text-zinc-300 hover:bg-zinc-900"
             aria-pressed={allRegions}
             data-testid="overlay-all-regions"
             onclick={() => (allRegions = !allRegions)}
