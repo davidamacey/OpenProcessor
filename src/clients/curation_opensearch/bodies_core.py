@@ -19,6 +19,7 @@ from src.clients.curation_opensearch.capture_fields import (
     CAPTURE_ITEM_MAPPING,
 )
 from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
+from src.clients.curation_opensearch.count_fields import IMAGE_COUNTS_MAPPING
 from src.clients.curation_opensearch.items_extra import ITEMS_EXTRA_MAPPING
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 from src.clients.curation_opensearch.open_vocab_fields import (
@@ -120,6 +121,7 @@ def _images_body() -> dict[str, Any]:
                 **_IMAGES_IMPORT_MAPPING,
                 **OPEN_VOCAB_IMAGE_MAPPING,
                 **CAPTURE_IMAGE_MAPPING,
+                **IMAGE_COUNTS_MAPPING,
             }
         },
     }
