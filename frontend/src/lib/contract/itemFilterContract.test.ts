@@ -170,6 +170,7 @@ describe('ItemFilterQuery', () => {
       has_location: true,
       near_dup_group: true,
       region_text_match: true,
+      import_id: true,
     } satisfies Record<keyof T.ItemFilterQuery, true>);
     const path = Object.keys(S.paths).find((p) =>
       /\/projects\/\{project\}\/crops$/.test(p),
@@ -228,6 +229,7 @@ describe('CropFilter (getCrops spreads every key into the query)', () => {
       include_excluded: true,
       item_text: true,
       region_text_match: true,
+      import_id: true,
     } satisfies Record<keyof CropFilter, true>);
     const path = Object.keys(S.paths).find((p) =>
       /\/projects\/\{project\}\/crops$/.test(p),

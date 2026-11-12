@@ -189,6 +189,7 @@ export async function getClusters(
       origin: filter.origin,
       embedding_state: filter.embedding_state,
       review_status: filter.review_status,
+      import_id: filter.import_id,
       taken_from: filter.taken_from ?? undefined,
       taken_to: filter.taken_to ?? undefined,
       image_id: filter.image_id,
