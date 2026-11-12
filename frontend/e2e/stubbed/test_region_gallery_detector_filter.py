@@ -59,7 +59,7 @@ def test_region_gallery_detector_filter_lists_served_filterable_detectors(stub, 
     # fail-closed-clean rather than accumulating unrelated `unhandled` hits.
     stub.on('GET', r'/clusters(\?|$)', {'clusters': [], 'count': 0})
 
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
 
     # The Detector select specifically — /clusters also renders an
     # unrelated cluster-sort <select>, so `.first` would be ambiguous.

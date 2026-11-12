@@ -2,7 +2,8 @@
   /**
    * A modal confirm step for a destructive or bulk action: the caller
    * supplies the title, the body (served facts), and what Confirm does.
-   * Esc and a backdrop click cancel.
+   * Esc and a backdrop click cancel. Confirm takes focus the first time it
+   * can be pressed, so Enter applies.
    */
   import type { Snippet } from 'svelte';
   import Modal from '$components/Modal.svelte';
@@ -28,6 +29,14 @@
     oncancel,
     children,
   }: Props = $props();
+
+  let confirmButton = $state<HTMLButtonElement | null>(null);
+  let focusedOnce = false;
+  $effect(() => {
+    if (focusedOnce || busy || confirmDisabled || !confirmButton) return;
+    focusedOnce = true;
+    confirmButton.focus();
+  });
 </script>
 
 <Modal
@@ -42,6 +51,7 @@
   <div class="flex justify-end gap-2">
     <button type="button" class="btn" onclick={oncancel}>Cancel</button>
     <button
+      bind:this={confirmButton}
       type="button"
       class="btn {danger ? 'btn-danger' : 'btn-primary'}"
       disabled={busy || confirmDisabled}

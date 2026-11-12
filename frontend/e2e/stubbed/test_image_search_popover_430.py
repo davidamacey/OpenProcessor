@@ -25,7 +25,7 @@ def _open(stub, page, app_url, width, height):
     stub.on('GET', r'/regions(\?|$)', {'items': [], 'total': 0})
     stub.on('GET', r'/clusters(\?|$)', clusters_handler([]))
     page.set_viewport_size({'width': width, 'height': height})
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     toggle = page.get_by_test_id('image-search-toggle')
     expect(toggle).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     toggle.click()

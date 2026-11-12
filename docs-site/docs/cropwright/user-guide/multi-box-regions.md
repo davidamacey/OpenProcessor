@@ -50,7 +50,7 @@ item whose set of boxes is incomplete shows a chip.
 
 ## The region gallery
 
-The region gallery on `/clusters` shows item and box counts side by side, and
+The region gallery in the Workspace Clusters view shows item and box counts side by side, and
 adds a **Box state** filter. Opening a region cluster and triaging in bulk
 changes the **box** state of the selected boxes, not their sibling boxes on
 the same item. A "rows truncated" chip appears when the backend cut the

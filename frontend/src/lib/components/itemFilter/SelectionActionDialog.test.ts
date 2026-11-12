@@ -31,7 +31,9 @@ const apply = () =>
   [...target.querySelectorAll('button')].find((b) => b.textContent?.includes('Apply'))!;
 
 function mountDialog(onapplied = vi.fn()) {
-  const controller = createSelectionActionController(() => ({ class_names: ['widget'] }));
+  const controller = createSelectionActionController(() => ({
+    filter: { class_names: ['widget'] },
+  }));
   instance = mount(SelectionActionDialog, { target, props: { controller, onapplied } });
   return { controller, onapplied };
 }

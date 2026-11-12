@@ -18,7 +18,7 @@ Pipeline health at a glance.
   VLM prompt pack, an optional per-class scope lets you point the
   VLM-assisted sweep at a single class instead of the whole pool. Absent
   when the backend doesn't advertise one.
-- The **Assist with the VLM** quick action links to the clusters: a VLM run on a
+- The **Assist with the VLM** quick action links to the Workspace Clusters view: a VLM run on a
   cluster, selection, crop or box is started from there with
   **Assist…** (see [Assist](./assist.md)). With no VLM active for the project
   it links to the Models settings instead.

@@ -307,7 +307,7 @@ stored vector (`GET /search/similar`), no encoder needed; `POST /search/image` r
 uploaded picture or a region of a project image. `target=box` on the three search routes ranks the
 per-box vectors and returns the item with the box that matched (`matched_box_id`).
 [Cropwright review](../docs-site/docs/cropwright/user-guide/review.md),
-[clusters](../docs-site/docs/cropwright/user-guide/clusters.md),
+[workspace](../docs-site/docs/cropwright/user-guide/workspace.md),
 [item filter](../docs-site/docs/cropwright/user-guide/item-filter.md). What starts a
 clustering run, and when:
 [Workers](../docs-site/docs/operations/workers.mdx).

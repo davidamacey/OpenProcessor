@@ -95,6 +95,28 @@ def test_locked_counts_class_box_and_geometry_locks(monkeypatch: pytest.MonkeyPa
     assert body['summary_text'] == '3 detections in 2 images · 1 locked, skipped'
 
 
+def test_locked_counts_a_human_box_and_a_human_delete(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'g1': _item('g1', 'img-a', geometry_source='human'),
+                'g2': _item(
+                    'g2',
+                    'img-a',
+                    class_excluded=True,
+                    excluded_by='human',
+                    excluded_reason='not_an_object',
+                ),
+                'g3': _item('g3', 'img-a'),
+            },
+            IMAGES: {'img-a': {'image_id': 'img-a'}},
+        }
+    )
+    client = _client(fake, monkeypatch)
+    body = client.post(URL, json={'crop_ids': ['g1', 'g2', 'g3']}).json()
+    assert body['locked'] == 2
+
+
 def test_over_the_bulk_cap_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr('src.services.curation.selection_summary.MAX_BULK_SELECTION', 2)
     client = _client(_world(), monkeypatch)

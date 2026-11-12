@@ -1,4 +1,5 @@
 <script lang="ts">
+  import SortSelect from '$lib/components/workspace/SortSelect.svelte';
   import ChipPicker from '$lib/components/clusters/ChipPicker.svelte';
   import { asSortId, asValidationState } from '$lib/clusters/clusterListFilter';
   import type { ClusterListController } from '$lib/clusters/clusterListController.svelte';
@@ -38,19 +39,12 @@
   data-testid="cluster-list-filters"
 >
   {#if list.sortOptions.length > 0}
-    <label class="flex items-center gap-2 text-zinc-400">
-      Sort
-      <select
-        class="select-sm"
-        data-testid="cluster-sort"
-        value={list.appliedSort ?? ''}
-        onchange={(e) => (list.sort = asSortId(e.currentTarget.value))}
-      >
-        {#each list.sortOptions as o (o.id)}
-          <option value={o.id}>{o.label}</option>
-        {/each}
-      </select>
-    </label>
+    <SortSelect
+      testid="cluster-sort"
+      options={list.sortOptions}
+      applied={list.appliedSort ?? ''}
+      onchange={(id) => (list.sort = asSortId(id))}
+    />
   {/if}
 
   <ChipPicker

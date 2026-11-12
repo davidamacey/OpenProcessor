@@ -42,7 +42,7 @@ describe('VlmQuickAction', () => {
     const t = await render({ source: 'saved', active: { name: 'x', revision: 1 } });
     const link = t.querySelector('a.btn-primary');
     expect(link?.textContent).toContain('Assist with the VLM');
-    expect(link?.getAttribute('href')).toMatch(/\/clusters$/);
+    expect(link?.getAttribute('href')).toMatch(/\/workspace\?view=clusters$/);
     expect(t.querySelector('button')).toBeNull();
     expect(t.querySelector('[data-testid="vlm-activate-first"]')).toBeNull();
   });

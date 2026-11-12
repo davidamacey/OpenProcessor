@@ -35,7 +35,7 @@
   const matching = createMatchingItems(() => query());
   const pager = matching.pager;
   const sel = createSelection({ plainClick: 'replace' });
-  const actions = createSelectionActionController(() => body());
+  const actions = createSelectionActionController(() => ({ filter: body() }));
   const assist = new AssistRunController();
 
   const queryKey = $derived(JSON.stringify(query()));
@@ -57,7 +57,7 @@
       () => {
         void undoStore.undoLast().then(() => pager.loadFirst());
       },
-      'clusters',
+      'cluster',
     );
     return off;
   });

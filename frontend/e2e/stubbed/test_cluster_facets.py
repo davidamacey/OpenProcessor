@@ -67,7 +67,7 @@ def serve_cluster(stub, crop_queries: list[dict]) -> None:
 def test_facet_chips_show_served_counts_and_send_the_served_filters(stub, page, app_url):
     queries: list[dict] = []
     serve_cluster(stub, queries)
-    page.goto(f'{app_url}/p/default/clusters/{FACET_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{FACET_UID}')
     facets = page.get_by_test_id('cluster-facets')
     expect(facets).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(facets.get_by_test_id('facet-detector-class')).to_have_text(

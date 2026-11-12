@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * The project-scoped app shell: top bar (project switcher, breadcrumb,
-   * primary nav, API chip), the class sidebar, and every project-scoped
+   * primary nav, API chip), and every project-scoped
    * store subscription. Rendered only once `+layout.ts` resolved the
    * `/p/<slug>` segment to a selectable served project; otherwise the
    * "not available" page renders instead and no scoped call fires.
@@ -9,7 +9,6 @@
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
@@ -17,9 +16,7 @@
   import { projectHref, sectionOf, SECTION_LABELS } from '$lib/projectPaths';
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
-  import ClassSidebar from '$components/ClassSidebar.svelte';
   import { slotRegistryWarnings } from '$lib/annotations/registeredSlots';
-  import { findActiveClassByName } from '$lib/classNameKey';
   import { isPickerHiddenClass } from '$lib/classVisibility';
   import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import ShortcutOverlay from '$components/ShortcutOverlay.svelte';
@@ -196,47 +193,7 @@
   function navLinkClass(s: string): string {
     return `shrink-0 hover:text-white${section === s ? ' text-white' : ''}`;
   }
-  const showSidebar = $derived(section === 'clusters');
-
-  // Class filter applied to the cluster grid. Page reads from URL (?class=NAME;
-  // an id still resolves).
-  const selectedClassId = $derived.by(() => {
-    const v = page.url.searchParams.get('class');
-    if (v == null) return null;
-    if (Number.isFinite(+v)) return +v;
-    return findActiveClassByName(classesStore.classes, v)?.id ?? null;
-  });
-
-  function selectClass(cls: { id: number } | null): void {
-    void (async () => {
-      // A class is not a cluster: clicking one filters the cluster grid to the
-      // clusters whose dominant class it is (class identity is the name). A class
-      // bound to a slot opens the slot gallery through the same link, since its
-      // regions are sub-bboxes on other items; driven by registeredSlots.
-      if (cls) {
-        const clsName = classesStore.classes.find((c) => c.id === cls.id)?.name;
-        if (clsName) {
-          void goto(
-            resolve(projectHref(`/clusters?class=${encodeURIComponent(clsName)}`)),
-            {
-              reset: false,
-            },
-          );
-        }
-        return;
-      }
-      const q = [...page.url.searchParams]
-        .filter(([k]) => k !== 'class')
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join('&');
-      void goto(resolve(projectHref(`/clusters${q ? `?${q}` : ''}`)), {
-        reset: false,
-      });
-    })();
-  }
-
-  // Crumbs from the path below `/p/<slug>`: the section, plus the
-  // cluster uid on `/clusters/<uid>` (the only nested page).
+  // Crumbs from the path below `/p/<slug>`: the section.
   const crumbs = $derived.by(() => {
     // No crumb on /dashboard — it is "home", already labeled by the
     // title/nav; a redundant lowercase "dashboard" crumb added nothing.
@@ -244,13 +201,6 @@
     const out: Array<{ label: string; href: ReturnType<typeof projectHref> }> = [
       { label: SECTION_LABELS[section] ?? section, href: projectHref(`/${section}`) },
     ];
-    const rest = path.split('/').filter(Boolean).slice(3);
-    if (section === 'clusters' && rest[0]) {
-      out.push({
-        label: decodeURIComponent(rest[0]),
-        href: projectHref(`/clusters/${rest[0]}`),
-      });
-    }
     return out;
   });
 
@@ -361,9 +311,9 @@
           aria-current={navCurrent('ingest')}>Ingest</a
         >
         <a
-          href={resolve(projectHref('/clusters'))}
-          class={navLinkClass('clusters')}
-          aria-current={navCurrent('clusters')}>Clusters</a
+          href={resolve(projectHref('/workspace'))}
+          class={navLinkClass('workspace')}
+          aria-current={navCurrent('workspace')}>Workspace</a
         >
         <a
           href={resolve(projectHref('/review'))}
@@ -461,13 +411,6 @@
        selection) would survive a switch. -->
     {#key `${active.slug}:${regionProfileStore.seedVersion}`}
       <div class="flex min-h-0 flex-1 flex-col md:flex-row">
-        {#if showSidebar}
-          <ClassSidebar
-            selectedId={selectedClassId}
-            onselect={selectClass}
-            ondrop={(cls, ids) => void dropOnClassStore.dispatch(cls, ids)}
-          />
-        {/if}
         <main class="min-h-0 flex-1 overflow-auto">
           {@render children?.()}
         </main>

@@ -562,7 +562,7 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
 
     stub.on('POST', r'/reprocess$', reprocess_handler)
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').nth(1).click()
     expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -609,7 +609,7 @@ def test_feature_absent_when_formats_404(stub, page, app_url):
     expect(page.get_by_test_id('import-path')).to_have_count(0)
 
     with page.expect_response(lambda r: r.url.endswith('/datasets/formats')):
-        page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+        page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').nth(1).click()
     expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)

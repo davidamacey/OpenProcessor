@@ -114,6 +114,15 @@ describe('keyboardStore', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('names the space bar space', () => {
+    const handler = vi.fn();
+    reg('space', handler);
+
+    press({ key: ' ' });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
   it('unregistering removes the handler', () => {
     const handler = vi.fn();
     const off = keyboardStore.register('q', handler);
@@ -216,5 +225,48 @@ describe('suspend / resume', () => {
     keyboardStore.resume();
     press({ key: 'k' });
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('context includes', () => {
+  it('dispatches an action registered in an included context', () => {
+    // review.queue includes review, which includes global.
+    const skip = vi.fn();
+    reg('k', skip, 'review');
+    keyboardStore.setScope('review.queue');
+
+    press({ key: 'k' });
+
+    expect(skip).toHaveBeenCalledTimes(1);
+  });
+
+  it('prefers the current context over an included one', () => {
+    const outer = vi.fn();
+    const inner = vi.fn();
+    // The included context registers first, so registration order alone would pick it.
+    reg('k', outer, 'review');
+    reg('k', inner, 'review.queue');
+    keyboardStore.setScope('review.queue');
+
+    press({ key: 'k' });
+
+    expect(inner).toHaveBeenCalledTimes(1);
+    expect(outer).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch an action from a context that is not included', () => {
+    const region = vi.fn();
+    reg('k', region, 'review.region');
+    keyboardStore.setScope('review.queue');
+
+    press({ key: 'k' });
+
+    expect(region).not.toHaveBeenCalled();
+  });
+
+  it('counts a binding in an included context as active', () => {
+    reg('k', vi.fn(), 'review');
+    keyboardStore.setScope('review.queue');
+    expect(keyboardStore.hasActiveBinding('k')).toBe(true);
   });
 });

@@ -4804,7 +4804,6 @@
             "title": "Hotkey Letter"
           },
           "name": {
-            "pattern": "^[a-z0-9_]+$",
             "title": "Name",
             "type": "string"
           },
@@ -7500,6 +7499,7 @@
               "project_owned_model",
               "class_hotkey_conflict",
               "hotkey_reserved",
+              "invalid_class_name",
               "hotkey_taken",
               "path_escape",
               "label_op_not_found",
@@ -7884,6 +7884,17 @@
               }
             ],
             "title": "Soft Limit"
+          },
+          "suggested_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Name"
           },
           "unbound_class_hotkeys": {
             "anyOf": [
@@ -46403,7 +46414,7 @@
         ]
       },
       "post": {
-        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written, against the bound project's stored keymap.",
+        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422\n``invalid_class_name`` with the ``suggested_name`` slug when one exists);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written, against the bound project's stored keymap.",
         "operationId": "create_class_curation_projects__project__classes_post",
         "parameters": [
           {

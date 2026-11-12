@@ -77,7 +77,7 @@ def test_cluster_single_discard(stub, page, app_url):
         lambda req, m: (200, {'items': [], 'discarded': 0, 'conflicts': [], 'not_found': []}),
     )
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
 
     page.locator('img').nth(1).click()

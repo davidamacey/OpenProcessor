@@ -29,11 +29,11 @@ function read(rel: string): string {
 
 // /clusters/[id] and the modules it was split into.
 const CLUSTER_DETAIL_FILES = [
-  '../../routes/p/[project]/clusters/[id]/+page.svelte',
+  '../workspace/views/ClusterScope.svelte',
   '../clusters/clusterDetailController.svelte.ts',
   '../clusters/clusterDetailActions.svelte.ts',
   '../clusters/clusterDetailLive.svelte.ts',
-  './clusters/ClusterDetailToolbar.svelte',
+  './workspace/BulkBar.svelte',
   './clusters/ClusterDetailFilters.svelte',
   './clusters/ClusterDetailGrid.svelte',
   './clusters/MoveClusterPicker.svelte',

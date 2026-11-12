@@ -110,7 +110,7 @@ these layouts is narrow-sensitive). The throwaway project is created and removed
 | File (`-1600.png`) | Project | What it shows |
 | --- | --- | --- |
 | `resources-menu` | `coco-sample` | The open Resources menu: bundled docs plus the served service links |
-| `wheels-inventory-card` | throwaway | The pinned Wheels inventory card on `/clusters` |
+| `wheels-inventory-card` | throwaway | The pinned Wheels inventory card on the Workspace Clusters view |
 | `region-gallery-boxes` | throwaway | The gallery toolbar's "N / M boxes listed (K items)" |
 | `import-job-actions` | `coco-import` | A completed import: Undo offered, Cancel and Resume with the served reason |
 | `reprocess-served-scopes` | `coco-import` | The Reprocess dialog's served scope labels and the dry-run counts (dry run only, never applied) |

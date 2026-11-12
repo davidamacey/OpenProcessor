@@ -85,10 +85,10 @@ backend hasn't mounted.
 
 | Feature                                                      | Backend requirement                                                                                                    |
 | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Region review tab, `/clusters` region gallery, sub-box edit  | A region profile served on `GET {API_PREFIX}/health` (`region_profile`) — absent, no region UI anywhere                |
+| Region review tab, Workspace region gallery, sub-box edit    | A region profile served on `GET {API_PREFIX}/health` (`region_profile`) — absent, no region UI anywhere                |
 | Score chips, mistakenness/uniqueness sort options            | `OP_SCORES_ENABLED`                                                                                                    |
-| Diverse-selection overlay on `/clusters/[id]`                | `OP_SELECT_DIVERSE_ENABLED`                                                                                            |
-| Embedding-plot lasso tool on `/clusters`                     | `OP_VIZ_PROJECTION_ENABLED`                                                                                            |
+| Diverse-selection overlay on an open cluster                 | `OP_SELECT_DIVERSE_ENABLED`                                                                                            |
+| Embedding-plot lasso tool in the Workspace                   | `OP_VIZ_PROJECTION_ENABLED`                                                                                            |
 | Semantic (embedding) search box                              | `OP_SEMANTIC_SEARCH_ENABLED` (on by default)                                                                           |
 | `/train` (preflight, launch, promote)                        | The backend's trainer container/worker running                                                                         |
 | `/bakeoff`                                                   | The backend's on-demand evaluator container, and its `/bakeoff/*` router mounted                                       |
@@ -100,7 +100,7 @@ build flag.
 
 ## End-to-end workflow
 
-`/ingest` (bring images in) → `/review` + `/clusters` (label and
+`/ingest` (bring images in) → `/review` + `/workspace` (label and
 triage) → `/classes` (manage the class registry) → `/export` (freeze a
 test holdout, export YOLO) → `/train` (launch, promote) → `/bakeoff`
 (compare models) → back to `/review` for the next cycle
@@ -140,8 +140,8 @@ See [docs/FEATURES.md](docs/FEATURES.md) for a full route-by-route walkthrough,
 and [CLAUDE.md](CLAUDE.md)'s Routes and Keyboard shortcuts
 sections for the authoritative, current tables (kept in lockstep with
 the code, not duplicated here to avoid drift). Highlights: `/dashboard`
-(pipeline health), `/ingest` (bring images in), `/clusters` +
-`/clusters/[id]` (cluster-based triage, drag-and-drop, and **Assist…**: VLM runs
+(pipeline health), `/ingest` (bring images in), `/workspace`
+(Clusters and Detections views, cluster-based triage, drag-and-drop, and **Assist…**: VLM runs
 on a cluster, sub-cluster, selection, crop or box with a label proposal), `/review`
 (keyboard-driven queues), `/classes`, `/export`, `/train`, `/models`,
 `/bakeoff`, `/settings`.

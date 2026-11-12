@@ -300,9 +300,119 @@
       "modifiable": true
     },
     {
+      "context": "workspace",
+      "default": [
+        "["
+      ],
+      "description": "Switch to the previous Workspace view.",
+      "group": null,
+      "id": "workspace.view_prev",
+      "label": "Previous view",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "]"
+      ],
+      "description": "Switch to the next Workspace view.",
+      "group": null,
+      "id": "workspace.view_next",
+      "label": "Next view",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        ","
+      ],
+      "description": "Open the previous cluster in the Clusters list.",
+      "group": null,
+      "id": "workspace.scope_prev",
+      "label": "Previous cluster",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "."
+      ],
+      "description": "Open the next cluster in the Clusters list.",
+      "group": null,
+      "id": "workspace.scope_next",
+      "label": "Next cluster",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "\\"
+      ],
+      "description": "Toggle the details panel.",
+      "group": null,
+      "id": "workspace.toggle_details",
+      "label": "Show or hide details",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "shift+o"
+      ],
+      "description": "Open the focused item's image in the editor.",
+      "group": null,
+      "id": "workspace.open_editor",
+      "label": "Open in the image editor",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "/"
+      ],
+      "description": "Open the class picker.",
+      "group": null,
+      "id": "workspace.class_picker",
+      "label": "Search all classes...",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
+        "escape"
+      ],
+      "description": "Step back one level: selection, then scope, then the details panel.",
+      "group": "cancel",
+      "id": "workspace.escape",
+      "label": "Clear selection / leave scope / close panel",
+      "modifiable": false
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "space"
+      ],
+      "description": "Toggle the focused card in the selection.",
+      "group": null,
+      "id": "workspace.select_toggle",
+      "label": "Select or deselect the focused card",
+      "modifiable": true
+    },
+    {
       "context": "cluster",
       "default": [
         "enter"
+      ],
+      "description": "Open Review at the focused card.",
+      "group": null,
+      "id": "workspace.open_review",
+      "label": "Open the focused card in Review",
+      "modifiable": false
+    },
+    {
+      "context": "cluster",
+      "default": [
+        "shift+enter"
       ],
       "description": "Confirm the selected crops.",
       "group": "confirm",
@@ -313,7 +423,7 @@
     {
       "context": "cluster",
       "default": [
-        "shift+enter"
+        "shift+g"
       ],
       "description": "Accept every VLM suggestion on the page.",
       "group": null,
@@ -368,7 +478,9 @@
     {
       "context": "cluster",
       "default": [
-        "z"
+        "z",
+        "ctrl+z",
+        "meta+z"
       ],
       "description": "Undo the last action.",
       "group": "undo",
@@ -401,7 +513,9 @@
     {
       "context": "cluster",
       "default": [
-        "a"
+        "a",
+        "ctrl+a",
+        "meta+a"
       ],
       "description": "Select every visible crop.",
       "group": "select_all",
@@ -441,17 +555,6 @@
       "id": "cluster.move",
       "label": "Move selected to cluster...",
       "modifiable": true
-    },
-    {
-      "context": "cluster",
-      "default": [
-        "escape"
-      ],
-      "description": "Cancel the current cluster interaction.",
-      "group": "cancel",
-      "id": "cluster.cancel",
-      "label": "Clear drag capture / close picker / clear selection",
-      "modifiable": false
     },
     {
       "context": "clusters_search",
@@ -555,16 +658,25 @@
     },
     {
       "class_hotkeys_live": true,
-      "description": "A single cluster's crop grid.",
-      "id": "cluster",
+      "description": "Keys that work in every Workspace view.",
+      "id": "workspace",
       "includes": [
         "global"
       ],
-      "label": "Cluster"
+      "label": "Workspace"
     },
     {
       "class_hotkeys_live": true,
-      "description": "Semantic-search results on /clusters.",
+      "description": "The Workspace card grids: clusters, detections and a cluster's crops.",
+      "id": "cluster",
+      "includes": [
+        "workspace"
+      ],
+      "label": "Workspace grid"
+    },
+    {
+      "class_hotkeys_live": true,
+      "description": "Semantic-search results in the Workspace Clusters view.",
       "id": "clusters_search",
       "includes": [
         "global"
@@ -573,7 +685,7 @@
     },
     {
       "class_hotkeys_live": false,
-      "description": "The region gallery on /clusters.",
+      "description": "The region gallery in the Workspace Clusters view.",
       "id": "region_gallery",
       "includes": [
         "global"

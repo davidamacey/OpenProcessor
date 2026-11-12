@@ -23,8 +23,8 @@ from playwright.sync_api import expect
 ROUTES = [
     '/',
     '/p/default/dashboard',
-    '/p/default/clusters',
-    '/p/default/clusters/cl-fixture-0001',
+    '/p/default/workspace?view=clusters',
+    '/p/default/workspace?view=clusters&scope=cluster:cl-fixture-0001',
     '/p/default/review',
     '/p/default/classes',
     '/p/default/export',
@@ -189,7 +189,7 @@ def test_labeling_flow(stub, page, app_url):
     register_base(stub)
 
     # ---- cluster detail page ------------------------------------
-    page.goto(f'{app_url}/p/default/clusters/cl-fixture-0001')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:cl-fixture-0001')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     # wait_for_selector("img") above already blocks until a real crop image
     # is in the DOM, which only happens inside the grid — no extra sleep
@@ -260,7 +260,9 @@ def test_labeling_flow(stub, page, app_url):
         wait_for_paint(page)
     # Escape with no drag in progress clears the selection (cluster.cancel)
     # — a real, observable state change proving the last Escape ran.
-    expect(page.get_by_text('0 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('bulk-summary')).to_have_text(
+        'Nothing selected', timeout=ACTION_TIMEOUT_MS
+    )
     overflow = [
         c
         for c in stub.console_errors

@@ -72,7 +72,7 @@ def test_region_status_filter_lists_served_statuses_and_forwards_the_query_param
 
     stub.on('GET', r'/regions(\?|$)', regions_handler)
 
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
 
     select = page.locator('label:has-text("Status") select')
     select.wait_for(timeout=ACTION_TIMEOUT_MS)
@@ -120,7 +120,7 @@ def test_gallery_count_does_not_divide_boxes_by_items(stub, page, app_url):
     stub.on('GET', r'/clusters(\?|$)', {'clusters': [], 'count': 0})
     stub.on('GET', r'/regions(\?|$)', {'items': rows, 'total': 1, 'total_rows': 3})
 
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
     count = page.get_by_test_id('slot-gallery-count')
     count.wait_for(timeout=ACTION_TIMEOUT_MS)
     text = ' '.join(count.inner_text().split())

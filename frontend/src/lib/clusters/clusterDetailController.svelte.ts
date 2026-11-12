@@ -1,9 +1,8 @@
 /**
- * The /clusters/[id] view state (the route param is the cluster uid): the
+ * The Workspace cluster scope's state (`uid` reads the scope's cluster uid): the
  * cluster card, the crop pager and its race guard, the source / subject /
  * clarity / order filters that feed one crop query, and selection.
  */
-import { page } from '$app/state';
 import { getCluster, getClusterFacets } from '$lib/api_clusters';
 import { createExclusionGuard } from '$lib/clusters/clusterController.svelte';
 import { SLOW_LOAD_MS } from '$lib/clusters/firstLoad';
@@ -21,8 +20,8 @@ import { classSourcesStore } from '$stores/classSources.svelte';
 import { keyboardStore } from '$stores/keyboard.svelte';
 import { strategiesStore } from '$stores/strategies.svelte';
 
-export function createClusterDetailController() {
-  const clusterUid = $derived(page.params.id ?? '');
+export function createClusterDetailController(uid: () => string) {
+  const clusterUid = $derived(uid());
 
   let cluster = $state<Cluster | null>(null);
   // Set when the cluster card read failed but the crops loaded: the header

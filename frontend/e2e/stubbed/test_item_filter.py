@@ -190,8 +190,8 @@ def test_clusters_grid_and_matching_mode_send_the_filter(stub, page, app_url):
     stub.on('GET', r'/crops(\?|$)', crops_handler)
     _common(stub)
 
-    page.goto(f'{app_url}/p/default/clusters')
-    page.get_by_test_id('clusters-filter-bar').wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    page.get_by_test_id('workspace-filter-bar').wait_for(timeout=ACTION_TIMEOUT_MS)
     # The open-vocabulary pair belongs to the Matching view only.
     assert page.get_by_test_id('served-filter-open_vocab_set').count() == 0
 
@@ -237,7 +237,9 @@ def test_open_vocab_link_opens_matching_mode_with_removable_chips(stub, page, ap
     stub.on('GET', r'/crops(\?|$)', crops_handler)
     _common(stub)
 
-    page.goto(f'{app_url}/p/default/clusters?open_vocab_set=tags&source_prompt=blue+widget')
+    page.goto(
+        f'{app_url}/p/default/workspace?view=clusters&open_vocab_set=tags&source_prompt=blue+widget'
+    )
     page.get_by_test_id('matching-total').wait_for(timeout=ACTION_TIMEOUT_MS)
     q = query_of(crop_requests[-1])
     assert q['open_vocab_set'] == ['tags']

@@ -73,9 +73,18 @@ describe('/ and the legacy bare paths', () => {
       status: 307,
     });
     const nested = await outcome(() =>
-      call(legacyLoad, { url: new URL('http://x/clusters/12') }),
+      call(legacyLoad, { url: new URL('http://x/workspace?view=clusters') }),
     );
-    expect(nested.location).toBe('/p/default/clusters/12');
+    expect(nested.location).toBe('/p/default/workspace?view=clusters');
+  });
+
+  it('the retired /clusters paths are the 404', async () => {
+    for (const path of ['/clusters', '/clusters/12']) {
+      const r = await outcome(() =>
+        call(legacyLoad, { url: new URL(`http://x${path}`) }),
+      );
+      expect(r).toEqual({ status: 404 });
+    }
   });
 
   it('anything else is a 404', async () => {

@@ -108,23 +108,25 @@ def serve(stub, requests, truncated=False):
 
 def card_ids(page) -> list[str]:
     # textContent, not innerText: cards below the fold are content-visibility:auto.
-    return page.locator('ul > li button [data-testid=cluster-uid]').evaluate_all(
-        'els => els.map(e => e.textContent.trim())'
-    )
+    return page.locator(
+        '[data-testid=workspace-view] ul > li button [data-testid=cluster-uid]'
+    ).evaluate_all('els => els.map(e => e.textContent.trim())')
 
 
 def test_cards_render_in_the_served_order_with_served_quality_fields(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
-    page.goto(f'{app_url}/p/default/clusters')
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     assert card_ids(page) == ['#1', '#2', '#3']
     assert 'sort' not in requests[0]
     # One list request carries the first screen's thumbnails.
     assert len(requests) == 1
     assert requests[0]['offset'] == ['0']
     assert requests[0]['limit'] == ['24']
-    second = page.locator('ul > li').nth(1)
+    second = page.locator('[data-testid=workspace-view] ul > li').nth(1)
     expect(second.get_by_test_id('cluster-detector')).to_contain_text('widget_x')
     expect(second.get_by_test_id('cluster-needs-review')).to_contain_text('9 to review')
     flags = second.get_by_test_id('cluster-flag')
@@ -137,12 +139,14 @@ def test_cards_render_in_the_served_order_with_served_quality_fields(stub, page,
 def test_a_chosen_sort_is_sent_and_the_served_order_is_shown(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
-    page.goto(f'{app_url}/p/default/clusters')
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id('cluster-sort').select_option('needs_review_desc')
-    expect(page.locator('ul > li button [data-testid=cluster-uid]').first).to_have_text(
-        '#2', timeout=ACTION_TIMEOUT_MS
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
     )
+    page.get_by_test_id('cluster-sort').select_option('needs_review_desc')
+    expect(
+        page.locator('[data-testid=workspace-view] ul > li button [data-testid=cluster-uid]').first
+    ).to_have_text('#2', timeout=ACTION_TIMEOUT_MS)
     assert card_ids(page) == ['#2', '#3', '#1']
     assert requests[-1]['sort'] == ['needs_review_desc']
     assert 'sort=needs_review_desc' in page.url
@@ -151,40 +155,52 @@ def test_a_chosen_sort_is_sent_and_the_served_order_is_shown(stub, page, app_url
 def test_filters_reach_the_server_survive_a_reload_and_clear(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
-    page.goto(f'{app_url}/p/default/clusters')
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     page.get_by_test_id('cluster-flag-filter-mixed_detector_classes').click()
-    expect(page.locator('ul > li')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
+        1, timeout=ACTION_TIMEOUT_MS
+    )
     assert requests[-1]['flag'] == ['mixed_detector_classes']
     assert 'flag=mixed_detector_classes' in page.url
 
     page.reload()
-    expect(page.locator('ul > li')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
+        1, timeout=ACTION_TIMEOUT_MS
+    )
     expect(page.get_by_test_id('cluster-flag-filter-mixed_detector_classes')).to_have_attribute(
         'aria-pressed', 'true'
     )
 
     page.get_by_test_id('cluster-filters-clear').click()
-    expect(page.locator('ul > li')).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
+        3, timeout=ACTION_TIMEOUT_MS
+    )
     assert 'flag=' not in page.url
 
 
 def test_a_filter_with_no_match_shows_the_empty_state_and_clears(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
-    page.goto(f'{app_url}/p/default/clusters')
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     page.get_by_test_id('cluster-flag-filter-label_disagreement').click()
     empty = page.get_by_test_id('clusters-filtered-empty')
     expect(empty).to_contain_text('No clusters match these filters', timeout=ACTION_TIMEOUT_MS)
     empty.get_by_role('button', name='Clear filters').click()
-    expect(page.locator('ul > li')).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
+        3, timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_a_truncated_list_says_so(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests, truncated=True)
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     expect(page.get_by_test_id('clusters-truncated')).to_contain_text(
         '3 clusters', timeout=ACTION_TIMEOUT_MS
     )
@@ -194,20 +210,24 @@ def test_a_failed_list_shows_its_error_and_retries(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
     stub.on('GET', r'/clusters(\?|$)', (500, {'detail': 'down'}))
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     expect(page.get_by_test_id('clusters-error')).to_contain_text(
         'Could not load clusters', timeout=ACTION_TIMEOUT_MS
     )
     stub.on('GET', r'/clusters(\?|$)', clusters_handler(requests))
     page.get_by_role('button', name='Retry').click()
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_unrelated_item_filters_keep_the_cluster_filter_in_the_url(stub, page, app_url):
     requests: list[dict] = []
     serve(stub, requests)
-    page.goto(f'{app_url}/p/default/clusters?flag=unvalidated&sort=size_asc')
-    expect(page.locator('ul > li button').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&flag=unvalidated&sort=size_asc')
+    expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
     assert card_ids(page) == ['#2', '#1']
     assert requests[0]['flag'] == ['unvalidated']
     assert requests[0]['sort'] == ['size_asc']

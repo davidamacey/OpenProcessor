@@ -4,7 +4,6 @@
  */
 import { apiFetch, isPlainObject, scoped } from '$lib/api';
 import { ApiError } from '$lib/api_errors';
-import type { ExcludeReason } from '$lib/api_cropWrites';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import type {
   DiverseSelection,
@@ -15,6 +14,7 @@ import type {
   ItemSelection,
   SelectionDryRun,
   SelectionExcludeResult,
+  SelectionSummary,
 } from '$lib/types_itemFilter';
 
 // -- pool-scale diverse selection for /review (P2-10) --------------------
@@ -160,7 +160,7 @@ export function bulkLabelSelection(
 
 export function batchExcludeSelection(
   selection: ItemSelection,
-  reason: ExcludeReason,
+  reason: string,
   dryRun: boolean,
   signal?: AbortSignal,
 ): Promise<SelectionWrite<SelectionExcludeResult & { excluded: number }>> {
@@ -203,6 +203,18 @@ export function moveSelectionToCluster(
       method: 'POST',
       body: JSON.stringify({ selection, cluster_uid: clusterUid, dry_run: dryRun }),
     },
+    signal,
+  );
+}
+
+/** What a bulk action over `selection` would touch, counted by the server. */
+export function getSelectionSummary(
+  selection: ItemSelection,
+  signal?: AbortSignal,
+): Promise<SelectionSummary> {
+  return apiFetch<SelectionSummary>(
+    `${scoped()}/selection/summary`,
+    { method: 'POST', body: JSON.stringify(selection) },
     signal,
   );
 }

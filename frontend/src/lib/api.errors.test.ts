@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { unknownStrategyDetail } from '$lib/api_autoLabel';
+import { invalidClassNameDetail } from '$lib/api_classes';
 import { ApiError, formatValidationEntry } from '$lib/api_errors';
 
 const body422 = {
@@ -118,5 +119,33 @@ describe('formatValidationEntry (p1, 2026-09-24 interactive pass)', () => {
     expect(formatValidationEntry(null)).toBeNull();
     expect(formatValidationEntry('a string')).toBeNull();
     expect(formatValidationEntry({ loc: ['body', 'x'] })).toBeNull();
+  });
+});
+
+describe('invalid class name 422', () => {
+  const body = (over: Record<string, unknown>) => ({
+    detail: { error: 'invalid_class_name', message: 'Use lower-case letters.', ...over },
+  });
+
+  it('carries the served suggestion', () => {
+    const e = new ApiError(
+      422,
+      '/curation/classes',
+      body({ suggested_name: 'traffic_light' }),
+    );
+    expect(invalidClassNameDetail(e)).toEqual({
+      message: 'Use lower-case letters.',
+      suggested_name: 'traffic_light',
+    });
+  });
+
+  it('has no suggestion when the server found none', () => {
+    const e = new ApiError(422, '/curation/classes', body({}));
+    expect(invalidClassNameDetail(e)?.suggested_name).toBeNull();
+  });
+
+  it('ignores other errors', () => {
+    expect(invalidClassNameDetail(new ApiError(409, '/x', body({})))).toBeNull();
+    expect(invalidClassNameDetail(new Error('x'))).toBeNull();
   });
 });

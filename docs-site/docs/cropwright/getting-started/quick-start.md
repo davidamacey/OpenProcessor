@@ -89,7 +89,7 @@ switcher in the top bar, or `/projects`, to create another; see
 ## The end-to-end workflow
 
 ```
-/ingest  ->  /review + /clusters  ->  /classes  ->  /export  ->  /train  ->  /bakeoff  ->  back to /review
+/ingest  ->  /review + /workspace  ->  /classes  ->  /export  ->  /train  ->  /bakeoff  ->  back to /review
 ```
 
 Bring images in, label and triage them, manage the class registry, freeze a

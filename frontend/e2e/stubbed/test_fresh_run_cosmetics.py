@@ -132,7 +132,7 @@ def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
     rows = [{**i, 'row_key': f'{i["crop_id"]}#item'} for i in items]
     stub.on('GET', r'/regions(\?|$)', {'items': rows, 'total': 4})
 
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     title = page.get_by_test_id('slot-card-title')
     title.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert title.inner_text().strip() == REGION_TAB_LABEL
@@ -159,7 +159,7 @@ def test_region_inventory_card_survives_boxes_of_one_item(stub, page, app_url):
     errors: list[str] = []
     page.on('pageerror', lambda e: errors.append(str(e)))
 
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     page.get_by_test_id('slot-card-title').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert not errors, errors
     tiles = (

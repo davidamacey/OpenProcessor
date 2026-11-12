@@ -532,7 +532,10 @@ def test_keymap_per_context_override(stub, page, app_url):
         lambda req, m: (200, {'items': [], 'discarded': 0, 'conflicts': [], 'not_found': []}),
     )
 
-    page.goto(f'{app_url}/clusters/{CLUSTER_UID}', wait_until='domcontentloaded')
+    page.goto(
+        f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}',
+        wait_until='domcontentloaded',
+    )
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').nth(1).click()
     expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)

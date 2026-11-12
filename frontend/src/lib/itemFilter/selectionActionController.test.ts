@@ -34,7 +34,7 @@ import type { ItemFilter } from '$lib/types_itemFilter';
 const FILTER: ItemFilter = { class_names: ['widget'], origin: ['sam3'] };
 
 function make(filter: ItemFilter = FILTER) {
-  return createSelectionActionController(() => filter);
+  return createSelectionActionController(() => ({ filter }));
 }
 
 beforeEach(() => {
@@ -206,12 +206,21 @@ describe('selectionActionController', () => {
     expect(batchExcludeSelection).toHaveBeenCalledTimes(1);
   });
 
+  it('a crop-id selection goes out as crop ids', async () => {
+    vi.mocked(batchExcludeSelection).mockResolvedValue({ dry_run: true, selected: 2 });
+    const c = createSelectionActionController(() => ({ crop_ids: ['a', 'b'] }));
+    await c.open('exclude');
+    expect(vi.mocked(batchExcludeSelection).mock.calls[0]![0]).toEqual({
+      crop_ids: ['a', 'b'],
+    });
+  });
+
   it('the filter is snapshotted when the dialog opens, not re-read at confirm', async () => {
     vi.mocked(batchExcludeSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 2 })
       .mockResolvedValueOnce({ excluded: 2, updated_ids: ['a', 'b'], errors: 0 });
     let live: ItemFilter = FILTER;
-    const c = createSelectionActionController(() => live);
+    const c = createSelectionActionController(() => ({ filter: live }));
     await c.open('exclude');
     live = { class_names: ['other'] };
     await c.confirm();

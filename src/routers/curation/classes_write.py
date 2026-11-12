@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import HTTPException, status
 
 from src.clients.curation_opensearch import RegistryClassEntry
 from src.config.curation_accessors import items_index
+from src.routers.curation._api_error import api_error
 from src.routers.curation._class_hotkeys import project_keymap_overrides, validated_hotkey
-from src.routers.curation._class_models import ClassCreateRequest, ClassUpdateRequest
+from src.routers.curation._class_models import (
+    CLASS_NAME_PATTERN,
+    ClassCreateRequest,
+    ClassUpdateRequest,
+)
 from src.routers.curation._common import OpenSearchDep, get_class_registry, router
 from src.schemas.curation.classes import ClassCreated
 from src.services.classes.registry import ClassRegistry, ClassRegistryError
+from src.utils.class_names import normalize_class_name
 
 
 async def create_registry_class(
@@ -56,9 +63,17 @@ async def create_registry_class(
 
 @router.post('/classes', status_code=status.HTTP_201_CREATED, response_model=ClassCreated)
 async def create_class(payload: ClassCreateRequest) -> dict[str, Any]:
-    """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422);
+    """Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422
+    ``invalid_class_name`` with the ``suggested_name`` slug when one exists);
     an optional ``hotkey_letter`` is validated like on update before
     anything is written, against the bound project's stored keymap."""
+    if not re.fullmatch(CLASS_NAME_PATTERN, payload.name):
+        raise api_error(
+            422,
+            'invalid_class_name',
+            'A class name uses lower-case letters, digits and underscores only.',
+            suggested_name=normalize_class_name(payload.name) or None,
+        )
     reg = get_class_registry()
     keymap_overrides = (
         await project_keymap_overrides() if payload.hotkey_letter is not None else None

@@ -17,7 +17,11 @@ from src.services.curation.item_selection import (
     SelectionError,
     selection_query,
 )
-from src.services.curation.reprocess_locks import class_locked_clause, region_locked_clause
+from src.services.curation.reprocess_locks import (
+    class_locked_clause,
+    geometry_locked_clause,
+    region_locked_clause,
+)
 
 
 if TYPE_CHECKING:
@@ -93,7 +97,11 @@ async def selection_summary(
                         'filters': {
                             'locked': {
                                 'bool': {
-                                    'should': [class_locked_clause(), region_locked_clause()],
+                                    'should': [
+                                        class_locked_clause(),
+                                        region_locked_clause(),
+                                        geometry_locked_clause(),
+                                    ],
                                     'minimum_should_match': 1,
                                 }
                             },

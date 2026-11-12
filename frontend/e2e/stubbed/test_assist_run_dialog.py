@@ -240,7 +240,7 @@ def shots(page, name: str) -> None:
 
 def open_cluster(stub, page, app_url, **kw):
     seen = register(stub, **kw)
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     return seen
 

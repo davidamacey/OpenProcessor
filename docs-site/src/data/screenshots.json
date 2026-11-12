@@ -1,5 +1,10 @@
 [
   {
+    "name": "cropwright/workspace-clusters-1600.png",
+    "alt": "The Workspace Clusters view: filter row, view bar, queues and classes rail, cluster cards and details panel, captured from Cropwright, a frontend for this backend",
+    "caption": "Workspace, Clusters view (captured from Cropwright, a frontend for this backend)"
+  },
+  {
     "name": "cropwright/clusters-1600.png",
     "alt": "Cluster cards served by GET /curation/clusters (dominant class, cohesion, size), captured from Cropwright, a frontend for this backend",
     "caption": "Clusters: cards served by GET /curation/clusters (captured from Cropwright, a frontend for this backend)"

@@ -124,63 +124,91 @@ def show_label_op_dry_run(page) -> None:
     expect(page.get_by_test_id('label-op-confirm')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
 
+def open_class_picker(page) -> None:
+    page.locator('img').first.click()
+    page.get_by_test_id('assign-selected').click()
+
+
 # (id, path, stub setup, selector that proves the data loaded[, step that opens a panel])
 PAGES = [
     ('projects', '/projects', serve_projects_page, '[data-testid="project-row-widgets-a"]'),
-    ('clusters', '/p/default/clusters', serve_clusters, 'li button'),
+    (
+        'workspace-clusters',
+        '/p/default/workspace?view=clusters',
+        serve_clusters,
+        '[data-testid=workspace-view] li button',
+    ),
     (
         'clusters-with-filters',
-        '/p/default/clusters?flag=unvalidated',
+        '/p/default/workspace?view=clusters&flag=unvalidated',
         serve_clusters_with_filters,
-        'li button',
+        '[data-testid=workspace-view] li button',
     ),
     (
         'clusters-loop-plan',
-        '/p/default/clusters',
+        '/p/default/workspace?view=clusters',
         serve_plan_form,
         '[data-testid="loop-panel-toggle"]',
         show_plan_form,
     ),
     (
         'clusters-loop-finished',
-        '/p/default/clusters',
+        '/p/default/workspace?view=clusters',
         lambda stub: serve_loop(stub, 'completed'),
         '[data-testid="loop-panel-toggle"]',
         show_finished_loop,
     ),
     (
         'clusters-loop-live',
-        '/p/default/clusters',
+        '/p/default/workspace?view=clusters',
         lambda stub: serve_loop(stub, 'running'),
         '[data-testid="loop-panel-toggle"]',
         lambda page: expect(page.get_by_test_id('loop-cancel')).to_be_visible(
             timeout=ACTION_TIMEOUT_MS
         ),
     ),
-    ('cluster-detail', '/p/default/clusters/1', serve_clusters, '[data-testid="class-name"]'),
+    (
+        'workspace-cluster-scope',
+        '/p/default/workspace?view=clusters&scope=cluster:1',
+        serve_clusters,
+        '[data-testid="class-name"]',
+    ),
     (
         'cluster-detail-facets',
-        f'/p/default/clusters/{FACET_UID}',
+        f'/p/default/workspace?view=clusters&scope=cluster:{FACET_UID}',
         serve_cluster_with_facets,
         '[data-testid="cluster-facets"]',
+    ),
+    (
+        'workspace-detections',
+        '/p/default/workspace?view=detections',
+        serve_clusters,
+        '[data-testid="detections-view"]',
+    ),
+    (
+        'workspace-class-picker',
+        '/p/default/workspace?view=detections',
+        serve_clusters,
+        '[data-testid="detections-view"] img',
+        open_class_picker,
     ),
     ('review', '/p/default/review', serve_review, 'main'),
     ('review-similar', '/p/default/review', serve_review_similar, '[data-testid="review-similar"]'),
     (
         'clusters-similar',
-        '/p/default/clusters?similar_to=crop-0',
+        '/p/default/workspace?view=clusters&similar_to=crop-0',
         serve_similar,
         '[data-testid="search-summary"]',
     ),
     (
         'cluster-detail-similar',
-        '/p/default/clusters/1',
+        '/p/default/workspace?view=clusters&scope=cluster:1',
         serve_similar,
         '[data-testid="crop-similar"]',
     ),
     (
         'cluster-detail-source-missing',
-        '/p/default/clusters/1',
+        '/p/default/workspace?view=clusters&scope=cluster:1',
         serve_cluster_grid,
         '[role="status"]',
     ),

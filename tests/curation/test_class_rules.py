@@ -18,13 +18,8 @@ from _class_registry_fake import InMemoryRegistry
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from curation._keymap_expectations import DEFAULT_RESERVED_HOTKEYS
 from src.services.curation.keymap import reserved_hotkeys
-
-
-# The legacy hardcoded set, kept only as a regression fixture: the
-# derived default must equal this set plus the per-box accept/reject keys
-# y/r and the overlay's backtick.
-LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 
 
 def _entry(registry: InMemoryRegistry, class_id: int) -> Any:
@@ -127,7 +122,7 @@ def test_create_rejects_duplicate_hotkey(client: TestClient, registry: InMemoryR
 
 def test_list_serves_reserved_hotkeys_and_added_at(client: TestClient) -> None:
     body = client.get('/curation/projects/default/classes').json()
-    assert body['reserved_hotkeys'] == sorted(LEGACY_RESERVED_HOTKEY_LETTERS | {'y', 'r', '`'})
+    assert body['reserved_hotkeys'] == sorted(DEFAULT_RESERVED_HOTKEYS)
     assert body['reserved_hotkeys'] == reserved_hotkeys({})
     assert all(c['added_at'] for c in body['classes'])
 

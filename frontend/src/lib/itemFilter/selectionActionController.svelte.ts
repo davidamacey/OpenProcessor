@@ -1,7 +1,7 @@
 /**
- * "Act on every item a filter matches": exclude, restore, label as a
- * class, or move to a cluster, over an `ItemSelection` (the filter, plus
- * an optional limit / sample / seed) instead of a list of crop ids.
+ * "Act on every item a selection names": exclude, restore, label as a
+ * class, or move to a cluster, over an `ItemSelection` (a filter or crop ids,
+ * plus an optional limit / sample / seed).
  *
  * The count the operator confirms is the server's: opening an action, or
  * changing the limit / sample / seed, runs the same write with
@@ -27,7 +27,6 @@ import {
 import { undoStore } from '$stores/undo.svelte';
 import { toastStore } from '$stores/toast.svelte';
 import type {
-  ItemFilter,
   ItemSelection,
   SelectionDryRun,
   SelectionSample,
@@ -49,10 +48,12 @@ function isDryRun(r: unknown): r is SelectionDryRun {
   return !!r && typeof r === 'object' && (r as { dry_run?: unknown }).dry_run === true;
 }
 
-export function createSelectionActionController(filter: () => ItemFilter) {
+export function createSelectionActionController(base: () => ItemSelection) {
   let action = $state<SelectionActionId | null>(null);
-  let snapshot: ItemFilter = {};
+  let snapshot: ItemSelection = {};
   let classId = $state<number | null>(null);
+  /** The served ignore reason an `exclude` action records. */
+  let reason = $state('ignore');
   let clusterUid = $state<string | null>(null);
   let clusterOptions = $state<Cluster[]>([]);
   let limit = $state<number | null>(null);
@@ -66,7 +67,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
   let inflight: AbortController | null = null;
 
   function selection(): ItemSelection {
-    const sel: ItemSelection = { filter: snapshot };
+    const sel: ItemSelection = { ...snapshot };
     if (limit != null) sel.limit = limit;
     if (sample != null) sel.sample = sample;
     if (sample === 'random' && seed != null) sel.seed = seed;
@@ -84,7 +85,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
     const sel = selection();
     switch (action) {
       case 'exclude':
-        return batchExcludeSelection(sel, 'ignore', dryRun, signal);
+        return batchExcludeSelection(sel, reason, dryRun, signal);
       case 'unexclude':
         return batchUnexcludeSelection(sel, dryRun, signal);
       case 'label':
@@ -122,7 +123,7 @@ export function createSelectionActionController(filter: () => ItemFilter) {
 
   async function open(next: SelectionActionId): Promise<void> {
     action = next;
-    snapshot = structuredClone($state.snapshot(filter()));
+    snapshot = structuredClone($state.snapshot(base()));
     confirmed = false;
     result = null;
     let optionsError: string | null = null;
@@ -226,6 +227,12 @@ export function createSelectionActionController(filter: () => ItemFilter) {
     },
     set classId(v: number | null) {
       classId = v;
+    },
+    get reason() {
+      return reason;
+    },
+    set reason(v: string) {
+      reason = v;
     },
     get clusterUid() {
       return clusterUid;
