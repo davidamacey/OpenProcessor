@@ -37,6 +37,7 @@ function render(
     selectedCropId?: string | null;
     locks?: Record<string, string | null>;
     pending?: [number, number, number, number] | null;
+    pixels?: { width: number; height: number };
   } = {},
 ): Calls & { canvas: Record<string, (...a: never[]) => unknown> } {
   const calls: Calls = {
@@ -51,8 +52,8 @@ function render(
     target,
     props: {
       imageUrl: (d: number) => `/img?d=${d}`,
-      width: W,
-      height: H,
+      width: over.pixels?.width ?? W,
+      height: over.pixels?.height ?? H,
       boxes: over.boxes ?? [ITEM],
       selectedCropId: over.selectedCropId ?? null,
       locks: over.locks ?? {},
@@ -293,6 +294,41 @@ describe('EditorCanvas zoom and pan', () => {
     });
     flushSync();
     expect(onzoom).toHaveBeenLastCalledWith(50);
+  });
+});
+
+describe('EditorCanvas minimap', () => {
+  const minimap = () => target.querySelector<HTMLElement>('[data-testid="minimap"]');
+
+  it('is only for a photo larger than four times the viewport', () => {
+    render();
+    expect(minimap()).toBeNull();
+    unmount(instance!);
+    target.remove();
+    render({ pixels: { width: 4000, height: 3000 } });
+    expect(minimap()).not.toBeNull();
+    expect(minimap()!.querySelectorAll('[data-testid="overlay-box"]')).toHaveLength(1);
+  });
+
+  it('minimap pans on click', () => {
+    const c = render({ pixels: { width: 4000, height: 3000 } });
+    c.canvas.zoomBy(4 as never);
+    flushSync();
+    expect(px(frameEl(), 'width')).toBe(W * 4);
+    // The stubbed layout makes every element 800 by 600: a click at (480, 300) is 0.6, 0.5.
+    pointer(minimap()!, 'pointerdown', 480, 300);
+    const f = frameEl();
+    expect((W / 2 - px(f, 'left')) / px(f, 'width')).toBeCloseTo(0.6, 3);
+    expect((H / 2 - px(f, 'top')) / px(f, 'height')).toBeCloseTo(0.5, 3);
+  });
+
+  it('shows the part of the picture in view as a rectangle', () => {
+    const c = render({ pixels: { width: 4000, height: 3000 } });
+    c.canvas.zoomBy(4 as never);
+    flushSync();
+    const view = target.querySelector<HTMLElement>('[data-testid="minimap-view"]')!;
+    expect(parseFloat(view.style.width)).toBeCloseTo(25, 1);
+    expect(parseFloat(view.style.height)).toBeCloseTo(25, 1);
   });
 });
 

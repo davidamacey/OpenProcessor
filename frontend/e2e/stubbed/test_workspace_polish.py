@@ -3,13 +3,15 @@
 - Gallery cards in one row have the same height, with or without the "+ more boxes" chip
 - The Clusters view shows "N matching" with the hidden note from the served total and hidden counts
 - "Diverse sample…" asks the server for k diverse items over the Workspace filter and selects them
+- The image editor shows a minimap for a photo larger than four viewports; a click on it pans
 - Ctrl+A selects the loaded page in Gallery and Detections; a second Ctrl+A on a full page asks for all
   matching with the served total
 """
 
 from __future__ import annotations
 
-from fixtures.contract import cluster_card, cluster_list, fill, image_card, image_page
+from fixtures.contract import cluster_card, cluster_list, fill, image_card, image_detail, image_page
+from fixtures.image_editor import Editor
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
@@ -139,3 +141,30 @@ def test_diverse_sample_selects_the_served_pick(stub, page, app_url):
     assert bodies[0]['k'] == 2
     assert bodies[0]['scope']['item_filter']['class_names'] == ['widget']
     shot(page, 'diverse-sample-picked', widths=(1600, 430))
+
+
+def test_editor_minimap_pans_a_zoomed_large_photo(stub, page, app_url):
+    ed = Editor(stub)
+    big = image_detail(
+        'img-1', list(ed.items.values()), list(ed.boxes.values()), width=6000, height=4500
+    )
+    stub.on('GET', r'/images/img-\d$', lambda _r, _m: big)
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    ed.open(page, app_url)
+    minimap = page.get_by_test_id('minimap')
+    expect(minimap).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    frame = page.get_by_test_id('editor-frame')
+    page.get_by_test_id('editor-canvas').hover()
+    for _ in range(6):
+        page.mouse.wheel(0, -400)
+    page.wait_for_timeout(300)
+    before = frame.bounding_box()
+    view = page.get_by_test_id('minimap-view')
+    assert view.bounding_box()['width'] < minimap.bounding_box()['width']
+    shot(page, 'editor-minimap', widths=(1600, 430))
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    page.wait_for_timeout(300)
+    box = minimap.bounding_box()
+    page.mouse.click(box['x'] + box['width'] * 0.9, box['y'] + box['height'] * 0.9)
+    page.wait_for_timeout(300)
+    assert frame.bounding_box()['x'] < before['x']
