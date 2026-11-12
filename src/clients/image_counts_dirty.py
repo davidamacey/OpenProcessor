@@ -68,12 +68,19 @@ def valkey_client() -> aioredis.Redis:
     )
 
 
-async def mark_dirty(image_ids: Iterable[str]) -> int:
-    """Add ``image_ids`` to the bound project's dirty set; returns how many were given.
+class CountsMarkError(RuntimeError):
+    """Neither Valkey nor the images index took the mark of a changed image."""
 
-    Called after the items write it describes has committed, so it never raises: a Valkey outage
-    must not turn a label that was stored into an error. A failure is logged at error level with
-    the number of images, and the images are recounted by the next backfill or any later write.
+
+async def mark_dirty(opensearch: Any, image_ids: Iterable[str]) -> int:
+    """Add ``image_ids`` to the bound project's dirty set; returns how many were marked.
+
+    Called after the items write it describes has committed. If Valkey does not answer, the
+    images are marked through the images index instead: their ``counts_at`` is cleared, which is
+    exactly what the periodic sweep looks for, so the next drain recounts them, and until then a
+    list treats the scope as uncounted and reads live counts (``image_view.counts_ready``). Only
+    when that write fails too is the mark lost, and then the error is raised (a
+    :class:`CountsMarkError` or the index's own error), never swallowed.
     """
     ids = sorted({i for i in image_ids if i})
     if not ids:
@@ -85,11 +92,30 @@ async def mark_dirty(image_ids: Iterable[str]) -> int:
         await client.sadd(key, *ids)
     except (redis.RedisError, EnvError, OSError):
         logger.error('image_counts_mark_failed', images=len(ids), exc_info=True)
-        return 0
+        await _clear_counts_at(opensearch, ids)
     finally:
         if client is not None:
             await client.aclose()
     return len(ids)
+
+
+async def _clear_counts_at(opensearch: Any, image_ids: list[str]) -> None:
+    from src.config.curation_accessors import images_index
+
+    index = images_index()
+    body: list[dict[str, Any]] = []
+    for image_id in image_ids:
+        body.append({'update': {'_index': index, '_id': image_id, 'retry_on_conflict': 3}})
+        body.append({'doc': {'counts_at': None}})
+    resp = await opensearch.bulk(body=body, refresh=False)
+    refused = [
+        i
+        for i, item in zip(image_ids, resp.get('items') or [], strict=True)
+        if int((item.get('update') or {}).get('status', 0)) not in (200, 201, 404)
+    ]
+    if refused:
+        msg = f'{len(refused)} of {len(image_ids)} images could not be marked for a recount'
+        raise CountsMarkError(msg)
 
 
 def changed_image_ids(written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]) -> list[str]:
@@ -106,21 +132,21 @@ def changed_image_ids(written: Iterable[tuple[Mapping[str, Any], Mapping[str, An
     return ids
 
 
-async def mark_items_created(index: str, image_ids: Iterable[str]) -> None:
+async def mark_items_created(opensearch: Any, index: str, image_ids: Iterable[str]) -> None:
     """Mark the images that just got items in ``index``; a write to any index but the bound
     project's items index changes no image count."""
     from src.config.curation_accessors import items_index
 
     if index == items_index():
-        await mark_dirty(image_ids)
+        await mark_dirty(opensearch, image_ids)
 
 
 async def mark_items_written(
-    index: str, written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]
+    opensearch: Any, index: str, written: Iterable[tuple[Mapping[str, Any], Mapping[str, Any]]]
 ) -> None:
     """Mark the images of the updates an OCC helper just committed on ``index``, for the updates
     that touch a count field."""
-    await mark_items_created(index, changed_image_ids(written))
+    await mark_items_created(opensearch, index, changed_image_ids(written))
 
 
 class DirtyImages:

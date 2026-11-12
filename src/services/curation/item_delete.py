@@ -148,7 +148,8 @@ async def _delete_round(
         await content_key.release_bound(removed)
     else:
         await enqueue_image_counts(
-            fresh[cid][0].get('image_id') or '' for cid in removed if cid in fresh
+            opensearch,
+            (fresh[cid][0].get('image_id') or '' for cid in removed if cid in fresh),
         )
     return deleted, gone, conflicted
 

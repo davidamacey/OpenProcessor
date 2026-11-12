@@ -55,9 +55,9 @@ class DrainReport:
     refused: int = 0
 
 
-async def enqueue_image_counts(image_ids: Iterable[str]) -> int:
+async def enqueue_image_counts(opensearch: Any, image_ids: Iterable[str]) -> int:
     """Mark ``image_ids`` for a recount (the entry point of a writer that changed their items)."""
-    return await mark_dirty(image_ids)
+    return await mark_dirty(opensearch, image_ids)
 
 
 async def recount_images(opensearch: Any, image_ids: list[str]) -> int:

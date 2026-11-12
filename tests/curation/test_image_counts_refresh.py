@@ -325,30 +325,63 @@ def test_projects_never_share_a_dirty_set(image_counts_dirty: dict[str, set[str]
     class _Record:
         slug = 'other'
 
-    _run(mark_dirty(['img-x']))
+    fake = _world()
+    _run(mark_dirty(fake, ['img-x']))
     with bind_project(_Record()):  # type: ignore[arg-type]
-        _run(mark_dirty(['img-y']))
+        _run(mark_dirty(fake, ['img-y']))
         dirty = DirtyImages(FakeValkeySets(image_counts_dirty))
         assert _run(dirty.claim()) is True
         assert _run(dirty.batch(10)) == ['img-y']
     assert image_counts_dirty['op:image_counts:dirty:default'] == {'img-x'}
 
 
-def test_a_valkey_outage_does_not_fail_the_write_that_marks(monkeypatch: Any) -> None:
-    import redis
+class _Down:
+    closed = False
 
-    from src.clients import image_counts_dirty
+    async def sadd(self, *_a: Any) -> int:
+        import redis
 
-    class _Down:
-        closed = False
+        raise redis.ConnectionError('valkey is down')
 
-        async def sadd(self, *_a: Any) -> int:
-            raise redis.ConnectionError('valkey is down')
+    async def aclose(self) -> None:
+        self.closed = True
 
-        async def aclose(self) -> None:
-            self.closed = True
 
+def test_a_valkey_outage_marks_the_image_through_the_index_and_the_sweep_recounts_it(
+    image_counts_dirty: dict[str, set[str]], monkeypatch: Any
+) -> None:
+    from src.clients import image_counts_dirty as dirty_mod
+
+    fake = _world()
+    _drain(fake, image_counts_dirty)  # every image counted, counts_at set
+    assert all('counts_at' in d for d in fake.docs(IMAGES).values())
+    fake.docs(ITEMS)['c1']['class_id'] = 7  # a label that committed while Valkey is down
     client = _Down()
-    monkeypatch.setattr(image_counts_dirty, 'valkey_client', lambda: client)
-    assert _run(image_counts_dirty.mark_dirty(['img-a'])) == 0
+    monkeypatch.setattr(dirty_mod, 'valkey_client', lambda: client)
+    assert _run(dirty_mod.mark_dirty(fake, ['img-c'])) == 1
     assert client.closed
+    docs = fake.docs(IMAGES)
+    assert 'counts_at' not in {k for k, v in docs['img-c'].items() if v is not None}
+    assert image_counts_dirty.get(DIRTY) is None
+    # Valkey is back: the sweep finds the image by its missing counts_at and recounts it.
+    monkeypatch.undo()
+    report = _drain(fake, image_counts_dirty)
+    assert report.swept == 1
+    assert docs['img-c']['counts']['labeled'] == 1
+    assert docs['img-c']['counts_at']
+
+
+def test_a_mark_that_neither_valkey_nor_the_index_takes_is_raised(monkeypatch: Any) -> None:
+    import pytest
+
+    from src.clients import image_counts_dirty as dirty_mod
+
+    fake = _world()
+    monkeypatch.setattr(dirty_mod, 'valkey_client', lambda: _Down())
+
+    async def refuse(*, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
+        return {'errors': True, 'items': [{'update': {'status': 400}} for _ in body[::2]]}
+
+    monkeypatch.setattr(fake, 'bulk', refuse)
+    with pytest.raises(dirty_mod.CountsMarkError):
+        _run(dirty_mod.mark_dirty(fake, ['img-a']))

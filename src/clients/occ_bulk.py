@@ -191,7 +191,7 @@ async def occ_bulk_rounds(
                     next_round.append(doc_id)
                 else:
                     on_failed(doc_id, docs[doc_id], 'error' if outcome == 'error' else 'conflict')
-            await mark_items_written(index, written)
+            await mark_items_written(client, index, written)
 
         pending_ids = next_round
         if pending_ids:
