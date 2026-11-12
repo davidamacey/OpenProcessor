@@ -121,6 +121,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -315,6 +327,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -511,6 +535,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -706,6 +742,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -906,6 +954,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -1114,6 +1174,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -1296,6 +1368,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -1492,6 +1576,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -1686,6 +1782,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -1886,6 +1994,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -2080,6 +2200,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -2283,6 +2415,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -2466,6 +2610,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -2682,6 +2838,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -2963,6 +3131,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -3152,6 +3332,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -3348,6 +3540,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -3538,6 +3742,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -3756,6 +3972,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -3979,6 +4207,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -4161,6 +4401,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -4352,6 +4604,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -4556,6 +4820,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -4758,6 +5034,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"
@@ -4962,6 +5250,18 @@
    "workspace.open_review": [
     "enter"
    ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
+   ],
    "cluster.confirm": [
     "shift+enter"
    ],
@@ -5144,6 +5444,18 @@
    ],
    "workspace.open_review": [
     "enter"
+   ],
+   "table.prev_row": [
+    "arrowup"
+   ],
+   "table.next_row": [
+    "arrowdown"
+   ],
+   "table.extend_prev": [
+    "shift+arrowup"
+   ],
+   "table.extend_next": [
+    "shift+arrowdown"
    ],
    "cluster.confirm": [
     "shift+enter"

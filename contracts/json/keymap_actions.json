@@ -388,26 +388,70 @@
       "modifiable": false
     },
     {
-      "context": "cluster",
+      "context": "workspace",
       "default": [
         "space"
       ],
-      "description": "Toggle the focused card in the selection.",
+      "description": "Toggle the focused card or row in the selection.",
       "group": null,
       "id": "workspace.select_toggle",
-      "label": "Select or deselect the focused card",
+      "label": "Select or deselect the focused card or row",
       "modifiable": true
     },
     {
-      "context": "cluster",
+      "context": "workspace",
       "default": [
         "enter"
       ],
-      "description": "Open Review at the focused card.",
+      "description": "Open Review at the focused card or row.",
       "group": null,
       "id": "workspace.open_review",
-      "label": "Open the focused card in Review",
+      "label": "Open the focused card or row in Review",
       "modifiable": false
+    },
+    {
+      "context": "table",
+      "default": [
+        "arrowup"
+      ],
+      "description": "Move focus to the previous table row.",
+      "group": null,
+      "id": "table.prev_row",
+      "label": "Previous row",
+      "modifiable": false
+    },
+    {
+      "context": "table",
+      "default": [
+        "arrowdown"
+      ],
+      "description": "Move focus to the next table row.",
+      "group": null,
+      "id": "table.next_row",
+      "label": "Next row",
+      "modifiable": false
+    },
+    {
+      "context": "table",
+      "default": [
+        "shift+arrowup"
+      ],
+      "description": "Move focus up and add the row to the selection.",
+      "group": null,
+      "id": "table.extend_prev",
+      "label": "Extend selection up",
+      "modifiable": true
+    },
+    {
+      "context": "table",
+      "default": [
+        "shift+arrowdown"
+      ],
+      "description": "Move focus down and add the row to the selection.",
+      "group": null,
+      "id": "table.extend_next",
+      "label": "Extend selection down",
+      "modifiable": true
     },
     {
       "context": "cluster",
@@ -664,6 +708,15 @@
         "global"
       ],
       "label": "Workspace"
+    },
+    {
+      "class_hotkeys_live": true,
+      "description": "The Workspace Table view: row focus and selection.",
+      "id": "table",
+      "includes": [
+        "workspace"
+      ],
+      "label": "Workspace table"
     },
     {
       "class_hotkeys_live": true,

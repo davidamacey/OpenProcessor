@@ -55,6 +55,7 @@ const SCANNED_FILES = [
   'lib/api_select.ts',
   'lib/api_settings.ts',
   'lib/api_stats.ts',
+  'lib/api_table.ts',
   'lib/api_train.ts',
   'lib/api_viz.ts',
   'lib/sse.ts',
@@ -489,6 +490,7 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_detector.ts GET /detections/summary',
   'lib/api_map.ts GET /map/cells',
   'lib/api_map.ts GET /map/images',
+  'lib/api_table.ts GET /table',
 ]);
 const unresolvedSeen = new Set<string>();
 

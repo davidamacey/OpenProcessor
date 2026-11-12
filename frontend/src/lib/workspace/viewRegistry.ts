@@ -6,6 +6,7 @@ import type { Component } from 'svelte';
 import ClustersView from './views/ClustersView.svelte';
 import GalleryView from './views/GalleryView.svelte';
 import DetectionsView from './views/DetectionsView.svelte';
+import TableView from './views/TableView.svelte';
 import type { WorkspaceController } from './workspaceController.svelte';
 import type { ViewId } from './workspaceUrl';
 
@@ -15,7 +16,7 @@ export interface ViewEntry {
   label: string;
   component: Component<{ ws: WorkspaceController }>;
   /** The keymap context the view's keys are registered under. */
-  keyContext: 'cluster';
+  keyContext: 'cluster' | 'table';
 }
 
 export const VIEWS: readonly ViewEntry[] = [
@@ -27,6 +28,7 @@ export const VIEWS: readonly ViewEntry[] = [
     component: DetectionsView,
     keyContext: 'cluster',
   },
+  { id: 'table', label: 'Table', component: TableView, keyContext: 'table' },
 ];
 
 /** The entry for `id`; a view this build does not have opens the first one. */

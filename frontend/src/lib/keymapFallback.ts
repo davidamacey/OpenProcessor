@@ -223,19 +223,24 @@ const SEEDS: ActionSeed[] = [
   ],
   [
     'workspace.select_toggle',
-    'cluster',
+    'workspace',
     null,
-    'Select or deselect the focused card',
+    'Select or deselect the focused card or row',
     ['space'],
   ],
   [
     'workspace.open_review',
-    'cluster',
+    'workspace',
     null,
-    'Open the focused card in Review',
+    'Open the focused card or row in Review',
     ['enter'],
     { modifiable: false },
   ],
+
+  ['table.prev_row', 'table', null, 'Previous row', ['arrowup'], { modifiable: false }],
+  ['table.next_row', 'table', null, 'Next row', ['arrowdown'], { modifiable: false }],
+  ['table.extend_prev', 'table', null, 'Extend selection up', ['shift+arrowup']],
+  ['table.extend_next', 'table', null, 'Extend selection down', ['shift+arrowdown']],
 
   [
     'cluster.confirm',
@@ -374,6 +379,13 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
       label: 'Workspace',
       description: 'Keys that work in every Workspace view.',
       includes: ['global'],
+      class_hotkeys_live: true,
+    },
+    {
+      id: 'table',
+      label: 'Workspace table',
+      description: 'The Workspace Table view: row focus and selection.',
+      includes: ['workspace'],
       class_hotkeys_live: true,
     },
     {
