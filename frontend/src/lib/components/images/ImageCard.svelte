@@ -11,9 +11,6 @@
   import type { ImageCardWire } from '$lib/types_images';
   import BoxLayer from '$components/boxes/BoxLayer.svelte';
 
-  /** Below this card width the boxes draw without their labels. */
-  const LABEL_MIN_WIDTH = 96;
-
   interface Props {
     card: ImageCardWire;
     selected: boolean;
@@ -24,7 +21,6 @@
 
   let { card, selected, focused, onclick, onopen }: Props = $props();
 
-  let width = $state(0);
   // A thumbnail that fails is asked for once more after a second; a second failure asks the
   // server why and shows its answer.
   const RETRY_AFTER_MS = 1000;
@@ -60,7 +56,7 @@
   data-selected={selected}
   aria-current={focused ? 'true' : undefined}
 >
-  <div class="relative" bind:clientWidth={width}>
+  <div class="relative">
     <button
       type="button"
       class="relative flex w-full items-center justify-center overflow-hidden rounded-t bg-surface-0"
@@ -89,14 +85,14 @@
       class="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-t"
     >
       <span class="relative block" style={picture}>
-        {#if missing}
-          <SourceMissingBadge {missing} compact />
-        {/if}
         <span class="contents" aria-hidden="true">
-          <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+          <BoxLayer boxes={card.boxes} showLabels={false} />
         </span>
       </span>
     </div>
+    {#if missing}
+      <SourceMissingBadge {missing} compact interactive />
+    {/if}
     {#if selected}
       <span
         class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-xs text-white"
