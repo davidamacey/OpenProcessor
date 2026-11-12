@@ -1011,7 +1011,7 @@ A person's drawn, moved or deleted box is locked: re-detect, open-vocabulary run
 
 | Method | Path | Body | Response | Errors |
 |---|---|---|---|---|
-| POST | `/images/{image_id}/items` | `{bbox_norm, class_name, request_id}` | `ItemCreated`: `{item, created, image_boxes[], image_counts, embedding_state, embedding_message}`. `201`, or `200` with `created: false` when `request_id` was already used | `404 image_not_found`; `422 unknown_class` (unknown or deprecated name), `box_out_of_image`, `degenerate_box`, `box_too_small` (with `min_side`) |
+| POST | `/images/{image_id}/items` | `{bbox_norm, class_name, request_id}` | `ItemCreated`: `{item, created, image_boxes[], image_counts, embedding_state, embedding_message}`. `201`, or `200` with `created: false` when `request_id` was already used | `404 image_not_found`; `409 request_id_reused` (same `request_id`, other box or class; carries the stored item; a repeat is answered before the class is checked again); `422 unknown_class` (unknown or deprecated name), `box_out_of_image`, `degenerate_box`, `box_too_small` (with `min_side`) |
 | PATCH | `/crops/{crop_id}/geometry` | `{bbox_norm, expected_geometry_revision, drop_region_box_ids[]}` | `GeometryWritten`: `{item, image_boxes[], embedding_state, embedding_message}` | `404`; `409 geometry_conflict` with `current_geometry_revision` and the current `item`; `422 regions_outside_item` with `box_ids` until they are listed in `drop_region_box_ids`; the box refusals above |
 | GET | `/exclude_reasons` | | `{reasons: [{id, label}]}` | |
 

@@ -123,6 +123,55 @@ def test_repeat_with_the_same_request_id_returns_the_first_item(world: Any) -> N
 
 
 @pytest.mark.parametrize(
+    'change',
+    [{'bbox_norm': [0.3, 0.3, 0.8, 0.9]}, {'class_name': 'truck'}],
+    ids=['other_box', 'other_class'],
+)
+def test_same_request_id_with_a_different_body_is_a_409(world: Any, change: dict[str, Any]) -> None:
+    fake, _ = world
+    client = _client(fake, FakePE())
+    body = _body()
+    first = _post(client, body)
+    resp = _post(client, {**body, **change})
+    assert resp.status_code == 409
+    assert resp.json()['detail']['error'] == 'request_id_reused'
+    assert resp.json()['detail']['item']['crop_id'] == first.json()['item']['crop_id']
+    assert len(fake.docs(ITEMS)) == 2
+
+
+def test_parallel_identical_creates_make_one_item(world: Any) -> None:
+    """Both requests pass the repeat check before either writes; the create conflict decides."""
+    import asyncio
+
+    from src.services.curation.image_item_write import create_drawn_item
+
+    fake, image_id = world
+    request_id = uuid.uuid4()
+    real_get = fake.get
+
+    async def get_then_yield(**kw: Any) -> Any:
+        try:
+            return await real_get(**kw)
+        finally:
+            await asyncio.sleep(0)
+
+    fake.get = get_then_yield
+
+    async def draw() -> Any:
+        return await create_drawn_item(
+            fake, FakePE(), image_id=image_id, bbox=BOX, class_name='car', request_id=request_id
+        )
+
+    async def both() -> list[Any]:
+        return list(await asyncio.gather(draw(), draw()))
+
+    results = asyncio.run(both())
+    assert sorted(r.created for r in results) == [False, True]
+    assert len(fake.docs(ITEMS)) == 2
+    assert results[0].source['crop_id'] == results[1].source['crop_id']
+
+
+@pytest.mark.parametrize(
     ('box', 'code'),
     [
         ([0.2, 0.2, 1.2, 0.7], 'box_out_of_image'),

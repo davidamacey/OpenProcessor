@@ -28,7 +28,12 @@ from src.services.curation.item_doc import DetectedItem, build_item_doc, region_
 from src.services.curation.item_embed_inline import EmbedOutcome, embed_item_inline
 from src.services.curation.item_geometry import checked_box, rerank_image_items
 from src.services.curation.reprocess_targets import items_by_terms
-from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
+from src.services.curation.wire import serialize_item
+from src.services.embedding_spaces.readers import (
+    item_state_fields,
+    item_write_fields,
+    vector_source_excludes,
+)
 from src.services.near_duplicates import pending as near_dup_pending
 from src.utils.timeutil import now_iso
 
@@ -94,6 +99,28 @@ async def _stored(
     return resp.get('_source') or None
 
 
+async def _repeat(
+    stored: dict[str, Any], crop_id: str, box: Sequence[float], class_name: str
+) -> dict[str, Any]:
+    """``stored`` when it is what this request asks for; 409 ``request_id_reused`` (with the
+    stored item) when the same request id came with another box or class. The stored item is
+    compared as it is now: a retry after a person edited it is told so rather than answered
+    with a box the editor did not ask for."""
+    same_box = (
+        len(stored.get('bbox_norm') or []) == 4
+        and max(abs(a - b) for a, b in zip(stored['bbox_norm'], box, strict=True)) < 1e-9
+    )
+    same_class = str(stored.get('class_name') or '').casefold() == class_name.strip().casefold()
+    if same_box and same_class:
+        return stored
+    raise _refuse(
+        409,
+        'request_id_reused',
+        'this request_id already created an item with another box or class; use a new request_id',
+        item=serialize_item(stored, crop_id, state_fields=await item_state_fields()),
+    )
+
+
 async def create_drawn_item(
     opensearch: AsyncOpenSearch,
     pe: Any | None,
@@ -105,14 +132,17 @@ async def create_drawn_item(
 ) -> DrawnItem:
     """Create the item, or return the one this ``request_id`` already created.
 
-    Raises :class:`~src.core.exceptions.RequestRejectedError`: 422 for a refused box or
-    ``unknown_class``, 404 ``image_not_found``."""
+    A repeat is answered from the stored item before the class and image are checked again, so a
+    retry still succeeds after the class was deprecated; with another box or class it is 409
+    ``request_id_reused``. Raises :class:`~src.core.exceptions.RequestRejectedError`: 422 for a
+    refused box or ``unknown_class``, 404 ``image_not_found``, 409 ``request_id_reused``."""
     box = checked_box(bbox)
     cfg = get_curation_config()
     crop_id = drawn_crop_id(image_id, request_id)
     excludes = await vector_source_excludes()
     write = await item_write_fields()
     if (repeat := await _stored(opensearch, crop_id, excludes)) is not None:
+        repeat = await _repeat(repeat, crop_id, box, class_name)
         return DrawnItem(repeat, False, EmbedOutcome(repeat.get(write.state_field, DEFERRED), None))
     class_id, canonical = await _active_class(class_name)
     image = await image_source(opensearch, image_id, IMAGE_FIELDS)
@@ -170,7 +200,9 @@ async def create_drawn_item(
     except ConflictError:
         created = False
     if not created:  # a parallel request with the same id won the create
-        raced = await _stored(opensearch, crop_id, excludes) or {}
+        raced = await _repeat(
+            await _stored(opensearch, crop_id, excludes) or {}, crop_id, box, class_name
+        )
         return DrawnItem(raced, False, EmbedOutcome(raced.get(write.state_field, DEFERRED), None))
     await rerank_image_items(opensearch, image_id)
     await near_dup_pending.enqueue_pending_bound('item', [crop_id], 'added')

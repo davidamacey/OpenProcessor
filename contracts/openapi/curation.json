@@ -7522,6 +7522,7 @@
               "geometry_conflict",
               "regions_outside_item",
               "regions_changed",
+              "request_id_reused",
               "nothing_to_undo",
               "test_busy",
               "test_timeout",
@@ -54754,7 +54755,7 @@
     },
     "/curation/projects/{project}/images/{image_id}/items": {
       "post": {
-        "description": "Create an item from a box a person drew. The class is resolved by name (an unknown or\ndeprecated one is `unknown_class`); the item carries a human class and human geometry, is held\nout when the image is, and is embedded in this request (a failure keeps the item and serves\n`embedding_state: deferred` with a message). Sending the same `request_id` again returns the\nfirst item with `created: false`.",
+        "description": "Create an item from a box a person drew. The class is resolved by name (an unknown or\ndeprecated one is `unknown_class`); the item carries a human class and human geometry, is held\nout when the image is, and is embedded in this request (a failure keeps the item and serves\n`embedding_state: deferred` with a message). Sending the same `request_id` again returns the\nfirst item with `created: false`; with another box or class it is `409 request_id_reused`\ncarrying the stored item.",
         "operationId": "create_item_curation_projects__project__images__image_id__items_post",
         "parameters": [
           {
@@ -54816,6 +54817,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "content": {

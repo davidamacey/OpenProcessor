@@ -141,6 +141,7 @@ ErrorCode = Literal[
     'geometry_conflict',
     'regions_outside_item',
     'regions_changed',
+    'request_id_reused',
     'nothing_to_undo',
     'test_busy',
     'test_timeout',

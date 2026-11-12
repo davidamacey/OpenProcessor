@@ -26,6 +26,7 @@ from src.services.embedding_spaces.readers import item_state_fields
         200: {'model': ItemCreated, 'description': 'A repeat of the same `request_id`.'},
         201: {'model': ItemCreated},
         404: {'model': ApiErrorResponse},
+        409: {'model': ApiErrorResponse},
         422: {'model': ApiErrorResponse},
     },
     tags=['Images'],
@@ -40,7 +41,8 @@ async def create_item(
     deprecated one is `unknown_class`); the item carries a human class and human geometry, is held
     out when the image is, and is embedded in this request (a failure keeps the item and serves
     `embedding_state: deferred` with a message). Sending the same `request_id` again returns the
-    first item with `created: false`."""
+    first item with `created: false`; with another box or class it is `409 request_id_reused`
+    carrying the stored item."""
     drawn = await create_drawn_item(
         opensearch,
         _get_pe_encoder(request),
