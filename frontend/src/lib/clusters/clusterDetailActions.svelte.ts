@@ -1,5 +1,5 @@
 /**
- * The /clusters/[id] actions: class assignment and advance, the M-key move
+ * The cluster detail actions: class assignment and advance, the M-key move
  * picker, flag / ignore, the drag-and-drop handlers and
  * every keyboard action. Optimistic writes go through the shared
  * `createClusterActionController`; the move-picker state stays together

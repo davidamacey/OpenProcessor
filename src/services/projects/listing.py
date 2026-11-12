@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from src.db.repos import projects as repo
 from src.db.session import deployment_tx
@@ -37,11 +37,18 @@ ITEMS_SORT = 'items:desc'
 ITEMS_SORT_CAP = 200
 
 
+Keyset = Literal['name:asc', 'updated_at:desc']
+
+
 @dataclass(frozen=True)
 class ProjectSort:
     id: str
     label: str
-    keyset: str  # the SQL order the page is read in
+    keyset: Keyset  # the SQL order the page is read in; the items sort reads the recency order
+
+    @property
+    def by_recency(self) -> bool:
+        return self.keyset == 'updated_at:desc'
 
 
 SORTS: tuple[ProjectSort, ...] = (
@@ -60,15 +67,27 @@ def sort_by_id(sort_id: str) -> ProjectSort:
     raise CursorError(msg)
 
 
+class UnknownStatusError(ValueError):
+    """A ``status`` filter value that is not one of :data:`FILTER_STATUSES`."""
+
+
 def listed_statuses(
     *, include_archived: bool, selectable: bool, status: Collection[str] | None
 ) -> tuple[str, ...]:
-    """The statuses a request can match: what the list shows, narrowed by the picker flag and filter."""
-    allowed = (*ALWAYS_LISTED, *(('archived',) if include_archived else ()))
+    """The statuses a request can match: what the list shows, narrowed by the picker flag and filter.
+
+    A ``status`` value outside :data:`FILTER_STATUSES` raises :class:`UnknownStatusError`; naming
+    ``archived`` asks for the archived projects, so it needs no ``include_archived`` beside it.
+    """
+    wanted = set(status or ())
+    if unknown := sorted(wanted - set(FILTER_STATUSES)):
+        msg = f'unknown status {unknown[0]!r}; one of {list(FILTER_STATUSES)}'
+        raise UnknownStatusError(msg)
+    allowed = (*ALWAYS_LISTED, *(('archived',) if include_archived or 'archived' in wanted else ()))
     if selectable:
         allowed = tuple(s for s in allowed if s in SELECTABLE)
-    if status:
-        allowed = tuple(s for s in allowed if s in set(status))
+    if wanted:
+        allowed = tuple(s for s in allowed if s in wanted)
     return allowed
 
 
@@ -80,7 +99,7 @@ def _after(sort: ProjectSort, cursor: str | None) -> tuple[Any, str] | None:
         msg = 'cursor is not one this route served'
         raise CursorError(msg)
     value, slug = after
-    if sort.keyset == 'updated_at:desc':
+    if sort.by_recency:
         try:
             value = dt.datetime.fromisoformat(value)
         except (TypeError, ValueError) as exc:
@@ -99,7 +118,12 @@ async def fetch_page(
     limit: int | None,
 ) -> tuple[list[Any], str | None, int]:
     """``(records, next_cursor, total)``. ``total`` counts every match; ``next_cursor`` is ``None`` on
-    the last page and always for the item-count sort."""
+    the last page and always for the item-count sort.
+
+    ``total`` is counted on every page, cursor pages included: the project table is small (one row
+    per project), the count shares the page's transaction, and the picker and the projects page
+    take ``total`` from each response as the "of N" they show while a list is loaded in pieces.
+    """
     capped = sort.id == ITEMS_SORT
     if capped and cursor is not None:
         msg = 'cursor belongs to a different sort'
@@ -122,7 +146,7 @@ async def fetch_page(
     next_cursor = None
     if more and not capped and rows:
         last = rows[-1]
-        value = last.updated_at.isoformat() if sort.keyset == 'updated_at:desc' else last.slug
+        value = last.updated_at.isoformat() if sort.by_recency else last.slug
         next_cursor = encode_cursor(sort.id, [value, last.slug])
     return records, next_cursor, total
 

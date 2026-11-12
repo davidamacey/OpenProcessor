@@ -190,7 +190,7 @@ projects, plus `archived` ones with `include_archived=true`.
 
 | Method | Path | Body or query | Response | Errors |
 |---|---|---|---|---|
-| GET | `/curation/projects` | `include_archived` | `ProjectsResponse` (`default_slug`, `projects[]` of `ProjectSummary`, `capacity`, `limits`, `labels`) | |
+| GET | `/curation/projects` | `include_archived`, `q`, `selectable`, `status` (repeatable; `archived` lists the archived ones), `sort`, `cursor`, `limit` | `ProjectsResponse` (`default_slug`, `projects[]` of `ProjectSummary`, `total`, `next_cursor`, `sort_options`, `status_options`, `capacity`, `limits`, `labels`) | `422 invalid_status`, `400 cursor_invalid` |
 | POST | `/curation/projects` | `CreateProjectRequest` (`slug`, `display_name`, `description`, `clone_settings_from`, `clone_axes`) | `202 ProjectLifecycleResponse` (the `building` record plus the create `job_id`; poll `GET /curation/jobs/{job_id}`) | `422 slug_invalid`, `409 slug_taken`, `409 slug_retired`, `409 shard_budget_exceeded`, `409 clone_source_not_ready`, `422 validation_failed` |
 | GET | `/curation/projects/{project}` | | `ProjectRecordResponse` (summary plus `resources`, `error`) | `404 project_not_found` |
 | PATCH | `/curation/projects/{project}` | `PatchProjectRequest` (`display_name`, `description`, `expected_revision`). The slug is immutable | `ProjectLifecycleResponse` | `409 revision_conflict` |
@@ -948,7 +948,6 @@ default state of a new box.
 | GET | `/table/columns` | `TableColumns`: `rows` (`detections` or `images`), `columns[]` (`id`, `label`, `sortable`, `align`, `kind`) and the `default` ids |
 | GET | `/table` | `TablePage`: `rows`, the requested `columns[]`, `items[]` (`crop_id`, `image_id`, `thumbnail_url`, `cells{column: {text, value, tone}}`), `total`, `limit`, `next_cursor`, `sort_applied`, `sort_options[]` (`<column>:<asc\|desc>`), `hidden`, `join_truncated`, `empty_reason`, `empty_message`. Takes the shared item filter, `rows`, `columns` (comma list; an unknown id is `422 unknown_column`), `sort`, `cursor`, `limit` (1 to 200); `rows=images` also takes the image-only filters of `GET /images` |
 | GET | `/crops/{crop_id}` | item (`404` when unknown) |
-| GET | `/crops/{crop_id}/context` | `CropContextResponse`: `image` (`image_id`, `image_path`, `width`, `height`, `source`, `indexed_at`; `null` when unknown) and `items[]`: every item on the frame, `crop_rank_in_image` ascending, at most 500. Items carry `mask_polygon` here (lists send it as null), so one call draws every sibling outline |
 | GET | `/crops/{crop_id}/history` | `{crop_id, entries[]}`: `class_id_history` oldest first |
 | GET | `/classes/{class_id}/crops` | `CropsPageResponse` (`cursor`, `limit`, `include_test`) |
 
@@ -1290,7 +1289,7 @@ one of `options`), `multi_enum` (repeatable parameter, any of `options`:
 class NAME, no fixed options: the names come from `GET /classes` and the
 detector labels of `GET /ingest/config`), `bool`, `number` / `integer`
 (`min`, `max`) or `text`. `empty_state` is `{has_probe_predictions,
-has_item_scores, has_imported_labels, has_unembedded_items,
+has_item_scores, has_unembedded_items,
 suggested_reprocess}`: `suggested_reprocess` is the dry-run embed
 `ReprocessRequest` exactly when `has_unembedded_items`, so an empty queue
 can offer the embed action.
@@ -1846,11 +1845,10 @@ omitted, all three run in that order.
 |---|---|---|
 | GET | `/map` | `MapMeta`: `available`, `location_policy`, `n_located`, `bounds`, `tile_url`, `tile_attribution`, `max_zoom`. `available` is false under `drop` or with no stored position |
 | GET | `/map/cells` | GeoJSON FeatureCollection (`application/geo+json`, RFC 7946): one `Point` per grid cell at the centroid of its images, `properties.count`, `properties.tile` (`z/x/y`); `precision`, `truncated` (more than 5000 cells matched), `join_truncated` |
-| GET | `/map/images` | `MapTileImages`: `tile`, `count`, `image_ids` (at most 200), `truncated` |
 
 `/map/cells` takes `zoom` (0 to 22, required) and `bbox` (`west,south,east,north`; `west > east`
-crosses the antimeridian), `/map/images` takes `tile`; both take the shared item filter with
-`taken_from` / `taken_to`. `400` for a malformed `bbox` or tile. Under `drop` nothing is served;
+crosses the antimeridian) and the shared item filter with
+`taken_from` / `taken_to`. `400` for a malformed `bbox`. Under `drop` nothing is served;
 under `store_coarse` cells are at most precision 15 and markers are rounded to 0.01 degree.
 
 ## Ingest
@@ -2465,10 +2463,9 @@ items is `422`. Response: `n_frozen`, `n_classes_covered`,
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/crops/{crop_id}/thumbnail` | JPEG, `size` 32 to 512 |
-| GET | `/crops/{crop_id}/image` | the clean source render: EXIF-transposed, RGB, optional `max_dim` (128 to 8192). It draws no overlay, so the bytes do not depend on any box. Draw boxes from `GET /crops/{crop_id}/context` |
 | GET | `/crops/{crop_id}/region_thumbnail` | see [Regions](#region-browse-clusters-and-false-positives) |
-| GET | `/images/serve` | `path` (required). Streams a source image the bound project's images index holds (404 otherwise), choosing the configured root that matches the path |
-| GET | `/images/root/{alias}` | `path` (required, relative to the alias root). `404` for an unknown alias or an image the project did not ingest |
+| GET | `/images/{image_id}` | `ImageDetail`: the image's facts, its items (wire items, at most 500, with `mask_polygon`) and the boxes to draw, in image coordinates |
+| GET | `/images/{image_id}/file` | the clean source pixels: EXIF orientation applied, optional `max_dim`, nothing drawn on them. A file that cannot be reached answers the typed `source_missing` 404 |
 | GET | `/images/cache/stats` | thumbnail cache counters |
 
 The server serves clean images and database metadata. A client draws boxes,
@@ -2617,7 +2614,6 @@ The table lists renamed or restructured wire surfaces.
 | `GET /stats/dataset` | `labeled.by_classifier`, `regions` block (was domain-named), `unlabeled.by_proposal`, `unlabeled.vlm_no_class`, `validated_by_import`, `labeled.by_import`, `regions.by_import` |
 | Training status metric pair | `last_epoch_metric` and `best_checkpoint_metric` |
 | Class merge dry run | `validations_carried_over` (a merge keeps `class_validated`) |
-| `GET /crops/{crop_id}/image` | the clean render, no overlay |
 | `GET /clusters` | `representatives` filled only for the `offset`/`limit` window |
 | `GET /crops` | `classifier_conf_lt`, `limit`, `sort`, `conf_min`, `conf_max`, `k`, `item_text`, `import_id`, `dataset_split`, `on_negative_frame`, `proposed_by_import` |
 | `GET /health` | `vlm` (the active endpoint), `region_profile`, `mlflow_public_url` |

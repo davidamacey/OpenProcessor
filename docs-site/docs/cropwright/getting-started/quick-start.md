@@ -89,12 +89,12 @@ switcher in the top bar, or `/projects`, to create another; see
 ## The end-to-end workflow
 
 ```
-/ingest  ->  /review + /workspace  ->  /classes  ->  /export  ->  /train  ->  /bakeoff  ->  back to /review
+/ingest  ->  /workspace (Review and the other views)  ->  /classes  ->  /export  ->  /train  ->  /bakeoff  ->  back to Review
 ```
 
 Bring images in, label and triage them, manage the class registry, freeze a
 test holdout and export a YOLO dataset, train and promote a model, compare
-models, then loop back — **Model Disagreements** on `/review` surfaces where
+models, then loop back — **Model Disagreements** in the Review view (`/workspace?view=review`) surfaces where
 a newly promoted model and the human label diverge, feeding the next cycle.
 
 ## Next steps

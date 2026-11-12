@@ -467,6 +467,10 @@ addopts = [
     "-m",
     "not live and not families and not db",
 ]
+# pytest-asyncio 1.4: unset, async fixtures take their own fixture scope and the plugin warns
+# that the default becomes "function"; every async fixture here is function-scoped, so pin it
+# (https://pytest-asyncio.readthedocs.io/en/stable/reference/configuration.html).
+asyncio_default_fixture_loop_scope = "function"
 # Seconds per test: three times the slowest offline test (124 s measured under 6 parallel workers).
 timeout = 400
 # The signal timeout above reports only the main thread; a test still running at 300 s also dumps

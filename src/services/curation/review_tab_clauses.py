@@ -392,7 +392,6 @@ def _primary_low_conf_tab(include_test: bool) -> _TabQuery:
             }
         }
     ]
-    # Default sort: 'primary_low_conf_default' — see review_sorts.py.
     reason = 'largest subject — classifier unsure or missed'
     return must, _default_must_not(include_test), reason
 
@@ -403,7 +402,6 @@ def _classifier_blind_spots_tab(include_test: bool) -> _TabQuery:
     # signal: an ingest proposal nothing classified. The stored
     # proposal score lives in ``confidence``.
     must = [{'terms': {'class_source': sorted(unlabeled_proposal_class_sources())}}]
-    # Default sort: 'classifier_blind_spots_default' — see review_sorts.py.
     reason = 'detector proposed an item the classifier missed (blind spot)'
     return must, _default_must_not(include_test), reason
 

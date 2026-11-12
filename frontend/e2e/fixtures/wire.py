@@ -116,9 +116,10 @@ def projects_response(
     api_prefix: str,
     projects: list[dict[str, Any]] | None = None,
     capacity_status: str = 'ok',
+    default_slug: str = DEFAULT_PROJECT_SLUG,
 ) -> dict[str, Any]:
     return {
-        'default_slug': DEFAULT_PROJECT_SLUG,
+        'default_slug': default_slug,
         'projects': projects if projects is not None else [default_project(api_prefix)],
         'capacity': {
             'status': capacity_status,

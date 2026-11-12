@@ -196,7 +196,7 @@ class ItemDoc(BaseModel):
     # Full-image open-vocabulary pass provenance: the target prompt that found
     # the item, the prompt set and revision that ran it, and the outline
     # (normalized (x, y) points in the source frame; null in list responses,
-    # present on GET /crops/{id} and the items of GET /crops/{id}/context).
+    # present on GET /crops/{id} and the items of GET /images/{image_id}).
     source_prompt: str | None = None
     open_vocab_set: str | None = None
     open_vocab_revision: int | None = None

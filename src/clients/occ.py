@@ -154,7 +154,7 @@ async def occ_update_one(
                 if_primary_term=primary_term,
                 refresh=refresh,
             )
-            await mark_items_written(index, [(source, update_doc)])
+            await mark_items_written(client, index, [(source, update_doc)])
             return update_doc
         except Exception as exc:  # opensearchpy ConflictError or transport error
             last_error = exc
@@ -330,7 +330,7 @@ async def occ_skip_on_conflict_bulk(
                 skipped_ids.append(doc_id)
                 continue
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
-        await mark_items_written(index, written)
+        await mark_items_written(client, index, written)
 
     return {
         'updated': len(updated_ids),

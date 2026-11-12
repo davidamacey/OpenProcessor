@@ -85,7 +85,6 @@ export interface ReviewEmptyState {
   has_probe_predictions: boolean;
   has_item_scores: boolean;
   /** Whether any labeled-dataset import has written labels. */
-  has_imported_labels: boolean;
   /** v0.4.0: whether any item has no vector, and the request that would
    *  embed them (served only then). */
   has_unembedded_items: boolean;

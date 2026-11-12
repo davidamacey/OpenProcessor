@@ -7453,6 +7453,7 @@
               "name_conflict",
               "invalid_transition",
               "cursor_invalid",
+              "invalid_status",
               "image_counts_not_ready",
               "unknown_column",
               "export_outside_project",
@@ -33945,10 +33946,6 @@
       "ReviewEmptyState": {
         "description": "Underlying-state flags a client uses to word ANY tab's\nzero-result state without a per-tab round trip -- the same signals\n``GET /review/{tab}``'s own ``empty_reason`` is derived from.",
         "properties": {
-          "has_imported_labels": {
-            "title": "Has Imported Labels",
-            "type": "boolean"
-          },
           "has_item_scores": {
             "title": "Has Item Scores",
             "type": "boolean"
@@ -33977,7 +33974,6 @@
         "required": [
           "has_probe_predictions",
           "has_item_scores",
-          "has_imported_labels",
           "has_unembedded_items",
           "suggested_reprocess"
         ],
@@ -43563,7 +43559,7 @@
             }
           },
           {
-            "description": "Only projects in one of these statuses (repeatable).",
+            "description": "Only projects in one of these statuses (repeatable); `archived` lists archived ones. An unknown value is `422 invalid_status`.",
             "in": "query",
             "name": "status",
             "required": false,
@@ -43579,7 +43575,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only projects in one of these statuses (repeatable).",
+              "description": "Only projects in one of these statuses (repeatable); `archived` lists archived ones. An unknown value is `422 invalid_status`.",
               "title": "Status"
             }
           },
@@ -66784,7 +66780,7 @@
     },
     "/curation/projects/{project}/review/tabs": {
       "get": {
-        "description": "The review queues in order: ``id``, ``label``, ``description``, the ``filters`` each honours,\ntheir ``filter_defaults`` and self-describing ``filter_specs``, and ``count``, the items the\nqueue holds under the filter the request carries (the same filter ``GET /review/{queue}``\ntakes). A queue that cannot fill is not listed: the audit queue exists only while a drawn\nsample is pending, the region queue only while a region profile is active, and\n``GET /next_steps`` says what to do. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.\n\nAlso carries ``empty_state`` -- ``{has_probe_predictions,\nhas_item_scores}`` -- computed once here so a client can annotate any\nqueue's zero-result state (the same reasons ``GET /review/{queue}``'s own\n``empty_reason`` uses) without a per-queue round trip.",
+        "description": "The review queues in order: ``id``, ``label``, ``description``, the ``filters`` each honours,\ntheir ``filter_defaults`` and self-describing ``filter_specs``, and ``count``, the items the\nqueue holds under the filter the request carries (the same filter ``GET /review/{queue}``\ntakes). A queue that cannot fill is not listed: the audit queue exists only while a drawn\nsample is pending, the region queue only while a region profile is active, and\n``GET /next_steps`` says what to do. Must be registered before ``GET /review/{tab}`` so it\nisn't shadowed as ``tab='tabs'``.\n\nAlso carries ``empty_state`` -- ``{has_probe_predictions, has_item_scores,\nhas_unembedded_items, suggested_reprocess}`` -- computed once here so a client can annotate any\nqueue's zero-result state (the same reasons ``GET /review/{queue}``'s own\n``empty_reason`` uses) without a per-queue round trip.",
         "operationId": "review_tabs_curation_projects__project__review_tabs_get",
         "parameters": [
           {

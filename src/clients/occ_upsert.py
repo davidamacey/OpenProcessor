@@ -250,7 +250,7 @@ async def _create_new_docs(
             )
             if outcomes is not None and doc_id:
                 outcomes[doc_id] = DocOutcome('error', error=_item_error(create_item))
-    await mark_items_created(index, created_images)
+    await mark_items_created(client, index, created_images)
     return create_conflict_ids
 
 

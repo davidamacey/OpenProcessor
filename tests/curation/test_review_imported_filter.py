@@ -108,9 +108,3 @@ def test_it_is_not_served_as_a_queue(client: _Client) -> None:
     ids = {t['id'] for t in client.get(f'{BASE}/review/tabs').json()['tabs']}
     assert 'imported' not in ids
     assert client.get(f'{BASE}/review/imported').status_code == 404
-
-
-def test_the_empty_state_flag_follows_the_imported_labels(client: _Client) -> None:
-    assert client.get(f'{BASE}/review/tabs').json()['empty_state']['has_imported_labels'] is True
-    client.fake.store[ITEMS].clear()
-    assert client.get(f'{BASE}/review/tabs').json()['empty_state']['has_imported_labels'] is False

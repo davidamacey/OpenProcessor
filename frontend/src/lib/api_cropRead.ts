@@ -121,8 +121,8 @@ export async function getCropsByIds(
  *
  * `filter` threads through arbitrary extra query params — same
  * `Record<string, unknown>` convention as `getReviewQueue` — so callers
- * can pass `cluster_uid` (search scoped to one cluster on
- * `/clusters/[id]`) or the active review tab/filters (on `/review`)
+ * can pass `cluster_uid` (search scoped to one cluster in the Clusters
+ * view) or the active review tab/filters (in the Review view)
  * without this function needing to know their shape.
  */
 export async function searchCrops(

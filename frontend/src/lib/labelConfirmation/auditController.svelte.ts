@@ -1,5 +1,5 @@
 /**
- * `/audit`: draw a stratified sample of machine-labelled crops for a human
+ * The Quality audit tab (`/quality/audit`): draw a stratified sample of machine-labelled crops for a human
  * to label, then read the detector's and the VLM's measured precision
  * (`POST /audit/start`, `GET /audit/report`), #119. The drawn sample is labelled in the
 Review view's `audit` queue.

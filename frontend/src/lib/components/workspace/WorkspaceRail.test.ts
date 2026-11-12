@@ -36,7 +36,6 @@ const TABS = [tab('to_label', 'To label', 1234), tab('all', 'All', 5)];
 const EMPTY_STATE = {
   has_probe_predictions: false,
   has_item_scores: false,
-  has_imported_labels: false,
   has_unembedded_items: false,
   suggested_reprocess: null,
 };

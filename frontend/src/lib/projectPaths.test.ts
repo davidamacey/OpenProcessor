@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { API_PREFIX, ProjectNotSelectedError } from '$lib/api';
 import {
   legacyRedirectTarget,
+  PRIMARY_NAV,
   projectHref,
+  sectionLabel,
   similarHref,
   sectionOf,
   switchProjectHref,
@@ -107,5 +109,31 @@ describe('similarHref', () => {
     expect(similarHref('a/b c', 'alpha')).toBe(
       '/p/alpha/workspace?view=clusters&similar_to=a%2Fb%20c',
     );
+  });
+});
+
+describe('the primary navigation', () => {
+  it('lists each section once, in the order the header shows them, with a label', () => {
+    const sections = PRIMARY_NAV.map((n) => n.section);
+    expect(new Set(sections).size).toBe(sections.length);
+    expect(sections).toEqual([
+      'dashboard',
+      'ingest',
+      'workspace',
+      'classes',
+      'export',
+      'models',
+      'train',
+      'bakeoff',
+      'quality',
+      'settings',
+    ]);
+    expect(PRIMARY_NAV.every((n) => n.label.length > 0)).toBe(true);
+  });
+
+  it('gives the breadcrumb the label of the nav link, and the id for a section with no link', () => {
+    expect(sectionLabel('bakeoff')).toBe('Bake-off');
+    expect(sectionLabel('quality')).toBe('Quality');
+    expect(sectionLabel('images')).toBe('images');
   });
 });

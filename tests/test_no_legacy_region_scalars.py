@@ -36,8 +36,9 @@ number of occurrences so a new one in the same file fails):
   It defines them once (``REPLY_*_KEY``); every other module imports them.
 - ``src/services/curation/review_sorts.py``: ``region_score`` is the served
   review-sort *id* of ``GET /review/{tab}?sort=``, not a storage name (the
-  sort reads ``region_max_score``); the id is spelled in the sort's
-  definition and in the default-sort map.
+  sort reads ``region_max_score``); the id is spelled once, as
+  ``REGION_SCORE_SORT``, which the sort's definition, the default-sort map and
+  the queue-only map use.
 - ``src/services/labeling/vlm_prompts.py``: the default prompt packs spell
   the same three VLM reply keys in their instruction text (any number of
   times -- it is prompt prose); only those three names are exempt there.
@@ -122,7 +123,7 @@ LITERAL_ALLOWLIST: dict[str, dict[str, int]] = {
         'region_confidence': 1,
         'region_text': 1,
     },
-    'src/services/curation/review_sorts.py': {'region_score': 2},
+    'src/services/curation/review_sorts.py': {'region_score': 1},
     # The `region_text` / `region_text_match` query parameters of the crops
     # listing: filter names that search the per-box `text_fold`,
     # not the retired item-level storage scalar. Pinned to the four spellings.
@@ -540,10 +541,10 @@ def test_the_allowlist_exempts_exactly_its_literals() -> None:
 
 def test_the_allowlist_exempts_only_its_pinned_count() -> None:
     sorts = 'src/services/curation/review_sorts.py'
-    two = "a = 'region_score'\nb = 'region_score'\n"
-    assert scan_source(two, sorts) == []
-    assert len(scan_source(two + "c = 'region_score'\n", sorts)) == 1
+    one = "a = 'region_score'\n"
+    assert scan_source(one, sorts) == []
+    assert len(scan_source(one + "b = 'region_score'\n", sorts)) == 1
     # an embedded spelling counts the same as a whole literal
-    assert len(scan_source(two + "c = 'ctx._source.region_score = 1'\n", sorts)) == 1
+    assert len(scan_source(one + "b = 'ctx._source.region_score = 1'\n", sorts)) == 1
     # and a name the file is not allowed is flagged however often it is spelled
     assert scan_source("a = 'region_bbox_norm'\n", sorts) != []

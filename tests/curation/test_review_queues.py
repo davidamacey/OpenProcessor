@@ -253,7 +253,9 @@ def test_a_queue_serves_the_sorts_it_can_be_read_in(monkeypatch: pytest.MonkeyPa
     """The served options are the selectable registry sorts (outlier-first included), never the
     sentinel or a sort that only belongs to another queue, and the queue's own default is one."""
 
-    async def covered(_opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
+    async def covered(
+        _opensearch: Any, fields: frozenset[str], *, live: bool = False
+    ) -> dict[str, int | None]:
         return dict.fromkeys(fields, 5)
 
     monkeypatch.setattr('src.services.curation.field_coverage.field_coverage', covered)
@@ -273,7 +275,9 @@ def test_a_queue_serves_the_sorts_it_can_be_read_in(monkeypatch: pytest.MonkeyPa
 def test_a_sort_whose_field_no_item_carries_is_not_offered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def coverage(_opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
+    async def coverage(
+        _opensearch: Any, fields: frozenset[str], *, live: bool = False
+    ) -> dict[str, int | None]:
         return {f: (0 if f == 'cluster_score' else 5) for f in fields}
 
     monkeypatch.setattr('src.services.curation.field_coverage.field_coverage', coverage)

@@ -20,14 +20,6 @@ from opensearchpy.exceptions import OpenSearchException
 
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import base_curation_config
-from src.services.curation.review_sorts import REVIEW_SORTS
-
-
-def test_classifier_blind_spots_default_label_has_no_stale_coco_name() -> None:
-    """The sort is 'Largest classifier blind spot'; its served label must not still say 'COCO'."""
-    label = REVIEW_SORTS['classifier_blind_spots_default'].label
-    assert 'coco' not in label.lower()
-    assert 'classifier' in label.lower()
 
 
 ITEMS = base_curation_config().items_index
