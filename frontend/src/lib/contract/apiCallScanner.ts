@@ -230,23 +230,11 @@ function extractInterfaceKeys(body: string): string[] {
   return keys;
 }
 
-/** Resolves `identifier`'s declared type from the nearest `identifier:
- *  TypeName` occurrence before `beforeIndex`, then returns that named
- *  interface/type's member keys. `null` when the type can't be resolved
- *  to a closed member list (e.g. `Record<string, unknown>`, `unknown`) —
- *  an untyped passthrough the scanner correctly declines to guess at. */
-function resolveIdentifierKeys(
-  fullSrc: string,
-  identName: string,
+/** Parameter-list span of the function whose body contains `beforeIndex`, or null. */
+function enclosingParamList(
+  masked: string,
   beforeIndex: number,
-): string[] | null {
-  // Every structural regex below runs against `masked` (comments/strings/
-  // templates blanked out, same length as `fullSrc`), so prose in a
-  // JSDoc comment that happens to contain "function foo(" or a type name
-  // can never be mistaken for a real declaration. Slicing for actual text
-  // always uses `fullSrc` at the same offsets.
-  const masked = maskNonCode(fullSrc);
-
+): { openParen: number; closeParen: number } | null {
   // Bound the search to the enclosing function's OWN parameter list —
   // not an arbitrary lookback window — so an identically-named parameter
   // on a different, earlier function in the same file can't be picked up
@@ -270,6 +258,43 @@ function resolveIdentifierKeys(
   if (bodyStart >= masked.length) return null;
   const bodyEnd = skipBalanced(masked, bodyStart, '{', '}');
   if (beforeIndex < closeParen || beforeIndex >= bodyEnd) return null;
+  return { openParen, closeParen };
+}
+
+const OPAQUE_TYPES: ReadonlySet<string> = new Set(['Record', 'unknown', '', 'object']);
+
+/** Declared type name of parameter `identName` in the masked list, or null when
+ *  it is missing or too opaque to resolve to keys. */
+function paramTypeName(maskedWindow: string, identName: string): string | null {
+  const paramRe = new RegExp(
+    `\\b${identName}\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>[\\], .]*)`,
+    'g',
+  );
+  const matches = [...maskedWindow.matchAll(paramRe)];
+  if (matches.length === 0) return null;
+  const typeName = matches[matches.length - 1][1].trim().split(/[<[]/)[0].trim();
+  return OPAQUE_TYPES.has(typeName) ? null : typeName;
+}
+
+/** Resolves `identifier`'s declared type from the nearest `identifier:
+ *  TypeName` occurrence before `beforeIndex`, then returns that named
+ *  interface/type's member keys. `null` when the type can't be resolved
+ *  to a closed member list (e.g. `Record<string, unknown>`, `unknown`) —
+ *  an untyped passthrough the scanner correctly declines to guess at. */
+function resolveIdentifierKeys(
+  fullSrc: string,
+  identName: string,
+  beforeIndex: number,
+): string[] | null {
+  // Every structural regex below runs against `masked` (comments/strings/
+  // templates blanked out, same length as `fullSrc`), so prose in a
+  // JSDoc comment that happens to contain "function foo(" or a type name
+  // can never be mistaken for a real declaration. Slicing for actual text
+  // always uses `fullSrc` at the same offsets.
+  const masked = maskNonCode(fullSrc);
+  const params = enclosingParamList(masked, beforeIndex);
+  if (!params) return null;
+  const { openParen, closeParen } = params;
 
   const windowStart = openParen;
   const maskedWindow = masked.slice(windowStart, closeParen);
@@ -286,22 +311,8 @@ function resolveIdentifierKeys(
     return extractInterfaceKeys(fullSrc.slice(braceStart + 1, braceEnd - 1));
   }
 
-  const paramRe = new RegExp(
-    `\\b${identName}\\s*:\\s*([A-Za-z_][A-Za-z0-9_<>[\\], .]*)`,
-    'g',
-  );
-  const matches = [...maskedWindow.matchAll(paramRe)];
-  if (matches.length === 0) return null;
-  let typeName = matches[matches.length - 1][1].trim();
-  typeName = typeName.split(/[<[]/)[0].trim();
-  if (
-    typeName === 'Record' ||
-    typeName === 'unknown' ||
-    typeName === '' ||
-    typeName === 'object'
-  ) {
-    return null;
-  }
+  const typeName = paramTypeName(maskedWindow, identName);
+  if (typeName === null) return null;
   const blockRe = new RegExp(`(?:interface|type)\\s+${typeName}\\b[^{]*\\{`);
   const bm = blockRe.exec(masked);
   if (!bm) return null;
@@ -361,89 +372,99 @@ function findStringConstants(src: string): Map<string, string> {
   return map;
 }
 
+/** HTTP method from the call's next argument (an options object), default GET. */
+function readMethod(src: string, end: number): string {
+  let pos = end;
+  while (pos < src.length && /\s/.test(src[pos])) pos++;
+  if (src[pos] !== ',') return 'GET';
+  pos++;
+  while (pos < src.length && /\s/.test(src[pos])) pos++;
+  if (src[pos] !== '{') return 'GET';
+  const optionsText = src.slice(pos, skipBalanced(src, pos, '{', '}'));
+  const m = /method\s*:\s*['"]([A-Za-z]+)['"]/.exec(optionsText);
+  return m ? m[1].toUpperCase() : 'GET';
+}
+
+/** Path text with the `qs(...)` composition cut off, and the keys that call sends. */
+function splitQsComposition(
+  src: string,
+  t: { start: number },
+  inner: string,
+  marker: string,
+  normAfterPrefix: string,
+): { path: string; queryParams: string[] | null } {
+  const markerIdx = inner.indexOf(marker);
+  const afterPrefix = inner.slice(markerIdx + marker.length);
+  const qsMarker = '${qs(';
+  const qsIdx = afterPrefix.indexOf(qsMarker);
+  if (qsIdx === -1) return { path: normAfterPrefix, queryParams: [] };
+  const openParen = t.start + 1 + markerIdx + marker.length + qsIdx + qsMarker.length - 1;
+  const closeParen = skipBalanced(src, openParen, '(', ')');
+  const queryParams = extractQsKeys(
+    src,
+    src.slice(openParen + 1, closeParen - 1),
+    t.start,
+  );
+  const normQsIdx = normAfterPrefix.indexOf(qsMarker);
+  return {
+    path: normAfterPrefix.slice(0, normQsIdx === -1 ? undefined : normQsIdx),
+    queryParams,
+  };
+}
+
+function scanTemplate(
+  src: string,
+  t: { start: number; end: number; text: string },
+  marker: string,
+  consts: Map<string, string>,
+): ApiCallSite {
+  // `inner` keeps original offsets (needed to locate the `qs(...)` call
+  // in `src`); `normInner` is a display copy with known local string
+  // constants (e.g. `REGION_BASE`) inlined so a segment like
+  // `${REGION_BASE}` normalizes to `/regions`, not an opaque `*`.
+  const inner = t.text.slice(1, -1); // drop backticks
+  let normInner = inner;
+  for (const [name, value] of consts) {
+    normInner = normInner.split(`\${${name}}`).join(value);
+  }
+  const normStart = normInner.slice(normInner.indexOf(marker) + marker.length);
+  const split = splitQsComposition(src, t, inner, marker, normStart);
+  let { path: normAfterPrefix, queryParams } = split;
+
+  // A literal query string composed by hand (no `qs()`), e.g.
+  // `/thumbnail?size=${size}` on the getThumbUrl-style URL builders —
+  // split it off and read its keys directly.
+  const literalQIdx = normAfterPrefix.indexOf('?');
+  if (queryParams != null && queryParams.length === 0 && literalQIdx !== -1) {
+    const queryPart = normAfterPrefix.slice(literalQIdx + 1);
+    const keys = [...queryPart.matchAll(/([A-Za-z_][A-Za-z0-9_]*)=/g)].map((m) => m[1]);
+    if (keys.length > 0) queryParams = [...new Set(keys)];
+    normAfterPrefix = normAfterPrefix.slice(0, literalQIdx);
+  }
+
+  // .searchParams.set('key', ...) pattern (sse.ts) — scan a bounded
+  // window after the template for any such calls.
+  const window = src.slice(t.end, Math.min(src.length, t.end + 1500));
+  const setMatches = [...window.matchAll(/searchParams\.set\(\s*['"](\w+)['"]/g)];
+  if (setMatches.length > 0) {
+    queryParams = [...new Set(setMatches.map((m) => m[1]))];
+  }
+
+  return {
+    pathTemplate: normAfterPrefix.replace(/\$\{.*?\}/g, '*') || '/',
+    method: readMethod(src, t.end),
+    queryParams,
+    index: t.start,
+    raw: t.text,
+  };
+}
+
 export function scanApiCallSites(
   src: string,
   marker: string = '${scoped()}',
 ): ApiCallSite[] {
-  const templates = findApiPrefixTemplates(src, marker);
   const consts = findStringConstants(src);
-  const sites: ApiCallSite[] = [];
-
-  for (const t of templates) {
-    // `inner` keeps original offsets (needed to locate the `qs(...)` call
-    // in `src`); `normInner` is a display copy with known local string
-    // constants (e.g. `REGION_BASE`) inlined so a segment like
-    // `${REGION_BASE}` normalizes to `/regions`, not an opaque `*`.
-    const inner = t.text.slice(1, -1); // drop backticks
-    let normInner = inner;
-    for (const [name, value] of consts) {
-      normInner = normInner.split(`\${${name}}`).join(value);
-    }
-    const markerIdx = inner.indexOf(marker);
-    const afterPrefix = inner.slice(markerIdx + marker.length);
-    let normAfterPrefix = normInner.slice(normInner.indexOf(marker) + marker.length);
-
-    // Cut the path off at the query-string composition, if any.
-    const qsMarker = '${qs(';
-    const qsIdx = afterPrefix.indexOf(qsMarker);
-    let queryParams: string[] | null = [];
-    if (qsIdx !== -1) {
-      const openParen =
-        t.start + 1 + markerIdx + marker.length + qsIdx + qsMarker.length - 1;
-      const closeParen = skipBalanced(src, openParen, '(', ')');
-      const argText = src.slice(openParen + 1, closeParen - 1);
-      queryParams = extractQsKeys(src, argText, t.start);
-      const normQsIdx = normAfterPrefix.indexOf(qsMarker);
-      normAfterPrefix = normAfterPrefix.slice(
-        0,
-        normQsIdx === -1 ? undefined : normQsIdx,
-      );
-    }
-
-    // A literal query string composed by hand (no `qs()`), e.g.
-    // `/thumbnail?size=${size}` on the getThumbUrl-style URL builders —
-    // split it off and read its keys directly.
-    const literalQIdx = normAfterPrefix.indexOf('?');
-    if (queryParams != null && queryParams.length === 0 && literalQIdx !== -1) {
-      const queryPart = normAfterPrefix.slice(literalQIdx + 1);
-      const keys = [...queryPart.matchAll(/([A-Za-z_][A-Za-z0-9_]*)=/g)].map((m) => m[1]);
-      if (keys.length > 0) queryParams = [...new Set(keys)];
-      normAfterPrefix = normAfterPrefix.slice(0, literalQIdx);
-    }
-
-    const pathTemplate = normAfterPrefix.replace(/\$\{.*?\}/g, '*') || '/';
-
-    // Method: look at the call's next argument (an options object), if any.
-    let method = 'GET';
-    let scanPos = t.end;
-    while (scanPos < src.length && /\s/.test(src[scanPos])) scanPos++;
-    if (src[scanPos] === ',') {
-      scanPos++;
-      while (scanPos < src.length && /\s/.test(src[scanPos])) scanPos++;
-      if (src[scanPos] === '{') {
-        const closeBrace = skipBalanced(src, scanPos, '{', '}');
-        const optionsText = src.slice(scanPos, closeBrace);
-        const m = /method\s*:\s*['"]([A-Za-z]+)['"]/.exec(optionsText);
-        if (m) method = m[1].toUpperCase();
-      }
-    }
-
-    // .searchParams.set('key', ...) pattern (sse.ts) — scan a bounded
-    // window after the template for any such calls.
-    const window = src.slice(t.end, Math.min(src.length, t.end + 1500));
-    const setMatches = [...window.matchAll(/searchParams\.set\(\s*['"](\w+)['"]/g)];
-    if (setMatches.length > 0) {
-      queryParams = [...new Set(setMatches.map((m) => m[1]))];
-    }
-
-    sites.push({
-      pathTemplate,
-      method,
-      queryParams,
-      index: t.start,
-      raw: t.text,
-    });
-  }
-
-  return sites;
+  return findApiPrefixTemplates(src, marker).map((t) =>
+    scanTemplate(src, t, marker, consts),
+  );
 }
