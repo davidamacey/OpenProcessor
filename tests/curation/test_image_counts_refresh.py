@@ -249,3 +249,19 @@ def test_the_sweep_size_is_a_setting_and_zero_turns_the_sweep_off(
     monkeypatch.setenv('OP_IMAGE_COUNTS_SWEEP_PER_TICK', '0')
     assert _drain(fake, image_counts_dirty).swept == 0
     assert sum('counts_at' in d for d in fake.docs(IMAGES).values()) == 2
+
+
+def test_projects_never_share_a_dirty_set(image_counts_dirty: dict[str, set[str]]) -> None:
+    from src.clients.image_counts_dirty import mark_dirty
+    from src.config.project_context import bind_project
+
+    class _Record:
+        slug = 'other'
+
+    _run(mark_dirty(['img-x']))
+    with bind_project(_Record()):  # type: ignore[arg-type]
+        _run(mark_dirty(['img-y']))
+        dirty = DirtyImages(FakeValkeySets(image_counts_dirty))
+        assert _run(dirty.claim()) is True
+        assert _run(dirty.batch(10)) == ['img-y']
+    assert image_counts_dirty['op:image_counts:dirty:default'] == {'img-x'}

@@ -17,6 +17,7 @@ from src.config.task_routes import (
     gpu_eval,
     gpu_export,
     gpu_train,
+    image_counts,
     infra,
     near_dup,
     near_dup_core,
@@ -47,6 +48,7 @@ _MODULES = (
     near_dup_core,
     source_backfill,
     region_text,
+    image_counts,
 )
 
 

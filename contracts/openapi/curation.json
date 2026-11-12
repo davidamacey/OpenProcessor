@@ -13721,6 +13721,24 @@
         "title": "ImageCounts",
         "type": "object"
       },
+      "ImageCountsBackfillStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "ImageCountsBackfillStarted",
+        "type": "object"
+      },
       "ImageDetail": {
         "description": "One image and everything detected on it. `items` are wire items ordered by\n`crop_rank_in_image` (at most 500, `items_truncated` says when there were more); `boxes` draws\nall of them in image coordinates.",
         "properties": {
@@ -54535,6 +54553,50 @@
         "summary": "Curation Health",
         "tags": [
           "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/image_counts/backfill": {
+      "post": {
+        "description": "Count the items of every stored image (the gallery's served sort and label-state filter).",
+        "operationId": "start_image_counts_backfill_curation_projects__project__image_counts_backfill_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageCountsBackfillStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Image Counts Backfill",
+        "tags": [
+          "Curation",
+          "Images"
         ]
       }
     },
