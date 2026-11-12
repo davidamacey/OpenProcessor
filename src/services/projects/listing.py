@@ -15,7 +15,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from src.db.repos import projects as repo
 from src.db.session import deployment_tx
@@ -37,11 +37,18 @@ ITEMS_SORT = 'items:desc'
 ITEMS_SORT_CAP = 200
 
 
+Keyset = Literal['name:asc', 'updated_at:desc']
+
+
 @dataclass(frozen=True)
 class ProjectSort:
     id: str
     label: str
-    keyset: str  # the SQL order the page is read in
+    keyset: Keyset  # the SQL order the page is read in; the items sort reads the recency order
+
+    @property
+    def by_recency(self) -> bool:
+        return self.keyset == 'updated_at:desc'
 
 
 SORTS: tuple[ProjectSort, ...] = (
@@ -92,7 +99,7 @@ def _after(sort: ProjectSort, cursor: str | None) -> tuple[Any, str] | None:
         msg = 'cursor is not one this route served'
         raise CursorError(msg)
     value, slug = after
-    if sort.keyset == 'updated_at:desc':
+    if sort.by_recency:
         try:
             value = dt.datetime.fromisoformat(value)
         except (TypeError, ValueError) as exc:
@@ -134,7 +141,7 @@ async def fetch_page(
     next_cursor = None
     if more and not capped and rows:
         last = rows[-1]
-        value = last.updated_at.isoformat() if sort.keyset == 'updated_at:desc' else last.slug
+        value = last.updated_at.isoformat() if sort.by_recency else last.slug
         next_cursor = encode_cursor(sort.id, [value, last.slug])
     return records, next_cursor, total
 
