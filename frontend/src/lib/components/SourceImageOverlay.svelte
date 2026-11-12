@@ -81,6 +81,7 @@
   let error = $state<string | null>(null);
   let loading = $state(false);
   let showBoxes = $state(true);
+  let allRegions = $state(false);
   let sourceMissing = $state<SourceMissing | null>(null);
   let naturalW = $state<number | null>(null);
   let naturalH = $state<number | null>(null);
@@ -165,7 +166,7 @@
       />
       {#if showBoxes && context}
         <div class="pointer-events-none absolute inset-0" data-testid="overlay-layer">
-          <BoxLayer boxes={context.boxes} {selectedCropId} {onselect} />
+          <BoxLayer boxes={context.boxes} {selectedCropId} {onselect} {allRegions} />
           {#each extraShapes as s (s.key)}
             {#if s.kind === 'box'}
               {@const [x1, y1, x2, y2] = s.box}
@@ -209,13 +210,26 @@
           {/each}
         </div>
       {/if}
-      <button
-        type="button"
-        class="pointer-events-auto absolute top-1 right-1 z-20 rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-900"
-        onclick={() => (showBoxes = !showBoxes)}
-      >
-        {showBoxes ? 'hide boxes' : 'show boxes'}
-      </button>
+      <div class="pointer-events-auto absolute top-1 right-1 z-20 flex gap-1">
+        <button
+          type="button"
+          class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-900"
+          onclick={() => (showBoxes = !showBoxes)}
+        >
+          {showBoxes ? 'hide boxes' : 'show boxes'}
+        </button>
+        {#if showBoxes}
+          <button
+            type="button"
+            class="rounded border border-zinc-700 bg-zinc-950/80 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-900"
+            aria-pressed={allRegions}
+            data-testid="overlay-all-regions"
+            onclick={() => (allRegions = !allRegions)}
+          >
+            All regions
+          </button>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>

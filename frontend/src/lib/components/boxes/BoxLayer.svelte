@@ -16,9 +16,23 @@
     onselect?: (cropId: string) => void;
     /** False on a thumbnail too small for text: boxes draw, labels do not. */
     showLabels?: boolean;
+    /** Region boxes of every item. Off, only the selected item's region boxes draw. */
+    allRegions?: boolean;
   }
 
-  let { boxes, selectedCropId = null, onselect, showLabels = true }: Props = $props();
+  let {
+    boxes,
+    selectedCropId = null,
+    onselect,
+    showLabels = true,
+    allRegions = false,
+  }: Props = $props();
+
+  const visible = $derived(
+    boxes.filter(
+      (b) => b.kind !== 'region' || allRegions || b.crop_id === selectedCropId,
+    ),
+  );
 
   function pct(n: number): string {
     return `${(n * 100).toFixed(3)}%`;
@@ -31,7 +45,7 @@
   }
 </script>
 
-{#each boxes as b, i (`${b.kind}-${b.crop_id}-${b.box_id ?? ''}-${i}`)}
+{#each visible as b, i (`${b.kind}-${b.crop_id}-${b.box_id ?? ''}-${i}`)}
   {@const [x1, y1, x2, y2] = b.bbox_norm}
   {@const selected = b.kind === 'item' && b.crop_id === selectedCropId}
   {@const clickable = b.kind === 'item' && !selected && !!onselect}
@@ -40,7 +54,7 @@
   }`}
   {@const boxStyle = `left:${pct(x1)}; top:${pct(y1)}; width:${pct(x2 - x1)}; height:${pct(y2 - y1)};`}
   {#snippet label()}
-    {#if showLabels && (selected || b.kind !== 'item')}
+    {#if showLabels}
       <span
         class="pointer-events-none absolute -top-4 left-0 rounded-sm bg-zinc-950/90 px-1 py-0.5 text-[9px] leading-none whitespace-nowrap text-zinc-100"
       >

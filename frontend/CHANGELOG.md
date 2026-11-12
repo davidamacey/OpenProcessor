@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The source-image overlay labels every item box and draws region boxes only for the selected item; an "All regions" toggle draws them for all (G-19).
 - Every grid pages by cursor: the shared pager follows the served `next_cursor`, a deep link loads the page that starts at the located item in one request, and no view sees a page number. The audit queue has Previous and Next.
 - Image overlays draw the served boxes and names (`BoxLayer`); region boxes show their read text or the region name and number instead of "Object N".
 - The source image of an item is reached through its `image_id`: `SourceImageOverlay` and the crop detail read `GET /images/{image_id}` (the image, its counts, every item on it and the boxes to draw) and draw over `GET /images/{image_id}/file`; near-duplicate image members take `GET /images/{image_id}/thumbnail` directly, so the page no longer looks up an item standing on each image. `GET /crops/{id}/context`, `GET /crops/{id}/image`, `GET /images/serve` and `GET /images/root/{alias}` are gone.

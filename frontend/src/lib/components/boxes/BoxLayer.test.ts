@@ -93,4 +93,36 @@ describe('BoxLayer', () => {
     b.click();
     expect(onselect).toHaveBeenCalledWith('b');
   });
+
+  it('region boxes only for the selected item by default', () => {
+    const boxes = [
+      box({ crop_id: 'a' }),
+      box({ crop_id: 'b' }),
+      box({ crop_id: 'a', kind: 'region', box_id: 'r1' }),
+      box({ crop_id: 'b', kind: 'region', box_id: 'r2' }),
+    ];
+    const el = render({ boxes, selectedCropId: 'a' });
+    const regions = el.querySelectorAll('[data-kind="region"]');
+    expect(regions).toHaveLength(1);
+    expect(regions[0]!.getAttribute('data-crop-id')).toBe('a');
+    expect(el.querySelectorAll('[data-kind="item"]')).toHaveLength(2);
+  });
+
+  it('draws every region box when allRegions is on', () => {
+    const boxes = [
+      box({ crop_id: 'a', kind: 'region', box_id: 'r1' }),
+      box({ crop_id: 'b', kind: 'region', box_id: 'r2' }),
+    ];
+    const el = render({ boxes, selectedCropId: 'a', allRegions: true });
+    expect(el.querySelectorAll('[data-kind="region"]')).toHaveLength(2);
+  });
+
+  it('labels every item box, not only the selected one', () => {
+    const el = render({
+      boxes: [box({ crop_id: 'a', label: 'cat' }), box({ crop_id: 'b', label: 'dog' })],
+      selectedCropId: 'a',
+    });
+    expect(el.textContent).toContain('cat');
+    expect(el.textContent).toContain('dog');
+  });
 });
