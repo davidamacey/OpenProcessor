@@ -126,6 +126,43 @@ def test_cluster_opens_in_place_and_assigns_through_a_dry_run(stub, page, app_ur
     assert not errors, errors[:3]
 
 
+def test_class_letter_then_enter_labels_a_pure_cluster(stub, page, app_url):
+    serve(stub)
+    label_calls: list[dict] = []
+    stub_label_op(stub, r'/crops/batch_label$', 'op-label-2', updated=3, method='PUT')
+
+    def label(request, _match):
+        body = request.post_data_json or {}
+        label_calls.append(body)
+        if body.get('dry_run'):
+            return (200, {'dry_run': True, 'selected': 3})
+        return (202, label_op_accepted('op-label-2', 'job-op-label-2'))
+
+    stub.on('PUT', r'/crops/batch_label$', label)
+
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    page.locator('[data-testid=workspace-view] li button').first.click()
+    expect(page.get_by_test_id('scope-chip')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
+
+    page.keyboard.press('k')
+    expect(page.get_by_test_id('selection-count')).to_contain_text('3', timeout=ACTION_TIMEOUT_MS)
+    assert [c.get('dry_run') for c in label_calls] == [True]
+    assert label_calls[0]['selection']['filter']['cluster_uids'] == [CLUSTER_UID]
+
+    with page.expect_response(
+        lambda r: (
+            r.request.method == 'PUT'
+            and r.url.endswith('/batch_label')
+            and not (r.request.post_data_json or {}).get('dry_run')
+        ),
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        page.keyboard.press('Enter')
+    assert label_calls[-1]['selection']['filter']['cluster_uids'] == [CLUSTER_UID]
+    assert label_calls[-1]['class_id'] == 1
+
+
 def test_filter_queue_and_selection_survive_a_view_switch(stub, page, app_url):
     serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=detections&class_name=widget')

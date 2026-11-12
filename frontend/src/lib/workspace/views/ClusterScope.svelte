@@ -18,6 +18,9 @@
   import ClusterProposalPanel from '$components/assistRun/ClusterProposalPanel.svelte';
   import AssistRunDialog from '$components/assistRun/AssistRunDialog.svelte';
   import { createClusterAssist } from '$lib/assistRun/clusterAssist.svelte';
+  import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
+  import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type { Crop } from '$lib/types';
   import { NO_SELECTION } from '$lib/workspace/selection';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -44,6 +47,19 @@
       ws.scopeCard = null;
     };
   });
+
+  // A class letter with nothing selected labels the whole open cluster: the
+  // server's dry run states the count, Enter applies it.
+  const wholeCluster = createSelectionActionController(() => ({ filter: ws.itemBody() }));
+  $effect(() =>
+    dropOnClassStore.register((cls, droppedIds) => {
+      if (view.sel.size === 0 && droppedIds.length === 0) {
+        wholeCluster.classId = cls.id;
+        return wholeCluster.open('label');
+      }
+      return actions.controller.handleClassDrop(cls, droppedIds);
+    }),
+  );
 
   // The proposal on screen belongs to the cluster being viewed.
   $effect(() => {
@@ -154,6 +170,11 @@
 </div>
 
 <MoveClusterPicker {view} {actions} />
+
+<SelectionActionDialog
+  controller={wholeCluster}
+  onapplied={() => void view.loadFirst()}
+/>
 
 <AssistRunDialog
   ctl={clusterAssist.assist}
