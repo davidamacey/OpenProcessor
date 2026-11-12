@@ -47,17 +47,28 @@ afterEach(() => {
 describe('VlmMenu', () => {
   it('offers assist only when a VLM is active (served)', async () => {
     const off = await render({ source: 'off', active: { name: null, revision: null } });
-    expect(off.querySelector('[data-testid="vlm-menu"]')).toBeNull();
+    expect(off.querySelector('[data-testid="vlm-menu-toggle"]')).not.toBeNull();
+    expect(
+      off.querySelector<HTMLButtonElement>('[data-testid="vlm-menu-assist"]')?.disabled,
+    ).toBe(true);
+    expect(off.querySelector('[data-testid="loop-panel"]')).toBeNull();
+    expect(off.querySelector('[data-testid="vlm-menu-off"]')).not.toBeNull();
     unmount(instance!);
     instance = null;
     off.remove();
     const on = await render({ source: 'saved', active: { name: 'x', revision: 1 } });
-    expect(on.querySelector('[data-testid="vlm-menu-assist"]')).not.toBeNull();
+    expect(
+      on.querySelector<HTMLButtonElement>('[data-testid="vlm-menu-assist"]')?.disabled,
+    ).toBe(false);
+    expect(on.querySelector('[data-testid="vlm-menu-off"]')).toBeNull();
   });
 
-  it('an unreadable answer leaves the menu out', async () => {
+  it('an unreadable answer disables assist but keeps the menu', async () => {
     const t = await render(null);
-    expect(t.querySelector('[data-testid="vlm-menu"]')).toBeNull();
+    expect(t.querySelector('[data-testid="vlm-menu"]')).not.toBeNull();
+    expect(
+      t.querySelector<HTMLButtonElement>('[data-testid="vlm-menu-assist"]')?.disabled,
+    ).toBe(true);
   });
 
   it('names the selection when crops are selected, else the scope', async () => {

@@ -1,10 +1,11 @@
 <script lang="ts">
   /**
-   * The one place VLM work starts from in the Workspace: Assist on the
-   * selection or the scope, the auto-label loop and its status, and the
-   * Auto-label run with its settings. It exists only while the backend serves
-   * an active VLM (`GET /vlm/endpoints/active`, `source !== 'off'`); an
-   * unreadable answer leaves it out, as a button that could only fail.
+   * The one place AI work starts from in the Workspace: Auto-label (embed and
+   * finalize, which needs no VLM), and, while the backend serves an active VLM
+   * (`GET /vlm/endpoints/active`, `source !== 'off'`), Assist on the selection
+   * or the scope and the auto-label loop with its status. Without a VLM, or
+   * when the answer is unreadable, those two are disabled and point to Models
+   * settings, as buttons that could only fail.
    */
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
@@ -40,50 +41,55 @@
   );
 </script>
 
-{#if active}
-  <div class="relative" data-testid="vlm-menu">
-    <button
-      type="button"
-      class="btn"
-      aria-expanded={open}
-      aria-controls="vlm-menu-body"
-      data-testid="vlm-menu-toggle"
-      onclick={() => (open = !open)}
-    >
-      VLM
-      {#if loop.loop}
-        <span class="chip font-normal text-zinc-400" data-testid="vlm-menu-loop-status"
-          >{loop.loop.status}</span
+<div class="relative" data-testid="vlm-menu">
+  <button
+    type="button"
+    class="btn"
+    aria-expanded={open}
+    aria-controls="vlm-menu-body"
+    data-testid="vlm-menu-toggle"
+    onclick={() => (open = !open)}
+  >
+    AI
+    {#if active && loop.loop}
+      <span class="chip font-normal text-zinc-400" data-testid="vlm-menu-loop-status"
+        >{loop.loop.status}</span
+      >
+    {/if}
+  </button>
+  <div
+    id="vlm-menu-body"
+    class="fixed inset-x-2 top-24 z-30 max-h-[80vh] overflow-auto rounded-md border border-zinc-700 bg-zinc-950 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-full md:mt-1 md:w-[40rem]"
+    hidden={!open}
+    data-testid="vlm-menu-body"
+  >
+    <div class="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-4 py-2">
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="vlm-menu-assist"
+        disabled={!active}
+        onclick={() => assist.open(opener)}
+      >
+        Assist on {opener.title.toLowerCase()}…
+      </button>
+      {#if !active}
+        <span class="text-xs text-zinc-400" data-testid="vlm-menu-off"
+          >Assist and the loop need an active VLM.</span
         >
       {/if}
-    </button>
-    <div
-      id="vlm-menu-body"
-      class="fixed inset-x-2 top-24 z-30 max-h-[80vh] overflow-auto rounded-md border border-zinc-700 bg-zinc-950 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-full md:mt-1 md:w-[40rem]"
-      hidden={!open}
-      data-testid="vlm-menu-body"
-    >
-      <div class="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-4 py-2">
-        <button
-          type="button"
-          class="btn btn-primary"
-          data-testid="vlm-menu-assist"
-          onclick={() => assist.open(opener)}
-        >
-          Assist on {opener.title.toLowerCase()}…
-        </button>
-        <span class="grow"></span>
-        <a
-          class="text-xs text-zinc-400 underline"
-          data-testid="vlm-menu-models"
-          href={resolve(projectHref('/settings/models'))}>Models settings</a
-        >
-      </div>
-      <AssistLoopPanel ctl={loop} />
-      {#if open}
-        <div class="p-3"><AutoLabelPanel /></div>
-      {/if}
+      <span class="grow"></span>
+      <a
+        class="text-xs text-zinc-400 underline"
+        data-testid="vlm-menu-models"
+        href={resolve(projectHref('/settings/models'))}
+        >{active ? 'Models settings' : 'Activate a VLM in Models settings'}</a
+      >
     </div>
-    <AssistRunDialog ctl={assist} />
+    {#if active}<AssistLoopPanel ctl={loop} />{/if}
+    {#if open}
+      <div class="p-3"><AutoLabelPanel /></div>
+    {/if}
   </div>
-{/if}
+  <AssistRunDialog ctl={assist} />
+</div>

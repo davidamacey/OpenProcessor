@@ -1,5 +1,5 @@
 /**
- * What the VLM menu's Assist covers: the selection when there is one, else
+ * What the AI menu's Assist covers: the selection when there is one, else
  * everything the filter, queue and scope match. A crop selection goes as
  * crops; any other selection goes as the filter that `ItemSelection` carries.
  */

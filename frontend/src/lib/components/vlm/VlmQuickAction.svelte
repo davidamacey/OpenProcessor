@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The dashboard's VLM action. VLM work starts from the Workspace's VLM
+   * The dashboard's VLM action. VLM work starts from the Workspace's AI
    * menu, so this links there. Whether the project has a VLM is the backend's call
    * (`GET /vlm/endpoints/active`, `source: 'off'`): with none, the action
    * links to the Models settings instead of a ready button that could only
@@ -37,7 +37,7 @@
   <a
     class="btn btn-primary"
     href={resolve(projectHref('/workspace'))}
-    title="Open the Workspace and use its VLM menu: Assist, the auto-label loop, Auto-label"
-    >Open the Workspace VLM menu</a
+    title="Open the Workspace and use its AI menu: Assist, the auto-label loop, Auto-label"
+    >Open the Workspace AI menu</a
   >
 {/if}

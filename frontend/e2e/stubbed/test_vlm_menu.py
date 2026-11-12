@@ -1,4 +1,4 @@
-"""The Workspace's VLM menu: absent without a served VLM, one home for Assist,
+"""The Workspace's AI menu: keeps Auto-label without a served VLM, one home for Assist,
 the auto-label loop and the Auto-label run, usable at 430 px."""
 
 from __future__ import annotations
@@ -14,13 +14,18 @@ from test_assist_run_dialog import COMPLETED, METHODS
 PATH = '/p/default/workspace?view=clusters'
 
 
-def test_menu_is_absent_when_no_vlm_is_active(stub, page, app_url):
+def test_menu_keeps_auto_label_and_disables_assist_when_no_vlm_is_active(stub, page, app_url):
     serve_loop(stub, 'completed')
     stub.on('GET', r'/vlm/endpoints/active(\?|$)', {'source': 'off', 'active': {'name': None}})
     page.goto(f'{app_url}{PATH}')
     expect(page.get_by_test_id('view-bar')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('vlm-menu')).to_have_count(0)
+    page.get_by_test_id('vlm-menu-toggle').click()
+    expect(page.get_by_test_id('vlm-menu-assist')).to_be_disabled()
+    expect(page.get_by_test_id('loop-panel')).to_have_count(0)
+    expect(page.get_by_role('button', name='Auto-label now')).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_menu_holds_assist_loop_status_and_the_auto_label_run(stub, page, app_url):

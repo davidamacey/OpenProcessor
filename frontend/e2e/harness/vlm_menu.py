@@ -1,4 +1,4 @@
-"""Opening the Workspace's VLM menu, which exists only while a VLM is served active."""
+"""Opening the Workspace's AI menu; Assist and the loop in it need a served active VLM."""
 
 from __future__ import annotations
 
