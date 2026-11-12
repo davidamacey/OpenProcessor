@@ -54,3 +54,18 @@ def test_the_defaults_collide_nowhere() -> None:
 def test_every_default_action_has_keys() -> None:
     registry = load_registry()
     assert all(effective_keys(a, {}) for a in registry.actions.values())
+
+
+def test_table_context_serves_row_keys() -> None:
+    registry = load_registry()
+    assert registry.active_set('table') == {'table', 'workspace', 'global'}
+    expected = {
+        'table.prev_row': ('arrowup',),
+        'table.next_row': ('arrowdown',),
+        'table.extend_prev': ('shift+arrowup',),
+        'table.extend_next': ('shift+arrowdown',),
+        'table.select_toggle': ('space',),
+        'table.open_review': ('enter',),
+    }
+    for action_id, keys in expected.items():
+        assert registry.actions[action_id].default == keys, action_id
