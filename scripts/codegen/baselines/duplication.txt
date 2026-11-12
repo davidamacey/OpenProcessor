@@ -20,7 +20,6 @@ scripts/curation/prune_exports.py <-> scripts/curation/prune_training_runs.py	27
 scripts/datasets/fetch_face_proxy.py <-> scripts/datasets/fetch_vehicle_proxy.py	17	baseline at introduction; extract a shared helper to shrink
 scripts/research/cluster_diag/class_prior_run.py <-> scripts/research/cluster_diag/y_run.py	16	baseline at introduction; extract a shared helper to shrink
 scripts/research/gpu_pipeline/pr0_stage_split.py <-> scripts/research/gpu_pipeline/pr2_resize_ops.py	15	baseline at introduction; extract a shared helper to shrink
-src/clients/opensearch/indexes.py <-> src/clients/opensearch/indexes.py	31	baseline at introduction; extract a shared helper to shrink
 src/routers/clusters.py <-> src/routers/clusters.py	30	baseline at introduction; extract a shared helper to shrink
 src/routers/curation/search.py <-> src/routers/curation/search.py	39	baseline at introduction; extract a shared helper to shrink
 src/routers/curation/search.py <-> src/routers/curation/search_image.py	13	baseline at introduction; extract a shared helper to shrink
