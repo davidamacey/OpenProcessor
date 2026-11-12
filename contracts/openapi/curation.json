@@ -35356,6 +35356,14 @@
             "description": "Set when the default sort's field has no coverage and sort_applied is its fallback.",
             "title": "Sort Fallback Reason"
           },
+          "sort_options": {
+            "description": "The sorts this queue can be read in, as `{id, label}`; any id is a valid `sort`. A sort whose field no item carries is not listed.",
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -35367,6 +35375,7 @@
           "limit",
           "items",
           "sort_applied",
+          "sort_options",
           "sort_fallback_reason",
           "empty_reason",
           "hidden"

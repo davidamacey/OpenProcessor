@@ -115,6 +115,18 @@ describe('WorkspaceController', () => {
     expect(c.itemBody().review_tab).toBe('to_label');
   });
 
+  it('another queue starts in its own order: the Review sort is dropped, a Detections sort stays', () => {
+    visit(
+      '?view=review&queue=to_label&sort_review=atypicality&sort_detections=class_name%3Aasc',
+    );
+    const c = make();
+    c.setQueue('check_machine');
+    const params = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(params.get('queue')).toBe('check_machine');
+    expect(params.has('sort_review')).toBe(false);
+    expect(params.get('sort_detections')).toBe('class_name:asc');
+  });
+
   it('cluster scope adds the cluster to the filter', () => {
     const id = '0c6f5a0e-1111-4222-8333-444455556666';
     const c = make();

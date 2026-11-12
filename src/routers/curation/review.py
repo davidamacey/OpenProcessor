@@ -35,7 +35,7 @@ from src.routers.curation._review_params import (
 )
 from src.routers.curation._review_tab_models import ReviewTabsResponse
 from src.schemas.curation.config_common import ApiErrorResponse
-from src.services.curation import review_empty_reason, review_reasons
+from src.services.curation import review_empty_reason, review_reasons, review_sorts
 from src.services.curation.audit import has_pending_sample
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
@@ -187,6 +187,7 @@ async def review_queue(
             'limit': limit,
             'items': [],
             'sort_applied': sort or 'default',
+            'sort_options': [],
             'sort_fallback_reason': None,
             'empty_reason': review_empty_reason.REGION_PROFILE_OFF_REASON,
             # The off profile serves no queue, so nothing is hidden from it.
@@ -194,6 +195,7 @@ async def review_queue(
             'join_truncated': False,
         }
     req = await _request(tab, filters, sort, opensearch)
+    sort_options = await review_sorts.sort_options(tab, opensearch)
     excludes = await vector_source_excludes()
     try:
         body = page_body(
@@ -261,6 +263,7 @@ async def review_queue(
         'limit': limit,
         'items': items,
         'sort_applied': req.sort_applied,
+        'sort_options': sort_options,
         # Set when the default sort's field has 0% coverage and
         # sort_applied is its fallback.
         'sort_fallback_reason': req.sort_fallback_reason,

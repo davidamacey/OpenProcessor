@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.routers.curation._item_models import ItemDoc
-from src.schemas.curation.views import HiddenCounts
+from src.schemas.curation.views import HiddenCounts, SortOption
 
 
 class ReviewItemDoc(ItemDoc):
@@ -30,6 +30,10 @@ class ReviewQueuePage(BaseModel):
     limit: int
     items: list[ReviewItemDoc]
     sort_applied: str
+    sort_options: list[SortOption] = Field(
+        description='The sorts this queue can be read in, as `{id, label}`; any id is a valid '
+        '`sort`. A sort whose field no item carries is not listed.'
+    )
     sort_fallback_reason: str | None = Field(
         description="Set when the default sort's field has no coverage and sort_applied is its fallback."
     )

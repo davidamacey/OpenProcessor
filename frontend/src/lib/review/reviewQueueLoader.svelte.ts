@@ -23,6 +23,7 @@ import { reviewSource, type ReviewSourceQuery } from '$lib/review/reviewSource.s
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
 import type { CropFilter, HiddenCounts } from '$lib/types';
+import type { SortOption } from '$lib/types_cursor';
 import type { ReviewItem } from '$lib/types_review';
 import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
@@ -69,6 +70,8 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
   // What the queue hides (test holdout, ignored items), as the last page served it.
   let hidden = $state<HiddenCounts | null>(null);
   let sortApplied = $state<string | null>(null);
+  // The orders the source serves (`sort_options`): a queue's registry sorts, or the crop sorts.
+  let sortOptions = $state<SortOption[]>([]);
 
   // One fetchPage closure means the queue + filter set can't drift between page 1 and the pages
   // the cursor pulls in behind it.
@@ -77,6 +80,7 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       const res = await source.page(cursor, REVIEW_PAGE_SIZE);
       sortFallbackReason = res.sort_fallback_reason ?? null;
       sortApplied = res.sort_applied ?? null;
+      sortOptions = res.sort_options ?? [];
       emptyReason = res.empty_reason ?? null;
       hidden = res.hidden ?? null;
       return res;
@@ -225,6 +229,9 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     },
     get sortApplied() {
       return sortApplied;
+    },
+    get sortOptions() {
+      return sortOptions;
     },
     maybePrefetch,
     get semanticSearchAvailable() {

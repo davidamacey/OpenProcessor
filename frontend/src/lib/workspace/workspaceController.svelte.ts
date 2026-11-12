@@ -154,8 +154,9 @@ export class WorkspaceController {
     this.#write({ view }, false);
   }
 
+  /** Another queue opens in its own order: the Review sort belongs to the queue it was picked in. */
   setQueue(id: string | null): void {
-    this.#write({ queue: id }, false);
+    this.#write({ queue: id, sort: { review: '' } }, false);
   }
 
   setScope(scope: ScopeRef | null): void {

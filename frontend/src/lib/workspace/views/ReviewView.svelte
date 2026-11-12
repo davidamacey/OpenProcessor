@@ -78,6 +78,7 @@
 
 <div class="flex h-full flex-col" data-testid="review-view">
   <ReviewHeader
+    {ws}
     {tabs}
     {loader}
     liveNewCount={live.liveNewCount}

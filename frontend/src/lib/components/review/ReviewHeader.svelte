@@ -5,13 +5,16 @@
 <script lang="ts">
   import HiddenItemsNote from '$lib/components/itemFilter/HiddenItemsNote.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
+  import SortSelect from '$lib/components/workspace/SortSelect.svelte';
   import { kg } from '$lib/review/reviewKeys';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
   import { rejectKeyGlyph } from '$lib/review/slotKeymap';
   import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
+  import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
 
   interface Props {
+    ws: WorkspaceController;
     tabs: ReviewTabsController;
     loader: ReviewQueueLoader;
     liveNewCount: number;
@@ -22,6 +25,7 @@
   }
 
   let {
+    ws,
     tabs,
     loader,
     liveNewCount,
@@ -52,6 +56,15 @@
     · {queue.total} total
   </span>
   <HiddenItemsNote hidden={loader.hidden} />
+  {#if loader.sortOptions.length > 0}
+    <SortSelect
+      testid="review-sort"
+      options={loader.sortOptions}
+      applied={loader.sortApplied ?? ''}
+      fallbackReason={loader.sortFallbackReason}
+      onchange={(id) => ws.setSort(tabs.queue ? 'review' : 'detections', id)}
+    />
+  {/if}
   <span class="grow"></span>
   <span class="hidden text-[11px] text-zinc-500 lg:inline">
     {#if isMultiBoxSlot && activeSlot}

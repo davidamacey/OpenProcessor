@@ -241,3 +241,44 @@ def test_import_id_narrows_a_queue_and_the_counts(monkeypatch: pytest.MonkeyPatc
     assert _ids(client.get(f'{BASE}/review/check_machine', params={'import_id': 'imp1'})) == ['a']
     counts = {t['id']: t['count'] for t in _tabs(client, import_id='imp1')}
     assert counts['check_machine'] == 1
+
+
+def _options(client: TestClient, queue: str, **params: Any) -> list[str]:
+    response = client.get(f'{BASE}/review/{queue}', params=params)
+    assert response.status_code == 200, response.text
+    return [o['id'] for o in response.json()['sort_options']]
+
+
+def test_a_queue_serves_the_sorts_it_can_be_read_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The served options are the selectable registry sorts (outlier-first included), never the
+    sentinel or a sort that only belongs to another queue, and the queue's own default is one."""
+
+    async def covered(_opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
+        return dict.fromkeys(fields, 5)
+
+    monkeypatch.setattr('src.services.curation.field_coverage.field_coverage', covered)
+    client = _client({'a': _machine('a')}, monkeypatch)
+    to_label = _options(client, 'to_label')
+    assert 'default' not in to_label
+    assert {'recent', 'atypicality', 'representativeness'} <= set(to_label)
+    assert review_sorts.default_sort_for_tab('to_label') in to_label
+    assert 'region_score' not in to_label
+    assert review_sorts.AUDIT_SAMPLE_ORDER not in to_label
+    assert review_sorts.AUDIT_SAMPLE_ORDER in _options(client, 'audit')
+    assert 'disagreement_entropy_asc' in _options(client, 'disagreements')
+    shown = client.get(f'{BASE}/review/to_label').json()['sort_options']
+    assert all(set(o) == {'id', 'label'} and o['label'] for o in shown)
+
+
+def test_a_sort_whose_field_no_item_carries_is_not_offered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def coverage(_opensearch: Any, fields: frozenset[str]) -> dict[str, int | None]:
+        return {f: (0 if f == 'cluster_score' else 5) for f in fields}
+
+    monkeypatch.setattr('src.services.curation.field_coverage.field_coverage', coverage)
+    client = _client({'a': _machine('a')}, monkeypatch)
+    offered = _options(client, 'to_label')
+    assert 'atypicality' not in offered
+    assert 'representativeness' not in offered
+    assert 'recent' in offered

@@ -175,8 +175,16 @@ def test_the_rail_lists_the_served_queues_with_their_counts(stub, page, app_url)
     assert rail.locator('[data-testid^="queue-"]').count() == 2
 
 
+SORT_OPTIONS = [
+    {'id': 'detector_confidence:desc', 'label': 'Detector confidence (high first)'},
+    {'id': 'recent', 'label': 'Recently updated'},
+    {'id': 'atypicality', 'label': 'Atypicality (outlier-first)'},
+]
+
+
 def _queue(items: list[dict], **over) -> dict:
     return {
+        'sort_options': SORT_OPTIONS,
         'items': items,
         'total': len(items),
         'next_cursor': None,
@@ -295,3 +303,38 @@ def test_enter_on_a_table_row_opens_review_at_that_row_and_esc_returns_to_the_ta
     page.keyboard.press('Escape')
     expect(page.get_by_test_id('data-table-row').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert 'view=table' in page.url, page.url
+
+
+def test_the_review_sort_is_the_served_one_and_belongs_to_its_queue(stub, page, app_url):
+    from urllib.parse import parse_qs, urlparse
+
+    serve(stub)
+    seen: list[dict] = []
+
+    def queue(request, _match):
+        q = {k: v[0] for k, v in parse_qs(urlparse(request.url).query).items()}
+        seen.append(q)
+        applied = q.get('sort', 'detector_confidence:desc')
+        return (200, _queue([item(0), item(1)], sort_applied=applied))
+
+    stub.on('GET', r'/review/to_label(\?|$)', queue)
+    stub.on('GET', r'/review/check_machine(\?|$)', queue)
+
+    page.goto(review_url(app_url, 'to_label'))
+    select = page.get_by_test_id('review-sort')
+    expect(select).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert [o.inner_text() for o in select.locator('option').all()] == [
+        o['label'] for o in SORT_OPTIONS
+    ]
+    assert select.input_value() == 'detector_confidence:desc'
+
+    select.select_option('atypicality')
+    expect(select).to_have_value('atypicality', timeout=ACTION_TIMEOUT_MS)
+    assert seen[-1]['sort'] == 'atypicality', seen
+    assert 'sort_review=atypicality' in page.url, page.url
+
+    page.get_by_test_id('queue-check_machine').click()
+    expect(page.get_by_test_id('review-sort')).to_have_value(
+        'detector_confidence:desc', timeout=ACTION_TIMEOUT_MS
+    )
+    assert 'sort_review' not in page.url, page.url

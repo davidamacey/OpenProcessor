@@ -33,6 +33,7 @@ from src.services.curation.crop_browse import CROP_SORT_LABELS, parse_crop_sort
 
 
 if TYPE_CHECKING:
+    from src.schemas.curation.views import SortOption
     from src.services.curation.strategy_flags import StrategyStatus
 
 
@@ -458,6 +459,46 @@ async def _first_covered(
     )
 
 
+_NOT_OFFERED: frozenset[str] = frozenset(
+    {'default', 'detector_disagreement_default', 'primary_low_conf_default'}
+    | {'classifier_blind_spots_default'}
+)
+"""The sentinel and the legacy per-tab defaults: they name a queue's own order, not a choice."""
+
+_ONLY_IN: dict[str, frozenset[str]] = {
+    'region_score': frozenset({'regions'}),
+    'disagreement_entropy_asc': frozenset({'disagreements'}),
+    AUDIT_SAMPLE_ORDER: frozenset({'audit'}),
+}
+"""Sorts that only make sense in one queue."""
+
+
+async def sort_options(tab: str, opensearch: Any) -> list[SortOption]:
+    """The sorts ``GET /review/{tab}`` can be read in, as ``{id, label}`` in registry order.
+
+    Selectable entries only (``shadow``/``disabled`` ones would be a 400), minus the sentinel and
+    the sorts of another queue, and minus a sort whose field no item carries (confirmed zero
+    coverage orders nothing); the queue's own default always stays. Unknown coverage counts as
+    covered, like :func:`_first_covered`."""
+    from src.services.curation.field_coverage import field_coverage
+
+    default = _TAB_DEFAULTS.get(tab)
+    offered = [
+        rs
+        for rs in get_review_sorts().values()
+        if rs.status in ('stable', 'experimental')
+        and rs.id not in _NOT_OFFERED
+        and tab in _ONLY_IN.get(rs.id, frozenset({tab}))
+    ]
+    fields = frozenset(rs.requires_field for rs in offered if rs.requires_field)
+    coverage = await field_coverage(opensearch, fields) if fields else {}
+    return [
+        {'id': rs.id, 'label': rs.label}
+        for rs in offered
+        if rs.id == default or rs.requires_field is None or coverage.get(rs.requires_field) != 0
+    ]
+
+
 def default_sort_for_tab(tab: str) -> str:
     """The default sort id for the queue ``tab``. Raises :class:`ValueError`
     for a tab this registry doesn't know about (should never happen in
@@ -535,4 +576,5 @@ __all__ = [
     'build_sort',
     'default_sort_for_tab',
     'get_review_sorts',
+    'sort_options',
 ]

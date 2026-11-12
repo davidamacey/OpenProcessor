@@ -33,6 +33,17 @@ filter the server advertises (for example a region-status filter on the region
 queue) shows beside it. An empty queue shows the served reason and a direct
 link to the step that fills it.
 
+## Sort
+
+The **Sort** menu in the Review header lists the orders the server offers for
+the open queue, with the one it applied selected (outlier-first, representativeness,
+uncertainty, mistakenness and uniqueness appear once the project has the data
+they need). Each queue opens in its own default order, and a sort chosen in one
+queue does not carry to another. If the server applied a different order than
+the one asked for, it says why beside the menu. The score and blur thresholds
+and "hide near-duplicates" are filters the queue serves; they appear beside the
+filter row when the queue has them.
+
 <Screenshot name="cropwright/review-1600.png" alt="The Review view on a queue" caption="Review: one item at a time, keyboard-first" />
 
 ## From the grid and back
