@@ -22,6 +22,7 @@ from .conftest import (
     crop_ids_in,
     get_doc,
     refresh,
+    request_when_free,
     run_near_duplicates,
     search,
     wait_job,
@@ -202,7 +203,15 @@ def test_merge_success_relabels_items(
 
     # The merge is a queued job (docs/design/curation_api_contract.md, class merge): 202 with the
     # job, then the relabel lands when the worker finishes it.
-    resp = api_client.post('/classes/merge', json={'source_id': source_id, 'target_id': target_id})
+    # A rename earlier in this module queues a projection sync in the merge's exclusivity group
+    # (class_registry_write); the merge is answered 409 job_busy until that served job ends.
+    resp = request_when_free(
+        lambda: api_client.post(
+            '/classes/merge', json={'source_id': source_id, 'target_id': target_id}
+        ),
+        busy='job_busy',
+        on_active=lambda job_id: wait_job(api_client, job_id),
+    )
     assert resp.status_code == 202, resp.text
     body = resp.json()
     assert body['kind'] == 'class_merge'
