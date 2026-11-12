@@ -69224,29 +69224,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
             "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
             "in": "query",
             "name": "cluster_uid",
@@ -69285,138 +69262,6 @@
               ],
               "description": "Optional review-tab cohort id, as /search/text.",
               "title": "Tab"
-            }
-          },
-          {
-            "description": "ISO date/datetime lower bound on created_at.",
-            "in": "query",
-            "name": "date_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime lower bound on created_at.",
-              "title": "Date From"
-            }
-          },
-          {
-            "description": "ISO date/datetime upper bound on created_at.",
-            "in": "query",
-            "name": "date_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime upper bound on created_at.",
-              "title": "Date To"
-            }
-          },
-          {
-            "in": "query",
-            "name": "min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "hide_near_duplicates",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Hide Near Duplicates",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Drop hits below this cosine-similarity score.",
-            "in": "query",
-            "name": "min_score",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Drop hits below this cosine-similarity score.",
-              "title": "Min Score"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Test",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-            "in": "query",
-            "name": "space",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-              "title": "Space"
-            }
-          },
-          {
-            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-            "in": "query",
-            "name": "fuse",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-              "title": "Fuse"
             }
           },
           {
@@ -69870,6 +69715,161 @@
               ],
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ISO date/datetime lower bound on created_at.",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime lower bound on created_at.",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "ISO date/datetime upper bound on created_at.",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime upper bound on created_at.",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Drop hits below this cosine-similarity score.",
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Drop hits below this cosine-similarity score.",
+              "title": "Min Score"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
             }
           }
         ],
@@ -70006,29 +70006,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
             "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
             "in": "query",
             "name": "cluster_uid",
@@ -70070,89 +70047,6 @@
             }
           },
           {
-            "description": "ISO date/datetime lower bound on created_at.",
-            "in": "query",
-            "name": "date_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime lower bound on created_at.",
-              "title": "Date From"
-            }
-          },
-          {
-            "description": "ISO date/datetime upper bound on created_at.",
-            "in": "query",
-            "name": "date_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime upper bound on created_at.",
-              "title": "Date To"
-            }
-          },
-          {
-            "in": "query",
-            "name": "min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "hide_near_duplicates",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Hide Near Duplicates",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Drop hits below this cosine-similarity score.",
-            "in": "query",
-            "name": "min_score",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Drop hits below this cosine-similarity score.",
-              "title": "Min Score"
-            }
-          },
-          {
             "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
             "in": "query",
             "name": "target",
@@ -70161,55 +70055,6 @@
               "$ref": "#/components/schemas/SearchTarget",
               "default": "item",
               "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Test",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-            "in": "query",
-            "name": "space",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-              "title": "Space"
-            }
-          },
-          {
-            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-            "in": "query",
-            "name": "fuse",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-              "title": "Fuse"
             }
           },
           {
@@ -70663,6 +70508,161 @@
               ],
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ISO date/datetime lower bound on created_at.",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime lower bound on created_at.",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "ISO date/datetime upper bound on created_at.",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime upper bound on created_at.",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Drop hits below this cosine-similarity score.",
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Drop hits below this cosine-similarity score.",
+              "title": "Min Score"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
             }
           }
         ],
@@ -70741,29 +70741,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 30,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
             "description": "Members of these clusters of the served partition, repeatable (OR; at most 200).",
             "in": "query",
             "name": "cluster_uid",
@@ -70805,89 +70782,6 @@
             }
           },
           {
-            "description": "ISO date/datetime lower bound on created_at.",
-            "in": "query",
-            "name": "date_from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime lower bound on created_at.",
-              "title": "Date From"
-            }
-          },
-          {
-            "description": "ISO date/datetime upper bound on created_at.",
-            "in": "query",
-            "name": "date_to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "ISO date/datetime upper bound on created_at.",
-              "title": "Date To"
-            }
-          },
-          {
-            "in": "query",
-            "name": "min_blur_ratio",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Min Blur Ratio"
-            }
-          },
-          {
-            "in": "query",
-            "name": "hide_near_duplicates",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Hide Near Duplicates",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "Drop hits below this cosine-similarity score.",
-            "in": "query",
-            "name": "min_score",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "maximum": 1.0,
-                  "minimum": 0.0,
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Drop hits below this cosine-similarity score.",
-              "title": "Min Score"
-            }
-          },
-          {
             "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`.",
             "in": "query",
             "name": "target",
@@ -70896,55 +70790,6 @@
               "$ref": "#/components/schemas/SearchTarget",
               "default": "item",
               "description": "`item` ranks the crop vectors; `box` ranks the per-box vectors and returns the parent item with `matched_box_id`."
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_test",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Test",
-              "type": "boolean"
-            }
-          },
-          {
-            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-            "in": "query",
-            "name": "space",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
-              "title": "Space"
-            }
-          },
-          {
-            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-            "in": "query",
-            "name": "fuse",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
-              "title": "Fuse"
             }
           },
           {
@@ -71398,6 +71243,161 @@
               ],
               "description": "Only items on these images, repeatable (at most 200); the map opens the list on the images of one cell this way.",
               "title": "Image Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ISO date/datetime lower bound on created_at.",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime lower bound on created_at.",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "ISO date/datetime upper bound on created_at.",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO date/datetime upper bound on created_at.",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_blur_ratio",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Blur Ratio"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_near_duplicates",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Near Duplicates",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Drop hits below this cosine-similarity score.",
+            "in": "query",
+            "name": "min_score",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Drop hits below this cosine-similarity score.",
+              "title": "Min Score"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_test",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Test",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+            "in": "query",
+            "name": "space",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The space to search (a live space key of the target); default the target's primary. Echoed in the response as `space`.",
+              "title": "Space"
+            }
+          },
+          {
+            "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+            "in": "query",
+            "name": "fuse",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "More live space keys to search; the per-space rankings are merged by reciprocal rank fusion. Each item keeps the cosine `semantic_score` of the first space that found it and names it in `score_space`.",
+              "title": "Fuse"
             }
           }
         ],
