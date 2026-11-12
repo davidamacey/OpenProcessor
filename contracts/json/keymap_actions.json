@@ -381,10 +381,10 @@
       "default": [
         "escape"
       ],
-      "description": "Step back one level: selection, then scope, then the details panel.",
+      "description": "Step back one level: Review to its grid, the selection, the scope, then the details panel.",
       "group": "cancel",
       "id": "workspace.escape",
-      "label": "Clear selection / leave scope / close panel",
+      "label": "Back to the grid / clear selection / leave scope / close panel",
       "modifiable": false
     },
     {
@@ -666,16 +666,17 @@
     },
     {
       "class_hotkeys_live": true,
-      "description": "Scan mode on any /review tab.",
+      "description": "Scan mode in the Review view, with the Workspace keys.",
       "id": "review",
       "includes": [
-        "global"
+        "global",
+        "workspace"
       ],
-      "label": "Review (every tab)"
+      "label": "Review"
     },
     {
       "class_hotkeys_live": true,
-      "description": "The core /review tabs.",
+      "description": "A plain Review queue.",
       "id": "review.queue",
       "includes": [
         "review"
@@ -684,7 +685,7 @@
     },
     {
       "class_hotkeys_live": true,
-      "description": "The region tab, scan mode.",
+      "description": "The region queue, scan mode.",
       "id": "review.region",
       "includes": [
         "review"
