@@ -235,8 +235,15 @@ export class CommandStack {
     return this.#undone.at(-1)?.label ?? null;
   }
 
-  run(cmd: EditorCommand): Promise<void> {
+  /**
+   * Runs `command`; a function is called when its turn comes, so it reads the image the commands
+   * ahead of it have left (a held arrow key queues moves before the first answer is back), and
+   * may return null to run nothing.
+   */
+  run(command: EditorCommand | (() => EditorCommand | null)): Promise<void> {
     return this.#enqueue(async () => {
+      const cmd = typeof command === 'function' ? command() : command;
+      if (!cmd) return;
       const r = await cmd.apply();
       if (r.ok) {
         this.#done = [...this.#done, cmd];
