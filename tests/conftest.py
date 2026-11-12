@@ -132,6 +132,20 @@ def _reachability_valkey(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def image_counts_dirty(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
+    """The dirty set of images whose stored counts need a recount is a Valkey set; the Docker-free
+    suite has no Valkey, so an item write marks into this shared in-memory one (returned, so a
+    test reads what was marked)."""
+    from fixtures.fake_valkey import FakeValkeySets
+
+    data: dict[str, set[str]] = {}
+    monkeypatch.setattr(
+        'src.clients.image_counts_dirty.valkey_client', lambda: FakeValkeySets(data)
+    )
+    return data
+
+
+@pytest.fixture(autouse=True)
 def _projects_data_root(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

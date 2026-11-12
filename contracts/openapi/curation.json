@@ -7453,6 +7453,7 @@
               "name_conflict",
               "invalid_transition",
               "cursor_invalid",
+              "image_counts_not_ready",
               "unknown_column",
               "export_outside_project",
               "empty_val_split",
@@ -13680,6 +13681,24 @@
           "in_holdout"
         ],
         "title": "ImageCounts",
+        "type": "object"
+      },
+      "ImageCountsBackfillStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "ImageCountsBackfillStarted",
         "type": "object"
       },
       "ImageDetail": {
@@ -54560,6 +54579,50 @@
         ]
       }
     },
+    "/curation/projects/{project}/image_counts/backfill": {
+      "post": {
+        "description": "Count the items of every stored image (the gallery's served sort and label-state filter).",
+        "operationId": "start_image_counts_backfill_curation_projects__project__image_counts_backfill_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageCountsBackfillStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Image Counts Backfill",
+        "tags": [
+          "Curation",
+          "Images"
+        ]
+      }
+    },
     "/curation/projects/{project}/images": {
       "get": {
         "description": "A page of the project's images. An image matches the item filter when at least one of its\nitems does (`join_truncated`: the join used only the first 10,000 matching images). Each card\ncarries its served counts and the boxes to draw; the page costs one query on the images index\nand one aggregation on the items index.",
@@ -55140,7 +55203,7 @@
             }
           },
           {
-            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
             "in": "query",
             "name": "label_state",
             "required": false,
@@ -55158,12 +55221,12 @@
                   "type": "null"
                 }
               ],
-              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
               "title": "Label State"
             }
           },
           {
-            "description": "One of the `sort_options` ids the response serves.",
+            "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -55176,7 +55239,7 @@
                   "type": "null"
                 }
               ],
-              "description": "One of the `sort_options` ids the response serves.",
+              "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
               "title": "Sort"
             }
           },
@@ -55830,7 +55893,7 @@
             }
           },
           {
-            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
             "in": "query",
             "name": "label_state",
             "required": false,
@@ -55848,12 +55911,12 @@
                   "type": "null"
                 }
               ],
-              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
               "title": "Label State"
             }
           },
           {
-            "description": "One of the `sort_options` ids the response serves.",
+            "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -55866,7 +55929,7 @@
                   "type": "null"
                 }
               ],
-              "description": "One of the `sort_options` ids the response serves.",
+              "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
               "title": "Sort"
             }
           },
@@ -73431,7 +73494,7 @@
             }
           },
           {
-            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+            "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
             "in": "query",
             "name": "label_state",
             "required": false,
@@ -73449,12 +73512,12 @@
                   "type": "null"
                 }
               ],
-              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Resolved by a join on the items.",
+              "description": "has_unlabeled, all_labeled (has items, none unlabeled) or no_items. Read from the stored per-image counts when every image in the list has them and no item filter or `include_test` narrows the items (they trail the items by a few seconds); otherwise resolved by a join on the items.",
               "title": "Label State"
             }
           },
           {
-            "description": "One of the `sort_options` ids the response serves.",
+            "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -73467,7 +73530,7 @@
                   "type": "null"
                 }
               ],
-              "description": "One of the `sort_options` ids the response serves.",
+              "description": "One of the `sort_options` ids the response serves. The unlabelled-count sorts are served once every image in the list has its stored counts; asked earlier they are refused with 422 `image_counts_not_ready`.",
               "title": "Sort"
             }
           },
@@ -73515,7 +73578,7 @@
     },
     "/curation/projects/{project}/table/columns": {
       "get": {
-        "description": "The columns a table of `rows` can show, which ones sort, and the default set.",
+        "description": "The columns a table of `rows` can show, which ones sort, and the default set. The image\ntable's `unlabeled` column sorts once every image has its stored counts.",
         "operationId": "table_columns_curation_projects__project__table_columns_get",
         "parameters": [
           {

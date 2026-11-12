@@ -55,8 +55,20 @@ class _ConflictError(Exception):
     """Stands in for opensearchpy's ConflictError (name contains 'Conflict')."""
 
 
+def _field(doc: dict[str, Any], field: str) -> Any:
+    """``doc[field]``, or the value at a dotted path through nested objects (``counts.unlabeled``)."""
+    if field in doc:
+        return doc[field]
+    value: Any = doc
+    for part in field.split('.'):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
 def _values(doc: dict[str, Any], field: str) -> list[Any]:
-    value = doc.get(field)
+    value = _field(doc, field)
     if value is None:
         return []
     if isinstance(value, list):
@@ -493,13 +505,17 @@ class QueryFakeOpenSearch:
                 # The review rank sort: params.ranks maps a keyword to its rank, 0 when absent.
                 ranks = first['_script']['script']['params']['ranks']
                 pool.sort(key=lambda kv: (ranks.get(kv[1].get('vlm_confidence'), 0), kv[0]))
-            elif sort_field == 'cluster_score' and first[sort_field].get('order') == 'desc':
-                # numeric, highest first, a missing value last
-                def _desc(kv: tuple[str, dict[str, Any]]) -> tuple[bool, float, str]:
-                    value = kv[1].get(sort_field)
-                    return (value is None, 0.0 if value is None else -float(value), kv[0])
+            elif sort_field == 'counts.unlabeled' or (
+                sort_field == 'cluster_score' and first[sort_field].get('order') == 'desc'
+            ):
+                # numeric in the requested order, a missing value last, ties by id
+                sign = -1.0 if first[sort_field].get('order') == 'desc' else 1.0
 
-                pool.sort(key=_desc)
+                def _numeric(kv: tuple[str, dict[str, Any]]) -> tuple[bool, float, str]:
+                    value = _field(kv[1], sort_field)
+                    return (value is None, 0.0 if value is None else sign * float(value), kv[0])
+
+                pool.sort(key=_numeric)
             else:
                 pool.sort(key=lambda kv: str(kv[1].get(sort_field, kv[0])))
             if body.get('search_after') is not None and sort_field != '_script':
@@ -510,7 +526,9 @@ class QueryFakeOpenSearch:
         for doc_id, doc in pool[:size]:
             hit = self._hit(index, doc_id, doc)
             if sort_field is not None:
-                hit['sort'] = [doc.get(sort_field, doc_id)]
+                hit['sort'] = [
+                    _field(doc, sort_field) if _field(doc, sort_field) is not None else doc_id
+                ]
             hits.append(hit)
         resp: dict[str, Any] = {'hits': {'total': {'value': len(pool)}, 'hits': hits}}
         for clause in _nested_clauses_with_inner_hits(body.get('query')):

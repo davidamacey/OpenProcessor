@@ -330,6 +330,7 @@ UNSEEDED_WRITES: dict[tuple[str, str], str] = {
         (
             ('POST', '/near_duplicates/runs'),
             ('POST', '/source_backfill/runs'),
+            ('POST', '/image_counts/backfill'),
             ('POST', '/pipeline/auto_label/start'),
             ('POST', '/pipeline/auto_label/cancel'),
             ('POST', '/pipeline/auto_label/pause'),

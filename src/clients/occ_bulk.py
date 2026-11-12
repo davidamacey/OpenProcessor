@@ -20,6 +20,7 @@ from opensearchpy.exceptions import (
     TransportError,
 )
 
+from src.clients.image_counts_dirty import mark_items_written
 from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -180,14 +181,17 @@ async def occ_bulk_rounds(
                         on_failed(doc_id, docs[doc_id], 'transport')
                 continue
 
-            for (doc_id, _update_doc), item in zip(pending, resp.get('items') or [], strict=True):
+            written: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for (doc_id, update_doc), item in zip(pending, resp.get('items') or [], strict=True):
                 outcome = _item_outcome(doc_id, item)
                 if outcome == 'written':
+                    written.append(((docs[doc_id].get('_source') or {}), update_doc))
                     on_written(doc_id)
                 elif outcome == 'conflict' and not final:
                     next_round.append(doc_id)
                 else:
                     on_failed(doc_id, docs[doc_id], 'error' if outcome == 'error' else 'conflict')
+            await mark_items_written(index, written)
 
         pending_ids = next_round
         if pending_ids:

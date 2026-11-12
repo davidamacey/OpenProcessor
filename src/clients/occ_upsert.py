@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.clients.image_counts_dirty import mark_items_created
 from src.clients.occ_locks import _is_locked_marker, has_human_geometry, is_locked_class
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -220,12 +221,16 @@ async def _create_new_docs(
         body.append({'create': {'_index': index, '_id': doc[id_field]}})
         body.append(doc)
     bulk_resp = await client.bulk(body=body, refresh=refresh)
+    image_of = {d[id_field]: d.get('image_id') for d in create_docs}
+    created_images: list[str] = []
     for item in bulk_resp.get('items', []) or []:
         create_item = item.get('create') or {}
         status = create_item.get('status')
         doc_id = create_item.get('_id')
         if status in (200, 201):
             result['created'] += 1
+            if image_of.get(doc_id):
+                created_images.append(str(image_of[doc_id]))
             if outcomes is not None and doc_id:
                 outcomes[doc_id] = DocOutcome('created')
             if created_ids is not None and doc_id:
@@ -245,6 +250,7 @@ async def _create_new_docs(
             )
             if outcomes is not None and doc_id:
                 outcomes[doc_id] = DocOutcome('error', error=_item_error(create_item))
+    await mark_items_created(index, created_images)
     return create_conflict_ids
 
 

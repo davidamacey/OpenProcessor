@@ -14,7 +14,7 @@ from fastapi import HTTPException, Query
 from src.config.curation_accessors import images_index
 from src.routers.curation._api_error import api_error
 from src.routers.curation._common import OpenSearchDep, is_not_found, router
-from src.routers.curation._image_query_params import ImageViewQuery
+from src.routers.curation._image_query_params import ImageViewQuery, image_query_refusal
 from src.routers.curation._image_view_models import ImageDetail
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.schemas.curation.images import ImageLocate, ImagePage
@@ -56,7 +56,7 @@ async def list_images(
     except CursorError as exc:
         raise api_error(400, 'cursor_invalid', str(exc)) from exc
     except ImageQueryError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise image_query_refusal(exc) from exc
 
 
 @router.get('/images/locate', response_model=ImageLocate, tags=['Images'])
@@ -94,7 +94,7 @@ async def locate_image_in_list(
             source,
         )
     except ImageQueryError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise image_query_refusal(exc) from exc
 
 
 @router.get(

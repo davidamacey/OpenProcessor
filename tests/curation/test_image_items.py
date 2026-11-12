@@ -254,6 +254,26 @@ def test_near_dup_pending_marked_added(world: Any, pending_calls: Any) -> None:
     assert ('item', [crop_id], 'added') in pending_calls.calls
 
 
+def test_a_drawn_item_marks_its_image_for_a_recount(
+    world: Any, image_counts_dirty: dict[str, set[str]]
+) -> None:
+    fake, _ = world
+    _post(_client(fake, FakePE()), _body())
+    assert image_counts_dirty == {'op:image_counts:dirty:default': {'img-1'}}
+
+
+def test_a_repeat_of_the_request_marks_nothing_new(
+    world: Any, image_counts_dirty: dict[str, set[str]]
+) -> None:
+    fake, _ = world
+    client = _client(fake, FakePE())
+    body = _body()
+    _post(client, body)
+    image_counts_dirty.clear()
+    assert _post(client, body).status_code == 200
+    assert image_counts_dirty == {}
+
+
 def test_response_carries_the_image_boxes_and_counts(world: Any) -> None:
     fake, _ = world
     out = _post(_client(fake, FakePE()), _body()).json()

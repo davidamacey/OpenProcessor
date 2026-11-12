@@ -10,7 +10,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Any
 
-from curation.query_fakes import QueryFakeOpenSearch, matches
+from curation.query_fakes import _DOC_ID_KEY, QueryFakeOpenSearch, _aggregate, matches
 
 
 if TYPE_CHECKING:
@@ -78,14 +78,20 @@ class PagingOpenSearch(QueryFakeOpenSearch):
             {'_id': d['crop_id'], '_source': d, 'sort': values(d)}
             for d in pool[start : start + body.get('size', 10)]
         ]
-        return {'hits': {'total': {'value': total}, 'hits': hits}}
+        resp: dict[str, Any] = {'hits': {'total': {'value': total}, 'hits': hits}}
+        if body.get('aggs'):  # a page read that also carries an aggregation over its whole match
+            matched = [d for d in self.docs(index).items() if matches(d[1], body.get('query'))]
+            resp['aggregations'] = _aggregate(
+                [{**doc, _DOC_ID_KEY: doc_id} for doc_id, doc in matched], body['aggs']
+            )
+        return resp
 
 
 class AggregatingPagingOpenSearch(PagingOpenSearch):
-    """Total ordering for page reads; aggregation reads (the item join) go to the base fake."""
+    """Total ordering for page reads; aggregation-only reads (the item join) go to the base fake."""
 
     async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
-        if 'aggs' in body or 'aggregations' in body:
+        if ('aggs' in body or 'aggregations' in body) and body.get('size') == 0:
             return await QueryFakeOpenSearch.search(self, index=index, body=body, **kw)
         return await super().search(index=index, body=body, **kw)
 
