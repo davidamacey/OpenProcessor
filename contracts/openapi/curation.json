@@ -5197,13 +5197,26 @@
             "title": "Classes",
             "type": "array"
           },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
           "thresholds": {
             "$ref": "#/components/schemas/ClassStatsThresholds"
           }
         },
         "required": [
           "classes",
-          "thresholds"
+          "thresholds",
+          "sort_applied",
+          "sort_options"
         ],
         "title": "ClassStatsResponse",
         "type": "object"
@@ -5239,6 +5252,16 @@
             "title": "Count",
             "type": "integer"
           },
+          "test_count": {
+            "description": "Frozen test-holdout crops of the class.",
+            "title": "Test Count",
+            "type": "integer"
+          },
+          "test_deficient": {
+            "description": "test_count is below the per-class test minimum.",
+            "title": "Test Deficient",
+            "type": "boolean"
+          },
           "trainable": {
             "description": "Validated minus holdout minus human-excluded crops.",
             "title": "Trainable",
@@ -5263,7 +5286,9 @@
           "trainable_gap",
           "adequacy",
           "aug_target",
-          "aug_gap"
+          "aug_gap",
+          "test_count",
+          "test_deficient"
         ],
         "title": "ClassStatsRow",
         "type": "object"
@@ -40225,6 +40250,18 @@
       },
       "TrainingCohort": {
         "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows the cohort holds for the requested `class_id`, counted by the same query that serves its rows; null when no class was asked for.",
+            "title": "Count"
+          },
           "cutoffs": {
             "additionalProperties": {
               "type": "number"
@@ -72024,6 +72061,89 @@
         ]
       }
     },
+    "/curation/projects/{project}/select/diverse/{job_id}/items": {
+      "get": {
+        "description": "One page of the items a finished diverse selection picked, in pick order.\n\nSame wire items as ``GET /crops``; ``total`` is the number picked. 404 for a job that is not\nthis project's selection, 409 while it has not completed.",
+        "operationId": "select_diverse_items_curation_projects__project__select_diverse__job_id__items_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's `next_cursor`; omit it for the first page. A cursor belongs to the sort that served it and is refused (400 `cursor_invalid`) under another.",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CropsPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Diverse Items",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/select/status": {
       "get": {
         "description": "Poll a queued ``POST /curation/select/diverse`` job. ``result`` is populated once\n``status == 'completed'`` with the same ``{crop_ids, method, version, n_pool}`` shape the\nsync path returns directly.",
@@ -72352,6 +72472,24 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. A bare field takes its default direction. Default `class_id:asc`. An unknown field or direction is a 400.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. A bare field takes its default direction. Default `class_id:asc`. An unknown field or direction is a 400.",
+              "title": "Sort"
             }
           },
           {
@@ -75298,7 +75436,7 @@
     },
     "/curation/projects/{project}/training_cohorts": {
       "get": {
-        "description": "``{cohorts: [{id, label, description, cutoffs, endpoint, params,\nrow_kind}]}`` — fetch a cohort's rows with ``GET {prefix}{endpoint}``\nand ``params``. Region cohorts appear only with a region profile.",
+        "description": "``{cohorts: [{id, label, description, cutoffs, endpoint, params,\nrow_kind, count}]}`` — fetch a cohort's rows with ``GET {prefix}{endpoint}``\nand ``params``. ``count`` is the cohort's size for ``class_id`` (null without one).\nRegion cohorts appear only with a region profile.",
         "operationId": "training_cohorts_curation_projects__project__training_cohorts_get",
         "parameters": [
           {
@@ -75311,7 +75449,7 @@
             }
           },
           {
-            "description": "Fold into every cohort query.",
+            "description": "Fold into every cohort query and count each cohort for this class.",
             "in": "query",
             "name": "class_id",
             "required": false,
@@ -75324,7 +75462,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Fold into every cohort query.",
+              "description": "Fold into every cohort query and count each cohort for this class.",
               "title": "Class Id"
             }
           }

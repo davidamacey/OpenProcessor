@@ -84,20 +84,27 @@ export interface DiverseSelection {
   n_pool: number;
 }
 
+/** A finished background selection as `GET {API_PREFIX}/select/status` serves it: the counts
+ *  only. The picked items come a page at a time from
+ *  `GET {API_PREFIX}/select/diverse/{job_id}/items`. */
+export interface DiverseJobResult {
+  method: string;
+  version: string;
+  n_pool: number;
+  n_selected: number;
+}
+
 /** Background-job state for a large-pool diverse selection (202 path),
- *  polled via `GET {API_PREFIX}/select/status`. CONFIRMED against the real backend
- *  (`selection/job.py`'s `_JobState`, 2026-09-12): `status` is one of
+ *  polled via `GET {API_PREFIX}/select/status`. `status` is one of
  *  `'idle' | 'running' | 'completed' | 'failed' | 'cancelled'`, and the
- *  finished selection is nested under `result` (the same
- *  `{crop_ids, method, version, n_pool}` shape the sync 200 path returns
- *  directly) — NOT flattened onto the job status object. `status` values
+ *  finished selection's counts are nested under `result`. `status` values
  *  this build doesn't recognize are carried through as-is rather than
  *  normalized — callers should treat anything other than `'running'` as
  *  "stop polling." */
 export interface SelectJobStatus {
   job_id?: string | null;
   status: string;
-  result?: DiverseSelection | null;
+  result?: DiverseJobResult | null;
   error?: string | null;
 }
 

@@ -12,7 +12,6 @@ from fastapi import FastAPI
 # One entry per distinct OpenSearch document (single search per page, or a
 # ranked distinct-id list hydrated by mget), so ``crop_id`` is unique.
 ONE_ENTRY_PER_DOC = {
-    '/audit/queue',
     '/classes/{class_id}/crops',
     '/clusters/{cluster_uid}',  # representatives: one hit per member document
     '/crops',
@@ -20,6 +19,7 @@ ONE_ENTRY_PER_DOC = {
     '/images/{image_id}',
     '/review/{tab}',
     '/search/similar',
+    '/select/diverse/{job_id}/items',  # a stored list of distinct ids, hydrated by mget
     '/search/text',
     '/table',  # detection rows: one per item document; image rows: one per image
     '/viz/projection',

@@ -3,6 +3,7 @@
  * region profile and the stats summary.
  */
 import type { ClassThresholds } from '$lib/types_classes';
+import type { SortOption } from '$lib/types_cursor';
 
 export interface StatsSummary {
   /** Set when `/stats/dataset` failed; the totals below are then zeros,
@@ -35,6 +36,10 @@ export interface StatsSummary {
    *  `ClassesResponse.thresholds`. Absent only when `/stats/classes`
    *  itself failed to load. */
   thresholds?: ClassThresholds;
+  /** The order `per_class` came back in (`<field>:<asc|desc>`); null when `/stats/classes` failed. */
+  sort_applied: string | null;
+  /** The orders `/stats/classes` accepts, as served. */
+  sort_options: SortOption[];
 }
 
 /** `GET {globalApi()}/health` (P1 projects cutover) — unscoped, has no

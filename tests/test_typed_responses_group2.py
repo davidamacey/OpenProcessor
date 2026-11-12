@@ -87,8 +87,12 @@ def test_class_stats_keeps_raw_aggregations() -> None:
                 'adequacy': 'ok',
                 'aug_target': 5,
                 'aug_gap': 4,
+                'test_count': 3,
+                'test_deficient': True,
             }
         ],
+        'sort_applied': 'class_id:asc',
+        'sort_options': [{'id': 'class_id:asc', 'label': 'ID (asc)'}],
         'thresholds': {
             'block_below': 1,
             'warn_below': 2,

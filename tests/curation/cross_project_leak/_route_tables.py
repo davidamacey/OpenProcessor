@@ -81,6 +81,7 @@ PG_ROW_IDS: dict[tuple[str, str], dict[str, str]] = {
     ('GET', '/ingest/sources/{source_id}'): {'source_id': 'source_id'},
     ('GET', '/pipeline/auto_label/status/{job_id}'): {'job_id': 'autolabel_job_id'},
     ('GET', '/reprocess/jobs/{job_id}'): {'job_id': 'reprocess_job_id'},
+    ('GET', '/select/diverse/{job_id}/items'): {'job_id': 'selection_job_id'},
     ('GET', '/train/artifacts/{job_id}/{name}'): {'job_id': 'train_job_id'},
     ('GET', '/train/log/tail/{job_id}'): {'job_id': 'train_job_id'},
     ('GET', '/train/manifest/{job_id}'): {'job_id': 'train_job_id'},

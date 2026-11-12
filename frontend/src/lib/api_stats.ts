@@ -5,6 +5,7 @@ import { apiFetch, globalApi, qs, scoped } from '$lib/api';
 import { apiErrorText } from '$lib/api_errors';
 import type { ClassThresholds } from '$lib/types_classes';
 import type { ApiHealth, GlobalHealth, StatsSummary } from '$lib/types_health';
+import type { SortOption } from '$lib/types_cursor';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
 // -- endpoints -----------------------------------------------------------
@@ -129,7 +130,10 @@ export async function getMatchingItemCount(
   return typeof raw.total_crops === 'number' ? raw.total_crops : null;
 }
 
-export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
+export async function getStats(
+  options: { sort?: string; signal?: AbortSignal } = {},
+): Promise<StatsSummary> {
+  const { sort, signal } = options;
   // The API returns
   //   {API_PREFIX}/stats/dataset:  {total_crops, validated, test_holdout, by_source}
   //   {API_PREFIX}/stats/classes:  {classes:[{class_id, class_name, count, validated_count}, ...]}
@@ -145,6 +149,8 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   type RawClasses = {
     classes: StatsSummary['per_class'];
     thresholds?: ClassThresholds;
+    sort_applied?: string;
+    sort_options?: SortOption[];
   };
   // allSettled, not Promise.all: /stats/dataset can 503 (G1 — the live
   // op_items region_status mapping isn't aggregatable) while
@@ -153,7 +159,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
   // falls back to an empty RawDataset rather than sinking both calls.
   const [dsResult, clsResult] = await Promise.allSettled([
     apiFetch<RawDataset>(`${scoped()}/stats/dataset`, {}, signal),
-    apiFetch<RawClasses>(`${scoped()}/stats/classes`, {}, signal),
+    apiFetch<RawClasses>(`${scoped()}/stats/classes${qs({ sort })}`, {}, signal),
   ]);
   const ds: RawDataset = dsResult.status === 'fulfilled' ? dsResult.value : {};
   const cls: RawClasses =
@@ -176,5 +182,7 @@ export async function getStats(signal?: AbortSignal): Promise<StatsSummary> {
       trainable_gap: c.trainable_gap,
     })),
     thresholds: cls.thresholds,
+    sort_applied: cls.sort_applied ?? null,
+    sort_options: cls.sort_options ?? [],
   };
 }

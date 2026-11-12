@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.schemas.curation.views import SortOption
 from src.services.curation.stats_embedding import EmbeddingBreakdown
 
 
@@ -111,6 +112,8 @@ class ClassStatsRow(BaseModel):
     adequacy: Literal['block', 'warn', 'ok']
     aug_target: int
     aug_gap: int
+    test_count: int = Field(description='Frozen test-holdout crops of the class.')
+    test_deficient: bool = Field(description='test_count is below the per-class test minimum.')
 
 
 class ClassStatsThresholds(BaseModel):
@@ -132,3 +135,5 @@ class ClassStatsResponse(BaseModel):
 
     classes: list[ClassStatsRow]
     thresholds: ClassStatsThresholds
+    sort_applied: str
+    sort_options: list[SortOption]

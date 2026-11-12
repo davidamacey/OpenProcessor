@@ -40,6 +40,8 @@ export interface ServedTrainingCohort {
   /** Already resolved for the requested class — no `{classId}` templates. */
   params: Record<string, unknown>;
   row_kind: 'crop' | 'region';
+  /** Rows the cohort holds for the requested class, counted by the server. */
+  count: number | null;
 }
 
 export function getTrainingCohorts(
