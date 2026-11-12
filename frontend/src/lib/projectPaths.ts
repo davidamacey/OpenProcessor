@@ -17,6 +17,7 @@ const PROJECT_SECTIONS = [
   'ingest',
   'datasets',
   'workspace',
+  'images',
   'review',
   'classes',
   'export',

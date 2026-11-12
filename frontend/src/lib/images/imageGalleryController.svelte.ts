@@ -7,15 +7,15 @@ import { listImages } from '$lib/api_images';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
 import type { ImageCardWire } from '$lib/types_images';
-import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
+import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import type { HiddenCounts } from '$lib/types';
 import type { SortOption } from '$lib/types_cursor';
-import { imageListQuery, imageSelectionFilter } from './imageQuery';
+import type { WorkspaceSelection } from '$lib/workspace/selection';
+import { imageListQuery } from './imageQuery';
 
 /** What the controller reads from the Workspace: the one place filter, queue and scope combine. */
 export interface ImageGalleryDeps {
   itemQuery(): ItemFilterQuery;
-  itemBody(): ItemFilter;
   /** The gallery's sort id from the URL; null = the server's default. */
   sortId(): string | null;
 }
@@ -113,8 +113,15 @@ export function createImageGalleryController(deps: ImageGalleryDeps) {
       );
     },
     clearSelection: () => selection.clear(),
-    /** The bulk-action filter for the selected images. */
-    selectionFilter: () => imageSelectionFilter(deps.itemBody(), [...selection.ids]),
+    /** The selection as the Workspace holds it; `ws.itemSelection()` adds the filter. */
+    get workspaceSelection(): WorkspaceSelection {
+      return selection.size > 0
+        ? { kind: 'images', imageIds: [...selection.ids] }
+        : { kind: 'none' };
+    },
+    replaceSelection(imageIds: string[]) {
+      selection.selectAll(imageIds);
+    },
     loadFirst: () => pager.loadFirst(),
     loadMore: () => pager.loadMore(),
   };

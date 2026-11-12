@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/api_images', () => ({ listImages: vi.fn() }));
 import { listImages } from '$lib/api_images';
 import { imageCard, imagePage } from '$lib/test/fixtures/imagePage';
+import { toItemSelection } from '$lib/workspace/selection';
 import { createImageGalleryController } from './imageGalleryController.svelte';
 
 const mocked = vi.mocked(listImages);
@@ -10,7 +11,6 @@ const mocked = vi.mocked(listImages);
 function make(sort: string | null = null) {
   return createImageGalleryController({
     itemQuery: () => ({ class_name: ['car'] }),
-    itemBody: () => ({ class_names: ['car'] }),
     sortId: () => sort,
   });
 }
@@ -67,7 +67,9 @@ describe('createImageGalleryController', () => {
     await g.loadFirst();
     g.select('a', undefined);
     g.select('b', { ctrlKey: true } as MouseEvent);
-    expect(g.selectionFilter()).toEqual({ class_names: ['car'], image_ids: ['a', 'b'] });
+    expect(toItemSelection(g.workspaceSelection, { class_names: ['car'] })).toEqual({
+      filter: { class_names: ['car'], image_ids: ['a', 'b'] },
+    });
   });
 
   it('sends the unlabelled chip as label_state and the served sort', async () => {
