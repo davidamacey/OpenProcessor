@@ -80,12 +80,22 @@
             onerror={thumbFailed}
           />
         {/key}
+      </span>
+    </button>
+    <!-- Over the button, not in it: text inside the button would have to be part of its name. The
+         box labels are a drawing on the picture (the chips below count what the image holds). -->
+    <div
+      class="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden rounded-t"
+    >
+      <span class="relative block" style={picture}>
         {#if missing}
           <SourceMissingBadge {missing} compact />
         {/if}
-        <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+        <span class="contents" aria-hidden="true">
+          <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+        </span>
       </span>
-    </button>
+    </div>
     {#if selected}
       <span
         class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-xs text-white"
