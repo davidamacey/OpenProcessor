@@ -23,6 +23,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, get_args
+from urllib.parse import urlsplit
 
 from src.config.env import env_choice, env_float, env_int, env_optional_str, env_path, env_str
 from src.core.logging import get_logger
@@ -285,6 +286,12 @@ def _env_request_params() -> dict[str, Any]:
     return out
 
 
+def _provider_for_host(url: str) -> Provider:
+    """The provider an unset ``OP_VLM_PROVIDER`` means: Anthropic's own host needs the
+    ``anthropic-version`` header and takes no ``json_object`` or ``temperature``."""
+    return 'anthropic' if urlsplit(url).hostname == 'api.anthropic.com' else 'vllm'
+
+
 def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
     """The read-only ``env`` endpoint, or ``None`` when ``OP_VLM_URL`` is
     empty (then no VLM exists unless a stored one is activated).
@@ -310,7 +317,7 @@ def env_endpoint(probe_doc: dict[str, Any] | None = None) -> VlmEndpoint | None:
         open_images_per_call=env_int('OP_VLM_OPEN_IMAGES_PER_CALL', 3, minimum=1),
         timeout_s=240.0,
         requests_per_second=500.0,
-        provider=env_choice('OP_VLM_PROVIDER', get_args(Provider), 'vllm'),
+        provider=env_choice('OP_VLM_PROVIDER', get_args(Provider), _provider_for_host(url)),
         allow_external=True,
         catalog_id=None,
         **_env_request_params(),
