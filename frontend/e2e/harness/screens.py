@@ -15,10 +15,10 @@ SCREENS = Path(__file__).resolve().parents[3] / 'artifacts_local' / 'screens'
 WIDTHS = (('desktop', 1280), ('430', 430))
 
 
-def save_screens(page: Any, folder: str, name: str) -> None:
+def save_screens(page: Any, folder: str, name: str, *, desktop: int = 1280) -> None:
     out = SCREENS / folder
     out.mkdir(parents=True, exist_ok=True)
-    for label, width in WIDTHS:
+    for label, width in (('desktop', desktop), WIDTHS[1]):
         page.set_viewport_size({'width': width, 'height': 1000})
         page.screenshot(path=str(out / f'{name}-{label}.png'), full_page=True)
     page.set_viewport_size({'width': 1280, 'height': 720})

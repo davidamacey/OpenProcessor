@@ -5,7 +5,7 @@ import VlmQuickAction from './VlmQuickAction.svelte';
 let instance: ReturnType<typeof mount> | null = null;
 let target: HTMLDivElement | null = null;
 
-async function render(active: unknown) {
+async function render(active: unknown, props: Record<string, unknown> = {}) {
   vi.stubGlobal(
     'fetch',
     vi.fn(
@@ -18,7 +18,7 @@ async function render(active: unknown) {
   );
   target = document.createElement('div');
   document.body.appendChild(target);
-  instance = mount(VlmQuickAction, { target, props: {} });
+  instance = mount(VlmQuickAction, { target, props });
   await new Promise((r) => setTimeout(r, 20));
   flushSync();
   return target;
@@ -45,5 +45,21 @@ describe('VlmQuickAction', () => {
     expect(link?.getAttribute('href')).toMatch(/\/workspace$/);
     expect(t.querySelector('button')).toBeNull();
     expect(t.querySelector('[data-testid="vlm-activate-first"]')).toBeNull();
+  });
+
+  it('is a secondary link when the served next step is not its own', async () => {
+    const t = await render(
+      { source: 'saved', active: { name: 'x', revision: 1 } },
+      { primary: false },
+    );
+    expect(t.querySelector('.btn-primary')).toBeNull();
+    expect(t.querySelector('a')?.textContent).toContain('Workspace AI menu');
+  });
+
+  it('with no VLM the prompt is a hint with a link, not a button', async () => {
+    const t = await render({ source: 'off', active: { name: null, revision: null } });
+    const hint = t.querySelector('[data-testid="vlm-activate-first"]')!;
+    expect(hint.classList.contains('btn')).toBe(false);
+    expect(hint.querySelector('a')?.getAttribute('href')).toMatch(/\/settings\/models$/);
   });
 });

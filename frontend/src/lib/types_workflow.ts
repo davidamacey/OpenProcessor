@@ -14,7 +14,8 @@ export type WorkflowStepId =
   | 'near_dups'
   | 'export'
   | 'train'
-  | 'review_disagreements';
+  | 'review_disagreements'
+  | 'audit';
 
 export interface WorkflowStep {
   id: WorkflowStepId;

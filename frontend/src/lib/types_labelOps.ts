@@ -96,3 +96,17 @@ export interface LabelOpUndoResponse {
 
 /** Operations per `GET /label_ops` page (within the served `limit` range, pinned by the contract test). */
 export const LABEL_OPS_PAGE_SIZE = 20;
+
+/** `AdoptDetectorResponse`: `POST /label_ops/adopt_detector`, a dry run or the queued write.
+ *  The counts are by detector name. `op_id` and `job_id` are null when no item was left. */
+export interface AdoptDetectorResponse {
+  dry_run: boolean;
+  items: number;
+  classes_to_create: string[];
+  blocked: string[];
+  blocked_items: number;
+  /** Items beyond this operation (one writes at most 20,000): adopt again. */
+  remaining: number;
+  op_id: string | null;
+  job_id: string | null;
+}

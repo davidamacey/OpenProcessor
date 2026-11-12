@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$components/ui/Button.svelte';
   import Icon from '$components/ui/Icon.svelte';
   /**
    * The served loop: every step in the order the backend gives, the first
@@ -13,8 +14,17 @@
     steps,
     next,
     slug,
-  }: { steps: readonly WorkflowStep[]; next: WorkflowStep | null; slug: string } =
-    $props();
+    onaction,
+  }: {
+    steps: readonly WorkflowStep[];
+    next: WorkflowStep | null;
+    slug: string;
+    /** A step's served `action` (a write instead of a page): the page opens its dialog. */
+    onaction?: (step: WorkflowStep) => void;
+  } = $props();
+
+  /** The button's words: the step's served label (`Create classes from the detector`). */
+  const actionLabel = (step: WorkflowStep): string => step.label;
 
   function path(step: WorkflowStep): ProjectSubPath {
     return `/${step.section}${step.query ? `?${step.query}` : ''}` as ProjectSubPath;
@@ -45,6 +55,14 @@
           >{step.label}</a
         >
         <span class="text-fg-2">{step.detail}</span>
+        {#if step.action && !step.done && onaction}
+          <Button
+            size="sm"
+            variant={next?.id === step.id ? 'primary' : 'secondary'}
+            onclick={() => onaction(step)}
+            data-testid="next-step-action">{actionLabel(step)}</Button
+          >
+        {/if}
       </li>
     {/each}
   </ol>

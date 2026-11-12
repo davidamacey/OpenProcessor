@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import type { WorkflowStep } from '$lib/types_workflow';
 import NextStepsCard from './NextStepsCard.svelte';
@@ -88,5 +88,27 @@ describe('NextStepsCard', () => {
     expect(
       root.querySelector('[data-testid="next-step-current"]')!.textContent,
     ).toContain('Create classes');
+  });
+
+  it('a served action is a button on the step that offers it, and nowhere else', () => {
+    const onaction = vi.fn();
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    const withAction = STEPS.map((s) =>
+      s.id === 'classes' ? { ...s, action: 'adopt_detector_classes' as const } : s,
+    );
+    instance = mount(NextStepsCard, {
+      target,
+      props: { steps: withAction, next: withAction[1], slug: 'demo', onaction },
+    } as never);
+    flushSync();
+    const buttons = target.querySelectorAll('button');
+    expect(buttons.length).toBe(1);
+    expect(buttons[0]!.closest('[data-step-id]')!.getAttribute('data-step-id')).toBe(
+      'classes',
+    );
+    expect(buttons[0]!.classList.contains('btn-primary')).toBe(true);
+    buttons[0]!.click();
+    expect(onaction).toHaveBeenCalledWith(withAction[1]);
   });
 });

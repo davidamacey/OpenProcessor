@@ -5,6 +5,7 @@
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import type {
+  AdoptDetectorResponse,
   LabelOpAccepted,
   LabelOpList,
   LabelOpUndoResponse,
@@ -46,6 +47,20 @@ export function queueLabelOpUndo(
   return apiFetch<LabelOpAccepted>(
     `${scoped()}/label_ops/${encodeURIComponent(opId)}/undo`,
     { method: 'POST', body: JSON.stringify({ dry_run: false }) },
+    signal,
+  );
+}
+
+/** `POST /label_ops/adopt_detector`: gives the items that have only a detector class that
+ *  class as a machine label, creating the registry classes it needs. `dryRun` counts and
+ *  writes nothing; a real run answers `op_id` and `job_id` (undo it by `op_id`). */
+export function adoptDetector(
+  dryRun: boolean,
+  signal?: AbortSignal,
+): Promise<AdoptDetectorResponse> {
+  return apiFetch<AdoptDetectorResponse>(
+    `${scoped()}/label_ops/adopt_detector`,
+    { method: 'POST', body: JSON.stringify({ dry_run: dryRun }) },
     signal,
   );
 }

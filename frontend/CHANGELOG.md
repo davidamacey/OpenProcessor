@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Dashboard: a next step that offers an action (`WorkflowStep.action`, adopt detector classes) shows a button; it opens the adopt dialog (the served dry run, then Confirm, then the items left over and a link to the Label history to undo). The primary button is the one the served next step names; a failed Detections read is an ErrorState with the request id and Retry.
 - Design system: tokens in `app.css` `@theme` (surfaces 0-3 and the nav surface, lines, text, elevation e1-e3, accent and semantic colours, box tones, radii, a 11-28 px type scale, focus ring), and a UI kit in `$components/ui/` (PageShell, PageHeader, Card, Section, Tabs, SidebarNav, Segmented, Button, Chip, Badge, Kbd, EmptyState, ErrorState with the request id and Retry, Skeleton, Drawer, Popover, Menu, Icon).
 - Icons are Lucide SVGs (`@lucide/svelte`); no emoji or Unicode glyph is used as an icon. A scan test fails on emoji, glyph icons, `text-[Npx]` and raw palette colour classes.
 - The top bar is 48 px on the nav surface with a shadow and blur, grouped Dashboard | Data | Model | Quality | Settings, with a drawer below 768 px; the breadcrumb names the group and page instead of repeating the nav; a 404 inside a project keeps the bar.
