@@ -4,8 +4,10 @@
 -->
 <script lang="ts">
   import HiddenItemsNote from '$lib/components/itemFilter/HiddenItemsNote.svelte';
+  import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SortSelect from '$lib/components/workspace/SortSelect.svelte';
+  import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import { kg } from '$lib/review/reviewKeys';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
   import { rejectKeyGlyph } from '$lib/review/slotKeymap';
@@ -37,6 +39,27 @@
 
   const queue = $derived(loader.queue);
   const activeSlot = $derived(tabs.activeSlot);
+
+  // The search runs over the Workspace query: its filter, the open queue (as `tab`; the region
+  // queue is no `review_tab` filter value) and the queue's own filters.
+  const searchFilter = $derived.by(() => {
+    const { review_tab: _tab, ...rest } = ws.itemQuery(withoutOpenVocab) as Record<
+      string,
+      unknown
+    >;
+    return {
+      ...rest,
+      ...tabs.queueFilterValues,
+      ...(tabs.queue ? { tab: tabs.queue } : {}),
+    };
+  });
+  let typed = '';
+  function syncSearchUrl(q: string): void {
+    ws.patchUrl((params) => {
+      if (q) params.set('q', q);
+      else params.delete('q');
+    });
+  }
 </script>
 
 <div
@@ -56,7 +79,7 @@
     · {queue.total} total
   </span>
   <HiddenItemsNote hidden={loader.hidden} />
-  {#if loader.sortOptions.length > 0}
+  {#if loader.sortOptions.length > 0 && !loader.searchActive}
     <SortSelect
       testid="review-sort"
       options={loader.sortOptions}
@@ -64,6 +87,28 @@
       fallbackReason={loader.sortFallbackReason}
       onchange={(id) => ws.setSort(tabs.queue ? 'review' : 'detections', id)}
     />
+  {/if}
+  {#if loader.semanticSearchAvailable}
+    <!-- Re-mounted when the queue, filter or sort changes, so the typed query runs again under it. -->
+    {#key loader.sourceKey}
+      <SemanticSearchBox
+        pageSize={200}
+        filter={searchFilter}
+        initialQuery={ws.url.q}
+        onQueryChange={(q) => {
+          typed = q;
+          if (!q) syncSearchUrl('');
+        }}
+        onResults={(res) => {
+          loader.applySearchResults(res);
+          syncSearchUrl(typed);
+        }}
+        onClear={() => {
+          loader.clearSearch();
+          syncSearchUrl('');
+        }}
+      />
+    {/key}
   {/if}
   <span class="grow"></span>
   <span class="hidden text-[11px] text-zinc-500 lg:inline">

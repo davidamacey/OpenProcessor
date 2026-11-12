@@ -338,3 +338,64 @@ def test_the_review_sort_is_the_served_one_and_belongs_to_its_queue(stub, page, 
         'detector_confidence:desc', timeout=ACTION_TIMEOUT_MS
     )
     assert 'sort_review' not in page.url, page.url
+
+
+def test_text_search_in_review_uses_the_workspace_query_and_swaps_the_queue(stub, page, app_url):
+    from urllib.parse import parse_qs, urlparse
+
+    serve(stub)
+    stub.on(
+        'GET',
+        r'/methods(\?|$)',
+        {
+            'strategies': [
+                {'id': 'semantic_search', 'axis': 'overlay', 'label': 'S', 'status': 'stable'}
+            ],
+            'flags': {},
+        },
+    )
+    seen: list[dict] = []
+
+    def queue(_request, _match):
+        return (200, _queue([item(0), item(1), item(2)], sort_applied='detector_confidence:desc'))
+
+    def text_search(request, _match):
+        seen.append(dict(parse_qs(urlparse(request.url).query)))
+        hit = {**item(7), 'semantic_score': 0.88}
+        return {
+            'items': [hit],
+            'total': 1,
+            'page': 1,
+            'page_size': 200,
+            'unembedded_in_scope': 0,
+            'space': None,
+            'fuse': [],
+        }
+
+    stub.on('GET', r'/review/to_label(\?|$)', queue)
+    stub.on('GET', r'/search/text(\?|$)', text_search)
+
+    page.goto(review_url(app_url, 'to_label', class_name='ducati', import_id='imp_1'))
+    expect(page.get_by_test_id('queue-counter').first).to_contain_text(
+        '3 total', timeout=ACTION_TIMEOUT_MS
+    )
+    box = page.get_by_placeholder('Search, e.g. "blurry closeup"')
+    expect(box).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    box.fill('red widget')
+    box.press('Enter')
+
+    expect(page.get_by_test_id('queue-counter').first).to_contain_text(
+        '1 total', timeout=ACTION_TIMEOUT_MS
+    )
+    q = seen[-1]
+    assert q['q'] == ['red widget'] and q['tab'] == ['to_label'], q
+    assert q['class_name'] == ['ducati'] and q['import_id'] == ['imp_1'], q
+    assert 'review_tab' not in q, q
+    expect(page.get_by_text('match', exact=False).first).to_be_visible()
+    assert 'q=red+widget' in page.url or 'q=red%20widget' in page.url, page.url
+
+    page.get_by_title('Clear search').click()
+    expect(page.get_by_test_id('queue-counter').first).to_contain_text(
+        '3 total', timeout=ACTION_TIMEOUT_MS
+    )
+    assert 'q=' not in page.url, page.url

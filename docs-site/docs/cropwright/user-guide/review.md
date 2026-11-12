@@ -63,6 +63,14 @@ any time). `D` discards (reversible, not through `Z`), `N` skips, `Z` undoes,
 and the arrow keys move between items. [Keyboard
 shortcuts](./keyboard-shortcuts.md) has the table.
 
+## Search
+
+When semantic search is enabled, the Review header has the same search box as
+the Clusters view. A text query runs over the Workspace's query: the filter, the
+open queue and the queue's own filters. Its results replace the queue (one ranked
+page, each with its match score in the item's Scores row), the query is kept in
+the address (`q`), and clearing the box returns to the queue.
+
 ## More like this
 
 A **More like this** link under the item's details (shown when semantic search

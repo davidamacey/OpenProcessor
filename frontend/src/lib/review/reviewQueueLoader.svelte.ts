@@ -23,6 +23,7 @@ import { reviewSource, type ReviewSourceQuery } from '$lib/review/reviewSource.s
 import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
 import { isSemanticSearchAvailable } from '$lib/strategies';
 import type { CropFilter, HiddenCounts } from '$lib/types';
+import type { SemanticSearchResult } from '$lib/searchBox.svelte';
 import type { SortOption } from '$lib/types_cursor';
 import type { ReviewItem } from '$lib/types_review';
 import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -93,11 +94,38 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     accept: (i) => !handledIds.has(i.id),
   });
 
+  // Text search over the same query: its results replace the queue (one ranked page, no paging),
+  // with each result's match score for the badge. Clearing it loads the queue again.
+  let searchActive = $state(false);
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale on every search, never mutated in place
+  let searchScores = $state(new Map<string, number>());
+
+  function applySearchResults(res: SemanticSearchResult): void {
+    searchActive = true;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale on every search, never mutated in place
+    searchScores = new Map(res.items.map((it) => [it.id, it.similarity_score]));
+    cursor = 0;
+    handledIds.clear();
+    queue.items = res.items.map((it) => {
+      const { similarity_score: _score, ...rest } = it;
+      return { ...rest, reason: '' };
+    });
+    queue.total = res.total;
+  }
+
+  function clearSearch(): void {
+    if (!searchActive) return;
+    searchActive = false;
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- replaced wholesale on every search, never mutated in place
+    searchScores = new Map();
+    void queue.loadFirst();
+  }
+
   // Eagerly prefetch the next page when the cursor is within this many items of the end of the
   // loaded buffer, so confirming the last loaded item never shows "no more" for a frame.
   const PREFETCH_AHEAD = 5;
   function maybePrefetch(): void {
-    if (queue.loadingMore || !queue.hasMore) return;
+    if (searchActive || queue.loadingMore || !queue.hasMore) return;
     if (queue.items.length - cursor <= PREFETCH_AHEAD) {
       void loadMore();
     }
@@ -186,7 +214,10 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     if (tabs.queue && !reviewTabsVocabularyStore.loaded) return;
     if (key === lastKey) return;
     lastKey = key;
-    untrack(() => void loadFirst());
+    untrack(() => {
+      searchActive = false;
+      void loadFirst();
+    });
   });
 
   const current = $derived<ReviewItem | null>(queue.items[cursor] ?? null);
@@ -234,6 +265,18 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       return sortOptions;
     },
     maybePrefetch,
+    applySearchResults,
+    clearSearch,
+    get searchActive() {
+      return searchActive;
+    },
+    get searchScores() {
+      return searchScores;
+    },
+    /** The key a changed queue, filter or sort makes new: a search re-runs under it. */
+    get sourceKey() {
+      return sourceKey;
+    },
     get semanticSearchAvailable() {
       return semanticSearchAvailable;
     },

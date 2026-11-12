@@ -269,6 +269,7 @@
       {activeSlot}
       {isMultiBoxSlot}
       opinion={actions.opinion}
+      searchScores={loader.searchScores}
       acceptModelClass={actions.acceptModelClass}
     />
 
