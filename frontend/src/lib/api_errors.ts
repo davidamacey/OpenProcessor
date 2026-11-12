@@ -88,19 +88,34 @@ function errorDetail(body: unknown): string | null {
     : text;
 }
 
+function bodyRequestId(body: unknown): string | null {
+  const id = (body as { request_id?: unknown } | null)?.request_id;
+  return typeof id === 'string' && id ? id : null;
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;
   url: string;
   /** The server's `detail`/`message` string, when it sent one. */
   detail: string | null;
-  constructor(status: number, url: string, body: unknown, message?: string) {
+  /** The API's request id (the `X-Request-ID` header, else the body's `request_id`), for
+   *  tracing a failure in the server log. */
+  requestId: string | null;
+  constructor(
+    status: number,
+    url: string,
+    body: unknown,
+    message?: string,
+    requestId?: string | null,
+  ) {
     const detail = errorDetail(body);
     super(message ?? `API ${status} ${url}${detail ? ` — ${detail}` : ''}`);
     this.status = status;
     this.body = body;
     this.url = url;
     this.detail = detail;
+    this.requestId = requestId || bodyRequestId(body);
   }
 }
 

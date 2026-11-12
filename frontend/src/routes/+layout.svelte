@@ -57,7 +57,7 @@
   {@render children?.()}
   {#if updated.current}
     <div
-      class="fixed right-3 bottom-3 z-50 flex items-center gap-3 rounded border border-line-strong bg-surface-1 px-3 py-2 text-sm text-fg-1"
+      class="fixed right-3 bottom-3 z-80 flex items-center gap-3 rounded border border-line-strong bg-surface-1 px-3 py-2 text-sm text-fg-1"
       role="status"
       data-testid="new-version-banner"
     >

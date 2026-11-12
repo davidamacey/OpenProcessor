@@ -16,7 +16,7 @@
 </script>
 
 <div
-  class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[360px] max-w-[95vw] flex-col gap-2"
+  class="pointer-events-none fixed right-4 bottom-4 z-80 flex w-[360px] max-w-[95vw] flex-col gap-2"
   aria-live="polite"
   aria-atomic="true"
 >

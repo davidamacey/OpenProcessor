@@ -18,10 +18,12 @@
     /** The dialog's accessible name. */
     label: string;
     onclose?: () => void;
-    /** Where the panel sits: centered, or near the top (pickers). */
-    align?: 'center' | 'top';
-    /** Stacking layer; a dialog opened over another dialog or the nav uses `top`. */
-    layer?: 'base' | 'top';
+    /** Where the panel sits: centered, near the top (pickers), or flush to the left or right
+     *  edge (a drawer; `ui/Drawer.svelte`). */
+    align?: 'center' | 'top' | 'start' | 'end';
+    /** Stacking layer: `drawer` (50), a modal (70), or `top` (75) for a dialog opened over
+     *  another dialog. The nav is 40, popovers 60, toasts 80. */
+    layer?: 'drawer' | 'base' | 'top';
     /** The scrim colour; lightboxes use a darker one. */
     scrim?: string;
     /** The panel's box. Defaults to the standard medium form dialog. */
@@ -37,13 +39,22 @@
     });
   }
 
+  const LAYER = { drawer: 'z-50', base: 'z-70', top: 'z-[75]' } as const;
+  const ALIGN = {
+    center: 'items-center',
+    top: 'items-start pt-24',
+    start: 'justify-start',
+    end: 'justify-end',
+  } as const;
+  const EDGE = { center: false, top: false, start: true, end: true } as const;
+
   let {
     label,
     onclose,
     align = 'center',
     layer = 'base',
     scrim = 'bg-black/60',
-    panelClass = 'w-full max-w-md rounded-lg border border-line bg-surface-0 p-5 shadow-2xl',
+    panelClass = 'w-full max-w-md rounded-modal border border-line bg-surface-3 p-5 shadow-e3',
     children,
     ...rest
   }: Props = $props();
@@ -51,9 +62,9 @@
 
 <div
   {...rest}
-  class="fixed inset-0 flex justify-center p-4 {layer === 'top'
-    ? 'z-50'
-    : 'z-40'} {align === 'top' ? 'items-start pt-24' : 'items-center'}"
+  class="fixed inset-0 flex {EDGE[align] ? '' : 'justify-center p-4'} {LAYER[
+    layer
+  ]} {ALIGN[align]}"
   role="dialog"
   aria-modal="true"
   aria-label={label}

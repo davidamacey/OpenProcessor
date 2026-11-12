@@ -149,7 +149,7 @@
 
   {#if open}
     <div
-      class="absolute left-0 top-full z-50 mt-1 w-72 max-w-[calc(100vw-1rem)] rounded border border-line-strong bg-surface-1 shadow-xl"
+      class="absolute left-0 top-full z-60 mt-1 w-72 max-w-[calc(100vw-1rem)] rounded border border-line-strong bg-surface-1 shadow-xl"
       role="presentation"
       data-testid="project-switcher-menu"
       onkeydown={onKeydown}

@@ -3,7 +3,8 @@
  * recognizable (so the operator sees the valid ids) and any
  * `{detail: {error}}` body must still yield readable text.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { apiFetch } from '$lib/api';
 import { unknownStrategyDetail } from '$lib/api_autoLabel';
 import { invalidClassNameDetail } from '$lib/api_classes';
 import { ApiError, formatValidationEntry } from '$lib/api_errors';
@@ -147,5 +148,32 @@ describe('invalid class name 422', () => {
   it('ignores other errors', () => {
     expect(invalidClassNameDetail(new ApiError(409, '/x', body({})))).toBeNull();
     expect(invalidClassNameDetail(new Error('x'))).toBeNull();
+  });
+});
+
+describe('the request id on an ApiError', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is the one passed in, else the body request_id, else null', () => {
+    expect(new ApiError(500, '/x', {}, undefined, 'hdr-1').requestId).toBe('hdr-1');
+    expect(new ApiError(500, '/x', { request_id: 'body-1' }).requestId).toBe('body-1');
+    expect(new ApiError(500, '/x', { detail: 'boom' }).requestId).toBeNull();
+  });
+
+  it('is read from the X-Request-ID response header of a failed call', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: 'bad' }), {
+            status: 422,
+            headers: { 'x-request-id': 'req-42' },
+          }),
+      ),
+    );
+    await expect(apiFetch('/x')).rejects.toMatchObject({
+      status: 422,
+      requestId: 'req-42',
+    });
   });
 });
