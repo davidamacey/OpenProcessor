@@ -32,7 +32,7 @@ describe('TopNav', () => {
   it('groups the nav: Dashboard, Data and Model menus, Quality, Settings', () => {
     const nav = primary(render('/p/default/dashboard'));
     const links = [...nav.querySelectorAll('a')].map((a) => a.textContent!.trim());
-    expect(links).toEqual(['Dashboard', 'Quality', 'Settings']);
+    expect(links).toEqual(['Dashboard', 'Data quality', 'Settings']);
     const menus = [...nav.querySelectorAll('button[aria-haspopup]')].map((b) =>
       b.textContent!.trim(),
     );
@@ -58,7 +58,7 @@ describe('TopNav', () => {
   it('marks the current page: its link, or the group and item of a menu page', () => {
     const quality = primary(render('/p/default/quality/audit'));
     expect(quality.querySelector('a[aria-current="page"]')!.textContent).toContain(
-      'Quality',
+      'Data quality',
     );
 
     const ws = primary(render('/p/default/workspace'));
@@ -100,7 +100,7 @@ describe('TopNav', () => {
       'Models',
       'Train',
       'Bake-off',
-      'Quality',
+      'Data quality',
       'Settings',
     ]);
     expect(drawer.querySelector('a[aria-current="page"]')!.textContent).toContain(

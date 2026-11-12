@@ -341,7 +341,33 @@ export function createKeymapCardController() {
 
   const hasChanges = $derived(changedActionIds().length > 0);
 
+  /** The table search: rows (and groups) whose words contain every typed term stay. */
+  let filter = $state('');
+  function matches(...texts: string[]): boolean {
+    const hay = texts.join(' ').toLowerCase();
+    return filter
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
+      .every((t) => hay.includes(t));
+  }
+
+  /** Drops the unsaved draft and shows what is stored. */
+  function discardChanges(): void {
+    cancelCapture();
+    seedDraft();
+    report = null;
+  }
+
   return {
+    get filter() {
+      return filter;
+    },
+    set filter(v: string) {
+      filter = v;
+    },
+    matches,
+    discardChanges,
     get validating() {
       return validating;
     },

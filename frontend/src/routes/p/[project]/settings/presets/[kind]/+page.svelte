@@ -56,7 +56,7 @@
   const axisLabel = (axis: string | null): string => list?.active.axisLabel(axis) ?? '';
 </script>
 
-<div class="mx-auto flex w-full max-w-6xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   {#if !kind || !list || !flow}
     <p class="text-sm text-fg-2" data-testid="preset-unknown-kind">
       There is no such kind of preset.
@@ -67,7 +67,7 @@
     >
   {:else}
     <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="text-2xl font-semibold tracking-tight">{kind.title}</h1>
+      <h1 class="text-h1 font-semibold text-fg-1">{kind.title}</h1>
       <span
         class="rounded border border-line-strong px-1.5 text-caption text-fg-2"
         data-testid="preset-scope"

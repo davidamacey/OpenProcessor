@@ -217,12 +217,8 @@ def serve_kind(stub: Any, slug: str, coll: str, kind: str, scope: str, state: di
 
         def serving_active(_r: Any, _m: Any):
             a = state['active'].get('serving')
-            if a is None:
-                return (
-                    404,
-                    {'detail': {'error': 'not_found', 'message': 'no serving profile is active'}},
-                )
-            return (200, a)
+            # Served as 200 {active: null} when nothing is active (the contract; ux-a).
+            return (200, {'active': a})
 
         stub.on('GET', rf'/{coll}/active$', serving_active)
     else:
@@ -438,7 +434,9 @@ def test_cluster_profile_activation_is_per_axis_and_a_stale_ref_is_a_served_409(
 def test_serving_profile_activation_sends_the_setting_revision(stub, page, app_url):
     slug, coll, kind, scope = KINDS[0]
     state: dict[str, Any] = {}
-    serve_kind(stub, slug, coll, kind, scope, state)  # nothing active: the active read is a 404
+    serve_kind(
+        stub, slug, coll, kind, scope, state
+    )  # nothing active: the active read is 200 {active: null}
     posts: list[Any] = []
 
     def activate(request: Any, _m: Any):

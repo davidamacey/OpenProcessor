@@ -92,7 +92,7 @@
 
   {#if crumbs.length}
     <nav
-      class="hidden shrink-0 items-center gap-1 text-control whitespace-nowrap sm:flex"
+      class="hidden shrink-0 items-center gap-1 text-control whitespace-nowrap lg:flex"
       aria-label="Breadcrumb"
       data-testid="breadcrumb"
     >

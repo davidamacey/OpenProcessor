@@ -265,8 +265,10 @@ def test_absent_when_open_vocab_404(stub, page, app_url):
 
     with page.expect_response(lambda r: '/open_vocab' in r.url and r.status == 404):
         page.goto(f'{app_url}/p/default/settings')
-    expect(page.get_by_role('heading', name='Deployment defaults')).to_be_visible()
-    expect(page.get_by_test_id('open-vocab-card')).to_have_count(0)
+    expect(page.get_by_role('heading', name='General')).to_be_visible()
+    expect(
+        page.get_by_test_id('sidebar-nav').get_by_role('link', name='Open vocabulary')
+    ).to_have_count(0)
 
     page.goto(f'{app_url}/p/default/settings/open-vocab')
     expect(page.get_by_test_id('open-vocab-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -307,8 +309,9 @@ def test_list_new_set_and_clone_a_template(stub, page, app_url):
     stub.on('GET', r'/open_vocab/mine/revisions$', {'name': 'mine', 'revisions': []})
 
     page.goto(f'{app_url}/p/default/settings')
-    expect(page.get_by_test_id('open-vocab-card')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id('open-vocab-card').get_by_role('link').click()
+    link = page.get_by_test_id('sidebar-nav').get_by_role('link', name='Open vocabulary')
+    expect(link).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    link.click()
     expect(page.get_by_test_id('active-ref')).to_have_text('widgets r3', timeout=ACTION_TIMEOUT_MS)
     row = page.locator('[data-name="widgets"]')
     expect(row.get_by_test_id('open-vocab-active-chip')).to_have_text('active r3')

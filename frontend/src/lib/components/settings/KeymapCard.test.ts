@@ -337,4 +337,46 @@ describe('KeymapCard', () => {
 
     expect(target.querySelector('[data-testid="detached-cluster.discard"]')).toBeNull();
   });
+
+  it('the search keeps only the rows that match every term', () => {
+    instance = mount(KeymapCard, { target });
+    flushSync();
+    const rows = () => target.querySelectorAll('tr').length;
+    const all = rows();
+    const input = target.querySelector<HTMLInputElement>(
+      '[data-testid="keymap-search"]',
+    )!;
+    input.value = 'discard';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(rows()).toBeGreaterThan(0);
+    expect(rows()).toBeLessThan(all);
+    input.value = 'zzzz';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(rows()).toBe(0);
+  });
+
+  it('Discard in the sticky bar drops the unsaved draft and hides itself', async () => {
+    instance = mount(KeymapCard, { target });
+    flushSync();
+    expect(target.querySelector('[data-testid="save-bar"]')!.textContent).toContain(
+      'No changes',
+    );
+    changeButtonForRow('Discard').dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    flushSync();
+    (target.querySelector('[data-capture]') as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'x', bubbles: true, cancelable: true }),
+    );
+    flushSync();
+    const bar = target.querySelector('[data-testid="save-bar"]')!;
+    expect(bar.textContent).toContain('unsaved changes');
+    [...bar.querySelectorAll('button')]
+      .find((b) => b.textContent?.trim() === 'Discard')!
+      .click();
+    flushSync();
+    expect(bar.textContent).toContain('No changes');
+  });
 });

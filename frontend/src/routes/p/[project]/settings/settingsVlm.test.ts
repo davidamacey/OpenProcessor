@@ -126,7 +126,7 @@ async function render(): Promise<void> {
   instance = mount(SettingsPage, { target });
   flushSync();
   await vi.waitFor(() => expect(target.textContent).toContain('Served VLM label'));
-  await vi.waitFor(() => expect(vlmAvailability.available).not.toBeNull());
+  await vlmAvailability.init();
   flushSync();
 }
 
@@ -274,19 +274,5 @@ describe('/settings VLM dropdown', () => {
       'Unknown vlm "gone_vlm" — valid: local_vlm, off.',
     );
     expect(q('settings-save-error')?.querySelector('a')).toBeNull();
-  });
-});
-
-describe('/settings Models card', () => {
-  it('links to Settings → Models when the registry is served', async () => {
-    await render();
-    const card = q('vlm-models-card')!;
-    expect(card.querySelector('a')?.getAttribute('href')).toMatch(/\/settings\/models$/);
-  });
-
-  it('is absent, not disabled, when the registry is not served', async () => {
-    registryServed = false;
-    await render();
-    expect(q('vlm-models-card')).toBeNull();
   });
 });

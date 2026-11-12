@@ -661,8 +661,10 @@ def test_absent_when_region_profiles_404(stub, page, app_url):
 
     with page.expect_response(lambda r: '/region_profiles' in r.url and r.status == 404):
         page.goto(f'{app_url}/p/default/settings')
-    expect(page.get_by_role('heading', name='Deployment defaults')).to_be_visible()
-    expect(page.get_by_test_id('region-profiles-card')).to_have_count(0)
+    expect(page.get_by_role('heading', name='General')).to_be_visible()
+    expect(
+        page.get_by_test_id('sidebar-nav').get_by_role('link', name='Region profiles')
+    ).to_have_count(0)
 
     page.goto(f'{app_url}/p/default/settings/region-profiles')
     expect(page.get_by_test_id('profiles-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
