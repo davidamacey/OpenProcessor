@@ -79,6 +79,7 @@ _STORED_SORTS: Final[dict[str, tuple[str, list[dict[str, Any]]]]] = {
     'unlabeled_count:asc': ('Fewest unlabelled first', [{'counts.unlabeled': {'order': 'asc'}}]),
 }
 STORED_SORT_OPTIONS: Final = [{'id': k, 'label': label} for k, (label, _) in _STORED_SORTS.items()]
+STORED_SORT_IDS: Final = frozenset(_STORED_SORTS)
 _STORED_LABEL_STATE: Final[dict[str, list[dict[str, Any]]]] = {
     'has_unlabeled': [{'range': {'counts.unlabeled': {'gt': 0}}}],
     'all_labeled': [
@@ -148,10 +149,11 @@ def _image_level_clauses(q: ImageQuery, policy: str) -> list[dict[str, Any]]:
     return out
 
 
-async def _counts_ready(opensearch: Any, query: dict[str, Any]) -> bool:
-    """True when every image ``query`` matches carries its stored counts."""
+async def counts_ready(opensearch: Any, query: dict[str, Any] | None = None) -> bool:
+    """True when every image ``query`` (default: all of them) carries its stored counts."""
     resp = await opensearch.count(
-        index=images_index(), body={'query': {'bool': {'filter': [query, _UNCOUNTED]}}}
+        index=images_index(),
+        body={'query': {'bool': {'filter': [query or {'match_all': {}}, _UNCOUNTED]}}},
     )
     return int(resp['count']) == 0
 
@@ -164,7 +166,7 @@ async def _use_stored_label_state(
     and so does a scope that has an uncounted image."""
     if q.view.label_state is None or not f.is_empty() or q.view.include_test:
         return False
-    return await _counts_ready(opensearch, {'bool': {'filter': image_clauses}})
+    return await counts_ready(opensearch, {'bool': {'filter': image_clauses}})
 
 
 async def _image_query(
@@ -276,8 +278,8 @@ async def image_page(
         limit=q.limit,
     )
     resp = await opensearch.search(index=images_index(), body=body)
-    counts_ready = int(resp['aggregations']['uncounted']['doc_count']) == 0
-    if q.view.sort_id in _STORED_SORTS and not counts_ready:
+    ready = int(resp['aggregations']['uncounted']['doc_count']) == 0
+    if q.view.sort_id in _STORED_SORTS and not ready:
         raise _not_ready()
     kept, next_cursor = split_page(resp['hits']['hits'], sort_id=q.view.sort_id, limit=q.limit)
     ids = [str(h['_source']['image_id']) for h in kept]
@@ -294,7 +296,7 @@ async def image_page(
         limit=q.limit,
         join_truncated=join_truncated,
         sort_applied=q.view.sort_id,
-        sort_options=_sort_options(counts_ready),
+        sort_options=_sort_options(ready),
         hidden=HiddenCounts(
             **await hidden_counts(
                 opensearch,
@@ -320,7 +322,7 @@ async def locate_image(
     sits in the list ``q`` would serve; its cursor and limit are ignored."""
     sort = _sort_clause(q.view.sort_id)
     query, _truncated = await _image_query(opensearch, q, embedding, policy)
-    if q.view.sort_id in _STORED_SORTS and not await _counts_ready(opensearch, query):
+    if q.view.sort_id in _STORED_SORTS and not await counts_ready(opensearch, query):
         raise _not_ready()
     out = ImageLocate(
         image_id=image_id,

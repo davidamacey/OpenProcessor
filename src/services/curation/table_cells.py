@@ -70,7 +70,7 @@ IMAGE_COLUMNS: Final[list[TableColumn]] = [
     _col('located', 'Located', 'badge'),
     _col('items', 'Items', 'number'),
     _col('labeled', 'Labeled', 'number'),
-    _col('unlabeled', 'Unlabeled', 'number'),
+    _col('unlabeled', 'Unlabeled', 'number'),  # sortable once the counts exist, see COUNT_SORTED
     _col('near_dup', 'Near-duplicate', 'badge'),
     _col('indexed_at', 'Indexed', 'date', sortable=True),
 ]
@@ -103,11 +103,23 @@ IMAGE_SORT_FIELD: Final[dict[str, str]] = {
     'file': 'file_name',
     'taken_at': 'taken_at',
     'indexed_at': 'indexed_at',
+    'unlabeled': 'unlabeled_count',
 }
+#: Image columns that sort on the stored per-image counts: served as sortable only while every
+#: image has them (`ImagePage.sort_options` says when), refused with 422 before that.
+COUNT_SORTED: Final = frozenset({'unlabeled'})
 
 
-def columns_of(rows: TableRows) -> list[TableColumn]:
-    return DETECTION_COLUMNS if rows == 'detections' else IMAGE_COLUMNS
+def columns_of(rows: TableRows, *, counts_ready: bool = False) -> list[TableColumn]:
+    """The columns of ``rows``; with ``counts_ready`` the count-sorted ones are sortable."""
+    if rows == 'detections':
+        return DETECTION_COLUMNS
+    if not counts_ready:
+        return IMAGE_COLUMNS
+    return [
+        c.model_copy(update={'sortable': True}) if c.id in COUNT_SORTED else c
+        for c in IMAGE_COLUMNS
+    ]
 
 
 def _text(value: Any, tone: str | None = None) -> Cell:

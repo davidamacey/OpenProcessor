@@ -18,7 +18,7 @@ from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_listing import crop_list_body
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import join_truncated
-from src.services.curation.image_view import ImageQuery, image_page
+from src.services.curation.image_view import STORED_SORT_IDS, ImageQuery, image_page
 from src.services.curation.list_cursor import split_page
 from src.services.curation.wire import serialize_item
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
@@ -47,11 +47,11 @@ def _sort_field(rows: TableRows) -> dict[str, str]:
     )
 
 
-def sort_options(rows: TableRows) -> list[SortOption]:
+def sort_options(rows: TableRows, *, counts_ready: bool = False) -> list[SortOption]:
     """One option per sortable column and direction."""
     return [
         {'id': f'{c.id}:{d}', 'label': f'{c.label} ({"ascending" if d == "asc" else "descending"})'}
-        for c in table_cells.columns_of(rows)
+        for c in table_cells.columns_of(rows, counts_ready=counts_ready)
         if c.sortable
         for d in ('asc', 'desc')
     ]
@@ -89,6 +89,7 @@ def _page(
     items: list[TableRow],
     *,
     narrowed: bool,
+    counts_ready: bool = False,
     **rest: Any,
 ) -> TablePage:
     reason = None if items else ('no_match' if narrowed else 'no_items')
@@ -96,7 +97,7 @@ def _page(
         rows=rows,
         columns=columns,
         items=items,
-        sort_options=sort_options(rows),
+        sort_options=sort_options(rows, counts_ready=counts_ready),
         empty_reason=reason,
         empty_message=None
         if reason is None
@@ -165,9 +166,15 @@ async def images_table(
     """A page of the images ``q`` matches (``q.view.sort`` is the image list's sort id)."""
     page = await image_page(opensearch, q, embedding, policy)
     ids = [c.id for c in columns]
+    ready = any(o['id'] in STORED_SORT_IDS for o in page.sort_options)
     return _page(
         'images',
-        columns,
+        [
+            c.model_copy(update={'sortable': True})
+            if ready and c.id in table_cells.COUNT_SORTED
+            else c
+            for c in columns
+        ],
         [
             TableRow(
                 crop_id=None,
@@ -178,6 +185,7 @@ async def images_table(
             for card in page.items
         ],
         narrowed=q.narrowed(),
+        counts_ready=ready,
         next_cursor=page.next_cursor,
         total=page.total,
         limit=q.limit,

@@ -72729,7 +72729,7 @@
     },
     "/curation/projects/{project}/table/columns": {
       "get": {
-        "description": "The columns a table of `rows` can show, which ones sort, and the default set.",
+        "description": "The columns a table of `rows` can show, which ones sort, and the default set. The image\ntable's `unlabeled` column sorts once every image has its stored counts.",
         "operationId": "table_columns_curation_projects__project__table_columns_get",
         "parameters": [
           {
