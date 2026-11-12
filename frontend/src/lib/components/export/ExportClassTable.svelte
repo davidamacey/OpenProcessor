@@ -4,10 +4,13 @@
   import {
     GAP_COLUMN_TITLE,
     gapCellTitle,
+    isServedSortField,
+    nextClassSort,
     TRAINABLE_COLUMN_TITLE,
     type ExportRow,
   } from '$lib/export/exportDatasetRows';
   import { scoped } from '$lib/api';
+  import type { SortOption } from '$lib/types_cursor';
 
   interface Props {
     rows: ExportRow[];
@@ -15,51 +18,33 @@
     error: string | null;
     /** The served `thresholds.block_below` the Gap cell titles cite. */
     blockBelow: number | null;
+    /** The served order of `rows` (`<field>:<direction>`) and the orders the server accepts. */
+    sortApplied: string | null;
+    sortOptions: SortOption[];
+    onSort: (sort: string) => void;
   }
 
-  let { rows, loading, error, blockBelow }: Props = $props();
+  let { rows, loading, error, blockBelow, sortApplied, sortOptions, onSort }: Props =
+    $props();
 
-  // Sort
-  type SortKey =
-    | 'class_name'
-    | 'class_id'
-    | 'total'
-    | 'validated'
-    | 'trainable'
-    | 'aug_target'
-    | 'trainableGap';
-  let sortKey = $state<SortKey>('trainableGap');
-  let sortDir = $state<'asc' | 'desc'>('desc');
-
-  const sortedRows = $derived.by((): ExportRow[] => {
-    const list = [...rows];
-    list.sort((a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
-      const av = a[sortKey];
-      const bv = b[sortKey];
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-      return String(av).localeCompare(String(bv)) * dir;
-    });
-    return list;
-  });
-  // Classes with any validated or held-out crop come first; the rest (often
-  // most of the registry) fold into one expandable row, so the classes that
-  // actually have data are never buried under empty ones.
-  const activeRows = $derived(
-    sortedRows.filter((r) => r.validated > 0 || r.test_count > 0),
-  );
-  const emptyRows = $derived(
-    sortedRows.filter((r) => !(r.validated > 0 || r.test_count > 0)),
-  );
+  // The server orders the rows (`GET /stats/classes?sort=`); a header click asks it again.
+  const activeRows = $derived(rows.filter((r) => r.validated > 0 || r.test_count > 0));
+  const emptyRows = $derived(rows.filter((r) => !(r.validated > 0 || r.test_count > 0)));
   let showEmptyClasses = $state(false);
+  const appliedField = $derived(sortApplied?.split(':')[0] ?? null);
+  const appliedDirection = $derived(sortApplied?.split(':')[1] ?? null);
 
-  function setSort(k: SortKey): void {
-    if (sortKey === k) {
-      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortKey = k;
-      sortDir = k === 'class_name' ? 'asc' : 'desc';
-    }
+  function sortable(field: string): boolean {
+    return isServedSortField(field, sortOptions);
+  }
+
+  function setSort(field: string): void {
+    if (sortable(field)) onSort(nextClassSort(field, sortApplied));
+  }
+
+  function ariaSort(field: string): 'ascending' | 'descending' | 'none' {
+    if (appliedField !== field) return 'none';
+    return appliedDirection === 'asc' ? 'ascending' : 'descending';
   }
 
   function gapClass(gap: number): string {
@@ -85,6 +70,19 @@
     return 'bg-zinc-800 text-zinc-400 border-zinc-700';
   }
 </script>
+
+{#snippet header(field: string, label: string, align: string, title?: string)}
+  <th
+    class="px-3 py-2 font-medium {align} {sortable(field)
+      ? 'cursor-pointer hover:text-zinc-100'
+      : ''}"
+    aria-sort={ariaSort(field)}
+    {title}
+    onclick={() => setSort(field)}
+  >
+    {label}{appliedField === field ? (appliedDirection === 'asc' ? ' ▲' : ' ▼') : ''}
+  </th>
+{/snippet}
 
 {#snippet classRow(row: ExportRow)}
   <tr class="border-b border-zinc-900 hover:bg-zinc-900/40">
@@ -153,16 +151,9 @@
         class="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-950 text-left text-xs uppercase text-zinc-400"
       >
         <tr>
-          <th
-            class="cursor-pointer px-3 py-2 font-medium hover:text-zinc-100"
-            onclick={() => setSort('class_name')}>Class</th
-          >
-          <th
-            class="cursor-pointer px-3 py-2 font-medium hover:text-zinc-100"
-            onclick={() => setSort('class_id')}>ID</th
-          >
-          <!-- DQ-m9: this
-               "Total" is every crop with that class_id
+          {@render header('class_name', 'Class', '')}
+          {@render header('class_id', 'ID', '')}
+          <!-- DQ-m9: this "Total" is every crop with that class_id
                (GET {API_PREFIX}/stats/classes) — a DIFFERENT number than the
                sidebar's / /classes' "Total" (GET {API_PREFIX}/classes'
                sample_count, the class-cluster bucket size). The two can
@@ -171,37 +162,30 @@
                this column, because no crop's own class_id is the region
                class — regions are sub-boxes on other items, counted in
                the cluster bucket but not in the class-id total. -->
-          <th
-            class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-            onclick={() => setSort('total')}
-            title="Crops with this class_id (GET {scoped()}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes."
-            >Total (labelled)</th
-          >
+          {@render header(
+            'count',
+            'Total (labelled)',
+            'text-right',
+            `Crops with this class_id (GET ${scoped()}/stats/classes) — not the same as the class-cluster bucket size shown in the sidebar and on /classes.`,
+          )}
           <!-- E1 (visual audit 2026-09-24): Validated counts the frozen
                test crops too; Trainable and Gap are the served
                `trainable`/`trainable_gap`. -->
-          <th
-            class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-            onclick={() => setSort('validated')}
-            title="Validated crops, including any frozen as test holdout">Validated</th
-          >
-          <th
-            class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-            onclick={() => setSort('trainable')}
-            title={TRAINABLE_COLUMN_TITLE}>Trainable</th
-          >
-          <th
-            class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-            onclick={() => setSort('aug_target')}>Aug target</th
-          >
-          <th
-            class="cursor-pointer px-3 py-2 text-right font-medium hover:text-zinc-100"
-            onclick={() => setSort('trainableGap')}
-            title={GAP_COLUMN_TITLE}>Gap</th
-          >
-          <th class="px-3 py-2 text-right font-medium" title="Frozen test holdout crops"
-            >Test (held out)</th
-          >
+          {@render header(
+            'validated_count',
+            'Validated',
+            'text-right',
+            'Validated crops, including any frozen as test holdout',
+          )}
+          {@render header('trainable', 'Trainable', 'text-right', TRAINABLE_COLUMN_TITLE)}
+          {@render header('aug_target', 'Aug target', 'text-right')}
+          {@render header('trainable_gap', 'Gap', 'text-right', GAP_COLUMN_TITLE)}
+          {@render header(
+            'test_count',
+            'Test (held out)',
+            'text-right',
+            'Frozen test holdout crops',
+          )}
           <th class="px-3 py-2 text-right font-medium">Adequacy</th>
         </tr>
       </thead>

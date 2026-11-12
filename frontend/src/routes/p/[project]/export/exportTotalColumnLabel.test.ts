@@ -17,12 +17,12 @@ const src = readFileSync(
 
 describe('the /export Total column is labeled as the labelled (class_id) count', () => {
   it('the column header says "Total (labelled)", not a bare "Total"', () => {
-    expect(src).toMatch(/>Total \(labelled\)<\/th/);
+    expect(src).toMatch(/'count',\s*'Total \(labelled\)'/);
   });
 
   it('carries a tooltip distinguishing it from the sidebar/classes Total column', () => {
-    const idx = src.indexOf('Total (labelled)');
-    const before = src.slice(Math.max(0, idx - 400), idx);
-    expect(before).toMatch(/title="Crops with this class_id/);
+    const idx = src.indexOf("'Total (labelled)'");
+    const after = src.slice(idx, idx + 400);
+    expect(after).toMatch(/Crops with this class_id/);
   });
 });

@@ -63,6 +63,22 @@ export function buildExportRows(
   });
 }
 
+/** The `sort` a header click asks the server for: the column again flips the served direction,
+ *  another column asks for it bare (the server picks its default direction). */
+export function nextClassSort(field: string, applied: string | null): string {
+  const [appliedField, direction] = (applied ?? '').split(':');
+  if (appliedField !== field) return field;
+  return `${field}:${direction === 'asc' ? 'desc' : 'asc'}`;
+}
+
+/** Whether the server serves any order on `field` (`sort_options` ids are `<field>:<direction>`). */
+export function isServedSortField(
+  field: string,
+  options: ReadonlyArray<{ id: string }>,
+): boolean {
+  return options.some((o) => o.id.startsWith(`${field}:`));
+}
+
 /**
  * m15 (2026-09-24 interactive pass): the registry download buttons
  * (class_registry.json/data.yaml/manifest.json) only make sense for a
