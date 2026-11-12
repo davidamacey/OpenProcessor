@@ -103,8 +103,16 @@ export class WorkspaceController {
     return selectionKindFor(this.view, this.#url.rows);
   }
 
+  /** The query a write started from last, until the navigation it asked for has landed: a second
+   *  write in the same tick starts from it, not from the URL that has not changed yet. */
+  #pending: string | null = null;
+
+  #base(): SvelteURLSearchParams {
+    return new SvelteURLSearchParams(this.#pending ?? page.url.search);
+  }
+
   #write(next: Partial<WorkspaceUrlState>, replace: boolean): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     writeWorkspaceUrl(params, next);
     this.#go(params, replace);
   }
@@ -116,7 +124,7 @@ export class WorkspaceController {
 
   /** Rewrites the keys a view owns, leaving every other key as it is. */
   patchUrl(mutate: (params: URLSearchParams) => void, replace = true): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     mutate(params);
     this.#go(params, replace);
   }
@@ -144,9 +152,14 @@ export class WorkspaceController {
 
   #go(params: URLSearchParams, replace: boolean): void {
     const search = params.toString();
-    void goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
-      replace,
-      reset: false,
+    this.#pending = search;
+    void Promise.resolve(
+      goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
+        replace,
+        reset: false,
+      }),
+    ).finally(() => {
+      if (this.#pending === search) this.#pending = null;
     });
   }
 
@@ -204,14 +217,14 @@ export class WorkspaceController {
 
   /** Writes the draft to the URL (and `view`, in the same navigation); the filter keys are the draft's own. */
   applyFilter(view?: ViewId): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     this.filter.toUrl(params);
     if (view) writeWorkspaceUrl(params, { view });
     this.#go(params, false);
   }
 
   removeChip(param: string, value?: string): void {
-    const params = new SvelteURLSearchParams(page.url.search);
+    const params = this.#base();
     const state = new ItemFilterState();
     state.fromUrl(params);
     const chip = state

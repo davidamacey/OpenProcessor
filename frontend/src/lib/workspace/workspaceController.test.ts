@@ -127,6 +127,16 @@ describe('WorkspaceController', () => {
     expect(params.get('sort_detections')).toBe('class_name:asc');
   });
 
+  it('two URL writes in one tick both land (the second starts from the first)', () => {
+    visit('?view=review&queue=to_label');
+    const c = make();
+    c.patchUrl((p) => p.set('q', 'red widget'));
+    c.setReviewFocus('crop-7');
+    const params = new URLSearchParams(lastGoto().href.split('?')[1]);
+    expect(params.get('q')).toBe('red widget');
+    expect(params.get('focus')).toBe('item:crop-7');
+  });
+
   it('cluster scope adds the cluster to the filter', () => {
     const id = '0c6f5a0e-1111-4222-8333-444455556666';
     const c = make();
