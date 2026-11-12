@@ -12,8 +12,7 @@
 
   let { active }: Props = $props();
 
-  const label = (axis: string | null): string =>
-    active.kind.axes.find((a) => a.id === axis)?.label ?? 'Deployment';
+  const label = (axis: string | null): string => active.axisLabel(axis) || 'Deployment';
 </script>
 
 <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Active">

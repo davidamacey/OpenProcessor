@@ -1,15 +1,9 @@
 /**
- * The four research preset kinds: the route segment each has in the app, its scope, and its
- * activation axes (`ACTIVATION_AXES` in `src/db/models/config.py`; the API serves no axis list). The
- * server serves the documents; this file only names the pages.
+ * The four research preset kinds: the route segment each has in the app and its scope. The server
+ * serves the documents and, with each kind's schema, the axes it can be activated on; this file only
+ * names the pages.
  */
 import type { PresetKindId } from '$lib/types_presets';
-
-export interface PresetAxis {
-  /** The axis id the activation routes take. */
-  id: string;
-  label: string;
-}
 
 export interface PresetKind {
   id: PresetKindId;
@@ -20,8 +14,6 @@ export interface PresetKind {
   /** "serving profile": the singular, lower case. */
   noun: string;
   blurb: string;
-  /** Empty for the deployment-wide serving profile. */
-  axes: readonly PresetAxis[];
 }
 
 export const PRESET_KINDS: readonly PresetKind[] = [
@@ -33,7 +25,6 @@ export const PRESET_KINDS: readonly PresetKind[] = [
     noun: 'serving profile',
     blurb:
       'Which Triton servers run, which models stay resident on each, how many instances, image preparation and request priorities. One is active for the whole deployment.',
-    axes: [],
   },
   {
     id: 'cluster_profile',
@@ -43,10 +34,6 @@ export const PRESET_KINDS: readonly PresetKind[] = [
     noun: 'cluster profile',
     blurb:
       'How clusters are built: method, embedding field, refresh rule, activation and backend. A profile is active per target, items and region boxes.',
-    axes: [
-      { id: 'clustering_item', label: 'Items' },
-      { id: 'clustering_region_box', label: 'Region boxes' },
-    ],
   },
   {
     id: 'assist_loop_preset',
@@ -56,7 +43,6 @@ export const PRESET_KINDS: readonly PresetKind[] = [
     noun: 'assist-loop preset',
     blurb:
       'The cluster-sampled auto-label loop: gate, recursion, budget, what to do on budget, and concurrency.',
-    axes: [{ id: 'assist_loop_preset', label: 'Assist loop' }],
   },
   {
     id: 'near_dup_profile',
@@ -66,7 +52,6 @@ export const PRESET_KINDS: readonly PresetKind[] = [
     noun: 'near-duplicate profile',
     blurb:
       'The thresholds that decide near-duplicates and leaks for the image and item levels: dedup and leak cosine, largest group, neighbours.',
-    axes: [{ id: 'near_dup', label: 'Near-duplicates' }],
   },
 ];
 

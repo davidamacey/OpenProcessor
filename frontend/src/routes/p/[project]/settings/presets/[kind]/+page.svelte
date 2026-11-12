@@ -53,8 +53,7 @@
     await goto(resolve(projectHref(editorPath(doc.name))));
   }
 
-  const axisLabel = (axis: string | null): string =>
-    kind?.axes.find((a) => a.id === axis)?.label ?? '';
+  const axisLabel = (axis: string | null): string => list?.active.axisLabel(axis) ?? '';
 </script>
 
 <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 p-6">

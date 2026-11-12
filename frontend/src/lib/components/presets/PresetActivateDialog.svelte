@@ -20,12 +20,13 @@
   let { active, target, unsaved = false, onclose, onactivated }: Props = $props();
 
   const kind = $derived(active.kind);
-  const single = $derived(kind.axes.length <= 1);
+  const axes = $derived(active.axes);
+  const single = $derived(axes.length <= 1);
   let chosen = $state('');
   const axis = $derived<string | null>(
-    kind.axes.length === 0 ? null : single ? kind.axes[0]!.id : chosen || null,
+    axes.length === 0 ? null : single ? axes[0]!.axis : chosen || null,
   );
-  const needsChoice = $derived(kind.axes.length > 1 && chosen === '');
+  const needsChoice = $derived(axes.length > 1 && chosen === '');
   const current = $derived(active.entries.find((e) => e.axis === axis));
 
   function refText(name: string | null | undefined, revision: number | null | undefined) {
@@ -52,12 +53,12 @@
     onclose();
   }}
 >
-  {#if kind.axes.length > 1}
+  {#if axes.length > 1}
     <label class="flex flex-col gap-1 text-xs text-zinc-400">
       Activate for
       <select class="input input-sm" bind:value={chosen} data-testid="activate-axis">
         <option value="" disabled>Choose a target</option>
-        {#each kind.axes as a (a.id)}<option value={a.id}>{a.label}</option>{/each}
+        {#each axes as a (a.axis)}<option value={a.axis}>{a.label}</option>{/each}
       </select>
     </label>
   {/if}

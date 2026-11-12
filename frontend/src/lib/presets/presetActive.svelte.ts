@@ -15,7 +15,7 @@ import {
 } from '$lib/api_presets';
 import { configErrorDetail } from '$lib/api_profiles';
 import type { ConfigErrorDetail } from '$lib/types_config';
-import type { ActivePreset, PresetSchemaWire } from '$lib/types_presets';
+import type { ActivePreset, PresetAxisWire, PresetSchemaWire } from '$lib/types_presets';
 import type { PresetKind } from './presetKinds';
 
 export interface PresetActiveDeps {
@@ -44,8 +44,18 @@ export class PresetActive {
     this.#deps = deps;
   }
 
+  /** Where the kind can be activated, as served with its schema; none for the serving profile. */
+  get axes(): PresetAxisWire[] {
+    return this.schema?.axes ?? [];
+  }
+
+  axisLabel(axis: string | null): string {
+    return this.axes.find((a) => a.axis === axis)?.label ?? '';
+  }
+
   async load(): Promise<void> {
-    await Promise.all([this.#loadSchema(), this.#loadActive()]);
+    await this.#loadSchema();
+    await this.#loadActive();
   }
 
   async #loadSchema(): Promise<void> {
@@ -61,13 +71,17 @@ export class PresetActive {
 
   async #loadActive(): Promise<void> {
     const d = this.#deps;
-    const { id, axes } = this.kind;
+    const { id } = this.kind;
     try {
+      if (id !== 'serving_profile' && !this.schema) {
+        this.loadError = this.schemaError ?? 'The axes of this kind are not known.';
+        return;
+      }
       if (id === 'serving_profile') {
         this.entries = [await (d.getActiveServingProfile ?? getActiveServingProfile)()];
       } else {
         const read = d.getActivePreset ?? getActivePreset;
-        this.entries = await Promise.all(axes.map((a) => read(id, a.id)));
+        this.entries = await Promise.all(this.axes.map((a) => read(id, a.axis)));
       }
       this.loadError = null;
     } catch (e) {

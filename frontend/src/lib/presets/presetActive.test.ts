@@ -3,7 +3,7 @@ import { ApiError } from '$lib/api_errors';
 import type { ActivePreset } from '$lib/types_presets';
 import { PresetActive } from './presetActive.svelte';
 import { PRESET_SCHEMAS } from '$lib/test/fixtures/presetSchemas';
-import { PRESET_KINDS, presetKindBySlug } from './presetKinds';
+import { presetKindBySlug } from './presetKinds';
 
 const kind = (slug: string) => presetKindBySlug(slug)!;
 const schemaOf = vi.fn(async (k: keyof typeof PRESET_SCHEMAS) => PRESET_SCHEMAS[k]);
@@ -33,21 +33,66 @@ describe('PresetActive schema', () => {
     expect(a.schemaError).toBeNull();
   });
 
-  it('a schema that cannot be read is shown as served and does not block the active read', async () => {
-    const a = new PresetActive(kind('near-dup-profiles'), {
+  it('a schema that cannot be read is shown as served and does not block the serving profile read', async () => {
+    const a = new PresetActive(kind('serving-profiles'), {
       getPresetSchema: vi.fn().mockRejectedValue(
         new ApiError(500, '/x', {
           detail: { error: 'internal', message: 'schema broke' },
         }),
       ),
-      getActivePreset: vi
+      getActiveServingProfile: vi
         .fn()
-        .mockResolvedValue(entry({ state: 'active', name: 'strict', revision: 2 })),
+        .mockResolvedValue(
+          entry({ axis: null, state: 'active', name: 'std', revision: 2 }),
+        ),
     });
     await a.load();
     expect(a.schema).toBeNull();
     expect(a.schemaError).toMatch(/schema broke/);
-    expect(a.activeOn('strict')).toEqual(['near_dup']);
+    expect(a.activeOn('std')).toEqual([null]);
+  });
+});
+
+describe('PresetActive axes', () => {
+  it('are the ones the server serves with the schema, with their labels', async () => {
+    const served = {
+      ...PRESET_SCHEMAS.cluster_profile,
+      axes: [
+        { axis: 'clustering_region_box', label: 'Boxes (served)', target: 'region_box' },
+      ],
+    };
+    const read = vi.fn().mockResolvedValue(entry({ axis: 'clustering_region_box' }));
+    const a = new PresetActive(kind('cluster-profiles'), {
+      getPresetSchema: vi.fn().mockResolvedValue(served),
+      getActivePreset: read,
+    });
+    await a.load();
+    expect(read.mock.calls.map((c) => c[1])).toEqual(['clustering_region_box']);
+    expect(a.axisLabel('clustering_region_box')).toBe('Boxes (served)');
+    expect(a.axisLabel('clustering_item')).toBe('');
+  });
+
+  it('are never guessed: without the schema a project kind reports why it cannot read the active ref', async () => {
+    const read = vi.fn();
+    const a = new PresetActive(kind('cluster-profiles'), {
+      getPresetSchema: vi.fn().mockRejectedValue(new Error('down')),
+      getActivePreset: read,
+    });
+    await a.load();
+    expect(read).not.toHaveBeenCalled();
+    expect(a.loadError).toBe('down');
+    expect(a.axes).toEqual([]);
+  });
+
+  it('the serving profile has none and still reads its one deployment-wide ref', async () => {
+    const serving = vi.fn().mockResolvedValue(entry({ axis: null }));
+    const a = new PresetActive(kind('serving-profiles'), {
+      getPresetSchema: schemaOf,
+      getActiveServingProfile: serving,
+    });
+    await a.load();
+    expect(a.axes).toEqual([]);
+    expect(a.entries).toHaveLength(1);
   });
 });
 
@@ -156,14 +201,5 @@ describe('PresetActive', () => {
     await a.load();
     expect(a.loadError).toBe('down');
     expect(await a.activate('x', 1, 'near_dup')).toBe(false);
-  });
-
-  it('every kind names its axes, and only the deployment kind has none', () => {
-    expect(PRESET_KINDS.map((k) => [k.id, k.axes.length])).toEqual([
-      ['serving_profile', 0],
-      ['cluster_profile', 2],
-      ['assist_loop_preset', 1],
-      ['near_dup_profile', 1],
-    ]);
   });
 });

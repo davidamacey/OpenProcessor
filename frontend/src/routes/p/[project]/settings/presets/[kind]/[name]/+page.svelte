@@ -60,8 +60,8 @@
           <span
             class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 text-xs text-emerald-300"
             data-testid="preset-active-chip"
-            >active{kind.axes.find((a) => a.id === e.axis)
-              ? ` · ${kind.axes.find((a) => a.id === e.axis)!.label}`
+            >active{ed.active.axisLabel(e.axis)
+              ? ` · ${ed.active.axisLabel(e.axis)}`
               : ''} r{e.revision}</span
           >
         {/each}

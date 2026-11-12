@@ -1,12 +1,13 @@
 /**
- * The schemas the server serves at `GET .../<kind>/schema`, as `model_json_schema()` wrote them
- * (copied from the models; the contract test pins the route, the help reads these).
+ * The schemas the server serves at `GET .../<kind>/schema`, as `model_json_schema()` and `kind_axes()`
+ * wrote them (copied from the models; the contract test pins the route, the help reads these).
  */
 import type { PresetKindId, PresetSchemaWire } from '$lib/types_presets';
 
 export const PRESET_SCHEMAS = {
   serving_profile: {
     kind: 'serving_profile',
+    axes: [],
     json_schema: {
       $defs: {
         ServingImagePrep: {
@@ -168,6 +169,18 @@ export const PRESET_SCHEMAS = {
   },
   cluster_profile: {
     kind: 'cluster_profile',
+    axes: [
+      {
+        axis: 'clustering_item',
+        label: 'Items',
+        target: 'item',
+      },
+      {
+        axis: 'clustering_region_box',
+        label: 'Region boxes',
+        target: 'region_box',
+      },
+    ],
     json_schema: {
       $defs: {
         ClusterRefreshRule: {
@@ -324,6 +337,13 @@ export const PRESET_SCHEMAS = {
   },
   assist_loop_preset: {
     kind: 'assist_loop_preset',
+    axes: [
+      {
+        axis: 'assist_loop_preset',
+        label: 'Assist loop',
+        target: null,
+      },
+    ],
     json_schema: {
       $defs: {
         LoopAudit: {
@@ -554,6 +574,13 @@ export const PRESET_SCHEMAS = {
   },
   near_dup_profile: {
     kind: 'near_dup_profile',
+    axes: [
+      {
+        axis: 'near_dup',
+        label: 'Near-duplicates',
+        target: null,
+      },
+    ],
     json_schema: {
       $defs: {
         NearDupImageProfile: {
