@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_PREFIX } from '$lib/api';
 import { patchItemGeometry, undoItemGeometry } from '$lib/api_cropWrites';
-import { createImageItem, locateImage } from '$lib/api_images';
+import { createImageItem, getImageThumbUrl, locateImage } from '$lib/api_images';
 import { makeItem } from './test/makeItem';
 
 function stubFetch(body: unknown) {
@@ -112,5 +112,13 @@ describe('locateImage', () => {
     expect(u.searchParams.get('target_image_id')).toBe('img-9');
     expect(u.searchParams.get('sort')).toBe('taken_at');
     expect(res.cursor_before).toBe('cb');
+  });
+});
+
+describe('getImageThumbUrl', () => {
+  it('points at the image thumbnail route with the size', () => {
+    expect(getImageThumbUrl('img 1', 96)).toBe(
+      `${API_PREFIX}/images/img%201/thumbnail?size=96`,
+    );
   });
 });

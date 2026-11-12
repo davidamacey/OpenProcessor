@@ -78,3 +78,8 @@ export function locateImage(
     signal,
   );
 }
+
+/** The thumbnail of an image, `size` pixels on the longest edge (32 to 512). */
+export function getImageThumbUrl(imageId: string, size: number = 160): string {
+  return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/thumbnail?size=${size}`;
+}

@@ -39,7 +39,7 @@
     boxes: ImageBox[];
     selectedCropId: string | null;
     /** Items whose box a person has locked, with the served words for the lock. */
-    locks: ReadonlyMap<string, string | null>;
+    locks: Readonly<Record<string, string | null>>;
     tool: EditorTool;
     showLabels: boolean;
     busy?: boolean;
@@ -207,7 +207,7 @@
   const selectedBox = $derived(
     boxes.find((b) => b.kind === 'item' && b.crop_id === selectedCropId) ?? null,
   );
-  const selectedLocked = $derived(selectedCropId !== null && locks.has(selectedCropId));
+  const selectedLocked = $derived(selectedCropId !== null && selectedCropId in locks);
   const overlay = $derived(
     live && live.cropId === selectedCropId ? live.box : (selectedBox?.bbox_norm ?? null),
   );
@@ -392,7 +392,7 @@
         style={boxStyle(overlay)}
         data-move
         data-testid="selected-box"
-        title={selectedLocked ? (locks.get(selectedCropId) ?? 'Locked') : undefined}
+        title={selectedLocked ? (locks[selectedCropId] ?? 'Locked') : undefined}
       >
         {#if !selectedLocked}
           {#each Object.entries(RESIZE_HANDLES) as [name, h] (name)}

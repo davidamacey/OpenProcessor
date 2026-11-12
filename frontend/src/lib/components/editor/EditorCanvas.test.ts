@@ -60,7 +60,7 @@ function render(
     tool?: EditorTool;
     boxes?: ImageBox[];
     selectedCropId?: string | null;
-    locks?: Map<string, string | null>;
+    locks?: Record<string, string | null>;
   } = {},
 ): Calls & { canvas: Record<string, (...a: never[]) => unknown> } {
   const calls: Calls = {
@@ -79,7 +79,7 @@ function render(
       height: H,
       boxes: over.boxes ?? [ITEM],
       selectedCropId: over.selectedCropId ?? null,
-      locks: over.locks ?? new Map(),
+      locks: over.locks ?? {},
       tool: over.tool ?? 'select',
       showLabels: true,
       ...calls,
@@ -190,7 +190,7 @@ describe('EditorCanvas moving and resizing', () => {
   it('a locked box shows its lock and has no handles or move', () => {
     const c = render({
       selectedCropId: 'c1',
-      locks: new Map([['c1', 'Placed by a person']]),
+      locks: { c1: 'Placed by a person' },
     });
     expect(target.querySelectorAll('[data-handle]')).toHaveLength(0);
     const body = target.querySelector('[data-testid="selected-box"]')!;
@@ -308,7 +308,7 @@ describe('EditorCanvas zoom and pan', () => {
         height: 1200,
         boxes: [],
         selectedCropId: null,
-        locks: new Map(),
+        locks: {},
         tool: 'select',
         showLabels: true,
         ondraw: vi.fn(),
@@ -338,7 +338,7 @@ describe('EditorCanvas labels', () => {
         height: H,
         boxes: [ITEM],
         selectedCropId: 'c1',
-        locks: new Map(),
+        locks: {},
         tool: 'select',
         showLabels: false,
         ondraw: vi.fn(),

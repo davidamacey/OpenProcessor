@@ -193,6 +193,8 @@ export class CommandStack {
   status = $state<SaveStatus>('saved');
   /** The served words for the last failure. */
   message = $state<string | null>(null);
+  /** Region boxes the last move would leave outside its item; null when it did not. */
+  regionBoxIds = $state.raw<string[] | null>(null);
   #done = $state.raw<EditorCommand[]>([]);
   #undone = $state.raw<EditorCommand[]>([]);
   #pending = $state(0);
@@ -263,6 +265,7 @@ export class CommandStack {
   }
 
   #settle(r: CommandResult): void {
+    this.regionBoxIds = r.ok ? null : (r.regionBoxIds ?? null);
     if (r.ok) {
       this.message = null;
       this.status = this.#pending > 1 ? 'saving' : 'saved';

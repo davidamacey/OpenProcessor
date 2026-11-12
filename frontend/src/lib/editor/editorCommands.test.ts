@@ -1,36 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mapRawCrop } from '$lib/api_cropMap';
 import { ApiError } from '$lib/api_errors';
-import { makeItem } from '$lib/test/makeItem';
 import { imageDetail } from '$lib/test/fixtures/imageDetail';
 import type { RegistryClass } from '$lib/types_classes';
+import { editorApi as api, editorItem, resetEditorApi } from './editorApiMock';
 
-const api = vi.hoisted(() => ({
-  createImageItem: vi.fn(),
-  getImage: vi.fn(),
-  patchItemGeometry: vi.fn(),
-  undoItemGeometry: vi.fn(),
-  excludeCrops: vi.fn(),
-  unexcludeCrops: vi.fn(),
-  putCropLabel: vi.fn(),
-  undoCropLabel: vi.fn(),
-  undoCropRegion: vi.fn(),
-  putRegionBoxes: vi.fn(),
-}));
-vi.mock('$lib/api_images', () => ({
-  createImageItem: api.createImageItem,
-  getImage: api.getImage,
-}));
-vi.mock('$lib/api_cropWrites', () => ({
-  patchItemGeometry: api.patchItemGeometry,
-  undoItemGeometry: api.undoItemGeometry,
-  excludeCrops: api.excludeCrops,
-  unexcludeCrops: api.unexcludeCrops,
-  putCropLabel: api.putCropLabel,
-  undoCropLabel: api.undoCropLabel,
-  undoCropRegion: api.undoCropRegion,
-}));
-vi.mock('$lib/api_regionBoxes', () => ({ putRegionBoxes: api.putRegionBoxes }));
+vi.mock('$lib/api_images', async () =>
+  (await import('./editorApiMock')).editorImagesModule(),
+);
+vi.mock('$lib/api_cropWrites', async () =>
+  (await import('./editorApiMock')).editorWritesModule(),
+);
+vi.mock('$lib/api_regionBoxes', async () =>
+  (await import('./editorApiMock')).editorRegionsModule(),
+);
 
 const {
   CommandStack,
@@ -41,9 +23,7 @@ const {
   regionCommand,
 } = await import('./editorCommands.svelte');
 
-const item = mapRawCrop(
-  makeItem({ crop_id: 'c1', image_id: 'img-1', geometry_revision: 2 }),
-);
+const item = editorItem();
 const BOX: [number, number, number, number] = [0.1, 0.1, 0.5, 0.5];
 const car = { id: 7, name: 'car' } as RegistryClass;
 
@@ -51,17 +31,7 @@ function conflict(): ApiError {
   return new ApiError(409, '/geometry', { detail: 'The box changed. Reload.' });
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  api.getImage.mockResolvedValue(imageDetail());
-  api.createImageItem.mockResolvedValue({ item: { ...item, id: 'new-1' } });
-  api.patchItemGeometry.mockResolvedValue({ item: { ...item, geometry_revision: 3 } });
-  api.undoItemGeometry.mockResolvedValue({ item: { ...item, geometry_revision: 4 } });
-  for (const k of ['excludeCrops', 'unexcludeCrops', 'putCropLabel', 'undoCropLabel'])
-    api[k as 'excludeCrops'].mockResolvedValue({});
-  api.undoCropRegion.mockResolvedValue({});
-  api.putRegionBoxes.mockResolvedValue({});
-});
+beforeEach(resetEditorApi);
 
 describe("each command's revert inverts apply", () => {
   it('draw: creates the item, then excludes it as not an object', async () => {
@@ -258,6 +228,20 @@ describe('CommandStack', () => {
     );
     const r = await moveCommand(item, BOX).apply();
     expect(r).toMatchObject({ ok: false, conflict: false, regionBoxIds: ['b1', 'b2'] });
+  });
+
+  it('the stack keeps the region boxes a move would strand until the next write', async () => {
+    api.patchItemGeometry.mockRejectedValueOnce(
+      new ApiError(422, '/geometry', {
+        detail: { error: 'regions_outside_item', message: 'outside', box_ids: ['b1'] },
+      }),
+    );
+    const { s } = stack();
+    await s.run(moveCommand(item, BOX));
+    expect(s.regionBoxIds).toEqual(['b1']);
+    expect(s.canUndo).toBe(false);
+    await s.run(deleteCommand(item));
+    expect(s.regionBoxIds).toBeNull();
   });
 
   it('a move confirmed with region box ids sends them as the drop list', async () => {
