@@ -309,19 +309,11 @@ function mapCropOrigin(c: RawCrop) {
   } satisfies Partial<Crop>;
 }
 
-export function mapRawCrop(c: RawCrop): Crop {
-  const bb = c.bbox_norm ?? [0, 0, 0, 0];
-  const out: Crop = {
-    id: c.crop_id,
-    source_image_path: c.image_path,
-    image_id: c.image_id || undefined,
-    bbox_norm: xyxyToBBoxNorm(bb),
+/** The class label and who set it. */
+function mapCropClass(c: RawCrop) {
+  return {
     class_id: c.class_id ?? null,
     class_name: c.class_name ?? null,
-    detector_class_name: c.detector_class_name ?? null,
-    ...mapCropAudit(c),
-    detector_class_id: c.detector_class_id ?? null,
-    detector_confidence: c.detector_confidence ?? null,
     class_source: c.class_source ?? null,
     label_source: c.label_source || 'unknown',
     label_validated: !!c.label_validated,
@@ -329,35 +321,59 @@ export function mapRawCrop(c: RawCrop): Crop {
     label_confidence: c.confidence ?? null,
     class_confidence: c.class_confidence ?? null,
     class_confidence_source: c.class_confidence_source ?? null,
-    vlm_raw_class: c.vlm_raw_class ?? null,
-    vlm_class_attempted_at: c.vlm_class_attempted_at ?? null,
-    vlm_class_empty_reason: c.vlm_class_empty_reason ?? null,
-    cluster: c.cluster ?? null,
     class_detector: c.class_detector ?? null,
     class_detector_version: c.class_detector_version ?? null,
     class_labeled_at: c.class_labeled_at ?? null,
     class_labeler: c.class_labeler ?? null,
-    source: c.source ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** The detector's answer and the backend's confirmable suggestions. */
+function mapCropSuggestions(c: RawCrop) {
+  return {
+    detector_class_name: c.detector_class_name ?? null,
+    detector_class_id: c.detector_class_id ?? null,
+    detector_confidence: c.detector_confidence ?? null,
     proposed_class_id: c.proposed_class_id ?? null,
     proposed_class_name: c.proposed_class_name ?? null,
+    proposal_name: c.proposal_name ?? null,
     display_name: c.display_name ?? '',
     display_name_kind: c.display_name_kind ?? 'none',
+    classifier_raw_confidence: c.classifier_raw_confidence ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** The VLM's answers and provenance. */
+function mapCropVlm(c: RawCrop) {
+  return {
+    vlm_raw_class: c.vlm_raw_class ?? null,
+    vlm_class_attempted_at: c.vlm_class_attempted_at ?? null,
+    vlm_class_empty_reason: c.vlm_class_empty_reason ?? null,
+    vlm_confidence: c.vlm_confidence ?? null,
+    vlm_suggested_class_id: c.vlm_proposed_class_id ?? null,
+    vlm_suggested_class_name: c.vlm_proposed_class_name ?? null,
+    vlm_endpoint: c.vlm_endpoint ?? null,
+    vlm_model: c.vlm_model ?? null,
+    vlm_prompt_pack: c.vlm_prompt_pack ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** Crop size and sharpness measurements, the holdout flag and exclusion. */
+function mapCropMeasures(c: RawCrop) {
+  return {
     test_holdout: !!c.test_holdout,
     crop_rank_in_image: c.crop_rank_in_image ?? null,
     crop_area_norm: c.crop_area_norm ?? null,
     blur_lap_ratio: c.blur_lap_ratio ?? null,
-    classifier_raw_confidence: c.classifier_raw_confidence ?? null,
-    proposal_name: c.proposal_name ?? null,
-    vlm_confidence: c.vlm_confidence ?? null,
-    vlm_suggested_class_id: c.vlm_proposed_class_id ?? null,
-    vlm_suggested_class_name: c.vlm_proposed_class_name ?? null,
     class_excluded: !!c.class_excluded,
     excluded_reason: c.excluded_reason ?? null,
     excluded_at: c.excluded_at ?? null,
-    item_text_lines: asItemTextLines(c.item_text_lines),
-    vlm_endpoint: c.vlm_endpoint ?? null,
-    vlm_model: c.vlm_model ?? null,
-    vlm_prompt_pack: c.vlm_prompt_pack ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** The import and combine lineage of a served crop. */
+function mapCropImport(c: RawCrop) {
+  return {
     label_locked: !!c.label_locked,
     import_ids: asStringArray(c.import_ids),
     dataset_split: c.dataset_split ?? null,
@@ -369,11 +385,12 @@ export function mapRawCrop(c: RawCrop): Crop {
     combine_conflict: !!c.combine_conflict,
     combine_conflict_origins: asStringArray(c.combine_conflict_origins),
     combine_merged_origins: asStringArray(c.combine_merged_origins),
-    embedding_states: c.embedding_states ?? {},
-    ...mapCropScores(c),
-    ...mapCropGeometry(c),
-    ...mapCropLabels(c),
-    ...mapCropOrigin(c),
+  } satisfies Partial<Crop>;
+}
+
+/** Near-duplicate group, open-vocabulary and region-proposal fields. */
+function mapCropGrouping(c: RawCrop) {
+  return {
     near_dup_group_id:
       typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,
     near_dup_group_size: c.near_dup_group_size ?? null,
@@ -383,15 +400,36 @@ export function mapRawCrop(c: RawCrop): Crop {
     open_vocab_revision: c.open_vocab_revision ?? null,
     mask_polygon: c.mask_polygon ?? null,
     region_gate_skip: c.region_gate_skip ?? null,
+  } satisfies Partial<Crop>;
+}
+
+export function mapRawCrop(c: RawCrop): Crop {
+  const bb = c.bbox_norm ?? [0, 0, 0, 0];
+  return {
+    id: c.crop_id,
+    source_image_path: c.image_path,
+    image_id: c.image_id || undefined,
+    bbox_norm: xyxyToBBoxNorm(bb),
+    ...mapCropClass(c),
+    ...mapCropSuggestions(c),
+    ...mapCropAudit(c),
+    ...mapCropVlm(c),
+    ...mapCropMeasures(c),
+    cluster: c.cluster ?? null,
+    source: c.source ?? null,
+    item_text_lines: asItemTextLines(c.item_text_lines),
+    embedding_states: c.embedding_states ?? {},
+    ...mapCropImport(c),
+    ...mapCropScores(c),
+    ...mapCropGeometry(c),
+    ...mapCropLabels(c),
+    ...mapCropOrigin(c),
+    ...mapCropGrouping(c),
     assist: c.assist ?? null,
     slots: mapCropSlots(c as unknown as Record<string, unknown>, bb as XYXY),
     // Preserve server-side updated_at — overriding it client-side breaks
     // ordering and lets the same crop key appear twice in keyed each blocks
     // (Svelte each_key_duplicate).
-    updated_at:
-      typeof (c as Record<string, unknown>).updated_at === 'string'
-        ? ((c as Record<string, unknown>).updated_at as string)
-        : '',
+    updated_at: typeof c.updated_at === 'string' ? c.updated_at : '',
   };
-  return out;
 }
