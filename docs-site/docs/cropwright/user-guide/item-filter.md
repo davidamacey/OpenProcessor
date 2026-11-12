@@ -17,6 +17,17 @@ control the page doesn't support is absent, not disabled.
 - confidence and area bands, and the largest N items per image
 - origin, embedding state and review state
 - open-vocabulary set and prompt
+- one or several clusters of the served partition
+- an area on the map (a box or a drawn outline), and whether the photo has a
+  location at all
+- a near-duplicate group, when a page opens the list on one group
+
+An area is matched against the stored positions as the project's location
+policy serves them: under `store_coarse` it snaps to the rounded position, and
+under `drop` no area matches anything. A list filtered by area or group says
+when the match was cut short (`join_truncated`), so a short list is never
+mistaken for the whole answer. The review queue's box text search takes a match
+mode (exact, fuzzy or fragment); left unset it is a plain substring search.
 
 Nothing is validated in the browser: a malformed band is refused by the
 backend and its message is shown under the bar.

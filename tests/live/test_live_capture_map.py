@@ -198,6 +198,39 @@ def test_map_serves_the_gps_point_and_only_it(api: Any, capture_project: dict[st
     assert listed.json()['image_ids'] == [GPS_ID]
 
 
+def _image_ids(api: Any, **params: Any) -> list[str]:
+    resp = api.get(f'{PREFIX}/images', params=params)
+    assert resp.status_code == 200, resp.text
+    return [card['image_id'] for card in resp.json()['items']]
+
+
+def test_area_filters_on_images_and_crops(api: Any, capture_project: dict[str, Any]) -> None:
+    around = f'{LONGITUDE - 0.01},{LATITUDE - 0.01},{LONGITUDE + 0.01},{LATITUDE + 0.01}'
+    elsewhere = '10,10,11,11'
+    assert _image_ids(api, geo_bbox=around) == [GPS_ID]
+    assert _image_ids(api, geo_bbox=elsewhere) == []
+    ring = ';'.join(
+        f'{LONGITUDE + dx},{LATITUDE + dy}' for dx, dy in ((-0.01, -0.01), (0.01, -0.01), (0, 0.01))
+    )
+    assert _image_ids(api, geo_polygon=ring) == [GPS_ID]
+    assert _image_ids(api, has_location='true') == [GPS_ID]
+    assert _image_ids(api, has_location='false') == [PLAIN_ID]
+
+    # The project holds no items: the area filter takes the item-side join and matches none.
+    crops = api.get(f'{PREFIX}/crops', params={'geo_bbox': around})
+    assert crops.status_code == 200, crops.text
+    assert crops.json()['total'] == 0
+
+    meta = api.get(f'{PREFIX}/map').json()
+    assert meta['n_located'] == 1
+    assert meta['n_without_location'] == 1
+    assert meta['bounds'] is not None
+    # A single-photo pin names its image only at the deepest zoom, where cells are finest.
+    deepest = api.get(f'{PREFIX}/map/cells', params={'zoom': meta['max_zoom']}).json()
+    (feature,) = deepest['features']
+    assert feature['properties']['image_id'] == GPS_ID
+
+
 def test_store_coarse_rounds_the_stored_point(
     api: Any, opensearch: Any, capture_project: dict[str, Any]
 ) -> None:

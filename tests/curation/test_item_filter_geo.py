@@ -320,3 +320,20 @@ def test_a_reprocess_refuses_image_predicates_and_suggests_nothing_for_them() ->
         ReprocessFilter(geo_bbox=box)
     assert suggested_embed_request(ItemFilter(geo_bbox=box)) is None
     assert suggested_embed_request(ItemFilter()) is not None
+
+
+@pytest.mark.asyncio
+async def test_join_stays_inside_the_result_window() -> None:
+    """OpenSearch refuses from + size above 10000: the cap probe must not ask for one more."""
+    seen: dict[str, Any] = {}
+
+    class _Search:
+        async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
+            seen.update(body)
+            hits = [{'_id': f'i{n}'} for n in range(min(body['size'], 3))]
+            return {'hits': {'hits': hits, 'total': {'value': 10_001, 'relation': 'gte'}}}
+
+    ids, truncated = await image_join.joined_image_ids(_Search(), index='images', clauses=[])
+    assert seen['size'] <= 10_000
+    assert truncated is True
+    assert ids == ['i0', 'i1', 'i2']

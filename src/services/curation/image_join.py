@@ -122,14 +122,17 @@ async def joined_image_ids(
     resp = await opensearch.search(
         index=index,
         body={
-            'size': JOIN_MAX_IMAGES + 1,
+            'size': JOIN_MAX_IMAGES,
+            # One past the cap is enough to know there were more, and from + size may not
+            # exceed the index's result window (10,000 by default).
+            'track_total_hits': JOIN_MAX_IMAGES + 1,
             'query': {'bool': {'filter': clauses}},
             '_source': False,
             'sort': [{'image_id': 'asc'}],
         },
     )
     ids = [str(h['_id']) for h in resp['hits']['hits']]
-    return ids[:JOIN_MAX_IMAGES], len(ids) > JOIN_MAX_IMAGES
+    return ids, resp['hits']['total']['value'] > JOIN_MAX_IMAGES
 
 
 async def resolve_image_join(opensearch: Any, f: ItemFilter, *, policy: str) -> ImageJoin | None:
