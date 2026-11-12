@@ -6,7 +6,7 @@
  * behaviors the global-search feature (docs: /clusters search-mode plan)
  * depends on:
  *  - the amber "Unlabeled #N" fallback when there's no dominant class
- *  - navigation to `/clusters/{uid}` on click, via `goto`, not a raw <a>
+ *  - navigation to the cluster scope in the Workspace on click, via `goto`, not a raw <a>
  *    (so it composes inside the absolutely-positioned overlay without a
  *    full page reload)
  */
@@ -42,7 +42,7 @@ describe('ClusterBadge.svelte', () => {
 
   it('navigates via goto, not a raw anchor tag', () => {
     expect(src).toMatch(
-      /goto\(resolve\(projectHref\(`\/clusters\/\$\{encodeURIComponent\(clusterUid\)\}`\)\)\)/,
+      /goto\(resolve\(projectHref\(`\/workspace\$\{clusterScopeSearch\(clusterUid\)\}`\)\)\)/,
     );
     expect(src).not.toMatch(/<a\s/);
   });

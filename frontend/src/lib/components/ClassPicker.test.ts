@@ -69,8 +69,8 @@ beforeEach(() => {
   onpick.mockReset();
   onclose.mockReset();
   classesStore.classes = [
-    cls(1, 'car'),
-    cls(2, 'bus'),
+    cls(1, 'widget'),
+    cls(2, 'gadget'),
     cls(3, 'old_truck', { deprecated: true }),
     cls(4, 'region_x', { kind: 'region' }),
   ];
@@ -93,7 +93,7 @@ describe('ClassPicker', () => {
       (o) => o.textContent,
     );
     expect(names.some((n) => n?.includes('old_truck'))).toBe(false);
-    expect(names.some((n) => n?.includes('car'))).toBe(true);
+    expect(names.some((n) => n?.includes('widget'))).toBe(true);
   });
 
   it('offers create when nothing matches', () => {
@@ -106,7 +106,7 @@ describe('ClassPicker', () => {
 
   it('offers no create row for a name that exists', () => {
     render();
-    type('car');
+    type('widget');
     expect(document.querySelector('[data-testid="class-picker-create"]')).toBeNull();
   });
 
@@ -142,7 +142,7 @@ describe('ClassPicker', () => {
     render();
     const input = type('bu');
     key(input, 'Enter');
-    expect(onpick.mock.calls[0]![0]).toMatchObject({ name: 'bus' });
+    expect(onpick.mock.calls[0]![0]).toMatchObject({ name: 'gadget' });
   });
 
   it('create mode lists no classes', () => {

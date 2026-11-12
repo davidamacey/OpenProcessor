@@ -37,7 +37,7 @@
 {:else}
   <a
     class="btn btn-primary"
-    href={resolve(projectHref('/clusters'))}
+    href={resolve(projectHref('/workspace?view=clusters'))}
     title="Open a cluster and use Assist to ask the VLM about it"
     >Assist with the VLM: pick a cluster</a
   >

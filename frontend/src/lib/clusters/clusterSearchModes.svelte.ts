@@ -305,7 +305,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
     if (q) url.searchParams.set('q', q);
     else url.searchParams.delete('q');
     url.searchParams.delete('similar_to');
-    void goto(resolve(projectHref(`/clusters${url.search}`)), {
+    void goto(resolve(projectHref(`/workspace${url.search}`)), {
       replace: true,
       reset: false,
     });
@@ -392,7 +392,7 @@ export function createClusterSearchModes(s: ClusterSearchModesState) {
 
     const offKeys: Array<() => void> = [];
     const reg = (actionId: string, fn: () => void | Promise<void>) =>
-      offKeys.push(keyboardStore.registerAction(actionId, () => void fn(), 'clusters'));
+      offKeys.push(keyboardStore.registerAction(actionId, () => void fn(), 'cluster'));
 
     reg('clusters_search.select_all', () =>
       searchSel.selectAll(searchResults.map((c) => c.id)),

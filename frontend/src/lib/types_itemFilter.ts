@@ -117,6 +117,34 @@ export interface ItemFilter {
   taken_to?: string | null;
 }
 
+/** `ClassCount` in `SelectionSummary.by_class`. */
+export interface SelectionClassCount {
+  class_name: string;
+  count: number;
+}
+
+/** `POST {P}/selection/summary` (`SelectionSummary`): what a bulk action would
+ *  touch. `summary_text` is rendered verbatim. */
+export interface SelectionSummary {
+  detections: number;
+  images: number;
+  clusters: number;
+  locked: number;
+  in_holdout: number;
+  by_class: SelectionClassCount[];
+  taken_from?: string | null;
+  taken_to?: string | null;
+  located: number;
+  join_truncated: boolean;
+  summary_text: string;
+}
+
+/** `GET {P}/exclude_reasons` entry (`ExcludeReasonEntry`). */
+export interface ExcludeReasonEntry {
+  id: string;
+  label: string;
+}
+
 /** `ItemSelection` (request body schema). */
 export interface ItemSelection {
   crop_ids?: string[] | null;

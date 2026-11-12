@@ -12,7 +12,7 @@ import type {
   WriteFailure,
 } from '$lib/types';
 import type { SlotSpec } from '$lib/annotations/types';
-import type { SelectionExcludeResult } from '$lib/types_itemFilter';
+import type { ExcludeReasonEntry, SelectionExcludeResult } from '$lib/types_itemFilter';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 
 export function putCropLabel(
@@ -313,14 +313,21 @@ export async function patchSlotMeta(
 
 // -- exclude / ignore crops ----------------------------------------------
 
-/** Reasons the operator can attach when ignoring crops. 'ignore' is the
- *  default one-click value; the others record *why* for later analysis. */
-export type ExcludeReason =
-  'ignore' | 'blurry' | 'unidentifiable' | 'not_the_subject' | 'partial_crop';
+/** The reasons an item can be ignored for, in display order, with their labels. */
+export async function getExcludeReasons(
+  signal?: AbortSignal,
+): Promise<ExcludeReasonEntry[]> {
+  const res = await apiFetch<{ reasons: ExcludeReasonEntry[] }>(
+    `${scoped()}/exclude_reasons`,
+    {},
+    signal,
+  );
+  return res.reasons;
+}
 
 export function excludeCrops(
   cropIds: string[],
-  reason: ExcludeReason = 'ignore',
+  reason = 'ignore',
   signal?: AbortSignal,
 ): Promise<SelectionExcludeResult & { excluded: number }> {
   return apiFetch<SelectionExcludeResult & { excluded: number }>(

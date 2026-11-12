@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const LIB = path.resolve(here, '../../../../lib');
+const LIB = path.resolve(here, '../..');
 const src = readFileSync(
   path.join(LIB, 'components/clusters/ClustersStatusBar.svelte'),
   'utf-8',

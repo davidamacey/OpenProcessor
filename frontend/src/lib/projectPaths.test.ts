@@ -24,7 +24,9 @@ describe('projectHref', () => {
   it('builds on the active project', () => {
     projectsStore.current = testProject({ slug: 'alpha' });
     expect(projectHref('/review?tab=all')).toBe('/p/alpha/review?tab=all');
-    expect(projectHref('/clusters/12')).toBe('/p/alpha/clusters/12');
+    expect(projectHref('/workspace?view=clusters')).toBe(
+      '/p/alpha/workspace?view=clusters',
+    );
   });
 
   it('uses an explicit slug over the active one, URL-encoded', () => {
@@ -51,12 +53,9 @@ describe('switchProjectHref', () => {
     expect(
       switchProjectHref(url('/p/alpha/review?tab=all&crop_id=c1&preset=x'), 'beta'),
     ).toBe('/p/beta/review?tab=all&preset=x');
-    expect(switchProjectHref(url('/p/alpha/clusters?class=7'), 'beta')).toBe(
-      '/p/beta/clusters',
-    );
-    expect(switchProjectHref(url('/p/alpha/clusters/42'), 'beta')).toBe(
-      '/p/beta/clusters',
-    );
+    expect(
+      switchProjectHref(url('/p/alpha/workspace?view=clusters&class=7'), 'beta'),
+    ).toBe('/p/beta/workspace?view=clusters');
   });
 
   it('lands on the default section outside a project', () => {
@@ -75,8 +74,8 @@ describe('legacyRedirectTarget', () => {
     expect(legacyRedirectTarget('/review', '?tab=regions&crop_id=c1', 'default')).toBe(
       '/p/default/review?tab=regions&crop_id=c1',
     );
-    expect(legacyRedirectTarget('/clusters/12', '', 'default')).toBe(
-      '/p/default/clusters/12',
+    expect(legacyRedirectTarget('/workspace', '?view=clusters', 'default')).toBe(
+      '/p/default/workspace?view=clusters',
     );
   });
 
@@ -88,7 +87,7 @@ describe('legacyRedirectTarget', () => {
 
 describe('sectionOf', () => {
   it('reads the section under /p/<slug>/', () => {
-    expect(sectionOf('/p/alpha/clusters/3')).toBe('clusters');
+    expect(sectionOf('/p/alpha/workspace')).toBe('workspace');
     expect(sectionOf('/p/alpha')).toBeNull();
     expect(sectionOf('/review')).toBeNull();
     expect(sectionOf('/p/alpha/unknown')).toBeNull();
@@ -96,7 +95,9 @@ describe('sectionOf', () => {
 });
 
 describe('similarHref', () => {
-  it('encodes the crop id into the clusters query', () => {
-    expect(similarHref('a/b c', 'alpha')).toBe('/p/alpha/clusters?similar_to=a%2Fb%20c');
+  it('encodes the crop id into the workspace query', () => {
+    expect(similarHref('a/b c', 'alpha')).toBe(
+      '/p/alpha/workspace?view=clusters&similar_to=a%2Fb%20c',
+    );
   });
 });

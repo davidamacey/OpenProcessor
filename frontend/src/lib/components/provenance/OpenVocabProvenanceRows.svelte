@@ -26,7 +26,7 @@
   const linkable = $derived(openVocabAvailability.available === true);
 
   const matchingQuery = $derived.by(() => {
-    const p = new SvelteURLSearchParams({ mode: 'matching' });
+    const p = new SvelteURLSearchParams({ view: 'clusters', mode: 'matching' });
     if (set != null) p.set('open_vocab_set', set);
     if (prompt != null) p.set('source_prompt', prompt);
     return p.toString();
@@ -61,7 +61,7 @@
     <a
       class="text-blue-300 underline hover:text-blue-200"
       data-testid="ov-matching-link"
-      href={resolve(projectHref(`/clusters?${matchingQuery}`))}>Show matching items</a
+      href={resolve(projectHref(`/workspace?${matchingQuery}`))}>Show matching items</a
     >
   </dd>
 {/if}

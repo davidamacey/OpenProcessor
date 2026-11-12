@@ -1,24 +1,30 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
-  import AddClassModal from './AddClassModal.svelte';
+  import ClassPicker from '$components/ClassPicker.svelte';
   import { adequacyChipClass } from '$lib/adequacy';
   import { isAssignableClass } from '$lib/classVisibility';
+  import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { classesStore } from '$stores/classes.svelte';
+  import { dropOnClassStore } from '$stores/dropOnClass.svelte';
   import type { RegistryClass } from '$lib/types_classes';
 
-  interface Props {
-    selectedId: number | null;
-    onselect: (cls: RegistryClass | null) => void;
-    /**
-     * Optional drop handler — when crops are dragged from a grid onto a
-     * class row, this fires with the destination class. Caller is
-     * responsible for assigning the currently-selected crops to that class.
-     * When omitted, drop targets are disabled (sidebar is filter-only).
-     */
-    ondrop?: (cls: RegistryClass, droppedIds: string[]) => void | Promise<void>;
+  // The classes half of the rail: the served registry in the served order, with
+  // its served counts. A click filters the Workspace by the class name; a card
+  // dragged onto a row assigns it.
+  let { ws }: { ws: WorkspaceController } = $props();
+
+  const selectedName = $derived(
+    ws.filter.classNames.length === 1 ? ws.filter.classNames[0]! : null,
+  );
+
+  function onselect(cls: RegistryClass | null): void {
+    ws.filter.classNames = cls ? [cls.name] : [];
+    ws.applyFilter();
   }
 
-  let { selectedId = null, onselect, ondrop }: Props = $props();
+  function ondrop(cls: RegistryClass, droppedIds: string[]): void {
+    void dropOnClassStore.dispatch(cls, droppedIds);
+  }
 
   // hoveredClassId tracks which class row currently sits under the dragged
   // crop. svelte-dnd-action fires `consider` events whenever the active
@@ -76,7 +82,6 @@
         .filter((id) => typeof id === 'string');
       const droppedIds = liveIds.length > 0 ? liveIds : pendingDroppedIds;
       pendingDroppedIds = [];
-      if (!ondrop) return;
       if (droppedIds.length === 0) return;
       void ondrop(cls, droppedIds);
     };
@@ -100,54 +105,26 @@
     };
   }
 
-  let query = $state<string>('');
-  let modalOpen = $state<boolean>(false);
+  let createOpen = $state<boolean>(false);
 
   const hoveredClass = $derived(
     hoveredClassId == null ? null : classesStore.byId(hoveredClassId),
   );
 
-  const filtered = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    const active = classesStore.classes.filter(isAssignableClass);
-    const list = q
-      ? active.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) || (c.group ?? '').toLowerCase().includes(q),
-        )
-      : active;
-    // Largest class first, matching the item count the chip shows.
-    return [...list].sort((a, b) => b.count - a.count);
-  });
-
-  // Chip color/threshold logic lives in $lib/adequacy so /classes,
-  // /clusters, the dashboard, and this sidebar all paint the same
-  // count the same way.
+  const classes = $derived(classesStore.classes.filter(isAssignableClass));
 </script>
 
 <!-- Narrow screens: a short strip above the content, so the page keeps the full width.
      md and up: the fixed 16rem column beside it. -->
-<aside
-  class="relative flex h-44 w-full shrink-0 flex-col border-b border-zinc-800 bg-zinc-950 md:h-full md:w-64 md:border-r md:border-b-0"
->
-  <div class="border-b border-zinc-800 p-3">
-    <h2 class="mb-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-      Classes
-    </h2>
-    <input
-      type="search"
-      bind:value={query}
-      placeholder="Filter..."
-      class="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
-    />
-  </div>
+<section class="relative flex min-h-0 flex-1 flex-col" aria-label="Classes">
+  <h2 class="p-3 text-xs font-semibold tracking-wide text-zinc-400 uppercase">Classes</h2>
 
   <!-- Drop hint is an ABSOLUTE overlay (pointer-events-none) so it can't
        reflow the class list mid-drag. Previously it was in flow and its
        appearance pushed every folder row down, so the drop landed on the
        wrong row / above the name. Overlaying keeps every row's hit target
        fixed under the cursor. -->
-  {#if dragActive && ondrop}
+  {#if dragActive}
     <div
       class="pointer-events-none absolute inset-x-0 top-[60px] z-20 border-y border-blue-500/40 bg-blue-600/90 px-3 py-1.5 text-center text-[11px] font-medium text-blue-50 shadow-lg backdrop-blur"
     >
@@ -164,14 +141,14 @@
       <div class="p-4 text-sm text-zinc-500">Loading classes...</div>
     {:else if classesStore.error}
       <div class="p-4 text-sm text-red-300">API unavailable</div>
-    {:else if filtered.length === 0}
+    {:else if classes.length === 0}
       <div class="p-4 text-sm text-zinc-500">No classes</div>
     {:else}
       <ul class="py-1">
         <li>
           <button
             type="button"
-            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-900 {selectedId ===
+            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-900 {selectedName ===
             null
               ? 'bg-zinc-800 text-white'
               : 'text-zinc-300'}"
@@ -180,14 +157,14 @@
             <span>All classes</span>
           </button>
         </li>
-        {#each filtered as cls (cls.id)}
+        {#each classes as cls (cls.id)}
           {@const isHover = hoveredClassId === cls.id}
           <li>
             <div
               class="crop-drop-row flex w-full items-center justify-between gap-2 transition-colors
                 {isHover
                 ? 'bg-blue-500/30 ring-2 ring-inset ring-blue-400'
-                : selectedId === cls.id
+                : selectedName === cls.name
                   ? 'bg-zinc-800'
                   : 'hover:bg-zinc-900'}"
               use:dndzone={{
@@ -200,7 +177,7 @@
                 // and hover-highlight became flaky. Letting the shadow
                 // trail the cursor keeps each row fully hittable.
                 dropTargetStyle: { outline: 'none' },
-                dropFromOthersDisabled: !ondrop,
+                dropFromOthersDisabled: false,
                 dragDisabled: true,
               }}
               onconsider={makeConsider(cls)}
@@ -211,8 +188,8 @@
               <div class="flex min-w-0 grow">
                 <button
                   type="button"
-                  class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedId ===
-                  cls.id
+                  class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedName ===
+                  cls.name
                     ? 'text-white'
                     : 'text-zinc-300'}"
                   onclick={() => onselect(cls)}
@@ -254,14 +231,19 @@
     <button
       type="button"
       class="btn w-full justify-center"
-      onclick={() => (modalOpen = true)}
+      onclick={() => (createOpen = true)}
     >
-      + Add Class
+      + New class
     </button>
   </div>
-</aside>
+</section>
 
-<AddClassModal open={modalOpen} onclose={() => (modalOpen = false)} />
+<ClassPicker
+  open={createOpen}
+  mode="create"
+  onpick={() => (createOpen = false)}
+  onclose={() => (createOpen = false)}
+/>
 
 <style>
   /* svelte-dnd-action injects a shadow placeholder element into the

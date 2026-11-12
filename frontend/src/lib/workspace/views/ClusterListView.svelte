@@ -1,9 +1,6 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
-  import { projectHref } from '$lib/projectPaths';
-  import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
-  import { page } from '$app/state';
+  import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import {
@@ -22,11 +19,7 @@
   import ClustersStatusBar from '$lib/components/clusters/ClustersStatusBar.svelte';
   import ClustersToolbar from '$lib/components/clusters/ClustersToolbar.svelte';
   import CropDetailModal from '$lib/components/CropDetailModal.svelte';
-  import ItemFilterBar from '$lib/components/itemFilter/ItemFilterBar.svelte';
-  import {
-    ItemFilterState,
-    withoutOpenVocab,
-  } from '$lib/itemFilter/itemFilterState.svelte';
+  import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
   import type { Crop } from '$lib/types';
   import type { ClusterListFilter, ClusterSortId } from '$lib/types_clusterList';
@@ -34,7 +27,11 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { strategiesStore } from '$stores/strategies.svelte';
 
+  let { ws }: { ws: WorkspaceController } = $props();
+
   const slotInventory = createSlotInventory();
+  // The controller is created once per mount and never swapped.
+  // svelte-ignore state_referenced_locally
   const list = createClusterListController({
     get classFilter() {
       return classFilter;
@@ -47,7 +44,7 @@
     },
     slotInventory,
     gridItemFilter,
-    initialUrlParams: page.url.searchParams,
+    initialUrlParams: ws.searchParams,
     writeUrl: syncClusterListUrl,
   });
   const modes = createClusterSearchModes({
@@ -84,90 +81,43 @@
     for (const g of galleriesBySlot.values()) g.dispose();
   });
 
-  const classFilter = $derived.by(() => {
-    const v = page.url.searchParams.get('class');
-    if (v == null) return null;
-    if (Number.isFinite(+v)) return +v;
-    // m22: a name-form deep link (`?class=<name>`) used to be silently
-    // ignored — only a numeric class id worked, so a name link to a
-    // slot-bound class rendered the unfiltered grid instead of routing to
-    // the slot gallery. Resolve the name against
-    // the loaded registry, same lookup `open()` already does in the
-    // opposite direction (cluster -> class name -> id -> slot route).
-    return findActiveClassByName(classesStore.classes, v)?.id ?? null;
-  });
-
-  // The shared item filter (class by name, confidence / area band, origin,
-  // embedding and review state), seeded from and written back to the URL.
-  // The largest-N toggle below keeps `max_rank`, so the bar never draws it.
-  const itemFilter = new ItemFilterState();
-  itemFilter.fromUrl(page.url.searchParams);
-  let matchingModeActive = $state(
-    page.url.searchParams.get('mode') === 'matching' ||
-      !!itemFilter.openVocabSet ||
-      !!itemFilter.sourcePrompt,
-  );
+  // A single class in the filter routes a slot-bound class to its gallery. The
+  // name is resolved against the loaded registry (class identity is the name).
   const classFilterName = $derived(
-    classFilter == null
-      ? null
-      : (classesStore.classes.find((c) => c.id === classFilter)?.name ?? null),
+    ws.itemQuery().class_name?.length === 1 ? ws.itemQuery().class_name![0]! : null,
   );
-  // The sidebar's `?class=` scopes the grid by the served class name, unless
-  // the bar already names classes.
-  function withSidebarClass<T extends { class_name?: string[]; class_names?: string[] }>(
-    f: T,
-    key: 'class_name' | 'class_names',
-  ): T {
-    const named = f[key];
-    if (named && named.length > 0) return f;
-    return classFilterName ? { ...f, [key]: [classFilterName] } : f;
-  }
+  const classFilter = $derived(
+    classFilterName
+      ? (findActiveClassByName(classesStore.classes, classFilterName)?.id ?? null)
+      : null,
+  );
+
+  // The shared item filter lives in the Workspace controller. The largest-N
+  // toggle below keeps `max_rank`, so the grid leaves it out of the list query.
+  const matchingModeActive = $derived(ws.matchingMode);
   function gridItemFilter(): ItemFilterQuery {
-    return withSidebarClass(
-      itemFilter.toQuery((p) => withoutOpenVocab(p) && p !== 'max_rank'),
-      'class_name',
-    );
+    return ws.itemQuery((p) => withoutOpenVocab(p) && p !== 'max_rank');
   }
   function matchingQuery(): ItemFilterQuery {
-    return withSidebarClass(itemFilter.toQuery(), 'class_name');
+    return ws.itemQuery();
   }
   function matchingBody(): ItemFilter {
-    return withSidebarClass(itemFilter.toBody(), 'class_names');
+    return ws.itemBody();
   }
   const gridFilterKey = $derived(JSON.stringify(gridItemFilter()));
   // Mirrors the cluster list's sort and card filter into the URL, beside the
   // item filter's own keys.
   function syncClusterListUrl(sort: ClusterSortId | null, f: ClusterListFilter): void {
-    const url = new URL(page.url.href);
-    clusterFilterToUrl(url.searchParams, sort, f);
-    void goto(resolve(projectHref(`/clusters${url.search}`)), {
-      replace: true,
-      reset: false,
-    });
-  }
-  function syncFilterUrl(): void {
-    const url = new URL(page.url.href);
-    itemFilter.toUrl(url.searchParams);
-    if (matchingModeActive) url.searchParams.set('mode', 'matching');
-    else url.searchParams.delete('mode');
-    void goto(resolve(projectHref(`/clusters${url.search}`)), {
-      replace: true,
-      reset: false,
-    });
+    ws.patchUrl((params) => clusterFilterToUrl(params, sort, f));
   }
   function enterMatchingMode(): void {
     if (modes.searchModeActive) modes.exitSearchMode();
     if (modes.ignoredModeActive) modes.exitIgnoredMode();
     if (modes.itemTextModeActive) modes.exitItemTextMode();
-    matchingModeActive = true;
-    syncFilterUrl();
+    ws.setMatchingMode(true);
   }
   function exitMatchingMode(): void {
-    matchingModeActive = false;
-    // The open-vocabulary pair only exists in this view.
-    itemFilter.openVocabSet = null;
-    itemFilter.sourcePrompt = null;
-    syncFilterUrl();
+    ws.setMatchingMode(false);
   }
 
   // The backend stores a slot's regions as a *sub-bbox* on each item
@@ -235,10 +185,6 @@
     }
   });
 
-  $effect(() => {
-    keyboardStore.setScope('clusters');
-  });
-
   // M6: Z on the slot gallery reverses the most recent region write
   // (bulk status change or a single bbox edit) — same key, same
   // undoStore, as the card-grid view's label-undo Z above; see
@@ -249,7 +195,7 @@
     const off = keyboardStore.registerAction(
       'region_gallery.undo',
       () => void gallery.undoLastAction(),
-      'clusters',
+      'cluster',
       { labelVars: { region: gallery.slot.label.singular } },
     );
     return off;
@@ -279,21 +225,6 @@
   />
 
   <AssistLoopPanel />
-
-  <!-- Shared item filter: scopes the cluster grid, or the Matching items list. -->
-  {#if !isSlotFilter && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
-    <div
-      class="border-b border-zinc-800 bg-zinc-900/40 px-4 py-2"
-      data-testid="clusters-filter-bar"
-    >
-      <ItemFilterBar
-        state={itemFilter}
-        visible={(p) => p !== 'max_rank'}
-        showOpenVocab={matchingModeActive}
-        onchange={syncFilterUrl}
-      />
-    </div>
-  {/if}
 
   {#if !isSlotFilter && !matchingModeActive && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
     <ClusterListFilterBar {list} />

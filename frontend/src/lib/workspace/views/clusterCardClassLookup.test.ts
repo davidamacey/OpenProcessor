@@ -10,8 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const LIB = path.resolve(here, '../../../../lib');
-const pageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../..');
+const pageSrc = readFileSync(path.join(here, 'ClusterListView.svelte'), 'utf-8');
 const cardSrc = readFileSync(
   path.join(LIB, 'components/clusters/ClusterGridCard.svelte'),
   'utf-8',
@@ -39,7 +39,9 @@ describe('/clusters class lookups', () => {
   });
 
   it('every name-to-class lookup goes through the active-first normalized lookup', () => {
-    expect(pageSrc).toMatch(/findActiveClassByName\(classesStore\.classes, v\)/);
+    expect(pageSrc).toMatch(
+      /findActiveClassByName\(classesStore\.classes, classFilterName\)/,
+    );
     expect(inventorySrc).toMatch(
       /findActiveClassByName\(classesStore\.classes, className\)/,
     );

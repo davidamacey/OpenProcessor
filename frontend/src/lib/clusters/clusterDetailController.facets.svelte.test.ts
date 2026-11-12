@@ -1,12 +1,12 @@
 /**
- * The cluster page's facet chips: the counts are the served facets, and a
+ * The cluster scope's facet chips: the counts are the served facets, and a
  * selected chip goes out as the matching `GET /crops` parameter, unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 
 vi.mock('$app/state', () => ({
-  page: { params: { id: 'uid-7' }, url: new URL('http://x/p/default/clusters/uid-7') },
+  page: { url: new URL('http://x/p/default/workspace?scope=cluster:uid-7') },
 }));
 vi.mock('$lib/api_clusters', async () => {
   const actual =
@@ -17,6 +17,7 @@ import { getCluster, getClusterFacets } from '$lib/api_clusters';
 import { createClusterDetailController } from './clusterDetailController.svelte';
 import type { ClusterFacets } from '$lib/types_clusterList';
 
+const UID = 'uid-7';
 const FACETS: ClusterFacets = {
   cluster_uid: 'uid-7',
   total: 30,
@@ -39,7 +40,7 @@ let cleanup: (() => void) | undefined;
 function wire() {
   let view!: ReturnType<typeof createClusterDetailController>;
   cleanup = $effect.root(() => {
-    view = createClusterDetailController();
+    view = createClusterDetailController(() => UID);
   });
   flushSync();
   return view;

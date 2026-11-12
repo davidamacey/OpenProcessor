@@ -13,6 +13,7 @@
     detectorText,
     reviewCountsTitle,
   } from '$lib/clusters/clusterCardText';
+  import { clusterScopeSearch } from '$lib/workspace/workspaceUrl';
   import { projectHref } from '$lib/projectPaths';
   import type { Cluster } from '$lib/types';
   import type { ClusterFlag } from '$lib/types_clusterList';
@@ -44,12 +45,14 @@
     if (slotForClassName(c.dominant_class_name) != null && c.dominant_class_name) {
       void goto(
         resolve(
-          projectHref(`/clusters?class=${encodeURIComponent(c.dominant_class_name)}`),
+          projectHref(
+            `/workspace?view=clusters&class_name=${encodeURIComponent(c.dominant_class_name)}`,
+          ),
         ),
       );
       return;
     }
-    void goto(resolve(projectHref(`/clusters/${encodeURIComponent(c.uid)}`)));
+    void goto(resolve(projectHref(`/workspace${clusterScopeSearch(c.uid)}`)));
   }
 
   const numberText = $derived(displayNoText(c));

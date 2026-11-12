@@ -152,7 +152,7 @@ describe('EmbeddingPlot.svelte: side-by-side layout + click-to-enlarge', () => {
 });
 
 const CLUSTERS_PAGE_FILES = [
-  '../../routes/p/[project]/clusters/+page.svelte',
+  '../workspace/views/ClusterListView.svelte',
   '../clusters/clusterListController.svelte.ts',
   '../clusters/clusterSearchModes.svelte.ts',
   '../clusters/slotInventory.svelte.ts',
@@ -163,7 +163,7 @@ const CLUSTERS_PAGE_FILES = [
 ];
 
 describe('/clusters wiring adds zero new keydown listeners', () => {
-  it('routes/clusters/+page.svelte and its split modules still register zero direct window/document keydown listeners', () => {
+  it('the Clusters view and its split modules still register zero direct window/document keydown listeners', () => {
     for (const rel of CLUSTERS_PAGE_FILES) {
       const src = read(rel);
       expect(src, rel).not.toMatch(
@@ -182,7 +182,7 @@ describe('/clusters wiring adds zero new keydown listeners', () => {
   });
 
   it('the toggle button is gated on isEmbeddingVizAvailable (absent, not just disabled, for a backend that has not shipped it)', () => {
-    const src = read('../../routes/p/[project]/clusters/+page.svelte');
+    const src = read('../workspace/views/ClusterListView.svelte');
     expect(src).toMatch(/isEmbeddingVizAvailable/);
     expect(src).toMatch(/embeddingVizAvailable/);
   });

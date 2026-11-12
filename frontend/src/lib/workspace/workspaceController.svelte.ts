@@ -16,6 +16,11 @@ import { page } from '$app/state';
 import { projectHref } from '$lib/projectPaths';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nextStepsStore } from '$stores/nextSteps.svelte';
+import {
+  createSelectionSummary,
+  type SelectionSummaryState,
+} from './selectionSummary.svelte';
+import type { Cluster } from '$lib/types';
 import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
@@ -48,6 +53,12 @@ export class WorkspaceController {
   /** Set by a second select-all on a full page: the served total to confirm. */
   pendingSelectAll = $state<{ total: number } | null>(null);
   detailsOpen = $state(wideScreen());
+  /** The queues and classes rail as a drawer under `lg`. */
+  railOpen = $state(false);
+  /** The server's account of the selection: what a bulk action would touch. */
+  summary!: SelectionSummaryState;
+  /** The open cluster's served card, set by the cluster scope for the details panel. */
+  scopeCard = $state<Cluster | null>(null);
 
   readonly #url = $derived(parseWorkspaceUrl(page.url.searchParams));
   readonly #applied = $derived.by(() => {
@@ -59,6 +70,7 @@ export class WorkspaceController {
 
   constructor() {
     this.#stop = $effect.root(() => {
+      this.summary = createSelectionSummary(() => this.itemSelection());
       $effect(() => {
         this.filter.fromUrl(page.url.searchParams);
       });
@@ -88,6 +100,39 @@ export class WorkspaceController {
     this.#go(params, replace);
   }
 
+  /** The URL's query, for the keys a view owns (cluster-list sort and filters). */
+  get searchParams(): Pick<URLSearchParams, 'get' | 'getAll' | 'has'> {
+    return page.url.searchParams;
+  }
+
+  /** Rewrites the keys a view owns, leaving every other key as it is. */
+  patchUrl(mutate: (params: URLSearchParams) => void, replace = true): void {
+    const params = new SvelteURLSearchParams(page.url.search);
+    mutate(params);
+    this.#go(params, replace);
+  }
+
+  /** The open-vocabulary "Matching items" mode of the Clusters view. */
+  get matchingMode(): boolean {
+    return (
+      page.url.searchParams.get('mode') === 'matching' ||
+      !!this.#applied.openVocabSet ||
+      !!this.#applied.sourcePrompt
+    );
+  }
+
+  setMatchingMode(on: boolean): void {
+    if (!on) {
+      this.filter.openVocabSet = null;
+      this.filter.sourcePrompt = null;
+    }
+    this.patchUrl((params) => {
+      this.filter.toUrl(params);
+      if (on) params.set('mode', 'matching');
+      else params.delete('mode');
+    });
+  }
+
   #go(params: URLSearchParams, replace: boolean): void {
     const search = params.toString();
     void goto(resolve(projectHref(`/workspace${search ? `?${search}` : ''}`)), {
@@ -106,6 +151,11 @@ export class WorkspaceController {
 
   setScope(scope: ScopeRef | null): void {
     this.#write({ scope }, false);
+  }
+
+  /** Opens a cluster in place; the filter and the view stay. */
+  openCluster(uid: string | null): void {
+    this.setScope(uid ? { kind: 'cluster', id: uid } : null);
   }
 
   setFocus(focus: FocusRef | null): void {
@@ -139,9 +189,12 @@ export class WorkspaceController {
     this.#go(params, false);
   }
 
-  /** The applied filter, the queue as `review_tab` and the scope, as query parameters. */
-  itemQuery(): ItemFilterQuery & { review_tab?: string } {
-    const q: ItemFilterQuery & { review_tab?: string } = this.#applied.toQuery();
+  /** The applied filter, the queue as `review_tab` and the scope, as query parameters.
+   *  `include` drops the filter keys a view does not apply. */
+  itemQuery(include?: (param: string) => boolean): ItemFilterQuery & {
+    review_tab?: string;
+  } {
+    const q: ItemFilterQuery & { review_tab?: string } = this.#applied.toQuery(include);
     const { queue, scope } = this.#url;
     if (queue) q.review_tab = queue;
     if (scope?.kind === 'cluster') q.cluster_uid = [scope.id];
@@ -183,6 +236,10 @@ export class WorkspaceController {
 
   confirmSelectAllMatching(): void {
     this.select({ kind: 'matching' });
+  }
+
+  toggleRail(): void {
+    this.railOpen = !this.railOpen;
   }
 
   toggleDetails(): void {

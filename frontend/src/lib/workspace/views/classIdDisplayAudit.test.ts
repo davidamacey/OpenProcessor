@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const LIB = path.resolve(here, '../../../../../lib');
+const LIB = path.resolve(here, '../..');
 const src = readFileSync(
   path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
   'utf-8',
@@ -27,8 +27,8 @@ const liveSrc = readFileSync(
   path.join(LIB, 'clusters/clusterDetailLive.svelte.ts'),
   'utf-8',
 );
-const toolbarSrc = readFileSync(
-  path.join(LIB, 'components/clusters/ClusterDetailToolbar.svelte'),
+const detailsSrc = readFileSync(
+  path.join(LIB, 'workspace/details/ClusterDetails.svelte'),
   'utf-8',
 );
 
@@ -43,7 +43,7 @@ describe('class-id-display-audit-2026-09-26: clusterName prefers the served name
     expect(liveSrc).toMatch(
       /const liveClassId = \$derived\(view\.clsForCluster\?\.id \?\? null\);/,
     );
-    expect(toolbarSrc).toMatch(/clsForCluster\.validated_count/);
-    expect(toolbarSrc).toMatch(/clsForCluster\.count/);
+    expect(detailsSrc).toMatch(/cls\.validated_count/);
+    expect(detailsSrc).toMatch(/cls\.count/);
   });
 });

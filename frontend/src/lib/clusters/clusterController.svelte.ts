@@ -34,7 +34,6 @@ import {
   putCropLabel,
   unexcludeCrops,
   vlmDismissCrop,
-  type ExcludeReason,
 } from '$lib/api_cropWrites';
 import { ApiError, apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
@@ -400,7 +399,7 @@ export function createClusterActionController(opts: ClusterActionControllerOptio
     void classesStore.refresh();
   }
 
-  async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
+  async function ignoreSelected(reason = 'ignore'): Promise<void> {
     const ids = [...sel.ids];
     if (ids.length === 0) {
       toastStore.info('Select crops first to ignore.');

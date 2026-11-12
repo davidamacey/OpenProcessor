@@ -42,7 +42,7 @@ const editSrc = reviewSource('lib/review/reviewSlotEditController.svelte.ts');
 const slotActionsSrc = reviewSource('lib/review/reviewSlotActions.svelte.ts');
 // The /clusters page and the modules it was split into.
 const clustersPageSrc = [
-  '../clusters/+page.svelte',
+  '../../../../lib/workspace/views/ClusterListView.svelte',
   '../../../../lib/clusters/clusterListController.svelte.ts',
   '../../../../lib/clusters/clusterSearchModes.svelte.ts',
   '../../../../lib/clusters/slotInventory.svelte.ts',

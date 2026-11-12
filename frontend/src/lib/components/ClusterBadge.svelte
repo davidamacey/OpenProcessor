@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { clusterScopeSearch } from '$lib/workspace/workspaceUrl';
   import { projectHref } from '$lib/projectPaths';
   /**
    * Cluster-origin badge for a search-result crop (global search on
@@ -8,7 +9,7 @@
    * cluster (blank when it served none; the uid stays in the title), or an amber "Unlabeled"
    * variant when the cluster has no dominant class yet.
    *
-   * Clicking navigates to `/clusters/{uid}`. Purely presentational
+   * Clicking opens the cluster in the Workspace. Purely presentational
    * otherwise — the caller supplies `dominant_class_name` (batched from
    * `getClusters()`, never recomputed client-side per this repo's
    * CLAUDE.md).
@@ -28,7 +29,7 @@
 
   function open(e: MouseEvent): void {
     e.stopPropagation();
-    void goto(resolve(projectHref(`/clusters/${encodeURIComponent(clusterUid)}`)));
+    void goto(resolve(projectHref(`/workspace${clusterScopeSearch(clusterUid)}`)));
   }
 </script>
 

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { parseWorkspaceUrl, writeWorkspaceUrl, WORKSPACE_URL_KEYS } from './workspaceUrl';
+import {
+  clusterScopeSearch,
+  parseWorkspaceUrl,
+  writeWorkspaceUrl,
+  WORKSPACE_URL_KEYS,
+} from './workspaceUrl';
 
 const FULL =
   'view=table&queue=to_label&scope=cluster%3Aabc&focus=item%3Acrop1' +
   '&sort_gallery=taken_desc&sort_clusters=size_desc&sort_detections=conf_asc' +
   '&sort_review=rank&sort_table=class&rows=images&columns=class%2Cconf' +
-  '&thumb=l&q=red+car&similar_to=crop9&map=12%2F51.51%2F-0.13';
+  '&thumb=l&q=red+widget&similar_to=crop9&map=12%2F51.51%2F-0.13';
 
 const entries = (q: string | URLSearchParams): [string, string][] =>
   [...new URLSearchParams(q).entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -31,7 +36,7 @@ describe('workspaceUrl', () => {
       rows: 'images',
       columns: ['class', 'conf'],
       thumb: 'l',
-      q: 'red car',
+      q: 'red widget',
       similarTo: 'crop9',
       map: { zoom: 12, lat: 51.51, lon: -0.13 },
     });
@@ -69,9 +74,9 @@ describe('workspaceUrl', () => {
   });
 
   it('leaves keys it was not given and deletes keys set to null', () => {
-    const p = new URLSearchParams('class_name=car&view=map&queue=q1');
+    const p = new URLSearchParams('class_name=widget&view=map&queue=q1');
     writeWorkspaceUrl(p, { view: 'clusters', queue: null });
-    expect(p.toString()).toBe('class_name=car&view=clusters');
+    expect(p.toString()).toBe('class_name=widget&view=clusters');
   });
 
   it('never writes the defaults', () => {
@@ -83,5 +88,11 @@ describe('workspaceUrl', () => {
   it('owns no item-filter key', () => {
     expect(WORKSPACE_URL_KEYS).not.toContain('class_name');
     expect(WORKSPACE_URL_KEYS).toContain('sort_clusters');
+  });
+});
+
+describe('clusterScopeSearch', () => {
+  it('opens a cluster in the Clusters view', () => {
+    expect(clusterScopeSearch('u 1')).toBe('?view=clusters&scope=cluster%3Au+1');
   });
 });

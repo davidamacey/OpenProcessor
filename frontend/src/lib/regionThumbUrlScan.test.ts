@@ -84,9 +84,7 @@ describe('no raw region_thumbnail URL construction outside the api.ts helpers', 
   it('scans at least the known call-site files (sanity check the walk works)', () => {
     const rels = files.map((f) => path.relative(srcRoot, f));
     expect(rels).toContain(path.join('lib', 'components', 'SlotCard.svelte'));
-    expect(rels.some((r) => r.includes('clusters') && r.endsWith('+page.svelte'))).toBe(
-      true,
-    );
+    expect(rels.some((r) => r.endsWith('ClusterListView.svelte'))).toBe(true);
   });
 
   for (const file of files) {

@@ -156,3 +156,10 @@ export function writeWorkspaceUrl(
       put(params, sortKey(view), next.sort[view] ?? null);
   }
 }
+
+/** The query string that opens one cluster in the Clusters view. */
+export function clusterScopeSearch(uid: string): string {
+  const params = new URLSearchParams();
+  writeWorkspaceUrl(params, { view: 'clusters', scope: { kind: 'cluster', id: uid } });
+  return `?${params.toString()}`;
+}

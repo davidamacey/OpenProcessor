@@ -100,7 +100,7 @@ describe('OpenVocabProvenanceRows', () => {
       open_vocab_revision: 3,
     });
     const href = q('ov-matching-link')!.getAttribute('href')!;
-    expect(href).toContain('/clusters?');
+    expect(href).toContain('/workspace?');
     const params = new URLSearchParams(href.split('?')[1]);
     expect(params.get('mode')).toBe('matching');
     expect(params.get('open_vocab_set')).toBe('widgets');

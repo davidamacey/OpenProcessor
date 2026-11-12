@@ -7,7 +7,7 @@
  */
 import { SOURCES, TRIGGERS } from 'svelte-dnd-action';
 import { getClusters } from '$lib/api_clusters';
-import { flagNeedsNewClass, type ExcludeReason } from '$lib/api_cropWrites';
+import { flagNeedsNewClass } from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
 import { createClusterActionController } from '$lib/clusters/clusterController.svelte';
 import type { ClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
@@ -102,22 +102,9 @@ export function createClusterDetailActions(view: ClusterDetailController) {
   }
 
   // -- Ignore / exclude --------------------------------------------------
-  // Excluded crops drop out of training + clustering (reversible). Actual
-  // request + excludedCropIds claim/release + last-batch bookkeeping now
-  // live in clusterController.svelte.ts (ignoreSelected/undoIgnore);
-  // ignoreMenuOpen/EXCLUDE_REASONS stay here — they're pure toolbar UI
-  // state, not action logic.
-  let ignoreMenuOpen = $state<boolean>(false);
-  const EXCLUDE_REASONS: { value: ExcludeReason; label: string }[] = [
-    { value: 'ignore', label: 'Ignore (generic)' },
-    { value: 'blurry', label: 'Blurry' },
-    { value: 'unidentifiable', label: 'Unidentifiable' },
-    { value: 'not_the_subject', label: 'Not the subject' },
-    { value: 'partial_crop', label: 'Partial crop' },
-  ];
-
-  async function ignoreSelected(reason: ExcludeReason = 'ignore'): Promise<void> {
-    if (sel.size > 0) ignoreMenuOpen = false;
+  // Excluded crops drop out of training + clustering (reversible). The request
+  // and its bookkeeping live in clusterController.svelte.ts.
+  async function ignoreSelected(reason = 'ignore'): Promise<void> {
     await controller.ignoreSelected(reason);
   }
 
@@ -376,14 +363,7 @@ export function createClusterDetailActions(view: ClusterDetailController) {
     get recentTargets() {
       return recentTargets;
     },
-    get ignoreMenuOpen() {
-      return ignoreMenuOpen;
-    },
-    set ignoreMenuOpen(v: boolean) {
-      ignoreMenuOpen = v;
-    },
     controller,
-    EXCLUDE_REASONS,
     kg,
     kc,
     flagSelectedForNewClass,

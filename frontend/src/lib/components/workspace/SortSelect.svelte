@@ -14,9 +14,16 @@
     applied: string;
     fallbackReason?: string | null;
     onchange: (id: string) => void;
+    testid?: string;
   }
 
-  let { options, applied, fallbackReason = null, onchange }: Props = $props();
+  let {
+    options,
+    applied,
+    fallbackReason = null,
+    onchange,
+    testid = 'sort-select',
+  }: Props = $props();
 </script>
 
 <label class="flex items-center gap-2 text-xs text-zinc-400">
@@ -25,7 +32,7 @@
     class="select"
     value={applied}
     onchange={(e) => onchange(e.currentTarget.value)}
-    data-testid="sort-select"
+    data-testid={testid}
   >
     {#each options as o (o.id)}
       <option value={o.id}>{o.label}</option>

@@ -3,7 +3,7 @@ import { legacyRedirectTarget } from '$lib/projectPaths';
 import { projectsStore } from '$stores/projects.svelte';
 import type { PageLoad } from './$types';
 
-// The bare pre-projects paths (`/review?tab=x`, `/clusters/12`, ...) are
+// The bare pre-projects paths (`/review?tab=x`, `/review`, ...) are
 // URL aliases for bookmarks: they redirect to the same path under the
 // served default project, query string kept. Anything that isn't a
 // project section is a 404. `/projects` and `/p/...` are more specific

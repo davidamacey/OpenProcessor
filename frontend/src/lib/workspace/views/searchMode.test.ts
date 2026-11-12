@@ -52,9 +52,9 @@ function extractSearchModeEffect(src: string): string {
 }
 
 describe('/clusters search mode', () => {
-  const src = read('../../../../lib/clusters/clusterSearchModes.svelte.ts');
-  const gridSrc = read('../../../../lib/components/clusters/ClustersGrid.svelte');
-  const toolbarSrc = read('../../../../lib/components/clusters/ClustersToolbar.svelte');
+  const src = read('../../clusters/clusterSearchModes.svelte.ts');
+  const gridSrc = read('../../components/clusters/ClustersGrid.svelte');
+  const toolbarSrc = read('../../components/clusters/ClustersToolbar.svelte');
 
   it('registers dropOnClassStore only inside the searchModeActive-gated effect, and unregisters on cleanup', () => {
     const body = extractSearchModeEffect(src);

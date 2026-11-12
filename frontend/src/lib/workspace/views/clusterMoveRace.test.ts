@@ -40,7 +40,7 @@ import { buildGroups, createGridGroups } from '$lib/gridGroups.svelte';
 import { extractBalanced, extractFunction, normalize } from '$lib/testing/sourceScan';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const LIB = path.resolve(here, '../../../../../lib');
+const LIB = path.resolve(here, '../..');
 const src = readFileSync(
   path.join(LIB, 'clusters/clusterDetailController.svelte.ts'),
   'utf-8',

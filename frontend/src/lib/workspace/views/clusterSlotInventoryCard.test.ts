@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const LIB = path.resolve(here, '../../../../lib');
-const pageSrc = readFileSync(path.join(here, '+page.svelte'), 'utf-8');
+const LIB = path.resolve(here, '../..');
+const pageSrc = readFileSync(path.join(here, 'ClusterListView.svelte'), 'utf-8');
 const inventorySrc = readFileSync(
   path.join(LIB, 'clusters/slotInventory.svelte.ts'),
   'utf-8',

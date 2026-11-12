@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe('WorkspaceController', () => {
   it('switching views keeps filter, queue, scope and selection', () => {
-    visit('?view=clusters&class_name=car&queue=to_label&scope=cluster%3Au1');
+    visit('?view=clusters&class_name=widget&queue=to_label&scope=cluster%3Au1');
     const c = make();
     c.select({ kind: 'clusters', clusterUids: ['u1'] });
     const selection = c.selection;
@@ -63,22 +63,22 @@ describe('WorkspaceController', () => {
   });
 
   it('back restores the previous view and filter', () => {
-    visit('?view=clusters&class_name=car');
+    visit('?view=clusters&class_name=widget');
     const c = make();
     expect(c.view).toBe('clusters');
-    expect(c.itemQuery().class_name).toEqual(['car']);
+    expect(c.itemQuery().class_name).toEqual(['widget']);
 
-    visit('?view=detections&class_name=bus');
+    visit('?view=detections&class_name=gadget');
     flushSync();
     expect(c.view).toBe('detections');
-    expect(c.itemQuery().class_name).toEqual(['bus']);
-    expect(c.filter.classNames).toEqual(['bus']);
+    expect(c.itemQuery().class_name).toEqual(['gadget']);
+    expect(c.filter.classNames).toEqual(['gadget']);
 
-    visit('?view=clusters&class_name=car');
+    visit('?view=clusters&class_name=widget');
     flushSync();
     expect(c.view).toBe('clusters');
-    expect(c.itemQuery().class_name).toEqual(['car']);
-    expect(c.filter.classNames).toEqual(['car']);
+    expect(c.itemQuery().class_name).toEqual(['widget']);
+    expect(c.filter.classNames).toEqual(['widget']);
   });
 
   it('uses the served default view when the URL has none', () => {
@@ -127,30 +127,30 @@ describe('WorkspaceController', () => {
   });
 
   it('an unapplied draft does not change the query', () => {
-    visit('?class_name=car');
+    visit('?class_name=widget');
     const c = make();
-    c.filter.classNames = ['bus'];
-    expect(c.itemQuery().class_name).toEqual(['car']);
+    c.filter.classNames = ['gadget'];
+    expect(c.itemQuery().class_name).toEqual(['widget']);
     c.applyFilter();
-    expect(lastGoto().href).toContain('class_name=bus');
+    expect(lastGoto().href).toContain('class_name=gadget');
   });
 
   it('removing a chip writes the URL without that value', () => {
-    visit('?class_name=car&class_name=bus&view=gallery');
+    visit('?class_name=widget&class_name=gadget&view=gallery');
     const c = make();
-    c.removeChip('class_name', 'car');
+    c.removeChip('class_name', 'widget');
     const { href } = lastGoto();
-    expect(href).toContain('class_name=bus');
-    expect(href).not.toContain('class_name=car');
+    expect(href).toContain('class_name=gadget');
+    expect(href).not.toContain('class_name=widget');
     expect(href).toContain('view=gallery');
   });
 
   it('builds the selection body from the current selection kind', () => {
-    visit('?view=clusters&class_name=car');
+    visit('?view=clusters&class_name=widget');
     const c = make();
     c.select({ kind: 'clusters', clusterUids: ['u1'] });
     expect(c.itemSelection()).toEqual({
-      filter: { class_names: ['car'], cluster_uids: ['u1'] },
+      filter: { class_names: ['widget'], cluster_uids: ['u1'] },
     });
   });
 
@@ -165,5 +165,44 @@ describe('WorkspaceController', () => {
     c.confirmSelectAllMatching();
     expect(c.selection).toEqual({ kind: 'matching' });
     expect(c.pendingSelectAll).toBeNull();
+  });
+
+  it('a view can drop filter keys it does not apply', () => {
+    visit('?class_name=widget&max_rank=2');
+    const c = make();
+    expect(c.itemQuery().max_rank).toBe(2);
+    expect(c.itemQuery((p) => p !== 'max_rank').max_rank).toBeUndefined();
+  });
+
+  it('patchUrl rewrites the keys a view owns and keeps the rest', () => {
+    visit('?view=clusters&class_name=widget&sort=size_desc');
+    const c = make();
+    c.patchUrl((p) => p.set('sort', 'updated_desc'));
+    const { href, opts } = lastGoto();
+    expect(href).toContain('sort=updated_desc');
+    expect(href).toContain('view=clusters');
+    expect(href).toContain('class_name=widget');
+    expect(opts.replace).toBe(true);
+  });
+
+  it('matching mode is on for mode=matching or an open-vocabulary filter', () => {
+    visit('?view=clusters&mode=matching');
+    expect(make().matchingMode).toBe(true);
+    ws?.dispose();
+    visit('?view=clusters&open_vocab_set=widgets');
+    expect(make().matchingMode).toBe(true);
+    ws?.dispose();
+    visit('?view=clusters');
+    expect(make().matchingMode).toBe(false);
+  });
+
+  it('leaving matching mode drops the mode and the open-vocabulary pair', () => {
+    visit('?view=clusters&mode=matching&open_vocab_set=widgets&source_prompt=w');
+    const c = make();
+    c.setMatchingMode(false);
+    const { href } = lastGoto();
+    expect(href).not.toContain('mode=');
+    expect(href).not.toContain('open_vocab_set');
+    expect(href).not.toContain('source_prompt');
   });
 });

@@ -7,7 +7,7 @@ import {
   type WorkspaceSelection,
 } from './selection';
 
-const FILTER = { class_names: ['car'], review_tab: 'to_label' };
+const FILTER = { class_names: ['widget'], review_tab: 'to_label' };
 
 describe('toItemSelection', () => {
   it('sends nothing for no selection', () => {
@@ -51,7 +51,7 @@ describe('toItemSelection', () => {
   });
 
   it('does not alias the caller filter', () => {
-    const f = { class_names: ['car'] };
+    const f = { class_names: ['widget'] };
     const out = toItemSelection({ kind: 'matching' }, f);
     expect(out!.filter).not.toBe(f);
   });
