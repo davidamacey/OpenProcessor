@@ -28,6 +28,7 @@ def bucket(
     detector_conf: float | None = None,
     review: dict[str, int] | None = None,
     updated: str | None = None,
+    near_dup_groups: int | None = None,
 ) -> dict[str, Any]:
     """One ``cluster_uid`` terms bucket (cluster ``cid``, see :func:`uid`) as OpenSearch returns it."""
     classes = classes if classes is not None else [('van', size)]
@@ -45,6 +46,8 @@ def bucket(
         },
         'detector_conf': {'value': detector_conf},
     }
+    if near_dup_groups is not None:
+        out['near_dup_groups'] = {'value': near_dup_groups}
     out['review'] = {
         'buckets': {tab: {'doc_count': (review or {}).get(tab, 0)} for tab in CLUSTER_REVIEW_TABS}
     }

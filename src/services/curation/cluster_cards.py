@@ -124,6 +124,7 @@ def aggregation_body(params: ClusterListParams, embedding: WriteFields) -> dict[
         'validated': {'filter': {'term': {'class_validated': True}}},
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
+        'near_dup_groups': {'cardinality': {'field': 'near_dup_group_id'}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
         **review_aggs(embedding.vector_field),
     }
@@ -178,6 +179,7 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
         'display_name_kind': cast(
             'Literal["class", "detector", "none"]', named['display_name_kind']
         ),
+        'near_dup_group_count': int(bucket.get('near_dup_groups', {}).get('value') or 0),
         'label_agreement': label_agreement,
         'labelled_share': (labelled_total / size) if size else None,
         'is_unlabeled': labelled_total == 0,

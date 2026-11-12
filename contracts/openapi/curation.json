@@ -5659,6 +5659,11 @@
             ],
             "title": "Labelled Share"
           },
+          "near_dup_group_count": {
+            "description": "How many near-duplicate groups the members belong to; 0 when none of them is in a group.",
+            "title": "Near Dup Group Count",
+            "type": "integer"
+          },
           "needs_review_count": {
             "description": "review_counts['all']: the review queue sort key.",
             "title": "Needs Review Count",
@@ -5718,6 +5723,7 @@
           "dominant_count",
           "display_name",
           "display_name_kind",
+          "near_dup_group_count",
           "label_agreement",
           "labelled_share",
           "is_unlabeled",

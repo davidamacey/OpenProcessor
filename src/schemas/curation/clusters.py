@@ -49,6 +49,13 @@ class ClusterCard(TypedDict):
         Literal['class', 'detector', 'none'],
         Field(description='Where `display_name` came from.'),
     ]
+    near_dup_group_count: Annotated[
+        int,
+        Field(
+            description='How many near-duplicate groups the members belong to; 0 when none of '
+            'them is in a group.'
+        ),
+    ]
     label_agreement: Annotated[
         float | None, Field(description="The top class's share of the labelled members.")
     ]
