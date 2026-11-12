@@ -49,7 +49,11 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-function setup() {
+function setup(): {
+  filter: { geoBbox: unknown; geoPolygon: unknown };
+  applyFilter: ReturnType<typeof vi.fn>;
+  area: AreaTools;
+} {
   const filter = { geoBbox: null, geoPolygon: null };
   const applyFilter = vi.fn();
   const area = new AreaTools({ filter, applyFilter });
@@ -60,7 +64,7 @@ function setup() {
     props: { meta: mapMeta(), cells: null, onview: () => {}, oncell: () => false, area },
   });
   flushSync();
-  return { filter, applyFilter };
+  return { filter, applyFilter, area };
 }
 
 const at = (lng: number, lat: number, shiftKey: boolean) => ({
@@ -100,5 +104,21 @@ describe('MapView area tools', () => {
     expect(filter.geoBbox).toBeNull();
     expect(filter.geoPolygon).toBeNull();
     expect(applyFilter).not.toHaveBeenCalled();
+  });
+
+  it('an armed lasso drawn by a plain drag writes the polygon in order, then disarms', () => {
+    const { filter, applyFilter, area } = setup();
+    area.toggleLasso();
+    h.handlers.mousedown(at(7, 46, false));
+    h.handlers.mousemove(at(9, 46.5, false));
+    h.handlers.mousemove(at(8, 48, false));
+    h.handlers.mouseup({});
+    expect(filter.geoPolygon).toEqual([
+      [7, 46],
+      [9, 46.5],
+      [8, 48],
+    ]);
+    expect(applyFilter).toHaveBeenCalledTimes(1);
+    expect(area.armed).toBe(false);
   });
 });

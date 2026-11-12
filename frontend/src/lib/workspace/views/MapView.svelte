@@ -43,14 +43,19 @@
     untrack(() => void ctl.refresh());
   });
 
-  // A cell focus in the URL (a reload, Back) is restored once its cell is in the loaded set.
+  // The URL focus drives the cell: a cell focus (a reload, Back) is restored once its cell is in
+  // the loaded set, and leaving a cell focus drops the cell. Only the focus changing clears it, so
+  // a click (cell set before the URL catches up) is not undone by an unrelated re-run.
+  let hadCellFocus = false;
   $effect(() => {
     const focus = ws.url.focus;
     const features = ctl.cells?.features;
     if (focus?.kind !== 'cell') {
-      if (ctl.cell && focus?.kind !== 'image') untrack(() => void (ctl.cell = null));
+      if (hadCellFocus) untrack(() => ctl.clearLocal());
+      hadCellFocus = false;
       return;
     }
+    hadCellFocus = true;
     if (untrack(() => ctl.cell?.tile) === focus.id) return;
     const hit = features?.find((f) => f.properties.tile === focus.id);
     if (hit)
@@ -63,6 +68,11 @@
           }),
       );
   });
+
+  /** A focus is useless behind a closed drawer (under 1280 px). */
+  function showDetails(): void {
+    if (!ws.detailsOpen) ws.toggleDetails();
+  }
 
   function onview(view: MapViewQuery): void {
     void ctl.loadCells(view);
@@ -91,7 +101,14 @@
           ? 'coarse (about 1 km)'
           : 'exact'}</span
       >
-      <span class="text-zinc-500">Shift+drag selects an area.</span>
+      <span class="text-zinc-500">Shift+drag selects an area, or</span>
+      <button
+        type="button"
+        class="btn-sm"
+        aria-pressed={area.armed}
+        data-testid="map-lasso"
+        onclick={() => area.toggleLasso()}>draw a lasso</button
+      >
     </p>
   {/if}
   {#if ctl.loadingMeta}
@@ -132,8 +149,14 @@
         {area}
         selectedTile={ctl.cell?.tile ?? null}
         {onview}
-        oncell={(cell) => void ctl.focusCell(cell)}
-        onpin={(id) => ctl.focusPin(id)}
+        oncell={(cell) => {
+          showDetails();
+          void ctl.focusCell(cell);
+        }}
+        onpin={(id) => {
+          showDetails();
+          ctl.focusPin(id);
+        }}
       />
       {#if ctl.loadingCells}
         <span class="chip absolute left-6 top-4 bg-zinc-900/90 text-zinc-300"

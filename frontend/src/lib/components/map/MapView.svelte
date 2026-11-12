@@ -47,8 +47,6 @@
   let ready = false;
   /** Set when MapLibre cannot get a WebGL2 context; the card then explains instead of drawing. */
   let noWebgl = $state(false);
-  /** The lasso button was pressed: the next drag draws instead of panning. */
-  let lassoArmed = $state(false);
   /** MapLibre's own words when the worker or style fails to load; the canvas stays blank then. */
   let loadError = $state<string | null>(null);
   const gpsNote = $derived(
@@ -131,7 +129,7 @@
       e.lngLat.lat,
     ];
     m.on('mousedown', (e) => {
-      if (lassoArmed) {
+      if (area.armed) {
         m.dragPan.disable();
         area.begin('lasso', at(e));
       } else if (e.originalEvent.shiftKey) {
@@ -146,7 +144,6 @@
     m.on('mouseup', () => {
       if (!area.drawing) return;
       area.finish();
-      lassoArmed = false;
       m.dragPan.enable();
     });
   }
@@ -366,15 +363,6 @@
     Map could not load: {loadError}
   </p>
 {/if}
-{#if area && !noWebgl}
-  <button
-    type="button"
-    class="btn-sm absolute right-2 top-24 z-10"
-    aria-pressed={lassoArmed}
-    data-testid="map-lasso"
-    onclick={() => (lassoArmed = !lassoArmed)}>Lasso</button
-  >
-{/if}
 <div
   bind:this={container}
   class:hidden={noWebgl}
@@ -385,6 +373,11 @@
 ></div>
 
 <style>
+  /* axe link-in-text-block: MapLibre's attribution links are only distinguishable by colour. */
+  :global(.maplibregl-ctrl-attrib a) {
+    text-decoration: underline;
+  }
+
   /* The popup box is white (MapLibre's stylesheet); the page's light text colour is unreadable on it. */
   :global(.maplibregl-popup-content) {
     color: #18181b;

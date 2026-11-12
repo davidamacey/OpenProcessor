@@ -59,6 +59,9 @@
     'exclude_class_name',
     'open_vocab_set',
     'source_prompt',
+    'geo_bbox',
+    'geo_polygon',
+    'has_location',
   ]);
   const chips = $derived(
     filter.chips().filter((c) => CHIP_PARAMS.has(c.param) && visible(c.param)),

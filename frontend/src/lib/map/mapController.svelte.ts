@@ -115,20 +115,25 @@ export class MapController {
 
   /** A cell click: focus it and ask once for its served summary and first cards. */
   focusCell(cell: FocusedCell): Promise<void> {
+    if (this.cell?.tile === cell.tile) return Promise.resolve();
     this.#host.setFocus({ kind: 'cell', id: cell.tile });
     return this.#loadCell(cell);
   }
 
   /** A pin click: the single photo opens in the image details. */
   focusPin(imageId: string): void {
-    this.#abortCell();
-    this.cell = null;
+    this.clearLocal();
     this.#host.setFocus({ kind: 'image', id: imageId });
   }
 
-  clearCell(): void {
+  /** The URL left the cell: drop it without writing the URL again. */
+  clearLocal(): void {
     this.#abortCell();
     this.cell = null;
+  }
+
+  clearCell(): void {
+    this.clearLocal();
     this.#host.setFocus(null);
   }
 

@@ -23,6 +23,9 @@ export class AreaTools {
   /** The points of the gesture in progress: two for a rectangle, many for a lasso. */
   points = $state<LngLat[]>([]);
 
+  /** The lasso button was pressed: the next drag draws instead of panning. */
+  armed = $state(false);
+
   #host: AreaHost;
 
   constructor(host: AreaHost) {
@@ -51,7 +54,12 @@ export class AreaTools {
     else if (mode === 'lasso') this.#commitLasso(points);
   }
 
+  toggleLasso(): void {
+    this.armed = !this.armed;
+  }
+
   cancel(): void {
+    this.armed = false;
     this.mode = null;
     this.points = [];
   }
